@@ -90,6 +90,17 @@ func TestPanelsFrame_ArkanoidHotkey(t *testing.T) {
 	if len(vtui.FrameManager.Screens) != initialScreens+1 {
 		t.Error("Second Arkanoid launch erroneously created a duplicate screen")
 	}
+
+	// Clean up Arkanoid to prevent background loop leak
+	arkFrame := arkScreen.Frames[0].(*ArkanoidFrame)
+	arkFrame.Close()
+	for i := 0; i < 20; i++ {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
 func TestPanelsFrame_SelectionByMask(t *testing.T) {
 	pf := NewPanelsFrame()
@@ -1836,6 +1847,20 @@ func TestExecuteDummyOp_HeadlessMode(t *testing.T) {
 	if !newScreen.Transparent {
 		t.Error("Headless screen should be transparent")
 	}
+
+	// Clean up and cancel the task to prevent background leak
+	dlg := newScreen.Frames[0].(*vtui.Window)
+	dlg.SetExitCode(1) // Cancels the taskCtx
+	if dlg.OnResult != nil {
+		dlg.OnResult(1)
+	}
+	for i := 0; i < 20; i++ {
+		select {
+		case task := <-fm.TaskChan:
+			task()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }
 
 func TestPanelsFrame_TerminalForwarding_Legacy(t *testing.T) {
@@ -2104,7 +2129,7 @@ func TestPanelsFrame_CopyShortcuts(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if got := vtui.GetClipboard(); got != "target.txt" {
-		t.Errorf("Ctrl+Ins failed: expected 'target.txt', got %q", got)
+		t.Fatalf("Ctrl+Ins failed: expected 'target.txt', got %q", got)
 	}
 
 	// 2. Test Ctrl+F (Full Path)
@@ -2122,7 +2147,7 @@ func TestPanelsFrame_CopyShortcuts(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if got := vtui.GetClipboard(); got != expectedPath {
-		t.Errorf("Ctrl+F failed: expected %q, got %q", expectedPath, got)
+		t.Fatalf("Ctrl+F failed: expected %q, got %q", expectedPath, got)
 	}
 }
 func TestLayout_F4ActionDialogs_Validity(t *testing.T) {
@@ -2397,6 +2422,10 @@ func TestPanelsFrame_ShiftInsert_Fallthrough(t *testing.T) {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+
+	if vtui.GetClipboard() != testText {
+		t.Fatalf("Failed to set clipboard to %q", testText)
 	}
 
 	// 2. Ensure panel is active (should NOT handle Shift+Ins)
@@ -3065,6 +3094,7 @@ func TestPanelsFrame_MiddleClick_LaunchesFile(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3098,6 +3128,7 @@ func TestPanelsFrame_CtrlBackslash_GoesToRoot(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3135,6 +3166,7 @@ func TestPanelsFrame_CtrlPgUp_GoesToParentOrDriveMenu(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3188,6 +3220,7 @@ func TestPanelsFrame_CtrlPgDn_EntersDir(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3229,6 +3262,7 @@ func TestPanelsFrame_Ctrl1AndCtrl2_ViewModes(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3305,8 +3339,17 @@ func TestPanelsFrame_CaptureCommands(t *testing.T) {
 			break
 		}
 		if vtui.FrameManager.GetTopFrameType() == vtui.TypeDialog {
-			if strings.Contains(vtui.FrameManager.GetTopFrame().GetTitle(), "Error") {
-				t.Fatalf("Execution failed, error dialog shown")
+			title := vtui.FrameManager.GetTopFrame().GetTitle()
+			if strings.Contains(title, "Error") {
+				var msg string
+				if dlg, ok := vtui.FrameManager.GetTopFrame().(vtui.Container); ok {
+					for _, child := range dlg.GetChildren() {
+						if txt, ok := child.(*vtui.Text); ok {
+							msg += txt.GetText() + " "
+						}
+					}
+				}
+				t.Fatalf("Execution failed, error dialog shown: %s - %s", title, msg)
 			}
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -3332,6 +3375,7 @@ func TestPanelsFrame_CtrlPgUp_EscapesNestedVFS(t *testing.T) {
 	vtui.FrameManager.Init(scr)
 
 	pf := NewPanelsFrame()
+	defer pf.Close()
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 
@@ -3361,5 +3405,77 @@ func TestPanelsFrame_CtrlPgUp_EscapesNestedVFS(t *testing.T) {
 	}
 	if fsp.pendingSelection != "test.zip" {
 		t.Errorf("Expected pendingSelection 'test.zip', got %q", fsp.pendingSelection)
+	}
+}
+
+// TestPanelsFrame_CtrlP_TogglesPassivePanel exercises issue #197:
+// Ctrl+P should hide/show the panel opposite the currently active one,
+// leaving the active panel untouched.
+func TestPanelsFrame_CtrlP_TogglesPassivePanel(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	send := func(pf *PanelsFrame) {
+		pf.ProcessKey(&vtinput.InputEvent{
+			Type: vtinput.KeyEventType, KeyDown: true,
+			VirtualKeyCode:  vtinput.VK_P,
+			ControlKeyState: vtinput.LeftCtrlPressed,
+		})
+	}
+
+	// Active = right (setupMockPanelsFrame's default), Ctrl+P hides left.
+	pf := setupMockPanelsFrame()
+	defer pf.Close()
+	if pf.activeIdx != 1 || !pf.showLeftPanel || !pf.showRightPanel || !pf.showPanels {
+		t.Fatalf("mock frame precondition: activeIdx=%d L=%v R=%v show=%v",
+			pf.activeIdx, pf.showLeftPanel, pf.showRightPanel, pf.showPanels)
+	}
+	send(pf)
+	if pf.showLeftPanel || !pf.showRightPanel {
+		t.Errorf("active=right: Ctrl+P should hide left only, got L=%v R=%v",
+			pf.showLeftPanel, pf.showRightPanel)
+	}
+	if pf.activeIdx != 1 {
+		t.Errorf("Ctrl+P must not move the active panel, got activeIdx=%d", pf.activeIdx)
+	}
+	if !pf.showPanels {
+		t.Errorf("one panel still visible, showPanels should stay true")
+	}
+
+	// Second press restores the hidden side.
+	send(pf)
+	if !pf.showLeftPanel || !pf.showRightPanel {
+		t.Errorf("Ctrl+P again should restore left, got L=%v R=%v",
+			pf.showLeftPanel, pf.showRightPanel)
+	}
+
+	// Symmetric case: active = left, Ctrl+P hides right.
+	pf.activeIdx = 0
+	send(pf)
+	if !pf.showLeftPanel || pf.showRightPanel {
+		t.Errorf("active=left: Ctrl+P should hide right only, got L=%v R=%v",
+			pf.showLeftPanel, pf.showRightPanel)
+	}
+	if pf.activeIdx != 0 {
+		t.Errorf("Ctrl+P must not move the active panel, got activeIdx=%d", pf.activeIdx)
+	}
+
+	// Toggle the last visible panel off — no panels left, showPanels drops.
+	pf.activeIdx = 1
+	pf.showLeftPanel = false
+	pf.showRightPanel = true
+	pf.showPanels = true
+	send(pf) // active=right, so this touches left; left was false → becomes true
+	if !pf.showLeftPanel {
+		t.Fatalf("setup for last-visible test: expected left to come back, got L=%v", pf.showLeftPanel)
+	}
+	// Now hide right via Ctrl+F2 to isolate: only left visible, active=right (invalid state
+	// that Ctrl+F2's auto-switch would fix; here we just want to test Ctrl+P's showPanels math).
+	pf.showLeftPanel = true
+	pf.showRightPanel = false
+	pf.showPanels = true
+	pf.activeIdx = 0 // active on the visible panel
+	send(pf)         // active=left, toggles right; right was false → becomes true
+	if !pf.showRightPanel {
+		t.Errorf("Ctrl+P should have shown the right panel again, got R=%v", pf.showRightPanel)
 	}
 }

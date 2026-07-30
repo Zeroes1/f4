@@ -129,6 +129,7 @@ type PanelsFrame struct {
 
 	lastPtyPath string
 	lastPtyVFS  vfs.VFS
+	closed      bool
 }
 
 func (pf *PanelsFrame) Left() Panel    { return pf.panels[0] }
@@ -368,6 +369,10 @@ func (pf *PanelsFrame) initPTY() {
 
 	go func() {
 		pf.ptyMutex.Lock()
+		if pf.closed {
+			pf.ptyMutex.Unlock()
+			return
+		}
 		p := pf.pty
 		pf.ptyMutex.Unlock()
 
@@ -391,6 +396,11 @@ func (pf *PanelsFrame) initPTY() {
 			}
 
 			pf.ptyMutex.Lock()
+			if pf.closed {
+				pf.ptyMutex.Unlock()
+				p.Close()
+				return
+			}
 			pf.pty = p
 			pf.parser.pty = p
 			pf.termView.pty = p
@@ -427,6 +437,19 @@ func (pf *PanelsFrame) initPTY() {
 func (pf *PanelsFrame) Close() {
 	pf.ptyMutex.Lock()
 	defer pf.ptyMutex.Unlock()
+
+	pf.closed = true
+
+	for _, p := range pf.panels {
+		if fsp, ok := p.(*FileSystemPanel); ok && fsp != nil {
+			if fsp.cancelLoad != nil {
+				fsp.cancelLoad()
+			}
+			if fsp.loadingTimer != nil {
+				fsp.loadingTimer.Stop()
+			}
+		}
+	}
 
 	if pf.pty != nil {
 		pf.pty.Close()
@@ -801,6 +824,23 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		if !pf.showRightPanel && pf.showPanels {
 			pf.activeIdx = 0
 		}
+		vtui.FrameManager.HardRefresh()
+		if pf.showPanels {
+			pf.RefreshAll()
+		}
+		return true
+	}
+
+	// Ctrl+P toggles the passive panel — the one not currently active.
+	// Complements Ctrl+F1/F2 (toggle a specific panel by side) and
+	// Ctrl+O (toggle both), matching far/far2l (issue #197).
+	if e.VirtualKeyCode == vtinput.VK_P && ctrl && !alt && !shift && e.KeyDown {
+		if pf.activeIdx == 0 {
+			pf.showRightPanel = !pf.showRightPanel
+		} else {
+			pf.showLeftPanel = !pf.showLeftPanel
+		}
+		pf.showPanels = pf.showLeftPanel || pf.showRightPanel
 		vtui.FrameManager.HardRefresh()
 		if pf.showPanels {
 			pf.RefreshAll()
