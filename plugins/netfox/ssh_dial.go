@@ -165,6 +165,26 @@ func sshHostKeyCallbackForHome(home string) (ssh.HostKeyCallback, error) {
 	return callback, nil
 }
 
+// setTransportKeepAlive makes the OS probe a long-lived SSH transport so a
+// silently dead peer (suspended VM, yanked cable, stale NAT) is noticed
+// instead of hanging every read/write on the channel forever. Without probes
+// the TCP connection stays ESTABLISHED with no traffic to trip a timeout, so
+// neither the FISH+ nor the SFTP backend can ever learn the link is gone. The
+// call is best-effort: some proxy wrappers hide the underlying socket and do
+// not expose SetKeepAlive, in which case the default behaviour is left intact.
+func setTransportKeepAlive(conn net.Conn) {
+	if ka, ok := conn.(interface {
+		SetKeepAlive(bool) error
+	}); ok {
+		_ = ka.SetKeepAlive(true)
+	}
+	if p, ok := conn.(interface {
+		SetKeepAlivePeriod(time.Duration) error
+	}); ok {
+		_ = p.SetKeepAlivePeriod(15 * time.Second)
+	}
+}
+
 // dialSSHVia opens the transport through px and speaks SSH over it.
 func dialSSHVia(px netproxy.Settings, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
 	ctx := context.Background()
@@ -177,6 +197,7 @@ func dialSSHVia(px netproxy.Settings, addr string, config *ssh.ClientConfig) (*s
 	if err != nil {
 		return nil, err
 	}
+	setTransportKeepAlive(conn)
 	if config.Timeout > 0 {
 		_ = conn.SetDeadline(time.Now().Add(config.Timeout))
 	}
