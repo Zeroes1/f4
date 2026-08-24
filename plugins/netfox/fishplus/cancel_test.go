@@ -116,7 +116,7 @@ func TestDrainGivesUpEventually(t *testing.T) {
 		}
 	}()
 
-	err := sess.drainToTerminator(".sometoken 1 ", false)
+	err := sess.drainToTerminator(context.Background(), ".sometoken 1 ", false)
 	closeErr := pw.Close()
 	<-done
 	if closeErr != nil {
