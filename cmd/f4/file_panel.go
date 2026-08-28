@@ -360,6 +360,10 @@ const (
 	panelModifiedColumnWidth  = 14
 	panelDragScrollInterval   = 75 * time.Millisecond
 	panelLoadingPulseInterval = 100 * time.Millisecond
+	// panelLoadingShowDelay hides the loading pulse until an operation has run
+	// at least this long. Quick loads (fast directory reads, snappy VFS mounts)
+	// then finish without ever showing the spinner, avoiding a brief flash.
+	panelLoadingShowDelay = 200 * time.Millisecond
 )
 
 var panelLoadingPulse = [...]string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -458,11 +462,12 @@ type FileSystemPanel struct {
 	dragScrollTimer       *time.Timer
 	dragScrollGeneration  uint64
 
-	loadCtx      context.Context
-	cancelLoad   context.CancelFunc
-	isLoading    bool
-	loadingTimer *time.Timer
-	loadingFrame int
+	loadCtx        context.Context
+	cancelLoad     context.CancelFunc
+	isLoading      bool
+	loadingTimer   *time.Timer
+	loadingFrame   int
+	loadingVisible bool
 
 	loadingGeneration          uint64
 	loadQueueMu                sync.Mutex
@@ -1530,7 +1535,7 @@ func (fp *FileSystemPanel) updateTitle(err error) {
 
 	if err != nil && err != context.Canceled {
 		title += " [Error]"
-	} else if fp.isLoading {
+	} else if fp.isLoading && fp.loadingVisible {
 		title += " " + panelLoadingPulse[fp.loadingFrame%len(panelLoadingPulse)]
 	}
 	fp.currentTitle = title
@@ -1543,11 +1548,15 @@ func (fp *FileSystemPanel) stopLoadingAnimation() {
 		fp.loadingTimer.Stop()
 		fp.loadingTimer = nil
 	}
+	fp.loadingVisible = false
 }
 
 func (fp *FileSystemPanel) startLoadingAnimation() {
 	fp.stopLoadingAnimation()
 	fp.loadingFrame = 0
+
+	// Reflect the loading state in the title immediately (path/error text), but
+	// the spinner glyph stays hidden until panelLoadingShowDelay elapses.
 	fp.updateTitle(nil)
 	vtui.FrameManager.Redraw()
 
@@ -1556,16 +1565,43 @@ func (fp *FileSystemPanel) startLoadingAnimation() {
 		return
 	}
 
+	// Defer the visible pulse: only show it once the operation has been loading
+	// for panelLoadingShowDelay. Fast operations finish before this fires and
+	// never flash the spinner.
 	generation := fp.loadingGeneration
-	var scheduleNext func()
-	scheduleNext = func() {
+	frames := vtui.FrameManager
+	fp.loadingTimer = time.AfterFunc(panelLoadingShowDelay, func() {
 		// Read on the goroutine that starts this work, not inside it: the
 		// work outlives the call, and reading the global from it races
 		// anything that reassigns vtui.FrameManager meanwhile.
+		f := frames
+		f.PostTask(func() {
+			if !fp.isLoading || fp.loadingGeneration != generation {
+				return
+			}
+			fp.loadingVisible = true
+			fp.updateTitle(nil)
+			f.Redraw()
+			fp.scheduleLoadingPulse(generation)
+		})
+	})
+}
+
+// scheduleLoadingPulse advances the loading spinner while the panel stays in a
+// loading state. It reuses fp.loadingTimer, so stopLoadingAnimation cancels it.
+func (fp *FileSystemPanel) scheduleLoadingPulse(generation uint64) {
+	var scheduleNext func()
+	scheduleNext = func() {
+		// Read the manager on this goroutine, not inside the posted task: the
+		// work outlives the call and reading the global from it races anything
+		// that reassigns vtui.FrameManager meanwhile.
 		frames := vtui.FrameManager
+		if frames == nil {
+			return
+		}
 		fp.loadingTimer = time.AfterFunc(panelLoadingPulseInterval, func() {
 			frames.PostTask(func() {
-				if !fp.isLoading || fp.loadingGeneration != generation {
+				if !fp.isLoading || fp.loadingGeneration != generation || !fp.loadingVisible {
 					return
 				}
 				fp.loadingFrame = (fp.loadingFrame + 1) % len(panelLoadingPulse)
