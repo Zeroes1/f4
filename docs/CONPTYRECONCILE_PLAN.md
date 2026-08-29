@@ -190,6 +190,14 @@ between them. Required properties include no panic or hang, bounded resource
 use, no lost printable input, no invented output, safe handling of malformed
 controls, and idempotence where applicable.
 
+The fuzz harness must also inject independently seeded, randomized delays at
+arbitrary points in parsing, live/frame interleaving, and resize scheduling.
+The delayed run is part of the same assertion set: timing changes may expose
+ordering and lifecycle bugs, but may not change the recorded event order or
+the reconciled result. The mock suite must include a separately recorded
+`go test -race` run over those concurrent boundaries; a race report, a timed
+out delay schedule, or a data race is a hard failure.
+
 Fuzz failures must print a reproducible input and seed. A failure is fixed in
 the source-faithful port or documented reconstruction; it is never hidden by
 weakening the assertion.
