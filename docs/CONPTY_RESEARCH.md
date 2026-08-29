@@ -1945,3 +1945,59 @@ them describe one build of one Windows.
 
 This is a design with measured costs, a known failure mode, a bounded error and
 a fallback. That is exactly what §7 lacked, and the reason it was abandoned.
+
+## 19. Handover: the conhost port in `tools/conptyreconcile`
+
+State as of this note. The tool's own terminal model has been replaced by a
+1:1 port of microsoft/terminal (commit `079d1cc423336c89c1e220701c94b320cecb603a`,
+MIT), per THE RULE at the head of this document. What was there before --
+`grid.go`'s cursor model, a hand-reduced `GraphemeNext`, a "length is a
+multiple of the width" merge rule, a hand-written wrap loop -- was
+reimplementation from observed behaviour, and it is why the probe kept
+failing on stages 1 and 2. None of it remains.
+
+**Ported files.** `mscwd.go` (`CodepointWidthDetector::_graphemeNext`,
+`utf16NextOrFFFD`, `resetIfOutOfRange`; tables in `ucd.go`), `msrow.go`
+(`ROW` and `WriteHelper` in full), `mstextbuffer.go` (`Cursor`,
+`TextBuffer`), `msdispatch.go` (`AdaptDispatch`: `_WriteToBuffer`,
+`_DoLineFeed`, cursor motion, erases, fills, vertical scroll),
+`msreflow.go` (`TextBuffer::Reflow`), `msengine.go` (`ForwardTab`,
+`_InitTabStopsForWidth`, `Cursor::SetXPosition`, plus this tool's own
+stream router, which is marked as such). Every deviation is recorded in the
+file headers; the notable ones are colors/`TextAttribute`, `ImageSlice`,
+hyperlinks, prompt marks, renderer notifications, the SIMD `_init` (the
+scalar `#else` from the same function is used), the narrow-rect branch of
+`_ScrollRectVertically`, the full `StateMachine`, and `_EraseScrollback`.
+One addition that is not in the original: a read-only tap on the row
+`IncrementCircularBuffer` is about to reset, because conhost keeps no
+scrollback (P16) and the mirror must.
+
+**Call sites now going through the port.** `cellWidth`/`cellLen` ->
+`GraphemeNext`; `takeRow` -> `ROW::ReplaceText`; `fillsRowsExactly` ->
+`ROW::WasWrapForced` plus the pending delayed-EOL wrap; `Wrap` and
+`RowsFor` -> the ported buffer; `Grid` -> a thin adapter.
+
+**What is left, in order.**
+
+1. Build and test. Nothing has been compiled or run since the port. The
+   package is `main` with `main_windows.go` behind a build tag, so a Linux
+   box builds the non-Windows part and runs every test that is not
+   Windows-only; `GOOS=windows go build ./...` cross-compiles the rest
+   without cgo. Only *running* the probe needs Windows.
+2. Ship an exe and run the probe. The two failing stages ("mirror holds
+   every printed line", "visible slice is the wrapped tail") are the
+   measurement; do not analyse the old logs, they came from the model that
+   has been replaced.
+3. `cellRows` in `cells.go` is probably orphaned now -- check and remove.
+4. `mock.go` says it is not a port of conhost, which is correct (it is a
+   stream generator), but it must be re-read for wrap rules it decides on
+   its own; those would be the same violation one layer down.
+5. `reconcile.go`'s `liveHardBreaks*` family still reasons about merges in
+   terms of line lengths. `fillsRowsExactly` underneath it is ported now,
+   but the surrounding logic should be re-read against the port rather than
+   trusted.
+
+**For whoever picks this up.** Read THE RULE first. When a behaviour has
+Microsoft source, port it; do not write what the source appears to do. If a
+line cannot be ported, record the obstacle here instead of inventing a
+substitute.
