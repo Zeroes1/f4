@@ -157,3 +157,32 @@ func TestActionPanelToggleTargetsActiveWorkspace(t *testing.T) {
 		t.Fatal("Panel.Toggle changed panels in the first, inactive workspace")
 	}
 }
+
+func TestActionPanelToggleRightPanelUsesFullWidth(t *testing.T) {
+	t.Cleanup(swapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := setupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	if !RunAction("Panel.ToggleRightPanel") {
+		t.Fatal("Panel.ToggleRightPanel did not run")
+	}
+	if pf.showRightPanel {
+		t.Fatal("Panel.ToggleRightPanel did not hide the right panel")
+	}
+	if x1, _, x2, _ := pf.panels[0].GetPosition(); x1 != 0 || x2 != 79 {
+		t.Fatalf("visible left panel geometry = %d..%d, want 0..79", x1, x2)
+	}
+
+	if !RunAction("Panel.ToggleRightPanel") {
+		t.Fatal("Panel.ToggleRightPanel did not restore the right panel")
+	}
+	if !pf.showRightPanel {
+		t.Fatal("Panel.ToggleRightPanel second call did not restore the right panel")
+	}
+	if x1, _, x2, _ := pf.panels[0].GetPosition(); x1 != 0 || x2 != 39 {
+		t.Fatalf("restored left panel geometry = %d..%d, want 0..39", x1, x2)
+	}
+}

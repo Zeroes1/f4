@@ -2231,6 +2231,35 @@ func TestPanelsFrame_VisualLeftRightFollowSwap(t *testing.T) {
 	}
 }
 
+func TestPanelsFrame_SingleVisiblePanelUsesFullWidth(t *testing.T) {
+	t.Cleanup(swapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := setupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+
+	left := pf.panels[0]
+	right := pf.panels[1]
+	pf.showRightPanel = false
+	pf.ResizeConsole(80, 25)
+	if x1, _, x2, _ := left.GetPosition(); x1 != 0 || x2 != 79 {
+		t.Fatalf("left-only panel geometry = %d..%d, want 0..79", x1, x2)
+	}
+	if got := pf.visualLeftFSP(); got != left || pf.visualRightFSP() != left {
+		t.Fatal("left-only layout did not resolve the visible panel on both visual sides")
+	}
+
+	pf.showLeftPanel = false
+	pf.showRightPanel = true
+	pf.ResizeConsole(80, 25)
+	if x1, _, x2, _ := right.GetPosition(); x1 != 0 || x2 != 79 {
+		t.Fatalf("right-only panel geometry = %d..%d, want 0..79", x1, x2)
+	}
+	if got := pf.visualLeftFSP(); got != right || pf.visualRightFSP() != right {
+		t.Fatal("right-only layout did not resolve the visible panel on both visual sides")
+	}
+}
+
 func TestPanelsFrame_WideFollowsSwapAndClone(t *testing.T) {
 	pf := NewPanelsFrame()
 	defer pf.Close()

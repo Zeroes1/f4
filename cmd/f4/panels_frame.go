@@ -346,12 +346,17 @@ func (pf *PanelsFrame) Right() Panel { return pf.panels[1] }
 // their on-screen X-position rather than slot index. The Ctrl+U
 // panel swap re-assigns pf.panels[0]/[1] but keeps the two frames
 // where the user sees them, so index-based routing sends Ctrl+[/]
-// to the wrong side after a swap. Sizing keeps both panels
-// horizontal-adjacent (see ResizeConsole), so a simple min-X pick
-// is enough — no need to check a bounding box.
+// to the wrong side after a swap. In single-panel mode the visible
+// panel occupies both visual sides, so both resolvers return it.
 func (pf *PanelsFrame) visualLeftFSP() *FileSystemPanel {
 	a, _ := pf.panels[0].(*FileSystemPanel)
 	b, _ := pf.panels[1].(*FileSystemPanel)
+	if pf.showPanels && pf.showLeftPanel != pf.showRightPanel {
+		if pf.showLeftPanel {
+			return a
+		}
+		return b
+	}
 	if a == nil {
 		return b
 	}
@@ -369,6 +374,12 @@ func (pf *PanelsFrame) visualLeftFSP() *FileSystemPanel {
 func (pf *PanelsFrame) visualRightFSP() *FileSystemPanel {
 	a, _ := pf.panels[0].(*FileSystemPanel)
 	b, _ := pf.panels[1].(*FileSystemPanel)
+	if pf.showPanels && pf.showLeftPanel != pf.showRightPanel {
+		if pf.showLeftPanel {
+			return a
+		}
+		return b
+	}
 	if a == nil {
 		return b
 	}
@@ -1423,6 +1434,19 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	}
 	leftW := w/2 - wd
 	rightW := w - leftW
+	panelX1 := [2]int{0, leftW}
+	panelX2 := [2]int{leftW - 1, w - 1}
+	// A hidden side is a display mode, not a request to leave a blank half.
+	// Expand the remaining panel to the complete content width while keeping
+	// the hidden slot's split geometry ready for the next toggle.
+	if pf.showLeftPanel != pf.showRightPanel {
+		visibleIdx := 0
+		if !pf.showLeftPanel {
+			visibleIdx = 1
+		}
+		panelX1[visibleIdx] = 0
+		panelX2[visibleIdx] = w - 1
+	}
 
 	if pf.panels[0] == nil {
 		pf.panels[0] = NewFileSystemPanel(0, contentY1, leftW, panelH, vfs.NewOSVFS("."))
@@ -1447,18 +1471,14 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 			fsp.Resize(w, panelY2-contentY1+1)
 		}
 	} else {
-		pf.panels[0].SetPosition(0, contentY1, leftW-1, leftPanelY2)
-		pf.panels[1].SetPosition(leftW, contentY1, w-1, rightPanelY2)
-
 		for i, p := range pf.panels {
-			width := leftW
 			panelY2Cur := leftPanelY2
 			if i == 1 {
-				width = rightW
 				panelY2Cur = rightPanelY2
 			}
+			p.SetPosition(panelX1[i], contentY1, panelX2[i], panelY2Cur)
 			if fsp, ok := p.(*FileSystemPanel); ok {
-				fsp.Resize(width, panelY2Cur-contentY1+1)
+				fsp.Resize(panelX2[i]-panelX1[i]+1, panelY2Cur-contentY1+1)
 			}
 		}
 	}
@@ -1473,11 +1493,14 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 			pf.altPanels[idx].SetPosition(0, contentY1, w-1, panelY2)
 		}
 	} else {
-		if pf.altPanels[0] != nil {
-			pf.altPanels[0].SetPosition(0, contentY1, leftW-1, leftPanelY2)
-		}
-		if pf.altPanels[1] != nil {
-			pf.altPanels[1].SetPosition(leftW, contentY1, w-1, rightPanelY2)
+		for i, alt := range pf.altPanels {
+			if alt != nil {
+				panelY2Cur := leftPanelY2
+				if i == 1 {
+					panelY2Cur = rightPanelY2
+				}
+				alt.SetPosition(panelX1[i], contentY1, panelX2[i], panelY2Cur)
+			}
 		}
 	}
 
@@ -1635,9 +1658,8 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 			pf.panels[idx].Show(scr)
 		}
 	} else if pf.showPanels {
-		// Показываем терминал под панелями если: одна из панелей скрыта
-		// (терминал занимает освободившуюся половину), либо панели уменьшены
-		// по высоте (Ctrl+Up) и терминал должен просвечивать снизу.
+		// Keep the terminal behind a single full-width panel, or let it show
+		// through below a panel that was reduced vertically (Ctrl+Up).
 		if !pf.showLeftPanel || !pf.showRightPanel || pf.leftHeightDecrement > 0 || pf.rightHeightDecrement > 0 {
 			pf.termView.SetVisible(true)
 			pf.termView.Show(scr)

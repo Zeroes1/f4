@@ -1492,6 +1492,9 @@ func init() {
 			if !pf.showLeftPanel && !pf.showRightPanel {
 				pf.showPanels = false
 			}
+			if pf.lastW > 0 && pf.lastH > 0 {
+				pf.ResizeConsole(pf.lastW, pf.lastH)
+			}
 			vtui.FrameManager.HardRefresh()
 			if pf.showPanels {
 				pf.RefreshAll()
@@ -1513,6 +1516,9 @@ func init() {
 			}
 			if !pf.showLeftPanel && !pf.showRightPanel {
 				pf.showPanels = false
+			}
+			if pf.lastW > 0 && pf.lastH > 0 {
+				pf.ResizeConsole(pf.lastW, pf.lastH)
 			}
 			vtui.FrameManager.HardRefresh()
 			if pf.showPanels {
@@ -1537,6 +1543,9 @@ func init() {
 			}
 			if !pf.showLeftPanel && !pf.showRightPanel {
 				pf.showPanels = false
+			}
+			if pf.lastW > 0 && pf.lastH > 0 {
+				pf.ResizeConsole(pf.lastW, pf.lastH)
 			}
 			vtui.FrameManager.HardRefresh()
 			if pf.showPanels {
