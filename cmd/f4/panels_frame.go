@@ -1315,6 +1315,9 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	// 1. Terminal Area: Fills everything except KeyBar
 	termY2 := h - 1
 	if pf.shellMode == ShellModeHost {
+		// The host console keeps its overlay rows *below* the mirrored grid,
+		// so nothing of the child's output is ever painted over.
+		pf.termView.SetPromptOverlaysLastRow(false)
 		n := pf.overlayLines()
 		termH := h - n
 		if termH <= 0 {
@@ -1349,7 +1352,10 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 		// a command is running. The keybar and command line are hidden then, but
 		// temporarily growing the PTY makes bash redraw its prompt on SIGWINCH.
 		// The command line intentionally still overlaps the PTY's bottom row so
-		// it paints over, rather than duplicates, the native shell prompt.
+		// it paints over, rather than duplicates, the native shell prompt. The
+		// view is told, because a command that ends without a newline would
+		// otherwise leave its last output line on that hidden row (#863).
+		pf.termView.SetPromptOverlaysLastRow(true)
 		if pf.showKeyBar && !pf.termView.OnAltScreen() &&
 			(pf.shellMode == ShellModeOwn || !pf.isPtyBusy()) {
 			termY2 = h - 2

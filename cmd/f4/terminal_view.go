@@ -89,6 +89,12 @@ type TerminalView struct {
 	Muted         bool
 	lastCharWasCR bool
 
+	// promptOverlaysLastRow records that f4 paints its own command line over
+	// the grid's bottom row, so that row belongs to the shell prompt alone.
+	// Written by the layout on the UI goroutine, read by the parser on the
+	// PTY goroutine; both go through the view's mutex.
+	promptOverlaysLastRow bool
+
 	authCache map[string]int
 
 	OnTitleChange func(string)
@@ -2214,10 +2220,47 @@ func (tv *TerminalView) HandleOSC133(payload string) {
 			tv.OnBusyChange(true)
 		}
 	} else if payload == "D" || strings.HasPrefix(payload, "D;") {
+		tv.EnsureFreshPromptLine()
 		if tv.OnBusyChange != nil {
 			tv.OnBusyChange(false)
 		}
 	}
+}
+
+// SetPromptOverlaysLastRow tells the view whether f4's own command line is
+// painted over the grid's bottom row. The layout knows; the view has to,
+// because the shell prompt is what that row is expected to hold.
+func (tv *TerminalView) SetPromptOverlaysLastRow(overlays bool) {
+	tv.mu.Lock()
+	tv.promptOverlaysLastRow = overlays
+	tv.mu.Unlock()
+}
+
+// EnsureFreshPromptLine opens a new line for the prompt if the command that
+// just finished left the cursor mid-row.
+//
+// A command whose output does not end in a newline -- `cat` on a file with no
+// trailing newline, `printf foo`, `echo -n` -- leaves the cursor after the
+// last character it printed, and the shell appends its next prompt right
+// there. That row is the one f4 covers with its own command line to hide the
+// native prompt, so the tail of the output disappears with it: issue #863,
+// where a two-line file showed only its first line while `cat file > out`
+// wrote both.
+//
+// zsh solves the same problem for ordinary terminals with its PROMPT_SP
+// filler, printing an inverse marker and a carriage return so the prompt
+// starts clean. f4 *is* the terminal, so it can simply open the line itself,
+// at the D marker its own wrapper emits, before the prompt bytes arrive. The
+// grid then holds the output on one row and the prompt on the next, which is
+// exactly what the overlay expects.
+func (tv *TerminalView) EnsureFreshPromptLine() {
+	tv.mu.Lock()
+	skip := tv.Muted || tv.UseAltScreen || !tv.promptOverlaysLastRow || tv.CursorX == 0
+	tv.mu.Unlock()
+	if skip {
+		return
+	}
+	tv.NextLine()
 }
 func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 	stk := (*vtinput.Far2lStack)(&data)

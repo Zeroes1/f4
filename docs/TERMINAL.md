@@ -140,6 +140,34 @@ The command is single-quoted into the `eval` by `shellSingleQuote`. Anything
 that changes this wrapper must keep the property that **no input from the user
 can prevent the D marker from being printed**.
 
+### The prompt row belongs to the prompt (`EnsureFreshPromptLine`)
+
+f4 hides the native shell prompt by painting its own command line over the
+grid's **bottom row** — the row the prompt always lands on, because "visual
+gravity" in `TerminalView.Show()` keeps the cursor row at the bottom of the
+viewport. Nothing else may be left there, or it is simply never seen.
+
+A command whose output does not end in a newline breaks that assumption: `cat`
+on a file with no trailing newline, `printf foo`, `echo -n`. The cursor stops
+after the last character printed, the shell appends its prompt to that same
+row, and the overlay swallows both. Issue #863 is exactly this — a two-line
+file showed only its first line, while `cat file > out` wrote both, because
+nothing was wrong with the output, only with the row it ended on.
+
+zsh solves this for ordinary terminals with `PROMPT_SP`: it prints an inverse
+marker plus a carriage return so its prompt always starts on a clean line. f4
+*is* the terminal, so it does not need the shell's cooperation. At the `D`
+marker of its own wrapper — before any prompt byte has arrived — the view
+checks the cursor column and, if it is not zero, performs a line feed itself
+(`TerminalView.EnsureFreshPromptLine`). The output keeps its row, the prompt
+gets the hidden one, and no second prompt ever becomes visible.
+
+The line feed is only correct while f4 actually covers that row, so the layout
+tells the view: `SetPromptOverlaysLastRow(true)` from the own-terminal branch
+of `ResizeConsole`, `false` in `ShellModeHost`, where the overlay sits *below*
+the mirrored grid and injecting anything would desync the mirror from the real
+host terminal. The alternate screen and muted mirrors are skipped as well.
+
 ### Known bug: keyboard protocol modes outlive the shell that asked for them
 
 `TerminalView.Win32InputMode` and `TerminalView.KittyFlags` are set by `DECSET`
