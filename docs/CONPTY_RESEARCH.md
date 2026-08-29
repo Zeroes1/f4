@@ -1184,11 +1184,13 @@ Costs nothing beyond a resize f4 was making anyway, works at every height
 measured, and is exact except for the P13 case.
 
 **Path 2 -- the wide frame.** Resize to a very large width for one frame and
-read lines that are rejoined by construction. Costs one extra round trip, and
-is bounded by the cell-product ceiling of §13, but it **resolves P13**: a line
-that is an exact multiple of the narrow width is not an exact multiple of 4000,
-so the ambiguity disappears. It is the check the native path cannot perform on
-itself.
+read lines that are rejoined by construction. It was adopted because it was
+believed to resolve P13. **It does not** -- see §17: conhost merges an
+exact-width line with its successor inside its own buffer, and no later width
+recovers the boundary. Path 2 survives only as a diagnostic, and §17 gives the
+cheaper correction that replaces it. Its costs stand as measured: 144-617 ms
+depending on height, and a cell-product ceiling beyond which it wedges the
+host.
 
 **How they combine.** The native frame is the default and carries ordinary
 work. The wide frame is used where exactness is worth a round trip -- the F4
@@ -1353,6 +1355,49 @@ The wide frame carries almost exactly the same bytes as the narrow one
 rebuilding a 4000-column buffer. Six hundred milliseconds at a 2000-row
 height makes the wide frame a deliberate, user-initiated operation and
 nothing else. The periodic audit floated in §15 is withdrawn on this evidence.
+
+### P13 is worse than recorded, and the wide frame does not fix it
+
+Read from the dumps after the fact, and it corrects a claim this file made
+twice. The fixture prints one line of exactly the console width -- 120
+characters at width 120 -- immediately followed by another line.
+
+In the **live stream** at width 120 it arrives correctly separated:
+
+    ~EXACT~===...===  CR LF  ~L1~xxx...
+
+In **every frame** -- at 119, at 4000, and after restoring 120 -- it arrives
+with no separator at all:
+
+    ~EXACT~===...===~L1~xxx...
+
+So conhost loses the boundary in its own buffer, permanently, for a line whose
+length equalled the width at the moment it was written, and it stays lost
+however the buffer is later re-wrapped. **The wide frame therefore does not
+resolve P13**: the merge has already happened upstream of it. That claim,
+made in §15 and repeated in §18, was written from reasoning about widths and
+not from the dumps, and it is withdrawn.
+
+**But the two sources turn out to be complementary, which is better than a
+wide frame.** The frame is reliable for long lines -- always whole -- and wrong
+for exact-width lines. The live stream is the reverse: it splits long lines
+while the buffer scrolls (§17), but it terminates an exact-width line with a
+plain CRLF. On this build the live stream is in fact unambiguous there,
+because a wrapped line arrives whole with no CRLF at all, so a CRLF after a
+full row can only be a hard break. On 19045 that does not hold -- P6 puts a
+CRLF at the wrap point too -- so this correction is build-dependent and belongs
+behind a setting like everything else in §16.
+
+The implementation that follows: read structure from frames, and record
+hard-break boundaries from the live stream as they pass, using them to
+un-merge what a frame joined. That is cheaper than the 617 ms wide frame,
+carries no risk of wedging a host, and -- the part that matters for §15 --
+means **the width is never misreported to the child at all**.
+
+**If the correction is not made**, the damage should be stated plainly: no
+text is lost, but two logical lines are displayed as one wrapped line. That is
+cosmetic and visible, because lines of exactly the terminal width are commonly
+separators drawn across the full width.
 
 ### The cell ceiling, located
 
@@ -1644,11 +1689,15 @@ identical in shape to those taken at rest -- the case that destroyed §7 is
 uneventful here. The cell ceiling sits between 32 and 48 million, and beyond it
 the host wedges and then stops being closable.
 
-**Known imperfect, with its bound.** A line whose length is an exact multiple
-of the width arrives with no terminator and cannot be told from a wrap (P13).
-The error is always in one direction, a hard break read as a wrap, at a
-frequency of one line in W. The wide frame resolves it -- a multiple of 119 is
-not a multiple of 4000 -- for 144 ms at a 500-row height and 617 ms at 2000.
+**Known imperfect, with its bound.** A line whose length equals the width when
+it is written loses its boundary inside conhost's buffer: every frame, at every
+width, merges it with the line that follows (P13, measured in §17). The error
+is always in one direction -- a hard break shown as a wrap -- and no text is
+lost. The wide frame does **not** repair it, contrary to what §15 originally
+claimed. What does is the live stream, which terminates such a line with a
+plain CRLF and is unambiguous about it on this build; recording those
+boundaries as they pass and using them to un-merge frames is the correction,
+and it is build-dependent enough to sit behind a setting.
 
 **The shape that follows.** A tall ConPTY whose height is the scrollback depth.
 f4 rendering the bottom slice and translating coordinates. Logical structure
