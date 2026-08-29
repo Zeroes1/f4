@@ -44,6 +44,27 @@ Every log now opens with the host it actually used. If the header says
 `INBOX conhost -- NOT the pinned host`, the run measured the machine rather
 than the bundled host, and its results answer a different question.
 
+## Nothing else may be measured
+
+`consoleHostPath()` in `msconpty.go` deliberately drops the fallback the
+original `winconpty.cpp` has: where Windows Terminal falls back to the inbox
+`conhost.exe` when no OpenConsole was shipped beside it, this probe refuses to
+run. A measurement of a console we do not ship is indistinguishable from a
+real result once it reaches a log, and acting on one is how this project lost
+a day.
+
+For the same reason the field dumps taken before the bundle existed have been
+deleted from `testdata`, and the tests that replayed them are gone. They were
+captured from the inbox conhost of one machine; using them as the reference
+for a transpilation of the *bundled* host would make every disagreement
+ambiguous -- port bug, or host difference? -- which is not a test.
+
+The reference corpus has to be re-captured from the pinned host. One
+`-suite` run out of the bundle produces it. That run also settles the question
+underneath the whole choice: whether the bundled OpenConsole reproduces the
+long lines that motivated this direction. If it does not, this pin is wrong
+and the version has to be chosen again.
+
 ## What is still open
 
 The inbox conhost of a given Windows build cannot be mapped to a public

@@ -146,24 +146,45 @@ func inboxConsoleHostPath() string {
 	return `\\?\` + systemDirectory() + `\conhost.exe`
 }
 
-// _ConsoleHostPath: "Returns the path to either conhost.exe or the
-// side-by-side OpenConsole, depending on whether this module is building with
-// Windows and OpenConsole could be found."
-func consoleHostPath() string {
+// _ConsoleHostPath, with the fallback REMOVED on purpose.
+//
+// The original falls back to the inbox conhost.exe when no OpenConsole is
+// found beside the module, because Windows Terminal must still work on a
+// machine where it was not shipped. This probe must do the opposite: a
+// measurement of some other console -- whatever version Windows happens to
+// carry, behaving however it behaves -- is worse than no measurement, because
+// it looks exactly like a real result and gets acted on. Every hour lost in
+// this project so far was lost to exactly that: work measured against a
+// console we do not ship.
+//
+// So there is no fallback. Without the pinned OpenConsole beside the
+// executable, the probe refuses to run.
+func consoleHostPath() (string, error) {
 	exe, err := os.Executable()
-	if err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "OpenConsole.exe")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
+	if err != nil {
+		return "", err
 	}
-	return inboxConsoleHostPath()
+	candidate := filepath.Join(filepath.Dir(exe), "OpenConsole.exe")
+	if _, err := os.Stat(candidate); err != nil {
+		return "", fmt.Errorf(
+			"the pinned console host is missing: %s not found.\n"+
+				"This probe measures the host f4 bundles and nothing else -- see docs/PINNED_CONSOLE.md.\n"+
+				"It will not fall back to the inbox conhost.exe: a measurement of a console we do not\n"+
+				"ship is indistinguishable from a real result and worse than none",
+			candidate)
+	}
+	return candidate, nil
 }
 
-// bundledHostInUse reports whether the bundled OpenConsole was found, for the
-// log header. Not part of the original.
-func bundledHostInUse() bool {
-	return filepath.Base(consoleHostPath()) == "OpenConsole.exe"
+// requirePinnedHost fails the run early, with the reason, rather than letting
+// a measurement of the wrong console reach a log.
+func requirePinnedHost() string {
+	path, err := consoleHostPath()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+	return path
 }
 
 type pseudoConsole struct {
@@ -198,7 +219,11 @@ func createPseudoConsoleViaHost(width, height int, hInput, hOutput syscall.Handl
 		return nil, err
 	}
 
-	hostPath := consoleHostPath()
+	hostPath, hostErr := consoleHostPath()
+	if hostErr != nil {
+		syscall.CloseHandle(serverHandle)
+		return nil, hostErr
+	}
 	// GH4061: the path is quoted so C:\Program.exe cannot collide with
 	// C:\Program Files.
 	cmd := fmt.Sprintf(`"%s" --headless --width %d --height %d --signal 0x%x --server 0x%x`,
@@ -314,12 +339,10 @@ func systemDirectory() string {
 	return syscall.UTF16ToString(buf[:n])
 }
 
-// hostKind names the host in the log header: measurements made against the
-// inbox conhost describe the machine they ran on, not the host f4 ships, and
-// a log that does not say which one it used cannot be trusted later.
+// hostKind names the host in the log header. There is only one possible
+// answer now -- the run does not start otherwise -- but the version is
+// recorded so a log can always be traced to the binary that produced it.
 func hostKind() string {
-	if bundledHostInUse() {
-		return "bundled OpenConsole " + fileVersionOf(consoleHostPath())
-	}
-	return "INBOX conhost -- NOT the pinned host; drop OpenConsole.exe beside this exe"
+	path := requirePinnedHost()
+	return "bundled OpenConsole " + fileVersionOf(path)
 }

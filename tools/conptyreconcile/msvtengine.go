@@ -70,11 +70,13 @@ type vtEngine struct {
 	_delayedEolWrap    bool
 	_deferredCursorPos vtCoord
 
-	_clearedAllThisFrame bool
-	_newBottomLine       bool
-	_needToDisableCursor bool
-	_resized             bool
-	_resizeQuirk         bool
+	_clearedAllThisFrame   bool
+	_newBottomLine         bool
+	_firstPaint            bool
+	_suppressResizeRepaint bool
+	_needToDisableCursor   bool
+	_resized               bool
+	_resizeQuirk           bool
 }
 
 func newVtEngine(width, height int) *vtEngine {
@@ -82,6 +84,10 @@ func newVtEngine(width, height int) *vtEngine {
 		_lastViewportRight:  width - 1,
 		_lastViewportBottom: height - 1,
 		_deferredCursorPos:  invalidCoords,
+		// VtEngine's constructor state: the first frame clears the screen and
+		// the first UpdateViewport does not emit a resize (MSFT:19408543).
+		_firstPaint:            true,
+		_suppressResizeRepaint: true,
 	}
 }
 
@@ -267,4 +273,90 @@ func (e *vtEngine) EndPaint() {
 	}
 	e._resized = false
 	e._clearedAllThisFrame = false
+}
+
+// ---------------------------------------------------------------------------
+// state.cpp / invalidate.cpp / XtermEngine::StartPaint / renderer.cpp
+// ---------------------------------------------------------------------------
+
+// VtEngine::_ResizeWindow (VtSequences.cpp): the XTWINOPS report that opens a
+// repaint frame after a resize. This is P14, and it is one line of source.
+func (e *vtEngine) _ResizeWindow(width, height int) {
+	e._Write(fmt.Sprintf("\x1b[8;%d;%dt", height, width))
+}
+
+// VtEngine::_ClearScreen
+func (e *vtEngine) _ClearScreen() { e._Write("\x1b[2J") }
+
+// VtEngine::UpdateViewport (state.cpp)
+func (e *vtEngine) UpdateViewport(width, height int) {
+	oldWidth, oldHeight := e._lastViewportRight+1, e._lastViewportBottom+1
+	e._lastViewportRight = width - 1
+	e._lastViewportBottom = height - 1
+
+	if oldHeight != height || oldWidth != width {
+		// Don't emit a resize event if we've requested it be suppressed.
+		if !e._suppressResizeRepaint {
+			e._ResizeWindow(width, height)
+		}
+		e._resized = true
+	}
+
+	// See MSFT:19408543 -- always clear the suppression request.
+	e._suppressResizeRepaint = false
+}
+
+// XtermEngine::StartPaint, first-paint branch, plus the _newBottomLine
+// decision of XtermEngine::ScrollFrame.
+//
+// allInvalidated is _invalidMap.all(): true for the full repaint a resize
+// produces, which is the only frame shape this tool generates. "If the entire
+// viewport was invalidated this frame, don't mark the bottom line as new"
+// (GH#5039) -- so _newBottomLine is false for those frames, and the
+// space-trimming optimisation in _PaintUtf8BufferLine does not fire because of
+// it.
+func (e *vtEngine) StartPaint(allInvalidated bool) {
+	if e._firstPaint {
+		e._ClearScreen()
+		e._clearedAllThisFrame = true
+		e._firstPaint = false
+	}
+	e._newBottomLine = !allInvalidated
+}
+
+// Renderer::_PaintBufferOutput, for a full-viewport repaint: walk every row of
+// the viewport and hand it to PaintBufferLine.
+//
+// lineWrapped is the renderer's own computation, quoted from renderer.cpp:
+// "1. this row wrapped, 2. We're painting the last col of the row" -- for a
+// full-width repaint the second is always true, so it reduces to the row's
+// WasWrapForced.
+func (e *vtEngine) PaintBufferOutput(buffer *v12TextBuffer, viewTop, viewHeight int) {
+	for row := viewTop; row < viewTop+viewHeight && row < buffer.height; row++ {
+		r := buffer.GetRowByOffset(row)
+		lineWrapped := r.WasWrapForced()
+
+		text, columns := v12RowTextAndColumns(r)
+		e._PaintUtf8BufferLine(text, columns, vtCoord{0, row - viewTop}, lineWrapped)
+	}
+}
+
+// The clusters Renderer hands to PaintBufferLine: the row's cells, with the
+// trailing half of a wide glyph contributing a column but no text. Padding to
+// the full width is what the renderer's iterator does -- it walks the whole
+// line, spaces included -- and _PaintUtf8BufferLine's numSpaces logic depends
+// on those trailing spaces being present.
+func v12RowTextAndColumns(r *v12Row) (string, int) {
+	var sb strings.Builder
+	columns := 0
+	cr := r.GetCharRow()
+	for i := 0; i < cr.size(); i++ {
+		if cr.DbcsAttrAt(i) == dbcsTrailing {
+			columns++
+			continue
+		}
+		sb.WriteString(cr.GlyphAt(i))
+		columns++
+	}
+	return sb.String(), columns
 }

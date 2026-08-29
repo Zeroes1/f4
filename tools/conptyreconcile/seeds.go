@@ -11,6 +11,14 @@ type knownSeed struct {
 	why  string
 }
 
+// NOTE ON WHAT THESE SEEDS MEAN NOW. Every entry below failed against the
+// INBOX conhost of the maintainer's machine (10.0.22000.2538), because that is
+// the only host this tool could measure at the time. It is not the host f4
+// bundles. The failures they describe are real bugs that were found and fixed,
+// so the seeds stay -- but a green run on the pinned OpenConsole does not
+// confirm anything about the inbox host, and a red one would not disprove it.
+// They are a regression net for the reconciler, nothing more, until they have
+// been re-run against the pinned host.
 var knownSeeds = []knownSeed{
 	{1787985364328457600, "failed the mirror and the slice before the conhost port"},
 	{1788001644056794200, "first green run after the port"},

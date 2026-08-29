@@ -1158,8 +1158,12 @@ func runTerminalOnce(self, logPath, dumpPath string, seed int64, width, height, 
 
 	say("conptyreconcile -- tall console %dx%d, window %dx%d, seed %d, dump in %s",
 		width, height, winW, winH, seed, dumpPath)
-	say("host: %s (%s); inbox conhost.exe %s -- see docs/PINNED_CONSOLE.md",
-		consoleHostPath(), hostKind(), fileVersionOf(inboxConsoleHostPath()))
+	// The pinned host, and only it: consoleHostPath refuses anything else.
+	// The machine's own conhost version is recorded alongside it, so a log
+	// says both what was measured and where -- but it is never what was
+	// measured.
+	say("host: %s -- see docs/PINNED_CONSOLE.md", hostKind())
+	say("machine: Windows conhost.exe %s (NOT measured)", fileVersionOf(inboxConsoleHostPath()))
 	say("")
 
 	// A dump is written here too. The first run of this mode failed and left
