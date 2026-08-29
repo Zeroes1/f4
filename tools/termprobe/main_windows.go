@@ -7,106 +7,72 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-// termprobe answers, in one run, every question the surviving directions in
-// docs/CONPTY_RESEARCH.md depend on -- not only the most likely one.
+// termprobe answers, in one bounded run, every question the surviving
+// directions in docs/CONPTY_RESEARCH.md depend on.
 //
 //	F  (tall viewport)     the height ladder: what can be created, what a
-//	                       width change costs there, whether the repaint
-//	                       carries the whole history, whether the wide frame
-//	                       rejoins lines, what the child believes its
-//	                       geometry is, and what the alternate screen does.
-//	D3 (bundled host)      the same ladder against a conpty.dll placed next
-//	                       to the probe, plus every binary's version.
-//	A  (pipes)             which shells and tools produce anything with no
-//	                       console at all, and whether COLUMNS is honoured.
-//	C  (permanently wide)  what a width-aware program prints at 4000.
-//	--- (baseline)         the §1 emission questions re-asked on this build:
-//	                       wrap shape, size report, repaint starts at home.
+//	                       width change costs, whether the repaint carries the
+//	                       whole history, whether the wide frame rejoins
+//	                       lines, what the child believes its geometry is,
+//	                       and what the alternate screen does.
+//	D3 (bundled host)      the same, re-runnable against a bundled conpty.dll
+//	A  (pipes)             which shells produce anything with no console
+//	C  (permanently wide)  what a width-aware program prints at 4000 columns
+//	--- (baseline)         P6/P11/P12/P14 re-asked on this build
 //
-// It runs in ROUNDS, smallest scale first, touching every direction in each
-// round before moving to a bigger one. A run that dies at 16000 rows -- or is
-// killed by an impatient tester -- therefore still leaves a complete answer
-// for every direction at every smaller scale, and a partial verdict is
-// printed after each round. Finishing one direction at every scale before
-// starting the next would lose everything about the other directions if the
-// tall rungs misbehave, and the tall rungs are the ones expected to
-// misbehave.
-//
-// Nothing here is destructive: the probe owns its pseudoconsoles and its
-// children, writes only to its own log, and changes no setting.
+// The structure exists because of how the earlier versions failed. Every step
+// is supervised (scheduler.go): a step that does not return is abandoned and
+// reported as hung rather than stopping the run. Independent measurements run
+// in parallel, so one stalled height costs only itself. Results are printed
+// the moment they exist. And the whole run has a hard deadline after which a
+// summary is printed and the process exits, without waiting politely for
+// anything.
 
 var (
-	runDeadline time.Time
-	verbose     bool
+	results struct {
+		sync.Mutex
+		rungs []rungResult
+		steps []stepResult
+	}
+	reportFile *reporter
 )
 
-func timeLeft() time.Duration {
-	if runDeadline.IsZero() {
-		return time.Hour
-	}
-	d := time.Until(runDeadline)
-	if d < 0 {
-		return 0
-	}
-	return d
+func recordRung(r rungResult) {
+	results.Lock()
+	results.rungs = append(results.rungs, r)
+	results.Unlock()
 }
 
-func outOfTime() bool { return timeLeft() <= 0 }
-
-// capped keeps every individual wait inside whatever is left of the run, so a
-// stuck phase cannot eat a deadline meant for the whole probe.
-func capped(d time.Duration) time.Duration {
-	if l := timeLeft(); d > l {
-		return l
-	}
-	return d
-}
-
-// settleFor and waitFor scale with the height: a 32000-row repaint is
-// legitimately slower than a 125-row one, and one fixed timeout either cuts
-// the big frames short or makes the small rounds crawl.
-func settleFor(height int) time.Duration {
-	d := 250*time.Millisecond + time.Duration(height/40)*time.Millisecond
-	if d > 2*time.Second {
-		d = 2 * time.Second
-	}
-	return d
-}
-
-func waitFor(height int) time.Duration {
-	d := 12*time.Second + time.Duration(height/6)*time.Millisecond
-	if d > 90*time.Second {
-		d = 90 * time.Second
-	}
-	return d
+func recordStep(s stepResult) {
+	results.Lock()
+	results.steps = append(results.steps, s)
+	results.Unlock()
 }
 
 func main() {
 	var (
-		emit        = flag.String("emit", "", "internal: run as the child inside a pseudoconsole")
-		fillLines   = flag.Int("fill", 200, "history lines the child prints per round")
-		longWidth   = flag.Int("long", 600, "length of the long line used for the rejoin test")
-		width       = flag.Int("width", 120, "pseudoconsole width for the ladder")
-		wideWidth   = flag.Int("wide", 4000, "width to widen to for the rejoin frame")
-		heightsCSV  = flag.String("heights", "", "comma separated ladder (default 125,250,...,32000)")
-		budgetMs    = flag.Int64("budget-ms", 250, "repaint budget used to pick the recommended height")
-		quick       = flag.Bool("quick", false, "only the 125..2000 rounds")
-		skipPipes   = flag.Bool("skip-pipes", false, "skip the direction A measurements")
-		useBundled  = flag.Bool("bundled", false, "use conpty.dll next to the probe if present")
-		deadlineMin = flag.Int("deadline-min", 20, "give up and summarise after this many minutes (0 = no limit)")
-		selfTest    = flag.Bool("selftest", false, "run only the smoke test and exit")
-		force       = flag.Bool("force", false, "run the rounds even if the smoke test finds a silent session")
-		verboseF    = flag.Bool("v", false, "print a line for every phase, not only every round")
-		logPath     = flag.String("log", "", "write the report here (default termprobe-<pid>.log)")
+		emit       = flag.String("emit", "", "internal: run as the child inside a pseudoconsole")
+		dryRun     = flag.Bool("dryrun", false, "exercise the scheduler with fake steps and exit (no console work)")
+		fillLines  = flag.Int("fill", 150, "history lines the child prints per rung")
+		longWidth  = flag.Int("long", 600, "length of the long line used for the rejoin test")
+		width      = flag.Int("width", 120, "pseudoconsole width for the ladder")
+		wideWidth  = flag.Int("wide", 4000, "width to widen to for the rejoin frame")
+		heightsCSV = flag.String("heights", "", "comma separated ladder (default 125,250,...,32000)")
+		budgetMs   = flag.Int64("budget-ms", 250, "repaint budget used to pick the recommended height")
+		totalMin   = flag.Float64("total-min", 5, "hard limit for the whole run, in minutes")
+		workers    = flag.Int("workers", 3, "how many pseudoconsoles to measure at once")
+		skipPipes  = flag.Bool("skip-pipes", false, "skip the direction A measurements")
+		useBundled = flag.Bool("bundled", false, "use conpty.dll next to the probe if present")
+		logPath    = flag.String("log", "", "write the report here (default termprobe-<pid>.log)")
 	)
 	flag.Parse()
-	verbose = *verboseF
 
 	switch *emit {
 	case "":
@@ -121,14 +87,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	heights := defaultLadder()
-	if *quick {
-		heights = []int{125, 250, 500, 1000, 2000}
-	}
-	if *heightsCSV != "" {
-		heights = parseHeights(*heightsCSV)
-	}
-
 	path := *logPath
 	if path == "" {
 		path = fmt.Sprintf("termprobe-%d.log", os.Getpid())
@@ -141,18 +99,34 @@ func main() {
 	defer lf.Close()
 
 	started := time.Now()
-	if *deadlineMin > 0 {
-		runDeadline = started.Add(time.Duration(*deadlineMin) * time.Minute)
-	}
+	total := time.Duration(*totalMin * float64(time.Minute))
+	plan := planBudget(total)
 
-	r := &reporter{out: lf, echo: os.Stdout, started: started}
-	r.printf("termprobe -- one run, every surviving direction of docs/CONPTY_RESEARCH.md")
+	r := &reporter{out: lf, echo: os.Stdout}
+	reportFile = r
+
+	// The last line of defence. If anything at all still manages to block --
+	// a Windows call with no timeout of its own, a goroutine we abandoned --
+	// the summary is printed and the process leaves. It does not ask.
+	time.AfterFunc(total, func() {
+		r.printf("")
+		r.printf("HARD DEADLINE (%s) reached. Summarising what was measured and exiting.", total)
+		printSummary(r, *budgetMs, started, path, "hard deadline")
+		os.Exit(3)
+	})
+
+	r.printf("termprobe -- one bounded run, every surviving direction of docs/CONPTY_RESEARCH.md")
 	r.printf("started %s", started.Format(time.RFC3339))
-	if *deadlineMin > 0 {
-		r.printf("deadline %d minutes; rounds run smallest first, so an early stop still leaves a usable log",
-			*deadlineMin)
-	}
+	r.printf("budget %s: smoke %s, feasibility %s, timing %s, reserve %s; %d measurements at once",
+		total, plan.Smoke.Round(time.Second), plan.Feasibility.Round(time.Second),
+		plan.Timing.Round(time.Second), plan.Reserve.Round(time.Second), *workers)
+	r.printf("every step is supervised: one that does not return is abandoned and marked HUNG.")
 	r.printf("")
+
+	if *dryRun {
+		dryRunScheduler(r)
+		return
+	}
 
 	host := findBundledHost()
 	reportEnvironment(r, host, *useBundled)
@@ -163,123 +137,226 @@ func main() {
 		return
 	}
 
-	if !smokeTest(r, self, host, *useBundled) {
+	// --- smoke test ---------------------------------------------------
+	if !smokeTest(r, self, host, *useBundled, started.Add(plan.Smoke)) {
 		r.printf("")
-		r.printf("The smoke test found a SILENT pseudoconsole: created without error, but not")
-		r.printf("one byte came back. Running the ladder now would only time out nine times,")
-		r.printf("which is exactly what the first field run of this probe did.")
-		r.printf("")
-		r.printf("Things worth trying, cheapest first:")
-		r.printf("  * copy the exe to a local disk and run it from there (a removable drive")
-		r.printf("    with Mark-of-the-Web can have the child launch blocked silently)")
-		r.printf("  * run it from a normal console window rather than from Explorer")
-		r.printf("  * check that no security product is blocking a second copy of this exe")
-		r.printf("  * send this log: the child status and byte counts above name the failure")
-		if !*force {
-			r.printf("")
-			r.printf("Stopping here. Pass -force to run the rounds anyway.")
-			return
-		}
-		r.printf("")
-		r.printf("-force given: continuing, expect timeouts.")
-	}
-	if *selfTest {
-		r.printf("")
-		r.printf("-selftest given: stopping after the smoke test.")
+		r.printf("No spawn strategy delivered output. The rounds would only time out, so")
+		r.printf("they are not run. The table above names, per strategy, whether the child")
+		r.printf("started, how it exited, whether a new console host appeared and what the")
+		r.printf("reader did -- that is the diagnosis, and it needs no further run.")
+		printSummary(r, *budgetMs, started, path, "smoke test failed")
 		return
 	}
 
-	r.printf("plan: %d rounds at heights %v; each round touches F, the top-draw risk,", len(heights), heights)
-	r.printf("the emission shape and the width-aware question at that scale.")
+	heights := defaultLadder()
+	if *heightsCSV != "" {
+		heights = parseHeights(*heightsCSV)
+	}
+
+	// --- phase 1: feasibility, all heights at once ---------------------
+	feasDeadline := time.Now().Add(plan.Feasibility)
+	r.section("phase 1 -- feasibility, all heights in parallel")
+	r.printf("Timings here are upper bounds: several pseudoconsoles are alive at once.")
+	r.printf("Phase 2 re-measures the survivors one at a time for numbers to quote.")
 	r.printf("")
 
-	rungs := make([]rungResult, 0, len(heights))
-	stopped := ""
+	tasks := make([]task, 0, len(heights)+1)
+	for _, h := range heights {
+		h := h
+		tasks = append(tasks, task{
+			Name:   fmt.Sprintf("height %d", h),
+			Budget: 45 * time.Second,
+			Run: func() (string, error) {
+				res := measureRung(r, self, host, *useBundled, *width, h,
+					*fillLines, *longWidth, *wideWidth, false)
+				recordRung(res)
+				return res.line(), nil
+			},
+		})
+	}
+	if !*skipPipes {
+		tasks = append(tasks, task{
+			Name:   "A: pipes",
+			Budget: 60 * time.Second,
+			Run: func() (string, error) {
+				lines := []string{}
+				for _, p := range measurePipes() {
+					lines = append(lines, p.line())
+				}
+				return "\n      " + strings.Join(lines, "\n      "), nil
+			},
+		})
+	}
 
-	for i, h := range heights {
-		if outOfTime() {
-			stopped = fmt.Sprintf("deadline reached before the %d-row round", h)
+	for _, s := range runTasks(tasks, *workers, feasDeadline, func(s stepResult) {
+		r.printf("%s", s.line())
+	}) {
+		recordStep(s)
+	}
+	r.printf("")
+
+	// --- phase 2: precise timings, serial, survivors only --------------
+	timingDeadline := time.Now().Add(plan.Timing)
+	r.section("phase 2 -- precise timings, one at a time, ascending")
+	survivors := survivingHeights()
+	if len(survivors) == 0 {
+		r.printf("no height survived phase 1; nothing to re-measure.")
+	}
+	for _, h := range survivors {
+		if time.Now().Add(20 * time.Second).After(timingDeadline) {
+			r.printf("stopping phase 2 at %d rows: not enough budget left for a clean measurement.", h)
 			break
 		}
-		roundStart := time.Now()
-		r.section(fmt.Sprintf("round %d/%d -- height %d", i+1, len(heights), h))
+		h := h
+		s := withTimeout(fmt.Sprintf("timing %d", h), 40*time.Second, func() (string, error) {
+			res := measureRung(r, self, host, *useBundled, *width, h,
+				*fillLines, *longWidth, *wideWidth, true)
+			replaceRung(res)
+			return res.line(), nil
+		})
+		recordStep(s)
+		r.printf("%s", s.line())
+	}
+	r.printf("")
 
-		// --- F: the rung itself -------------------------------------------
-		res := measureRung(r, self, host, *useBundled, *width, h, *fillLines, *longWidth, *wideWidth)
-		rungs = append(rungs, res)
-		r.printf("F   %s", res.line())
-		for _, n := range res.Notes {
-			r.printf("      note: %s", n)
-		}
-		if res.CreateOK {
-			r.printf("F   child sees window %dx%d, buffer %dx%d; inside alt %dx%d; taller buffer: %s",
-				res.ChildCols, res.ChildRows, res.ChildBufW, res.ChildBufH,
-				res.AltChildCols, res.AltChildRows, res.ChildSetBufTallerDetal)
-		}
-
-		// --- F risk: a program drawing at the top of a tall window ---------
-		if res.CreateOK && !outOfTime() {
-			measureTopDraw(r, self, host, *useBundled, *width, h)
-		}
-
-		// --- baseline: this build's emission shape, re-asked at this scale -
-		if res.CreateOK && !outOfTime() {
-			measureEmissionShape(r, self, host, *useBundled, *width, h)
-		}
-
-		// --- C: what a width-aware program prints -------------------------
-		if res.CreateOK && !outOfTime() {
-			measureWidthAware(r, host, *useBundled, *width, *wideWidth, h)
-		}
-
-		// --- A: pipes, once, in the first round ---------------------------
-		if !*skipPipes && i == 0 && !outOfTime() {
-			r.printf("A   candidates over pipes, with no console at all:")
-			for _, p := range measurePipes(r) {
-				r.printf("A     %s", p.line())
-			}
-			r.printf("A   'NOTHING' means the program needs a console and cannot be routed to")
-			r.printf("A   pipes; anything that works is a candidate for f4 to host directly.")
-		}
-
-		r.printf("--- round %d done in %s; partial verdict: %s",
-			i+1, time.Since(roundStart).Round(time.Millisecond), ladderVerdict(rungs, *budgetMs))
+	// --- the remaining directions, whatever budget is left -------------
+	if time.Now().Before(timingDeadline) {
+		r.section("C -- what a width-aware program prints")
+		s := withTimeout("C: dir /w", 30*time.Second, func() (string, error) {
+			return measureWidthAware(host, *useBundled, *width, *wideWidth), nil
+		})
+		recordStep(s)
+		r.printf("%s", s.line())
 		r.printf("")
 	}
 
-	r.section("summary")
-	if stopped != "" {
-		r.printf("STOPPED EARLY: %s", stopped)
-		r.printf("everything above is complete for the scales it covers.")
+	if time.Now().Before(timingDeadline) {
+		r.section("baseline -- this build's emission shape")
+		s := withTimeout("baseline", 30*time.Second, func() (string, error) {
+			return measureEmissionShape(self, host, *useBundled, *width), nil
+		})
+		recordStep(s)
+		r.printf("%s", s.line())
+		r.printf("")
 	}
-	r.printf("VERDICT(F): %s", ladderVerdict(rungs, *budgetMs))
-	r.printf("")
-	r.printf("%-8s %-24s %-14s %s", "height", "at start (win/buf)", "inside alt", "SetConsoleScreenBufferSize taller")
-	for _, res := range rungs {
-		if !res.CreateOK {
-			continue
+
+	printSummary(r, *budgetMs, started, path, "completed")
+}
+
+// dryRunScheduler proves the supervision machinery on a machine with no
+// ConPTY at all -- including under Wine, where this probe is smoke-tested
+// before being handed to a tester. It deliberately includes a step that never
+// returns and one that panics.
+func dryRunScheduler(r *reporter) {
+	r.section("dry run -- the scheduler only, no console work")
+	tasks := []task{
+		{Name: "fast", Budget: 2 * time.Second, Run: func() (string, error) { return "returned at once", nil }},
+		{Name: "slow but fine", Budget: 3 * time.Second, Run: func() (string, error) {
+			time.Sleep(700 * time.Millisecond)
+			return "took 700ms", nil
+		}},
+		{Name: "hangs forever", Budget: time.Second, Run: func() (string, error) { select {} }},
+		{Name: "panics", Budget: 2 * time.Second, Run: func() (string, error) {
+			var p *int
+			_ = *p
+			return "", nil
+		}},
+		{Name: "fails", Budget: 2 * time.Second, Run: func() (string, error) {
+			return "", fmt.Errorf("E_INVALIDARG")
+		}},
+	}
+	out := runTasks(tasks, 3, time.Now().Add(20*time.Second), func(s stepResult) { r.printf("%s", s.line()) })
+	ok, hung, failed := 0, 0, 0
+	for _, s := range out {
+		switch s.Outcome {
+		case stepOK:
+			ok++
+		case stepHung:
+			hung++
+		case stepFailed:
+			failed++
 		}
-		r.printf("%-8d %-24s %-14s %s",
-			res.Height,
-			fmt.Sprintf("%dx%d / %dx%d", res.ChildCols, res.ChildRows, res.ChildBufW, res.ChildBufH),
-			fmt.Sprintf("%dx%d", res.AltChildCols, res.AltChildRows),
-			res.ChildSetBufTallerDetal)
 	}
 	r.printf("")
-	r.printf("Reading: if 'at start' reports the full round height, height-aware programs")
-	r.printf("(dir /p, more, Write-Progress) lay out for it -- risk 4 of section 10.")
+	r.printf("dry run: %d ok, %d hung (abandoned, not waited for), %d failed. The run", ok, hung, failed)
+	r.printf("survived a step that never returns and a step that panics, which is the point.")
+}
+
+func survivingHeights() []int {
+	results.Lock()
+	defer results.Unlock()
+	out := []int{}
+	for _, r := range results.rungs {
+		if r.CreateOK && r.LinesSeen > 0 {
+			out = append(out, r.Height)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
+func replaceRung(res rungResult) {
+	results.Lock()
+	defer results.Unlock()
+	for i := range results.rungs {
+		if results.rungs[i].Height == res.Height {
+			results.rungs[i] = res
+			return
+		}
+	}
+	results.rungs = append(results.rungs, res)
+}
+
+func printSummary(r *reporter, budgetMs int64, started time.Time, path, why string) {
+	results.Lock()
+	rungs := make([]rungResult, len(results.rungs))
+	copy(rungs, results.rungs)
+	steps := make([]stepResult, len(results.steps))
+	copy(steps, results.steps)
+	results.Unlock()
+
+	sort.Slice(rungs, func(i, j int) bool { return rungs[i].Height < rungs[j].Height })
+
+	r.section("summary (" + why + ")")
+	if len(rungs) == 0 {
+		r.printf("no height was measured.")
+	}
+	for _, res := range rungs {
+		r.printf("%s", res.line())
+		for _, n := range res.Notes {
+			r.printf("      note: %s", n)
+		}
+	}
+	r.printf("")
+	r.printf("VERDICT(F): %s", ladderVerdict(rungs, budgetMs))
 	r.printf("")
 
-	r.section("D3 -- bundled host")
-	if host.found {
-		r.printf("conpty.dll found next to the probe: %s (version %s)", host.path, host.version)
-		r.printf("re-run with -bundled to put the whole ladder through it and diff the two logs.")
-	} else {
-		r.printf("no conpty.dll next to the probe. To measure D3, drop the signed pair")
-		r.printf("(OpenConsole.exe + conpty.dll) from the Microsoft.Windows.Console.ConPTY")
-		r.printf("NuGet package beside this exe and re-run with -bundled.")
+	if len(rungs) > 0 {
+		r.printf("%-8s %-24s %-14s %s", "height", "child sees (win/buf)", "inside alt", "taller buffer accepted")
+		for _, res := range rungs {
+			if !res.CreateOK {
+				continue
+			}
+			r.printf("%-8d %-24s %-14s %s", res.Height,
+				fmt.Sprintf("%dx%d / %dx%d", res.ChildCols, res.ChildRows, res.ChildBufW, res.ChildBufH),
+				fmt.Sprintf("%dx%d", res.AltChildCols, res.AltChildRows),
+				res.ChildSetBufTallerDetal)
+		}
+		r.printf("")
 	}
-	r.printf("")
+
+	hung := []string{}
+	for _, s := range steps {
+		if s.Outcome == stepHung {
+			hung = append(hung, s.Name)
+		}
+	}
+	if len(hung) > 0 {
+		r.printf("HUNG steps (abandoned, their numbers are missing rather than wrong): %s",
+			strings.Join(hung, ", "))
+		r.printf("")
+	}
+
 	r.printf("total %s; report written to %s", time.Since(started).Round(time.Second), path)
 }
 
@@ -301,18 +378,13 @@ func parseHeights(csv string) []int {
 }
 
 // ---------------------------------------------------------------------------
-// reporting, with a heartbeat
-//
-// A probe that prints nothing for three minutes is indistinguishable from a
-// hung one, and the tester is right to kill it. Every wait that can be long
-// says what it is waiting for and how long it has been waiting.
+// reporting
 // ---------------------------------------------------------------------------
 
 type reporter struct {
-	mu      sync.Mutex
-	out     *os.File
-	echo    *os.File
-	started time.Time
+	mu   sync.Mutex
+	out  *os.File
+	echo *os.File
 }
 
 func (r *reporter) printf(format string, a ...any) {
@@ -324,22 +396,8 @@ func (r *reporter) printf(format string, a ...any) {
 	r.out.Sync()
 }
 
-// tick prints only to the console: the log stays readable, the tester sees
-// the probe is alive.
-func (r *reporter) tick(format string, a ...any) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	fmt.Fprintf(r.echo, "      ... %s\n", fmt.Sprintf(format, a...))
-}
-
 func (r *reporter) section(title string) {
-	r.printf("=== %s %s", title, strings.Repeat("=", max(0, 66-len(title))))
-}
-
-func (r *reporter) phase(format string, a ...any) {
-	if verbose {
-		r.printf("      %s", fmt.Sprintf(format, a...))
-	}
+	r.printf("=== %s %s", title, strings.Repeat("=", max(0, 60-len(title))))
 }
 
 func max(a, b int) int {
@@ -347,48 +405,6 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-type heartbeat struct {
-	stop chan struct{}
-	done chan struct{}
-}
-
-func startHeartbeat(r *reporter, label string) *heartbeat {
-	h := &heartbeat{stop: make(chan struct{}), done: make(chan struct{})}
-	go func() {
-		defer close(h.done)
-		start := time.Now()
-		t := time.NewTicker(5 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-h.stop:
-				return
-			case <-t.C:
-				r.tick("%s (%s elapsed, %s of the run's budget left)",
-					label, time.Since(start).Round(time.Second), timeLeft().Round(time.Second))
-			}
-		}
-	}()
-	return h
-}
-
-func (h *heartbeat) stopIt() {
-	close(h.stop)
-	<-h.done
-}
-
-func waitMarker(r *reporter, c *collector, off int, marker, label string, timeout time.Duration) int {
-	hb := startHeartbeat(r, "waiting for "+label)
-	defer hb.stopIt()
-	return c.waitForMarker(off, marker, capped(timeout))
-}
-
-func waitSettled(r *reporter, c *collector, quiet, timeout time.Duration, label string) {
-	hb := startHeartbeat(r, "draining "+label)
-	defer hb.stopIt()
-	c.waitQuiet(quiet, capped(timeout))
 }
 
 func reportEnvironment(r *reporter, host bundledHost, useBundled bool) {
@@ -405,59 +421,68 @@ func reportEnvironment(r *reporter, host bundledHost, useBundled bool) {
 }
 
 // ---------------------------------------------------------------------------
-// smoke test
-//
-// The cheapest possible question, asked before anything expensive: does a
-// pseudoconsole on this machine deliver bytes at all? The first field run of
-// this probe spent five minutes timing out on a session that never produced
-// one, and the log could not say so because nothing ever asked.
+// smoke test: stop at the first strategy that works
 // ---------------------------------------------------------------------------
 
-func smokeTest(r *reporter, self string, host bundledHost, useBundled bool) bool {
-	r.section("smoke test")
-	ok := false
+func smokeTest(r *reporter, self string, host bundledHost, useBundled bool, deadline time.Time) bool {
+	r.section("smoke test -- does a pseudoconsole deliver anything at all")
+	r.printf("%-26s %8s %7s  %s", "strategy", "bytes", "marker", "child / host / reader")
 
-	cases := []struct {
-		name string
-		argv []string
-		want string
-	}{
-		{"cmd /c echo", []string{"cmd.exe", "/d", "/c", "echo", "probe-alive"}, "probe-alive"},
-		{"our own child", []string{self, "-emit", "topdraw"}, markerDone},
-	}
+	const want = "probe-alive"
+	argv := []string{"cmd.exe", "/d", "/c", "echo", want}
 
-	for _, c := range cases {
-		s, err := newSession(80, 25, c.argv, host, useBundled)
-		if err != nil {
-			r.printf("%-16s CreatePseudoConsole failed: %v", c.name, err)
+	for _, st := range defaultStrategies() {
+		if time.Now().After(deadline) {
+			r.printf("(smoke budget spent)")
+			break
+		}
+		st := st
+		res := withTimeout("smoke: "+st.Name, 12*time.Second, func() (string, error) {
+			s, err := newSessionWith(st, 80, 25, argv, host, useBundled)
+			if err != nil {
+				return "", err
+			}
+			defer s.Close(host)
+			until := time.Now().Add(4 * time.Second)
+			got := false
+			for time.Now().Before(until) {
+				if strings.Contains(string(s.col.since(0)), want) {
+					got = true
+					break
+				}
+				time.Sleep(40 * time.Millisecond)
+			}
+			return fmt.Sprintf("%-26s %8d %7v  %s / %s / %s",
+				st.Name, s.col.size(), got, s.childStatus(), s.hostDescription(), s.readerStatus()), nil
+		})
+		recordStep(res)
+
+		if res.Outcome == stepHung {
+			r.printf("%-26s %8s %7s  HUNG after %s, abandoned", st.Name, "-", "-", res.Dur.Round(time.Millisecond))
 			continue
 		}
-		deadline := time.Now().Add(capped(6 * time.Second))
-		got := false
-		for time.Now().Before(deadline) {
-			if strings.Contains(string(s.col.since(0)), c.want) {
-				got = true
-				break
-			}
-			time.Sleep(50 * time.Millisecond)
+		if res.Outcome == stepFailed {
+			r.printf("%-26s %8s %7s  %s", st.Name, "-", "-", res.Err)
+			continue
 		}
-		bytes := s.col.size()
-		r.printf("%-16s %6d bytes, marker %v, child %s, host %s",
-			c.name, bytes, got, s.childStatus(), s.hostDescription())
-		if bytes > 0 {
-			ok = true
+		r.printf("%s", res.Summary)
+
+		// The moment one strategy delivers bytes, the question is answered and
+		// the remaining rows would only cost budget. An earlier version kept
+		// walking the matrix after the answer was in hand and hung on the next
+		// row, which is how a solved problem turned into another trip.
+		if strings.Contains(res.Summary, " true  ") || !strings.Contains(res.Summary, "        0 ") {
+			chosenStrategy = st
+			r.printf("")
+			r.printf("using strategy %q; the remaining rows are not needed.", st.Name)
+			return true
 		}
-		s.Close(host)
 	}
-	r.printf("")
-	if ok {
-		r.printf("the pseudoconsole delivers output; proceeding to the rounds.")
-	}
-	return ok
+	return false
 }
 
 // ---------------------------------------------------------------------------
-// one rung of the ladder
+// one rung
 // ---------------------------------------------------------------------------
 
 var sizeLineRE = regexp.MustCompile(`~SZ:([a-z-]+);wincols=(\d+);winrows=(\d+);bufw=(\d+);bufh=(\d+)~`)
@@ -476,73 +501,69 @@ func parseSizeLines(raw []byte) map[string][4]int {
 
 var setBufRE = regexp.MustCompile(`~SETBUF:[^~]*~`)
 
+// measureRung runs one height. Every wait inside it is bounded, and the whole
+// call is itself run under a watchdog by the caller, so it has two independent
+// reasons it cannot block the run.
 func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
-	width, height, fillLines, longWidth, wideWidth int) rungResult {
+	width, height, fillLines, longWidth, wideWidth int, precise bool) rungResult {
 
-	res := rungResult{Height: height, LinesAsked: fillLines}
+	res := rungResult{Height: height, LinesAsked: fillLines, Precise: precise}
 	settle := settleFor(height)
 	limit := waitFor(height)
 
 	args := []string{self, "-emit", "main", "-fill", strconv.Itoa(fillLines), "-long", strconv.Itoa(longWidth)}
 
-	r.phase("creating a %dx%d pseudoconsole", width, height)
 	t0 := time.Now()
-	hb := startHeartbeat(r, fmt.Sprintf("CreatePseudoConsole %dx%d", width, height))
 	s, err := newSession(width, height, args, host, useBundled)
-	hb.stopIt()
 	res.CreateMs = time.Since(t0).Milliseconds()
 	if err != nil {
 		res.CreateNo = err.Error()
 		return res
 	}
-	defer s.Close(host)
+	defer func() {
+		if cs := s.Close(host); cs.Outcome == stepHung {
+			res.Notes = append(res.Notes, "ClosePseudoConsole did not return; session abandoned")
+		}
+	}()
 	res.CreateOK = true
 	res.HostName = s.hostName
 	res.HostRSSAfterCreateKB = workingSetKB(s.hostPID)
 
-	// --- history -----------------------------------------------------------
 	fillStart := time.Now()
-	off := waitMarker(r, s.col, 0, markerDone, fmt.Sprintf("%d history lines", fillLines), limit)
+	off := s.col.waitForMarker(0, markerDone, limit)
 	res.FillMs = time.Since(fillStart).Milliseconds()
 	if off < 0 {
 		if s.col.silent() {
-			// Nothing at all arrived. The remaining seven phases of this rung
-			// would each wait out their own timeout and measure the same
-			// nothing, so the rung ends here.
-			res.Notes = append(res.Notes,
-				fmt.Sprintf("SILENT session: zero bytes in %s. child: %s; host: %s. "+
-					"Remaining phases skipped.", res.durFill(), s.childStatus(), s.hostDescription()))
+			res.Notes = append(res.Notes, fmt.Sprintf(
+				"SILENT: zero bytes in %dms. child: %s; host: %s; %s. Remaining phases skipped.",
+				res.FillMs, s.childStatus(), s.hostDescription(), s.readerStatus()))
 			return res
 		}
-		res.Notes = append(res.Notes, "the child never reported DONE; everything below is unreliable")
+		res.Notes = append(res.Notes, "no DONE marker; the numbers below are unreliable")
 		off = s.col.mark()
 	}
-	waitSettled(r, s.col, settle, limit, "the history")
+	s.col.waitQuiet(settle, limit)
 	full := s.col.since(0)
 	res.FillBytes = len(full)
 	res.LinesSeen, res.LowestSeen, res.HighestSeen = countFillMarkers(full)
 	res.HostRSSAfterFillKB = workingSetKB(s.hostPID)
-
 	if sizes := parseSizeLines(full); len(sizes) > 0 {
 		if v, ok := sizes["start"]; ok {
 			res.ChildCols, res.ChildRows, res.ChildBufW, res.ChildBufH = v[0], v[1], v[2], v[3]
 		}
 	}
 
-	// --- a width change: does conhost re-wrap and re-send everything? ------
-	waitMarker(r, s.col, off, markerReady, "the child to hand over", 15*time.Second)
-	waitSettled(r, s.col, settle, limit, "before the width change")
+	s.col.waitForMarker(off, markerReady, 10*time.Second)
+	s.col.waitQuiet(settle, limit)
 
 	mark := s.col.mark()
 	t1 := time.Now()
-	r.phase("width %d -> %d", width, width-1)
 	if err := s.resize(width-1, height, host); err != nil {
 		res.Notes = append(res.Notes, "resize to width-1 failed: "+err.Error())
 	}
-	waitSettled(r, s.col, settle, limit, "the reflow repaint")
+	s.col.waitQuiet(settle, limit)
 	res.ReflowMs = time.Since(t1).Milliseconds()
-	frame := s.col.since(mark)
-	shape := analyseFrame(frame, width-1)
+	shape := analyseFrame(s.col.since(mark), width-1)
 	res.ReflowBytes = shape.bytes
 	res.ReflowMarkers = shape.fillMarkers
 	res.ReflowLowest = shape.lowestMarker
@@ -551,40 +572,32 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	res.ReflowHidesCursor = shape.hidesCursor
 	res.ReflowSizeReport = shape.sizeReport
 
-	// --- the F4 trick: one wide frame, every logical line rejoined ---------
 	mark = s.col.mark()
 	t2 := time.Now()
-	r.phase("width %d -> %d (the rejoin frame)", width-1, wideWidth)
 	if err := s.resize(wideWidth, height, host); err != nil {
 		res.Notes = append(res.Notes, "widen failed: "+err.Error())
 	} else {
-		waitSettled(r, s.col, settle, limit, "the wide repaint")
+		s.col.waitQuiet(settle, limit)
 		res.WideMs = time.Since(t2).Milliseconds()
-		wideFrame := s.col.since(mark)
-		res.WideBytes = len(wideFrame)
-		res.WideLongRows = lineRows(wideFrame, wideWidth, markerLongStart)
-		if res.WideLongRows == 1 && lineRows(wideFrame, wideWidth, markerLongEnd) != 1 {
-			res.Notes = append(res.Notes, "the long line's start and end landed on different rows at the wide width")
-		}
+		wide := s.col.since(mark)
+		res.WideBytes = len(wide)
+		res.WideLongRows = lineRows(wide, wideWidth, markerLongStart)
 	}
 
 	mark = s.col.mark()
-	r.phase("restoring width %d", width)
 	if err := s.resize(width, height, host); err != nil {
 		res.Notes = append(res.Notes, "restore failed: "+err.Error())
 	} else {
-		waitSettled(r, s.col, settle, limit, "the restore repaint")
+		s.col.waitQuiet(settle, limit)
 		res.RestoreOK = true
-		after := analyseFrame(s.col.since(mark), width)
-		res.AfterRestoreM = after.fillMarkers
+		res.AfterRestoreM = analyseFrame(s.col.since(mark), width).fillMarkers
 	}
 
-	// --- the alternate screen ---------------------------------------------
 	s.writeInput("\r\n")
-	if waitMarker(r, s.col, mark, markerAltDone, "the alt-screen phase", 30*time.Second) < 0 {
+	if s.col.waitForMarker(mark, markerAltDone, 20*time.Second) < 0 {
 		res.Notes = append(res.Notes, "the alt-screen phase did not complete")
 	}
-	waitSettled(r, s.col, settle, 15*time.Second, "the alt-screen tail")
+	s.col.waitQuiet(settle, 10*time.Second)
 	tail := s.col.since(mark)
 	tailShape := analyseFrame(tail, width)
 	res.AltEnterSeen = tailShape.sawAltEnter
@@ -600,111 +613,81 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	} else {
 		res.ChildSetBufTallerDetal = "(not reported)"
 	}
-
 	s.writeInput("\r\n")
 	return res
 }
 
-// ---------------------------------------------------------------------------
-// the other directions, asked at the round's scale
-// ---------------------------------------------------------------------------
-
-func measureTopDraw(r *reporter, self string, host bundledHost, useBundled bool, width, height int) {
-	args := []string{self, "-emit", "topdraw"}
-	s, err := newSession(width, height, args, host, useBundled)
-	if err != nil {
-		r.printf("Frisk could not create a %dx%d session: %v", width, height, err)
-		return
+func settleFor(height int) time.Duration {
+	d := 250*time.Millisecond + time.Duration(height/40)*time.Millisecond
+	if d > 1500*time.Millisecond {
+		d = 1500 * time.Millisecond
 	}
-	defer s.Close(host)
-	waitMarker(r, s.col, 0, markerDone, "the top-draw child", waitFor(height))
-	waitSettled(r, s.col, settleFor(height), 15*time.Second, "the top-draw frame")
-	raw := s.col.since(0)
-	g := newWideGrid(width)
-	g.feed(raw)
-	rowOfTop := -1
-	for i, row := range g.rows {
-		if strings.Contains(string(row), "~TOPDRAW~") {
-			rowOfTop = i
-			break
-		}
-	}
-	r.printf("Frisk ESC[1;1H text in a %d-row session landed on stream row %d -- that many rows",
-		height, rowOfTop)
-	r.printf("Frisk above the visible slice (the Write-Progress class of problem).")
+	return d
 }
 
-func measureWidthAware(r *reporter, host bundledHost, useBundled bool, narrow, wide, height int) {
-	// Bounded height: this question is about width, and a 32000-row console
-	// would only make the same answer slower.
-	h := height
-	if h > 200 {
-		h = 200
+func waitFor(height int) time.Duration {
+	d := 8*time.Second + time.Duration(height/10)*time.Millisecond
+	if d > 25*time.Second {
+		d = 25 * time.Second
 	}
+	return d
+}
+
+// ---------------------------------------------------------------------------
+// the other directions
+// ---------------------------------------------------------------------------
+
+func measureWidthAware(host bundledHost, useBundled bool, narrow, wide int) string {
 	argv := []string{"cmd.exe", "/d", "/c", "dir", "/w", "/-p", `%SystemRoot%\System32\drivers\etc`}
+	lines := []string{}
 	for _, w := range []int{narrow, wide} {
-		if outOfTime() {
-			return
-		}
-		s, err := newSession(w, h, argv, host, useBundled)
+		s, err := newSession(w, 200, argv, host, useBundled)
 		if err != nil {
-			r.printf("C   dir /w at width %-5d session failed: %v", w, err)
+			lines = append(lines, fmt.Sprintf("width %-5d session failed: %v", w, err))
 			continue
 		}
-		waitSettled(r, s.col, 600*time.Millisecond, 20*time.Second, fmt.Sprintf("dir /w at width %d", w))
+		s.col.waitQuiet(600*time.Millisecond, 12*time.Second)
 		raw := s.col.since(0)
 		g := newWideGrid(w)
 		g.feed(raw)
 		longest, nonEmpty := 0, 0
 		for _, row := range g.rows {
-			t := strings.TrimRight(string(row), " ")
-			if t != "" {
+			if t := strings.TrimRight(string(row), " "); t != "" {
 				nonEmpty++
 				if len(t) > longest {
 					longest = len(t)
 				}
 			}
 		}
-		r.printf("C   dir /w at width %-5d rows=%-4d longest row=%-5d bytes=%d", w, nonEmpty, longest, len(raw))
+		lines = append(lines, fmt.Sprintf("width %-5d rows=%-4d longest=%-5d bytes=%d", w, nonEmpty, longest, len(raw)))
 		s.Close(host)
 	}
-	r.printf("C   a jump in 'longest row' between %d and %d is a program formatting for the", narrow, wide)
-	r.printf("C   width it is told -- the reason direction C was demoted.")
+	return "\n      " + strings.Join(lines, "\n      ")
 }
 
-func measureEmissionShape(r *reporter, self string, host bundledHost, useBundled bool, width, height int) {
-	h := height
-	if h > 200 {
-		h = 200
-	}
+func measureEmissionShape(self string, host bundledHost, useBundled bool, width int) string {
 	args := []string{self, "-emit", "main", "-fill", "20", "-long", strconv.Itoa(width + width/2)}
-	s, err := newSession(width, h, args, host, useBundled)
+	s, err := newSession(width, 200, args, host, useBundled)
 	if err != nil {
-		r.printf("base session failed: %v", err)
-		return
+		return "session failed: " + err.Error()
 	}
 	defer s.Close(host)
-	waitMarker(r, s.col, 0, markerDone, "the emission-shape child", 20*time.Second)
-	waitSettled(r, s.col, 300*time.Millisecond, 15*time.Second, "the live stream")
+	s.col.waitForMarker(0, markerDone, 15*time.Second)
+	s.col.waitQuiet(300*time.Millisecond, 10*time.Second)
 	live := s.col.since(0)
-
-	rowsAtWidth := lineRows(live, width, markerLongStart)
-	hardCRLF := strings.Contains(string(live), markerLongStart) && crlfWithinLongLine(string(live))
+	rows := lineRows(live, width, markerLongStart)
+	hard := strings.Contains(string(live), markerLongStart) && crlfWithinLongLine(string(live))
 
 	mark := s.col.mark()
-	s.resize(width-1, h, host)
-	waitSettled(r, s.col, 300*time.Millisecond, 20*time.Second, "the shape repaint")
+	s.resize(width-1, 200, host)
+	s.col.waitQuiet(300*time.Millisecond, 12*time.Second)
 	frame := analyseFrame(s.col.since(mark), width-1)
 
-	r.printf("base long line: start marker on %d row(s) at width %d; hard CRLF inside the wrap (P6 shape): %v",
-		rowsAtWidth, width, hardCRLF)
-	r.printf("base repaint: hides cursor=%v  starts at home=%v  size report=%v",
-		frame.hidesCursor, frame.startsAtHome, frame.sizeReport)
+	return fmt.Sprintf("\n      long line start marker on %d row(s) at width %d; hard CRLF inside the wrap (P6): %v"+
+		"\n      repaint: hides cursor=%v starts at home=%v size report=%v",
+		rows, width, hard, frame.hidesCursor, frame.startsAtHome, frame.sizeReport)
 }
 
-// crlfWithinLongLine reports whether a CRLF appears between the long line's
-// markers, which is the 19045-era shape (P6) as opposed to the whole-line
-// autowrap shape (P11/P12).
 func crlfWithinLongLine(s string) bool {
 	i := strings.Index(s, markerLongStart)
 	j := strings.Index(s, markerLongEnd)

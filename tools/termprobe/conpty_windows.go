@@ -39,7 +39,17 @@ var (
 const (
 	procThreadAttributePseudoConsole = 0x00020016
 	extendedStartupInfoPresent       = 0x00080000
-	createNoWindow                   = 0x08000000
+
+	// CREATE_NO_WINDOW belongs to the same family as CREATE_NEW_CONSOLE and
+	// DETACHED_PROCESS: it says "a console application run without a console
+	// window", and it competes with PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE for
+	// deciding which console the child gets. The first field run of this
+	// probe passed it and measured silence: the children ran and exited 0,
+	// having written to a console of their own. Microsoft's sample passes
+	// EXTENDED_STARTUPINFO_PRESENT and nothing else. Kept as a named constant
+	// because one strategy in the smoke-test matrix deliberately sets it, to
+	// keep that finding reproducible rather than folkloric.
+	createNoWindow = 0x08000000
 
 	th32csSnapProcess = 0x00000002
 
@@ -50,6 +60,30 @@ const (
 // ---------------------------------------------------------------------------
 // A pseudoconsole we own, and the child inside it
 // ---------------------------------------------------------------------------
+
+// spawnStrategy is the set of choices that turned out to matter for whether a
+// pseudoconsole delivers anything at all. The smoke test walks them and the
+// rounds use the first that works, so a machine that needs a different
+// combination reports it instead of producing an unexplained silence.
+type spawnStrategy struct {
+	Name            string
+	NoWindowFlag    bool // add CREATE_NO_WINDOW (expected to break attachment)
+	Inheritable     bool // create the pipes with an inheritable SECURITY_ATTRIBUTES
+	CloseChildEnds  bool // close our copies of the pseudoconsole's ends after spawn
+	PumpBeforeSpawn bool
+	PipeSize        uint32
+}
+
+func defaultStrategies() []spawnStrategy {
+	return []spawnStrategy{
+		{Name: "plain (MS sample shape)", CloseChildEnds: true, PumpBeforeSpawn: true},
+		{Name: "keep our pipe ends open", CloseChildEnds: false, PumpBeforeSpawn: true},
+		{Name: "inheritable pipes", Inheritable: true, CloseChildEnds: true, PumpBeforeSpawn: true},
+		{Name: "pump after spawn", CloseChildEnds: true, PumpBeforeSpawn: false},
+		{Name: "1MB pipe buffer", CloseChildEnds: true, PumpBeforeSpawn: true, PipeSize: 1 << 20},
+		{Name: "with CREATE_NO_WINDOW", NoWindowFlag: true, CloseChildEnds: true, PumpBeforeSpawn: true},
+	}
+}
 
 type session struct {
 	hpc     uintptr
@@ -62,8 +96,9 @@ type session struct {
 	childProc syscall.Handle
 	childPID  uint32
 
-	hostPID  uint32
-	hostName string
+	hostPID     uint32
+	hostName    string
+	hostsBefore map[uint32]string
 
 	col *collector
 
@@ -72,6 +107,11 @@ type session struct {
 	// dllCreate, when set, is the CreatePseudoConsole of a bundled
 	// conpty.dll rather than the inbox one.
 	viaBundledDLL bool
+
+	strategy  spawnStrategy
+	pumpErr   string
+	pumpReads int
+	closeHung bool
 }
 
 // collector accumulates everything the pseudoconsole emits, so a measurement
@@ -106,6 +146,13 @@ func (c *collector) size() int {
 }
 
 func (c *collector) silent() bool { return c.size() == 0 }
+
+// firstAt is when the first byte arrived, zero if none has.
+func (c *collector) firstAt() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.firstRead
+}
 
 func (c *collector) mark() int {
 	c.mu.Lock()
@@ -207,11 +254,30 @@ func findBundledHost() bundledHost {
 }
 
 func newSession(width, height int, childArgs []string, host bundledHost, useBundled bool) (*session, error) {
+	return newSessionWith(chosenStrategy, width, height, childArgs, host, useBundled)
+}
+
+// chosenStrategy is what the smoke test settled on; the rounds use it.
+var chosenStrategy = defaultStrategies()[0]
+
+func newSessionWith(st spawnStrategy, width, height int, childArgs []string,
+	host bundledHost, useBundled bool) (*session, error) {
+
+	if err := procCreatePseudoConsole.Find(); err != nil {
+		return nil, fmt.Errorf("CreatePseudoConsole is not available on this system: %w", err)
+	}
+
+	var sa *syscall.SecurityAttributes
+	if st.Inheritable {
+		sa = &syscall.SecurityAttributes{InheritHandle: 1}
+		sa.Length = uint32(unsafe.Sizeof(*sa))
+	}
+
 	var inRead, inWrite, outRead, outWrite syscall.Handle
-	if err := syscall.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
+	if err := syscall.CreatePipe(&inRead, &inWrite, sa, st.PipeSize); err != nil {
 		return nil, fmt.Errorf("CreatePipe(in): %w", err)
 	}
-	if err := syscall.CreatePipe(&outRead, &outWrite, nil, 0); err != nil {
+	if err := syscall.CreatePipe(&outRead, &outWrite, sa, st.PipeSize); err != nil {
 		syscall.CloseHandle(inRead)
 		syscall.CloseHandle(inWrite)
 		return nil, fmt.Errorf("CreatePipe(out): %w", err)
@@ -239,8 +305,9 @@ func newSession(width, height int, childArgs []string, host bundledHost, useBund
 		hpc: hpc, inWrite: inWrite, outRead: outRead,
 		inRead: inRead, outWrite: outWrite,
 		col: &collector{}, width: width, height: height,
-		viaBundledDLL: viaDLL,
+		viaBundledDLL: viaDLL, strategy: st,
 	}
+	s.hostsBefore = snapshotConsoleHosts()
 
 	// Read before spawning. Microsoft's own guidance for ConPTY is that the
 	// output pipe must be drained promptly: conhost writes its first frame
@@ -248,23 +315,30 @@ func newSession(width, height int, childArgs []string, host bundledHost, useBund
 	// deadlock the host before the child has produced a byte. This probe's
 	// first field run showed exactly that shape -- every wait timing out with
 	// zero bytes received.
-	go s.pump()
+	if st.PumpBeforeSpawn {
+		go s.pump()
+	}
 
 	if err := s.spawn(childArgs); err != nil {
 		s.Close(host)
 		return nil, err
 	}
 
-	// Our copies of the pseudoconsole's own ends are no longer needed; the
-	// pseudoconsole duplicated them. Holding them open also means the reader
-	// never sees EOF when the child exits.
-	if s.inRead != 0 {
-		syscall.CloseHandle(s.inRead)
-		s.inRead = 0
+	if !st.PumpBeforeSpawn {
+		go s.pump()
 	}
-	if s.outWrite != 0 {
-		syscall.CloseHandle(s.outWrite)
-		s.outWrite = 0
+
+	if st.CloseChildEnds {
+		// The pseudoconsole duplicated these; holding them open also means the
+		// reader never sees EOF when the child exits.
+		if s.inRead != 0 {
+			syscall.CloseHandle(s.inRead)
+			s.inRead = 0
+		}
+		if s.outWrite != 0 {
+			syscall.CloseHandle(s.outWrite)
+			s.outWrite = 0
+		}
 	}
 
 	return s, nil
@@ -303,10 +377,14 @@ func (s *session) spawn(args []string) error {
 		return err
 	}
 
+	flags := uint32(extendedStartupInfoPresent)
+	if s.strategy.NoWindowFlag {
+		flags |= createNoWindow
+	}
+
 	var pi syscall.ProcessInformation
 	err = syscall.CreateProcess(nil, argp, nil, nil, false,
-		extendedStartupInfoPresent|createNoWindow,
-		nil, nil, &si.StartupInfo, &pi)
+		flags, nil, nil, &si.StartupInfo, &pi)
 	if err != nil {
 		return fmt.Errorf("CreateProcess(%s): %w", cmdline, err)
 	}
@@ -314,9 +392,12 @@ func (s *session) spawn(args []string) error {
 	s.childProc = pi.Process
 	s.childPID = pi.ProcessId
 
-	// The pseudoconsole's own conhost/OpenConsole is our child too; find it so
-	// its memory can be reported per height.
-	s.hostPID, s.hostName = findConsoleHost(uint32(os.Getpid()))
+	// The pseudoconsole's own conhost/OpenConsole is a new process; find the
+	// one that was not there before. Matching only on "a conhost child of
+	// ours" reported the probe's own console host instead, identically for
+	// every session, which is how the first field log came to name pid 1776
+	// twice.
+	s.hostPID, s.hostName = newConsoleHost(s.hostsBefore)
 	return nil
 }
 
@@ -337,14 +418,29 @@ func (s *session) pump() {
 	for {
 		var n uint32
 		err := syscall.ReadFile(s.outRead, buf, &n, nil)
+		s.pumpReads++
 		if err != nil || n == 0 {
 			s.col.mu.Lock()
 			s.col.closed = true
 			s.col.mu.Unlock()
+			if err != nil {
+				s.pumpErr = err.Error()
+			} else {
+				s.pumpErr = "EOF"
+			}
 			return
 		}
 		s.col.append(buf[:n])
 	}
+}
+
+// readerStatus describes what the output reader did, so a silent session can
+// say whether nothing was sent or nothing was read.
+func (s *session) readerStatus() string {
+	if s.pumpErr == "" {
+		return fmt.Sprintf("reader active after %d read(s)", s.pumpReads)
+	}
+	return fmt.Sprintf("reader stopped after %d read(s): %s", s.pumpReads, s.pumpErr)
 }
 
 func (s *session) writeInput(text string) {
@@ -367,26 +463,71 @@ func (s *session) resize(width, height int, host bundledHost) error {
 	return nil
 }
 
-func (s *session) Close(host bundledHost) {
+// CloseGuarded tears the session down but never blocks for longer than the
+// given budget. ClosePseudoConsole is a blocking wait on this era of Windows
+// (it became non-blocking only in build 26100), and a session whose pipe ends
+// were left open can make that wait indefinite -- which is exactly how the
+// probe hung after answering its own question. A leaked handle in a probe is
+// cheaper than a hang, so a close that does not return is abandoned and
+// reported.
+func (s *session) CloseGuarded(host bundledHost, budget time.Duration) string {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Close(host)
+	}()
+	select {
+	case <-done:
+		return ""
+	case <-time.After(budget):
+		return fmt.Sprintf("ClosePseudoConsole did not return within %s; session abandoned", budget)
+	}
+}
+
+// Close tears the session down without ever being able to block the run.
+//
+// ClosePseudoConsole waits for the host to exit on builds before 26100, and a
+// field run of this probe lost a minute to exactly that: a strategy that kept
+// our copy of the output pipe open meant the host could never finish, so the
+// close never returned. It is now a supervised step like any other, and a
+// close that does not come back is abandoned with the handles leaked
+// deliberately -- a leaked handle costs nothing in a probe that is about to
+// exit, while a blocked close costs the whole run.
+func (s *session) Close(host bundledHost) stepResult {
 	if s.childProc != 0 {
 		syscall.TerminateProcess(s.childProc, 0)
 		syscall.CloseHandle(s.childProc)
 		s.childProc = 0
 	}
+
+	res := stepResult{Name: "close", Outcome: stepOK}
 	if s.hpc != 0 {
 		closefn := procClosePseudoConsole
 		if s.viaBundledDLL && host.found {
 			closefn = host.closefn
 		}
-		closefn.Call(s.hpc)
+		hpc := s.hpc
 		s.hpc = 0
+		res = withTimeout("ClosePseudoConsole", 3*time.Second, func() (string, error) {
+			closefn.Call(hpc)
+			return "", nil
+		})
+		if res.Outcome == stepHung {
+			s.closeHung = true
+			// The pipe handles stay open on purpose: the abandoned goroutine
+			// may still be inside the call and closing under it would be
+			// worse than leaking.
+			return res
+		}
 	}
+
 	for _, h := range []*syscall.Handle{&s.inWrite, &s.outRead, &s.inRead, &s.outWrite} {
 		if *h != 0 {
 			syscall.CloseHandle(*h)
 			*h = 0
 		}
 	}
+	return res
 }
 
 // childStatus reports whether the spawned child is still running, and its
@@ -434,23 +575,33 @@ type processEntry32 struct {
 	ExeFile         [260]uint16
 }
 
-func findConsoleHost(parentPID uint32) (uint32, string) {
+// snapshotConsoleHosts records every console host alive right now, so the one
+// created for the next session can be identified by difference.
+func snapshotConsoleHosts() map[uint32]string {
+	out := map[uint32]string{}
 	snap, _, _ := procCreateToolhelp32.Call(uintptr(th32csSnapProcess), 0)
 	if snap == uintptr(syscall.InvalidHandle) || snap == 0 {
-		return 0, ""
+		return out
 	}
 	defer syscall.CloseHandle(syscall.Handle(snap))
-
 	var e processEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
 	ret, _, _ := procProcess32FirstW.Call(snap, uintptr(unsafe.Pointer(&e)))
 	for ret != 0 {
-		name := syscall.UTF16ToString(e.ExeFile[:])
-		lower := strings.ToLower(name)
-		if e.ParentProcessID == parentPID && (lower == "conhost.exe" || lower == "openconsole.exe") {
-			return e.ProcessID, name
+		name := strings.ToLower(syscall.UTF16ToString(e.ExeFile[:]))
+		if name == "conhost.exe" || name == "openconsole.exe" {
+			out[e.ProcessID] = name
 		}
 		ret, _, _ = procProcess32NextW.Call(snap, uintptr(unsafe.Pointer(&e)))
+	}
+	return out
+}
+
+func newConsoleHost(before map[uint32]string) (uint32, string) {
+	for pid, name := range snapshotConsoleHosts() {
+		if _, existed := before[pid]; !existed {
+			return pid, name
+		}
 	}
 	return 0, ""
 }

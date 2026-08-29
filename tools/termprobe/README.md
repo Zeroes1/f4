@@ -78,10 +78,23 @@ transport is not a marker.
 
 ## If it prints nothing but heartbeats
 
-The probe starts with a **smoke test**: an 80x25 pseudoconsole running
-`cmd /c echo`, and a second one running its own child. It reports the byte
-count, whether the expected marker arrived, the child's status (running, or
-its exit code) and which conhost is serving the session.
+The probe starts with a **smoke test matrix**: six spawn strategies, each
+tried on an 80x25 pseudoconsole running `cmd /c echo`. For every row it
+reports bytes received, whether the marker arrived, the child's exit status,
+which *new* console host appeared, and what the output reader did. The first
+strategy that delivers bytes is used for the rounds, and the probe says which
+one it picked.
+
+The matrix exists because of a real failure. The first field run measured
+silence for five minutes: pseudoconsoles created without error, children that
+ran and exited with code 0, and not one byte returned. The cause was
+`CREATE_NO_WINDOW` on the child — a flag from the same family as
+`CREATE_NEW_CONSOLE`, which competes with
+`PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` for deciding which console the child
+gets, so the child wrote to a console of its own. Microsoft's sample passes
+`EXTENDED_STARTUPINFO_PRESENT` and nothing else. That row is kept in the
+matrix deliberately, so the finding stays reproducible rather than
+folkloric.
 
 If both come back with zero bytes, the session is *silent*, not slow, and the
 probe stops with a diagnosis instead of grinding through nine rounds of

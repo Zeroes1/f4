@@ -401,6 +401,10 @@ func analyseFrame(raw []byte, width int) frameShape {
 type rungResult struct {
 	Height int
 
+	// Precise marks a measurement taken alone rather than alongside other
+	// sessions; phase 1 timings are upper bounds, phase 2 timings are not.
+	Precise bool
+
 	CreateOK bool
 	CreateMs int64
 	CreateNo string
@@ -458,6 +462,10 @@ func (r rungResult) line() string {
 	if !r.CreateOK {
 		return fmt.Sprintf("%-7d create FAILED: %s", r.Height, r.CreateNo)
 	}
+	tag := " "
+	if r.Precise {
+		tag = "*"
+	}
 	rejoined := "no"
 	if r.WideLongRows == 1 {
 		rejoined = "yes"
@@ -465,9 +473,9 @@ func (r rungResult) line() string {
 		rejoined = "n/a"
 	}
 	return fmt.Sprintf(
-		"%-7d create %5dms  host %6dKB->%6dKB  fill %d/%d in %5dms  "+
+		"%-7d%s create %5dms  host %6dKB->%6dKB  fill %d/%d in %5dms  "+
 			"reflow %7dB %5dms carrying %d [%d..%d]  wide4000 %6dB %5dms rejoined=%s  alt h/l=%v/%v",
-		r.Height, r.CreateMs,
+		r.Height, tag, r.CreateMs,
 		r.HostRSSAfterCreateKB, r.HostRSSAfterFillKB,
 		r.LinesSeen, r.LinesAsked, r.FillMs,
 		r.ReflowBytes, r.ReflowMs, r.ReflowMarkers, r.ReflowLowest, r.ReflowHighest,

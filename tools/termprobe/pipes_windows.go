@@ -101,7 +101,7 @@ func firstLine(b []byte) string {
 // measurePipes runs every candidate with a short timeout and announces each
 // one before it starts: a tester watching a silent probe cannot tell a slow
 // wsl.exe from a hung one.
-func measurePipes(r *reporter) []pipeResult {
+func measurePipes() []pipeResult {
 	wide := []string{"COLUMNS=200", "LINES=50", "TERM=xterm-256color", "COLORTERM=truecolor"}
 	specs := []struct {
 		name    string
@@ -126,13 +126,7 @@ func measurePipes(r *reporter) []pipeResult {
 
 	out := make([]pipeResult, 0, len(specs))
 	for _, sp := range specs {
-		if outOfTime() {
-			out = append(out, pipeResult{Name: sp.name, Err: "skipped: run deadline"})
-			continue
-		}
-		hb := startHeartbeat(r, "running "+sp.name+" on pipes")
-		out = append(out, runPipe(sp.name, capped(sp.timeout), sp.env, sp.argv...))
-		hb.stopIt()
+		out = append(out, runPipe(sp.name, sp.timeout, sp.env, sp.argv...))
 	}
 	return out
 }
