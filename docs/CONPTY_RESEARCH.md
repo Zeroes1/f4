@@ -1671,6 +1671,112 @@ geometry destroys no history. A late detection costs one badly drawn frame; a
 false positive costs a temporarily shallower buffer. Neither loses text, which
 is the property §7 could not offer.
 
+### Two generations of emitter, read from the source
+
+Everything measured in §13 and §17 was measured on 10.0.22000, which carries
+the ConPTY emitter that PR #17510 removed. That PR shipped in Terminal v1.22
+and, through the inbox console, in Windows 11 24H2 and later. The two
+generations differ in ways that decide which mechanism f4 can use, so the code
+was read rather than guessed at.
+
+**The old emitter (VtEngine, everything before v1.22).** A resize repaints the
+whole buffer over VT with the grammar §13 records. This is what direction F
+stands on.
+
+**The new emitter (main today).** Console API calls are translated to VT
+directly and no renderer paints the buffer. Following the resize path:
+
+    ResizePseudoConsole
+      -> PtySignalInputThread::_DoResizeWindow          (src/host/PtySignalInputThread.cpp)
+      -> ConhostInternalGetSet::ResizeWindow            (src/host/outputStream.cpp)
+      -> SetConsoleScreenBufferInfoExImpl               (src/host/getset.cpp)
+      -> SCREEN_INFORMATION::ResizeScreenBuffer
+
+Not one step touches a VT writer: **a resize emits nothing**. The only
+whole-screen dump left is `VtIo::Writer::WriteScreenInfo`, called from
+`SetConsoleActiveScreenBufferImpl` alone -- a program switching the active
+buffer, not a resize -- and it positions every row with an absolute CUP, with
+no `ESC[K` and no CRLF, so it carries no logical-line structure. Beside it sits
+`TODO GH#5094`: the size report §13 saw is not sent there.
+
+**What the new emitter keeps** is the live stream's reliance on autowrap:
+`WriteCharsLegacy` hands the chunk to `writer.WriteUTF16` whole and appends
+`\r\n` only when the final character wrapped. Long lines still arrive whole,
+which is where both this project and Windows Terminal take wrap flags from.
+
+**Two findings in f4's favour, from the same code.** `WriteASB` means
+`ESC[?1049h/l` is emitted, so the alternate screen *is* visible in the stream
+on new builds -- the detector §17 could not build on 22000 exists there. And
+with no repaint on resize, ConPTY stops being a second owner of the viewport,
+which is the root cause of both §7 and Windows Terminal's duplicated rows.
+
+| | Old emitter (<= v1.21, incl. 10.0.22000) | New emitter (>= v1.22, incl. 24H2) |
+|---|---|---|
+| Resize repaints the buffer | yes | **no** |
+| Logical lines readable from a frame | yes, `ESC[K CR LF` | no frames to read |
+| Long lines whole in the live stream | yes | yes |
+| Alternate screen visible in the stream | no | **yes** |
+| Second owner of the viewport | yes | no |
+
+So **F as measured is a mechanism of the old emitter.** On new builds f4 needs
+the other design: own the buffer, set wrap flags from its own autowrap while
+parsing the live stream, and reflow that buffer itself -- what Windows Terminal
+does, and better there than for WT today, because a resize no longer produces a
+repaint to reconcile against. The tall viewport, the geometry lie and the
+full-screen detector are needed only on the old emitter.
+
+Where the old grammar is wanted anyway it can be **carried**: `conpty.dll` plus
+`OpenConsole.exe` from a pre-v1.22 release are redistributable and load from
+beside the binary, as WezTerm and Alacritty already do. NuGet publishes signed
+pairs of the current generation for x64, arm64 and x86; pre-v1.22 pairs are
+obtainable from older WezTerm releases, x64 only. This is direction D3 of §9,
+now with a concrete reason to exist.
+
+**Not yet verified by measurement.** The above is read from the current
+`microsoft/terminal` tree. `tools/conptydump` already accepts a bundled pair,
+so one run against a pre-v1.22 pair and one against a 1.24 pair on the same
+machine answers it. It is the one remaining question that could invalidate code
+written before it is asked.
+
+### The correction, implemented and verified against a real ConPTY
+
+`tools/conptyreconcile` implements the frame-plus-stream correction §17
+describes and checks it against ground truth. Three runs on 10.0.22000 passed,
+including randomised rounds and a resize issued while output was still
+arriving.
+
+**It works by order, not by content.** A line of 120 `+` followed by one of 360
+`+` is byte-identical to the reverse, so content matching picks arbitrarily and
+is wrong half the time. The tool walks the live sequence instead, using the
+emitter's own rule: a frame run is a sequence of live lines where every one but
+the last filled its rows and the last did not. Two things fall out of that. The
+width each line was written at is read from the size reports in the stream, so
+a resize *during* output needs no special case -- lines written at 120 and at
+100 are each judged by their own width. And a blank line printed immediately
+after a line that fills the width, which vanishes from the frame without trace,
+is recovered from the live sequence.
+
+**What the exercise cost, recorded because §3 exists for this reason.** Six
+real defects were found, four of them by machinery rather than by a tester:
+
+- the correction keyed on the width of the *frame* instead of the width the
+  lines were *written* at. It made the correction do nothing while appearing to
+  run. Found by replaying a field capture offline.
+- a bare `ESC` skipped one byte instead of two. Found by the fuzzer in seconds.
+- OSC terminated only at BEL, so the window title conhost sends leaked into the
+  first logical line and broke the alignment entirely. Found by replaying a
+  field dump.
+- content matching split identical runs at the wrong point. Found by the
+  randomised rounds, and the reason the algorithm is order-based.
+- a blank line after an exact-width line disappeared silently.
+- the expected list omitted the end marker the harness itself prints, so a
+  correct run reported one line short.
+
+The last one is the lesson worth keeping: a fixed fixture and a mock that only
+models what its author thought of will both happily agree with a wrong
+implementation. The randomised rounds and the real capture would not, and did
+not.
+
 ## 18. Where this leaves direction F
 
 **Direction F is feasible.** Every question §15 named as blocking is answered,
@@ -1689,15 +1795,15 @@ identical in shape to those taken at rest -- the case that destroyed §7 is
 uneventful here. The cell ceiling sits between 32 and 48 million, and beyond it
 the host wedges and then stops being closable.
 
-**Known imperfect, with its bound.** A line whose length equals the width when
-it is written loses its boundary inside conhost's buffer: every frame, at every
-width, merges it with the line that follows (P13, measured in §17). The error
-is always in one direction -- a hard break shown as a wrap -- and no text is
-lost. The wide frame does **not** repair it, contrary to what §15 originally
-claimed. What does is the live stream, which terminates such a line with a
-plain CRLF and is unambiguous about it on this build; recording those
-boundaries as they pass and using them to un-merge frames is the correction,
-and it is build-dependent enough to sit behind a setting.
+**Known imperfect, and now corrected.** A line whose length equals the width
+when it is written loses its boundary inside conhost's buffer: every frame, at
+every width, merges it with the line that follows (P13, §17). The wide frame
+does not repair it, contrary to what §15 originally claimed. The live stream
+does -- it terminates such a line with a plain CRLF -- and `tools/conptyreconcile`
+implements that correction by walking the live sequence in order. It recovered
+every printed line on a real capture and passed randomised rounds on 10.0.22000,
+including a resize issued mid-output. The mechanism is build-dependent and sits
+behind a setting like everything else in §16.
 
 **The shape that follows.** A tall ConPTY whose height is the scrollback depth.
 f4 rendering the bottom slice and translating coordinates. Logical structure
@@ -1719,8 +1825,9 @@ them describe one build of one Windows.
   terminator count §17 recorded.
 - *The ring arithmetic for the overflow case*, which is reasoned above and not
   yet checked against two frames bracketing a known overflow.
-- *Other builds*: 19045, and any build carrying the rewritten emitter, where
-  the frame grammar must be re-measured into the settings of §16.
+- *Other builds*: 19045 remains unmeasured. The rewritten emitter is no longer
+  a question of degree but of kind -- see the generation table above -- and
+  confirming it by measurement is the first thing to do.
 - *Remote Windows over ssh*: mechanically plausible, bounded by frame volume
   and by the risk of wedging someone else's host; FISH+ Step 17 remains the
   better answer.
