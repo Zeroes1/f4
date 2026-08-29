@@ -69,7 +69,7 @@ func (m *mockConPTY) FrameAtWidth(lines []string, writeWidth int) []byte {
 
 	used := 0
 	for _, l := range kept {
-		sb.WriteString(l)
+		sb.WriteString(msFrameText(l, writeWidth, m.Width))
 		// The merge is decided by the width in force when the line was
 		// written, not by the width of this frame.
 		if !mergesWithNext(l, writeWidth) {
@@ -107,7 +107,7 @@ func (m *mockConPTY) FrameAtWidths(lines []string, split, widthA, widthB int) []
 		if i+offset < split {
 			w = widthA
 		}
-		sb.WriteString(l)
+		sb.WriteString(msFrameText(l, w, m.Width))
 		if !mergesWithNext(l, w) {
 			sb.WriteString("\x1b[K\r\n")
 		}
@@ -139,7 +139,7 @@ func (m *mockConPTY) Frame(lines []string) []byte {
 
 	used := 0
 	for _, l := range kept {
-		sb.WriteString(l)
+		sb.WriteString(msFrameText(l, m.Width, m.Width))
 		if !mergesWithNext(l, m.Width) {
 			sb.WriteString("\x1b[K\r\n")
 		}
@@ -156,6 +156,20 @@ func (m *mockConPTY) Frame(lines []string) []byte {
 	sb.WriteString(";1H")
 	sb.WriteString("\x1b[?25h")
 	return []byte(sb.String())
+}
+
+// msFrameText is the one byte-level detail the old emitter adds to an
+// otherwise logical line. VtIo::Writer::WriteInfos substitutes a space when
+// the leading/trailing half of a wide CHAR_INFO pair falls at the edge of the
+// output range. The 10.0.22000 capture records the resulting single padding
+// cell when a line written at 120 columns is repainted at 119. This helper is
+// intentionally limited to that source-backed case; it never trims or
+// normalizes ordinary child whitespace.
+func msFrameText(line string, writeWidth, frameWidth int) string {
+	if writeWidth != frameWidth && mergesWithNext(line, writeWidth) && endsInWideGlyph(line) {
+		return line + " "
+	}
+	return line
 }
 
 // LiveStream renders the same lines the way they arrive as they are printed:
@@ -239,13 +253,13 @@ func (m *mockConPTY) fit(lines []string) []string {
 // may be the middle of a wrapped line, which is why it is returned as a text
 // line without inventing its missing prefix.
 func (m *mockConPTY) bufferLines(lines []string) ([]string, bool) {
-	if len(Wrap(lines, m.Width)) <= m.Height {
+	totalRows := RowsFor(lines, m.Width)
+	if totalRows <= m.Height {
 		// The input is the complete buffer in this case. Keep explicit empty
 		// logical lines: unlike trailing padding rows, they are part of the
 		// caller's writes and are observable before the frame trim.
 		return append([]string(nil), lines...), false
 	}
-
 	t := newMsTerminal(m.Width, m.Height)
 	for _, line := range lines {
 		t.Feed([]byte(line))

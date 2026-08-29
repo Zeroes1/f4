@@ -84,10 +84,19 @@ func TestReconciliationNeverInventsText(t *testing.T) {
 
 		frame := viewer.FrameAtWidth(printed, width)
 		runs := trimTrailingBlanks(splitFrameLines(frame))
-		got := reconcileOrdered(runs, liveLines(writer.LiveStream(printed), width))
+		live := liveLines(writer.LiveStream(printed), width)
+		got := reconcileOrdered(runs, live)
 
-		if strings.Join(got, "") != strings.Join(runs, "") {
-			t.Fatalf("seed %d: the correction changed the text rather than only its boundaries", seed)
+		if strings.Join(got, "") != joinLiveText(live) {
+			t.Fatalf("seed %d: the correction invented or dropped child text", seed)
 		}
 	}
+}
+
+func joinLiveText(lines []liveLine) string {
+	var sb strings.Builder
+	for _, line := range lines {
+		sb.WriteString(line.Text)
+	}
+	return sb.String()
 }

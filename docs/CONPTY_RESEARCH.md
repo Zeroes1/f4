@@ -1752,12 +1752,16 @@ so one run against a pre-v1.22 pair and one against a 1.24 pair on the same
 machine answers it. It is the one remaining question that could invalidate code
 written before it is asked.
 
-### The correction, implemented and verified against a real ConPTY
+### The correction, implemented and audited against field evidence
 
 `tools/conptyreconcile` implements the frame-plus-stream correction §17
-describes and checks it against ground truth. Three runs on 10.0.22000 passed,
-including randomised rounds and a resize issued while output was still
-arriving.
+describes and checks it against ground truth. The supplied 2000-row run was not
+green: it failed both the mirror-line and visible-tail stages. Those two FAILs
+had one first mismatch -- a line of 60 CJK glyphs in a 120-column write was
+followed by one literal space in the 119-column frame. That byte is the
+Microsoft writer's wide-cell edge padding, not child text. The mock and the
+reconciler now model this documented case, and a regression replays the saved
+seed; a Windows rerun is still the final confirmation against that host.
 
 **It works by order, not by content.** A line of 120 `+` followed by one of 360
 `+` is byte-identical to the reverse, so content matching picks arbitrarily and
@@ -1770,8 +1774,9 @@ a resize *during* output needs no special case -- lines written at 120 and at
 after a line that fills the width, which vanishes from the frame without trace,
 is recovered from the live sequence.
 
-**What the exercise cost, recorded because §3 exists for this reason.** Six
-real defects were found, four of them by machinery rather than by a tester:
+**What the exercise cost, recorded because §3 exists for this reason.** The
+audit found the following defects and uncovered mock boundaries, rather than
+assuming that a passing fixture was sufficient:
 
 - the correction keyed on the width of the *frame* instead of the width the
   lines were *written* at. It made the correction do nothing while appearing to
@@ -1785,11 +1790,14 @@ real defects were found, four of them by machinery rather than by a tester:
 - a blank line after an exact-width line disappeared silently.
 - the expected list omitted the end marker the harness itself prints, so a
   correct run reported one line short.
+- the frame writer's wide-cell edge padding was absent, so a 120-to-119 repaint
+  differed by one literal space. The current mock models only this documented
+  `WriteInfos` case, and the reconciler consumes it only when the live sequence
+  proves it is padding.
 
-The last one is the lesson worth keeping: a fixed fixture and a mock that only
-models what its author thought of will both happily agree with a wrong
-implementation. The randomised rounds and the real capture would not, and did
-not.
+The lesson is worth keeping: a fixed fixture and a mock that only models what
+its author thought of will both happily agree with a wrong implementation. The
+randomised rounds and the real capture exposed the gaps instead.
 
 ### The method, and why it is now the rule
 
@@ -1821,13 +1829,13 @@ times too wide. Both errors were invisible to a mock that shared the same
 mistaken assumption -- which is the whole point.
 
 **Build the mock from the vendor's code too, then validate it against real
-captures.** The mock reproduces the emission grammar and is checked against
-field dumps: an empty buffer costs five bytes per row, terminator counts match
-the captures at 500 and 2000 rows. A mock that is written from what its author
-believes will agree with an implementation that shares the belief. Three real
-bugs here were found only by replaying a captured dump offline -- the window
-title leaking through an OSC skipper that knew only BEL, the correction keyed
-on the wrong width, the boundary that ordered alignment fixes.
+captures.** The mock's buffer state is now the ported `TextBuffer`/
+`AdaptDispatch`; the remaining byte grammar is explicitly documented
+reconstruction. The field dump remains an input to the audit, not a claim of a
+green run. It found the window title leaking through an OSC skipper that knew
+only BEL, the correction keyed on the wrong width, and the one-byte wide-cell
+padding at the frame edge. The empty-buffer cost and terminator counts remain
+pinned at 500 and 2000 rows.
 
 **Randomise the fixture and print the seed.** A fixed fixture is a set of cases
 its author thought of. The seeded generator changes shape every run and a
@@ -1836,7 +1844,7 @@ Windows is diagnosed without Windows. Two defects surfaced this way that no
 hand-written case had.
 
 **Fuzz the parsers, and expect the oracle to be wrong as often as the code.**
-Six fuzz targets cover the invariants: nothing panics, text is never lost or
+Seven fuzz targets cover the invariants: nothing panics, text is never lost or
 invented, rows never exceed their width, coordinates never leave the mirror.
 The fuzzer found a bare `ESC` skipped by one byte instead of two, and an
 infinite loop on a glyph wider than a one-column window. It also twice proved
@@ -1882,11 +1890,15 @@ verified with `cmd.exe`, because watching for `vim.exe` would make the check
 untestable exactly where it needs testing.
 
 **Answer "what did the mock not model?" out loud, periodically.** Asked
-directly after a passing run, the honest answer was four things: widths counted
-in bytes, output never interleaved with a frame, eviction by whole lines rather
-than rows, and a stream with no window title and no colour. Each was a real
-gap and each is now closed. A passing test says nothing about the cases the
-test does not contain, and the only way to find those is to ask.
+directly after a passing run, the audit found byte-width counting, output
+interleaving, row-level eviction, missing window-title control bytes, missing
+wide-cell frame padding, and a parser that was not truly fed chunked input.
+The port-backed buffer, deterministic stream fixtures, padding regression, and
+incremental-feed tests now cover those boundaries. SGR attributes remain an
+explicit non-port because this tool verifies text boundaries, not colour runs;
+that omission is recorded in the port headers. A passing test still says
+nothing about cases the test does not contain, and the only way to find those
+is to ask.
 
 ## 18. Where this leaves direction F
 
@@ -1911,10 +1923,11 @@ when it is written loses its boundary inside conhost's buffer: every frame, at
 every width, merges it with the line that follows (P13, §17). The wide frame
 does not repair it, contrary to what §15 originally claimed. The live stream
 does -- it terminates such a line with a plain CRLF -- and `tools/conptyreconcile`
-implements that correction by walking the live sequence in order. It recovered
-every printed line on a real capture and passed randomised rounds on 10.0.22000,
-including a resize issued mid-output. The mechanism is build-dependent and sits
-behind a setting like everything else in §16.
+implements that correction by walking the live sequence in order. The supplied
+2000-row capture exposed an additional one-byte wide-cell padding case in the
+frame; the mock and regression now pin the correction for it. The mechanism is
+build-dependent and sits behind a setting like everything else in §16. The
+Windows rerun is still required before treating the captured run as green.
 
 **The shape that follows.** A tall ConPTY whose height is the scrollback depth.
 f4 rendering the bottom slice and translating coordinates. Logical structure
@@ -1948,70 +1961,98 @@ a fallback. That is exactly what §7 lacked, and the reason it was abandoned.
 
 ## 19. Handover: the conhost port in `tools/conptyreconcile`
 
-State as of this note. The tool's own terminal model has been replaced by a
-1:1 port of microsoft/terminal (commit `079d1cc423336c89c1e220701c94b320cecb603a`,
-MIT), per THE RULE at the head of this document. What was there before --
-`grid.go`'s cursor model, a hand-reduced `GraphemeNext`, a "length is a
-multiple of the width" merge rule, a hand-written wrap loop -- was
-reimplementation from observed behaviour, and it is why the probe kept
-failing on stages 1 and 2. None of it remains.
+State as of this audit. The terminal model is a 1:1 Go transcription of the
+relevant `microsoft/terminal` code at commit
+`079d1cc423336c89c1e220701c94b320cecb603a` (MIT), per THE RULE at the head of
+this document. The earlier `grid.go` cursor implementation, hand-reduced
+grapheme logic, byte-length wrap test, and hand-written wrap loop are gone;
+none is retained as a competing implementation.
+
+**Source boundary.** The audit checked both the current source and the base of
+Microsoft's [emitter rewrite in PR #17510](https://github.com/microsoft/terminal/pull/17510).
+The old [`XtermEngine`](https://github.com/microsoft/terminal/blob/295cd17b028d288ff81445f532d9301b44f6ffd9/src/renderer/vt/XtermEngine.cpp)
+cursor/row grammar is in the pre-PR tree; the current
+[`VtIo::Writer::WriteInfos`](https://github.com/microsoft/terminal/blob/079d1cc423336c89c1e220701c94b320cecb603a/src/host/VtIo.cpp)
+source documents the literal-space substitution for a wide `CHAR_INFO` half at
+the edge of a write range. There is no single Microsoft source file exposing
+the complete old Windows 10.0.22000 frame byte serializer in the exact shape of
+the supplied dump. That last byte-level case is therefore a documented
+reconstruction, not presented as a source port; it is limited to the observed
+one-space padding and is pinned by a regression. No behavior was deleted to
+make the audit pass.
 
 **Ported files.** `mscwd.go` (`CodepointWidthDetector::_graphemeNext`,
 `utf16NextOrFFFD`, `resetIfOutOfRange`; tables in `ucd.go`), `msrow.go`
-(`ROW` and `WriteHelper` in full), `mstextbuffer.go` (`Cursor`,
-`TextBuffer`), `msdispatch.go` (`AdaptDispatch`: `_WriteToBuffer`,
-`_DoLineFeed`, cursor motion, erases, fills, vertical scroll),
-`msreflow.go` (`TextBuffer::Reflow`), `msengine.go` (`ForwardTab`,
-`_InitTabStopsForWidth`, `Cursor::SetXPosition`, plus this tool's own
-stream router, which is marked as such). Every deviation is recorded in the
-file headers; the notable ones are colors/`TextAttribute`, `ImageSlice`,
-hyperlinks, prompt marks, renderer notifications, the SIMD `_init` (the
-scalar `#else` from the same function is used), the narrow-rect branch of
-`_ScrollRectVertically`, the full `StateMachine`, and `_EraseScrollback`.
-One addition that is not in the original: a read-only tap on the row
-`IncrementCircularBuffer` is about to reset, because conhost keeps no
-scrollback (P16) and the mirror must.
+(`ROW` and `WriteHelper`), `mstextbuffer.go` (`Cursor`, `TextBuffer`),
+`msdispatch.go` (`AdaptDispatch`: `_WriteToBuffer`, `_DoLineFeed`, cursor
+motion, erases, fills, vertical scroll), `msreflow.go`
+(`TextBuffer::Reflow`), and the ported `ForwardTab`, tab-stop initialization,
+and `Cursor::SetXPosition` in `msengine.go`. Every deviation is recorded in
+the file headers: attributes/colors, `ImageSlice`, hyperlinks, prompt marks,
+renderer notifications, the SIMD `_init` branch (the scalar branch from the
+same function is used), the narrow-rectangle `_ScrollRectVertically` branch,
+the full `StateMachine`, and `_EraseScrollback` are outside this text-boundary
+oracle. The stream router is explicitly tool code, not mislabeled as a port.
+
+One tool-side addition is a read-only tap before the ported
+`IncrementCircularBuffer` recycles a row. It copies text, wrap state, and the
+write-width tag so the mirror can retain what conhost's no-scrollback ring has
+evicted; it does not alter the ported row behavior.
 
 **Call sites now going through the port.** `cellWidth`/`cellLen` ->
 `GraphemeNext`; `takeRow` -> `ROW::ReplaceText`; `fillsRowsExactly` ->
 `ROW::WasWrapForced` plus the pending delayed-EOL wrap; `Wrap` and
-`RowsFor` -> the ported buffer; `Grid` -> a thin adapter.
+`RowsFor` -> the ported buffer; `Grid` -> a thin adapter. The width tag is tool
+metadata carried through reflow solely for matching lines written before a
+resize.
 
-**First verification pass after the handover (2026-08-29).** The package now
-builds and its complete portable test suite passes. The first run exposed three
-port-boundary defects, all fixed without changing the Microsoft model: the
-stream router was passing ANSI's 1-based cursor coordinates as zero-based,
-`CR` was targeting column 1 instead of column 0, and a resize reflow discarded
-the write-time width needed by the reconciliation layer. The last was handled
-as tool metadata carried alongside rows and through the ported reflow; it is
-never read by conhost semantics. The saved malformed-UTF-8 fuzz corpus also
-passes: the public `Wrap` API keeps such Go-string bytes opaque, while valid
-terminal text still goes through the UTF-16 port.
+**First verification pass after the handover (2026-08-29).** The package
+builds and its portable test suite passes. The first port-boundary defects
+were fixed without changing the Microsoft model: the stream router now
+converts ANSI's 1-based cursor coordinates to zero-based dispatch coordinates,
+`CR` targets column 0, and the write-time width survives resize reflow as tool
+metadata that the conhost port never reads. The malformed-UTF-8 compatibility
+path remains explicit in `Wrap`; valid terminal text goes through the UTF-16
+port.
 
-**What is left, in order.**
+**Field failure and correction.** The supplied seed
+`1787989147020622300` still reproduced the original two FAIL stages after the
+first port pass. They had one root cause: the first merged frame run contained
+60 CJK glyphs followed by one ordinary space before `line 000004`; the live
+stream contained the 60 glyphs followed directly by the next line. Microsoft
+`WriteInfos` explains that space as display padding when a wide pair is cut at
+the edge of the output range. `msFrameText` reconstructs only that documented
+case; `alignFrom` consumes one or two spaces only when the next live line and
+the preceding wide glyph prove the byte is padding. Ordinary child spaces are
+still not normalized.
 
-1. Build and test are complete for this handover: `go test
-   ./tools/conptyreconcile`, `go test -race ./tools/conptyreconcile
-   -skip '^TestRealCommandUnderACornerDrag$'`, and the `GOOS=windows
-   GOARCH=amd64 CGO_ENABLED=0 go build ./...` cross-build pass. The full
-   race run including the Linux real-PTY test was stopped after it exceeded
-   its normal duration without producing a diagnostic; it did not report a
-   race. Only running the ConPTY probe still needs Windows.
-2. Ship an exe and run the probe. The two failing stages ("mirror holds
-   every printed line", "visible slice is the wrapped tail") are the
-   measurement; do not analyse the old logs, they came from the model that
-   has been replaced.
-3. `cellRows` is used by the mock's measured frame grammar and remains. Its
-   row count now delegates to the port-backed `ROW::ReplaceText` path.
-4. `mock.go` remains a stream generator rather than a conhost port, but its
-   row count and merge decision now delegate to the port-backed model; no
-   independent byte-length wrap rule remains there.
-5. The `liveHardBreaks*` compatibility helpers in `reconcile.go` now consume
-   the ordered `liveLine` sequence and `fillsRowsExactly`; the active
-   correction already uses that sequence directly. The old standalone
-   `liveSegments` length-based path has been removed.
+The audit also found and fixed a genuine port-boundary error in the Go
+translation: C++ `GraphemeState::resetIfOutOfRange` compares pointer ranges,
+not just integer offsets. The Go port now tracks the source slice identity, so
+feeding one byte at a time cannot accidentally continue a grapheme state from
+the preceding `ROW` string view. A one-byte-feed regression pins this.
 
-**For whoever picks this up.** Read THE RULE first. When a behaviour has
-Microsoft source, port it; do not write what the source appears to do. If a
-line cannot be ported, record the obstacle here instead of inventing a
-substitute.
+**Mock audit.** `mock.go` now obtains row occupancy, delayed-EOL wrapping,
+wide-glyph padding, reflow, and row eviction from the ported buffer. The
+remaining stream/frame envelope is explicitly reconstructed from §13/§17 and
+the documented old-emitter shape: title OSC, frame terminators, exact-width
+live CRLF, deterministic scrolling seams, and a frame interleave boundary.
+Random chunking is fed into the incremental parser rather than reassembled
+first. SGR is consumed but attributes are not modeled because this tool's
+contract is text boundaries; that is an explicit non-port in the headers, not a
+hand-written substitute.
+
+**Verification status (2026-08-29).** The dedicated field-seed regression and
+the complete portable package tests pass (`go test ./tools/conptyreconcile
+-count=1`); the race suite excluding the unrelated long-running real-PTY test
+passes; `go vet ./tools/conptyreconcile` and the `GOOS=windows
+GOARCH=amd64 CGO_ENABLED=0 go build ./...` cross-build pass. The real Windows
+ConPTY rerun remains an external confirmation for build 10.0.22000; Linux
+cannot provide that evidence. This commit keeps the exact evidence boundary
+and does not call the supplied FAIL log a pass.
+
+**For whoever picks this up.** Read THE RULE first. When a behavior has
+Microsoft source, port it; do not write what the source appears to do. When
+the source search is exhausted, record the missing boundary and reconstruct
+only from the documented measurements, as was done for the single wide-cell
+padding byte above.

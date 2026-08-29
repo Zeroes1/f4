@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"strings"
+	"testing"
+)
 
 // The mock is only worth anything if it reproduces what was measured. These
 // pin the two numbers that are checkable without Windows: an empty buffer
@@ -25,6 +29,18 @@ func TestMockMergesAnExactWidthLineLikeConhostDoes(t *testing.T) {
 	f := string(m.Frame([]string{exact, "next"}))
 	if !contains(f, exact+"next") {
 		t.Fatal("an exact-width line must arrive glued to its successor, as measured in §17")
+	}
+}
+
+func TestMockEmitsMSWideCellFramePadding(t *testing.T) {
+	const writeWidth, frameWidth = 120, 119
+	wide := strings.Repeat("中", writeWidth/2)
+	next := "line 000004 short"
+
+	frame := newMockConPTY(frameWidth, 100, 1).FrameAtWidth(
+		[]string{wide, next}, writeWidth)
+	if !bytes.Contains(frame, []byte(wide+" "+next)) {
+		t.Fatal("the audited 120-to-119 frame must contain the documented wide-cell padding byte")
 	}
 }
 

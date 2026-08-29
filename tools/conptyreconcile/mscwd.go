@@ -24,6 +24,12 @@ type msGraphemeState struct {
 	len   int
 	width int
 
+	// source is the Go equivalent of the C++ pointer range used by
+	// resetIfOutOfRange. A GraphemeState is deliberately passed first the
+	// preceding row text and then the new text by ROW::_replaceTextUnicode;
+	// those are different string views and must restart at the new view.
+	source *uint16
+
 	_state int
 	_last  int
 }
@@ -81,7 +87,13 @@ func msGraphemeNext(s *msGraphemeState, str []uint16) bool {
 	lead := s._last
 
 	// If it's a new string argument, we'll restart at the new string's beginning.
-	clusterBeg = resetIfOutOfRange(beg, end, beg, clusterBeg)
+	// C++ compares the stored pointer against [beg, end). Comparing the first
+	// element pointer is the equivalent check for the slice views used here.
+	if len(str) == 0 || s.source != &str[0] {
+		clusterBeg = beg
+	} else {
+		clusterBeg = resetIfOutOfRange(beg, end, beg, clusterBeg)
+	}
 
 	clusterEnd := clusterBeg
 
@@ -156,6 +168,7 @@ func msGraphemeNext(s *msGraphemeState, str []uint16) bool {
 		s.beg = clusterBeg
 		s.len = clusterEnd - clusterBeg
 		s.width = width
+		s.source = &str[0]
 		s._state = state
 		s._last = lead
 	}

@@ -7,8 +7,10 @@ the mirror image: it terminates such a line with a plain CRLF, but splits long
 lines while the buffer scrolls. Neither source alone is enough; together they
 are exact.
 
-This tool implements that correction and checks it against ground truth — on a
-mock, under fuzzing, and against a real ConPTY.
+This tool implements that correction and checks it against ground truth on a
+port-backed mock and under fuzzing; the Windows binary also captures a real
+ConPTY. The mock is not treated as proof by itself: its edge cases are pinned
+to the research and to captured failures.
 
 ## How the correction works
 
@@ -51,19 +53,24 @@ waits for Enter before closing so a run from Explorer leaves something to read.
 
 ## What the tests are for
 
-The mock reproduces the measured grammar and is validated against real dumps:
-an empty buffer costs five bytes per row, and terminator counts match the field
-captures at 500 and 2000 rows. Jitter is built in — the stream is cut into
+The mock reproduces the measured grammar and carries regressions for the field
+captures: an empty buffer costs five bytes per row, and terminator counts match
+the field captures at 500 and 2000 rows. The supplied 2000-row run was not
+green: at write width 120 and frame width 119, a CJK line ended with one
+Microsoft display-padding space in the frame. The correction now consumes that
+byte only when the live sequence proves it is padding, and the captured seed
+has a dedicated replay test. Jitter is built in — the live stream is fed in
 random chunks at random offsets, including inside escape sequences — because a
 parser that only works on whole frames passes on a mock and fails in the field.
 
-Six fuzz targets cover the properties that must hold on any input: the report
+Seven fuzz targets cover the properties that must hold on any input: the report
 never panics and never comes back empty, the correction never loses or invents
 a character and only ever splits, and the stream splitter preserves the text
 exactly.
 
-**Every one of the following was a real bug, found here rather than by a
-tester**, which is the whole point of the arrangement:
+**Every one of the following was a real bug or an uncovered mock boundary,
+found here rather than by a tester**, which is the whole point of the
+arrangement:
 
 - the correction keyed on the width of the *frame* instead of the width the
   lines were *written* at — found by replaying a field capture; it made the
@@ -79,6 +86,10 @@ tester**, which is the whole point of the arrangement:
 - the expected list omitted the end marker the child itself prints, so a
   correct run reported one line short — the mock had never modelled a child
   that prints more than the fixture
+- the frame writer's wide-cell edge padding was absent, so a 120-to-119 repaint
+  differed by one literal space — the current mock models only this documented
+  `WriteInfos` case and the reconciler consumes it only with proof from the
+  live sequence
 
 ## The stream is read with a cursor, not with rules about it
 
@@ -148,7 +159,8 @@ coordinate inside the mirror.
 ## What the mock did not model, and now does
 
 Asked directly after a passing run: which parts of the original were
-reproduced inaccurately. Four answers, all since closed.
+reproduced inaccurately. The audit found four old gaps plus two new boundaries;
+each is either covered now or explicitly recorded as outside this text oracle.
 
 **Widths were counted in bytes.** Everything measured `len(s)`, which is right
 only for ASCII. A Cyrillic line is twice as many bytes as cells, so "the length
@@ -174,7 +186,15 @@ behaviour.
 
 **The stream had no window title and no colour.** `ESC]0;…BEL` is what leaked
 into the first logical line of a real capture and broke everything; the mock
-never had it, so the mock never caught it. Both are in the stream now.
+never had it, so the mock never caught it. The title and BEL/ST parser coverage
+are now present. SGR attributes remain an explicit non-port because this tool
+verifies text boundaries, not colour runs; the omission is recorded in the
+Microsoft-port headers rather than guessed at.
+
+**The incremental parser was not actually exercised.** The end-to-end test
+reassembled the live chunks before parsing, so it did not test a read ending in
+the middle of UTF-8, OSC, or CSI. It now feeds those chunks directly and pins
+whole-buffer versus one-byte equivalence.
 
 ## The full-screen detector
 

@@ -27,6 +27,37 @@ func TestReportPassesOnAGoodCapture(t *testing.T) {
 	}
 }
 
+func TestCollectedFieldSeedReplaysAgainstAuditedMock(t *testing.T) {
+	// This is the seed printed by conptyreconcile-2000.txt. Keep it as an
+	// end-to-end regression: the field failure was caused by a wide-cell
+	// padding byte in a 120-to-119 repaint, not by the synthetic fixtures.
+	const seed int64 = 1787989147020622300
+	const writeWidth, frameWidth, height, lines = 120, 119, 2000, 150
+	printed := append(randomGroundTruth(seed, writeWidth, lines), markerDone)
+
+	writer := newMockConPTY(writeWidth, height, seed)
+	viewer := newMockConPTY(frameWidth, height, seed)
+	liveChunks := writer.Chunks(writer.LiveStream(printed), 97)
+	frameChunks := viewer.Chunks(viewer.FrameAtWidth(printed, writeWidth), 313)
+
+	var frame []byte
+	for _, chunk := range frameChunks {
+		frame = append(frame, chunk...)
+	}
+	got := trimTrailingBlanks(reconcileOrdered(
+		trimTrailingBlanks(splitFrameLines(frame)),
+		liveLinesFromChunks(liveChunks, writeWidth)))
+	want := trimTrailingBlanks(printed)
+	if len(got) != len(want) {
+		t.Fatalf("field seed recovered %d lines, expected %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("field seed line %d: got %q, want %q", i, trunc(got[i]), trunc(want[i]))
+		}
+	}
+}
+
 func TestReportSaysNoFrameWhenTheResizeEmitsNothing(t *testing.T) {
 	// The post-#17510 emitter case: a resize produces no repaint. The tool
 	// must say so plainly instead of reporting zero matches.

@@ -199,3 +199,16 @@ func TestGridFeedIsIndependentOfReadBoundaries(t *testing.T) {
 		}
 	}
 }
+
+func TestReconcileAcceptsMSWideCellFramePadding(t *testing.T) {
+	const width = 120
+	wide := strings.Repeat("中", width/2)
+	next := "line 000004 short"
+	live := liveLines([]byte("\x1b]0;probe\x07"+wide+"\r\n"+next+"\r\n"), width)
+	frame := frameOf(wide + " " + next)
+
+	got := reconcileOrdered(splitFrameLines(frame), live)
+	if len(got) != 2 || got[0] != wide || got[1] != next {
+		t.Fatalf("MS frame padding must not become part of either logical line: got %q", got)
+	}
+}

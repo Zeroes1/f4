@@ -86,6 +86,41 @@ func stripEscapes(b []byte) string {
 	return sb.String()
 }
 
+// ---------------------------------------------------------------------------
+// live-stream hard breaks
+// ---------------------------------------------------------------------------
+
+// liveHardBreaks returns every logical line that the ported conhost model says
+// filled its rows and therefore had a boundary the frame may have lost. It is
+// retained as a compatibility helper for the report experiments; the main
+// correction uses the ordered liveLine sequence directly.
+//
+// On 19045 (P6) the wrap point carries a CRLF too and this signal is not
+// available; that is why the correction is a setting rather than a constant.
+func liveHardBreaks(stream []byte, width int) map[string]int {
+	return liveHardBreaksTracking(stream, width)
+}
+
+// liveHardBreaksTracking is the width-aware form. The width can change while
+// output is in flight -- a window drag during a `dir` is the ordinary case --
+// and the ported model retains the write-time width for each row through a
+// reflow.
+//
+// The width in force is read from the stream itself: ConPTY announces it with
+// the XTWINOPS size report, ESC[8;rows;cols t, at the head of every frame.
+func liveHardBreaksTracking(stream []byte, initialWidth int) map[string]int {
+	out := map[string]int{}
+	if initialWidth <= 0 {
+		return out
+	}
+	for _, line := range liveLines(stream, initialWidth) {
+		if mergesAtWidth(line.Text, line.Width) {
+			out[line.Text]++
+		}
+	}
+	return out
+}
+
 // liveLine is one logical line as the live stream delivered it, together with
 // the console width in force when it was written.
 type liveLine struct {
@@ -102,7 +137,6 @@ func liveLines(stream []byte, initialWidth int) []liveLine {
 	// immediately: a 119-column line in a 120-column console ended with no
 	// newline at all, followed by an absolute ESC[30;1H, because conhost
 	// repositioned rather than emitting a newline and a blank row. The grid
-	// reads that correctly because a cursor move is a cursor move.
 	//
 	// On the same capture the seam rules produced 130 logical lines out of
 	// 151 printed; the grid produces 151 of 151.
@@ -122,6 +156,19 @@ func liveLinesFromChunks(chunks [][]byte, initialWidth int) []liveLine {
 		g.Feed(chunk)
 	}
 	return g.LogicalLinesWithWidth()
+}
+
+func liveHardBreaksFixed(stream []byte, width int) map[string]int {
+	out := map[string]int{}
+	if width <= 0 {
+		return out
+	}
+	for _, line := range liveLines(stream, width) {
+		if mergesAtWidth(line.Text, line.Width) {
+			out[line.Text]++
+		}
+	}
+	return out
 }
 
 // liveLogicalLines splits the live stream into logical lines, rejoining the
@@ -270,7 +317,6 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 	i := 0
 	for _, run := range frameRuns {
 		acc := ""
-		consumed := 0
 		for {
 			if i >= len(live) {
 				return nil, false
@@ -282,7 +328,6 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 			acc += l.Text
 			out = append(out, l.Text)
 			i++
-			consumed++
 			// A line that exactly fills its rows gets no terminator and the
 			// run continues into the next line; anything else ends the run.
 			if !mergesAtWidth(l.Text, l.Width) {
@@ -312,7 +357,6 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 		if acc != run {
 			return nil, false
 		}
-		_ = consumed
 	}
 	return out, true
 }
@@ -322,14 +366,7 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 // whitespace normalizer: a real trailing/interior space must still defeat
 // alignment rather than disappear from the child's text.
 func endsInWideGlyph(s string) bool {
-	runes := []rune(s)
-	for i := len(runes) - 1; i >= 0; i-- {
-		if cellWidth(runes[i]) == 0 {
-			continue
-		}
-		return cellWidth(runes[i]) == 2
-	}
-	return false
+	return lastGraphemeWidth(s) == 2
 }
 
 func mergesAtWidth(line string, width int) bool {
