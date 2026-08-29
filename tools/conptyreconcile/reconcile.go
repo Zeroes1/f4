@@ -86,41 +86,6 @@ func stripEscapes(b []byte) string {
 	return sb.String()
 }
 
-// ---------------------------------------------------------------------------
-// live-stream hard breaks
-// ---------------------------------------------------------------------------
-
-// liveHardBreaks returns every logical line that the ported conhost model says
-// filled its rows and therefore had a boundary the frame may have lost. It is
-// retained as a compatibility helper for the report experiments; the main
-// correction uses the ordered liveLine sequence directly.
-//
-// On 19045 (P6) the wrap point carries a CRLF too and this signal is not
-// available; that is why the correction is a setting rather than a constant.
-func liveHardBreaks(stream []byte, width int) map[string]int {
-	return liveHardBreaksTracking(stream, width)
-}
-
-// liveHardBreaksTracking is the width-aware form. The width can change while
-// output is in flight -- a window drag during a `dir` is the ordinary case --
-// and the ported model retains the write-time width for each row through a
-// reflow.
-//
-// The width in force is read from the stream itself: ConPTY announces it with
-// the XTWINOPS size report, ESC[8;rows;cols t, at the head of every frame.
-func liveHardBreaksTracking(stream []byte, initialWidth int) map[string]int {
-	out := map[string]int{}
-	if initialWidth <= 0 {
-		return out
-	}
-	for _, line := range liveLines(stream, initialWidth) {
-		if mergesAtWidth(line.Text, line.Width) {
-			out[line.Text]++
-		}
-	}
-	return out
-}
-
 // liveLine is one logical line as the live stream delivered it, together with
 // the console width in force when it was written.
 type liveLine struct {
@@ -156,19 +121,6 @@ func liveLinesFromChunks(chunks [][]byte, initialWidth int) []liveLine {
 		g.Feed(chunk)
 	}
 	return g.LogicalLinesWithWidth()
-}
-
-func liveHardBreaksFixed(stream []byte, width int) map[string]int {
-	out := map[string]int{}
-	if width <= 0 {
-		return out
-	}
-	for _, line := range liveLines(stream, width) {
-		if mergesAtWidth(line.Text, line.Width) {
-			out[line.Text]++
-		}
-	}
-	return out
 }
 
 // liveLogicalLines splits the live stream into logical lines, rejoining the
