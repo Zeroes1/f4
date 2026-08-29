@@ -48,17 +48,6 @@ type stepResult struct {
 	Dur     time.Duration
 }
 
-func (s stepResult) line() string {
-	base := fmt.Sprintf("%-22s %-8s %6dms", s.Name, s.Outcome, s.Dur.Milliseconds())
-	if s.Summary != "" {
-		base += "  " + s.Summary
-	}
-	if s.Err != "" {
-		base += "  <" + s.Err + ">"
-	}
-	return base
-}
-
 // withTimeout runs fn on its own goroutine and returns as soon as fn finishes
 // or d elapses, whichever comes first. A step that times out is abandoned:
 // its goroutine keeps running and is never waited for, because waiting is

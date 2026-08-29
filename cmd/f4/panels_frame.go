@@ -4631,8 +4631,9 @@ func (pf *PanelsFrame) driveMenuDefaultPos(panelIdx int) int {
 	cur := osVFS.GetPath()
 	for i, drv := range getPlatformDrives() {
 		if driveMatchesPath(drv, cur) {
-			// platform drives begin at menu row 1 (row 0 is "Other panel")
-			return i + 1
+			// The "Other panel" and "Temporary panel" entries precede
+			// platform drives.
+			return i + 2
 		}
 	}
 	return 0

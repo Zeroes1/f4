@@ -63,7 +63,7 @@ func stripEscapes(b []byte) string {
 			// Skip ESC [ ... final-byte, or ESC ] ... BEL/ST, or ESC X.
 			if i+1 < len(b) && b[i+1] == '[' {
 				j := i + 2
-				for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
+				for j < len(b) && (b[j] < 0x40 || b[j] > 0x7e) {
 					j++
 				}
 				i = j
@@ -146,7 +146,7 @@ func liveLogicalLines(stream []byte) []string {
 		// A CSI sequence: consume it, and remember whether it repositioned.
 		if stream[i] == 0x1b && i+1 < len(stream) && stream[i+1] == '[' {
 			j := i + 2
-			for j < len(stream) && !(stream[j] >= 0x40 && stream[j] <= 0x7e) {
+			for j < len(stream) && (stream[j] < 0x40 || stream[j] > 0x7e) {
 				j++
 			}
 			i = j + 1
@@ -218,39 +218,10 @@ func seamFollows(b []byte, off int) bool {
 		return false
 	}
 	j := off + 2
-	for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
+	for j < len(b) && (b[j] < 0x40 || b[j] > 0x7e) {
 		j++
 	}
 	return j < len(b) && (b[j] == 'H' || b[j] == 'f')
-}
-
-// stripEscapesKeepBreaks removes CSI/OSC sequences but keeps CR and LF, so
-// that line structure survives.
-func stripEscapesKeepBreaks(b []byte) string {
-	var sb strings.Builder
-	for i := 0; i < len(b); i++ {
-		c := b[i]
-		if c == 0x1b {
-			if i+1 < len(b) && b[i+1] == '[' {
-				j := i + 2
-				for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
-					j++
-				}
-				i = j
-				continue
-			}
-			if i+1 < len(b) && b[i+1] == ']' {
-				i = skipOSC(b, i) - 1
-				continue
-			}
-			i++
-			continue
-		}
-		if c == '\r' || c == '\n' || (c >= 0x20 && c != 0x7f) {
-			sb.WriteByte(c)
-		}
-	}
-	return sb.String()
 }
 
 // ---------------------------------------------------------------------------

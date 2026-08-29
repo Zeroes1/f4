@@ -385,6 +385,7 @@ Action.App.Spreadsheet.Desc=Open the spreadsheet workspace
 ; --- SQLite ---
 Action.App.SQLite=SQLite &client
 Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
+Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 
 Link.Title= Link
 Link.Prompt=Create link to %s in:
@@ -853,13 +854,13 @@ FindFile.BtnView=&View
 FindFile.BtnEdit=&Edit
 FindFile.BtnClose=&Close
 FindFile.BtnPanel=&Panel
+
 TempPanel.Title=Temporary panel
 TempPanel.Drive=&Temporary panel
 TempPanel.Remove=Remove
 TempPanel.SwitchTitle=Temporary panel lists
 TempPanel.Slot=&%d  (%d items)
 TempPanel.AddError=Failed to add items to the temporary panel:\n%v
-Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 
 History.FoldersTitle= Folders History
 History.CommandsTitle= Commands History

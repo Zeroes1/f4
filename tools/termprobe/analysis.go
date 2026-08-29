@@ -458,37 +458,6 @@ type rungResult struct {
 	Notes []string
 }
 
-// durFill is the fill phase's duration, used when reporting a silent session.
-func (r rungResult) durFill() string {
-	return fmt.Sprintf("%dms", r.FillMs)
-}
-
-func (r rungResult) line() string {
-	if !r.CreateOK {
-		return fmt.Sprintf("%-7d create FAILED: %s", r.Height, r.CreateNo)
-	}
-	tag := " "
-	if r.Precise {
-		tag = "*"
-	}
-	rejoined := "no"
-	switch r.WideLongRows {
-	case 1:
-		rejoined = "yes"
-	case 0:
-		rejoined = "n/a"
-	}
-	return fmt.Sprintf(
-		"%-7d%s create %5dms  host %6dKB->%6dKB  fill %d/%d in %5dms  "+
-			"reflow %7dB %5dms carrying %d [%d..%d]  wide4000 %6dB %5dms rejoined=%s  alt h/l=%v/%v",
-		r.Height, tag, r.CreateMs,
-		r.HostRSSAfterCreateKB, r.HostRSSAfterFillKB,
-		r.LinesSeen, r.LinesAsked, r.FillMs,
-		r.ReflowBytes, r.ReflowMs, r.ReflowMarkers, r.ReflowLowest, r.ReflowHighest,
-		r.WideBytes, r.WideMs, rejoined,
-		r.AltEnterSeen, r.AltLeaveSeen)
-}
-
 // ladderVerdict turns the rungs into the two sentences a reader needs: the
 // tallest height that worked at all, and the tallest whose reflow still
 // carried the whole history in a time worth paying.

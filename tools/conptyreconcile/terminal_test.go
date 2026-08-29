@@ -11,14 +11,6 @@ import (
 // reflow
 // ---------------------------------------------------------------------------
 
-func countRunes(s string) int {
-	n := 0
-	for range s {
-		n++
-	}
-	return n
-}
-
 func TestWrapRoundTripsAtEveryWidth(t *testing.T) {
 	lines := []string{"short", strings.Repeat("x", 250), "", "exactly ten", strings.Repeat("y", 40)}
 	for _, w := range []int{1, 3, 10, 39, 40, 41, 250, 1000} {
