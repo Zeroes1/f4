@@ -1,3 +1,0 @@
-go test fuzz v1
-string("摝n\xe6n\x0e\xb7\xa9\x14\xf0")
-int(1)
