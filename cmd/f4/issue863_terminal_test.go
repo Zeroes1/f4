@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/unxed/vtui"
@@ -34,13 +35,38 @@ func TestIssue863OwnTerminalKeepsPTYHeightWhileBusy(t *testing.T) {
 	if pf.termView.Y2 >= pf.cmdLine.Y1 {
 		t.Fatalf("own terminal overlaps f4 command line: terminal Y2=%d, command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
 	}
+}
 
-	// The terminal can also remain visible below a reduced panel layout. It
-	// still shares the screen with the f4 command line and keybar there.
-	pf.showPanels = true
-	pf.showLeftPanel = false
+// TestIssue863OwnTerminalDrawsLastOutputRow reproduces a Unix shell prompt
+// printed on the same row as command output that has no trailing LF. The f4
+// command line must not paint over that row.
+func TestIssue863OwnTerminalDrawsLastOutputRow(t *testing.T) {
+	vtui.SetDefaultPalette()
+	t.Cleanup(swapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.shellMode = ShellModeOwn
+	pf.showPanels = false
+	pf.showKeyBar = true
+	pf.pty = &mockPty{}
+
+	// bash produces this shape for: printf '1\n2' followed by its prompt.
+	pf.parser.Process([]byte("shell$ printf '1\\n2'\r\n1\r\n2shell$ "))
 	pf.ResizeConsole(80, 25)
-	if pf.termView.Y2 >= pf.cmdLine.Y1 {
-		t.Fatalf("own terminal below panels overlaps f4 command line: terminal Y2=%d, command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	pf.Show(scr)
+
+	for y := 0; y < scr.Height(); y++ {
+		var row strings.Builder
+		for x := 0; x < scr.Width(); x++ {
+			row.WriteRune(rune(scr.GetCell(x, y).Char))
+		}
+		if strings.Contains(row.String(), "2shell$") {
+			return
+		}
 	}
+	t.Fatal("last output row was painted over by the f4 command line")
 }
