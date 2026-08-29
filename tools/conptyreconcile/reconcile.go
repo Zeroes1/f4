@@ -137,15 +137,24 @@ type liveLine struct {
 // liveLines splits the stream into logical lines and tags each with the width
 // that applied to it, tracking the size reports ConPTY sends.
 func liveLines(stream []byte, initialWidth int) []liveLine {
-	out := make([]liveLine, 0, 64)
+	// A cursor model, not a CRLF split. The rules this replaced -- "a CRLF
+	// followed by a cursor move is a continuation", and so on -- were written
+	// from what the stream usually looks like, and a real capture broke them
+	// immediately: a 119-column line in a 120-column console ended with no
+	// newline at all, followed by an absolute ESC[30;1H, because conhost
+	// repositioned rather than emitting a newline and a blank row. The grid
+	// reads that correctly because a cursor move is a cursor move.
+	//
+	// On the same capture the seam rules produced 130 logical lines out of
+	// 151 printed; the grid produces 151 of 151.
 	width := initialWidth
-	for _, seg := range liveSegments(stream) {
-		if seg.width > 0 {
-			width = seg.width
-		}
-		out = append(out, liveLine{Text: seg.line, Width: width})
+	if width < 1 {
+		width = 1
 	}
-	return out
+	g := NewGrid(width)
+	g.Feed(stream)
+
+	return g.LogicalLinesWithWidth()
 }
 
 type liveSegment struct {
@@ -458,5 +467,7 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 }
 
 func mergesAtWidth(line string, width int) bool {
-	return width > 0 && len(line) > 0 && len(line)%width == 0
+	// Cells, not bytes: a Cyrillic line is twice as many bytes as columns, so
+	// a byte-based test fires at the wrong places and misses the real ones.
+	return fillsRowsExactly(line, width)
 }

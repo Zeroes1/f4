@@ -30,8 +30,17 @@ without trace — is recovered, because the live sequence still has it.
 conptyreconcile.exe                          # one fixed case
 conptyreconcile.exe -fuzz 10                 # ten randomised rounds
 conptyreconcile.exe -fuzz 5 -resize-during-output
+conptyreconcile.exe -terminal                # the whole pipeline in one run
 conptyreconcile.exe -seed 12345              # replay one round
 ```
+
+`-terminal` is the end-to-end check: a tall console, a frame read out of it,
+the mirror built from that frame, the visible slice at the real window size,
+the coordinate mapping over that slice, scroll clamping, re-wrap without a new
+frame, and the geometry switch for a full-screen program. Each stage is
+compared against something computed independently, so a pass means the stages
+agree rather than that nothing crashed. The same pipeline runs on the mock in
+`TestPipelineFromFrameToVisibleSlice`.
 
 Every round prints its seed. A seed that fails on Windows replays against the
 mock on any machine — `go test ./tools/conptyreconcile` — with no Windows
@@ -48,7 +57,7 @@ captures at 500 and 2000 rows. Jitter is built in — the stream is cut into
 random chunks at random offsets, including inside escape sequences — because a
 parser that only works on whole frames passes on a mock and fails in the field.
 
-Three fuzz targets cover the properties that must hold on any input: the report
+Six fuzz targets cover the properties that must hold on any input: the report
 never panics and never comes back empty, the correction never loses or invents
 a character and only ever splits, and the stream splitter preserves the text
 exactly.
@@ -70,6 +79,135 @@ tester**, which is the whole point of the arrangement:
 - the expected list omitted the end marker the child itself prints, so a
   correct run reported one line short — the mock had never modelled a child
   that prints more than the fixture
+
+## The stream is read with a cursor, not with rules about it
+
+`grid.go` applies the stream to a screen with a cursor, autowrap, delayed EOL,
+scrolling and a scrollback, and marks a row as wrapped when *this code* wraps
+it -- which is how Windows Terminal obtains the same flag, and mirrors
+`ROW::SetWrapForced` and the `if (newX >= newWidth)` in `TextBuffer::Reflow`.
+Logical lines are then rows joined by that flag. Double-width glyphs that do
+not fit at the end of a row move down whole and leave a padding cell, which is
+`ROW::SetDoubleBytePadded` and must not become a space when the line is
+reassembled.
+
+It replaced a set of rules I wrote about what the stream "usually" looks like
+-- a CRLF followed by a cursor move is a continuation, and so on. A real
+capture broke them at once: a 119-column line in a 120-column console ended
+with **no newline at all**, followed by an absolute `ESC[30;1H`, because
+conhost repositioned the cursor rather than emitting a newline and a blank
+row. The rules read that as one continued line and produced 130 logical lines
+where 151 were printed; the cursor model produces 151 of 151 on the same
+bytes.
+
+The research document had already said this -- finding P11: *read the bytes
+with a cursor model, not a CRLF split*. Writing rules instead cost a field run.
+
+## Everything with a Microsoft original is a port of it
+
+`ucd.go` is `src/types/CodepointWidthDetector.cpp` from `microsoft/terminal`:
+the four-stage trie over all 1,114,112 codepoints, the grapheme join rules and
+the lookup, reproduced unchanged with the MIT notice retained. Only the syntax
+is Go, and the file is generated from their source rather than typed.
+
+It replaced a short table of "wide" ranges written from memory, which was
+wrong in a way that mattered: conhost decides where a row ends, and if this
+disagrees with conhost then it disagrees about where a line exactly fills its
+rows -- which is exactly where conhost merges two logical lines into one.
+
+The port also exposed a second error in the same place. `ucdToCharacterWidth`
+returns an enum, not a column count: the value 3 means *ambiguous* and is
+replaced by `_ambiguousWidth`, whose default is 1. Reading it as a width made
+every Cyrillic line three times too wide. That is ported too, along with the
+U+FE0F rule and the clamp to two, and `ambiguousWidth` is a setting here
+because `SetAmbiguousWidth` is one there.
+
+## A real command under a corner drag
+
+The generated fixture is deterministic, which is what makes a ground-truth
+comparison possible and also what makes it unlike anything a user runs.
+
+```
+conptyreconcile.exe -cmd "dir /s C:\Windows\System32" -drag 40
+```
+
+runs a real command and resizes the console forty times, at random widths, at
+random intervals, while it prints. There is no ground truth, so it checks the
+invariants that hold for any content -- output arrived, the correction only
+splits, re-wrapping holds at *every* width the drag used, coordinates stay
+inside the mirror, scrolling stays clamped -- and logs the whole timeline of
+resizes with byte counts so a failure can be read rather than reproduced.
+
+The same exercise runs here on a real Unix pty against `ls -laR /usr`
+(`TestRealCommandUnderACornerDrag`). A pty is not ConPTY and wraps nothing, so
+that test cannot check the reconstruction; what it does check is everything
+that is not ConPTY-specific, over two megabytes of real output and forty live
+resizes. On this machine: 42,940 logical lines, every width held, every
+coordinate inside the mirror.
+
+## What the mock did not model, and now does
+
+Asked directly after a passing run: which parts of the original were
+reproduced inaccurately. Four answers, all since closed.
+
+**Widths were counted in bytes.** Everything measured `len(s)`, which is right
+only for ASCII. A Cyrillic line is twice as many bytes as cells, so "the length
+is a multiple of the width" -- the rule that decides whether conhost merged a
+line -- fired in the wrong places, and wrapping cut characters in half.
+conhost counts cells and gives a wide glyph two, with a separate flag for the
+padding cell left when one will not fit (`ROW::WasDoubleBytePadded`). `cells.go`
+is the model catching up; the generator now emits Cyrillic and CJK so the path
+is exercised rather than assumed. The fuzzer immediately found an infinite loop
+in the new code -- a single glyph wider than a one-column window -- which is why
+every row split goes through one guarded helper.
+
+**Output interleaved with a frame was not modelled.** The live stream and the
+frame were built as separate blocks and butted together, so the
+`-resize-during-output` run was less well covered than its PASS suggested: in
+reality the child keeps printing *while* the repaint is written.
+`FrameInterleaved` does that now.
+
+**Eviction dropped whole lines.** conhost's ring evicts *rows*, so the top of a
+frame can begin partway through a wrapped line, where an aligner looking for
+whole lines cannot find its start. `fitRows` models it and a test pins the
+behaviour.
+
+**The stream had no window title and no colour.** `ESC]0;…BEL` is what leaked
+into the first logical line of a real capture and broke everything; the mock
+never had it, so the mock never caught it. Both are in the stream now.
+
+## The full-screen detector
+
+All four layers of §17, with the platform-specific part behind a
+`ProcessLister` interface so the decision logic is tested on any machine:
+
+1. **the process tree** — deterministic, and the only layer that is not an
+   inference. f4 spawns the shell, not the program the user runs in it, so the
+   watcher walks descendants and matches image names against a configurable
+   list. A failed enumeration keeps the previous answer rather than flipping
+   the geometry; a cycle in reported parents cannot hang it; the geometry
+   returns only when the *last* watched program exits.
+2. **`ESC[?1049h/l`** — available where the emitter forwards it, which is not
+   10.0.22000.
+3. **frame signals** — the doubled terminator count and content spanning the
+   whole viewport. Labelled a heuristic, consulted last.
+4. **the user's key** — no detector may be the last word.
+
+The Windows run exercises layer 1 with `cmd.exe`, which every machine has:
+watching for `vim.exe` would make the check untestable exactly where it needs
+testing, and which names denote full-screen programs is a setting anyway.
+
+## The terminal core
+
+`terminal.go` is the f4 side: the mirror of logical lines, the reflow, the
+bottom slice, the screen-to-mirror coordinate mapping, scroll clamping, the
+geometry decision and the layered full-screen detector. It is deliberately
+portable — none of it touches Windows — so all of it is tested and fuzzed here,
+and the Windows run only has to confirm that the real ConPTY agrees.
+
+It stores text, not attributes: colour travels in the stream as SGR and is
+applied by f4's renderer at draw time. The reflow only has to get the
+boundaries right, and boundaries are what conhost loses.
 
 The last two are the pattern worth remembering: a fixed fixture and a mock that
 only models what its author thought of will both agree with a wrong

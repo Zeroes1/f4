@@ -42,3 +42,10 @@ func trunc(s string) string {
 	}
 	return s
 }
+
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"math/rand"
 	"strings"
 )
@@ -40,22 +42,11 @@ func newMockConPTY(width, height int, seed int64) *mockConPTY {
 }
 
 // rowsFor is how many buffer rows a logical line occupies.
-func rowsFor(line string, width int) int {
-	if len(line) == 0 {
-		return 1
-	}
-	n := (len(line) + width - 1) / width
-	if n < 1 {
-		n = 1
-	}
-	return n
-}
+func rowsFor(line string, width int) int { return cellRows(line, width) }
 
 // mergesWithNext reports the measured P13 condition: a line that exactly
 // fills its rows loses its boundary.
-func mergesWithNext(line string, width int) bool {
-	return len(line) > 0 && len(line)%width == 0
-}
+func mergesWithNext(line string, width int) bool { return fillsRowsExactly(line, width) }
 
 // FrameAtWidth renders the repaint produced by a resize to a *different*
 // width than the lines were written at. This is the ordinary case in the
@@ -171,6 +162,10 @@ func (m *mockConPTY) Frame(lines []string) []byte {
 // ones, which is the boundary the frame will have lost.
 func (m *mockConPTY) LiveStream(lines []string) []byte {
 	var sb strings.Builder
+	// conhost announces the window title before anything else. An OSC skipper
+	// that knew only about BEL let this text leak into the first logical line
+	// of a real capture; the mock never had it, so the mock never caught it.
+	sb.WriteString("\x1b]0;C:\\probe.exe\x07")
 	for _, l := range lines {
 		sb.WriteString(l)
 		sb.WriteString("\r\n")
@@ -183,27 +178,76 @@ func (m *mockConPTY) LiveStream(lines []string) []byte {
 // reliable for long lines. The reconciliation must not depend on it for those.
 func (m *mockConPTY) LiveStreamScrolling(lines []string) []byte {
 	var sb strings.Builder
+	sb.WriteString("\x1b]0;C:\\probe.exe\x07")
+	row := 0
 	for _, l := range lines {
-		if len(l) > m.Width && m.rnd.Intn(2) == 0 {
-			// The measured shape: the piece, a CRLF, then an absolute cursor
-			// position, then the continuation. The reposition is what marks
-			// this as a seam rather than a line ending.
-			cut := m.Width
-			sb.WriteString(l[:cut])
-			sb.WriteString("\r\n")
-			sb.WriteString("\x1b[")
-			sb.WriteString(itoa(m.Height - 1))
-			sb.WriteString(";")
-			sb.WriteString(itoa(m.Width))
-			sb.WriteString("H")
-			sb.WriteString(l[cut:])
-			sb.WriteString("\r\n")
+		sb.WriteString(l)
+		row += rowsFor(l, m.Width)
+		if m.rnd.Intn(3) == 0 {
+			// The measured shape: instead of a newline, conhost repositions
+			// the cursor absolutely to the row where the next line goes.
+			// There is no CRLF at all, which is what defeated the seam rules
+			// this mock used to model -- a cursor handles it, a rule does not.
+			fmt.Fprintf(&sb, "\x1b[%d;1H", row+1)
 			continue
 		}
-		sb.WriteString(l)
 		sb.WriteString("\r\n")
 	}
 	return []byte(sb.String())
+}
+
+// FrameInterleaved models what a resize during output really produces: the
+// child keeps printing while the repaint is being written, so fresh output
+// lands inside the frame rather than after it.
+func (m *mockConPTY) FrameInterleaved(lines []string, writeWidth int, extra []string) ([]byte, []string) {
+	frame := m.FrameAtWidth(lines, writeWidth)
+	term := []byte("\x1b[K\r\n")
+	parts := bytes.Split(frame, term)
+	if len(parts) < 4 {
+		return frame, lines
+	}
+	cut := len(parts) / 2
+
+	var sb strings.Builder
+	for i, p := range parts {
+		sb.Write(p)
+		if i < len(parts)-1 {
+			sb.Write(term)
+		}
+		if i == cut {
+			for _, e := range extra {
+				sb.WriteString(e)
+				sb.WriteString("\r\n")
+			}
+		}
+	}
+	return []byte(sb.String()), append(append([]string{}, lines...), extra...)
+}
+
+func (m *mockConPTY) fitRows(lines []string) ([]string, bool) {
+	total := 0
+	for _, l := range lines {
+		total += rowsFor(l, m.Width)
+	}
+	if total <= m.Height {
+		return lines, false
+	}
+	drop := total - m.Height
+	out := append([]string{}, lines...)
+	for drop > 0 && len(out) > 0 {
+		r := rowsFor(out[0], m.Width)
+		if r <= drop {
+			drop -= r
+			out = out[1:]
+			continue
+		}
+		// The first surviving line is cut mid-way: the rows above it are gone
+		// and what remains starts inside the line.
+		_, tail := cutCells(out[0], drop*m.Width)
+		out[0] = tail
+		return out, true
+	}
+	return out, false
 }
 
 func (m *mockConPTY) fit(lines []string) []string {

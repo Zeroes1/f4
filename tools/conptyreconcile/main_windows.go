@@ -35,12 +35,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf16"
 	"unsafe"
 )
 
@@ -151,6 +154,12 @@ func escape(b []byte) string {
 	return sb.String()
 }
 
+func (d *dump) size() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.raw)
+}
+
 func (d *dump) markLiveEnd() {
 	d.mu.Lock()
 	d.liveEnd = len(d.raw)
@@ -179,33 +188,37 @@ func (d *dump) close() {
 
 func main() {
 	var (
-		emit    = flag.String("emit", "", "internal: run as the child")
-		width   = flag.Int("width", 120, "pseudoconsole width")
-		height  = flag.Int("height", 2000, "pseudoconsole height")
-		wide    = flag.Int("wide", 4000, "width to widen to")
-		lines   = flag.Int("lines", 150, "history lines the child prints")
-		long    = flag.Int("long", 600, "length of the long line")
-		out     = flag.String("out", "", "dump file (default conptydump-<height>.txt)")
-		hold    = flag.Duration("hold", 3*time.Second, "how long the child stays alive after printing")
-		step    = flag.Duration("step", 2*time.Second, "delay between resize steps")
-		noPause = flag.Bool("no-pause", false, "do not wait for Enter before closing")
-		rounds  = flag.Int("fuzz", 0, "run this many randomised rounds instead of one fixed case")
-		seed    = flag.Int64("seed", 0, "seed for a randomised round (0 = derived from the clock)")
-		during  = flag.Bool("resize-during-output", false, "resize while the child is still printing")
-		logTo   = flag.String("log", "", "write the report here (default conptyreconcile-<height>.log)")
+		emit      = flag.String("emit", "", "internal: run as the child")
+		width     = flag.Int("width", 120, "pseudoconsole width")
+		height    = flag.Int("height", 2000, "pseudoconsole height")
+		wide      = flag.Int("wide", 4000, "width to widen to")
+		lines     = flag.Int("lines", 150, "history lines the child prints")
+		long      = flag.Int("long", 600, "length of the long line")
+		out       = flag.String("out", "", "dump file (default conptydump-<height>.txt)")
+		hold      = flag.Duration("hold", 3*time.Second, "how long the child stays alive after printing")
+		step      = flag.Duration("step", 2*time.Second, "delay between resize steps")
+		noPause   = flag.Bool("no-pause", false, "do not wait for Enter before closing")
+		rounds    = flag.Int("fuzz", 0, "run this many randomised rounds instead of one fixed case")
+		seed      = flag.Int64("seed", 0, "seed for a randomised round (0 = derived from the clock)")
+		during    = flag.Bool("resize-during-output", false, "resize while the child is still printing")
+		realCmd   = flag.String("cmd", "", "run this real command instead of the generated fixture")
+		drag      = flag.Int("drag", 0, "simulate a corner drag: this many rapid resizes while it runs")
+		linesOnly = flag.Bool("lines-only", false, "check only the line reconstruction, not the terminal pipeline")
+		logTo     = flag.String("log", "", "write the report here (default conptyreconcile-<height>.log)")
 	)
 	flag.Parse()
 
 	if *emit == "child-random" {
+		w := newConsoleWriter()
 		// A seeded child: the parent regenerates the identical list, so the
 		// expected result never has to cross the pipe.
 		for _, l := range randomGroundTruth(*seed, *width, *lines) {
-			fmt.Print(l, "\r\n")
+			w.line(l)
 			if *during {
 				time.Sleep(8 * time.Millisecond)
 			}
 		}
-		fmt.Print(markerDone, "\r\n")
+		w.line(markerDone)
 		time.Sleep(*hold)
 		return
 	}
@@ -250,6 +263,17 @@ func main() {
 		os.Exit(2)
 	}
 
+	// The whole pipeline is the default. Running the tool without arguments
+	// should check everything it knows how to check; a narrower mode is for
+	// comparing against older logs and has to be asked for.
+	if *realCmd != "" {
+		runRealCommand(logPath, path, *realCmd, *width, *height, *drag, *step, *noPause)
+		return
+	}
+	if !*linesOnly && *rounds == 0 {
+		runTerminal(self, logPath, path, *seed, *width, *height, *lines, *step, *noPause)
+		return
+	}
 	if *rounds > 0 {
 		runRounds(self, logPath, *rounds, *seed, *width, *height, *lines, *step, *during, *noPause)
 		return
@@ -460,11 +484,11 @@ func buildCommandLine(args []string) string {
 // ---------------------------------------------------------------------------
 
 func runChild(lines, width int, hold time.Duration) {
-	out := os.Stdout
+	w := newConsoleWriter()
 	for _, l := range groundTruthLines(width, lines) {
-		fmt.Fprint(out, l, "\r\n")
+		w.line(l)
 	}
-	fmt.Fprintf(out, "%s\r\n", markerDone)
+	w.line(markerDone)
 	time.Sleep(hold)
 }
 
@@ -671,4 +695,428 @@ func oneRound(self string, seed int64, width, height, lines int,
 		return false, "no frame at all (post-#17510 emitter?)"
 	}
 	return false, fmt.Sprintf("%d of %d lines wrong", miss, len(want))
+}
+
+// ---------------------------------------------------------------------------
+// the whole pipeline against a real ConPTY
+//
+// One run that exercises everything f4 will do: a tall console, a frame read
+// out of it, the mirror built from that frame, the visible slice taken at the
+// real window size, the coordinate mapping over that slice, and the geometry
+// decision for a full-screen program. Each stage is checked against something
+// computed independently, so a pass means the stages agree rather than that
+// nothing crashed.
+// ---------------------------------------------------------------------------
+
+func runTerminal(self, logPath, dumpPath string, seed int64, width, height, lines int,
+	step time.Duration, noPause bool) {
+
+	lf, err := os.Create(logPath)
+	if err != nil {
+		fmt.Println("cannot create the log:", err)
+		os.Exit(2)
+	}
+	defer lf.Close()
+	say := func(format string, a ...any) {
+		line := fmt.Sprintf(format, a...)
+		fmt.Println(line)
+		fmt.Fprintln(lf, line)
+		lf.Sync()
+	}
+
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
+	const winW, winH = 100, 25
+
+	say("conptyreconcile -- tall console %dx%d, window %dx%d, seed %d, dump in %s",
+		width, height, winW, winH, seed, dumpPath)
+	say("")
+
+	// A dump is written here too. The first run of this mode failed and left
+	// nothing to look at, which cost a round trip that a file would have
+	// saved.
+	d, derr := newDump(dumpPath)
+	if derr != nil {
+		say("cannot create the dump: %v", derr)
+		os.Exit(2)
+	}
+	defer d.close()
+
+	sess, err := startSession(width, height, []string{self,
+		"-emit", "child-random",
+		"-seed", strconv.FormatInt(seed, 10),
+		"-width", strconv.Itoa(width),
+		"-lines", strconv.Itoa(lines),
+		"-hold", (step * 4).String(),
+	}, d)
+	if err != nil {
+		say("session failed: %v", err)
+		os.Exit(2)
+	}
+	defer sess.stop()
+
+	time.Sleep(step)
+	d.markLiveEnd()
+	sess.resize(width-1, height)
+	time.Sleep(step)
+
+	live, frame := d.split()
+	printed := trimTrailingBlanks(append(randomGroundTruth(seed, width, lines), markerDone))
+
+	fail := 0
+	check := func(name string, ok bool, detail string) {
+		if ok {
+			say("  ok    %-34s %s", name, detail)
+			return
+		}
+		fail++
+		say("  FAIL  %-34s %s", name, detail)
+	}
+
+	// 1. the mirror
+	recovered := trimTrailingBlanks(reconcileOrdered(
+		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width)))
+	m := NewMirror()
+	m.Replace(recovered)
+	check("mirror holds every printed line",
+		len(m.Lines()) == len(printed) && diffCount(m.Lines(), printed) == 0,
+		fmt.Sprintf("%d lines, expected %d", len(m.Lines()), len(printed)))
+
+	// 2. the visible slice, against an independent wrap of the ground truth
+	v := m.Slice(winW, winH)
+	want := Wrap(printed, winW)
+	sliceOK := len(v.Rows) == winH && len(want) >= winH
+	if sliceOK {
+		for i := range v.Rows {
+			if v.Rows[i].Text != want[len(want)-winH+i].Text {
+				sliceOK = false
+				break
+			}
+		}
+	}
+	check("visible slice is the wrapped tail", sliceOK,
+		fmt.Sprintf("%d rows of %d total", len(v.Rows), v.Total))
+
+	// 3. coordinates: every visible cell must map to the mirror and back
+	coordOK, checked := true, 0
+	for row := range v.Rows {
+		for col := 0; col <= len(v.Rows[row].Text); col++ {
+			p, ok := v.ScreenToMirror(col, row)
+			if !ok || p.Line < 0 || p.Line >= len(m.Lines()) || p.Offset > len(m.Lines()[p.Line]) {
+				coordOK = false
+				break
+			}
+			c2, r2, ok := v.MirrorToScreen(p)
+			if !ok {
+				coordOK = false
+				break
+			}
+			if back, _ := v.ScreenToMirror(c2, r2); back != p {
+				coordOK = false
+				break
+			}
+			checked++
+		}
+	}
+	check("screen and mirror coordinates agree", coordOK,
+		fmt.Sprintf("%d cells round-tripped", checked))
+
+	// 4. scrolling is bounded at both ends
+	top := m.ScrollBy(1<<30, winW, winH)
+	bottom := m.ScrollBy(-(1 << 30), winW, winH)
+	check("scroll is clamped, never wrapped", top == v.Total-winH && bottom == 0,
+		fmt.Sprintf("top %d (rows %d), bottom %d", top, v.Total, bottom))
+
+	// 5. a width change costs no round trip: the mirror re-wraps itself
+	narrow := m.Slice(60, winH)
+	wide := m.Slice(200, winH)
+	check("re-wrap needs no new frame",
+		len(narrow.Rows) == winH && len(wide.Rows) == winH && narrow.Total > wide.Total,
+		fmt.Sprintf("%d rows at 60, %d at 200", narrow.Total, wide.Total))
+
+	// 6. the detector, exercised with a program every Windows has.
+	//
+	// vim, far and mc are not on most machines, so watching for them would
+	// make this check untestable exactly where it needs testing. cmd.exe is
+	// always there, and whether the watched name denotes a full-screen program
+	// is a setting anyway (§16) -- what has to be proven is that the layer
+	// sees a descendant appear and disappear.
+	det := &Detector{
+		Process: NewProcessWatcher(SnapshotLister{}, uint32(os.Getpid()), []string{"cmd.exe"}),
+		Signals: &FrameSignals{Height: height},
+	}
+	det.Alt.Feed(live)
+	det.Alt.Feed(frame)
+	altSeen, _ := det.Alt.Active()
+
+	before, _ := det.Decide()
+
+	// Start a cmd.exe under us and let the watcher see it.
+	victim := exec.Command("cmd.exe", "/c", "ping -n 3 127.0.0.1 >nul")
+	if err := victim.Start(); err != nil {
+		check("detector sees a descendant appear", false, "cannot start cmd.exe: "+err.Error())
+	} else {
+		time.Sleep(400 * time.Millisecond)
+		during, why := det.Decide()
+		gTall := GeometryFor(winW, winH, height, false)
+		gReal := GeometryFor(winW, winH, height, during)
+		check("detector sees a descendant appear",
+			!before && during && strings.HasPrefix(why, "process: "),
+			fmt.Sprintf("before %v, during %v (%s); alt-screen in the stream: %v",
+				before, during, why, altSeen))
+		check("geometry switches with it",
+			gTall.Height == height && gReal.Height == winH,
+			fmt.Sprintf("tall %d, real %d", gTall.Height, gReal.Height))
+
+		victim.Wait()
+		time.Sleep(300 * time.Millisecond)
+		after, _ := det.Decide()
+		check("detector releases when it exits", !after,
+			fmt.Sprintf("after %v", after))
+	}
+
+	// The user's override must beat every layer.
+	det.Forced, det.ForcedSet = false, true
+	forced, fwhy := det.Decide()
+	check("user override wins", !forced && fwhy == "forced by the user", fwhy)
+
+	say("")
+	if fail == 0 {
+		say("PASS -- the whole pipeline agrees, seed %d", seed)
+	} else {
+		say("FAIL -- %d stage(s) wrong; replay with -seed %d against the mock", fail, seed)
+	}
+	if !noPause {
+		fmt.Print("\npress Enter to close ")
+		fmt.Fscanln(os.Stdin)
+	}
+	if fail > 0 {
+		os.Exit(1)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// the child's writer
+//
+// Go writes bytes; a console interprets them through its output code page,
+// which on a Russian machine is 866 and turns UTF-8 into mojibake. That is
+// recorded in docs/CONPTY_RESEARCH.md -- a Russian filename came back mangled
+// under OEM 850 in an earlier probe -- and it is what made the first run of
+// this tool with non-ASCII content collapse from 151 lines to 66.
+//
+// WriteConsoleW takes UTF-16 and never consults a code page, so the question
+// does not arise. SetConsoleOutputCP is set as well, for anything that writes
+// bytes anyway.
+// ---------------------------------------------------------------------------
+
+var (
+	procWriteConsoleW      = kernel32.NewProc("WriteConsoleW")
+	procSetConsoleOutputCP = kernel32.NewProc("SetConsoleOutputCP")
+	procGetStdHandleW      = kernel32.NewProc("GetStdHandle")
+)
+
+const cpUTF8 = 65001
+
+type consoleWriter struct {
+	h syscall.Handle
+}
+
+func newConsoleWriter() *consoleWriter {
+	procSetConsoleOutputCP.Call(cpUTF8)
+	h, _, _ := procGetStdHandleW.Call(^uintptr(10)) // STD_OUTPUT_HANDLE
+	return &consoleWriter{h: syscall.Handle(h)}
+}
+
+func (w *consoleWriter) line(s string) {
+	u := utf16.Encode([]rune(s + "\r\n"))
+	if len(u) == 0 {
+		return
+	}
+	var written uint32
+	procWriteConsoleW.Call(uintptr(w.h), uintptr(unsafe.Pointer(&u[0])),
+		uintptr(len(u)), uintptr(unsafe.Pointer(&written)), 0)
+}
+
+// ---------------------------------------------------------------------------
+// a real command, under a corner drag
+//
+// The generated fixture is deterministic, which is what makes the ground-truth
+// comparison possible -- and also what makes it unlike anything a user runs.
+// `dir /s` prints tens of thousands of lines of real text at real speed, and a
+// corner drag resizes the window dozens of times while it does. There is no
+// ground truth to compare against here, so this checks the invariants that
+// must hold whatever the content is, and records everything that happened so a
+// failure can be read afterwards rather than reproduced.
+// ---------------------------------------------------------------------------
+
+func runRealCommand(logPath, dumpPath, command string,
+	width, height, drags int, step time.Duration, noPause bool) {
+
+	lf, err := os.Create(logPath)
+	if err != nil {
+		fmt.Println("cannot create the log:", err)
+		os.Exit(2)
+	}
+	defer lf.Close()
+	say := func(format string, a ...any) {
+		line := fmt.Sprintf(format, a...)
+		fmt.Println(line)
+		fmt.Fprintln(lf, line)
+		lf.Sync()
+	}
+
+	if drags < 1 {
+		drags = 40
+	}
+	say("conptyreconcile -- real command under a corner drag")
+	say("command: %s", command)
+	say("console: %dx%d, %d resizes, dump in %s", width, height, drags, dumpPath)
+	say("")
+
+	d, derr := newDump(dumpPath)
+	if derr != nil {
+		say("cannot create the dump: %v", derr)
+		os.Exit(2)
+	}
+	defer d.close()
+
+	sess, err := startSession(width, height,
+		[]string{"cmd.exe", "/d", "/c", command}, d)
+	if err != nil {
+		say("session failed: %v", err)
+		os.Exit(2)
+	}
+	defer sess.stop()
+
+	// The drag: rapid width changes while the command is producing output,
+	// which is the case §7 died on and the one a user reproduces by grabbing
+	// the corner of the window.
+	type step0 struct {
+		at    time.Duration
+		width int
+		bytes int
+	}
+	var timeline []step0
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	start := time.Now()
+
+	widths := make([]int, 0, drags)
+	for i := 0; i < drags; i++ {
+		w := 40 + rnd.Intn(width-40+1)
+		widths = append(widths, w)
+		sess.resize(w, height)
+		timeline = append(timeline, step0{at: time.Since(start), width: w, bytes: d.size()})
+		time.Sleep(time.Duration(20+rnd.Intn(60)) * time.Millisecond)
+	}
+	sess.resize(width, height)
+	time.Sleep(step)
+
+	live, frame := d.split()
+	all := append(append([]byte(nil), live...), frame...)
+
+	say("timeline of resizes (ms, width, bytes captured so far):")
+	for i, t := range timeline {
+		if i < 8 || i%8 == 0 || i == len(timeline)-1 {
+			say("  %6dms  width %-5d %8d bytes", t.at.Milliseconds(), t.width, t.bytes)
+		}
+	}
+	say("")
+
+	fail := 0
+	check := func(name string, ok bool, detail string) {
+		if ok {
+			say("  ok    %-38s %s", name, detail)
+			return
+		}
+		fail++
+		say("  FAIL  %-38s %s", name, detail)
+	}
+
+	// There is no ground truth, so these are the invariants that hold for any
+	// content at all.
+	ll := liveLines(all, width)
+	check("output arrived", len(all) > 0 && len(ll) > 0,
+		fmt.Sprintf("%d bytes, %d logical lines", len(all), len(ll)))
+
+	runs := trimTrailingBlanks(splitFrameLines(frame))
+	fixed := trimTrailingBlanks(reconcileOrdered(runs, ll))
+	check("the correction only ever splits",
+		strings.Join(fixed, "") == strings.Join(runs, ""),
+		fmt.Sprintf("%d runs became %d lines", len(runs), len(fixed)))
+
+	m := NewMirror()
+	m.Replace(fixed)
+
+	// Re-wrap at every width the drag visited: the mirror must survive all of
+	// them, and no row may exceed the width it was wrapped to.
+	badRow := ""
+	for _, w := range append(widths, width) {
+		for _, r := range Wrap(m.Lines(), w) {
+			if c := cellLen(r.Text); c > w && countRunesIn(r.Text) != 1 {
+				badRow = fmt.Sprintf("a row of %d cells at width %d", c, w)
+				break
+			}
+		}
+		if badRow != "" {
+			break
+		}
+	}
+	check("re-wrap holds at every width the drag used", badRow == "",
+		fmt.Sprintf("%d widths from %d to %d; %s", len(widths)+1, minOf(widths), width, badRow))
+
+	// Coordinates over the final viewport.
+	v := m.Slice(100, 25)
+	coordOK, cells := true, 0
+	for row := range v.Rows {
+		for col := 0; col <= cellLen(v.Rows[row].Text); col++ {
+			p, ok := v.ScreenToMirror(col, row)
+			if !ok || p.Line < 0 || p.Line >= len(m.Lines()) || p.Offset > len(m.Lines()[p.Line]) {
+				coordOK = false
+				break
+			}
+			cells++
+		}
+	}
+	check("coordinates stay inside the mirror", coordOK,
+		fmt.Sprintf("%d cells checked over %d rows", cells, len(v.Rows)))
+
+	check("scroll is clamped after the drag",
+		m.ScrollBy(1<<30, 100, 25) == max0(v.Total-25) && m.ScrollBy(-(1<<30), 100, 25) == 0,
+		fmt.Sprintf("%d rows total", v.Total))
+
+	say("")
+	if fail == 0 {
+		say("PASS -- %d resizes during live output, invariants held", len(widths))
+	} else {
+		say("FAIL -- %d invariant(s) broken; the dump has every byte", fail)
+	}
+	if !noPause {
+		fmt.Print("\npress Enter to close ")
+		fmt.Fscanln(os.Stdin)
+	}
+	if fail > 0 {
+		os.Exit(1)
+	}
+}
+
+func countRunesIn(s string) int {
+	n := 0
+	for range s {
+		n++
+	}
+	return n
+}
+
+func minOf(v []int) int {
+	if len(v) == 0 {
+		return 0
+	}
+	m := v[0]
+	for _, x := range v {
+		if x < m {
+			m = x
+		}
+	}
+	return m
 }

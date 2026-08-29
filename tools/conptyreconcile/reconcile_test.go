@@ -39,29 +39,35 @@ func TestSplitFrameLinesKeepsALongLineWhole(t *testing.T) {
 	}
 }
 
-func TestLiveLinesTagsEachLineWithTheWidthInForce(t *testing.T) {
-	exact := strings.Repeat("=", W)
-	stream := []byte(exact + "\r\n" + "short\r\n" + "\x1b[8;100;40t" + strings.Repeat("q", 40) + "\r\n")
-	got := liveLines(stream, W)
-	if len(got) != 3 {
-		t.Fatalf("expected three lines, got %d: %v", len(got), got)
-	}
-	if got[0].Width != W || got[1].Width != W {
-		t.Fatalf("lines before the size report keep the old width: %v", got[:2])
-	}
-	if got[2].Width != 40 {
-		t.Fatalf("a size report must change the width in force, got %d", got[2].Width)
+func TestLiveLinesUsesACursorNotASeamRule(t *testing.T) {
+	// The shape a real capture produced: a short line ended not with a
+	// newline but with an absolute cursor position to the next row but one,
+	// skipping a blank row. Seam rules read this as one continued line; a
+	// cursor reads it as two lines and a blank.
+	stream := []byte("first" + "\x1b[3;1H" + "third")
+	got := liveLines(stream, 20)
+	if len(got) != 3 || got[0].Text != "first" || got[1].Text != "" || got[2].Text != "third" {
+		t.Fatalf("expected first / blank / third, got %d: %+v", len(got), got)
 	}
 }
 
-func TestLiveLinesRejoinsAScrollSeam(t *testing.T) {
-	// A CRLF followed by an absolute cursor position is a scroll seam, not a
-	// line ending -- measured behaviour, see the research doc.
-	long := strings.Repeat("z", W*2+3)
-	stream := []byte(long[:W] + "\r\n\x1b[499;120H" + long[W:] + "\r\n")
-	got := liveLines(stream, W)
+func TestLiveLinesJoinsAWrappedLine(t *testing.T) {
+	// Wrapping is decided by this code's own autowrap, exactly as conhost's
+	// ROW::SetWrapForced is set when a write runs past the last column.
+	long := strings.Repeat("z", 45)
+	got := liveLines([]byte(long+"\r\n"), 20)
 	if len(got) != 1 || got[0].Text != long {
-		t.Fatalf("the split line must be rejoined, got %v", got)
+		t.Fatalf("a wrapped line is one logical line, got %d: %+v", len(got), got)
+	}
+}
+
+func TestLiveLinesHandlesAWidthChangeMidStream(t *testing.T) {
+	before := strings.Repeat("a", 30)
+	after := strings.Repeat("b", 30)
+	stream := []byte(before + "\r\n" + "\x1b[8;100;40t" + after + "\r\n")
+	got := liveLines(stream, 20)
+	if len(got) != 2 || got[0].Text != before || got[1].Text != after {
+		t.Fatalf("a size report must not corrupt the lines around it: %+v", got)
 	}
 }
 

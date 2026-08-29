@@ -41,6 +41,14 @@ func randomGroundTruth(seed int64, width, n int) []string {
 			out = append(out, strings.Repeat("w", width+1+r.Intn(width*3)))
 		case 5:
 			out = append(out, "")
+		case 6:
+			// Non-ASCII, so the cell measurement is exercised rather than
+			// assumed: Cyrillic is two bytes per cell, CJK is one cell of
+			// width two, and a line built to fill rows exactly in *cells*
+			// merges while its byte length is not a multiple of anything.
+			out = append(out, cyrillicOfCells(width, r.Intn(2)+1))
+		case 7:
+			out = append(out, wideOfCells(width))
 		default:
 			out = append(out, strings.TrimRight(
 				fmt.Sprintf("line %06d %s", i, strings.Repeat(pick(r, ".:_"), r.Intn(width/2))), " "))
@@ -54,4 +62,18 @@ func randomGroundTruth(seed int64, width, n int) []string {
 
 func pick(r *rand.Rand, set string) string {
 	return string(set[r.Intn(len(set))])
+}
+
+// cyrillicOfCells returns a Cyrillic line of exactly n*width cells, which
+// merges in the frame while being twice as many bytes.
+func cyrillicOfCells(width, n int) string {
+	return strings.Repeat("\u0442", width*n)
+}
+
+// wideOfCells returns a line of double-width glyphs filling exactly one row.
+// An odd width leaves one cell that no wide glyph fits into, so conhost pads
+// it -- the WasDoubleBytePadded case -- and the line is one cell short of
+// filling the row, which is itself worth exercising.
+func wideOfCells(width int) string {
+	return strings.Repeat("\u4e2d", width/2)
 }

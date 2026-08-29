@@ -60,6 +60,38 @@ is not a violation; it is welcome, and several directions in
 *does f4 still build its screen from the stream?* If yes, the design is in
 scope, whoever computed the wrap.
 
+### How this component is verified
+
+One rule, arrived at expensively and now not negotiable: **where Microsoft's
+source exists for something, port it verbatim rather than reimplementing it
+from its observed behaviour.** `microsoft/terminal` is MIT and compatible with
+BSD-3-Clause; the "written from scratch" rule in `FISH+.md` is about GPL
+sources and does not apply. A width table written from memory disagreed with
+conhost about where rows end, and conhost is what decides where lines merge --
+the reconstruction of a non-ASCII capture fell from 151 lines to 66, and a mock
+built on the same assumption agreed with the bug.
+
+The rest of the method, in short, with the full account and the failures behind
+each in `CONPTY_RESEARCH.md` §17:
+
+- mocks are built from the vendor's code and then validated against real
+  captures, not against expectations;
+- fixtures are randomised and print their seed, so a failure on Windows
+  replays on any machine;
+- parsers are fuzzed, and the test's own oracle is expected to be wrong as
+  often as the code;
+- every step is assumed to be able to hang and runs under a watchdog; a hung
+  step is abandoned and reported, never waited on;
+- independent measurements run in parallel and smallest-first, so an early
+  stop still leaves a usable result;
+- nothing decides anything while measuring -- capture raw, analyse afterwards;
+- real commands under a real corner drag are exercised alongside the
+  deterministic fixture;
+- platform-specific parts sit behind interfaces, and where a Windows check is
+  unavoidable it uses something every Windows has;
+- and "what does the mock not model?" is asked out loud, periodically, because
+  a passing test says nothing about the cases it does not contain.
+
 ## 1. The Fundamental Conflict: Streams vs. Grids
 
 To build a terminal that supports an infinite scrollback history (like `Ctrl+O` in Far Manager) while correctly displaying interactive applications, we must bridge two completely different OS philosophies:

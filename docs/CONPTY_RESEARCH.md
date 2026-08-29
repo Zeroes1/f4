@@ -1777,6 +1777,103 @@ models what its author thought of will both happily agree with a wrong
 implementation. The randomised rounds and the real capture would not, and did
 not.
 
+### The method, and why it is now the rule
+
+This section is the one that generalises. Everything above is about ConPTY;
+this is about how the answers were obtained, and it changed more than once
+before it started working. It is recorded as a rule rather than as a story
+because the failures were expensive and they repeat.
+
+**Port the vendor's code verbatim. Do not reimplement it from its behaviour.**
+
+Where Microsoft's source exists for something, it is copied, not paraphrased.
+`tools/conptyreconcile/ucd.go` is `src/types/CodepointWidthDetector.cpp` --
+the four-stage trie over all 1,114,112 codepoints, the grapheme join rules and
+the lookup -- reproduced unchanged with the MIT notice retained, generated from
+their file rather than typed. MIT is compatible with f4's BSD-3-Clause, so
+there is no licence reason not to, and the "written from scratch" rule in
+`FISH+.md` is about GPL sources (far2l, mc) and does not apply here.
+
+The reason is not tidiness. Before the port, this tool measured character
+widths with a short table of "wide" ranges written from memory. conhost is the
+thing that decides where a row ends, so a width table that disagrees with
+conhost disagrees about which lines exactly fill their rows -- which is exactly
+where conhost merges two logical lines into one. The reconstruction of a
+non-ASCII capture collapsed from 151 lines to 66. Porting also immediately
+exposed a second error of the same kind: `ucdToCharacterWidth` returns an
+*enum*, and the value 3 means "ambiguous", replaced by a configurable width
+whose default is 1. Read as a column count it made every Cyrillic line three
+times too wide. Both errors were invisible to a mock that shared the same
+mistaken assumption -- which is the whole point.
+
+**Build the mock from the vendor's code too, then validate it against real
+captures.** The mock reproduces the emission grammar and is checked against
+field dumps: an empty buffer costs five bytes per row, terminator counts match
+the captures at 500 and 2000 rows. A mock that is written from what its author
+believes will agree with an implementation that shares the belief. Three real
+bugs here were found only by replaying a captured dump offline -- the window
+title leaking through an OSC skipper that knew only BEL, the correction keyed
+on the wrong width, the boundary that ordered alignment fixes.
+
+**Randomise the fixture and print the seed.** A fixed fixture is a set of cases
+its author thought of. The seeded generator changes shape every run and a
+failing seed replays against the mock on any machine, so a failure found on
+Windows is diagnosed without Windows. Two defects surfaced this way that no
+hand-written case had.
+
+**Fuzz the parsers, and expect the oracle to be wrong as often as the code.**
+Six fuzz targets cover the invariants: nothing panics, text is never lost or
+invented, rows never exceed their width, coordinates never leave the mirror.
+The fuzzer found a bare `ESC` skipped by one byte instead of two, and an
+infinite loop on a glyph wider than a one-column window. It also twice proved
+the *test's* oracle wrong rather than the code -- which is a result, not a
+nuisance.
+
+**Assume every step can hang, and supervise it.** `ClosePseudoConsole` blocks
+until the host exits on this build and has been observed never to return;
+`ReadFile` on a pipe nobody writes to blocks forever; a child that never starts
+makes every wait run to its timeout. Each step therefore runs under a watchdog,
+a step that does not return is abandoned and reported as hung rather than
+stopping the run, panics are caught per step, and the whole run has a hard
+deadline after which the summary is printed and the process exits. Four field
+trips were lost before this existed.
+
+**Run independent measurements in parallel, and smallest first.** Heights do
+not depend on each other, so they run concurrently and one stalled height costs
+only itself. Rounds go from the cheapest parameters upwards, so a run that dies
+at the top -- or that an impatient tester kills -- still leaves a complete answer
+for every smaller scale. Results are printed the moment they exist and a
+partial verdict after every round.
+
+**Never make a decision while measuring.** Every probe that decided *during* a
+run whether a phase had finished -- by waiting for a marker, or for the stream
+to fall silent -- produced a confident zero that was its own bug. `conptydump`
+decides nothing: fixed schedule, a reader with no timeout, raw bytes to a file,
+analysis afterwards. A mistake in reading a dump costs a re-read; a mistake in
+a live decision costs a trip to the machine under test.
+
+**Exercise the real thing with real content.** A generated fixture is
+deterministic, which is what makes ground truth possible and also what makes it
+unlike anything a user runs. `-cmd "dir /s ..." -drag 40` runs a real command
+and resizes the console forty times at random widths while it prints, checking
+the invariants that hold for any content and logging the whole timeline. The
+same exercise runs on a real Unix pty here against `ls -laR /usr`, so the
+non-ConPTY half of it is covered without anyone's machine.
+
+**Make the tool testable where the tester is not.** The platform-specific parts
+sit behind interfaces -- process enumeration behind `ProcessLister` -- so the
+decision logic is exercised on any machine. Where a Windows check is
+unavoidable, it uses something every Windows has: the full-screen detector is
+verified with `cmd.exe`, because watching for `vim.exe` would make the check
+untestable exactly where it needs testing.
+
+**Answer "what did the mock not model?" out loud, periodically.** Asked
+directly after a passing run, the honest answer was four things: widths counted
+in bytes, output never interleaved with a frame, eviction by whole lines rather
+than rows, and a stream with no window title and no colour. Each was a real
+gap and each is now closed. A passing test says nothing about the cases the
+test does not contain, and the only way to find those is to ask.
+
 ## 18. Where this leaves direction F
 
 **Direction F is feasible.** Every question §15 named as blocking is answered,
