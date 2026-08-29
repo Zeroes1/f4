@@ -98,23 +98,43 @@ func firstLine(b []byte) string {
 	return s
 }
 
-func measurePipes() []pipeResult {
+// measurePipes runs every candidate with a short timeout and announces each
+// one before it starts: a tester watching a silent probe cannot tell a slow
+// wsl.exe from a hung one.
+func measurePipes(r *reporter) []pipeResult {
 	wide := []string{"COLUMNS=200", "LINES=50", "TERM=xterm-256color", "COLORTERM=truecolor"}
-	return []pipeResult{
-		runPipe("cmd /c echo", 10*time.Second, nil, "cmd", "/c", "echo", "hello"),
+	specs := []struct {
+		name    string
+		timeout time.Duration
+		env     []string
+		argv    []string
+	}{
+		{"cmd /c echo", 8 * time.Second, nil, []string{"cmd", "/c", "echo", "hello"}},
 		// A program that genuinely needs a console: the control that proves
 		// the split A relies on is measurable at all.
-		runPipe("cmd /c mode con", 10*time.Second, nil, "cmd", "/c", "mode", "con"),
-		runPipe("powershell 5.1", 25*time.Second, nil, "powershell", "-NoProfile", "-NonInteractive", "-Command", "Write-Output pipe-ok"),
-		runPipe("pwsh 7+", 25*time.Second, nil, "pwsh", "-NoProfile", "-NonInteractive", "-Command", "Write-Output pipe-ok"),
+		{"cmd /c mode con", 8 * time.Second, nil, []string{"cmd", "/c", "mode", "con"}},
+		{"powershell 5.1", 15 * time.Second, nil, []string{"powershell", "-NoProfile", "-NonInteractive", "-Command", "Write-Output pipe-ok"}},
+		{"pwsh 7+", 15 * time.Second, nil, []string{"pwsh", "-NoProfile", "-NonInteractive", "-Command", "Write-Output pipe-ok"}},
 		// Does anything honour COLUMNS with no console to ask?
-		runPipe("pwsh width", 25*time.Second, wide, "pwsh", "-NoProfile", "-NonInteractive", "-Command", "$Host.UI.RawUI.WindowSize"),
-		runPipe("wsl echo", 20*time.Second, nil, "wsl.exe", "-e", "echo", "pipe-ok"),
-		runPipe("wsl stty size", 20*time.Second, wide, "wsl.exe", "-e", "sh", "-c", "stty size 2>&1; echo COLUMNS=$COLUMNS"),
-		runPipe("wsl colour", 20*time.Second, wide, "wsl.exe", "-e", "sh", "-c", "printf '\\033[38;2;255;96;0mRGB\\033[0m\\n'"),
-		runPipe("ssh -V", 10*time.Second, nil, "ssh", "-V"),
-		runPipe("git branch --column", 15*time.Second, wide, "git", "--no-pager", "branch", "--column=always"),
+		{"pwsh width", 15 * time.Second, wide, []string{"pwsh", "-NoProfile", "-NonInteractive", "-Command", "$Host.UI.RawUI.WindowSize"}},
+		{"wsl echo", 12 * time.Second, nil, []string{"wsl.exe", "-e", "echo", "pipe-ok"}},
+		{"wsl stty size", 12 * time.Second, wide, []string{"wsl.exe", "-e", "sh", "-c", "stty size 2>&1; echo COLUMNS=$COLUMNS"}},
+		{"wsl colour", 12 * time.Second, wide, []string{"wsl.exe", "-e", "sh", "-c", "printf '\\033[38;2;255;96;0mRGB\\033[0m\\n'"}},
+		{"ssh -V", 8 * time.Second, nil, []string{"ssh", "-V"}},
+		{"git branch --column", 12 * time.Second, wide, []string{"git", "--no-pager", "branch", "--column=always"}},
 	}
+
+	out := make([]pipeResult, 0, len(specs))
+	for _, sp := range specs {
+		if outOfTime() {
+			out = append(out, pipeResult{Name: sp.name, Err: "skipped: run deadline"})
+			continue
+		}
+		hb := startHeartbeat(r, "running "+sp.name+" on pipes")
+		out = append(out, runPipe(sp.name, capped(sp.timeout), sp.env, sp.argv...))
+		hb.stopIt()
+	}
+	return out
 }
 
 func (p pipeResult) line() string {

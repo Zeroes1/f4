@@ -78,18 +78,34 @@ type session struct {
 // can name the byte range that belongs to it. Every read is timestamped
 // because "how long did the repaint take" is one of the questions.
 type collector struct {
-	mu       sync.Mutex
-	buf      []byte
-	lastRead time.Time
-	closed   bool
+	mu        sync.Mutex
+	buf       []byte
+	lastRead  time.Time
+	firstRead time.Time
+	closed    bool
 }
 
 func (c *collector) append(p []byte) {
 	c.mu.Lock()
+	if c.firstRead.IsZero() {
+		c.firstRead = time.Now()
+	}
 	c.buf = append(c.buf, p...)
 	c.lastRead = time.Now()
 	c.mu.Unlock()
 }
+
+// size is how the caller asks the question that matters most and that this
+// probe originally could not ask: has anything arrived at all? A phase that
+// times out with zero bytes is a dead session, not a slow one, and the two
+// deserve completely different handling.
+func (c *collector) size() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.buf)
+}
+
+func (c *collector) silent() bool { return c.size() == 0 }
 
 func (c *collector) mark() int {
 	c.mu.Lock()
@@ -226,12 +242,31 @@ func newSession(width, height int, childArgs []string, host bundledHost, useBund
 		viaBundledDLL: viaDLL,
 	}
 
+	// Read before spawning. Microsoft's own guidance for ConPTY is that the
+	// output pipe must be drained promptly: conhost writes its first frame
+	// while holding a lock, and a parent that starts reading afterwards can
+	// deadlock the host before the child has produced a byte. This probe's
+	// first field run showed exactly that shape -- every wait timing out with
+	// zero bytes received.
+	go s.pump()
+
 	if err := s.spawn(childArgs); err != nil {
 		s.Close(host)
 		return nil, err
 	}
 
-	go s.pump()
+	// Our copies of the pseudoconsole's own ends are no longer needed; the
+	// pseudoconsole duplicated them. Holding them open also means the reader
+	// never sees EOF when the child exits.
+	if s.inRead != 0 {
+		syscall.CloseHandle(s.inRead)
+		s.inRead = 0
+	}
+	if s.outWrite != 0 {
+		syscall.CloseHandle(s.outWrite)
+		s.outWrite = 0
+	}
+
 	return s, nil
 }
 
@@ -352,6 +387,34 @@ func (s *session) Close(host bundledHost) {
 			*h = 0
 		}
 	}
+}
+
+// childStatus reports whether the spawned child is still running, and its
+// exit code if it is not. A silent session with a child that exited with a
+// non-zero code is a different diagnosis from one whose child is alive and
+// blocked.
+// hostDescription names the conhost/OpenConsole serving this session, when
+// one could be identified.
+func (s *session) hostDescription() string {
+	if s.hostPID == 0 {
+		return "not identified"
+	}
+	return fmt.Sprintf("%s pid %d, %dKB", s.hostName, s.hostPID, workingSetKB(s.hostPID))
+}
+
+func (s *session) childStatus() string {
+	if s.childProc == 0 {
+		return "no child handle"
+	}
+	var code uint32
+	if err := syscall.GetExitCodeProcess(s.childProc, &code); err != nil {
+		return "GetExitCodeProcess failed: " + err.Error()
+	}
+	const stillActive = 259
+	if code == stillActive {
+		return fmt.Sprintf("pid %d still running", s.childPID)
+	}
+	return fmt.Sprintf("pid %d exited with code %d", s.childPID, code)
 }
 
 // ---------------------------------------------------------------------------

@@ -449,6 +449,11 @@ type rungResult struct {
 	Notes []string
 }
 
+// durFill is the fill phase's duration, used when reporting a silent session.
+func (r rungResult) durFill() string {
+	return fmt.Sprintf("%dms", r.FillMs)
+}
+
 func (r rungResult) line() string {
 	if !r.CreateOK {
 		return fmt.Sprintf("%-7d create FAILED: %s", r.Height, r.CreateNo)

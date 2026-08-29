@@ -22,6 +22,29 @@ is the maximum" but "where does the cost turn". A 32000-row console that
 takes two seconds to reflow is worse than a 4000-row one that takes forty
 milliseconds, and only the ladder shows where that crossover is.
 
+## Rounds, smallest first
+
+The probe does **not** finish one direction at every scale before starting
+the next. It runs in rounds: round 1 does F, the top-draw risk, the emission
+shape and the width-aware question at 125 rows; round 2 does all of them at
+250; and so on up the ladder. Direction A (pipes) runs once, in round 1,
+because it does not depend on the scale.
+
+The reason is that the tall rungs are the ones expected to misbehave. Ordered
+this way, a run that dies at 16000 rows — or that an impatient tester kills —
+still leaves a complete answer for every direction at every smaller scale,
+and a **partial verdict is printed after every round**. Ordered the other way,
+a stall in the tall rungs would cost the answers about A, C and the emission
+shape entirely.
+
+Two more things follow from the same concern. Every wait is bounded by a
+global `-deadline-min` (20 by default) and prints a heartbeat every five
+seconds saying what it is waiting for and how much budget is left, because a
+probe that is silent for three minutes is indistinguishable from a hung one.
+And the per-phase timeouts scale with the height: a 32000-row repaint is
+legitimately slower than a 125-row one, so one fixed timeout would either cut
+the big frames short or make the small rounds crawl.
+
 Each rung is a fresh pseudoconsole, so one failure cannot poison the next.
 Per rung the probe records:
 
@@ -53,6 +76,23 @@ Markers are ASCII and `~`-delimited, because an earlier transcript came back
 as mojibake under OEM code page 850 and a marker that cannot survive the
 transport is not a marker.
 
+## If it prints nothing but heartbeats
+
+The probe starts with a **smoke test**: an 80x25 pseudoconsole running
+`cmd /c echo`, and a second one running its own child. It reports the byte
+count, whether the expected marker arrived, the child's status (running, or
+its exit code) and which conhost is serving the session.
+
+If both come back with zero bytes, the session is *silent*, not slow, and the
+probe stops with a diagnosis instead of grinding through nine rounds of
+timeouts — which is what its own first field run did, for five minutes,
+before this check existed. `-force` runs the rounds anyway; `-selftest` runs
+only the smoke test.
+
+Inside a round the same rule applies: a rung whose first wait ends with zero
+bytes received skips its remaining seven phases and says so, so a dead
+session costs seconds rather than minutes.
+
 ## Running it
 
 ```sh
@@ -60,11 +100,15 @@ GOOS=windows GOARCH=amd64 go build -o termprobe.exe ./tools/termprobe
 ```
 
 ```
-termprobe.exe                      # the full ladder, all directions
+termprobe.exe                      # all rounds, all directions
 termprobe.exe -quick               # 125..2000 only, for a fast first look
 termprobe.exe -heights 500,4000    # a specific pair
+termprobe.exe -deadline-min 5      # stop and summarise after five minutes
+termprobe.exe -v                   # a line per phase, not only per round
 termprobe.exe -skip-pipes          # skip direction A
 termprobe.exe -bundled             # use conpty.dll placed next to the exe
+termprobe.exe -selftest            # only the smoke test, ~10 seconds
+termprobe.exe -force               # run the rounds even if the smoke test fails
 ```
 
 The report goes to the console and to `termprobe-<pid>.log`; send the log.
