@@ -86,7 +86,7 @@ func FuzzLiveLogicalLinesPreservesText(f *testing.F) {
 			if c == 0x1b && i+1 < len(stream) && (stream[i+1] == '[' || stream[i+1] == ']') {
 				if stream[i+1] == '[' {
 					j := i + 2
-					for j < len(stream) && !(stream[j] >= 0x40 && stream[j] <= 0x7e) {
+					for j < len(stream) && (stream[j] < 0x40 || stream[j] > 0x7e) {
 						j++
 					}
 					i = j + 1
