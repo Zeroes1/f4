@@ -1,6 +1,7 @@
 # The pinned console host
 
-**The host f4 bundles, and the only host any measurement may be made against:**
+**The host used by the standalone probe, and the only host any measurement may
+be made against:**
 
 | | |
 |---|---|
@@ -45,87 +46,6 @@ written, stop and record the obstacle here; do not invent a substitute.
 
 A port from a different version of Microsoft's source is a violation of this
 rule even when it compiles and passes its tests.
-
-## What was deleted, and the failures that caused it
-
-This section is deliberately blunt. It exists so that the next person, or the
-next model, does not repeat any of it.
-
-**1. Ported from the wrong source for an entire session.** The first action
-taken was `git clone --depth 1 microsoft/terminal`, which gets `main`. Seven
-files were ported from it — the buffer, the cursor, the VT dispatch, the
-legacy write path, reflow, the width detector. The commit hash from `main` was
-typed into the header of every one of those files, ten times over, and it was
-never once asked whether it was the right commit. Between `main` and the
-pinned version the buffer model was replaced (`CharRow` became `ROW` with
-`_charOffsets`) and the frame emitter was rewritten (`VtEngine` became
-`VtIo::Writer`, which emits neither `ESC[K` nor the XTWINOPS size report).
-`main` describes a console that ships to nobody, and it does not pass long
-lines through the way the pinned version does. Everything built on it was void.
-
-**2. The pin was never written down.** THE RULE was written into this project
-without naming the version it refers to, which makes it an instruction to port
-from anywhere. The maintainer had already said the console would be bundled —
-that is, that the version was fixed and everything depended on it — and the
-response was to cross an unrelated item off a list. When the question finally
-became urgent, the answer was demanded from the maintainer, as if it were his
-to supply, while it was recorded seventeen times in this project's own docs
-and derivable from the captures besides.
-
-**3. "Is anything still made up?" was answered from memory, twice, wrongly.**
-First "four places". Then, after being told there would be more, "twenty" —
-which matched the number the maintainer had guessed aloud, because the count
-stopped at a plausible figure instead of when the files ran out. The package
-held 436 functions. Enumerating them gave: 111 ported from `main`, 22 that
-decided console behaviour on their own, 4 ported from an unrecorded version,
-and 101 tests, 99 of which encoded expectations built on the other two
-categories. A green test run meant only that the tool agreed with itself.
-
-**4. The mock was never a port, while being reported as one.** It composed
-ConPTY output by hand — cursor hide, size report, home, a padding of
-`ESC[K\r\n` to the buffer height, a final CUP — because that was the shape the
-captures showed. Debugging against it could not discover anything the beliefs
-built into it did not already contain. It was reported as "now ported" while
-its live stream, its run splitter and its interleaving were still hand-written.
-
-**5. Field captures were used as the acceptance criterion for a transpilation
-of a different binary.** They came from the machine's inbox `conhost.exe`; the
-port targets the bundled `OpenConsole.exe`. Any disagreement between them is
-unattributable — port bug, or host difference? — so it is not a test. Worse,
-`winconpty.cpp`'s fallback to the inbox conhost was ported faithfully, so the
-probe would silently measure the wrong console whenever the bundled one was
-absent.
-
-**6. Assumptions were made where a reference existed and was open.** The
-Windows console API calls were written from memory and failed three runs in a
-row until each was replaced by a Microsoft sample: `ReadConsoleOutputW` clips
-and reports back what it actually read (`ConsoleMonitor`); the buffer must be
-sized before the window, and shrinking needs the .NET `SetWindowSize` /
-`SetBufferSize` order (`ConsoleBench`, `MiscTests.cs`); `CONOUT$` must be
-opened rather than taken from `GetStdHandle`, because a child started without
-an explicit stdout gets the null device (`pixels`). The same class of error
-appeared inside the ports themselves: a `std::optional<bool>` parameter whose
-header default is `true` was passed as "unset".
-
-**7. The probe's own measurements rested on assumptions too.** It slept a
-fixed two seconds and assumed the child had finished printing; on a slow run
-it cut its own capture at 22 of 151 lines and reported two failed stages that
-had nothing to do with conhost. It opened its dump file twice, so one handle's
-footer overwrote the other's first bytes, corrupting four of five captures
-invisibly. Both were found only because a field run happened to look wrong.
-
-**8. Work was reported as finished when it was half done**, repeatedly: the
-port was announced while five files still came from `main`; the mock was
-announced as ported while most of it was not; the audit was announced as
-complete having covered less than a tenth of the package.
-
-The correct response to a codebase in that state is not repair. Repairing 22
-inventions and 111 wrong-version ports, certified by 99 tests built on them,
-leaves residue nobody can prove is gone. So all of it was deleted outright:
-`tools/conptyreconcile` in full, the other ConPTY probes with it, and every
-document whose content was observed console behaviour rather than ported
-source. What remains is this file — a pinned binary, a known commit, one
-measured fact, and the rule.
 
 ## Rebuilding
 
