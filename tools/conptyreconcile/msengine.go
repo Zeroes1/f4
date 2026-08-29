@@ -113,8 +113,10 @@ type msRetiredLine struct {
 }
 
 type msTerminal struct {
-	disp    *msAdaptDispatch
-	retired []msRetiredLine
+	disp        *msAdaptDispatch
+	retired     []msRetiredLine
+	pending     []byte
+	pendingText []uint16
 }
 
 // msDefaultUnsizedHeight is this tool's choice for streams that never
@@ -131,6 +133,7 @@ func newMsTerminal(width, height int) *msTerminal {
 		height = msDefaultUnsizedHeight
 	}
 	t := &msTerminal{disp: newMsAdaptDispatch(width, height)}
+	t.disp.writeWidth = width
 	t.disp.page.buffer.onRecycle = t.recycle
 	return t
 }
@@ -140,7 +143,7 @@ func (t *msTerminal) recycle(r *msROW) {
 	t.retired = append(t.retired, msRetiredLine{
 		text:    string(utf16.Decode(r.GetTextRange(0, r.MeasureRight()))),
 		wrapped: r.WasWrapForced(),
-		width:   t.disp.page.buffer.Width(),
+		width:   r.writeWidth,
 	})
 }
 
@@ -156,12 +159,21 @@ func (t *msTerminal) resize(width, height int) {
 	t.disp.page.buffer = newBuffer
 	t.disp.page.cursor = newCursor
 	t.disp.page.top = 0
+	t.disp.writeWidth = width
 }
 
-// Feed routes the byte stream into the ported handlers (file header).
-func (t *msTerminal) Feed(b []byte) {
+// Feed routes the byte stream into the ported handlers (file header). The
+// pending suffix is the parser's incomplete escape/UTF-8 sequence; retaining
+// it is required because ConPTY reads are allowed to end at any byte.
+func (t *msTerminal) Feed(input []byte) {
+	b := make([]byte, 0, len(t.pending)+len(input))
+	b = append(b, t.pending...)
+	b = append(b, input...)
+	t.pending = nil
+
 	d := t.disp
-	var text []uint16
+	text := t.pendingText
+	t.pendingText = nil
 	flush := func() {
 		if len(text) > 0 {
 			d.PrintString(text)
@@ -169,22 +181,32 @@ func (t *msTerminal) Feed(b []byte) {
 		}
 	}
 	i := 0
+	incomplete := false
 	for i < len(b) {
 		c := b[i]
 		switch {
-		case c == 0x1b && i+1 < len(b) && b[i+1] == '[':
+		case c == 0x1b && i+1 >= len(b):
+			incomplete = true
+		case c == 0x1b && b[i+1] == '[':
 			flush()
 			j := i + 2
-			for j < len(b) && !(b[j] >= 0x40 && b[j] <= 0x7e) {
+			for j < len(b) && (b[j] < 0x40 || b[j] > 0x7e) {
 				j++
 			}
-			if j < len(b) {
-				t.csi(string(b[i+2:j]), b[j])
+			if j >= len(b) {
+				incomplete = true
+				break
 			}
+			t.csi(string(b[i+2:j]), b[j])
 			i = j + 1
-		case c == 0x1b && i+1 < len(b) && b[i+1] == ']':
+		case c == 0x1b && b[i+1] == ']':
 			flush()
-			i = skipOSC(b, i)
+			end, ok := completeOSC(b, i)
+			if !ok {
+				incomplete = true
+				break
+			}
+			i = end
 		case c == 0x1b:
 			flush()
 			i += 2
@@ -206,6 +228,10 @@ func (t *msTerminal) Feed(b []byte) {
 			i++
 		default:
 			r, size := utf8.DecodeRune(b[i:])
+			if r == utf8.RuneError && !utf8.FullRune(b[i:]) {
+				incomplete = true
+				break
+			}
 			if size < 1 {
 				size = 1
 			}
@@ -219,8 +245,37 @@ func (t *msTerminal) Feed(b []byte) {
 			}
 			i += size
 		}
+		if incomplete {
+			break
+		}
 	}
-	flush()
+	if incomplete && i < len(b) {
+		t.pending = append(t.pending, b[i:]...)
+	}
+	t.pendingText = text
+}
+
+func (t *msTerminal) flushPendingText() {
+	if len(t.pendingText) == 0 {
+		return
+	}
+	t.disp.PrintString(t.pendingText)
+	t.pendingText = nil
+}
+
+// completeOSC is the bounded counterpart of skipOSC for the incremental
+// parser. skipOSC intentionally treats an unterminated sequence as consuming
+// the rest of a complete capture; Feed must instead retain that suffix.
+func completeOSC(b []byte, i int) (int, bool) {
+	for j := i + 2; j < len(b); j++ {
+		if b[j] == 0x07 {
+			return j + 1, true
+		}
+		if b[j] == 0x1b && j+1 < len(b) && b[j+1] == '\\' {
+			return j + 2, true
+		}
+	}
+	return len(b), false
 }
 
 func (t *msTerminal) csi(params string, final byte) {
@@ -235,7 +290,10 @@ func (t *msTerminal) csi(params string, final byte) {
 	}
 	switch final {
 	case 'H', 'f':
-		d.CursorPosition(arg(0, 1), arg(1, 1))
+		// CSI cursor positions are 1-based. AdaptDispatch's position
+		// methods operate on zero-based buffer coordinates, so perform the
+		// same -1 conversion as the original dispatch before routing.
+		d.CursorPosition(arg(0, 1)-1, arg(1, 1)-1)
 	case 'A':
 		d.CursorUp(arg(0, 1))
 	case 'B':
@@ -245,9 +303,9 @@ func (t *msTerminal) csi(params string, final byte) {
 	case 'D':
 		d.CursorBackward(arg(0, 1))
 	case 'G', '`':
-		d.CursorHorizontalPositionAbsolute(arg(0, 1))
+		d.CursorHorizontalPositionAbsolute(arg(0, 1) - 1)
 	case 'd':
-		d.VerticalLinePositionAbsolute(arg(0, 1))
+		d.VerticalLinePositionAbsolute(arg(0, 1) - 1)
 	case 'J':
 		n := 0
 		if len(nums) > 0 {
@@ -303,6 +361,7 @@ func msCsiNums(s string) []int {
 // ---------------------------------------------------------------------------
 
 func (t *msTerminal) logicalLines() []liveLine {
+	t.flushPendingText()
 	b := t.disp.page.buffer
 	w := b.Width()
 	var out []liveLine
@@ -328,7 +387,11 @@ func (t *msTerminal) logicalLines() []liveLine {
 	}
 	for y := 0; y < b.Height(); y++ {
 		row := b.GetRowByOffset(y)
-		emitRow(string(utf16.Decode(row.GetTextRange(0, row.MeasureRight()))), row.WasWrapForced(), w)
+		rowWidth := row.writeWidth
+		if rowWidth == 0 {
+			rowWidth = w
+		}
+		emitRow(string(utf16.Decode(row.GetTextRange(0, row.MeasureRight()))), row.WasWrapForced(), rowWidth)
 	}
 	if cur.Len() > 0 {
 		out = append(out, liveLine{Text: cur.String(), Width: curWidth})

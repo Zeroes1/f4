@@ -46,11 +46,11 @@ func TestOutputInterleavedWithTheFrame(t *testing.T) {
 // find its start and silently falls back to the uncorrected frame.
 func TestFrameBeginningPartwayThroughALine(t *testing.T) {
 	const width = 40
-	long := strings.Repeat("q", width*4) // four rows
+	long := strings.Repeat("q", width*4+1) // four rows plus a forced wrap
 	printed := []string{long, strings.Repeat("=", width), "after", markerDone}
 
 	// A buffer too short to hold it all, so the first line is cut.
-	viewer := newMockConPTY(width, 5, 1)
+	viewer := newMockConPTY(width, 6, 1)
 	kept, cutMidLine := viewer.fitRows(printed)
 	if !cutMidLine {
 		t.Fatalf("the fixture must exercise a mid-line cut, kept %d lines", len(kept))

@@ -70,11 +70,11 @@ func (r msRect) height() int { return r.bottom - r.top }
 func (r msRect) empty() bool { return r.left >= r.right || r.top >= r.bottom }
 
 type msTextBuffer struct {
-	_width     int
-	_height    int
-	_firstRow  int
-	_storage   []*msROW
-	_scratch   *msROW
+	_width             int
+	_height            int
+	_firstRow          int
+	_storage           []*msROW
+	_scratch           *msROW
 	_currentAttributes TextAttribute
 
 	// onRecycle is NOT part of the original TextBuffer. It is the recorded
@@ -238,7 +238,7 @@ func (b *msTextBuffer) FillRect(rect msRect, fill []uint16, attributes TextAttri
 
 	// The scratchpad row gets reset to whitespace by default, so there's no need to
 	// initialize it again. Filling with whitespace is the most common operation by far.
-	if !(len(fill) == 1 && fill[0] == ' ') {
+	if len(fill) != 1 || fill[0] != ' ' {
 		state := msRowWriteState{
 			columnLimit: rect.right,
 			columnEnd:   rect.left,

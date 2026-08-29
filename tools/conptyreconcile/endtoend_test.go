@@ -58,10 +58,8 @@ func runCase(t *testing.T, width, height, lines int, seed int64, scrolling bool)
 
 	// Feed both through jittered chunks and reassemble, which is what a real
 	// reader does. A parser that only works on whole buffers fails here.
-	var liveBuf, frameBuf []byte
-	for _, c := range m.Chunks(live, 97) {
-		liveBuf = append(liveBuf, c...)
-	}
+	liveChunks := m.Chunks(live, 97)
+	var frameBuf []byte
 	for _, c := range m.Chunks(frame, 313) {
 		frameBuf = append(frameBuf, c...)
 	}
@@ -69,7 +67,7 @@ func runCase(t *testing.T, width, height, lines int, seed int64, scrolling bool)
 	// The frame's blank filler rows are trimmed before reconciling: they are
 	// buffer padding, not printed lines, and the live sequence has no
 	// counterpart for them.
-	ll := liveLines(liveBuf, width)
+	ll := liveLinesFromChunks(liveChunks, width)
 	frameLines := trimTrailingBlanks(splitFrameLines(frameBuf))
 	recovered = reconcileOrdered(frameLines, ll)
 

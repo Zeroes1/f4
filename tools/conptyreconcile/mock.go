@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"unicode/utf16"
 )
 
 // A mock of the ConPTY emission grammar, so the reconciliation can be
 // exercised without Windows.
 //
-// It is not a port of conhost. It reproduces the grammar this project
-// measured on 10.0.22000 (docs/CONPTY_RESEARCH.md §13, §17) and that the
-// pre-#17510 VtEngine in microsoft/terminal explains:
+// The stream wrapper is a documented reconstruction, not a second conhost
+// implementation. Its buffer state comes from the ported MS TextBuffer and
+// AdaptDispatch below; only the byte grammar around that state is reconstructed
+// from §13/§17 and the pre-#17510 XtermEngine source:
 //
 //   - a frame opens with ESC[?25l, the XTWINOPS size report, and ESC[H
 //   - a logical line is emitted whole; the receiver's autowrap places it
 //   - a logical line is terminated by ESC[K CR LF
-//   - EXCEPT when its length is a non-zero multiple of the width, in which
-//     case it exactly fills its rows, no terminator is emitted, and it merges
-//     with the line that follows -- the P13 failure, measured in §17
+//   - EXCEPT when the port-backed row model says it exactly fills its rows, in
+//     which case no terminator is emitted and it merges with the line that
+//     follows -- the P13 failure, measured in §17
 //   - the frame closes with ESC[<row>;1H and ESC[?25h
 //
 // The live stream is modelled separately, because §17 measured the two to
@@ -56,8 +58,7 @@ func mergesWithNext(line string, width int) bool { return fillsRowsExactly(line,
 // bug through: the correction searched for multiples of the frame width,
 // found none, and silently did nothing.
 func (m *mockConPTY) FrameAtWidth(lines []string, writeWidth int) []byte {
-	framed := &mockConPTY{Width: m.Width, Height: m.Height, rnd: m.rnd}
-	kept := framed.fit(lines)
+	kept := m.fit(lines)
 
 	var sb strings.Builder
 	sb.WriteString("\x1b[?25l\x1b[8;")
@@ -183,11 +184,14 @@ func (m *mockConPTY) LiveStreamScrolling(lines []string) []byte {
 	for _, l := range lines {
 		sb.WriteString(l)
 		row += rowsFor(l, m.Width)
-		if m.rnd.Intn(3) == 0 {
+		if rowsFor(l, m.Width) > 1 {
 			// The measured shape: instead of a newline, conhost repositions
 			// the cursor absolutely to the row where the next line goes.
 			// There is no CRLF at all, which is what defeated the seam rules
 			// this mock used to model -- a cursor handles it, a rule does not.
+			// The fixture uses this at every multi-row line. That is a
+			// deterministic instance of the documented shape, not a guessed
+			// probability of when conhost chooses to repaint.
 			fmt.Fprintf(&sb, "\x1b[%d;1H", row+1)
 			continue
 		}
@@ -202,68 +206,74 @@ func (m *mockConPTY) LiveStreamScrolling(lines []string) []byte {
 func (m *mockConPTY) FrameInterleaved(lines []string, writeWidth int, extra []string) ([]byte, []string) {
 	frame := m.FrameAtWidth(lines, writeWidth)
 	term := []byte("\x1b[K\r\n")
-	parts := bytes.Split(frame, term)
-	if len(parts) < 4 {
+	boundary := bytes.Index(frame, term)
+	if boundary < 0 {
 		return frame, lines
 	}
-	cut := len(parts) / 2
+	boundary += len(term)
 
 	var sb strings.Builder
-	for i, p := range parts {
-		sb.Write(p)
-		if i < len(parts)-1 {
-			sb.Write(term)
-		}
-		if i == cut {
-			for _, e := range extra {
-				sb.WriteString(e)
-				sb.WriteString("\r\n")
-			}
-		}
+	sb.Write(frame[:boundary])
+	for _, e := range extra {
+		sb.WriteString(e)
+		sb.WriteString("\r\n")
 	}
+	sb.Write(frame[boundary:])
 	return []byte(sb.String()), append(append([]string{}, lines...), extra...)
 }
 
 func (m *mockConPTY) fitRows(lines []string) ([]string, bool) {
-	total := 0
-	for _, l := range lines {
-		total += rowsFor(l, m.Width)
-	}
-	if total <= m.Height {
-		return lines, false
-	}
-	drop := total - m.Height
-	out := append([]string{}, lines...)
-	for drop > 0 && len(out) > 0 {
-		r := rowsFor(out[0], m.Width)
-		if r <= drop {
-			drop -= r
-			out = out[1:]
-			continue
-		}
-		// The first surviving line is cut mid-way: the rows above it are gone
-		// and what remains starts inside the line.
-		_, tail := cutCells(out[0], drop*m.Width)
-		out[0] = tail
-		return out, true
-	}
-	return out, false
+	kept, cutMidLine := m.bufferLines(lines)
+	return kept, cutMidLine
 }
 
 func (m *mockConPTY) fit(lines []string) []string {
-	total := 0
-	for _, l := range lines {
-		total += rowsFor(l, m.Width)
+	kept, _ := m.bufferLines(lines)
+	return kept
+}
+
+// bufferLines reads the current rows of the ported TextBuffer after the
+// supplied writes. This is the mock's ring, not a hand-counted approximation:
+// AdaptDispatch performs delayed EOL wrapping, wide-glyph padding, and
+// IncrementCircularBuffer exactly as the port does. The first surviving row
+// may be the middle of a wrapped line, which is why it is returned as a text
+// line without inventing its missing prefix.
+func (m *mockConPTY) bufferLines(lines []string) ([]string, bool) {
+	if len(Wrap(lines, m.Width)) <= m.Height {
+		// The input is the complete buffer in this case. Keep explicit empty
+		// logical lines: unlike trailing padding rows, they are part of the
+		// caller's writes and are observable before the frame trim.
+		return append([]string(nil), lines...), false
 	}
-	if total <= m.Height {
-		return lines
+
+	t := newMsTerminal(m.Width, m.Height)
+	for _, line := range lines {
+		t.Feed([]byte(line))
+		t.Feed([]byte("\r\n"))
 	}
-	drop := 0
-	for i := 0; i < len(lines) && total > m.Height; i++ {
-		total -= rowsFor(lines[i], m.Width)
-		drop = i + 1
+
+	b := t.disp.page.buffer
+	kept := make([]string, 0, m.Height)
+	var current strings.Builder
+	for y := 0; y < b.Height(); y++ {
+		r := b.GetRowByOffset(y)
+		current.WriteString(string(utf16.Decode(r.GetTextRange(0, r.MeasureRight()))))
+		if !r.WasWrapForced() {
+			kept = append(kept, current.String())
+			current.Reset()
+		}
 	}
-	return lines[drop:]
+	if current.Len() > 0 {
+		kept = append(kept, current.String())
+	}
+	for len(kept) > 0 && kept[len(kept)-1] == "" {
+		kept = kept[:len(kept)-1]
+	}
+
+	// A leading wrapped row means that the top of the ring cut into a
+	// logical line. The row's own wrap flag tells us that it continues.
+	cutMidLine := b.Height() > 0 && b.GetRowByOffset(0).WasWrapForced()
+	return kept, cutMidLine
 }
 
 func contentRows(lines []string, width int) int {

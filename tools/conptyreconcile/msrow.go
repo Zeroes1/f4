@@ -50,6 +50,12 @@ type msROW struct {
 	_lineRendition    LineRendition
 	_wrapForced       bool
 	_doubleBytePadded bool
+
+	// writeWidth is tool metadata, not part of Microsoft's ROW. It records
+	// the width at which this row first received output so a later resize can
+	// still tell which live lines were exact-width at write time. The ported
+	// row semantics never consult it.
+	writeWidth int
 }
 
 // ROW::ROW
@@ -83,15 +89,15 @@ func (r *msROW) Reset(attr TextAttribute) {
 	r._lineRendition = LineRenditionSingleWidth
 	r._wrapForced = false
 	r._doubleBytePadded = false
+	r.writeWidth = 0
 	r._init()
 }
 
-func (r *msROW) SetWrapForced(wrap bool)        { r._wrapForced = wrap }
-func (r *msROW) WasWrapForced() bool            { return r._wrapForced }
-func (r *msROW) SetDoubleBytePadded(p bool)     { r._doubleBytePadded = p }
-func (r *msROW) WasDoubleBytePadded() bool      { return r._doubleBytePadded }
+func (r *msROW) SetWrapForced(wrap bool)         { r._wrapForced = wrap }
+func (r *msROW) WasWrapForced() bool             { return r._wrapForced }
+func (r *msROW) SetDoubleBytePadded(p bool)      { r._doubleBytePadded = p }
+func (r *msROW) WasDoubleBytePadded() bool       { return r._doubleBytePadded }
 func (r *msROW) GetLineRendition() LineRendition { return r._lineRendition }
-func (r *msROW) size() int                      { return r._columnCount }
 
 // ROW::GetReadableColumnCount
 func (r *msROW) GetReadableColumnCount() int {
@@ -602,6 +608,7 @@ func (r *msROW) _resizeChars(colEndDirty, chBegDirty, chEndDirty, chEndDirtyOld 
 func (r *msROW) CopyFrom(source *msROW) {
 	r._lineRendition = source._lineRendition
 	r._wrapForced = source._wrapForced
+	r.writeWidth = source.writeWidth
 
 	state := msRowCopyTextFromState{
 		source:            source,
@@ -613,5 +620,5 @@ func (r *msROW) CopyFrom(source *msROW) {
 
 // ROW::SetAttrToEnd / ReplaceAttributes: recorded non-port (colors),
 // kept so call sites match the original line for line.
-func (r *msROW) SetAttrToEnd(columnBegin int, attr TextAttribute)            {}
+func (r *msROW) SetAttrToEnd(columnBegin int, attr TextAttribute)               {}
 func (r *msROW) ReplaceAttributes(beginIndex, endIndex int, attr TextAttribute) {}

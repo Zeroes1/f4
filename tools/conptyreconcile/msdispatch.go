@@ -42,10 +42,10 @@ type msOffset struct {
 	IsAbsolute bool
 }
 
-func msOffsetAbsolute(v int) msOffset  { return msOffset{Value: v, IsAbsolute: true} }
-func msOffsetForward(v int) msOffset   { return msOffset{Value: v} }
-func msOffsetBackward(v int) msOffset  { return msOffset{Value: -v} }
-func msOffsetUnchanged() msOffset      { return msOffset{} }
+func msOffsetAbsolute(v int) msOffset { return msOffset{Value: v, IsAbsolute: true} }
+func msOffsetForward(v int) msOffset  { return msOffset{Value: v} }
+func msOffsetBackward(v int) msOffset { return msOffset{Value: -v} }
+func msOffsetUnchanged() msOffset     { return msOffset{} }
 
 type msEraseType int
 
@@ -63,19 +63,24 @@ type msPage struct {
 	top    int // page.Top(): the viewport top; 0 with buffer == window
 }
 
-func (p *msPage) Buffer() *msTextBuffer { return p.buffer }
-func (p *msPage) Cursor() *msCursor     { return p.cursor }
-func (p *msPage) Width() int            { return p.buffer.Width() }
-func (p *msPage) Height() int           { return p.buffer.Height() }
-func (p *msPage) BufferHeight() int     { return p.buffer.Height() }
-func (p *msPage) Top() int              { return p.top }
-func (p *msPage) Bottom() int           { return p.top + p.Height() }
+func (p *msPage) Buffer() *msTextBuffer     { return p.buffer }
+func (p *msPage) Cursor() *msCursor         { return p.cursor }
+func (p *msPage) Width() int                { return p.buffer.Width() }
+func (p *msPage) Height() int               { return p.buffer.Height() }
+func (p *msPage) BufferHeight() int         { return p.buffer.Height() }
+func (p *msPage) Top() int                  { return p.top }
+func (p *msPage) Bottom() int               { return p.top + p.Height() }
 func (p *msPage) Attributes() TextAttribute { return TextAttribute{} }
-func (p *msPage) XPanOffset() int       { return 0 }
-func (p *msPage) MoveViewportDown()     { p.top++ }
+func (p *msPage) XPanOffset() int           { return 0 }
+func (p *msPage) MoveViewportDown()         { p.top++ }
 
 type msAdaptDispatch struct {
 	page msPage
+
+	// writeWidth is a tool-side observation used by msTerminal to retain the
+	// width at which a live row was first written. It does not participate in
+	// the ported dispatch semantics.
+	writeWidth int
 
 	// _modes (adaptDispatch.hpp): the ones the ported subset tests.
 	modeOrigin        bool
@@ -148,6 +153,10 @@ func (d *msAdaptDispatch) _WriteToBuffer(str []uint16) {
 	}
 
 	for len(state.text) != 0 {
+		if row := textBuffer.GetMutableRowByOffset(cursorPosition.y); row.writeWidth == 0 {
+			row.writeWidth = d.writeWidth
+		}
+
 		if delayedCursorPosition := cursor.GetDelayEOLWrap(); delayedCursorPosition != nil && wrapAtEOL {
 			cursor.ResetDelayEOLWrap()
 			// Only act on a delayed EOL if we didn't move the cursor to a
@@ -305,7 +314,10 @@ func (d *msAdaptDispatch) LineFeed() {
 
 // AdaptDispatch::CarriageReturn
 func (d *msAdaptDispatch) CarriageReturn() {
-	d._CursorMovePosition(msOffsetUnchanged(), msOffsetAbsolute(1), true)
+	// The absolute column used by the dispatch is zero-based. CSI callers
+	// convert their 1-based parameters before reaching it; CR itself targets
+	// column zero directly.
+	d._CursorMovePosition(msOffsetUnchanged(), msOffsetAbsolute(0), true)
 }
 
 // AdaptDispatch::CursorUp / CursorDown / CursorForward / CursorBackward
@@ -418,10 +430,11 @@ func (d *msAdaptDispatch) EraseInDisplay(eraseType msEraseType) {
 		return
 	}
 
-	if eraseType == msEraseScrollback {
+	switch eraseType {
+	case msEraseScrollback:
 		// _EraseScrollback: recorded non-port (no stream here carries CSI 3 J).
 		return
-	} else if eraseType == msEraseAllType {
+	case msEraseAllType:
 		d._EraseAll()
 		return
 	}

@@ -113,6 +113,9 @@ func msTextBufferReflow(oldBuffer, newBuffer *msTextBuffer, oldCursor *msCursor,
 			}
 
 			newRow := newBuffer.GetMutableRowByOffset(newY)
+			// Tool metadata only: preserve the width at which this source row
+			// first received live output while the ported rows are reflowed.
+			newRow.writeWidth = oldRow.writeWidth
 
 			state := msRowCopyTextFromState{
 				source:            oldRow,
@@ -133,7 +136,7 @@ func msTextBufferReflow(oldBuffer, newBuffer *msTextBuffer, oldCursor *msCursor,
 			oldX = state.sourceColumnEnd
 			newX = state.columnEnd
 
-			if !(oldX < oldRowLimit) {
+			if oldX >= oldRowLimit {
 				break
 			}
 		}
@@ -147,7 +150,6 @@ func msTextBufferReflow(oldBuffer, newBuffer *msTextBuffer, oldCursor *msCursor,
 
 	// The for loop right after this if condition will copy entire rows of attributes at a time.
 	if newX != 0 {
-		newX = 0
 		newY++
 	}
 

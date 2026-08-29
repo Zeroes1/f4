@@ -1977,25 +1977,39 @@ scrollback (P16) and the mirror must.
 `ROW::WasWrapForced` plus the pending delayed-EOL wrap; `Wrap` and
 `RowsFor` -> the ported buffer; `Grid` -> a thin adapter.
 
+**First verification pass after the handover (2026-08-29).** The package now
+builds and its complete portable test suite passes. The first run exposed three
+port-boundary defects, all fixed without changing the Microsoft model: the
+stream router was passing ANSI's 1-based cursor coordinates as zero-based,
+`CR` was targeting column 1 instead of column 0, and a resize reflow discarded
+the write-time width needed by the reconciliation layer. The last was handled
+as tool metadata carried alongside rows and through the ported reflow; it is
+never read by conhost semantics. The saved malformed-UTF-8 fuzz corpus also
+passes: the public `Wrap` API keeps such Go-string bytes opaque, while valid
+terminal text still goes through the UTF-16 port.
+
 **What is left, in order.**
 
-1. Build and test. Nothing has been compiled or run since the port. The
-   package is `main` with `main_windows.go` behind a build tag, so a Linux
-   box builds the non-Windows part and runs every test that is not
-   Windows-only; `GOOS=windows go build ./...` cross-compiles the rest
-   without cgo. Only *running* the probe needs Windows.
+1. Build and test are complete for this handover: `go test
+   ./tools/conptyreconcile`, `go test -race ./tools/conptyreconcile
+   -skip '^TestRealCommandUnderACornerDrag$'`, and the `GOOS=windows
+   GOARCH=amd64 CGO_ENABLED=0 go build ./...` cross-build pass. The full
+   race run including the Linux real-PTY test was stopped after it exceeded
+   its normal duration without producing a diagnostic; it did not report a
+   race. Only running the ConPTY probe still needs Windows.
 2. Ship an exe and run the probe. The two failing stages ("mirror holds
    every printed line", "visible slice is the wrapped tail") are the
    measurement; do not analyse the old logs, they came from the model that
    has been replaced.
-3. `cellRows` in `cells.go` is probably orphaned now -- check and remove.
-4. `mock.go` says it is not a port of conhost, which is correct (it is a
-   stream generator), but it must be re-read for wrap rules it decides on
-   its own; those would be the same violation one layer down.
-5. `reconcile.go`'s `liveHardBreaks*` family still reasons about merges in
-   terms of line lengths. `fillsRowsExactly` underneath it is ported now,
-   but the surrounding logic should be re-read against the port rather than
-   trusted.
+3. `cellRows` is used by the mock's measured frame grammar and remains. Its
+   row count now delegates to the port-backed `ROW::ReplaceText` path.
+4. `mock.go` remains a stream generator rather than a conhost port, but its
+   row count and merge decision now delegate to the port-backed model; no
+   independent byte-length wrap rule remains there.
+5. The `liveHardBreaks*` compatibility helpers in `reconcile.go` now consume
+   the ordered `liveLine` sequence and `fillsRowsExactly`; the active
+   correction already uses that sequence directly. The old standalone
+   `liveSegments` length-based path has been removed.
 
 **For whoever picks this up.** Read THE RULE first. When a behaviour has
 Microsoft source, port it; do not write what the source appears to do. If a

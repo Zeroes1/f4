@@ -472,9 +472,10 @@ func (r rungResult) line() string {
 		tag = "*"
 	}
 	rejoined := "no"
-	if r.WideLongRows == 1 {
+	switch r.WideLongRows {
+	case 1:
 		rejoined = "yes"
-	} else if r.WideLongRows == 0 {
+	case 0:
 		rejoined = "n/a"
 	}
 	return fmt.Sprintf(

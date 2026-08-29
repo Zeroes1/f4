@@ -8,7 +8,7 @@ import (
 
 // The reconciliation this file tests exists because of one measured fact
 // (docs/CONPTY_RESEARCH.md §17): conhost loses the boundary between a line
-// whose length equalled the console width and the line after it. Every frame,
+// whose last row filled the console width and the line after it. Every frame,
 // at every width, delivers those two logical lines merged. The live stream
 // does not: there the exact-width line is terminated by a plain CRLF.
 //
@@ -86,52 +86,11 @@ func stripEscapes(b []byte) string {
 	return sb.String()
 }
 
-// ---------------------------------------------------------------------------
-// live-stream hard breaks
-// ---------------------------------------------------------------------------
-
-// liveHardBreaks returns every logical line the live stream terminated with a
-// CRLF whose length is a multiple of the width -- precisely the lines a frame
-// will have merged into their successor. On a build where a wrapped line arrives whole (the
-// 22000 shape, P11/P12), such a row can only be a hard break -- which is
-// exactly the boundary a frame will have lost.
-//
-// On 19045 (P6) the wrap point carries a CRLF too and this signal is not
-// available; that is why the correction is a setting rather than a constant.
-func liveHardBreaks(stream []byte, width int) map[string]int {
-	return liveHardBreaksTracking(stream, width)
-}
-
-// liveHardBreaksTracking is the form the tool actually needs. The width can
-// change while output is in flight -- a window drag during a `dir` is the
-// ordinary case -- and whether a line merges is decided by the width in force
-// when *that line* was written. Fixing on one width gets every line printed
-// after a resize wrong.
-//
-// The width in force is read from the stream itself: ConPTY announces it with
-// the XTWINOPS size report, ESC[8;rows;cols t, at the head of every frame.
-func liveHardBreaksTracking(stream []byte, initialWidth int) map[string]int {
-	out := map[string]int{}
-	if initialWidth <= 0 {
-		return out
-	}
-	width := initialWidth
-	for _, seg := range liveSegments(stream) {
-		if seg.width > 0 {
-			width = seg.width
-		}
-		if len(seg.line) > 0 && len(seg.line)%width == 0 {
-			out[seg.line]++
-		}
-	}
-	return out
-}
-
 // liveLine is one logical line as the live stream delivered it, together with
 // the console width in force when it was written.
 type liveLine struct {
 	Text  string
-	Width int
+	Width int // width at which the row first received output
 }
 
 // liveLines splits the stream into logical lines and tags each with the width
@@ -157,29 +116,12 @@ func liveLines(stream []byte, initialWidth int) []liveLine {
 	return g.LogicalLinesWithWidth()
 }
 
-type liveSegment struct {
-	line  string
-	width int // non-zero when a size report preceded this line
-}
-
-func liveHardBreaksFixed(stream []byte, width int) map[string]int {
-	out := map[string]int{}
-	if width <= 0 {
-		return out
+func liveLinesFromChunks(chunks [][]byte, initialWidth int) []liveLine {
+	g := NewGrid(initialWidth)
+	for _, chunk := range chunks {
+		g.Feed(chunk)
 	}
-	for _, line := range liveLogicalLines(stream) {
-		// A logical line merges into its successor exactly when it fills its
-		// rows completely -- when its length is a non-zero multiple of the
-		// width. Two unit tests shaped this: the first version recorded only
-		// one-row lines and missed a line of 2W; the second recorded just the
-		// final row and then split a 2W line of identical characters in half,
-		// because its first row and its last row are the same text. The whole
-		// line is recorded, and matching is by whole line.
-		if len(line) > 0 && len(line)%width == 0 {
-			out[line]++
-		}
-	}
-	return out
+	return g.LogicalLinesWithWidth()
 }
 
 // liveLogicalLines splits the live stream into logical lines, rejoining the
@@ -247,67 +189,6 @@ func liveLogicalLines(stream []byte) []string {
 	return out
 }
 
-// liveSegments is liveLogicalLines with the width announcements kept. A
-// segment carries the logical line and, when a size report was seen just
-// before it, the width that report declared.
-func liveSegments(stream []byte) []liveSegment {
-	var out []liveSegment
-	var cur []byte
-	pending := 0
-
-	flush := func() {
-		out = append(out, liveSegment{line: string(cur), width: pending})
-		cur = cur[:0]
-		pending = 0
-	}
-
-	i := 0
-	for i < len(stream) {
-		if stream[i] == 0x1b && i+1 < len(stream) && stream[i+1] == '[' {
-			j := i + 2
-			for j < len(stream) && !(stream[j] >= 0x40 && stream[j] <= 0x7e) {
-				j++
-			}
-			if j < len(stream) && stream[j] == 't' {
-				if w := sizeReportWidth(stream[i : j+1]); w > 0 {
-					pending = w
-				}
-			}
-			i = j + 1
-			continue
-		}
-		if stream[i] == 0x1b && i+1 < len(stream) && stream[i+1] == ']' {
-			i = skipOSC(stream, i)
-			continue
-		}
-		if stream[i] == 0x1b {
-			i += 2
-			continue
-		}
-		if stream[i] == '\r' {
-			i++
-			continue
-		}
-		if stream[i] == '\n' {
-			if seamFollows(stream, i+1) {
-				i++
-				continue
-			}
-			flush()
-			i++
-			continue
-		}
-		if stream[i] >= 0x20 && stream[i] != 0x7f {
-			cur = append(cur, stream[i])
-		}
-		i++
-	}
-	if len(cur) > 0 || pending > 0 {
-		flush()
-	}
-	return out
-}
-
 // skipOSC steps over an OSC sequence, which ends at BEL or at ST (ESC \\).
 // A version that recognised only BEL let the window title conhost sends --
 // ESC ] 0 ; <path> BEL -- leak into the first logical line of a real capture,
@@ -325,27 +206,6 @@ func skipOSC(b []byte, i int) int {
 		j++
 	}
 	return j
-}
-
-// sizeReportWidth reads the columns out of ESC[8;rows;cols t.
-func sizeReportWidth(seq []byte) int {
-	body := string(seq)
-	if len(body) < 4 || body[len(body)-1] != 't' {
-		return 0
-	}
-	body = body[2 : len(body)-1]
-	parts := strings.Split(body, ";")
-	if len(parts) != 3 || parts[0] != "8" {
-		return 0
-	}
-	w := 0
-	for _, c := range parts[2] {
-		if c < '0' || c > '9' {
-			return 0
-		}
-		w = w*10 + int(c-'0')
-	}
-	return w
 }
 
 // seamFollows reports whether the bytes at off begin an absolute cursor
@@ -457,6 +317,26 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 			if !mergesAtWidth(l.Text, l.Width) {
 				break
 			}
+
+			// Microsoft VtIo::Writer::WriteInfos emits a literal space when a
+			// wide glyph is split at the edge of the CHAR_INFO range. It is
+			// display padding, not a character from the child. The old
+			// XtermEngine frame observed in §13 has the same one-cell padding
+			// at this point. Consume it only when the next live line proves
+			// that the byte is padding; ordinary spaces remain part of text.
+			if i < len(live) && endsInWideGlyph(l.Text) {
+				for n := 1; n <= 2 && len(acc)+n <= len(run); n++ {
+					if run[len(acc):len(acc)+n] != strings.Repeat(" ", n) {
+						break
+					}
+					next := live[i].Text
+					if len(acc)+n+len(next) <= len(run) &&
+						run[len(acc)+n:len(acc)+n+len(next)] == next {
+						acc += strings.Repeat(" ", n)
+						break
+					}
+				}
+			}
 		}
 		if acc != run {
 			return nil, false
@@ -464,6 +344,21 @@ func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
 		_ = consumed
 	}
 	return out, true
+}
+
+// endsInWideGlyph is the narrow condition under which the MS writer can
+// replace a cell with a padding space. It is intentionally not a general
+// whitespace normalizer: a real trailing/interior space must still defeat
+// alignment rather than disappear from the child's text.
+func endsInWideGlyph(s string) bool {
+	runes := []rune(s)
+	for i := len(runes) - 1; i >= 0; i-- {
+		if cellWidth(runes[i]) == 0 {
+			continue
+		}
+		return cellWidth(runes[i]) == 2
+	}
+	return false
 }
 
 func mergesAtWidth(line string, width int) bool {

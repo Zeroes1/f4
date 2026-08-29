@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // The terminal side of direction F, kept portable so that all of it is tested
@@ -85,6 +86,19 @@ func Wrap(lines []string, width int) []Row {
 			rows = append(rows, Row{Line: i, Offset: 0, Text: ""})
 			continue
 		}
+		if !utf8.ValidString(line) {
+			// The Microsoft model is UTF-16 based and therefore cannot retain
+			// malformed UTF-8 bytes. Wrap still has a byte-preservation contract
+			// for arbitrary Go strings, so leave this exceptional input opaque.
+			off, rest := 0, line
+			for rest != "" {
+				head, tail := takeRawRow(rest, width)
+				rows = append(rows, Row{Line: i, Offset: off, Text: head})
+				off += len(head)
+				rest = tail
+			}
+			continue
+		}
 		// Where a logical line breaks at a given width is conhost's decision,
 		// not ours: the line is written into a ported buffer of that width and
 		// the rows it occupies are read back, joined exactly as
@@ -92,6 +106,7 @@ func Wrap(lines []string, width int) []Row {
 		// hand-written cut loop that used to be here was a reimplementation.
 		t := newMsTerminal(width, msRowsForSafely(line, width))
 		t.Feed([]byte(line))
+		t.flushPendingText()
 		b := t.disp.page.buffer
 		last := t.disp.page.cursor.GetPosition().y
 

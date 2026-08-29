@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 const W = 20
@@ -165,5 +166,36 @@ func TestLiveLinesSkipsTheWindowTitle(t *testing.T) {
 	// Unterminated: must not loop or panic, and must not resurrect the title.
 	if got := liveLines([]byte("\x1b]0;never ends"), W); len(got) != 0 {
 		t.Fatalf("an unterminated OSC should swallow the rest, got %v", got)
+	}
+}
+
+func TestGridFeedIsIndependentOfReadBoundaries(t *testing.T) {
+	row := newMsROW(20)
+	col := 0
+	for _, r := range utf16.Encode([]rune("prefix" + strings.Repeat("中", 7))) {
+		state := msRowWriteState{text: []uint16{r}, columnBegin: col, columnLimit: 20}
+		// This intentionally mirrors a series of one-code-unit PrintString calls.
+		row.ReplaceText(&state)
+		col = state.columnEnd
+	}
+	stream := []byte("prefix\x1b]0;window title\x1b\\" + strings.Repeat("中", 7) +
+		"\x1b[8;30;17t\x1b[12;4Htail\r\n")
+
+	whole := NewGrid(20)
+	whole.Feed(stream)
+
+	chunked := NewGrid(20)
+	for _, chunk := range newMockConPTY(20, 30, 1).Chunks(stream, 1) {
+		chunked.Feed(chunk)
+	}
+
+	got, want := chunked.LogicalLinesWithWidth(), whole.LogicalLinesWithWidth()
+	if len(got) != len(want) {
+		t.Fatalf("chunked feed returned %d lines, whole feed returned %d: got=%+v want=%+v", len(got), len(want), got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("line %d differs after one-byte chunking: got=%+v want=%+v", i, got[i], want[i])
+		}
 	}
 }

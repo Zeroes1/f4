@@ -94,6 +94,13 @@ func takeRow(s string, width int) (head, tail string) {
 	if s == "" {
 		return "", ""
 	}
+	// The conhost port consumes UTF-16, so malformed UTF-8 cannot be
+	// represented by its row. The public Wrap helper nevertheless promises
+	// not to lose bytes from an arbitrary Go string; keep malformed input
+	// opaque and use the same cell boundary for its valid portions.
+	if !utf8.ValidString(s) {
+		return takeRawRow(s, width)
+	}
 	// How much of a logical line fits in a row of `width` columns is not a
 	// question to answer with a hand-written cell count: it is exactly what
 	// ROW::ReplaceText decides, including the wide glyph that does not fit at
@@ -114,6 +121,18 @@ func takeRow(s string, width int) (head, tail string) {
 	head = string(utf16.Decode(str[:consumed]))
 	tail = string(utf16.Decode(str[consumed:]))
 	return head, tail
+}
+
+func takeRawRow(s string, width int) (head, tail string) {
+	head, tail = cutCells(s, width)
+	if head != "" {
+		return head, tail
+	}
+	_, size := utf8.DecodeRuneInString(s)
+	if size < 1 {
+		size = 1
+	}
+	return s[:size], s[size:]
 }
 
 // cellRows is how many rows a string occupies at a given width.
@@ -153,6 +172,7 @@ func fillsRowsExactly(s string, width int) bool {
 	// child process would, and ask the last row it occupies.
 	t := newMsTerminal(width, msRowsForSafely(s, width))
 	t.Feed([]byte(s))
+	t.flushPendingText()
 	b := t.disp.page.buffer
 	y := t.disp.page.cursor.GetPosition().y
 	if y < 0 || y >= b.Height() {
