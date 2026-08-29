@@ -1510,37 +1510,96 @@ nothing, and f4 wraps long lines itself as it always has. What stays fixed
 there is column formatting like `ls -C`, which the remote program generated for
 a width it was told -- exactly as it is for every other terminal.
 
-### Why no other Windows terminal does this
+### Why no other Windows terminal does this, read from their source
 
-Worth recording, because "nobody does it" was treated as evidence against the
-idea earlier in this file.
+"Nobody does it" was treated as evidence against the idea earlier in this file.
+The source says something more useful: Windows Terminal does the *equivalent*,
+in its own buffer, and pays a different price for it.
 
-They have no reason to. WezTerm, Alacritty and Windows Terminal *are* the
-terminal: ConPTY is their renderer, they display its frame, and they keep
-scrollback as it was written without ever re-wrapping it. Long lines in the
-frame are of no use to them, because they do not reconstruct logical lines --
-they draw screen rows. The `ESC[K CR LF` structure has been in plain sight
-since 1809; there was no question, so nobody read the answer.
+**They keep the tall buffer themselves.** `Terminal::Create`
+(`src/cascadia/TerminalCore/Terminal.cpp`) allocates a `TextBuffer` of
+`viewportSize.height + scrollbackLines`, and `UserResize` re-allocates it at
+the new width and calls `TextBuffer::Reflow` over it. A tall buffer with wrap
+flags and a real reflow exists -- it is theirs, not ConPTY's. The
+pseudoconsole itself they keep at window size:
+`ConptyConnection::Resize` forwards exactly the window's rows and columns.
 
-Their duplicated rows after a resize have the same root cause as §7, in a
-milder form. Their viewport is the size of the window; what scrolls off it they
-captured from the live stream into scrollback of their own. On a resize ConPTY
-repaints its viewport, and that repaint contains rows the terminal already
-archived -- with no row identity in the stream, the overlap cannot be
-recognised. Two owners again.
+**Their wrap flags come from the same place ours do.** ConPTY emits a long line
+whole and relies on autowrap; their parser lays it into their buffer, autowrap
+fires, `wrapForced` is set. We rediscovered independently the mechanism
+Windows Terminal has always stood on -- and it has the same hole: on a build
+where ConPTY breaks the wrap with a hard CRLF (P6, 19045) the flag is never
+set and the line becomes two. Their reflow is wrong there in exactly the way a
+heuristic of ours would have been.
 
-The tall viewport removes it by removing the archive: nothing ever scrolls off
-into separate storage, one owner holds the grid, and a frame replaces the
-mirror whole.
+**They document ConPTY's reflow as destructive.** `UserResize` says so in as
+many words: for ConPTY a reflow "forgets" text that wraps beyond the top of its
+viewport when shrinking. They work around it by deferring the main buffer's
+reflow while the alternate buffer is active, to avoid damaging state more than
+necessary.
 
-**And the price f4 pays, which a general terminal cannot.** A tall viewport
-means telling the child something untrue about its window height -- measured in
-§17, the child believes whatever it is told. A universal terminal cannot do
-that: it must tell every program it hosts the truth, or the first `vim` breaks.
-f4 can, because it knows which program it launched and can give a full-screen
-one a real-sized console. The advantage is bought precisely by *not* being a
-general-purpose terminal -- and the open detector question above is the bill
-for it.
+**And their duplicated rows are the reconciliation.** The same function carries
+the GH#3490 note: ConPTY trims blank lines at the bottom when the height
+shrinks, and when there are none it shifts the top down, pushing a line into
+scrollback. What follows is described in their own comment as trickiness to
+stay consistent with conpty's buffer -- computing where ConPTY's viewport top
+will land so their buffer does not drift, with a branch on
+`row.WasWrapForced()`. That is two buffers being kept in step, it is fragile,
+and its failures are the duplication users see.
+
+**So the positions are opposite, not accidental.** They hold two buffers and
+code to reconcile them. The tall viewport holds one -- ConPTY's -- with f4
+keeping a mirror it replaces whole; there is nothing to reconcile because
+there is no second owner.
+
+The price is symmetric. They tell the child the truth about the window and pay
+in reconciliation. f4 tells it a tall lie and pays in needing to know when a
+program must be given the real size. This is a different point on one
+trade-off, not an oversight by them.
+
+### Detecting a full-screen program
+
+This is the bill for the lie, and it is the last open question of §18. Two
+constraints shape it.
+
+**It is only needed where the tall viewport is used.** Over plain ssh the tall
+viewport is not used at all -- §17 shows why: a 949 KB frame per width change
+crossing the wire, and a wide frame able to wedge *someone else's* conhost. A
+remote session therefore gets a real-sized ConPTY, tells the truth, needs no
+detector, and reflows no better than any other Windows terminal does. So the
+detector only has to work where f4 owns the host: locally, and on the far side
+of FISH+ Step 17, where the remote f4 is again local to its own console.
+
+**Anything that cannot be observed from there is discarded outright.** No
+mechanism in this design may depend on reading remote state, because the one
+place it would be needed is the one place it is unavailable.
+
+What survives, in the order it should be trusted:
+
+1. **The process tree under the child** -- deterministic, and the only layer
+   that is not a guess. Note a correction to an earlier assumption in this
+   file: f4 does *not* know what was launched, even locally. It spawns
+   `cmd.exe`; `vim` is spawned by the shell. What f4 can do locally is notice a
+   new descendant process, match its image name against a configurable list,
+   switch geometry for its lifetime and switch back when it exits. Process
+   enumeration is cheap and exact. Unavailable over plain ssh, which does not
+   matter; available to the remote f4 under FISH+.
+2. **`ESC[?1049h/l`, where the build forwards it.** Consumed by conhost on
+   10.0.22000 (§17), possibly passed through by the post-#17510 emitter. Must
+   be measured per build and kept behind a setting, and it covers VT programs
+   only -- a native `vim.exe` draws through the Console API and never sends it,
+   as Far does not.
+3. **Signals in the frame itself** -- the doubled terminator count observed
+   during the alternate screen, and content that suddenly spans the whole tall
+   viewport instead of growing at the bottom. Heuristic, and admitted as such.
+4. **A key the user can press** to force real-size mode. No detector may be
+   the last word.
+
+**Getting it wrong is cheap, which is what makes the layering acceptable.**
+Because f4 owns the logical lines as soon as it has read a frame, changing the
+geometry destroys no history. A late detection costs one badly drawn frame; a
+false positive costs a temporarily shallower buffer. Neither loses text, which
+is the property §7 could not offer.
 
 ## 18. Where this leaves direction F
 
@@ -1578,10 +1637,10 @@ them describe one build of one Windows.
 
 **Open, and none of it blocking.**
 
-- *Detecting a full-screen program*, now that both proposed detectors are
-  disproved on 22000. Needed for geometry, not for wrapping. A 1049 detector
-  may return on a post-#17510 build and would cover VT programs but not native
-  Console API ones.
+- *Detecting a full-screen program*: designed in §17 as four layers, of which
+  only the process-tree watch is deterministic. Needed for geometry, not for
+  wrapping, and only where the tall viewport is used -- which excludes plain
+  ssh by construction. Being wrong costs a frame, never text.
 - *What a resize does while the alternate screen is active*, beyond the doubled
   terminator count §17 recorded.
 - *The ring arithmetic for the overflow case*, which is reasoned above and not
