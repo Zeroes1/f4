@@ -56,6 +56,13 @@ var (
 	procInitAttrList        = kernel32.NewProc("InitializeProcThreadAttributeList")
 	procUpdateAttr          = kernel32.NewProc("UpdateProcThreadAttribute")
 	procDeleteAttrList      = kernel32.NewProc("DeleteProcThreadAttributeList")
+
+	// Reading a real console's screen back, for the reference window of
+	// stage 2. ReadConsoleOutputW is Windows' own view of what is displayed.
+	procSetConsoleWindowInfo        = kernel32.NewProc("SetConsoleWindowInfo")
+	procSetConsoleScreenBufferSize  = kernel32.NewProc("SetConsoleScreenBufferSize")
+	procReadConsoleOutputW          = kernel32.NewProc("ReadConsoleOutputW")
+	procGetConsoleScreenBufferInfoEx = kernel32.NewProc("GetConsoleScreenBufferInfoEx")
 )
 
 const (
@@ -202,6 +209,9 @@ func main() {
 		rounds    = flag.Int("fuzz", 0, "run this many randomised rounds instead of one fixed case")
 		seed      = flag.Int64("seed", 0, "seed for a randomised round (0 = derived from the clock)")
 		during    = flag.Bool("resize-during-output", false, "resize while the child is still printing")
+		winOut    = flag.String("window-out", "", "internal: where the child-window mode writes the screen it read")
+		winCols   = flag.Int("window-cols", 100, "internal: reference window width")
+		winRows   = flag.Int("window-rows", 25, "internal: reference window height")
 		realCmd   = flag.String("cmd", "", "run this real command instead of the generated fixture")
 		drag      = flag.Int("drag", 0, "simulate a corner drag: this many rapid resizes while it runs")
 		linesOnly = flag.Bool("lines-only", false, "check only the line reconstruction, not the terminal pipeline")
@@ -224,6 +234,10 @@ func main() {
 		}
 		w.line(markerDone)
 		time.Sleep(*hold)
+		return
+	}
+	if *emit == "child-window" {
+		runChildWindow(*seed, *width, *lines, *winCols, *winRows, *winOut)
 		return
 	}
 	if *emit == "child" {
@@ -712,6 +726,231 @@ func oneRound(self string, seed int64, width, height, lines int,
 // nothing crashed.
 // ---------------------------------------------------------------------------
 
+
+// realWindowRows returns what a real 100x25 console actually shows after the
+// same child has printed into it.
+//
+// It does NOT parse a byte stream. The first version of this did, with
+// splitFrameLines, and that was wrong in the way this whole project is about:
+// splitFrameLines recovers row boundaries from the ESC[K terminator, conhost
+// omits ESC[K after a row that was filled to the edge (P6), so every full row
+// merged with its successor and a 25-row screen read back as 14. A reference
+// that infers structure from a hint is not a reference.
+//
+// Instead the child sizes its own console to the window, prints, and reads its
+// own screen buffer back with ReadConsoleOutputW -- Windows' own record of
+// what is on the screen, no parsing anywhere -- and writes those rows to a
+// file the probe reads. Wide glyphs occupy two cells there, the second marked
+// COMMON_LVB_TRAILING_BYTE, which is skipped so the row reads as text.
+//
+// Deliberately not called an oracle: that word belongs to the rejected
+// wide-resize path (§17), and reusing it is how a rejected path creeps back in
+// under a familiar name. Nothing here is widened and nothing is stamped into
+// any history; it is a second console in a probe.
+func realWindowRows(self string, seed int64, width, lines, winW, winH int,
+	step time.Duration) ([]string, error) {
+
+	tmp, err := os.CreateTemp("", "conptyreconcile-window-*.txt")
+	if err != nil {
+		return nil, err
+	}
+	path := tmp.Name()
+	tmp.Close()
+	defer os.Remove(path)
+
+	cmd := exec.Command(self,
+		"-emit", "child-window",
+		"-seed", strconv.FormatInt(seed, 10),
+		"-width", strconv.Itoa(width),
+		"-lines", strconv.Itoa(lines),
+		"-window-out", path,
+		"-window-cols", strconv.Itoa(winW),
+		"-window-rows", strconv.Itoa(winH),
+	)
+	// Its own console, so that sizing it cannot disturb ours.
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windowsCreateNewConsole}
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(string(body), "ERROR ") {
+		return nil, fmt.Errorf("%s", strings.TrimSpace(string(body)))
+	}
+	rows := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
+	for i := range rows {
+		rows[i] = strings.TrimRight(rows[i], " ")
+	}
+	return rows, nil
+}
+
+const windowsCreateNewConsole = 0x00000010
+
+// runChildWindow is the child side of realWindowRows: size this console to the
+// window, print the same lines, then read the screen back through Windows.
+//
+// Every API call below follows a Microsoft reference rather than memory,
+// because getting these wrong is how the previous two attempts at this stage
+// failed:
+//   - CONOUT$ is opened with the flags of src/tools/pixels/main.cpp:
+//     GENERIC_READ|GENERIC_WRITE, FILE_SHARE_WRITE, OPEN_EXISTING. The std
+//     handles cannot be used: a Go child started with CreateProcess gets the
+//     null device for stdout unless one is supplied, so GetStdHandle would
+//     hand back NUL and every console call on it would fail. That is the
+//     "exit status 2" of the previous run.
+//   - the size is set the way src/tools/ConsoleBench/main.cpp sets it:
+//     SetConsoleScreenBufferSize first, then SetConsoleWindowInfo with
+//     Right/Bottom one less than the size. Shrinking the window to nothing
+//     first, which the previous version did, is not in any reference.
+//   - the screen is read the way src/tools/ConsoleMonitor/main.cpp reads it:
+//     GetConsoleScreenBufferInfoEx for the real size, a buffer of that size,
+//     a read region whose Right/Bottom are the size, and the region READ BACK
+//     from the call to learn how much was actually delivered -- ReadConsoleOutputW
+//     clips and reports. The previous version assumed the whole rectangle came
+//     back.
+//   - wide glyphs are handled as ConsoleMonitor handles them: the leading cell
+//     contributes its character, a cell marked COMMON_LVB_TRAILING_BYTE
+//     contributes none.
+func runChildWindow(seed int64, width, lines, cols, rows int, outPath string) {
+	// Diagnostics go into the output file. stderr here is a console window
+	// that closes with the process, so the previous failure arrived at the
+	// probe as a bare exit code with no reason attached.
+	fail := func(what string, e error) {
+		os.WriteFile(outPath, []byte("ERROR "+what+": "+fmt.Sprint(e)+"\n"), 0o644)
+		os.Exit(0)
+	}
+
+	name, _ := syscall.UTF16PtrFromString("CONOUT$")
+	h, err := syscall.CreateFile(name,
+		syscall.GENERIC_READ|syscall.GENERIC_WRITE,
+		syscall.FILE_SHARE_WRITE,
+		nil, syscall.OPEN_EXISTING, 0, 0)
+	if err != nil {
+		fail("CreateFile CONOUT$", err)
+	}
+	defer syscall.CloseHandle(h)
+
+	// Sizing, ported from .NET referencesource system/console.cs --
+	// SetWindowSize then SetBufferSize -- which is the reference
+	// src/host/ft_uia/MiscTests.cs itself points at ("Adapted from .NET
+	// source code"). The previous attempt copied ConsoleBench, whose buffer
+	// (120x9001) is LARGER than its window, so a bare
+	// SetConsoleScreenBufferSize was enough there; this console shrinks, and
+	// the API refuses a buffer smaller than the current window ("The
+	// parameter is incorrect" of the last run). .NET's sequence handles both
+	// directions: grow the buffer just enough for the new window if needed,
+	// set the window, then set the buffer to the final size, which the
+	// window now fits.
+	var csbi consoleScreenBufferInfoEx
+	csbi.cbSize = uint32(unsafe.Sizeof(csbi))
+	if r, _, e := procGetConsoleScreenBufferInfoEx.Call(uintptr(h), uintptr(unsafe.Pointer(&csbi))); r == 0 {
+		fail("GetConsoleScreenBufferInfoEx", e)
+	}
+
+	// Console.SetWindowSize(width, height):
+	sizeX, sizeY := csbi.dwSizeX, csbi.dwSizeY
+	resizeBuffer := false
+	if int(csbi.srWindow.left)+cols > int(sizeX) {
+		sizeX = int16(int(csbi.srWindow.left) + cols)
+		resizeBuffer = true
+	}
+	if int(csbi.srWindow.top)+rows > int(sizeY) {
+		sizeY = int16(int(csbi.srWindow.top) + rows)
+		resizeBuffer = true
+	}
+	if resizeBuffer {
+		if r, _, e := procSetConsoleScreenBufferSize.Call(uintptr(h), packCoord(int(sizeX), int(sizeY))); r == 0 {
+			fail("SetConsoleScreenBufferSize (grow for window)", e)
+		}
+	}
+	srWindow := csbi.srWindow
+	srWindow.bottom = srWindow.top + int16(rows) - 1
+	srWindow.right = srWindow.left + int16(cols) - 1
+	if r, _, e := procSetConsoleWindowInfo.Call(uintptr(h), 1, uintptr(unsafe.Pointer(&srWindow))); r == 0 {
+		fail("SetConsoleWindowInfo", e)
+	}
+
+	// Console.SetBufferSize(width, height): the window now fits, so the
+	// final buffer size is legal.
+	if r, _, e := procSetConsoleScreenBufferSize.Call(uintptr(h), packCoord(cols, rows)); r == 0 {
+		fail("SetConsoleScreenBufferSize", e)
+	}
+
+	procSetConsoleOutputCP.Call(cpUTF8)
+	w := &consoleWriter{h: h}
+	for _, l := range randomGroundTruth(seed, width, lines) {
+		w.line(l)
+	}
+	w.line(markerDone)
+
+	// ConsoleMonitor asks the console for its own size rather than assuming.
+	info := consoleScreenBufferInfoEx{cbSize: uint32(unsafe.Sizeof(consoleScreenBufferInfoEx{}))}
+	if r, _, e := procGetConsoleScreenBufferInfoEx.Call(uintptr(h), uintptr(unsafe.Pointer(&info))); r == 0 {
+		fail("GetConsoleScreenBufferInfoEx", e)
+	}
+	bufW, bufH := int(info.dwSizeX), int(info.dwSizeY)
+
+	buf := make([]charInfo, bufW*bufH)
+	// Right/Bottom are the size, not size-1, exactly as ConsoleMonitor passes
+	// them; the call writes back what it actually read.
+	readArea := smallRect{0, 0, int16(bufW), int16(bufH)}
+	if r, _, e := procReadConsoleOutputW.Call(uintptr(h),
+		uintptr(unsafe.Pointer(&buf[0])), packCoord(bufW, bufH), packCoord(0, 0),
+		uintptr(unsafe.Pointer(&readArea))); r == 0 {
+		fail("ReadConsoleOutputW", e)
+	}
+	cellCountX := int(readArea.right) + 1
+	cellCountY := int(readArea.bottom) + 1
+
+	var sb strings.Builder
+	for y := 0; y < cellCountY; y++ {
+		offset := bufW * y
+		var line []uint16
+		for x := 0; x < cellCountX; x++ {
+			ci := buf[offset+x]
+			if ci.attributes&commonLvbTrailingByte != 0 {
+				continue
+			}
+			line = append(line, ci.unicodeChar)
+		}
+		sb.WriteString(strings.TrimRight(string(utf16.Decode(line)), " "))
+		sb.WriteString("\n")
+	}
+
+	if err := os.WriteFile(outPath, []byte(sb.String()), 0o644); err != nil {
+		os.Exit(2)
+	}
+}
+
+// consoleScreenBufferInfoEx is CONSOLE_SCREEN_BUFFER_INFOEX. Only the size is
+// read here, but the whole struct has to be laid out so cbSize is right.
+type consoleScreenBufferInfoEx struct {
+	cbSize               uint32
+	dwSizeX, dwSizeY     int16
+	dwCursorPositionX    int16
+	dwCursorPositionY    int16
+	wAttributes          uint16
+	srWindow             smallRect
+	dwMaximumWindowSizeX int16
+	dwMaximumWindowSizeY int16
+	wPopupAttributes     uint16
+	bFullscreenSupported int32
+	colorTable           [16]uint32
+}
+
+const commonLvbTrailingByte = 0x0200
+
+type charInfo struct {
+	unicodeChar uint16
+	attributes  uint16
+}
+
+type smallRect struct{ left, top, right, bottom int16 }
+
+
 func runTerminal(self, logPath, dumpPath string, seed int64, width, height, lines int,
 	step time.Duration, noPause bool) {
 
@@ -787,20 +1026,51 @@ func runTerminal(self, logPath, dumpPath string, seed int64, width, height, line
 		len(m.Lines()) == len(printed) && diffCount(m.Lines(), printed) == 0,
 		fmt.Sprintf("%d lines, expected %d", len(m.Lines()), len(printed)))
 
-	// 2. the visible slice, against an independent wrap of the ground truth
+	// 2. the visible slice, against a second real ConPTY of exactly the
+	// window size.
+	//
+	// This used to compare Slice() against Wrap() of the ground truth. Both
+	// sides of that comparison now run the same ported conhost code, so it
+	// checked nothing that stage 1 had not already checked. The second side
+	// has to be something that is not us: a real 100x25 console fed the
+	// identical stream, whose own last 25 rows are what a user would see. If
+	// our slice and conhost's screen agree row for row, the wrap is right.
+	//
+	// This is NOT the wide-resize oracle of the rejected path 2 (§17), and
+	// the word is avoided deliberately. Nothing is widened -- the reference
+	// console is the window size, one column wider only for the instant that
+	// forces the repaint -- nothing is stamped into any history, and this
+	// lives in the probe and never in f4. The reason path 2 was rejected is
+	// that it wrote flags back into a history f4 also owned; a reference
+	// console in a test writes nothing anywhere.
 	v := m.Slice(winW, winH)
-	want := Wrap(printed, winW)
-	sliceOK := len(v.Rows) == winH && len(want) >= winH
+	realRows, refErr := realWindowRows(self, seed, width, lines, winW, winH, step)
+	// The screen's last row is blank: the final \r\n scrolled the content up
+	// and left the cursor on a fresh row, which the user sees but the mirror
+	// slice (a slice of content) does not carry. So trailing blank rows are
+	// dropped from the screen and the remainder is compared against the
+	// BOTTOM of our slice: screen row k from the end must equal slice row k
+	// from the end.
+	for len(realRows) > 0 && strings.TrimRight(realRows[len(realRows)-1], " ") == "" {
+		realRows = realRows[:len(realRows)-1]
+	}
+	sliceOK := refErr == nil && len(v.Rows) == winH &&
+		len(realRows) > 0 && len(realRows) <= winH
 	if sliceOK {
-		for i := range v.Rows {
-			if v.Rows[i].Text != want[len(want)-winH+i].Text {
+		off := len(v.Rows) - len(realRows)
+		for i := range realRows {
+			if strings.TrimRight(v.Rows[off+i].Text, " ") != strings.TrimRight(realRows[i], " ") {
 				sliceOK = false
 				break
 			}
 		}
 	}
-	check("visible slice is the wrapped tail", sliceOK,
-		fmt.Sprintf("%d rows of %d total", len(v.Rows), v.Total))
+	detail := fmt.Sprintf("%d rows of %d total, %d read back from a real %dx%d console",
+		len(v.Rows), v.Total, len(realRows), winW, winH)
+	if refErr != nil {
+		detail = fmt.Sprintf("reference console failed: %v", refErr)
+	}
+	check("visible slice matches a real window", sliceOK, detail)
 
 	// 3. coordinates: every visible cell must map to the mirror and back
 	coordOK, checked := true, 0
