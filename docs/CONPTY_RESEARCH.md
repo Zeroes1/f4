@@ -1266,3 +1266,160 @@ observable and adjustable from a config file, which is what makes an
 unmeasured build -- 19045, 24H2, 25H2, whatever ships next -- a support
 question instead of a release blocker. A single hard-coded `5` or `4000` puts
 that property back in the bin.
+
+## 17. The matrix, complete (2026-08-29, `tools/conptymatrix`, full run, 10.0.22000.2538)
+
+Sixteen sessions across the full grid -- fill x height x width-op x line-shape
+x child -- plus a ten-point sweep for the cell ceiling. This supersedes the
+partial reading in §14 and settles every question §13 and §15 left open. The
+raw dumps are the evidence; the numbers below are counted from them, not
+judged.
+
+### The cost model, corrected and now measured at a full buffer
+
+§13 fitted `3815 + 5.0 x rows` on a nearly empty buffer and warned that the
+constant was really a content term. It is, and the corrected model is:
+
+    frame bytes = SUM(logical line lengths) + 5 x buffer rows
+
+Both terms are now measured at three heights and two fill levels. The
+per-row term is exact: an empty buffer costs `5 x rows + 654` at 500, 2000 and
+32000 rows alike (3154, 10655, 160654 bytes), where 654 is the frame header
+and never grows. The content term is linear in what the buffer holds: a full
+buffer of ~21-character lines costs 23.8, 23.7 and 24.7 bytes per line at the
+three heights -- the line plus its five-byte terminator.
+
+| Height | Empty frame | Full frame | Latency, full |
+|---|---|---|---|
+| 500 | 3.1 KB | 14.3 KB | 20 ms |
+| 2000 | 10.7 KB | 57.2 KB | 46 ms |
+| 32000 | 160.7 KB | 949 KB | 609 ms |
+
+A full 32000-row buffer costs just under a megabyte and 0.6 s per width
+change. A full 2000-row buffer costs 57 KB and 46 ms, which is affordable
+during an interactive drag with debouncing.
+
+### History depth is exactly the buffer height
+
+Measured at three scales by printing more than the buffer holds and reading
+back the oldest surviving line:
+
+| Height | Lines printed | Oldest surviving | Lines retained |
+|---|---|---|---|
+| 500 | 750 | 268 | 483 |
+| 2000 | 3000 | 1042 | 1959 |
+| 32000 | 40000 | 8070 | 31931 |
+
+conhost's buffer is a plain ring: nothing above the top is kept, and the
+retained count is the height less the rows consumed by wrapped lines. **This
+is the sizing rule for direction F**: the configured height *is* the scrollback
+depth, and it is chosen for the depth wanted, never for cheapness.
+
+### The frame is self-describing
+
+The count of `ESC[K CR LF` terminators in a frame is exactly the number of
+logical lines it contains, and `buffer rows - terminators` is the number of
+rows consumed by wrapping. The frames prove it directly: at height 500 the
+narrow frame carries 493 terminators and the 4000-column frame carries 497 --
+four more, because the over-wide line stopped occupying extra rows. Same
+step at 2000 (1993 -> 1997). Nothing has to be inferred: the frame states its
+own structure.
+
+### The logical lines are readable from the frame, and only from the frame
+
+Every frame in every case reported `longWhole=true`: the over-wide line
+arrived as one unbroken run. But the **live stream** in the two overflow cases
+reported `longWhole=false` -- while the buffer is scrolling, conhost splits
+that line across its partial redraws.
+
+So the rule for the implementation is narrow and firm: **logical structure is
+read from a repaint frame, never from the live stream.** The live stream is for
+display; the frame is for structure. This distinction did not exist in §13,
+which had only non-scrolling fixtures.
+
+### The wide frame is expensive, and the cost scales with height
+
+| Height | Narrow frame | Wide (4000) frame |
+|---|---|---|
+| 500 | 9 ms | 144 ms |
+| 2000 | 46 ms | 617 ms |
+| 32000 | 473 ms | wedges the host |
+
+The wide frame carries almost exactly the same bytes as the narrow one
+(14068 vs 13998 at height 2000), so the time is not transfer -- it is conhost
+rebuilding a 4000-column buffer. Six hundred milliseconds at a 2000-row
+height makes the wide frame a deliberate, user-initiated operation and
+nothing else. The periodic audit floated in §15 is withdrawn on this evidence.
+
+### The cell ceiling, located
+
+| Width x height | Cells | Result |
+|---|---|---|
+| 4000 x 8000 | 32 M | ok, 41.5 KB |
+| 4000 x 12000 | 48 M | no output; host wedged |
+| 4000 x 16000 | 64 M | no output; host wedged |
+| 4000 x 24000 | 96 M | wedged, and `ClosePseudoConsole` never returns |
+| 4000 x 32000 | 128 M | wedged, and `ClosePseudoConsole` never returns |
+
+The boundary is between 32 and 48 million cells, and the failure has two
+stages: first the host stops producing output, then, higher up, it also stops
+being closable. A safe default should sit well under the lower bound -- 16
+million cells leaves a factor of two -- and `ConPtyMaxCells` (§16) exists so
+this can be moved without touching code.
+
+### The alternate screen is invisible, confirmed
+
+The alt-screen child entered and left `ESC[?1049h/l`, and **no frame in that
+session contained either sequence**: conhost consumes them. Neither of §10's
+proposed detectors survives -- not the stream, and not the geometry, since the
+buffer already equals the viewport. One anomaly is recorded for whoever builds
+the detector: while the child was in the alternate screen, the narrow frame
+carried 3992 terminators instead of the usual 1993, which looks like both
+buffers being painted in one frame.
+
+### The child sees every width change, including 4000
+
+The size-querying child reported `win=120x2000`, then `119x2000`, then
+`4000x2000`, then back -- every resize, promptly. Width-aware programs will
+therefore reformat for 4000 during a wide frame, which is the objection that
+demoted direction C in §8 and is now a measured property of the wide path
+rather than an argument about it.
+
+## 18. Where this leaves direction F
+
+Everything §15 said had to be settled before implementation is settled.
+
+**What is established.** A tall viewport is creatable at every height to 32000
+and cheap to create (24-104 ms). Its whole buffer is re-wrapped and
+re-transmitted on any width change, oldest line included. The frame states its
+own logical structure through `ESC[K CR LF`, exactly, with one known
+exception. The frame cost is a formula with both terms measured. History depth
+equals buffer height, exactly. Repeated resizes, and resizes during live
+output, are stable -- the case that destroyed the design of §7 is harmless
+here, because f4 replaces a mirror from a whole frame instead of merging a
+delta into a history it also owns.
+
+**What is known to be imperfect, with its bound.** A line whose length is an
+exact multiple of the width arrives with no terminator and is indistinguishable
+from a wrap (P13). The error is always in one direction -- a hard break read
+as a wrap -- and its frequency is one line in W. The wide frame resolves it,
+because a multiple of 119 is not a multiple of 4000, at a cost of 144-617 ms
+depending on height.
+
+**What remains genuinely open**, and none of it blocks a first implementation:
+detecting a full-screen program now that both proposed detectors are disproved;
+what a resize does while the alternate screen is active, beyond the doubled
+terminator count; and the same measurements on 19045 and on a post-#17510
+build, where the emitter was rewritten. `tools/conptymatrix` is the instrument
+for all three and needs no changes to ask them.
+
+**The shape that follows.** A tall ConPTY whose height is the scrollback
+depth; f4 rendering the bottom slice and translating coordinates; logical
+structure read from repaint frames only; the native path carrying ordinary
+work at 46 ms per width change at a 2000-row height; the wide path reserved
+for the F4 viewer and editor, where a user pressed a key and a few hundred
+milliseconds is a fair price for exactness; every number above a setting per
+§16, because all of them describe one build of one Windows.
+
+That is a design with measured costs, a known failure mode, a bounded error
+and a fallback -- which is what §7 lacked, and the reason it was abandoned.
