@@ -165,10 +165,10 @@ func TestWidthsComeFromMicrosoftsTable(t *testing.T) {
 func TestAmbiguousWidthIsASettingAsItIsInConhost(t *testing.T) {
 	// CodepointWidthDetector has SetAmbiguousWidth; a user with a CJK font
 	// wants Cyrillic counted as two, and conhost lets them say so.
-	old := ambiguousWidth
-	defer func() { ambiguousWidth = old }()
+	old := msAmbiguousWidth
+	defer func() { msAmbiguousWidth = old }()
 
-	ambiguousWidth = 2
+	setAmbiguousWidth(2)
 	if got := cellWidth('т'); got != 2 {
 		t.Fatalf("with ambiguous width 2, Cyrillic should be 2 cells, got %d", got)
 	}

@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf16"
+)
 
 // The terminal side of direction F, kept portable so that all of it is tested
 // here rather than on a tester's machine.
@@ -82,15 +85,29 @@ func Wrap(lines []string, width int) []Row {
 			rows = append(rows, Row{Line: i, Offset: 0, Text: ""})
 			continue
 		}
-		// Cut by cells. The offset stays a byte offset into the logical line,
-		// because that is what a caller needs to index the text; only the
-		// *measurement* is in cells.
-		off, rest := 0, line
-		for rest != "" {
-			head, tail := takeRow(rest, width)
-			rows = append(rows, Row{Line: i, Offset: off, Text: head})
-			off += len(head)
-			rest = tail
+		// Where a logical line breaks at a given width is conhost's decision,
+		// not ours: the line is written into a ported buffer of that width and
+		// the rows it occupies are read back, joined exactly as
+		// TextBuffer::Reflow reads them (WasWrapForced / MeasureRight). The
+		// hand-written cut loop that used to be here was a reimplementation.
+		t := newMsTerminal(width, msRowsForSafely(line, width))
+		t.Feed([]byte(line))
+		b := t.disp.page.buffer
+		last := t.disp.page.cursor.GetPosition().y
+
+		off := 0
+		for y := 0; y <= last && y < b.Height(); y++ {
+			r := b.GetRowByOffset(y)
+			text := string(utf16.Decode(r.GetTextRange(0, r.MeasureRight())))
+			if y > 0 && text == "" && !r.WasWrapForced() {
+				// Past the end of the line: the buffer's own blank padding.
+				break
+			}
+			rows = append(rows, Row{Line: i, Offset: off, Text: text})
+			off += len(text)
+			if !r.WasWrapForced() {
+				break
+			}
 		}
 	}
 	return rows
@@ -101,11 +118,10 @@ func RowsFor(lines []string, width int) int {
 	if width < 1 {
 		width = 1
 	}
-	n := 0
-	for _, l := range lines {
-		n += cellRows(l, width)
-	}
-	return n
+	// The row count has to agree with Wrap exactly, or a viewport sized from
+	// it will not match the rows drawn into it. So it is Wrap's count, which
+	// is conhost's, rather than a second measurement made independently.
+	return len(Wrap(lines, width))
 }
 
 // ---------------------------------------------------------------------------

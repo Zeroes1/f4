@@ -1,6 +1,9 @@
 package main
 
-import "unicode/utf8"
+import (
+	"unicode/utf16"
+	"unicode/utf8"
+)
 
 // Widths are measured in cells, not bytes.
 //
@@ -25,41 +28,34 @@ import "unicode/utf8"
 // setting here (§16): Cyrillic, Greek and the box-drawing characters are
 // "ambiguous" in Unicode's East Asian Width, and a user with a CJK font may
 // legitimately want them counted as two.
-var ambiguousWidth = 1
+// The single copy of this setting lives in the port (mscwd.go); this alias
+// keeps the old name for callers and tests.
+func setAmbiguousWidth(w int) { msAmbiguousWidth = w }
 
+// cellWidth is the width of one codepoint, obtained by running the ported
+// CodepointWidthDetector::GraphemeNext (mscwd.go) over just that codepoint.
+// The hand-reduced copy of that function that used to live here -- the
+// per-codepoint "w = ucdToCharacterWidth(lead); if w == 3 ..." block -- was a
+// reimplementation, not a port, and THE RULE forbids it.
 func cellWidth(r rune) int {
-	// Microsoft's GraphemeNext, reduced to one codepoint:
-	//
-	//	auto w = ucdToCharacterWidth(lead);
-	//	if (w == 3) { w = _ambiguousWidth; }
-	//	if (cp == 0xFE0F) { w = 2; }
-	//	...
-	//	width = width > 2 ? 2 : width;
-	//
-	// The value 3 is *ambiguous*, not three columns. Reading it as a column
-	// count made a Cyrillic line three times too wide, which moved every
-	// merge boundary and broke the whole reconstruction -- exactly the class
-	// of error that comes of writing this from memory instead of porting it.
-	w := ucdToCharacterWidth(ucdLookup(r))
-	if w == 3 {
-		w = ambiguousWidth
-	}
-	// U+FE0F Variation Selector-16 turns an unqualified emoji into a
-	// qualified one, which by convention is wide.
-	if r == 0xFE0F {
-		w = 2
-	}
-	if w > 2 {
-		w = 2
-	}
-	return w
+	return cellLen(string(r))
 }
 
 // cellLen is the width of a string in cells.
 func cellLen(s string) int {
+	// Microsoft measures a string by walking grapheme clusters and summing
+	// the width GraphemeNext reports for each, which is what msAmbiguousWidth,
+	// U+FE0F and the clamp to 2 are already handled by. Summing per codepoint
+	// would disagree with conhost on any cluster of more than one codepoint.
+	str := utf16.Encode([]rune(s))
 	n := 0
-	for _, r := range s {
-		n += cellWidth(r)
+	var st msGraphemeState
+	for {
+		more := msGraphemeNext(&st, str)
+		n += st.width
+		if !more {
+			break
+		}
 	}
 	return n
 }
@@ -98,14 +94,25 @@ func takeRow(s string, width int) (head, tail string) {
 	if s == "" {
 		return "", ""
 	}
-	head, tail = cutCells(s, width)
-	if head == "" {
-		_, size := utf8.DecodeRuneInString(s)
-		if size < 1 {
-			size = 1
-		}
-		return s[:size], s[size:]
+	// How much of a logical line fits in a row of `width` columns is not a
+	// question to answer with a hand-written cell count: it is exactly what
+	// ROW::ReplaceText decides, including the wide glyph that does not fit at
+	// the end of a row and moves down whole (WasDoubleBytePadded). So this
+	// writes the text into a ported ROW of that width and reads back how much
+	// it consumed. The measurement is conhost's, not ours.
+	str := utf16.Encode([]rune(s))
+	row := newMsROW(width)
+	state := msRowWriteState{text: str, columnLimit: width}
+	row.ReplaceText(&state)
+	consumed := len(str) - len(state.text)
+	if consumed < 1 {
+		// The glyph is wider than the row and can never be inserted; the
+		// original throws it away (AdaptDispatch::_WriteToBuffer, the
+		// textPositionBefore == textPositionAfter branch).
+		consumed = msGraphemeLen(str)
 	}
+	head = string(utf16.Decode(str[:consumed]))
+	tail = string(utf16.Decode(str[consumed:]))
 	return head, tail
 }
 
@@ -133,5 +140,38 @@ func fillsRowsExactly(s string, width int) bool {
 	if width < 1 || s == "" {
 		return false
 	}
-	return cellLen(s)%width == 0
+	// Whether conhost merges this line into the next one is not a property of
+	// its length: it is ROW::WasWrapForced on the line's last row. conhost
+	// sets that flag in exactly one place -- AdaptDispatch::_DoLineFeed with
+	// wrapForced=true, which _WriteToBuffer calls when a write ran past the
+	// last column (delayed EOL wrap). "length is a multiple of the width" was
+	// this project's inference from that behaviour, and inferences are what
+	// THE RULE forbids: it is wrong for any line whose last row ends in a
+	// wide glyph that did not fit (WasDoubleBytePadded), among others.
+	//
+	// So: write the line into a ported buffer of that width, exactly as a
+	// child process would, and ask the last row it occupies.
+	t := newMsTerminal(width, msRowsForSafely(s, width))
+	t.Feed([]byte(s))
+	b := t.disp.page.buffer
+	y := t.disp.page.cursor.GetPosition().y
+	if y < 0 || y >= b.Height() {
+		return false
+	}
+	return b.GetRowByOffset(y).WasWrapForced() ||
+		// The delayed EOL wrap has not been acted on yet when the write ends
+		// exactly at the edge: the cursor sits pending at the last column and
+		// the flag is set by the *next* glyph (or by the line feed that a
+		// terminator would bring). Both mean the same thing for the merge.
+		t.disp.page.cursor.GetDelayEOLWrap() != nil
+}
+
+// msRowsForSafely sizes the scratch buffer so nothing this line writes can
+// scroll off it. A tool detail, not a Microsoft value.
+func msRowsForSafely(s string, width int) int {
+	n := cellLen(s)/width + 2
+	if n < 2 {
+		n = 2
+	}
+	return n
 }
