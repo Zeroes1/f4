@@ -1245,6 +1245,18 @@ jobs:
         path: artifacts
         merge-multiple: true
 
+    # Updating an existing release changes its assets and body but keeps its
+    # original published_at, so a long-lived nightly release stays near the
+    # bottom of the Releases page. Recreate only the release to publish it at
+    # the top again; deliberately keep the floating nightly tag in place.
+    - name: Refresh Nightly Release Position
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes
+        fi
+
     - name: Update Nightly Release
       uses: softprops/action-gh-release@v3
       with:
