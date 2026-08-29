@@ -4,7 +4,11 @@
 > writing any code.** Where Microsoft's source exists for a behaviour
 > (`microsoft/terminal`, MIT-licensed, `src/buffer/out` and neighbours), the
 > only permitted implementation is a **1:1, transpilation-level port of that
-> source**. It is **strictly forbidden to assume anything** and **strictly
+> source, taken from the version pinned in `PINNED_CONSOLE.md` and from no
+> other**. A port from a different version of Microsoft's source is a
+> violation of this rule even when it compiles and passes: an entire session
+> of this project was ported from `main` and had to be discarded, because
+> `main` describes a console that ships to nobody. It is **strictly forbidden to assume anything** and **strictly
 > forbidden to change anything**: no simplifications, no "equivalent"
 > rewrites, no reordering, no filling a gap from observed behaviour, no
 > width table or wrap rule written from memory. If a line cannot be ported

@@ -557,6 +557,7 @@ func analyse(d *dump, width, height, lines, long int) {
 // ones from tools/conptydump, unchanged.
 type roundSession struct {
 	hpc    uintptr
+	pty    *pseudoConsole
 	ourIn  syscall.Handle
 	ourOut syscall.Handle
 	child  *childProc
@@ -570,16 +571,23 @@ func startSession(width, height int, argv []string, d *dump) (*roundSession, err
 	if err := syscall.CreatePipe(&ourIn, &ptyOut, nil, 0); err != nil {
 		return nil, err
 	}
-	var hpc uintptr
-	r, _, e := procCreatePseudoConsole.Call(packCoord(width, height),
-		uintptr(ptyIn), uintptr(ptyOut), 0, uintptr(unsafe.Pointer(&hpc)))
+	// The pseudoconsole is created by the ported winconpty path (msconpty.go),
+	// not by kernel32: kernel32 always starts the inbox conhost, and a
+	// measurement of the inbox conhost is a measurement of this machine rather
+	// than of the host f4 will ship. With OpenConsole.exe beside this
+	// executable, that is the host being measured.
+	pty, perr := createPseudoConsoleViaHost(width, height, ptyIn, ptyOut)
 	syscall.CloseHandle(ptyIn)
 	syscall.CloseHandle(ptyOut)
-	if r != 0 {
-		return nil, fmt.Errorf("CreatePseudoConsole HRESULT 0x%08x (%v)", uint32(r), e)
+	if perr != nil {
+		return nil, perr
 	}
+	// The HPCON a child is attached with is a pointer to this structure; its
+	// layout is winconpty's PseudoConsole, which is what the attribute
+	// consumer expects.
+	hpc := uintptr(unsafe.Pointer(pty))
 
-	s := &roundSession{hpc: hpc, ourIn: ourIn, ourOut: ourOut}
+	s := &roundSession{hpc: hpc, pty: pty, ourIn: ourIn, ourOut: ourOut}
 	go func() {
 		buf := make([]byte, 64*1024)
 		for {
@@ -604,6 +612,10 @@ func startSession(width, height int, argv []string, d *dump) (*roundSession, err
 }
 
 func (s *roundSession) resize(w, h int) {
+	if s.pty != nil {
+		s.pty.resize(w, h)
+		return
+	}
 	procResizePseudoConsole.Call(s.hpc, packCoord(w, h))
 }
 
@@ -612,7 +624,11 @@ func (s *roundSession) stop() {
 		s.child.kill()
 		s.child = nil
 	}
-	if s.hpc != 0 {
+	if s.pty != nil {
+		s.pty.close()
+		s.pty = nil
+		s.hpc = 0
+	} else if s.hpc != 0 {
 		hpc := s.hpc
 		s.hpc = 0
 		done := make(chan struct{})
@@ -1142,6 +1158,8 @@ func runTerminalOnce(self, logPath, dumpPath string, seed int64, width, height, 
 
 	say("conptyreconcile -- tall console %dx%d, window %dx%d, seed %d, dump in %s",
 		width, height, winW, winH, seed, dumpPath)
+	say("host: %s (%s); inbox conhost.exe %s -- see docs/PINNED_CONSOLE.md",
+		consoleHostPath(), hostKind(), fileVersionOf(inboxConsoleHostPath()))
 	say("")
 
 	// A dump is written here too. The first run of this mode failed and left
