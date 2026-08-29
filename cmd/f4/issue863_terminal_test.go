@@ -34,4 +34,13 @@ func TestIssue863OwnTerminalKeepsPTYHeightWhileBusy(t *testing.T) {
 	if pf.termView.Y2 >= pf.cmdLine.Y1 {
 		t.Fatalf("own terminal overlaps f4 command line: terminal Y2=%d, command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
 	}
+
+	// The terminal can also remain visible below a reduced panel layout. It
+	// still shares the screen with the f4 command line and keybar there.
+	pf.showPanels = true
+	pf.showLeftPanel = false
+	pf.ResizeConsole(80, 25)
+	if pf.termView.Y2 >= pf.cmdLine.Y1 {
+		t.Fatalf("own terminal below panels overlaps f4 command line: terminal Y2=%d, command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
+	}
 }
