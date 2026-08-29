@@ -96,10 +96,9 @@ func (p *utf8WideParser) feed(input []byte) ([]uint16, error) {
 }
 
 func (p *utf8WideParser) finish() ([]uint16, error) {
-	// The pinned parser remains AwaitingMoreBytes when the final input ends in
-	// a partial sequence.  It does not invent U+FFFD at the stream boundary.
-	p.bytesStored = 0
-	p.currentState = utf8Ready
+	// Parse(nullptr, 0, ...) returns without changing the pinned parser state.
+	// An incomplete trailing sequence therefore remains saved for a future
+	// Parse call; it is not silently discarded or replaced here.
 	return nil, nil
 }
 

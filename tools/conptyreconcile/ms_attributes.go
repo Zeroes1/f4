@@ -31,6 +31,15 @@ type textAttribute struct {
 	hyperlinkID uint16
 }
 
+// These are the Windows COMMON_LVB values consumed by TextAttribute. They
+// are kept named because the pinned source tests each edge independently.
+const (
+	commonLVBGridHorizontal uint16 = 0x0400
+	commonLVBGridLVertical  uint16 = 0x0800
+	commonLVBGridRVertical  uint16 = 0x1000
+	commonLVBUnderscore     uint16 = 0x8000
+)
+
 const (
 	extBold             uint8 = 0x01
 	extItalics          uint8 = 0x02
@@ -127,7 +136,7 @@ func (a textAttribute) isInvisible() bool        { return a.hasFlag(extInvisible
 func (a textAttribute) isCrossedOut() bool       { return a.hasFlag(extCrossedOut) }
 func (a textAttribute) isUnderlined() bool       { return a.hasFlag(extUnderlined) }
 func (a textAttribute) isDoublyUnderlined() bool { return a.hasFlag(extDoublyUnderlined) }
-func (a textAttribute) isOverlined() bool        { return a.legacy&0x0001 != 0 }
+func (a textAttribute) isOverlined() bool        { return a.legacy&commonLVBGridHorizontal != 0 }
 func (a textAttribute) isReverseVideo() bool     { return a.legacy&0x4000 != 0 }
 
 func (a *textAttribute) setBold(v bool)             { a.setFlag(extBold, v) }
@@ -140,9 +149,9 @@ func (a *textAttribute) setUnderlined(v bool)       { a.setFlag(extUnderlined, v
 func (a *textAttribute) setDoublyUnderlined(v bool) { a.setFlag(extDoublyUnderlined, v) }
 func (a *textAttribute) setOverlined(v bool) {
 	if v {
-		a.legacy |= 0x0001
+		a.legacy |= commonLVBGridHorizontal
 	} else {
-		a.legacy &^= 0x0001
+		a.legacy &^= commonLVBGridHorizontal
 	}
 }
 func (a *textAttribute) setReverseVideo(v bool) {

@@ -22,6 +22,7 @@ type frameEmitter struct {
 	delayedEOLWrap      bool
 	deferredCursorPos   *coordinate
 	virtualTop          int
+	circled             bool
 	newBottomLine       bool
 	newBottomBGMatched  bool
 	clearedAll          bool
@@ -32,10 +33,10 @@ type frameEmitter struct {
 	output              []byte
 }
 
-func newFrameEmitter(width, height int) *frameEmitter {
+func newFrameEmitter(width, height, top int) *frameEmitter {
 	return &frameEmitter{
 		lastText:           coordinate{x: -1, y: -1},
-		viewport:           viewport{Width: width, Height: height},
+		viewport:           viewport{Top: top, Width: width, Height: height},
 		newBottomBGMatched: true,
 		nextCursorVisible:  true,
 		firstPaint:         true,
@@ -83,13 +84,19 @@ func (e *frameEmitter) endPaint() {
 		e.write("\x1b[?25l")
 	}
 	e.lastCursorVisible = e.nextCursorVisible
+	// VtEngine::EndPaint clears per-frame state and updates the virtual top
+	// before consuming a deferred cursor move.
+	e.clearedAll = false
+	e.resized = false
+	if e.circled && e.virtualTop > 0 {
+		e.virtualTop--
+	}
+	e.circled = false
 	if e.deferredCursorPos != nil {
 		pos := *e.deferredCursorPos
 		e.moveCursor(pos)
 	}
 	e.deferredCursorPos = nil
-	e.clearedAll = false
-	e.resized = false
 	e.needToDisableCursor = false
 }
 
@@ -133,8 +140,8 @@ func (e *frameEmitter) moveCursor(pos coordinate) {
 
 // paint is VtEngine::_PaintUtf8BufferLine for the state that affects the
 // emitted stream: trailing-space accounting, cursor movement, wrapped-row
-// tracking, and delayed EOL. Color/grid rendering is outside this text-only
-// probe and is kept as an explicit ledger boundary.
+// tracking, and delayed EOL. PaintBufferGridLines is separately represented as
+// the pinned source's no-op and therefore emits no bytes.
 func (e *frameEmitter) paint(clusters []frameCluster, pos coordinate, lineWrapped bool) {
 	if pos.y < e.virtualTop {
 		return
@@ -160,7 +167,7 @@ func (e *frameEmitter) paint(clusters []frameCluster, pos coordinate, lineWrappe
 	}
 	optimalToUseECH := numSpaces > 8
 	useEraseChar := optimalToUseECH && !e.newBottomLine && !e.clearedAll
-	printingBottomLine := pos.y == e.viewport.Height-1
+	printingBottomLine := pos.y == e.viewport.Top+e.viewport.Height-1
 	removeSpaces := !lineWrapped && (useEraseChar || e.clearedAll || (e.newBottomLine && printingBottomLine && e.newBottomBGMatched))
 	actualUnits := lineUnits
 	actualWidth := totalWidth
@@ -177,16 +184,16 @@ func (e *frameEmitter) paint(clusters []frameCluster, pos coordinate, lineWrappe
 		row := pos.y
 		e.wrappedRow = &row
 	}
-	if e.lastText.x < e.viewport.Width {
+	if e.lastText.x < e.viewport.Left+e.viewport.Width {
 		e.lastText.x += actualWidth
 	}
-	if e.lastText.x >= e.viewport.Width-1 {
+	if e.lastText.x >= e.viewport.Left+e.viewport.Width-1 {
 		e.delayedEOLWrap = true
 	}
 	if useEraseChar {
 		position := coordinate{x: e.lastText.x + numSpaces, y: e.lastText.y}
 		e.deferredCursorPos = &position
-		if position.x <= e.viewport.Width-1 {
+		if position.x <= e.viewport.Left+e.viewport.Width-1 {
 			e.eraseCharacter(numSpaces)
 		} else {
 			e.eraseLine()
@@ -200,5 +207,23 @@ func (e *frameEmitter) paint(clusters []frameCluster, pos coordinate, lineWrappe
 	}
 	if printingBottomLine {
 		e.newBottomLine = false
+	}
+}
+
+// paintCursor follows Renderer::_GetCursorInfo, XtermEngine::PaintCursor, and
+// VtEngine::PaintCursor for the cursor visibility and deferred-wrap branches.
+func (e *frameEmitter) paintCursor(cursor cursorState) {
+	if !cursor.visible || cursor.popupShown {
+		return
+	}
+	position := cursor.position
+	position.y -= e.viewport.Top
+	if position.x < e.viewport.Left-1 || position.x > e.viewport.Left+e.viewport.Width-1 || position.y < 0 || position.y >= e.viewport.Height {
+		return
+	}
+	e.nextCursorVisible = true
+	cursorIsInDeferredWrap := position.x == e.lastText.x-1 && position.y == e.lastText.y
+	if !((cursorIsInDeferredWrap || e.circled) && e.delayedEOLWrap && e.wrappedRow != nil) {
+		e.moveCursor(position)
 	}
 }

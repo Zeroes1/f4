@@ -18,11 +18,16 @@ import (
 type streamKind uint8
 
 const (
-	streamLive streamKind = iota
+	streamInput streamKind = iota
+	streamObservedOutput
 	streamFrame
 	streamResize
 	streamMarker
 )
+
+// streamLive is retained as a source-compatible name for the child input
+// event. It must never be used for bytes read from the ConPTY output pipe.
+const streamLive = streamInput
 
 type streamEvent struct {
 	Sequence uint64     `json:"sequence"`
@@ -56,7 +61,7 @@ func (c *capture) append(kind streamKind, width, height int, data []byte, cause 
 func (c capture) liveBytes() []byte {
 	var result []byte
 	for _, event := range c.Events {
-		if event.Kind == streamLive || event.Kind == streamFrame {
+		if event.Kind == streamInput {
 			result = append(result, event.Bytes...)
 		}
 	}
@@ -64,25 +69,82 @@ func (c capture) liveBytes() []byte {
 }
 
 type frameRow struct {
-	Units       []uint16 `json:"units"`
-	WrapForced  bool     `json:"wrap_forced"`
-	DoublePad   bool     `json:"double_byte_padded"`
-	SourceIndex int      `json:"source_index"`
+	Units       []uint16         `json:"units"`
+	Attributes  []frameAttribute `json:"attributes"`
+	Grid        []frameGridLine  `json:"grid"`
+	WrapForced  bool             `json:"wrap_forced"`
+	DoublePad   bool             `json:"double_byte_padded"`
+	SourceIndex int              `json:"source_index"`
+}
+
+type frameColor struct {
+	// ColorType values are the pinned TextColor enum values: index256=0,
+	// index16=1, default=2, rgb=3.
+	Kind  uint8  `json:"kind"`
+	Index uint8  `json:"index"`
+	RGB   uint32 `json:"rgb"`
+}
+
+type frameAttribute struct {
+	Legacy      uint16     `json:"legacy"`
+	Foreground  frameColor `json:"foreground"`
+	Background  frameColor `json:"background"`
+	Extended    uint8      `json:"extended"`
+	HyperlinkID uint16     `json:"hyperlink_id"`
+}
+
+type frameCursorState struct {
+	Position           coordinate `json:"position"`
+	HasMoved           bool       `json:"has_moved"`
+	Visible            bool       `json:"visible"`
+	On                 bool       `json:"on"`
+	Double             bool       `json:"double"`
+	BlinkingAllowed    bool       `json:"blinking_allowed"`
+	Delay              bool       `json:"delay"`
+	ConversionArea     bool       `json:"conversion_area"`
+	PopupShown         bool       `json:"popup_shown"`
+	Delayed            bool       `json:"delayed"`
+	DelayedAt          coordinate `json:"delayed_at"`
+	DeferCursorRedraw  bool       `json:"defer_cursor_redraw"`
+	HaveDeferredRedraw bool       `json:"have_deferred_redraw"`
+	Size               uint32     `json:"size"`
+	Style              cursorType `json:"style"`
+	UseColor           bool       `json:"use_color"`
+	Color              uint32     `json:"color"`
+}
+
+type frameGridLine struct {
+	Top    bool `json:"top"`
+	Bottom bool `json:"bottom"`
+	Left   bool `json:"left"`
+	Right  bool `json:"right"`
 }
 
 type frame struct {
-	Width       int        `json:"width"`
-	Height      int        `json:"height"`
-	Cursor      coordinate `json:"cursor"`
-	Rows        []frameRow `json:"rows"`
-	Cause       string     `json:"cause"`
-	Sequence    uint64     `json:"sequence"`
-	PartialTop  bool       `json:"partial_top"`
-	EvictedRows int        `json:"evicted_rows"`
+	Width       int              `json:"width"`
+	Height      int              `json:"height"`
+	Viewport    viewport         `json:"viewport"`
+	Cursor      coordinate       `json:"cursor"`
+	CursorState frameCursorState `json:"cursor_state"`
+	Rows        []frameRow       `json:"rows"`
+	GridLines   []frameGridLine  `json:"grid_lines"`
+	GridNoop    bool             `json:"grid_noop"`
+	Cause       string           `json:"cause"`
+	Sequence    uint64           `json:"sequence"`
+	PartialTop  bool             `json:"partial_top"`
+	EvictedRows int              `json:"evicted_rows"`
 }
 
 func frameFromBuffer(b *textBuffer, cause string, sequence uint64) frame {
-	result := frame{Width: b.width, Height: b.height, Cursor: b.cursor.position, Cause: cause, Sequence: sequence}
+	result := frame{
+		Width: b.width, Height: b.height,
+		Viewport: viewport{Top: b.viewportTop, Left: 0, Width: b.width, Height: b.viewportHeight},
+		Cursor:   b.cursor.position, CursorState: frameCursorStateFrom(b.cursor),
+		Cause: cause, Sequence: sequence, EvictedRows: b.firstRow,
+		// VtEngine::PaintBufferGridLines is an intentional no-op in the pinned
+		// source. Preserve that fact in the frame instead of inventing output.
+		GridNoop: true,
+	}
 	for i := 0; i < b.height; i++ {
 		row := b.rowByOffset(i)
 		limit := row.charRow.measureRight()
@@ -93,13 +155,19 @@ func frameFromBuffer(b *textBuffer, cause string, sequence uint64) frame {
 			}
 		}
 		units := make([]uint16, 0, limit)
+		attributes := make([]frameAttribute, b.width)
+		grid := make([]frameGridLine, b.width)
+		for col := range attributes {
+			attributes[col] = frameAttributeFrom(row.attrs[col])
+			grid[col] = frameGridLineFrom(row.attrs[col])
+		}
 		for col := 0; col < limit; col++ {
 			if row.charRow.data[col].attr.isTrailing() {
 				continue
 			}
 			units = append(units, row.charRow.glyphAt(col)...)
 		}
-		result.Rows = append(result.Rows, frameRow{Units: units, WrapForced: row.wrapForced, DoublePad: row.doubleBytePadded, SourceIndex: i})
+		result.Rows = append(result.Rows, frameRow{Units: units, Attributes: attributes, Grid: grid, WrapForced: row.wrapForced, DoublePad: row.doubleBytePadded, SourceIndex: i})
 	}
 	if len(result.Rows) > 0 {
 		result.PartialTop = result.Rows[0].WrapForced
@@ -107,13 +175,63 @@ func frameFromBuffer(b *textBuffer, cause string, sequence uint64) frame {
 	return result
 }
 
+func frameColorFrom(color textColor) frameColor {
+	kind := uint8(2) // ColorType::IsDefault
+	switch color.kind {
+	case textColorIndex16:
+		kind = 1 // ColorType::IsIndex16
+	case textColorIndex256:
+		kind = 0 // ColorType::IsIndex256
+	case textColorRGB:
+		kind = 3 // ColorType::IsRgb
+	}
+	return frameColor{Kind: kind, Index: color.index, RGB: color.rgb}
+}
+
+func frameAttributeFrom(attr textAttribute) frameAttribute {
+	return frameAttribute{
+		Legacy: attr.legacy, Foreground: frameColorFrom(attr.foreground),
+		Background: frameColorFrom(attr.background), Extended: attr.extended,
+		HyperlinkID: attr.hyperlinkID,
+	}
+}
+
+func frameGridLineFrom(attr textAttribute) frameGridLine {
+	return frameGridLine{
+		Top:    attr.legacy&commonLVBGridHorizontal != 0,
+		Bottom: attr.legacy&commonLVBUnderscore != 0,
+		Left:   attr.legacy&commonLVBGridLVertical != 0,
+		Right:  attr.legacy&commonLVBGridRVertical != 0,
+	}
+}
+
+func frameCursorStateFrom(cursor cursorState) frameCursorState {
+	return frameCursorState{
+		Position: cursor.position, HasMoved: cursor.hasMoved, Visible: cursor.visible,
+		On: cursor.on, Double: cursor.double, BlinkingAllowed: cursor.blinkingAllowed,
+		Delay: cursor.delay, ConversionArea: cursor.conversionArea, PopupShown: cursor.popupShown,
+		Delayed: cursor.delayed, DelayedAt: cursor.delayedAt, DeferCursorRedraw: cursor.deferCursorRedraw,
+		HaveDeferredRedraw: cursor.haveDeferredRedraw, Size: cursor.size, Style: cursor.style,
+		UseColor: cursor.useColor, Color: cursor.color,
+	}
+}
+
 // frameBytesFromBuffer drives the pinned VtEngine/XtermEngine transcription
-// over the current rows. The returned bytes are frame data; live input stays
-// in the capture as its own streamLive events.
+// over the current rows. The returned bytes are generated frame data; child
+// input stays in the capture as streamInput events and is never conflated with
+// renderer output.
 func frameBytesFromBuffer(b *textBuffer) []byte {
-	emitter := newFrameEmitter(b.width, b.height)
+	// Renderer::_PaintBufferOutput maps buffer coordinates back to screen
+	// coordinates by subtracting the viewport origin. The emitter therefore
+	// receives the visible screen-sized rows, not the backing rows verbatim.
+	emitter := newFrameEmitter(b.width, b.viewportHeight, 0)
+	emitter.circled = b.circled
 	emitter.startPaint()
-	for rowIndex := 0; rowIndex < b.height; rowIndex++ {
+	for screenRow := 0; screenRow < b.viewportHeight; screenRow++ {
+		rowIndex := b.viewportTop + screenRow
+		if rowIndex < 0 || rowIndex >= b.height {
+			continue
+		}
 		row := b.rowByOffset(rowIndex)
 		limit := row.charRow.measureRight()
 		if row.wrapForced {
@@ -133,8 +251,11 @@ func frameBytesFromBuffer(b *textBuffer) []byte {
 			}
 			clusters = append(clusters, frameCluster{Units: row.charRow.glyphAt(column), Columns: columns})
 		}
-		emitter.paint(clusters, coordinate{x: 0, y: rowIndex}, row.wrapForced)
+		emitter.paint(clusters, coordinate{x: 0, y: screenRow}, row.wrapForced)
 	}
+	cursor := b.cursor
+	cursor.position.y -= b.viewportTop
+	emitter.paintCursor(cursor)
 	emitter.endPaint()
 	return bytes.Clone(emitter.output)
 }
@@ -165,6 +286,7 @@ type scenario struct {
 	InitialHeight int
 	Input         []byte
 	ExpectedText  string
+	Marker        string
 	Chunks        [][]byte
 	Resizes       []resizeEvent
 	Frame         frame
@@ -206,10 +328,10 @@ func parseWithChunks(width, height int, chunks [][]byte) (*vtParser, error) {
 	return parser, nil
 }
 
-// parseCapturedFrameEvents replays the host's serialized event order. A
-// resize is applied at the exact point at which the recorder observed it;
-// frame bytes are either handed to the parser as ReadFile chunks or split at
-// every byte. This keeps resize ordering separate from parser chunking.
+// parseCapturedFrameEvents replays serialized renderer/observed-output events.
+// A resize is applied at the exact point at which the recorder observed it;
+// output bytes are either handed to the parser as ReadFile chunks or split at
+// every byte. Input events are intentionally ignored.
 func parseCapturedFrameEvents(width, height int, events []streamEvent, byteAtATime bool) (*vtParser, error) {
 	parser := newVTParser(width, height)
 	for _, event := range events {
@@ -218,7 +340,7 @@ func parseCapturedFrameEvents(width, height int, events []streamEvent, byteAtATi
 			if err := parser.resize(event.Width, event.Height); err != nil {
 				return nil, err
 			}
-		case streamFrame:
+		case streamFrame, streamObservedOutput:
 			if byteAtATime {
 				for _, value := range event.Bytes {
 					if err := parser.feed([]byte{value}); err != nil {

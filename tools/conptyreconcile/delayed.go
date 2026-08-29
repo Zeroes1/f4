@@ -90,103 +90,129 @@ func runDelayedMockScenario(s scenario, delaySeed int64) error {
 }
 
 func runDelayedMockScenarioWithCapture(s scenario, delaySeed int64) (capture, error) {
+	return runDelayedMockScenarioWithCaptureOrdered(s, delaySeed)
+}
+
+func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capture, error) {
 	session := newDelayedMockSession(s.InitialWidth, s.InitialHeight, s.Seed)
 	rng := rand.New(rand.NewSource(delaySeed))
-	type liveJob struct {
-		chunk []byte
-		delay time.Duration
-	}
-	liveJobs := make([]liveJob, 0, len(s.Chunks))
-	for _, chunk := range s.Chunks {
-		// Splitting here deliberately places scheduler boundaries inside the
-		// UTF-8 and CSI/OSC bytes already present in the recorded input.
-		for _, part := range splitDelayedChunk(chunk, rng) {
-			liveJobs = append(liveJobs, liveJob{chunk: part, delay: randomDelay(rng)})
-		}
-	}
-	resizeJobs := make([]struct {
-		event resizeEvent
-		delay time.Duration
-	}, 0, len(s.Resizes))
-	for _, event := range sortedResizeEvents(s.Resizes) {
-		resizeJobs = append(resizeJobs, struct {
-			event resizeEvent
-			delay time.Duration
-		}{event: event, delay: randomDelay(rng)})
-	}
-	frameCount := 1 + len(resizeJobs)
 
+	type delayedOperation struct {
+		kind        streamKind
+		chunk       []byte
+		resize      resizeEvent
+		beforeDelay time.Duration
+		afterDelay  time.Duration
+	}
+	base := make([]delayedOperation, 0, len(s.Chunks)+len(s.Resizes))
+	resizes := sortedResizeEvents(s.Resizes)
+	liveIndex, resizeIndex := 0, 0
+	for liveIndex < len(s.Chunks) || resizeIndex < len(resizes) {
+		chooseResize := liveIndex == len(s.Chunks) || resizeIndex < len(resizes) && rng.Intn(2) == 0
+		if chooseResize {
+			base = append(base, delayedOperation{kind: streamResize, resize: resizes[resizeIndex]})
+			resizeIndex++
+			continue
+		}
+		// Split at arbitrary byte boundaries, including boundaries inside
+		// UTF-8, CSI, and OSC sequences.
+		for _, part := range splitDelayedChunk(s.Chunks[liveIndex], rng) {
+			base = append(base, delayedOperation{kind: streamInput, chunk: part})
+		}
+		liveIndex++
+	}
+	operations := make([]delayedOperation, 0, len(base)+len(resizes)+1)
+	operations = append(operations, delayedOperation{kind: streamFrame})
+	for _, operation := range base {
+		operation.beforeDelay = randomDelay(rng)
+		operation.afterDelay = randomDelay(rng)
+		operations = append(operations, operation)
+		if operation.kind == streamResize || rng.Intn(5) == 0 {
+			operations = append(operations, delayedOperation{
+				kind:        streamFrame,
+				beforeDelay: randomDelay(rng),
+				afterDelay:  randomDelay(rng),
+			})
+		}
+	}
+
+	// Start all workers up front so the race detector observes the same
+	// mutex/queue boundaries as a live producer. Turn gates preserve the
+	// already-recorded source event order; random sleeps cannot reorder it.
+	type operationResult struct {
+		index int
+		err   error
+	}
+	gates := make([]chan struct{}, len(operations))
+	results := make(chan operationResult, len(operations))
 	var wg sync.WaitGroup
-	errors := make(chan error, 2)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i, job := range liveJobs {
-			if err := session.feedLive(job.chunk, job.delay); err != nil {
-				errors <- fmt.Errorf("seed %d delayed live chunk %d: %w", s.Seed, i, err)
-				return
-			}
-		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i, job := range resizeJobs {
-			if err := session.resize(job.event, job.delay); err != nil {
-				errors <- fmt.Errorf("seed %d delayed resize %d: %w", s.Seed, i, err)
-				return
-			}
-		}
-	}()
-	// Frame requests have an independent schedule, so live/resize/frame
-	// lock-acquisition order is recorded rather than assumed.
-	wg.Add(frameCount)
-	for i := 0; i < frameCount; i++ {
-		go func(delay time.Duration) {
+	for index, operation := range operations {
+		gate := make(chan struct{})
+		gates[index] = gate
+		wg.Add(1)
+		go func(index int, operation delayedOperation, gate <-chan struct{}) {
 			defer wg.Done()
-			session.emitFrame(delay)
-		}(randomDelay(rng))
+			delayAtBoundary(operation.beforeDelay)
+			<-gate
+			var err error
+			switch operation.kind {
+			case streamInput:
+				err = session.feedLive(operation.chunk, operation.afterDelay)
+			case streamResize:
+				err = session.resize(operation.resize, operation.afterDelay)
+			case streamFrame:
+				session.emitFrame(operation.afterDelay)
+			}
+			results <- operationResult{index: index, err: err}
+		}(index, operation, gate)
+	}
+	for index := range operations {
+		close(gates[index])
+		result := <-results
+		if result.err != nil {
+			for _, gate := range gates[index+1:] {
+				close(gate)
+			}
+			wg.Wait()
+			parser, logged := session.result()
+			_ = parser
+			return logged, fmt.Errorf("seed %d delayed operation %d: %w", s.Seed, result.index, result.err)
+		}
 	}
 	wg.Wait()
-	close(errors)
-	for err := range errors {
-		return capture{}, err
-	}
 
+	delayAtBoundary(randomDelay(rng))
 	if err := session.finishAndEmitFrame(); err != nil {
 		_, logged := session.result()
 		return logged, fmt.Errorf("seed %d delayed finish: %w", s.Seed, err)
 	}
 	parser, logged := session.result()
-	var live bytes.Buffer
+	var input bytes.Buffer
 	for _, event := range logged.Events {
-		if event.Kind == streamLive {
-			live.Write(event.Bytes)
+		if event.Kind == streamInput {
+			input.Write(event.Bytes)
 		}
 	}
-	if !bytes.Equal(live.Bytes(), s.Input) {
-		return logged, fmt.Errorf("seed %d delayed scheduler reordered or lost live bytes", s.Seed)
+	if !bytes.Equal(input.Bytes(), s.Input) {
+		return logged, fmt.Errorf("seed %d delayed scheduler reordered or lost input bytes", s.Seed)
 	}
-	marker := "__END_" + fmt.Sprint(s.Seed) + "__"
+	marker := s.Marker
 	if !bytes.Contains([]byte(parser.buffer.text()), []byte(marker)) {
 		return logged, fmt.Errorf("seed %d delayed run lost terminal marker %q", s.Seed, marker)
 	}
+	if parser.buffer.text() != s.ExpectedText {
+		return logged, fmt.Errorf("seed %d delayed source text mismatch: got %q want %q", s.Seed, parser.buffer.text(), s.ExpectedText)
+	}
 	whole, err := parseCapturedFrameEvents(s.InitialWidth, s.InitialHeight, logged.Events, false)
 	if err != nil {
-		return logged, fmt.Errorf("seed %d delayed whole-frame parse: %w", s.Seed, err)
+		return logged, fmt.Errorf("seed %d delayed whole-output parse: %w", s.Seed, err)
 	}
 	chunked, err := parseCapturedFrameEvents(s.InitialWidth, s.InitialHeight, logged.Events, true)
 	if err != nil {
-		return logged, fmt.Errorf("seed %d delayed byte-frame parse: %w", s.Seed, err)
+		return logged, fmt.Errorf("seed %d delayed byte-output parse: %w", s.Seed, err)
 	}
 	if whole.snapshot() != chunked.snapshot() {
-		return logged, fmt.Errorf("seed %d delayed frame chunking changed snapshot", s.Seed)
-	}
-	if !bytes.Contains([]byte(chunked.buffer.text()), []byte(marker)) {
-		return logged, fmt.Errorf("seed %d delayed final frame lost terminal marker %q", s.Seed, marker)
-	}
-	if err := reconcile(frameFromBuffer(chunked.buffer, "delayed-frame", uint64(s.Seed)), chunked.buffer.logicalRows()); err != nil {
-		return logged, fmt.Errorf("seed %d delayed frame reconciliation: %w", s.Seed, err)
+		return logged, fmt.Errorf("seed %d delayed output chunking changed snapshot", s.Seed)
 	}
 	for i, event := range logged.Events {
 		if event.Sequence != uint64(i) {

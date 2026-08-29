@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,6 +23,7 @@ var (
 	getFileVersionInfoSizeW = versionDLL.NewProc("GetFileVersionInfoSizeW")
 	getFileVersionInfoW     = versionDLL.NewProc("GetFileVersionInfoW")
 	verQueryValueW          = versionDLL.NewProc("VerQueryValueW")
+	wcsicmp                 = syscall.NewLazyDLL("msvcrt.dll").NewProc("_wcsicmp")
 )
 
 func readHostProductVersion(path string) (string, error) {
@@ -398,6 +400,10 @@ func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	}
 	startup := windows.StartupInfoEx{}
 	startup.StartupInfo.Cb = uint32(unsafe.Sizeof(startup))
+	// ConptyConnection::_LaunchAttachedClient sets STARTF_USESTDHANDLES on a
+	// zeroed STARTUPINFOEX.  The pseudoconsole supplies the console handles;
+	// this flag is nevertheless part of the pinned CreateProcess call.
+	startup.StartupInfo.Flags = windows.STARTF_USESTDHANDLES
 	startup.ProcThreadAttributeList = attrs.List()
 	_, environmentBlock, err := attachedClientEnvironment()
 	if err != nil {
@@ -432,35 +438,35 @@ func expandEnvironmentStrings(command string) (string, error) {
 
 func attachedClientEnvironment() ([]string, *uint16, error) {
 	// ConptyConnection::_LaunchAttachedClient starts from the current process
-	// environment, overwrites WT_SESSION with the connection identifier, and
-	// prepends WT_SESSION to WSLENV. This probe has no settings ValueSet, so
-	// there are no additional WT_* values to merge.
+	// environment, then uses Utils::EnvironmentVariableMapW.  The map is
+	// case-insensitive (_wcsicmp), try_emplace keeps the first spelling from
+	// GetEnvironmentStringsW, and insert_or_assign updates the existing value
+	// without changing that spelling.  Its final iteration is therefore sorted
+	// by the same comparator, not by the order returned by os.Environ.
 	guid, err := windows.GenerateGUID()
 	if err != nil {
 		return nil, nil, fmt.Errorf("CoCreateGuid: %w", err)
 	}
 	session := strings.Trim(guid.String(), "{}")
-	environment := windows.Environ()
-	filtered := make([]string, 0, len(environment)+1)
-	for _, entry := range environment {
-		name := entry
-		if equal := strings.IndexByte(name, '='); equal >= 0 {
-			name = name[:equal]
+	currentEnvironment := windows.Environ()
+	environment := make([]environmentVariable, 0, len(currentEnvironment)+1)
+	for _, entry := range currentEnvironment {
+		equal := strings.IndexByte(entry, '=')
+		if equal < 0 {
+			return nil, nil, fmt.Errorf("GetEnvironmentStringsW returned entry without '=': %q", entry)
 		}
-		switch strings.ToUpper(name) {
-		case "WT_SESSION":
-			continue
-		case "WSLENV":
-			value := ""
-			if equal := strings.IndexByte(entry, '='); equal >= 0 {
-				value = entry[equal+1:]
-			}
-			filtered = append(filtered, "WSLENV=WT_SESSION:"+value)
-		default:
-			filtered = append(filtered, entry)
-		}
+		insertEnvironmentVariable(&environment, entry[:equal], entry[equal+1:], false)
 	}
-	filtered = append(filtered, "WT_SESSION="+session)
+	insertEnvironmentVariable(&environment, "WT_SESSION", session, true)
+	wslEnv := environmentValue(environment, "WSLENV")
+	insertEnvironmentVariable(&environment, "WSLENV", "WT_SESSION:"+wslEnv, true)
+	sort.SliceStable(environment, func(i, j int) bool {
+		return compareEnvironmentNames(environment[i].Name, environment[j].Name) < 0
+	})
+	filtered := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		filtered = append(filtered, entry.Name+"="+entry.Value)
+	}
 	block := make([]uint16, 0)
 	for _, entry := range filtered {
 		units, err := windows.UTF16FromString(entry)
@@ -473,14 +479,56 @@ func attachedClientEnvironment() ([]string, *uint16, error) {
 	return filtered, &block[0], nil
 }
 
+type environmentVariable struct {
+	Name  string
+	Value string
+}
+
+func compareEnvironmentNames(left, right string) int {
+	left16, err := windows.UTF16FromString(left)
+	if err != nil {
+		panic(err)
+	}
+	right16, err := windows.UTF16FromString(right)
+	if err != nil {
+		panic(err)
+	}
+	result, _, _ := wcsicmp.Call(uintptr(unsafe.Pointer(&left16[0])), uintptr(unsafe.Pointer(&right16[0])))
+	return int(int32(result))
+}
+
+func environmentNameEqual(left, right string) bool {
+	return compareEnvironmentNames(left, right) == 0
+}
+
+func environmentValue(environment []environmentVariable, name string) string {
+	for _, entry := range environment {
+		if environmentNameEqual(entry.Name, name) {
+			return entry.Value
+		}
+	}
+	return ""
+}
+
+func insertEnvironmentVariable(environment *[]environmentVariable, name, value string, assign bool) {
+	for index := range *environment {
+		if environmentNameEqual((*environment)[index].Name, name) {
+			if assign {
+				(*environment)[index].Value = value
+			}
+			return
+		}
+	}
+	*environment = append(*environment, environmentVariable{Name: name, Value: value})
+}
+
 func resizePinnedPseudoConsole(pty *pinnedConPTY, width, height uint16) error {
 	packet := []uint16{ptySignalResizeWindow, width, height}
-	var written uint32
-	if err := windows.WriteFile(pty.signal, unsafeBytes(packet), &written, nil); err != nil {
+	// _ResizePseudoConsole passes nullptr for lpNumberOfBytesWritten and
+	// treats the WriteFile boolean as the complete result.  Keep that API
+	// boundary instead of adding a short-write policy to the transcription.
+	if err := windows.WriteFile(pty.signal, unsafeBytes(packet), nil, nil); err != nil {
 		return fmt.Errorf("WriteFile(PTY_SIGNAL_RESIZE_WINDOW): %w", err)
-	}
-	if written != uint32(len(packet)*2) {
-		return fmt.Errorf("short PTY resize packet: wrote %d of %d bytes", written, len(packet)*2)
 	}
 	return nil
 }
@@ -513,7 +561,7 @@ func readPinnedOutputRecorded(pty *pinnedConPTY, recorder *hostCaptureRecorder) 
 		}
 		_, _ = result.Write(buffer[:read])
 		if recorder != nil {
-			recorder.append(streamFrame, buffer[:read], "pinned-host-output")
+			recorder.append(streamObservedOutput, buffer[:read], "pinned-host-observed-output")
 		}
 	}
 	return result.Bytes(), nil
@@ -624,7 +672,7 @@ func runPinnedScenario(path string, identity pinnedHostIdentity, scenarioCase sc
 	base := filepath.Join(artifactDirectory, "seed-"+fmt.Sprint(uint64(scenarioCase.Seed)))
 	defer func() {
 		logged := recorder.snapshot()
-		if writeErr := os.WriteFile(base+".raw", bytesForKind(logged, streamFrame), 0o644); writeErr != nil && runErr == nil {
+		if writeErr := os.WriteFile(base+".raw", bytesForKind(logged, streamObservedOutput), 0o644); writeErr != nil && runErr == nil {
 			runErr = writeErr
 		}
 		artifact := struct {
@@ -650,7 +698,9 @@ func runPinnedScenario(path string, identity pinnedHostIdentity, scenarioCase sc
 	if edge {
 		cause += "-edge"
 	}
-	recorder.append(streamLive, scenarioCase.Input, cause)
+	// This is the child's input workload, not host output. The ConPTY output
+	// pipe is recorded independently by readPinnedOutputRecorded below.
+	recorder.append(streamInput, scenarioCase.Input, cause)
 	executable, err := os.Executable()
 	if err != nil {
 		return err
@@ -689,6 +739,11 @@ func runPinnedScenario(path string, identity pinnedHostIdentity, scenarioCase sc
 	if err := <-resizeDone; err != nil {
 		return fmt.Errorf("seed %d resize schedule: %w", scenarioCase.Seed, err)
 	}
+	// The pinned close path breaks the signal pipe and waits for OpenConsole
+	// to flush before the reader is allowed to observe EOF.  Without this
+	// boundary the host-owned output handle remains open after the attached
+	// client exits and ReadFile can wait indefinitely.
+	pty.close()
 	if err := <-outputReady; err != nil {
 		return fmt.Errorf("seed %d host output: %w", scenarioCase.Seed, err)
 	}
@@ -697,8 +752,8 @@ func runPinnedScenario(path string, identity pinnedHostIdentity, scenarioCase sc
 		pty.input = 0
 	}
 	logged := recorder.snapshot()
-	frameBytes := bytesForKind(logged, streamFrame)
-	marker := "__END_" + fmt.Sprint(scenarioCase.Seed) + "__"
+	frameBytes := bytesForKind(logged, streamObservedOutput)
+	marker := scenarioCase.Marker
 	if edge {
 		marker = "__EDGE_END_" + fmt.Sprint(scenarioCase.InitialWidth) + "__"
 	}
@@ -716,11 +771,9 @@ func runPinnedScenario(path string, identity pinnedHostIdentity, scenarioCase sc
 	if whole.snapshot() != chunked.snapshot() {
 		return fmt.Errorf("seed %d host output chunking changed snapshot", scenarioCase.Seed)
 	}
-	f := frameFromBuffer(chunked.buffer, "pinned-host-output", uint64(scenarioCase.Seed))
-	if err := reconcile(f, chunked.buffer.logicalRows()); err != nil {
-		return fmt.Errorf("seed %d host frame reconciliation: %w", scenarioCase.Seed, err)
+	if chunked.buffer.text() != scenarioCase.ExpectedText {
+		return fmt.Errorf("seed %d host output text mismatch: got %q want %q", scenarioCase.Seed, chunked.buffer.text(), scenarioCase.ExpectedText)
 	}
-	_ = logged
 	return nil
 }
 

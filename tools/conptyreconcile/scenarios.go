@@ -97,6 +97,7 @@ func scenarioForSeed(seed int64) scenario {
 		InitialHeight: height,
 		Input:         data,
 		ExpectedText:  strings.Join(append(lines, "__END_"+fmt.Sprint(seed)+"__"), "\n"),
+		Marker:        "__END_" + fmt.Sprint(seed) + "__",
 		Chunks:        splitAtBoundaries(data, boundaries),
 		Resizes:       resizes,
 		Command:       "cmd.exe /d /c dir /s C:\\Windows\\System32",
@@ -134,8 +135,11 @@ func edgeScenario(width int) scenario {
 		InitialWidth:  width,
 		InitialHeight: 256,
 		Input:         data,
-		ExpectedText:  strings.Join(append(lines, "tabmove", marker), "\n"),
-		Chunks:        allByteChunks(data),
+		// ESC[3G addresses the third column (one-based), so "move"
+		// overwrites the final character of "tab" and leaves "tamove".
+		ExpectedText: strings.Join(append(lines, "tamove", marker), "\n"),
+		Marker:       marker,
+		Chunks:       allByteChunks(data),
 		Resizes: []resizeEvent{
 			{Width: maxInt(1, width-1), Height: 256, Order: 0},
 			{Width: width, Height: 256, Order: 1},
@@ -196,14 +200,16 @@ func runMockScenarioWithCapture(s scenario) (capture, error) {
 		return empty, fmt.Errorf("seed %d generated printable invariant changed: got %q want %q", s.Seed, got, want)
 	}
 	text := chunked.buffer.text()
-	marker := "__END_" + fmt.Sprint(s.Seed) + "__"
+	marker := s.Marker
 	if !strings.Contains(text, marker) {
 		return empty, fmt.Errorf("seed %d lost end marker %q after the recorded resize sequence", s.Seed, marker)
 	}
+	if text != s.ExpectedText {
+		return empty, fmt.Errorf("seed %d source text mismatch after resize: got %q want %q", s.Seed, text, s.ExpectedText)
+	}
 
-	f := frameFromBuffer(chunked.buffer, "mock-resize", uint64(s.Seed))
-	if err := reconcile(f, chunked.buffer.logicalRows()); err != nil {
-		return empty, fmt.Errorf("seed %d reconciliation: %w", s.Seed, err)
+	if count := strings.Count(chunked.buffer.text(), marker); count != 1 {
+		return empty, fmt.Errorf("seed %d marker multiplicity is %d, want exactly one", s.Seed, count)
 	}
 
 	// Drive one additional session with live chunks and resize requests
@@ -225,32 +231,31 @@ func runMockScenarioWithCapture(s scenario) (capture, error) {
 			events = append(events, scheduledEvent{kind: streamResize, resize: resizes[resizeIndex]})
 			resizeIndex++
 		} else {
-			events = append(events, scheduledEvent{kind: streamLive, chunk: s.Chunks[liveIndex]})
+			events = append(events, scheduledEvent{kind: streamInput, chunk: s.Chunks[liveIndex]})
 			liveIndex++
 		}
 	}
 	logged := capture{Seed: s.Seed}
 	for _, event := range events {
 		switch event.kind {
-		case streamLive:
+		case streamInput:
 			if err := interleaved.feed(event.chunk); err != nil {
 				return logged, fmt.Errorf("seed %d interleaved live feed: %w", s.Seed, err)
 			}
-			logged.append(streamLive, interleaved.buffer.width, interleaved.buffer.height, event.chunk, "mock-live")
+			logged.append(streamInput, interleaved.buffer.width, interleaved.buffer.height, event.chunk, "mock-input")
 		case streamResize:
 			if err := interleaved.resize(event.resize.Width, event.resize.Height); err != nil {
 				return logged, fmt.Errorf("seed %d interleaved resize %dx%d: %w", s.Seed, event.resize.Width, event.resize.Height, err)
 			}
 			logged.append(streamResize, event.resize.Width, event.resize.Height, nil, "mock-resize")
-			f := frameFromBuffer(interleaved.buffer, "mock-frame", uint64(len(logged.Events)))
-			if err := reconcile(f, interleaved.buffer.logicalRows()); err != nil {
-				return logged, fmt.Errorf("seed %d interleaved frame reconciliation: %w", s.Seed, err)
-			}
 			logged.append(streamFrame, interleaved.buffer.width, interleaved.buffer.height, frameBytesFromBuffer(interleaved.buffer), "mock-frame")
 		}
 	}
 	if err := interleaved.finish(); err != nil {
 		return logged, fmt.Errorf("seed %d interleaved finish: %w", s.Seed, err)
+	}
+	if count := strings.Count(interleaved.buffer.text(), marker); count != 1 {
+		return logged, fmt.Errorf("seed %d interleaved marker multiplicity is %d, want exactly one", s.Seed, count)
 	}
 	return logged, nil
 }

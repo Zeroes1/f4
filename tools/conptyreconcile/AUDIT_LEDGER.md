@@ -58,15 +58,13 @@ An audit pass is `PASS` only when its report contains no unresolved `Gap`.
 The absence of a panic is not an audit result.  A failed or missing pass
 blocks all test execution.
 
-### Latest pre-test run
+### Current construction state
 
-The audit was executed three independent times after the source manifest and
-mock files were gofmt-formatted and compiled.  `audit-pass-1.json`,
-`audit-pass-2.json`, and `audit-pass-3.json` all report
-`symbol/path=PASS`, `transition/control-flow=FAIL`, and
-`negative/provenance=PASS`.  The transition failure is intentional and blocks
-all tests.  No mock test, fuzz run, seed run, or host run has been counted
-while this result is failing.
+No audit result is recorded here.  The referenced `audit-pass-*.json` files
+are not part of this checkout, and the current executable audit still returns
+`transition/control-flow=FAIL`.  Consequently no mock test, fuzz run, seed
+run, or host run is accepted as a result while this ledger contains open
+items.
 
 ## Known open audit items while the port is being written
 

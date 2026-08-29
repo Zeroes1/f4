@@ -64,6 +64,7 @@ type vtParser struct {
 	sgrStack          []textAttribute
 	responses         [][]byte
 	cursorKeysMode    bool
+	keypadMode        bool
 	deccolmSupport    bool
 	screenMode        bool
 	mouseModes        map[int]bool
@@ -111,6 +112,7 @@ func (p *vtParser) reset() {
 	p.sgrStack = nil
 	p.responses = nil
 	p.cursorKeysMode = false
+	p.keypadMode = false
 	p.deccolmSupport = false
 	p.screenMode = false
 	p.mouseModes = make(map[int]bool)
@@ -183,8 +185,11 @@ func (p *vtParser) printUnits(units []uint16) {
 		return
 	}
 	if len(units) != 0 {
-		p.lastPrinted = units[len(units)-1]
-		p.printed = true
+		last := units[len(units)-1]
+		if last >= unicodeSpace {
+			p.lastPrinted = last
+			p.printed = true
+		}
 	}
 }
 
@@ -382,6 +387,16 @@ func (p *vtParser) consumeEscape(b byte) {
 		} else {
 			p.dispatchVT52('O')
 		}
+	case '=':
+		p.keypadMode = true
+		p.state = stateGround
+		p.clearSequence()
+		p.clearLastPrinted()
+	case '>':
+		p.keypadMode = false
+		p.state = stateGround
+		p.clearSequence()
+		p.clearLastPrinted()
 	case 'P':
 		p.state = stateDCSEntry
 	case 'X', '^', '_':
@@ -399,9 +414,13 @@ func (p *vtParser) consumeEscape(b byte) {
 	case '7':
 		p.buffer.saveCursor()
 		p.state = stateGround
+		p.clearSequence()
+		p.clearLastPrinted()
 	case '8':
 		p.buffer.restoreCursor()
 		p.state = stateGround
+		p.clearSequence()
+		p.clearLastPrinted()
 	case 'c':
 		p.reset()
 	default:
@@ -415,17 +434,22 @@ func (p *vtParser) consumeEscape(b byte) {
 
 func (p *vtParser) consumeDCS(b byte) {
 	if p.state == stateDCSPassThrough {
-		if b >= 0x20 && b < 0x7f {
-			// AdaptDispatch::RequestSetting accepts intermediates and
-			// parameter bytes, then returns false on the final byte. That
-			// return changes the state to DcsIgnore.
-			p.dcsData = append(p.dcsData, uint16(b))
-			if b >= 0x40 {
-				p.state = stateDCSIgnore
-			}
+		// StateMachine::_EventDcsPassThrough forwards C0 and 0x20..0x7e
+		// to AdaptDispatch::RequestSetting. The handler collects only
+		// intermediates and finalizes on the first final byte.
+		if b < 0x20 {
 			return
 		}
-		p.state = stateDCSIgnore
+		if b >= 0x20 && b <= 0x2f {
+			p.dcsData = append(p.dcsData, uint16(b))
+			return
+		}
+		if b >= 0x40 && b <= 0x7e {
+			p.dcsData = append(p.dcsData, uint16(b))
+			p.reportRequestedSetting()
+			p.dcsPassThrough = false
+			p.state = stateDCSIgnore
+		}
 		return
 	}
 	if p.state == stateDCSIgnore {
@@ -466,6 +490,82 @@ func (p *vtParser) consumeDCS(b byte) {
 		// outside the parameter ranges (including DEL).
 		p.dispatchDCS(uint16(b))
 	}
+}
+
+// reportRequestedSetting is AdaptDispatch::RequestSetting and its two
+// reporting helpers. It writes to the parser response channel, which is the
+// standalone equivalent of the pinned ConPTY input response path.
+func (p *vtParser) reportRequestedSetting() {
+	if len(p.dcsData) == 0 {
+		p.responses = append(p.responses, []byte("\x1bP0$r\x1b\\"))
+		return
+	}
+	final := rune(p.dcsData[len(p.dcsData)-1])
+	intermediates := p.dcsData[:len(p.dcsData)-1]
+	identifier := string(runesFromUTF16(append(append([]uint16(nil), intermediates...), uint16(final))))
+	switch identifier {
+	case "m":
+		p.reportSGRSetting()
+	case "r":
+		p.reportDECSTBMSetting()
+	default:
+		p.responses = append(p.responses, []byte("\x1bP0$r\x1b\\"))
+	}
+}
+
+func (p *vtParser) reportSGRSetting() {
+	attr := p.buffer.currentAttrs
+	response := "\x1bP1$r0"
+	add := func(parameter string, enabled bool) {
+		if enabled {
+			response += parameter
+		}
+	}
+	add(";1", attr.hasFlag(extBold))
+	add(";2", attr.hasFlag(extFaint))
+	add(";3", attr.hasFlag(extItalics))
+	add(";4", attr.hasFlag(extUnderlined))
+	add(";5", attr.hasFlag(extBlinking))
+	add(";7", attr.isReverseVideo())
+	add(";8", attr.hasFlag(extInvisible))
+	add(";9", attr.hasFlag(extCrossedOut))
+	add(";21", attr.hasFlag(extDoublyUnderlined))
+	add(";53", attr.legacy&commonLVBGridHorizontal != 0)
+	addColor := func(base int, color textColor) {
+		switch color.kind {
+		case textColorIndex16:
+			index := xtermToWindowsIndex(int(color.index))
+			parameter := base + int(index)%8
+			if index >= 8 {
+				parameter += 60
+			}
+			response += fmt.Sprintf(";%d", parameter)
+		case textColorIndex256:
+			response += fmt.Sprintf(";%d;5;%d", base+8, xterm256ToWindowsIndex(int(color.index)))
+		case textColorRGB:
+			red := color.rgb & 0xff
+			green := (color.rgb >> 8) & 0xff
+			blue := (color.rgb >> 16) & 0xff
+			response += fmt.Sprintf(";%d;2;%d;%d;%d", base+8, red, green, blue)
+		}
+	}
+	addColor(30, attr.foreground)
+	addColor(40, attr.background)
+	response += "m\x1b\\"
+	p.responses = append(p.responses, []byte(response))
+}
+
+func (p *vtParser) reportDECSTBMSetting() {
+	top := p.buffer.scrollTop + 1
+	bottom := p.buffer.scrollBottom + 1
+	if !p.buffer.marginsSet() {
+		top = 1
+		// The pinned AdaptDispatch reports the exclusive viewport height
+		// (srWindow.Bottom - srWindow.Top), not the last zero-based row.
+		bottom = p.buffer.viewportHeight
+	}
+	response := fmt.Sprintf("\x1bP1$r%d;%dr\x1b\\", top, bottom)
+	p.responses = append(p.responses, []byte(response))
 }
 
 func (p *vtParser) addParameter(b byte) {
@@ -833,7 +933,7 @@ func (p *vtParser) privateMode(enable bool, params []int) {
 			p.bracketedPaste = enable
 		case 9001:
 			p.win32InputMode = enable
-		case 1049, 47, 1047:
+		case 1049:
 			if enable {
 				p.useAlternate()
 			} else {
@@ -890,15 +990,17 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 			attr.setIndexedForeground(uint8(option - 30))
 		case option == 38:
 			consumed := 1
-			if i+1 < len(options) && options[i+1] == 2 && i+4 < len(options) {
-				red, green, blue := options[i+2], options[i+3], options[i+4]
-				if red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255 {
+			if i+1 < len(options) && options[i+1] == 2 {
+				red, green, blue := parameterAt(options, i+2), parameterAt(options, i+3), parameterAt(options, i+4)
+				if red <= 255 && green <= 255 && blue <= 255 {
 					attr.setColor(uint32(red)|uint32(green)<<8|uint32(blue)<<16, true)
 				}
+				// AdaptDispatch::_SetRgbColorsHelper consumes all three RGB
+				// slots even when the VT parameter vector omits them.
 				consumed = 4
-			} else if i+1 < len(options) && options[i+1] == 5 && i+2 < len(options) {
-				index := options[i+2]
-				if index >= 0 && index <= 255 {
+			} else if i+1 < len(options) && options[i+1] == 5 {
+				index := parameterAt(options, i+2)
+				if index <= 255 {
 					attr.setIndexedForeground256(uint8(index))
 				}
 				consumed = 2
@@ -910,15 +1012,15 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 			attr.setIndexedBackground(uint8(option - 40))
 		case option == 48:
 			consumed := 1
-			if i+1 < len(options) && options[i+1] == 2 && i+4 < len(options) {
-				red, green, blue := options[i+2], options[i+3], options[i+4]
-				if red >= 0 && red <= 255 && green >= 0 && green <= 255 && blue >= 0 && blue <= 255 {
+			if i+1 < len(options) && options[i+1] == 2 {
+				red, green, blue := parameterAt(options, i+2), parameterAt(options, i+3), parameterAt(options, i+4)
+				if red <= 255 && green <= 255 && blue <= 255 {
 					attr.setColor(uint32(red)|uint32(green)<<8|uint32(blue)<<16, false)
 				}
 				consumed = 4
-			} else if i+1 < len(options) && options[i+1] == 5 && i+2 < len(options) {
-				index := options[i+2]
-				if index >= 0 && index <= 255 {
+			} else if i+1 < len(options) && options[i+1] == 5 {
+				index := parameterAt(options, i+2)
+				if index <= 255 {
 					attr.setIndexedBackground256(uint8(index))
 				}
 				consumed = 2
@@ -937,6 +1039,13 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 		}
 	}
 	p.buffer.currentAttrs = attr
+}
+
+func parameterAt(options []int, index int) int {
+	if index < 0 || index >= len(options) {
+		return 0
+	}
+	return options[index]
 }
 
 func (p *vtParser) setCursorStyle(style int) {
@@ -974,7 +1083,8 @@ func (p *vtParser) deviceStatusReport(status int) {
 		position := p.buffer.cursor.position
 		row := position.y + 1
 		if p.buffer.originMode && p.buffer.marginsSet() {
-			row -= p.buffer.scrollTop
+			top, _ := p.buffer.absoluteScrollMargins()
+			row -= top
 		}
 		p.responses = append(p.responses, []byte(fmt.Sprintf("\x1b[%d;%dR", row, position.x+1)))
 	}
@@ -983,10 +1093,18 @@ func (p *vtParser) deviceStatusReport(status int) {
 func (p *vtParser) softReset() {
 	p.buffer.wrapAtEOL = true
 	p.buffer.originMode = false
+	p.cursorKeysMode = false
+	p.keypadMode = false
+	p.buffer.scrollTop = 0
+	p.buffer.scrollBottom = 0
 	p.buffer.cursor.visible = true
 	p.buffer.cursor.blinkingAllowed = true
 	p.buffer.currentAttrs = textAttribute{}
 	p.setGraphicsRendition([]int{0})
+	p.buffer.savedCursorState = cursorState{}
+	if p.altBuffer != nil {
+		p.altBuffer.savedCursorState = cursorState{}
+	}
 }
 
 func (p *vtParser) moveCursor(dy, dx int) {
@@ -1103,9 +1221,12 @@ func (p *vtParser) shiftCells(row *msRow, start, count int, insert bool) {
 
 func (p *vtParser) insertLines(count int) {
 	y := p.buffer.cursor.position.y
-	bottom := p.buffer.height - 1
-	if p.buffer.marginsSet() && y >= p.buffer.scrollTop && y <= p.buffer.scrollBottom {
-		bottom = p.buffer.scrollBottom
+	bottom := p.buffer.viewportBottom()
+	if p.buffer.marginsSet() {
+		top, marginBottom := p.buffer.absoluteScrollMargins()
+		if y >= top && y <= marginBottom {
+			bottom = marginBottom
+		}
 	}
 	if count > bottom-y+1 {
 		count = bottom - y + 1
@@ -1116,9 +1237,12 @@ func (p *vtParser) insertLines(count int) {
 
 func (p *vtParser) deleteLines(count int) {
 	y := p.buffer.cursor.position.y
-	bottom := p.buffer.height - 1
-	if p.buffer.marginsSet() && y >= p.buffer.scrollTop && y <= p.buffer.scrollBottom {
-		bottom = p.buffer.scrollBottom
+	bottom := p.buffer.viewportBottom()
+	if p.buffer.marginsSet() {
+		top, marginBottom := p.buffer.absoluteScrollMargins()
+		if y >= top && y <= marginBottom {
+			bottom = marginBottom
+		}
 	}
 	if count > bottom-y+1 {
 		count = bottom - y + 1
@@ -1137,11 +1261,11 @@ func (p *vtParser) scrollDown(count int) {
 
 func (p *vtParser) reverseLineFeed() {
 	old := p.buffer.cursor.position
-	viewportTop := 0
+	viewportTop := p.buffer.viewportTop
 	newPosition := coordinate{x: old.x, y: old.y - 1}
 	newPosition = p.buffer.clampPositionWithinLine(newPosition)
 	if old.y > viewportTop {
-		if err := adjustCursorPosition(p.buffer, newPosition); err != nil {
+		if err := adjustCursorPosition(p.buffer, newPosition, true); err != nil {
 			p.failed = err
 		}
 		return
@@ -1149,32 +1273,59 @@ func (p *vtParser) reverseLineFeed() {
 	// At the top of the viewport, RI inserts a blank row only when the
 	// cursor is in the active scrolling region. With no margins that is the
 	// entire viewport; with margins it is exactly the margin rectangle.
-	if !p.buffer.marginsSet() || (old.y >= p.buffer.scrollTop && old.y <= p.buffer.scrollBottom) {
-		top, bottom := viewportTop, p.buffer.height-1
-		if p.buffer.marginsSet() {
-			top, bottom = p.buffer.scrollTop, p.buffer.scrollBottom
+	if !p.buffer.marginsSet() {
+		p.buffer.scrollRegion(viewportTop, p.buffer.viewportBottom(), 1, true)
+	} else {
+		top, bottom := p.buffer.absoluteScrollMargins()
+		if old.y >= top && old.y <= bottom {
+			p.buffer.scrollRegion(top, bottom, 1, true)
 		}
-		p.buffer.scrollRegion(top, bottom, 1, true)
 	}
 }
 
 func (p *vtParser) useAlternate() {
 	// AdaptDispatch::UseAlternateScreenBuffer first saves the active cursor,
-	// then PrivateUseAlternateScreenBuffer creates the alternate buffer. The
-	// existing alternate buffer is discarded on a new transition.
+	// then SCREEN_INFORMATION::_CreateAltBuffer creates an initially erased
+	// buffer with the main viewport dimensions and copies only the cursor style,
+	// visibility, blinking policy, and viewport-relative position.
 	p.buffer.saveCursor()
-	p.altBuffer = newTextBuffer(p.mainBuffer.width, p.mainBuffer.height)
-	p.altBuffer.vtMode = p.mainBuffer.vtMode
+	main := p.mainBuffer
+	height := main.viewportHeight
+	if height <= 0 {
+		height = main.height
+	}
+	initAttributes := main.currentAttrs
+	initAttributes.setStandardErase()
+	p.altBuffer = newTextBufferWithAttributes(main.width, height, initAttributes)
+	p.altBuffer.vtMode = main.vtMode
+	p.altBuffer.cursor.size = main.cursor.size
+	p.altBuffer.cursor.style = main.cursor.style
+	p.altBuffer.cursor.color = main.cursor.color
+	p.altBuffer.cursor.visible = main.cursor.visible
+	p.altBuffer.cursor.blinkingAllowed = main.cursor.blinkingAllowed
+	altPosition := main.cursor.position
+	altPosition.y -= main.virtualViewportTop()
+	p.altBuffer.cursor.position = altPosition
+	p.altBuffer.cursor.delayed = false
 	p.buffer = p.altBuffer
 }
 
 func (p *vtParser) useMain() {
-	// AdaptDispatch::UseMainScreenBuffer switches first and restores the
-	// cursor state belonging to the main buffer afterwards.
+	// SCREEN_INFORMATION::UseMainScreenBuffer copies the alternate cursor's
+	// style/visibility/blinking policy to main. AdaptDispatch then restores the
+	// saved main cursor state (position, origin, rendition).
 	if p.buffer == p.mainBuffer {
 		return
 	}
+	alt := p.altBuffer
 	p.buffer = p.mainBuffer
+	if alt != nil {
+		p.mainBuffer.cursor.size = alt.cursor.size
+		p.mainBuffer.cursor.style = alt.cursor.style
+		p.mainBuffer.cursor.color = alt.cursor.color
+		p.mainBuffer.cursor.visible = alt.cursor.visible
+		p.mainBuffer.cursor.blinkingAllowed = alt.cursor.blinkingAllowed
+	}
 	p.mainBuffer.restoreCursor()
 	p.altBuffer = nil
 }
@@ -1313,12 +1464,31 @@ func resizeBuffer(old *textBuffer, width, height int) (*textBuffer, error) {
 	newBuffer.wrapAtEOL = old.wrapAtEOL
 	newBuffer.processedOutput = old.processedOutput
 	newBuffer.returnOnNewline = old.returnOnNewline
-	newBuffer.currentAttrs = old.currentAttrs
-	newBuffer.cursorSize = old.cursorSize
-	newBuffer.cursor.size = old.cursor.size
+	// SCREEN_INFORMATION::ResizeWithReflow constructs the replacement buffer
+	// with default attributes.  The old current attributes are restored only
+	// after TextBuffer::Reflow, so overflow rows are erased with the new
+	// buffer's defaults exactly as in the pinned path.
+	cursorHeightBefore := old.cursor.position.y - old.viewportTop
 	if err := reflow(old, newBuffer); err != nil {
 		return nil, err
 	}
+	newBuffer.currentAttrs = old.currentAttrs
+	newBuffer.cursorSize = old.cursorSize
+	newBuffer.viewportHeight = height
+	if newBuffer.viewportHeight > newBuffer.height {
+		newBuffer.viewportHeight = newBuffer.height
+	}
+	if newBuffer.viewportHeight < 1 {
+		newBuffer.viewportHeight = 1
+	}
+	newBuffer.viewportTop = old.viewportTop + (newBuffer.cursor.position.y - cursorHeightBefore - old.viewportTop)
+	if maxTop := newBuffer.height - newBuffer.viewportHeight; newBuffer.viewportTop > maxTop {
+		newBuffer.viewportTop = maxTop
+	}
+	if newBuffer.viewportTop < 0 {
+		newBuffer.viewportTop = 0
+	}
+	newBuffer.virtualBottom = newBuffer.viewportBottom()
 	return newBuffer, nil
 }
 

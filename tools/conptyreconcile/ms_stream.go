@@ -12,80 +12,146 @@ const (
 	wcDelayEOLWrap         = 0x80
 )
 
-// adjustCursorPosition is the pinned AdjustCursorPosition path with the
-// SCREEN_INFORMATION-only services represented by textBuffer state. The
-// viewport in this standalone buffer is the complete backing buffer; the
-// source's render invalidation and accessibility notifications have no text
-// or cursor effect and are intentionally not called here.
-func adjustCursorPosition(buffer *textBuffer, pos coordinate) error {
+// adjustCursorPosition is AdjustCursorPosition from src/host/_stream.cpp.
+// Render invalidation and accessibility notifications are not state-bearing
+// operations in this text-only transcription; every buffer mutation and
+// coordinate transition remains represented here.
+func adjustCursorPosition(buffer *textBuffer, pos coordinate, keepCursorVisible bool) error {
 	if buffer == nil {
 		return fmt.Errorf("nil screen buffer")
 	}
 	inVtMode := buffer.vtMode
-	// AdjustCursorPosition uses the backing buffer width. The VT legacy write
-	// path selects a rendition width separately before calling it.
-	lineWidth := buffer.width
-	originalX := buffer.cursor.position.x
+	bufferSizeX, bufferSizeY := buffer.width, buffer.height
 	if pos.x < 0 {
 		if pos.y > 0 {
-			pos.x = buffer.width + pos.x
+			pos.x = bufferSizeX + pos.x
 			pos.y--
 		} else {
 			pos.x = 0
 		}
-	} else if pos.x >= lineWidth {
+	} else if pos.x >= bufferSizeX {
 		if buffer.wrapAtEOL {
-			pos.y += pos.x / lineWidth
-			pos.x %= lineWidth
+			pos.y += pos.x / bufferSizeX
+			pos.x %= bufferSizeX
 		} else {
-			pos.x = buffer.width - 1
 			if !inVtMode {
-				// AdjustCursorPosition leaves a legacy cursor at the X
-				// position held by the screen cursor when wrapping is off.
-				pos.x = originalX
+				pos.x = buffer.cursor.position.x
+			} else {
+				pos.x = bufferSizeX - 1
 			}
 		}
 	}
 
-	// This is the pinned margin-scroll branch. A cursor moved below the
-	// bottom margin scrolls the margin contents up; a cursor moved above the
-	// top margin scrolls them down. The source also applies the same upward
-	// path to a VT reverse-line-feed above the viewport when no margins exist.
-	top, bottom := 0, buffer.height-1
-	marginsSet := buffer.marginsSet()
-	if marginsSet {
-		top, bottom = buffer.scrollTop, buffer.scrollBottom
+	// The VT standard requires newly revealed rows to keep the current
+	// background but lose meta attributes.
+	fillAttributes := buffer.currentAttrs
+	fillAttributes.setStandardErase()
+	relativeTop := 0
+	if buffer.marginsSet() {
+		relativeTop = buffer.scrollTop
 	}
-	currentY := buffer.cursor.position.y
-	cursorInMargins := currentY >= top && currentY <= bottom
-	if (!marginsSet && inVtMode && pos.y < 0) || (marginsSet && cursorInMargins && pos.y < top) {
-		diff := pos.y - top
-		count := -diff
-		if count > 0 {
-			buffer.scrollRegion(top, bottom, count, true)
+	viewportTop := buffer.viewportTop
+	viewportBottom := buffer.viewportBottom()
+	marginsTop, marginsBottom := buffer.absoluteScrollMargins()
+	marginsSet := marginsBottom > marginsTop
+	currentCursor := buffer.cursor.position
+	cursorInMargins := currentCursor.y >= marginsTop && currentCursor.y <= marginsBottom
+	cursorAboveViewport := pos.y < 0 && inVtMode
+	scrollUp := marginsSet && cursorInMargins && pos.y < marginsTop
+	scrollUpWithoutMargins := !marginsSet && cursorAboveViewport
+	if scrollUpWithoutMargins {
+		scrollUp = true
+		marginsTop = viewportTop
+		marginsBottom = viewportBottom
+	}
+	scrollDown := marginsSet && cursorInMargins && pos.y > marginsBottom
+	scrollDownAtTop := scrollDown && relativeTop == 0
+
+	if scrollDownAtTop {
+		delta := pos.y - marginsBottom
+		scrollTop := marginsBottom + 1
+		moveToY := scrollTop + delta
+		newViewTop := viewportTop + delta
+		newRows := (viewportBottom + 1 + delta) - bufferSizeY
+		for i := 0; i < newRows; i++ {
+			if !buffer.incrementCircularBuffer() {
+				return fmt.Errorf("circular buffer increment failed")
+			}
+			moveToY--
+			newViewTop--
+			scrollTop--
+		}
+		_ = moveToY // The target origin is consumed by the clipped scroll below.
+		if scrollTop <= bufferSizeY-1 {
+			if delta > 0 {
+				buffer.scrollRegionWithAttr(scrollTop, bufferSizeY-1, delta, true, fillAttributes)
+			}
+		}
+		if err := buffer.setViewportOrigin(true, coordinate{y: newViewTop}, true); err != nil {
+			return err
+		}
+		viewportTop = buffer.viewportTop
+		viewportBottom = buffer.viewportBottom()
+		if newRows > 0 {
+			currentCursor.y -= newRows
+			pos.y -= newRows
+		}
+		marginsTop, marginsBottom = buffer.absoluteScrollMargins()
+	}
+
+	if scrollUp || (scrollDown && !scrollDownAtTop) {
+		boundary := marginsTop
+		if !scrollUp {
+			boundary = marginsBottom
+		}
+		diff := pos.y - boundary
+		if diff != 0 {
+			top, bottom := marginsTop, marginsBottom
+			if top < 0 {
+				top = 0
+			}
+			if bottom >= bufferSizeY {
+				bottom = bufferSizeY - 1
+			}
+			if top <= bottom {
+				if diff > 0 {
+					buffer.scrollRegionWithAttr(top, bottom, diff, false, fillAttributes)
+				} else {
+					buffer.scrollRegionWithAttr(top, bottom, -diff, true, fillAttributes)
+				}
+			}
 			pos.y -= diff
 		}
 	}
-	if marginsSet && cursorInMargins && pos.y > bottom {
-		diff := pos.y - bottom
-		if diff > 0 {
-			buffer.scrollRegion(top, bottom, diff, false)
-			pos.y -= diff
+
+	if marginsSet && pos.y > viewportBottom {
+		pos.y = viewportBottom
+	}
+
+	if pos.y >= bufferSizeY {
+		if pos.y != bufferSizeY {
+			return fmt.Errorf("cursor moved beyond buffer by %d rows", pos.y-bufferSizeY)
 		}
-	}
-	if marginsSet && pos.y > buffer.height-1 {
-		pos.y = buffer.height - 1
-	}
-	for pos.y >= buffer.height {
-		if !buffer.incrementCircularBuffer() {
+		if !buffer.incrementCircularBuffer(buffer.vtMode) {
 			return fmt.Errorf("circular buffer increment failed")
 		}
-		pos.y--
+		pos.y += bufferSizeY - pos.y - 1
 	}
-	if pos.y < 0 {
-		pos.y = 0
+
+	cursorMovedPastViewport := pos.y > buffer.viewportBottom()
+	cursorMovedPastVirtualViewport := pos.y > buffer.virtualViewportBottom()
+	if cursorMovedPastViewport {
+		if err := buffer.setViewportOrigin(false, coordinate{y: pos.y - buffer.viewportBottom()}, true); err != nil {
+			return err
+		}
+	}
+	if keepCursorVisible {
+		buffer.makeCursorVisible(pos, true)
 	}
 	buffer.setCursor(pos)
+	if inVtMode && cursorMovedPastViewport && cursorMovedPastVirtualViewport {
+		buffer.initializeCursorRowAttributes()
+	}
 	return nil
 }
 
@@ -114,7 +180,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if delayedAt == position {
 				position.x = 0
 				position.y++
-				if err = adjustCursorPosition(buffer, position); err != nil {
+				if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 					return consumed, spaces, err
 				}
 				position = buffer.cursor.position
@@ -201,8 +267,8 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if len(local) > available {
 				local = local[:available]
 			}
-			itEnd := buffer.write(outputCellsFromUTF16WithAttr(local, buffer.currentAttrs), buffer.cursor.position, nil)
-			spaces += itEnd
+			_, cellDistance := buffer.write(outputCellsFromUTF16WithAttr(local, buffer.currentAttrs), buffer.cursor.position, nil)
+			spaces += cellDistance
 			position = buffer.cursor.position
 			position.x = xPosition
 			if flags&wcDelayEOLWrap != 0 && position.x >= lineWidth && fWrapAtEOL {
@@ -210,7 +276,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				buffer.setCursor(position)
 				buffer.cursor.delayed = true
 				buffer.cursor.delayedAt = position
-			} else if err = adjustCursorPosition(buffer, position); err != nil {
+			} else if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 			continue
@@ -250,7 +316,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				case isGlyphFullWidth(last):
 					position.x--
 					spaces--
-					if err = adjustCursorPosition(buffer, position); err != nil {
+					if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 						return consumed, spaces, err
 					}
 					if flags&wcDestructiveBackspace != 0 {
@@ -265,7 +331,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				position.x = 0
 			}
 			consumed++
-			if err = adjustCursorPosition(buffer, position); err != nil {
+			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 			if flags&wcDestructiveBackspace != 0 {
@@ -277,7 +343,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				if position.y >= 0 {
 					buffer.rowByOffset(position.y).wrapForced = false
 				}
-				if err = adjustCursorPosition(buffer, position); err != nil {
+				if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 					return consumed, spaces, err
 				}
 			}
@@ -296,14 +362,14 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if numChars > 0 {
 				writeSpacesAt(buffer, buffer.cursor.position, numChars)
 			}
-			if err = adjustCursorPosition(buffer, position); err != nil {
+			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 		case 0x0d:
 			consumed++
 			position.x = 0
 			position.y = buffer.cursor.position.y
-			if err = adjustCursorPosition(buffer, position); err != nil {
+			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 		case 0x0a:
@@ -313,7 +379,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			}
 			position.y = buffer.cursor.position.y + 1
 			buffer.rowByOffset(buffer.cursor.position.y).wrapForced = false
-			if err = adjustCursorPosition(buffer, position); err != nil {
+			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 		default:
@@ -331,14 +397,14 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				position.y = target.y + 1
 				buffer.rowByOffset(target.y).wrapForced = true
 				buffer.rowByOffset(target.y).doubleBytePadded = true
-				if err = adjustCursorPosition(buffer, position); err != nil {
+				if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 					return consumed, spaces, err
 				}
 				continue
 			}
 			consumed++
 			position.x++
-			if err = adjustCursorPosition(buffer, position); err != nil {
+			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
 			}
 		}
@@ -461,7 +527,7 @@ func writeSpaceAt(buffer *textBuffer, target coordinate) {
 	if target.x < 0 || target.y < 0 || target.x >= buffer.width || target.y >= buffer.height {
 		return
 	}
-	buffer.write([]outputCell{{glyph: []uint16{unicodeSpace}, attr: buffer.currentAttrs, behavior: attrValue}}, target, nil)
+	_, _ = buffer.write([]outputCell{{glyph: []uint16{unicodeSpace}, attr: buffer.currentAttrs, behavior: attrStored}}, target, nil)
 }
 
 func writeSpacesAt(buffer *textBuffer, target coordinate, count int) {
@@ -472,32 +538,28 @@ func writeSpacesAt(buffer *textBuffer, target coordinate, count int) {
 	for i := range units {
 		units[i] = unicodeSpace
 	}
-	buffer.write(outputCellsFromUTF16WithAttr(units, buffer.currentAttrs), target, nil)
+	_, _ = buffer.write(outputCellsFromUTF16WithAttr(units, buffer.currentAttrs), target, nil)
 }
 
 var bufferWidth = newWidthDetector()
 
 func outputCellsFromUTF16(units []uint16) []outputCell {
 	result := make([]outputCell, 0, len(units)*2)
+	// OutputCellIterator::operator++ advances by the current view's UTF-16
+	// length, not by the number of malformed units skipped by ParseNext.  A
+	// leading view is then exposed a second time as its trailing half without
+	// advancing the source position. Preserve that exact iterator behavior.
 	for offset := 0; offset < len(units); {
 		glyph := utf16ParseNext(units[offset:])
-		consumed := 1
-		if len(glyph) == 2 && offset+1 < len(units) && glyph[0] == units[offset] && glyph[1] == units[offset+1] {
-			consumed = 2
-		} else if len(glyph) == 1 && glyph[0] != 0xfffd && glyph[0] == units[offset] {
-			consumed = 1
-		} else {
-			glyph = []uint16{0xfffd}
-		}
 		if bufferWidth.IsWide(glyph) {
 			result = append(result,
-				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsLeading}, behavior: attrValue},
-				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsTrailing}, behavior: attrValue},
+				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsLeading}, behavior: attrStored},
+				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsTrailing}, behavior: attrStored},
 			)
 		} else {
-			result = append(result, outputCell{glyph: glyph, behavior: attrValue})
+			result = append(result, outputCell{glyph: glyph, behavior: attrStored})
 		}
-		offset += consumed
+		offset += len(glyph)
 	}
 	return result
 }
