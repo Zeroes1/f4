@@ -363,7 +363,7 @@ func (q *QuickViewPanel) showCodepageDialog() {
 		if !ok {
 			return
 		}
-		if cpID == -1 {
+		if cpID == vfs.CodepageAutoDetect {
 			delete(q.codepages, q.cacheKey)
 			q.persistCodepage(0)
 			q.applyPreviewCodepage(vfs.DetectEncoding(q.cacheRaw, AppConfig.ViewerAutodetectCodePage, AppConfig.ViewerDefaultCodePage), true)

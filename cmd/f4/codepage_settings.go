@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -12,12 +10,13 @@ func codepageSettingChoices() ([]int, []string) {
 	labels := make([]string, 0, len(vfs.AvailableCodepages))
 	for _, cp := range vfs.AvailableCodepages {
 		ids = append(ids, cp.ID)
-		labels = append(labels, fmt.Sprintf("%5d  %s", cp.ID, vfs.DisplayCodepageName(cp.ID)))
+		labels = append(labels, vfs.CodepageMenuLabel(cp))
 	}
 	return ids, labels
 }
 
 func codepageChoiceIndex(ids []int, current int) int {
+	current = vfs.NormalizeCodepageID(current)
 	for i, id := range ids {
 		if id == current {
 			return i

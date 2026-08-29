@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,16 +11,42 @@ import (
 	"unicode/utf8"
 
 	"github.com/abadojack/whatlanggo"
+	"github.com/unxed/localecp"
 	"github.com/unxed/vtui"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/encoding/japanese"
+	"golang.org/x/text/encoding/korean"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/encoding/traditionalchinese"
 	"golang.org/x/text/encoding/unicode"
+	"golang.org/x/text/encoding/unicode/utf32"
+)
+
+const (
+	CodepageAutoDetect = -1
+
+	legacySystemANSI = 11111
+	legacySystemOEM  = 22222
+)
+
+var systemANSI, systemOEM int
+
+type codepageGroup uint8
+
+const (
+	codepageSystem codepageGroup = iota
+	codepageUnicode
+	codepageOther
+	codepageIconv
 )
 
 type Codepage struct {
-	ID   int
-	Name string
-	Enc  encoding.Encoding
+	ID    int
+	Name  string
+	Enc   encoding.Encoding
+	group codepageGroup
 }
 
 var AvailableCodepages []Codepage
@@ -29,27 +54,100 @@ var AvailableCodepages []Codepage
 const UTF8BOMSize = 3
 
 func init() {
+	ascii, _ := htmlindex.Get("us-ascii")
+	systemANSI, systemOEM = systemCodepageIDs()
+	ansiName, oemName := systemCodepageNames()
 	AvailableCodepages = []Codepage{
-		{65001, "UTF-8", unicode.UTF8},
-		{11111, "1251 ANSI (Cyrillic)", nil},
-		{22222, "866 OEM (Russian)", nil},
-		{1200, "UTF-16 (Little endian)", unicode.UTF16(unicode.LittleEndian, unicode.UseBOM)},
-		{1201, "UTF-16 (Big endian)", unicode.UTF16(unicode.BigEndian, unicode.UseBOM)},
-		{1251, "Windows-1251 (Cyrillic)", charmap.Windows1251},
-		{866, "CP866 (Cyrillic OEM)", charmap.CodePage866},
-		{20866, "KOI8-R (Cyrillic)", charmap.KOI8R},
-		{1252, "Windows-1252 (Western)", charmap.Windows1252},
-		{437, "CP437 (US OEM)", charmap.CodePage437},
-		{850, "CP850 (Western OEM)", charmap.CodePage850},
-		{852, "CP852 (Slavic OEM)", charmap.CodePage852},
+		{ID: systemANSI, Name: ansiName, Enc: localecp.ANSIEncoding, group: codepageSystem},
+		{ID: systemOEM, Name: oemName, Enc: localecp.OEMEncoding, group: codepageSystem},
+		{ID: 65001, Name: "UTF-8", Enc: unicode.UTF8, group: codepageUnicode},
+		{ID: 1200, Name: "UTF-16 (Little endian)", Enc: unicode.UTF16(unicode.LittleEndian, unicode.UseBOM), group: codepageUnicode},
+		{ID: 1201, Name: "UTF-16 (Big endian)", Enc: unicode.UTF16(unicode.BigEndian, unicode.UseBOM), group: codepageUnicode},
+		{ID: 12000, Name: "UTF-32 (Little endian)", Enc: utf32.UTF32(utf32.LittleEndian, utf32.UseBOM), group: codepageUnicode},
+		{ID: 12001, Name: "UTF-32 (Big endian)", Enc: utf32.UTF32(utf32.BigEndian, utf32.UseBOM), group: codepageUnicode},
+		{ID: 20127, Name: "US-ASCII", Enc: ascii, group: codepageOther},
+		{ID: 37, Name: "IBM EBCDIC US-Canada", Enc: charmap.CodePage037, group: codepageOther},
+		{ID: 437, Name: "CP437 (US OEM)", Enc: charmap.CodePage437, group: codepageOther},
+		{ID: 850, Name: "CP850 (Western OEM)", Enc: charmap.CodePage850, group: codepageOther},
+		{ID: 852, Name: "CP852 (Slavic OEM)", Enc: charmap.CodePage852, group: codepageOther},
+		{ID: 855, Name: "CP855 (Cyrillic OEM)", Enc: charmap.CodePage855, group: codepageOther},
+		{ID: 858, Name: "CP858 (Western OEM)", Enc: charmap.CodePage858, group: codepageOther},
+		{ID: 860, Name: "CP860 (Portuguese OEM)", Enc: charmap.CodePage860, group: codepageOther},
+		{ID: 862, Name: "CP862 (Hebrew OEM)", Enc: charmap.CodePage862, group: codepageOther},
+		{ID: 863, Name: "CP863 (Canadian French OEM)", Enc: charmap.CodePage863, group: codepageOther},
+		{ID: 865, Name: "CP865 (Nordic OEM)", Enc: charmap.CodePage865, group: codepageOther},
+		{ID: 866, Name: "CP866 (Cyrillic OEM)", Enc: charmap.CodePage866, group: codepageOther},
+		{ID: 1047, Name: "IBM-1047 EBCDIC", Enc: charmap.CodePage1047, group: codepageOther},
+		{ID: 1140, Name: "IBM-1140 EBCDIC", Enc: charmap.CodePage1140, group: codepageOther},
+		{ID: 874, Name: "Windows-874 (Thai)", Enc: charmap.Windows874, group: codepageOther},
+		{ID: 1250, Name: "Windows-1250 (Central European)", Enc: charmap.Windows1250, group: codepageOther},
+		{ID: 1251, Name: "Windows-1251 (Cyrillic)", Enc: charmap.Windows1251, group: codepageOther},
+		{ID: 1252, Name: "Windows-1252 (Western)", Enc: charmap.Windows1252, group: codepageOther},
+		{ID: 1253, Name: "Windows-1253 (Greek)", Enc: charmap.Windows1253, group: codepageOther},
+		{ID: 1254, Name: "Windows-1254 (Turkish)", Enc: charmap.Windows1254, group: codepageOther},
+		{ID: 1255, Name: "Windows-1255 (Hebrew)", Enc: charmap.Windows1255, group: codepageOther},
+		{ID: 1256, Name: "Windows-1256 (Arabic)", Enc: charmap.Windows1256, group: codepageOther},
+		{ID: 1257, Name: "Windows-1257 (Baltic)", Enc: charmap.Windows1257, group: codepageOther},
+		{ID: 1258, Name: "Windows-1258 (Vietnamese)", Enc: charmap.Windows1258, group: codepageOther},
+		{ID: 20866, Name: "KOI8-R (Cyrillic)", Enc: charmap.KOI8R, group: codepageOther},
+		{ID: 21866, Name: "KOI8-U (Cyrillic/Ukrainian)", Enc: charmap.KOI8U, group: codepageOther},
+		{ID: 28591, Name: "ISO-8859-1 (Western)", Enc: charmap.ISO8859_1, group: codepageOther},
+		{ID: 28592, Name: "ISO-8859-2 (Central European)", Enc: charmap.ISO8859_2, group: codepageOther},
+		{ID: 28593, Name: "ISO-8859-3 (Southern European)", Enc: charmap.ISO8859_3, group: codepageOther},
+		{ID: 28594, Name: "ISO-8859-4 (Northern European)", Enc: charmap.ISO8859_4, group: codepageOther},
+		{ID: 28595, Name: "ISO-8859-5 (Cyrillic)", Enc: charmap.ISO8859_5, group: codepageOther},
+		{ID: 28596, Name: "ISO-8859-6 (Arabic)", Enc: charmap.ISO8859_6, group: codepageOther},
+		{ID: 28597, Name: "ISO-8859-7 (Greek)", Enc: charmap.ISO8859_7, group: codepageOther},
+		{ID: 28598, Name: "ISO-8859-8 (Hebrew)", Enc: charmap.ISO8859_8, group: codepageOther},
+		{ID: 28599, Name: "ISO-8859-9 (Turkish)", Enc: charmap.ISO8859_9, group: codepageOther},
+		{ID: 28600, Name: "ISO-8859-10 (Nordic)", Enc: charmap.ISO8859_10, group: codepageOther},
+		{ID: 28603, Name: "ISO-8859-13 (Baltic)", Enc: charmap.ISO8859_13, group: codepageOther},
+		{ID: 28604, Name: "ISO-8859-14 (Celtic)", Enc: charmap.ISO8859_14, group: codepageOther},
+		{ID: 28605, Name: "ISO-8859-15 (Western)", Enc: charmap.ISO8859_15, group: codepageOther},
+		{ID: 28606, Name: "ISO-8859-16 (Central European)", Enc: charmap.ISO8859_16, group: codepageOther},
+		{ID: 932, Name: "Shift JIS (Japanese)", Enc: japanese.ShiftJIS, group: codepageOther},
+		{ID: 50220, Name: "ISO-2022-JP (Japanese)", Enc: japanese.ISO2022JP, group: codepageOther},
+		{ID: 51932, Name: "EUC-JP (Japanese)", Enc: japanese.EUCJP, group: codepageOther},
+		{ID: 51949, Name: "EUC-KR (Korean)", Enc: korean.EUCKR, group: codepageOther},
+		{ID: 936, Name: "GBK (Simplified Chinese)", Enc: simplifiedchinese.GBK, group: codepageOther},
+		{ID: 52936, Name: "HZ-GB-2312 (Simplified Chinese)", Enc: simplifiedchinese.HZGB2312, group: codepageOther},
+		{ID: 54936, Name: "GB18030 (Simplified Chinese)", Enc: simplifiedchinese.GB18030, group: codepageOther},
+		{ID: 950, Name: "Big5 (Traditional Chinese)", Enc: traditionalchinese.Big5, group: codepageOther},
 	}
+	AvailableCodepages = append(AvailableCodepages, platformCodepages()...)
+	AvailableCodepages = uniqueCodepages(AvailableCodepages)
+}
+
+// SystemANSICodepage and SystemOEMCodepage are the real system codepage IDs
+// used by Far for its ANSI and OEM entries. The associated encodings remain
+// localecp.ANSIEncoding and localecp.OEMEncoding respectively.
+func SystemANSICodepage() int { return systemANSI }
+func SystemOEMCodepage() int  { return systemOEM }
+
+func uniqueCodepages(codepages []Codepage) []Codepage {
+	seen := make(map[int]struct{}, len(codepages))
+	result := make([]Codepage, 0, len(codepages))
+	for _, cp := range codepages {
+		if cp.group == codepageSystem {
+			seen[cp.ID] = struct{}{}
+			result = append(result, cp)
+			continue
+		}
+		if _, ok := seen[cp.ID]; ok {
+			continue
+		}
+		seen[cp.ID] = struct{}{}
+		result = append(result, cp)
+	}
+	return result
 }
 
 func DisplayCodepageName(id int) string {
-	if id == 11111 {
+	id = normalizeCodepageID(id)
+	if id == systemANSI {
 		return "ANSI"
 	}
-	if id == 22222 {
+	if id == systemOEM {
 		return "OEM"
 	}
 	if id == 65001 {
@@ -62,6 +160,7 @@ func DisplayCodepageName(id int) string {
 }
 
 func FindCodepage(id int) (Codepage, bool) {
+	id = normalizeCodepageID(id)
 	for _, cp := range AvailableCodepages {
 		if cp.ID == id {
 			return cp, true
@@ -70,24 +169,45 @@ func FindCodepage(id int) (Codepage, bool) {
 	return Codepage{}, false
 }
 
+func normalizeCodepageID(id int) int {
+	switch id {
+	case legacySystemANSI:
+		return systemANSI
+	case legacySystemOEM:
+		return systemOEM
+	default:
+		return id
+	}
+}
+
+// NormalizeCodepageID maps the pre-875 system aliases to Far's real ACP/OEMCP
+// codepage IDs. It lets old configuration values keep working while all newly
+// written values use the real system IDs.
+func NormalizeCodepageID(id int) int {
+	return normalizeCodepageID(id)
+}
+
+// CodepageMenuLabel is shared by the settings and viewer/editor menus. System
+// aliases and iconv-only names have no meaningful numeric codepage to show;
+// native and built-in codepages retain their standard numeric ID.
+func CodepageMenuLabel(cp Codepage) string {
+	if cp.group == codepageSystem || cp.ID < 0 {
+		return cp.Name
+	}
+	return fmt.Sprintf("%5d  %s", cp.ID, cp.Name)
+}
+
 func DecodeBytes(data []byte, cpID int) ([]byte, error) {
+	cpID = normalizeCodepageID(cpID)
 	if cpID == 65001 {
 		return data, nil
 	}
 
-	var decoder *encoding.Decoder
-	switch cpID {
-	case 11111:
-		decoder = GetSystemANSIEncoding().NewDecoder()
-	case 22222:
-		decoder = GetSystemOEMEncoding().NewDecoder()
-	default:
-		cp, ok := FindCodepage(cpID)
-		if !ok || cp.Enc == nil {
-			return data, fmt.Errorf("unsupported codepage: %d", cpID)
-		}
-		decoder = cp.Enc.NewDecoder()
+	cp, ok := FindCodepage(cpID)
+	if !ok || cp.Enc == nil {
+		return data, fmt.Errorf("unsupported codepage: %d", cpID)
 	}
+	decoder := cp.Enc.NewDecoder()
 
 	if decoder == nil {
 		return data, fmt.Errorf("decoder is nil for codepage: %d", cpID)
@@ -97,23 +217,16 @@ func DecodeBytes(data []byte, cpID int) ([]byte, error) {
 }
 
 func EncodeBytes(data []byte, cpID int) ([]byte, error) {
+	cpID = normalizeCodepageID(cpID)
 	if cpID == 65001 {
 		return data, nil
 	}
 
-	var encoder *encoding.Encoder
-	switch cpID {
-	case 11111:
-		encoder = GetSystemANSIEncoding().NewEncoder()
-	case 22222:
-		encoder = GetSystemOEMEncoding().NewEncoder()
-	default:
-		cp, ok := FindCodepage(cpID)
-		if !ok || cp.Enc == nil {
-			return data, fmt.Errorf("unsupported codepage: %d", cpID)
-		}
-		encoder = cp.Enc.NewEncoder()
+	cp, ok := FindCodepage(cpID)
+	if !ok || cp.Enc == nil {
+		return data, fmt.Errorf("unsupported codepage: %d", cpID)
 	}
+	encoder := cp.Enc.NewEncoder()
 
 	if encoder == nil {
 		return data, fmt.Errorf("encoder is nil for codepage: %d", cpID)
@@ -186,7 +299,7 @@ func detectLegacyCodepage(data []byte) (int, bool) {
 	// decode to the same text, the alias is the useful result on that system
 	// (and preserves the existing ANSI/OEM behaviour). Explicit codepages are
 	// still tried when the system locale is unrelated to the file.
-	ids := []int{11111, 22222, 1251, 866, 20866, 1252, 437, 850, 852}
+	ids := []int{systemANSI, systemOEM, 1251, 866, 20866, 1252, 437, 850, 852}
 	type candidate struct {
 		id         int
 		text       string
@@ -258,7 +371,7 @@ func detectLegacyCodepage(data []byte) (int, bool) {
 	// prefer it over an explicit duplicate. This keeps ANSI/OEM detection
 	// stable for the user's locale while still allowing an explicit codepage
 	// to win whenever it is materially more plausible.
-	if top.id == 11111 || top.id == 22222 {
+	if top.id == systemANSI || top.id == systemOEM {
 		return top.id, true
 	}
 	return 0, false
@@ -409,15 +522,11 @@ func GetCodepageDecoderEncoder(cp string) (*encoding.Decoder, *encoding.Encoder)
 	if cp == "" || cp == "65001" {
 		return nil, nil
 	}
-	id, _ := strconv.Atoi(cp)
-	if id == 11111 {
-		enc := GetSystemANSIEncoding()
-		return enc.NewDecoder(), enc.NewEncoder()
+	id, err := strconv.Atoi(cp)
+	if err != nil {
+		return nil, nil
 	}
-	if id == 22222 {
-		enc := GetSystemOEMEncoding()
-		return enc.NewDecoder(), enc.NewEncoder()
-	}
+	id = normalizeCodepageID(id)
 	if cpObj, ok := FindCodepage(id); ok && cpObj.Enc != nil {
 		return cpObj.Enc.NewDecoder(), cpObj.Enc.NewEncoder()
 	}
@@ -425,63 +534,11 @@ func GetCodepageDecoderEncoder(cp string) (*encoding.Decoder, *encoding.Encoder)
 }
 
 func GetSystemOEMEncoding() encoding.Encoding {
-	if oem := getWindowsOEMCP(); oem != nil {
-		return oem
-	}
-
-	lc := os.Getenv("LC_ALL")
-	if lc == "" {
-		lc = os.Getenv("LC_CTYPE")
-	}
-	if lc == "" {
-		lc = os.Getenv("LANG")
-	}
-	if lc == "" || lc == "C" || lc == "POSIX" {
-		return charmap.CodePage437
-	}
-
-	lcBase := lc
-	if idx := strings.IndexByte(lcBase, '.'); idx != -1 {
-		lcBase = lcBase[:idx]
-	}
-
-	switch lcBase {
-	case "ru_RU", "be_BY", "bg_BG", "kk_KZ", "uk_UA", "tt_RU":
-		return charmap.CodePage866
-	case "cs_CZ", "pl_PL", "hu_HU", "ro_RO", "sk_SK", "hr_HR":
-		return charmap.CodePage852
-	}
-	return charmap.CodePage437
+	return localecp.OEMEncoding
 }
 
 func GetSystemANSIEncoding() encoding.Encoding {
-	if ansi := getWindowsACP(); ansi != nil {
-		return ansi
-	}
-
-	lc := os.Getenv("LC_ALL")
-	if lc == "" {
-		lc = os.Getenv("LC_CTYPE")
-	}
-	if lc == "" {
-		lc = os.Getenv("LANG")
-	}
-	if lc == "" || lc == "C" || lc == "POSIX" {
-		return charmap.Windows1252
-	}
-
-	lcBase := lc
-	if idx := strings.IndexByte(lcBase, '.'); idx != -1 {
-		lcBase = lcBase[:idx]
-	}
-
-	switch lcBase {
-	case "ru_RU", "be_BY", "bg_BG", "kk_KZ", "uk_UA", "tt_RU":
-		return charmap.Windows1251
-	case "cs_CZ", "pl_PL", "hu_HU", "ro_RO", "sk_SK", "hr_HR":
-		return charmap.Windows1250
-	}
-	return charmap.Windows1252
+	return localecp.ANSIEncoding
 }
 
 type MemoryReadAtCloser struct {
@@ -505,16 +562,42 @@ func (m *MemoryReadAtCloser) Read(ctx context.Context, p []byte) (int, error) {
 func (m *MemoryReadAtCloser) Close() error { return nil }
 
 func GetNextFastSwitchCodepage(current int) int {
-	FastSwitchCodepages := []int{65001, 11111, 22222}
+	legacy := current == legacySystemANSI || current == legacySystemOEM
+	current = normalizeCodepageID(current)
+	FastSwitchCodepages := make([]int, 0, 3)
+	for _, id := range []int{65001, systemANSI, systemOEM} {
+		if !slicesContains(FastSwitchCodepages, id) {
+			FastSwitchCodepages = append(FastSwitchCodepages, id)
+		}
+	}
 	for i, id := range FastSwitchCodepages {
 		if id == current {
 			nextIdx := (i + 1) % len(FastSwitchCodepages)
+			if legacy {
+				switch FastSwitchCodepages[nextIdx] {
+				case systemANSI:
+					return legacySystemANSI
+				case systemOEM:
+					return legacySystemOEM
+				}
+			}
 			return FastSwitchCodepages[nextIdx]
 		}
 	}
 	return 65001
 }
+
+func slicesContains(values []int, want int) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func BuildCodepageMenuItems(currentCpID int, autoDetect bool) ([]vtui.MenuItem, int) {
+	currentCpID = normalizeCodepageID(currentCpID)
 	var items []vtui.MenuItem
 	currIdx := 0
 
@@ -523,15 +606,7 @@ func BuildCodepageMenuItems(currentCpID int, autoDetect bool) ([]vtui.MenuItem, 
 	}
 
 	addCP := func(cp Codepage) {
-		if cp.ID == 1251 || cp.ID == 866 {
-			return // Exclude duplicate 1251 and 866 from the UI menu
-		}
-		var text string
-		if cp.ID == 11111 || cp.ID == 22222 {
-			text = cp.Name // Don't show technical "11111" / "22222" IDs
-		} else {
-			text = fmt.Sprintf("%5d  %s", cp.ID, cp.Name)
-		}
+		text := CodepageMenuLabel(cp)
 
 		if cp.ID == currentCpID && !autoDetect {
 			text = "√ " + text
@@ -552,26 +627,26 @@ func BuildCodepageMenuItems(currentCpID int, autoDetect bool) ([]vtui.MenuItem, 
 	}
 	items = append(items, vtui.MenuItem{
 		Text:     autoText,
-		UserData: -1,
+		UserData: CodepageAutoDetect,
 	})
 
 	addHeader(" System ")
 	for _, cp := range AvailableCodepages {
-		if cp.ID == 11111 || cp.ID == 22222 {
+		if cp.group == codepageSystem {
 			addCP(cp)
 		}
 	}
 
 	addHeader(" Unicode ")
 	for _, cp := range AvailableCodepages {
-		if cp.ID == 65001 || cp.ID == 1200 || cp.ID == 1201 {
+		if cp.group == codepageUnicode {
 			addCP(cp)
 		}
 	}
 
 	addHeader(" Other ")
 	for _, cp := range AvailableCodepages {
-		if cp.ID != 11111 && cp.ID != 22222 && cp.ID != 65001 && cp.ID != 1200 && cp.ID != 1201 {
+		if cp.group == codepageOther || cp.group == codepageIconv {
 			addCP(cp)
 		}
 	}
