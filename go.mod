@@ -22,6 +22,7 @@ require (
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/jezek/xgb v1.3.1
 	github.com/jlaffaye/ftp v0.2.0
+	github.com/kbolino/pageant v0.0.0-20180919004629-179b60797d9f
 	github.com/mattn/go-runewidth v0.0.15
 	github.com/mholt/archives v0.1.5
 	github.com/pkg/sftp v1.13.6
