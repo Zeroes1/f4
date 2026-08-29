@@ -1385,41 +1385,212 @@ therefore reformat for 4000 during a wide frame, which is the objection that
 demoted direction C in §8 and is now a measured property of the wide path
 rather than an argument about it.
 
+### Ownership, re-examined: does the archive bring §7 back?
+
+The obvious objection to reading structure out of frames is that f4 ends up
+holding logical lines *and* conhost holds the grid, which is the two-owner
+shape §7 died of. It is not, and the difference is worth stating precisely
+because it is the difference between this design and the abandoned one.
+
+§7 failed because f4 held history **above** the viewport and had to sew a
+delta onto it. The seam was in the middle of the stream, rows had no identity,
+and every join was a guess. Here a frame covers the **whole** buffer, first row
+to last. Nothing is joined; the mirror is replaced. Once replaced, f4 can
+re-wrap those logical lines to any width by itself, as often as it likes,
+without asking conhost anything -- re-wrapping logical lines is a local
+operation f4 already performs in its editor.
+
+**Until the buffer overflows there is exactly one owner.** At a 32000-row
+height that is tens of thousands of lines of work during which conhost holds
+everything and f4 only reads. An archive of f4's own is needed only once rows
+start being evicted.
+
+**And when it is needed, rows are identified by ring position, not by text.**
+Matching the tail of the archive against the head of a new frame by content
+fails on the obvious case -- ten consecutive `------` lines match in ten
+places. It is not needed: a frame is a snapshot of the ring, and the shift
+between two frames follows from what the frame states about itself, the
+terminator count (§17) and the final cursor position that marks the end of live
+content. While the buffer has not wrapped the positions do not move at all and
+there is nothing to join; once it wraps, the shift equals the growth.
+
+**This last step is reasoning, not measurement.** Two frames bracketing a known
+overflow must be captured and the arithmetic checked against them before any
+code depends on it. `tools/conptymatrix` already produces both frames; the
+check is a reading of dumps it can already make, not another field trip.
+
+### Resizing while output is in flight
+
+The case that destroyed §7 -- dragging the window corner while `dir` prints --
+is measured here and is uneventful. Every session in §17 ends with a
+`during-output` resize issued while the child is still writing: 58115 bytes,
+1994 lines, 1993 terminators, `longWhole=true`, identical in shape to the same
+frame taken at rest, at every height and every fill level. Repeated resizes
+(`narrow-again`, `restore-again`) show no degradation either.
+
+There is nothing to lose because f4 is not deciding which bytes belong to
+whom. It receives a complete frame and replaces its mirror.
+
+What a corner drag does cost is one frame per step: 57 KB and 46 ms at a
+2000-row height with a full buffer, 949 KB and 609 ms at 32000. That is what
+`ResizeDebounceMs` (§16) is for -- not correctness, but not shipping a
+megabyte per pixel. Intermediate frames during a drag can simply be dropped,
+because each frame is complete in itself; a property no delta-based design
+ever had.
+
+### Full-screen programs: the problem is geometry, not reflow
+
+An earlier reading of this treated full-screen programs as a reflow problem.
+They are not: they repaint themselves, and the history above them does not
+depend on what they believe the screen size is. The problem is **geometry**. A
+program told its window is 32000 rows tall will draw its frame across 32000
+rows and put its bottom border thirty thousand rows above the visible slice.
+Nothing breaks; everything is off-screen.
+
+So a full-screen program needs a console of the real size while it runs, and
+the detector §17 shows both proposed mechanisms cannot supply is needed for
+that -- not for wrapping.
+
+Switching the height for its duration is cheap, and this is the second
+consequence of f4 owning the logical lines: the history does not have to
+survive inside conhost across the switch. f4 takes a frame before the switch,
+keeps the lines, and lets conhost's ring be re-cut however it likes.
+
+**What is left of the alternate screen as a signal.** `ESC[?1049h/l` is
+consumed by conhost on 10.0.22000 and appears in no frame (§17), so it is not
+available as a stream signal on this build. Two qualifications, neither
+measured: the post-#17510 emitter added VT passthrough and may forward it, so
+24H2 and later must be re-measured before the idea is written off; and a
+native Windows `vim.exe` draws through the Console API and never sends 1049 at
+all, as Far does not -- the sequence is used by VT programs, `vim` under WSL,
+`mc`, anything from the Unix side. A working 1049 detector would therefore
+cover part of the cases, not all of them.
+
+### The role conhost actually plays
+
+Taken together, the above moves conhost out of the position of *holding* the
+history and into a narrower one: it lays out incoming output and states the
+boundaries of it. f4 reads those boundaries from frames and owns the lines
+afterwards.
+
+That is a better place to depend on a Windows component. It needs conhost to
+be correct about what it just printed, not about what it printed an hour ago;
+it survives a height change, an alternate-screen excursion and a ring that
+evicts; and it is much closer to how far2l's terminal is built, which is the
+architecture f4 is reproducing.
+
+### Over ssh to a Windows host
+
+Asked because the target matrix in `TERMINAL.md` §0 names Windows over ssh
+explicitly. This section is reasoning from the measurements, not a measurement.
+
+The mechanism exists. `sshd` on a Windows host runs an interactive session on
+a ConPTY, sized from the `pty-req` at connection and from `window-change`
+afterwards, and forwards its bytes unchanged. So f4 controls the remote
+geometry through the protocol, and a repaint frame with its `ESC[K CR LF`
+structure would arrive intact: the native path is available in principle.
+
+Three things spoil it. **Volume**: a frame that costs 949 KB locally at 32000
+rows costs 949 KB over the wire per width change; 57 KB at 2000 rows is
+tolerable, the tall configuration is not, so remote sessions need their own
+much smaller height. **Risk**: the wide frame can wedge a conhost, and wedging
+*someone else's* conhost on a server is not the local case of a probe killing
+its own host -- path 2 should be off by default over ssh. **Unknowns**:
+everything depends on the remote `sshd` build, how it clamps sizes, and
+whether it uses ConPTY at all.
+
+Which is the same conclusion §11 reached, now with numbers behind it: **FISH+
+Step 17 is strictly better.** With f4 on the far side, all of this happens
+locally there -- the 949 KB never crosses the network -- and what comes back is
+logical lines.
+
+One clarification to §11 while this is being written: on a *Linux* host over
+ssh there is no ConPTY and no layout being imposed, the remote pty wraps
+nothing, and f4 wraps long lines itself as it always has. What stays fixed
+there is column formatting like `ls -C`, which the remote program generated for
+a width it was told -- exactly as it is for every other terminal.
+
+### Why no other Windows terminal does this
+
+Worth recording, because "nobody does it" was treated as evidence against the
+idea earlier in this file.
+
+They have no reason to. WezTerm, Alacritty and Windows Terminal *are* the
+terminal: ConPTY is their renderer, they display its frame, and they keep
+scrollback as it was written without ever re-wrapping it. Long lines in the
+frame are of no use to them, because they do not reconstruct logical lines --
+they draw screen rows. The `ESC[K CR LF` structure has been in plain sight
+since 1809; there was no question, so nobody read the answer.
+
+Their duplicated rows after a resize have the same root cause as §7, in a
+milder form. Their viewport is the size of the window; what scrolls off it they
+captured from the live stream into scrollback of their own. On a resize ConPTY
+repaints its viewport, and that repaint contains rows the terminal already
+archived -- with no row identity in the stream, the overlap cannot be
+recognised. Two owners again.
+
+The tall viewport removes it by removing the archive: nothing ever scrolls off
+into separate storage, one owner holds the grid, and a frame replaces the
+mirror whole.
+
+**And the price f4 pays, which a general terminal cannot.** A tall viewport
+means telling the child something untrue about its window height -- measured in
+§17, the child believes whatever it is told. A universal terminal cannot do
+that: it must tell every program it hosts the truth, or the first `vim` breaks.
+f4 can, because it knows which program it launched and can give a full-screen
+one a real-sized console. The advantage is bought precisely by *not* being a
+general-purpose terminal -- and the open detector question above is the bill
+for it.
+
 ## 18. Where this leaves direction F
 
-Everything §15 said had to be settled before implementation is settled.
+**Direction F is feasible.** Every question §15 named as blocking is answered,
+and the answers are measurements rather than arguments. What remains open is
+engineering and portability, not viability.
 
-**What is established.** A tall viewport is creatable at every height to 32000
-and cheap to create (24-104 ms). Its whole buffer is re-wrapped and
-re-transmitted on any width change, oldest line included. The frame states its
-own logical structure through `ESC[K CR LF`, exactly, with one known
-exception. The frame cost is a formula with both terms measured. History depth
-equals buffer height, exactly. Repeated resizes, and resizes during live
-output, are stable -- the case that destroyed the design of §7 is harmless
-here, because f4 replaces a mirror from a whole frame instead of merging a
-delta into a history it also owns.
+**Established by measurement.** A tall viewport is creatable at every height to
+32000 rows and cheap to create (24-104 ms). Its entire buffer is re-wrapped and
+re-transmitted on any width change, oldest line included. A frame states its
+own logical structure through `ESC[K CR LF` -- terminator count is the logical
+line count, and rows minus terminators is the rows consumed by wrapping. The
+frame cost is a formula with both terms measured,
+`SUM(line lengths) + 5 x rows`. History depth equals buffer height exactly, at
+three scales. Repeated resizes and resizes during live output produce frames
+identical in shape to those taken at rest -- the case that destroyed §7 is
+uneventful here. The cell ceiling sits between 32 and 48 million, and beyond it
+the host wedges and then stops being closable.
 
-**What is known to be imperfect, with its bound.** A line whose length is an
-exact multiple of the width arrives with no terminator and is indistinguishable
-from a wrap (P13). The error is always in one direction -- a hard break read
-as a wrap -- and its frequency is one line in W. The wide frame resolves it,
-because a multiple of 119 is not a multiple of 4000, at a cost of 144-617 ms
-depending on height.
+**Known imperfect, with its bound.** A line whose length is an exact multiple
+of the width arrives with no terminator and cannot be told from a wrap (P13).
+The error is always in one direction, a hard break read as a wrap, at a
+frequency of one line in W. The wide frame resolves it -- a multiple of 119 is
+not a multiple of 4000 -- for 144 ms at a 500-row height and 617 ms at 2000.
 
-**What remains genuinely open**, and none of it blocks a first implementation:
-detecting a full-screen program now that both proposed detectors are disproved;
-what a resize does while the alternate screen is active, beyond the doubled
-terminator count; and the same measurements on 19045 and on a post-#17510
-build, where the emitter was rewritten. `tools/conptymatrix` is the instrument
-for all three and needs no changes to ask them.
+**The shape that follows.** A tall ConPTY whose height is the scrollback depth.
+f4 rendering the bottom slice and translating coordinates. Logical structure
+read from repaint frames only, never from the live stream, which splits long
+lines while scrolling. f4 owning those lines once read, so that re-wrapping
+needs no round trip and a height change costs no history. conhost reduced to
+laying out new output and stating its boundaries. The wide frame reserved for
+the F4 viewer and editor, where a user pressed a key and a few hundred
+milliseconds buys exactness. Every constant a setting, per §16, because all of
+them describe one build of one Windows.
 
-**The shape that follows.** A tall ConPTY whose height is the scrollback
-depth; f4 rendering the bottom slice and translating coordinates; logical
-structure read from repaint frames only; the native path carrying ordinary
-work at 46 ms per width change at a 2000-row height; the wide path reserved
-for the F4 viewer and editor, where a user pressed a key and a few hundred
-milliseconds is a fair price for exactness; every number above a setting per
-§16, because all of them describe one build of one Windows.
+**Open, and none of it blocking.**
 
-That is a design with measured costs, a known failure mode, a bounded error
-and a fallback -- which is what §7 lacked, and the reason it was abandoned.
+- *Detecting a full-screen program*, now that both proposed detectors are
+  disproved on 22000. Needed for geometry, not for wrapping. A 1049 detector
+  may return on a post-#17510 build and would cover VT programs but not native
+  Console API ones.
+- *What a resize does while the alternate screen is active*, beyond the doubled
+  terminator count §17 recorded.
+- *The ring arithmetic for the overflow case*, which is reasoned above and not
+  yet checked against two frames bracketing a known overflow.
+- *Other builds*: 19045, and any build carrying the rewritten emitter, where
+  the frame grammar must be re-measured into the settings of §16.
+- *Remote Windows over ssh*: mechanically plausible, bounded by frame volume
+  and by the risk of wedging someone else's host; FISH+ Step 17 remains the
+  better answer.
+
+This is a design with measured costs, a known failure mode, a bounded error and
+a fallback. That is exactly what §7 lacked, and the reason it was abandoned.
