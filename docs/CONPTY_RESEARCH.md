@@ -1335,7 +1335,10 @@ that line across its partial redraws.
 So the rule for the implementation is narrow and firm: **logical structure is
 read from a repaint frame, never from the live stream.** The live stream is for
 display; the frame is for structure. This distinction did not exist in §13,
-which had only non-scrolling fixtures.
+which had only non-scrolling fixtures, and it is the single most consequential
+line in this section: it is what separates this design from every other
+Windows terminal, all of which take their structure from the stream because
+they have no second source to take it from.
 
 ### The wide frame is expensive, and the cost scales with height
 
@@ -1524,13 +1527,35 @@ flags and a real reflow exists -- it is theirs, not ConPTY's. The
 pseudoconsole itself they keep at window size:
 `ConptyConnection::Resize` forwards exactly the window's rows and columns.
 
-**Their wrap flags come from the same place ours do.** ConPTY emits a long line
-whole and relies on autowrap; their parser lays it into their buffer, autowrap
-fires, `wrapForced` is set. We rediscovered independently the mechanism
-Windows Terminal has always stood on -- and it has the same hole: on a build
-where ConPTY breaks the wrap with a hard CRLF (P6, 19045) the flag is never
-set and the line becomes two. Their reflow is wrong there in exactly the way a
-heuristic of ours would have been.
+**Their wrap flags come from the same place ours do, and neither is a guess.**
+This needs saying plainly, because "heuristic" was used loosely earlier in this
+file and it slanders both designs. ConPTY prints a long line whole; the
+receiver lays it into its own buffer; its own autowrap fires; it sets
+`wrapForced` **because it just wrapped it**. That is a record of one's own
+action, not an inference about someone else's. Windows Terminal has stood on
+this since the beginning and we arrived at it independently.
+
+**But "ConPTY always sends long lines whole" is false, and that is the whole
+difference.** §17 measured both halves and this file failed to connect them.
+In a *repaint frame* it is true without exception -- `longWhole=true` in all
+sixteen sessions, every height, every fill level. In the *live stream* it is
+not: the two overflow cases report `longWhole=false`, because while the buffer
+is scrolling conhost splits that line across partial redraws. And on 19045 the
+wrap point carried a hard CRLF outright (P6).
+
+**Windows Terminal lives off the live stream.** Bytes arrive, it lays them
+down immediately, the flag is set at that instant. When the stream delivered
+the line whole, the flag is right. When it split the line during a scroll, or
+sent a CRLF on 19045, no flag is set and that logical line is two rows for
+good. There is nobody to ask again: what scrolled into their scrollback, ConPTY
+has forgotten, and they keep it as it was written.
+
+**We live off the frame**, where the line is whole every time, and a frame can
+be requested again with one resize because the history is still conhost's.
+
+So it is not that they infer and we do not. Both take the flag from the same
+event. The difference is that they get **one pass with no retake**, and we have
+a source that can be re-read.
 
 **They document ConPTY's reflow as destructive.** `UserResize` says so in as
 many words: for ConPTY a reflow "forgets" text that wraps beyond the top of its
