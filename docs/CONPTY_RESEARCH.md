@@ -1756,12 +1756,13 @@ written before it is asked.
 
 `tools/conptyreconcile` implements the frame-plus-stream correction §17
 describes and checks it against ground truth. The supplied 2000-row run was not
-green: it failed both the mirror-line and visible-tail stages. Those two FAILs
-had one first mismatch -- a line of 60 CJK glyphs in a 120-column write was
-followed by one literal space in the 119-column frame. That byte is the
-Microsoft writer's wide-cell edge padding, not child text. The mock and the
-reconciler now model this documented case, and a regression replays the saved
-seed; a Windows rerun is still the final confirmation against that host.
+green: it failed both the mirror-line and visible-tail stages. The fresh
+failure was a global-reflow case: two preceding 120-cell rows shift a following
+60-glyph CJK line by two cells when the frame is 119 columns wide, producing
+`58*"中" + " " + 2*"中"`. That byte is display padding from the Microsoft
+writer path, not child text. The mock and reconciler now run the complete
+merged run through the ported reflow and pin the extracted byte shape; a
+Windows rerun is still the final confirmation against that host.
 
 **It works by order, not by content.** A line of 120 `+` followed by one of 360
 `+` is byte-identical to the reverse, so content matching picks arbitrarily and
@@ -1791,9 +1792,9 @@ assuming that a passing fixture was sufficient:
 - the expected list omitted the end marker the harness itself prints, so a
   correct run reported one line short.
 - the frame writer's wide-cell edge padding was absent, so a 120-to-119 repaint
-  differed by one literal space. The current mock models only this documented
-  `WriteInfos` case, and the reconciler consumes it only when the live sequence
-  proves it is padding.
+  differed by one literal space inside a globally reflowed run. The current
+  mock models only this documented `WriteInfos` case, and the reconciler
+  consumes it only when the live sequence proves it is padding.
 
 The lesson is worth keeping: a fixed fixture and a mock that only models what
 its author thought of will both happily agree with a wrong implementation. The
@@ -1925,9 +1926,11 @@ does not repair it, contrary to what §15 originally claimed. The live stream
 does -- it terminates such a line with a plain CRLF -- and `tools/conptyreconcile`
 implements that correction by walking the live sequence in order. The supplied
 2000-row capture exposed an additional one-byte wide-cell padding case in the
-frame; the mock and regression now pin the correction for it. The mechanism is
-build-dependent and sits behind a setting like everything else in §16. The
-Windows rerun is still required before treating the captured run as green.
+frame: two preceding full rows shift a following CJK line during the ported
+reflow. The mock and regression now pin the complete `58/space/2` shape, not
+just an independently appended space. The mechanism is build-dependent and
+sits behind a setting like everything else in §16. The Windows rerun is still
+required before treating the captured run as green.
 
 **The shape that follows.** A tall ConPTY whose height is the scrollback depth.
 f4 rendering the bottom slice and translating coordinates. Logical structure
@@ -2015,16 +2018,24 @@ metadata that the conhost port never reads. The malformed-UTF-8 compatibility
 path remains explicit in `Wrap`; valid terminal text goes through the UTF-16
 port.
 
-**Field failure and correction.** The supplied seed
-`1787989147020622300` still reproduced the original two FAIL stages after the
-first port pass. They had one root cause: the first merged frame run contained
-60 CJK glyphs followed by one ordinary space before `line 000004`; the live
-stream contained the 60 glyphs followed directly by the next line. Microsoft
-`WriteInfos` explains that space as display padding when a wide pair is cut at
-the edge of the output range. `msFrameText` reconstructs only that documented
-case; `alignFrom` consumes one or two spaces only when the next live line and
-the preceding wide glyph prove the byte is padding. Ordinary child spaces are
-still not normalized.
+**Field failure and correction.** The fresh supplied seed
+`1787996042561810700` reproduced the same two FAIL stages after the first port
+pass. The failure was not a different character-width rule: the mock reflowed
+each logical line independently. In the captured run, two preceding 120-cell
+rows leave a two-cell offset after reflow to 119 columns, so the frame contains
+`58*"中" + " " + 2*"中"` before `line 000005`. The live stream contains the 60
+glyphs followed directly by the next line. `msFrameRunText` now runs the whole
+merged run through the ported `TextBuffer::Reflow` once, and the text-only
+`WriteInfos` view keeps complete row cells, trimming only the end of a frame
+run. The extracted `58/space/2` byte shape is pinned by a regression.
+
+The old 10.0.22000 frame can also omit an intermediate run terminator during a
+resize. `alignFromExtended` accepts that only when the ordered live sequence
+and the ported frame text prove the same source lines. A genuinely interleaved
+frame is handled separately only when every live text appears in the frame
+with its multiplicity and the frame order proves the insertion; otherwise the
+reconciler keeps the uncorrected frame. Ordinary child spaces are never
+normalized on the normal ordered path.
 
 The audit also found and fixed a genuine port-boundary error in the Go
 translation: C++ `GraphemeState::resetIfOutOfRange` compares pointer ranges,
@@ -2033,26 +2044,29 @@ feeding one byte at a time cannot accidentally continue a grapheme state from
 the preceding `ROW` string view. A one-byte-feed regression pins this.
 
 **Mock audit.** `mock.go` now obtains row occupancy, delayed-EOL wrapping,
-wide-glyph padding, reflow, and row eviction from the ported buffer. The
+wide-glyph padding, the whole-run reflow, and row eviction from the ported
+buffer. For a resize it writes at the source width, reflows to the frame width,
+and only then reads the surviving ring rows. The
 remaining stream/frame envelope is explicitly reconstructed from §13/§17 and
 the documented old-emitter shape: title OSC, frame terminators, exact-width
 live CRLF, deterministic scrolling seams, and a frame interleave boundary.
-Random chunking is fed into the incremental parser rather than reassembled
-first. SGR is consumed but attributes are not modeled because this tool's
-contract is text boundaries; that is an explicit non-port in the headers, not a
-hand-written substitute.
+`writeWidth` and the empty-row width mark are tool metadata only; the ported
+Microsoft code never reads them. Random chunks are fed into the incremental
+parser rather than reassembled first. SGR is consumed but attributes are not
+modeled because this tool's contract is text boundaries; that is an explicit
+non-port in the headers, not a hand-written substitute.
 
-**Verification status (2026-08-29).** The dedicated field-seed regression and
-the complete portable package tests pass (`go test ./tools/conptyreconcile
--count=1`); the race suite excluding the unrelated long-running real-PTY test
-passes; `go vet ./tools/conptyreconcile` and the `GOOS=windows
-GOARCH=amd64 CGO_ENABLED=0 go build ./...` cross-build pass. The real Windows
-ConPTY rerun remains an external confirmation for build 10.0.22000; Linux
-cannot provide that evidence. This commit keeps the exact evidence boundary
-and does not call the supplied FAIL log a pass.
+**Verification status (2026-08-29).** The fresh field-seed regression, the
+extracted frame-run regression, the interleaved-output cases, and the complete
+portable package tests pass (`go test ./tools/conptyreconcile -count=1`). The
+real Windows ConPTY rerun remains the final external confirmation for build
+10.0.22000; Linux cannot provide that host evidence. The Windows executable is
+built from this same source after the portable tests pass; its result is not
+claimed here until it is run on Windows.
 
 **For whoever picks this up.** Read THE RULE first. When a behavior has
 Microsoft source, port it; do not write what the source appears to do. When
 the source search is exhausted, record the missing boundary and reconstruct
-only from the documented measurements, as was done for the single wide-cell
-padding byte above.
+only from the documented measurements. Here the old complete frame envelope
+is the missing boundary; its byte framing is reconstructed, while row content
+and reflow go through the ported Microsoft code.

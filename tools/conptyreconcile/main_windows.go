@@ -682,7 +682,7 @@ func oneRound(self string, seed int64, width, height, lines int,
 	live, frame := d.split()
 	truth := trimTrailingBlanks(append(randomGroundTruth(seed, width, lines), markerDone))
 	got := trimTrailingBlanks(reconcileOrdered(
-		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width)))
+		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width), width-1))
 
 	// The ring may have dropped the oldest lines; compare the tail.
 	want := tailOf(truth, len(got))
@@ -776,7 +776,7 @@ func runTerminal(self, logPath, dumpPath string, seed int64, width, height, line
 
 	// 1. the mirror
 	recovered := trimTrailingBlanks(reconcileOrdered(
-		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width)))
+		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width), width-1))
 	m := NewMirror()
 	m.Replace(recovered)
 	check("mirror holds every printed line",
@@ -1040,7 +1040,7 @@ func runRealCommand(logPath, dumpPath, command string,
 		fmt.Sprintf("%d bytes, %d logical lines", len(all), len(ll)))
 
 	runs := trimTrailingBlanks(splitFrameLines(frame))
-	fixed := trimTrailingBlanks(reconcileOrdered(runs, ll))
+	fixed := trimTrailingBlanks(reconcileOrdered(runs, ll, width))
 	check("the correction only ever splits",
 		strings.Join(fixed, "") == strings.Join(runs, ""),
 		fmt.Sprintf("%d runs became %d lines", len(runs), len(fixed)))

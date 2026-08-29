@@ -28,10 +28,10 @@ func TestReportPassesOnAGoodCapture(t *testing.T) {
 }
 
 func TestCollectedFieldSeedReplaysAgainstAuditedMock(t *testing.T) {
-	// This is the seed printed by conptyreconcile-2000.txt. Keep it as an
-	// end-to-end regression: the field failure was caused by a wide-cell
-	// padding byte in a 120-to-119 repaint, not by the synthetic fixtures.
-	const seed int64 = 1787989147020622300
+	// This is the fresh seed printed by conptydump-2000.txt. Keep it as an
+	// end-to-end regression: the field failure was caused by global reflow of
+	// wide cells in a 120-to-119 repaint, not by the synthetic fixtures.
+	const seed int64 = 1787996042561810700
 	const writeWidth, frameWidth, height, lines = 120, 119, 2000, 150
 	printed := append(randomGroundTruth(seed, writeWidth, lines), markerDone)
 
@@ -46,7 +46,7 @@ func TestCollectedFieldSeedReplaysAgainstAuditedMock(t *testing.T) {
 	}
 	got := trimTrailingBlanks(reconcileOrdered(
 		trimTrailingBlanks(splitFrameLines(frame)),
-		liveLinesFromChunks(liveChunks, writeWidth)))
+		liveLinesFromChunks(liveChunks, writeWidth), frameWidth))
 	want := trimTrailingBlanks(printed)
 	if len(got) != len(want) {
 		t.Fatalf("field seed recovered %d lines, expected %d", len(got), len(want))
@@ -144,14 +144,14 @@ func TestFrameTakenAtADifferentWidthThanTheLinesWereWritten(t *testing.T) {
 	// of writeWidth-1 characters is an exact multiple of the frame width, so a
 	// spurious candidate is recorded and can cut a line that never merged.
 	wrongBreaks := liveLines(live, frameWidth)
-	wrong := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), wrongBreaks))
+	wrong := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), wrongBreaks, frameWidth))
 	if len(wrong) == len(truth) {
 		t.Fatalf("keying on the frame width must not recover the truth by accident")
 	}
 
 	// Keying on the write width: correct.
 	breaks := liveLines(live, writeWidth)
-	fixed := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks))
+	fixed := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks, frameWidth))
 	if len(fixed) != len(truth) {
 		t.Fatalf("recovered %d lines, expected %d", len(fixed), len(truth))
 	}
@@ -173,7 +173,7 @@ func TestRandomisedRoundsAgainstTheMock(t *testing.T) {
 
 		breaks := liveLines(writer.LiveStream(truth), writeWidth)
 		frame := viewer.FrameAtWidth(truth, writeWidth)
-		got := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks))
+		got := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks, frameWidth))
 
 		want := trimTrailingBlanks(truth)
 		if len(got) != len(want) {
@@ -211,10 +211,10 @@ func TestResizeWhileOutputIsStillArriving(t *testing.T) {
 		frame := after.FrameAtWidths(all, len(first), w1, w2)
 
 		breaks := liveLines(live, w1)
-		got := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks))
+		got := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), breaks, w2))
 
 		fixedFixed := liveLines(live, w1)
-		naive := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), fixedFixed))
+		naive := trimTrailingBlanks(reconcileOrdered(trimTrailingBlanks(splitFrameLines(frame)), fixedFixed, w2))
 
 		want := trimTrailingBlanks(all)
 		if len(got) != len(want) {

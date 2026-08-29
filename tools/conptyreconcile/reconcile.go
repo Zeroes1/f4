@@ -52,6 +52,28 @@ func splitFrameLines(frame []byte) []string {
 	return out
 }
 
+// frameWidthFromFrame reads the XTWINOPS size report emitted at the head of
+// the old resize frame. The width is needed only by the reconciler to apply
+// the ported WriteInfos view; it is not guessed from byte lengths.
+func frameWidthFromFrame(frame []byte) int {
+	i := bytes.Index(frame, []byte("\x1b[8;"))
+	if i < 0 {
+		return 0
+	}
+	j := i + 2
+	for j < len(frame) && (frame[j] < 0x40 || frame[j] > 0x7e) {
+		j++
+	}
+	if j >= len(frame) || frame[j] != 't' {
+		return 0
+	}
+	nums := msCsiNums(string(frame[i+2 : j]))
+	if len(nums) < 3 {
+		return 0
+	}
+	return nums[2]
+}
+
 // stripEscapes removes CSI sequences and control bytes, leaving text. It is
 // deliberately crude: the reconciliation only compares text, and a sequence
 // left in place would break a comparison that is otherwise exact.
@@ -227,12 +249,9 @@ func seamFollows(b []byte, off int) bool {
 // the correction
 // ---------------------------------------------------------------------------
 
-// reconcile splits frame lines that conhost merged. A merge can only have
-// happened at an exact multiple of the width, so those are the only candidate
-// points, and a candidate is taken only when the live stream recorded a hard
-// break after a row of exactly that text.
 // reconcileOrdered rebuilds the logical lines by walking the live sequence in
-// order, instead of matching frame runs against recorded text.
+// order. The merge decision uses the write-time width and the ported row
+// state; the frame width is used only to reproduce the final repaint bytes.
 //
 // Content matching is not enough, and the randomised test says why: a line of
 // 120 '+' followed by one of 360 '+' is byte-identical to the reverse, so any
@@ -242,83 +261,250 @@ func seamFollows(b []byte, off int) bool {
 // its rows (and so received no terminator) and the last did not.
 //
 // The width each line was written at comes from the stream itself, so a resize
-// while output is arriving is handled by construction.
-func reconcileOrdered(frameRuns []string, live []liveLine) []string {
+// while output is arriving is handled by construction. The optional frame
+// width is kept optional for callers that only have the logical frame text.
+func reconcileOrdered(frameRuns []string, live []liveLine, frameWidth ...int) []string {
 	if len(live) == 0 {
 		return frameRuns
 	}
-	// The buffer's blank rows are not in the live stream, but the last
-	// printed line can merge into the first of them, so the run needs one
-	// blank to terminate against. Without it the alignment fails on its very
-	// last run whenever output ends on a line that fills its rows.
-	live = append(append([]liveLine(nil), live...),
-		liveLine{Text: "", Width: live[len(live)-1].Width})
-
+	originalLive := append([]liveLine(nil), live...)
+	width := 0
+	if len(frameWidth) > 0 {
+		width = frameWidth[0]
+	}
+	if frameContainsAllLiveText(frameRuns, originalLive) &&
+		!frameFollowsLiveOrder(frameRuns, originalLive) {
+		out := make([]string, 0, len(originalLive))
+		for _, line := range originalLive {
+			out = append(out, line.Text)
+		}
+		return out
+	}
 	// The buffer is a ring: the frame may begin partway through what was
-	// printed. Find the first live line the frame starts at.
-	for start := 0; start < len(live); start++ {
-		if out, ok := alignFrom(frameRuns, live[start:]); ok {
+	// printed. Find plausible starts from the first frame run before doing the
+	// full walk; otherwise every failed suffix would re-render the whole frame.
+	starts := frameStartCandidates(frameRuns, live, width)
+	for _, start := range starts {
+		if out, ok := alignFromStrict(frameRuns, live[start:], width); ok {
 			return out
 		}
+	}
+	// The extended walk is only needed for the source-backed wide-cell frame
+	// cases. Keeping it out of the normal path matters for tall captures: a
+	// failed candidate otherwise re-renders every suffix of every run.
+	if liveHasWideText(originalLive) {
+		for _, start := range starts {
+			if out, ok := alignFromExtended(frameRuns, live[start:], width); ok {
+				return out
+			}
+		}
+	}
+	// A resize can interleave freshly written output into the middle of the
+	// repaint. In that case the frame and the live stream contain the same
+	// child text in different orders, so no single ordered walk can succeed.
+	// Returning the live sequence is safe only when every non-empty live line
+	// is also present in the frame with the required multiplicity; otherwise a
+	// ring/partial-frame case must retain the uncorrected frame.
+	if frameContainsAllLiveText(frameRuns, originalLive) &&
+		!frameFollowsLiveOrder(frameRuns, originalLive) {
+		out := make([]string, 0, len(originalLive))
+		for _, line := range originalLive {
+			out = append(out, line.Text)
+		}
+		return out
 	}
 	return frameRuns
 }
 
-func alignFrom(frameRuns []string, live []liveLine) ([]string, bool) {
-	out := make([]string, 0, len(live))
-	i := 0
-	for _, run := range frameRuns {
-		acc := ""
-		for {
-			if i >= len(live) {
-				return nil, false
-			}
-			l := live[i]
-			if len(acc)+len(l.Text) > len(run) || run[len(acc):len(acc)+len(l.Text)] != l.Text {
-				return nil, false
-			}
-			acc += l.Text
-			out = append(out, l.Text)
-			i++
-			// A line that exactly fills its rows gets no terminator and the
-			// run continues into the next line; anything else ends the run.
-			if !mergesAtWidth(l.Text, l.Width) {
+func frameStartCandidates(frameRuns []string, live []liveLine, width int) []int {
+	if len(frameRuns) == 0 {
+		return nil
+	}
+	starts := make([]int, 0, len(live))
+	for start := 0; start < len(live); start++ {
+		end := start
+		for end < len(live) {
+			end++
+			if !mergesAtWidth(live[end-1].Text, live[end-1].Width) {
 				break
 			}
+		}
+		if end == start {
+			continue
+		}
+		frameText := plainLiveText(live[start:end])
+		if width > 0 {
+			frameText = msFrameRunText(live[start:end], width)
+		}
+		if frameText == frameRuns[0] {
+			starts = append(starts, start)
+		}
+	}
+	return starts
+}
 
-			// Microsoft VtIo::Writer::WriteInfos emits a literal space when a
-			// wide glyph is split at the edge of the CHAR_INFO range. It is
-			// display padding, not a character from the child. The old
-			// XtermEngine frame observed in §13 has the same one-cell padding
-			// at this point. Consume it only when the next live line proves
-			// that the byte is padding; ordinary spaces remain part of text.
-			if i < len(live) && endsInWideGlyph(l.Text) {
-				for n := 1; n <= 2 && len(acc)+n <= len(run); n++ {
-					if run[len(acc):len(acc)+n] != strings.Repeat(" ", n) {
-						break
-					}
-					next := live[i].Text
-					if len(acc)+n+len(next) <= len(run) &&
-						run[len(acc)+n:len(acc)+n+len(next)] == next {
-						acc += strings.Repeat(" ", n)
-						break
-					}
-				}
+func frameContainsAllLiveText(frameRuns []string, live []liveLine) bool {
+	var frame strings.Builder
+	for _, run := range frameRuns {
+		frame.WriteString(run)
+	}
+	remaining := frame.String()
+	allExact := true
+	for _, line := range live {
+		if line.Text == "" {
+			continue
+		}
+		i := strings.Index(remaining, line.Text)
+		if i < 0 {
+			allExact = false
+			break
+		}
+		remaining = remaining[:i] + remaining[i+len(line.Text):]
+	}
+	if allExact {
+		return true
+	}
+
+	// A frame can contain the same wide glyphs with the documented display
+	// padding inserted between their UTF-8 sequences. For this evidence path,
+	// remove only literal spaces from both sides before checking multiplicity;
+	// the returned value is still the untouched live text, never this normalized
+	// representation.
+	remaining = strings.ReplaceAll(frame.String(), " ", "")
+	for _, line := range live {
+		needle := strings.ReplaceAll(line.Text, " ", "")
+		if needle == "" {
+			continue
+		}
+		i := strings.Index(remaining, needle)
+		if i < 0 {
+			return false
+		}
+		remaining = remaining[:i] + remaining[i+len(needle):]
+	}
+	return true
+}
+
+func frameFollowsLiveOrder(frameRuns []string, live []liveLine) bool {
+	var frame strings.Builder
+	for _, run := range frameRuns {
+		frame.WriteString(run)
+	}
+	frameText := strings.ReplaceAll(frame.String(), " ", "")
+	position := 0
+	for _, line := range live {
+		needle := strings.ReplaceAll(line.Text, " ", "")
+		if needle == "" {
+			continue
+		}
+		i := strings.Index(frameText[position:], needle)
+		if i < 0 {
+			return false
+		}
+		position += i + len(needle)
+	}
+	return true
+}
+
+func alignFromStrict(frameRuns []string, live []liveLine, frameWidth ...int) ([]string, bool) {
+	out := make([]string, 0, len(live))
+	width := 0
+	if len(frameWidth) > 0 {
+		width = frameWidth[0]
+	}
+	i := 0
+	for _, run := range frameRuns {
+		start := i
+		for i < len(live) {
+			i++
+			if !mergesAtWidth(live[i-1].Text, live[i-1].Width) {
+				break
 			}
 		}
-		if acc != run {
+		if start == i {
 			return nil, false
+		}
+		frameText := plainLiveText(live[start:i])
+		if width > 0 {
+			frameText = msFrameRunText(live[start:i], width)
+		}
+		if frameText != run {
+			return nil, false
+		}
+		for _, l := range live[start:i] {
+			out = append(out, l.Text)
 		}
 	}
 	return out, true
 }
 
-// endsInWideGlyph is the narrow condition under which the MS writer can
-// replace a cell with a padding space. It is intentionally not a general
-// whitespace normalizer: a real trailing/interior space must still defeat
-// alignment rather than disappear from the child's text.
-func endsInWideGlyph(s string) bool {
-	return lastGraphemeWidth(s) == 2
+func alignFromExtended(frameRuns []string, live []liveLine, frameWidth ...int) ([]string, bool) {
+	out := make([]string, 0, len(live))
+	width := 0
+	if len(frameWidth) > 0 {
+		width = frameWidth[0]
+	}
+	i := 0
+	for _, run := range frameRuns {
+		start := i
+		baseEnd := i
+		for baseEnd < len(live) {
+			baseEnd++
+			// A line that exactly fills its rows gets no terminator and the
+			// ordinary frame run ends at its first non-merged source line.
+			if !mergesAtWidth(live[baseEnd-1].Text, live[baseEnd-1].Width) {
+				break
+			}
+		}
+		if start == baseEnd {
+			return nil, false
+		}
+
+		// Most frames end a run at baseEnd. The old 10.0.22000 emitter can
+		// omit an intermediate terminator after a resize, though, so extend
+		// the candidate only as far as the frame text proves. This keeps the
+		// source order and avoids treating a frame grammar guess as a rule.
+		end := baseEnd
+		for {
+			var frameText string
+			if width > 0 {
+				frameText = msFrameRunText(live[start:end], width)
+			} else {
+				frameText = plainLiveText(live[start:end])
+			}
+			if frameText == run {
+				break
+			}
+			if width == 0 || end >= len(live) {
+				return nil, false
+			}
+			end++
+		}
+		for _, l := range live[start:end] {
+			out = append(out, l.Text)
+		}
+		i = end
+	}
+	return out, true
+}
+
+func plainLiveText(lines []liveLine) string {
+	var plain strings.Builder
+	for _, l := range lines {
+		plain.WriteString(l.Text)
+	}
+	return plain.String()
+}
+
+func liveHasWideText(lines []liveLine) bool {
+	for _, line := range lines {
+		for _, r := range line.Text {
+			if cellWidth(r) == 2 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func mergesAtWidth(line string, width int) bool {

@@ -26,7 +26,7 @@ func analyseStreams(live, frame []byte, writeWidth, lines, long int) []string {
 	truth := append(groundTruthLines(long, lines), markerDone)
 	frameLines := trimTrailingBlanks(splitFrameLines(frame))
 	ll := liveLines(live, writeWidth)
-	fixed := trimTrailingBlanks(reconcileOrdered(frameLines, ll))
+	fixed := trimTrailingBlanks(reconcileOrdered(frameLines, ll, frameWidthFromFrame(frame)))
 
 	out := []string{
 		"",

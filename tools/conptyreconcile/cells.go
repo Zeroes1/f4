@@ -60,23 +60,6 @@ func cellLen(s string) int {
 	return n
 }
 
-// lastGraphemeWidth returns the width of the last cluster using the same
-// ported iterator as cellLen. Looking only at the last rune would misclassify
-// a wide base followed by a variation selector or combining mark.
-func lastGraphemeWidth(s string) int {
-	str := utf16.Encode([]rune(s))
-	if len(str) == 0 {
-		return 0
-	}
-	var state msGraphemeState
-	for {
-		more := msGraphemeNext(&state, str)
-		if !more {
-			return state.width
-		}
-	}
-}
-
 // cutCells splits s after `cells` columns and returns both halves. A wide
 // glyph that would straddle the boundary moves to the next row whole, exactly
 // as conhost does -- the cell it vacates is padding, and reassembling the

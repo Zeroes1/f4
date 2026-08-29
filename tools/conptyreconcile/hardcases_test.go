@@ -24,7 +24,7 @@ func TestOutputInterleavedWithTheFrame(t *testing.T) {
 		live := writer.LiveStream(all)
 
 		got := trimTrailingBlanks(reconcileOrdered(
-			trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, writeWidth)))
+			trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, writeWidth), frameWidth))
 
 		// Everything printed must still be present and in order. The frame is
 		// no longer a clean snapshot, so the requirement is containment rather
@@ -61,7 +61,7 @@ func TestFrameBeginningPartwayThroughALine(t *testing.T) {
 	frame := viewer.FrameAtWidth(kept, width)
 
 	got := trimTrailingBlanks(reconcileOrdered(
-		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width)))
+		trimTrailingBlanks(splitFrameLines(frame)), liveLines(live, width), width-1))
 
 	// The surviving tail must come back intact; the truncated head may not,
 	// and the tool must not corrupt what follows it.
@@ -85,7 +85,7 @@ func TestReconciliationNeverInventsText(t *testing.T) {
 		frame := viewer.FrameAtWidth(printed, width)
 		runs := trimTrailingBlanks(splitFrameLines(frame))
 		live := liveLines(writer.LiveStream(printed), width)
-		got := reconcileOrdered(runs, live)
+		got := reconcileOrdered(runs, live, width-1)
 
 		if strings.Join(got, "") != joinLiveText(live) {
 			t.Fatalf("seed %d: the correction invented or dropped child text", seed)

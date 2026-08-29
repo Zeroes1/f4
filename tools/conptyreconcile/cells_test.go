@@ -126,7 +126,7 @@ func TestPipelineWithNonASCIIContent(t *testing.T) {
 
 	got := trimTrailingBlanks(reconcileOrdered(
 		trimTrailingBlanks(splitFrameLines(viewer.FrameAtWidth(printed, writeWidth))),
-		liveLines(writer.LiveStream(printed), writeWidth)))
+		liveLines(writer.LiveStream(printed), writeWidth), frameWidth))
 
 	if len(got) != len(printed) {
 		t.Fatalf("recovered %d lines, expected %d: %q", len(got), len(printed), got)

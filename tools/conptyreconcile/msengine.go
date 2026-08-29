@@ -212,10 +212,12 @@ func (t *msTerminal) Feed(input []byte) {
 			i += 2
 		case c == '\r':
 			flush()
+			t.markEmptyRowWidth()
 			d.CarriageReturn()
 			i++
 		case c == '\n' || c == '\v' || c == '\f':
 			flush()
+			t.markEmptyRowWidth()
 			d.LineFeed()
 			i++
 		case c == '\b':
@@ -261,6 +263,17 @@ func (t *msTerminal) flushPendingText() {
 	}
 	t.disp.PrintString(t.pendingText)
 	t.pendingText = nil
+}
+
+// markEmptyRowWidth is tool metadata only. Microsoft records no write width
+// in ROW; this tap records the width for an explicitly emitted empty line so a
+// later resize cannot mistake a reflow-created blank row for child output.
+func (t *msTerminal) markEmptyRowWidth() {
+	p := t.disp.page.cursor.GetPosition()
+	r := t.disp.page.buffer.GetMutableRowByOffset(p.y)
+	if r.MeasureRight() == 0 && !r.WasWrapForced() {
+		r.writeWidth = t.disp.writeWidth
+	}
 }
 
 // completeOSC is the bounded counterpart of skipOSC for the incremental

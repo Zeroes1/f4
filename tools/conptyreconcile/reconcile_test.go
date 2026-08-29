@@ -80,7 +80,7 @@ func TestReconcileSplitsWhatConhostMerged(t *testing.T) {
 	merged := exact + next
 
 	breaks := liveLines([]byte(exact+"\r\n"+next+"\r\n"), W)
-	got := reconcileOrdered([]string{merged}, breaks)
+	got := reconcileOrdered([]string{merged}, breaks, W)
 
 	if len(got) != 2 || got[0] != exact || got[1] != next {
 		t.Fatalf("expected the merge to be undone, got %q", got)
@@ -92,7 +92,7 @@ func TestReconcileLeavesAGenuineWrapAlone(t *testing.T) {
 	// live stream recorded nothing and no split may happen.
 	long := strings.Repeat("q", W*2+5)
 	breaks := liveLines([]byte(long+"\r\n"), W)
-	got := reconcileOrdered([]string{long}, breaks)
+	got := reconcileOrdered([]string{long}, breaks, W)
 	if len(got) != 1 || got[0] != long {
 		t.Fatalf("a genuine wrap must survive, got %q", got)
 	}
@@ -112,7 +112,7 @@ func TestReconcileHandlesIdenticalLines(t *testing.T) {
 	breaks := liveLines([]byte(live.String()), W)
 	// The frame merged all ten separators and the tail into one run.
 	merged := strings.Repeat(sep, 10) + "tail"
-	got := reconcileOrdered([]string{merged}, breaks)
+	got := reconcileOrdered([]string{merged}, breaks, W)
 
 	if len(got) != 11 {
 		t.Fatalf("expected 10 separators plus the tail, got %d: %q", len(got), got)
@@ -134,7 +134,7 @@ func TestReconcileSplitsAMultipleOfTheWidth(t *testing.T) {
 	breaks := liveLines([]byte(двойная+"\r\n"+next+"\r\n"), W)
 	// Only the *last* row before the break is recorded, which is what the
 	// splitter looks at.
-	got := reconcileOrdered([]string{двойная + next}, breaks)
+	got := reconcileOrdered([]string{двойная + next}, breaks, W)
 	if len(got) != 2 || got[0] != двойная || got[1] != next {
 		t.Fatalf("got %q", got)
 	}
@@ -144,8 +144,8 @@ func TestReconcileIsIdempotent(t *testing.T) {
 	exact := strings.Repeat("=", W)
 	next := "tail"
 	breaks := liveLines([]byte(exact+"\r\n"+next+"\r\n"), W)
-	once := reconcileOrdered([]string{exact + next}, breaks)
-	twice := reconcileOrdered(once, breaks)
+	once := reconcileOrdered([]string{exact + next}, breaks, W)
+	twice := reconcileOrdered(once, breaks, W)
 	if len(once) != len(twice) {
 		t.Fatalf("second pass changed the result: %q then %q", once, twice)
 	}
@@ -205,10 +205,38 @@ func TestReconcileAcceptsMSWideCellFramePadding(t *testing.T) {
 	wide := strings.Repeat("中", width/2)
 	next := "line 000004 short"
 	live := liveLines([]byte("\x1b]0;probe\x07"+wide+"\r\n"+next+"\r\n"), width)
-	frame := frameOf(wide + " " + next)
+	frame := frameOf(strings.Repeat("中", 59) + " " + "中" + next)
 
-	got := reconcileOrdered(splitFrameLines(frame), live)
+	got := reconcileOrdered(splitFrameLines(frame), live, 119)
 	if len(got) != 2 || got[0] != wide || got[1] != next {
 		t.Fatalf("MS frame padding must not become part of either logical line: got %q", got)
+	}
+}
+
+func TestCollectedFrameRunReflowsWideCellsAtTheGlobalOffset(t *testing.T) {
+	const writeWidth, frameWidth = 120, 119
+	dashes := strings.Repeat("-", writeWidth)
+	wide := strings.Repeat("中", writeWidth/2)
+	next := "line 000005 ................................."
+
+	// This is the exact byte shape in the fresh 10.0.22000 capture: two
+	// preceding full-width rows leave a two-cell offset after reflow, so the
+	// wide line is 58 glyphs, one display-padding space, then two glyphs.
+	run := dashes + dashes + strings.Repeat("中", 58) + " " + "中中" + next
+	live := []liveLine{
+		{Text: dashes, Width: writeWidth},
+		{Text: dashes, Width: writeWidth},
+		{Text: wide, Width: writeWidth},
+		{Text: next, Width: writeWidth},
+	}
+
+	got := reconcileOrdered([]string{run}, live, frameWidth)
+	if len(got) != len(live) {
+		t.Fatalf("captured run recovered %d lines, expected %d: %q", len(got), len(live), got)
+	}
+	for i := range live {
+		if got[i] != live[i].Text {
+			t.Fatalf("line %d: got %q, want %q", i, got[i], live[i].Text)
+		}
 	}
 }

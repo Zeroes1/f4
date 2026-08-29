@@ -32,11 +32,12 @@ without trace — is recovered, because the live sequence still has it.
 conptyreconcile.exe                          # one fixed case
 conptyreconcile.exe -fuzz 10                 # ten randomised rounds
 conptyreconcile.exe -fuzz 5 -resize-during-output
-conptyreconcile.exe -terminal                # the whole pipeline in one run
+conptyreconcile.exe -lines-only              # line reconstruction only
 conptyreconcile.exe -seed 12345              # replay one round
 ```
 
-`-terminal` is the end-to-end check: a tall console, a frame read out of it,
+The default invocation is the end-to-end check: a tall console, a frame read
+out of it,
 the mirror built from that frame, the visible slice at the real window size,
 the coordinate mapping over that slice, scroll clamping, re-wrap without a new
 frame, and the geometry switch for a full-screen program. Each stage is
@@ -56,12 +57,13 @@ waits for Enter before closing so a run from Explorer leaves something to read.
 The mock reproduces the measured grammar and carries regressions for the field
 captures: an empty buffer costs five bytes per row, and terminator counts match
 the field captures at 500 and 2000 rows. The supplied 2000-row run was not
-green: at write width 120 and frame width 119, a CJK line ended with one
-Microsoft display-padding space in the frame. The correction now consumes that
-byte only when the live sequence proves it is padding, and the captured seed
-has a dedicated replay test. Jitter is built in — the live stream is fed in
-random chunks at random offsets, including inside escape sequences — because a
-parser that only works on whole frames passes on a mock and fails in the field.
+green: at write width 120 and frame width 119, two preceding full rows shift a
+following CJK line during the ported reflow, producing 58 glyphs, a Microsoft
+display-padding space, and two glyphs. The correction now consumes that byte
+only when the live sequence proves it is padding, and the captured seed has a
+dedicated replay test. Jitter is built in — the live stream is fed in random
+chunks at random offsets, including inside escape sequences — because a parser
+that only works on whole frames passes on a mock and fails in the field.
 
 Seven fuzz targets cover the properties that must hold on any input: the report
 never panics and never comes back empty, the correction never loses or invents
@@ -87,9 +89,9 @@ arrangement:
   correct run reported one line short — the mock had never modelled a child
   that prints more than the fixture
 - the frame writer's wide-cell edge padding was absent, so a 120-to-119 repaint
-  differed by one literal space — the current mock models only this documented
-  `WriteInfos` case and the reconciler consumes it only with proof from the
-  live sequence
+  differed by one literal space inside a globally reflowed run — the current
+  mock models only this documented `WriteInfos` case and the reconciler
+  consumes it only with proof from the live sequence
 
 ## The stream is read with a cursor, not with rules about it
 

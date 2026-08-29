@@ -69,7 +69,7 @@ func runCase(t *testing.T, width, height, lines int, seed int64, scrolling bool)
 	// counterpart for them.
 	ll := liveLinesFromChunks(liveChunks, width)
 	frameLines := trimTrailingBlanks(splitFrameLines(frameBuf))
-	recovered = reconcileOrdered(frameLines, ll)
+	recovered = reconcileOrdered(frameLines, ll, width)
 
 	// Ground truth is what survived the ring, with trailing blanks removed.
 	truth = m.fit(all)

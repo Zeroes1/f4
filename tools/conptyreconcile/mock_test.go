@@ -39,8 +39,9 @@ func TestMockEmitsMSWideCellFramePadding(t *testing.T) {
 
 	frame := newMockConPTY(frameWidth, 100, 1).FrameAtWidth(
 		[]string{wide, next}, writeWidth)
-	if !bytes.Contains(frame, []byte(wide+" "+next)) {
-		t.Fatal("the audited 120-to-119 frame must contain the documented wide-cell padding byte")
+	want := strings.Repeat("中", 59) + " " + "中" + next
+	if !bytes.Contains(frame, []byte(want)) {
+		t.Fatalf("the audited 120-to-119 frame must put padding at the wide-cell edge: want %q", want)
 	}
 }
 

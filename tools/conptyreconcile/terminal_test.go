@@ -265,7 +265,7 @@ func TestPipelineFromFrameToVisibleSlice(t *testing.T) {
 
 		recovered := trimTrailingBlanks(reconcileOrdered(
 			trimTrailingBlanks(splitFrameLines(viewer.FrameAtWidth(printed, writeWidth))),
-			liveLines(writer.LiveStream(printed), writeWidth)))
+			liveLines(writer.LiveStream(printed), writeWidth), frameWidth))
 
 		m := NewMirror()
 		m.Replace(recovered)
