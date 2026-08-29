@@ -464,6 +464,8 @@ func (srw *SearchResultsWindow) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 
 	switch e.VirtualKeyCode {
+	case vtinput.VK_F5:
+		return srw.sendToTempPanel()
 	case vtinput.VK_F3:
 		return srw.HandleCommand(CmView, nil)
 	case vtinput.VK_F4:
@@ -492,9 +494,24 @@ func (srw *SearchResultsWindow) HandleCommand(cmd int, args any) bool {
 func (srw *SearchResultsWindow) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
-			"", "", "View", "Edit", "", "", "", "", "", "Quit", "", "",
+			"", "", "View", "Edit", Msg("FindFile.BtnPanel"), "", "", "", "", "Quit", "", "",
 		},
 	}
+}
+
+func (srw *SearchResultsWindow) sendToTempPanel() bool {
+	if srw == nil || srw.pf == nil || len(srw.found) == 0 {
+		return true
+	}
+	fsp := srw.pf.getActivePanel()
+	if fsp == nil {
+		return true
+	}
+	slot := globalTempPanelStore.searchSlot()
+	globalTempPanelStore.replaceWithSearchResults(slot, srw.vfs, srw.found)
+	srw.Close()
+	srw.pf.switchToVFS(fsp, newTempPanelVFS(nil, globalTempPanelStore, slot))
+	return true
 }
 
 func ShowSearchResults(pf *PanelsFrame, v vfs.VFS, found []FoundFile) {
@@ -525,6 +542,8 @@ func ShowSearchResults(pf *PanelsFrame, v vfs.VFS, found []FoundFile) {
 
 	btnGo := vtui.NewButton(0, 0, Msg("FindFile.BtnGoTo"))
 	btnGo.SetOwner(srw)
+	btnPanel := vtui.NewButton(0, 0, Msg("FindFile.BtnPanel"))
+	btnPanel.SetOwner(srw)
 	btnView := vtui.NewButton(0, 0, Msg("FindFile.BtnView"))
 	btnView.SetOwner(srw)
 	btnEdit := vtui.NewButton(0, 0, Msg("FindFile.BtnEdit"))
@@ -550,6 +569,7 @@ func ShowSearchResults(pf *PanelsFrame, v vfs.VFS, found []FoundFile) {
 
 	srw.table.OnAction = func(idx int) { doGoTo() }
 	btnGo.OnClick = doGoTo
+	btnPanel.OnClick = func() { srw.sendToTempPanel() }
 	btnClose.OnClick = func() { srw.Close() }
 	btnView.OnClick = func() { srw.HandleCommand(CmView, nil) }
 	btnEdit.OnClick = func() { srw.HandleCommand(CmEdit, nil) }
@@ -561,6 +581,7 @@ func ShowSearchResults(pf *PanelsFrame, v vfs.VFS, found []FoundFile) {
 	hbox.HorizontalAlign = vtui.AlignCenter
 	hbox.Spacing = 2
 	hbox.Add(btnGo, vtui.Margins{}, vtui.AlignTop)
+	hbox.Add(btnPanel, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnView, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnEdit, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnClose, vtui.Margins{}, vtui.AlignTop)
@@ -570,6 +591,7 @@ func ShowSearchResults(pf *PanelsFrame, v vfs.VFS, found []FoundFile) {
 
 	srw.AddItem(srw.table)
 	srw.AddItem(btnGo)
+	srw.AddItem(btnPanel)
 	srw.AddItem(btnView)
 	srw.AddItem(btnEdit)
 	srw.AddItem(btnClose)

@@ -79,7 +79,7 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 		class: paletteAuditActionArea, rationale: "editor commands are registered actions; raw text and cursor editing remain local primitives",
 	},
 	"cmd/f4/find_file.go:(*SearchResultsWindow).ProcessKey": {
-		class: paletteAuditModalLocal, rationale: "find results are a modal result picker whose F3/F4 buttons route to the existing view/edit operations",
+		class: paletteAuditModalLocal, rationale: "find results are a modal result picker whose F3/F4/F5 buttons route to existing view/edit/temporary-panel operations",
 	},
 	"cmd/f4/file_panel.go:(*FileSystemPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "panel actions and audited transient panel keys are exposed by the action registry and panel-context provider",
@@ -203,6 +203,9 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"cmd/f4/quick_view_panel.go:(*QuickViewPanel).showCodepageDialog#1": {
 		class: paletteAuditDynamicAction, rationale: "the focused Quick View codepage action opens the runtime codepage list",
+	},
+	"cmd/f4/temp_panel.go:showTempPanelSlots#1": {
+		class: paletteAuditModalLocal, rationale: "the temporary-panel slot picker is a local modal menu; its entries are dynamic panel state, not standalone actions",
 	},
 }
 
