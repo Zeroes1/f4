@@ -865,6 +865,17 @@ func init() {
 		Handler:     withPF(func(pf *PanelsFrame) { pf.showPluginMenu() }),
 	})
 	RegisterAction(Action{
+		Name:        "Panel.TempPanel",
+		Area:        "Shell",
+		Label:       "Temporary panel",
+		LabelKey:    "Menu.Commands.TempPanel",
+		Description: "Open the temporary panel or switch its saved list",
+		DescKey:     "Action.Panel.TempPanel.Desc",
+		DefaultKeys: []string{"AltShiftF12"},
+		MenuPath:    "Commands",
+		Handler:     withPF(func(pf *PanelsFrame) { actionOpenTempPanel(pf) }),
+	})
+	RegisterAction(Action{
 		Name:        "Panel.CommandHistory",
 		Area:        "Shell",
 		Label:       "Command History",

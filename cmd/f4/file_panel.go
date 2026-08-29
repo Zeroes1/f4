@@ -3014,13 +3014,19 @@ func (fp *FileSystemPanel) ProcessKey(e *vtinput.InputEvent) bool {
 				if isRoot {
 					if parent != nil {
 						oldPath := fp.vfs.GetPath()
+						parentSelection := ""
+						if temp, ok := fp.vfs.(*TempPanelVFS); ok {
+							parentSelection = temp.parentSelection
+						}
 
 						fp.cancelProviderOpen()
 						// Закрываем текущую систему (удаляем временные файлы)
 						fp.vfs.Close()
 
 						fp.vfs = parent
-						if fp.providerEntryName != "" {
+						if parentSelection != "" {
+							fp.pendingSelection = parentSelection
+						} else if fp.providerEntryName != "" {
 							fp.pendingSelection = fp.providerEntryName
 							fp.providerEntryName = ""
 						} else {

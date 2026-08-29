@@ -1898,6 +1898,19 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
+	if pf.showPanels && e.KeyDown && alt && shift && !ctrl {
+		if fsp := pf.getActivePanel(); fsp != nil {
+			if temp, ok := fsp.vfs.(*TempPanelVFS); ok {
+				if e.VirtualKeyCode == vtinput.VK_F3 {
+					temp.showSelectedOnPassive(pf)
+					return true
+				}
+				if slot, ok := tempPanelSlotKey(e); ok {
+					return temp.switchToSlot(pf, fsp, slot)
+				}
+			}
+		}
+	}
 
 	// A keyboard action starts a new terminal interaction. Clear the old
 	// mouse highlight before forwarding the key to a shell or terminal app;
@@ -3545,6 +3558,7 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 	area := MacroMgr.GetCurrentArea()
 
 	f2 := Msg("KeyBar.F2")
+	f7 := Msg("KeyBar.F7")
 	overrideF2 := false
 	if pf.showPanels && pf.activeIdx >= 0 && pf.activeIdx < len(pf.altPanels) {
 		if q, ok := pf.altPanels[pf.activeIdx].(*QuickViewPanel); ok && q != nil && q.IsFocused() {
@@ -3566,6 +3580,11 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 		}
 	}
 	if pf.showPanels && pf.activeIdx >= 0 && pf.activeIdx < len(pf.altPanels) {
+		if fsp := pf.getActivePanel(); fsp != nil {
+			if _, ok := fsp.vfs.(*TempPanelVFS); ok {
+				f7 = Msg("TempPanel.Remove")
+			}
+		}
 		if a := pf.altPanels[pf.activeIdx]; a != nil && a.IsFocused() && a.Kind() == "quick_view" {
 			if q, ok := a.(*QuickViewPanel); ok {
 				if q.wrap {
@@ -3581,7 +3600,7 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 	fallbacks := &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
 			Msg("KeyBar.F1"), f2, Msg("KeyBar.F3"), Msg("KeyBar.F4"),
-			Msg("KeyBar.F5"), Msg("KeyBar.F6"), Msg("KeyBar.F7"), Msg("KeyBar.F8"),
+			Msg("KeyBar.F5"), Msg("KeyBar.F6"), f7, Msg("KeyBar.F8"),
 			Msg("KeyBar.F9"), Msg("KeyBar.F10"), Msg("KeyBar.F11"), Msg("KeyBar.F12"),
 		},
 		Shift: vtui.KeyBarLabels{"", "", "", "", "", "Rename", "", "", "Save", "", "", ""},
@@ -4648,6 +4667,12 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		pf.RefreshAll()
 	}})
 
+	// TempPanel is a native VFS panel, so it is available from the same
+	// Alt+F1/Alt+F2 drive menu as far2l's plugin panels.
+	menu.AddItem(vtui.MenuItem{Text: Msg("TempPanel.Drive"), UserData: func(fsp *FileSystemPanel) {
+		pf.switchToVFS(fsp, newTempPanelVFS(nil, globalTempPanelStore, 0))
+	}})
+
 	// 2. Fixed platform paths (Root, Home)
 	for _, drv := range getPlatformDrives() {
 		factory := drv.Factory
@@ -4866,12 +4891,26 @@ func (pf *PanelsFrame) clearBookmarkSlot(slot int, menu *vtui.VMenu, reopen func
 func (pf *PanelsFrame) switchToVFS(fsp *FileSystemPanel, newVFS vfs.VFS) {
 	if newVFS != nil {
 		fsp.cancelProviderOpen()
-		if fsp.vfs != nil {
-			fsp.vfs.Close()
+		oldVFS := fsp.vfs
+		if temp, ok := newVFS.(*TempPanelVFS); ok {
+			// Keep the source VFS alive as TempPanel's parent. This is what
+			// makes Ctrl+PgUp return to the exact panel directory instead of
+			// reopening it, and is also important for remote VFSes whose Close
+			// tears down their session.
+			if temp.parent == nil && oldVFS != nil {
+				temp.setParent(oldVFS, fsp.getRawSelectedName())
+			}
+		}
+		keepOldVFS := false
+		if temp, ok := newVFS.(*TempPanelVFS); ok {
+			keepOldVFS = temp.parent != nil && sameVFSInstance(temp.parent, oldVFS)
+		}
+		if oldVFS != nil && !keepOldVFS {
+			oldVFS.Close()
 			pf.ptyMutex.Lock()
-			if pty, ok := pf.remotePtys[fsp.vfs]; ok {
+			if pty, ok := pf.remotePtys[oldVFS]; ok {
 				pty.Close()
-				delete(pf.remotePtys, fsp.vfs)
+				delete(pf.remotePtys, oldVFS)
 			}
 			pf.ptyMutex.Unlock()
 		}
@@ -4899,6 +4938,10 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 	if targetPath == ".." && fsp.vfs.IsAtRoot() && fsp.vfs.ParentVFS() != nil {
 		parent := fsp.vfs.ParentVFS()
 		oldPath := fsp.vfs.GetPath()
+		parentSelection := ""
+		if temp, ok := fsp.vfs.(*TempPanelVFS); ok {
+			parentSelection = temp.parentSelection
+		}
 
 		fsp.vfs.Close()
 		pf.ptyMutex.Lock()
@@ -4910,7 +4953,9 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 
 		fsp.vfs = parent
 		fsp.showCurrentVFSLoadingRows()
-		if fsp.providerEntryName != "" {
+		if parentSelection != "" {
+			fsp.pendingSelection = parentSelection
+		} else if fsp.providerEntryName != "" {
 			fsp.pendingSelection = fsp.providerEntryName
 			fsp.providerEntryName = ""
 		} else {

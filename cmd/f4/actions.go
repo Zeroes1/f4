@@ -2196,6 +2196,20 @@ func actionCopyMove(pf *PanelsFrame, isMove bool) {
 
 	srcVfs, dstVfs := fspSrc.vfs, fspDst.vfs
 	srcBasePath := srcVfs.GetPath()
+	if temp, ok := dstVfs.(*TempPanelVFS); ok {
+		// A temporary panel contains references, not copies. Keep F5/F6
+		// useful for it, but never remove the real source on F6: the
+		// reference list is intentionally non-destructive.
+		if err := temp.AddReferences(context.Background(), srcVfs, names); err != nil {
+			vtui.ShowMessage(Msg("Error.Title"), fmt.Sprintf(Msg("TempPanel.AddError"), err), []string{Msg("vtui.Ok")})
+		}
+		fspSrc.selectedItems = make(map[string]bool)
+		for _, entry := range fspSrc.entries {
+			entry.Selected = false
+		}
+		pf.RefreshAll()
+		return
+	}
 
 	initialDest := dstVfs.GetPath()
 	if initialDest != "" && !strings.HasSuffix(initialDest, "/") && !strings.HasSuffix(initialDest, "\\") {
@@ -2942,6 +2956,15 @@ func actionMkDir(pf *PanelsFrame) {
 	panel := pf.getActivePanel()
 	if panel == nil {
 		return
+	}
+	if temp, isTempPanel := panel.vfs.(*TempPanelVFS); isTempPanel {
+		// F7 removes references from TempPanel. Do this at the concrete F7
+		// action boundary: PanelActionCreate is also used by Shift+F4 for
+		// creating a new file and must keep its ordinary meaning.
+		if temp.removePanelReferences(selectedPanelActionPaths(panel)) {
+			pf.RefreshAll()
+			return
+		}
 	}
 
 	activeVfs := panel.vfs
