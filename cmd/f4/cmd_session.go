@@ -64,11 +64,19 @@ type cmdShellSession struct {
 // cmdPromptSettleDelay is how long after a prompt mark the screen is first
 // examined. ConPTY renders the text that follows an echoed batch prompt within
 // a frame or two; a prompt still alone after this is a prompt.
-var cmdPromptSettleDelay = 150 * time.Millisecond
+//
+// Lowered from 150ms to keep the return-to-panels snappy: the settle check
+// still requires two unchanged screen looks, so a shorter window only means we
+// confirm prompt stability a few frames sooner.
+var cmdPromptSettleDelay = 50 * time.Millisecond
 
 // cmdPromptRecheckDelay is the poll interval while the prompt has not settled
 // yet, or while a console child holds the terminal.
-var cmdPromptRecheckDelay = 250 * time.Millisecond
+//
+// Lowered from 250ms: this was the dominant ~250ms lag felt after external
+// commands and batches finished. The prompt must be unchanged across two looks
+// to release, so a tighter interval just polls faster without false positives.
+var cmdPromptRecheckDelay = 100 * time.Millisecond
 
 // cmdPromptMaxAttempts bounds how long a prompt-shaped screen that will not
 // hold still is waited on before the wait is released (roughly five seconds).
