@@ -4,75 +4,96 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
-// TestIssue863OwnTerminalKeepsPTYHeightWhileBusy guards the resize that makes
-// bash redraw a prompt over output which did not end in a newline.
-func TestIssue863OwnTerminalKeepsPTYHeightWhileBusy(t *testing.T) {
-	vtui.SetDefaultPalette()
-	t.Cleanup(swapFrameManager(t))
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-
-	pf := NewPanelsFrame()
-	defer pf.Close()
-	pf.shellMode = ShellModeOwn
-	pf.showPanels = false
-	pf.showKeyBar = true
-	pf.pty = &mockPty{}
-
-	pf.ResizeConsole(80, 25)
-	idleHeight := pf.termView.Height
-	if idleHeight <= 0 {
-		t.Fatalf("idle own terminal height = %d, want a positive size", idleHeight)
-	}
-
-	pf.executing = true
-	pf.ResizeConsole(80, 25)
-	if pf.termView.Height != idleHeight {
-		t.Fatalf("own terminal changed PTY height while busy: got %d, want %d", pf.termView.Height, idleHeight)
-	}
-	if pf.termView.Y2 >= pf.cmdLine.Y1 {
-		t.Fatalf("own terminal overlaps f4 command line: terminal Y2=%d, command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
-	}
-}
-
-// TestIssue863OwnTerminalDrawsLastOutputRow reproduces a Unix shell prompt
-// printed on the same row as command output that has no trailing LF. The f4
-// command line must not paint over that row.
-func TestIssue863OwnTerminalDrawsLastOutputRow(t *testing.T) {
-	vtui.SetDefaultPalette()
-	t.Cleanup(swapFrameManager(t))
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-
-	pf := NewPanelsFrame()
-	defer pf.Close()
-	pf.shellMode = ShellModeOwn
-	pf.showPanels = false
-	pf.showKeyBar = true
-	pf.pty = &mockPty{}
-
-	// Start with the shell prompt already in the viewport, then use the same
-	// clean-command path as f4's own command line. The shell echoes are muted
-	// by production while it runs the command, but its output and next prompt
-	// still reach the terminal view.
-	pf.ResizeConsole(80, 25)
-	pf.parser.Process([]byte("shell$ "))
-	pf.termView.PrintCleanCommand("cat cat_tst")
-	pf.termView.SetMuted(false)
-	pf.parser.Process([]byte("#!/bin/bash\r\necho \"test text\"shell$ "))
-	scr := vtui.NewSilentScreenBuf()
-	scr.AllocBuf(80, 25)
-	pf.Show(scr)
-
+func issue863ScreenRows(scr *vtui.ScreenBuf) []string {
+	rows := make([]string, scr.Height())
 	for y := 0; y < scr.Height(); y++ {
 		var row strings.Builder
 		for x := 0; x < scr.Width(); x++ {
-			row.WriteRune(rune(scr.GetCell(x, y).Char))
+			row.WriteString(vtui.CellString(scr.GetCell(x, y).Char))
 		}
-		if strings.Contains(row.String(), `echo "test text"shell$`) {
-			return
+		rows[y] = strings.TrimSpace(row.String())
+	}
+	return rows
+}
+
+func issue863CountRow(rows []string, want string) int {
+	count := 0
+	for _, row := range rows {
+		if row == want {
+			count++
 		}
 	}
-	t.Fatal("last output row was painted over by the f4 command line")
+	return count
+}
+
+// TestIssue863OwnTerminalFinalNewlineKeepsSinglePrompt follows the Unix own-
+// terminal command path for a file containing "1\n2\n". The PTY must not be
+// resized when the command line and keybar temporarily disappear, both output
+// rows must remain visible, and the native prompt must occupy the same screen
+// row as f4's editable prompt rather than appearing as a duplicate above it.
+func TestIssue863OwnTerminalFinalNewlineKeepsSinglePrompt(t *testing.T) {
+	vtui.SetDefaultPalette()
+	t.Cleanup(swapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := NewPanelsFrame()
+	t.Cleanup(pf.Close)
+	pf.shellMode = ShellModeOwn
+	pf.showPanels = false
+	pf.showKeyBar = true
+	pty := &mockPty{}
+	pf.pty = pty
+	pf.termView.pty = pty
+	pf.parser = NewAnsiParser(pf.termView, pty)
+	pf.ResizeConsole(80, 25)
+
+	idleHeight := pf.termView.Height
+	prompt := cellsText(pf.buildPrompt())
+	pf.consumeLocalOutput(pty, []byte(prompt))
+
+	pf.cmdLine.Edit.SetText("cat cat_tst")
+	if !pf.ProcessKey(&vtinput.InputEvent{
+		Type:           vtinput.KeyEventType,
+		KeyDown:        true,
+		VirtualKeyCode: vtinput.VK_RETURN,
+	}) {
+		t.Fatal("f4 command line did not handle Enter")
+	}
+	if wire := pty.String(); !strings.Contains(wire, "eval 'cat cat_tst'") {
+		t.Fatalf("f4 did not send the managed cat command to its PTY: %q", wire)
+	}
+	pf.ResizeConsole(80, 25)
+	busyHeight := pf.termView.Height
+
+	pf.consumeLocalOutput(pty, []byte("\x1b]133;C\x07"))
+	pf.consumeLocalOutput(pty, []byte("1\r\n"))
+	pf.consumeLocalOutput(pty, []byte("2\r\n"))
+	pf.consumeLocalOutput(pty, []byte("\x1b]133;D\x07"+prompt))
+	drainUITasks()
+
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	pf.Show(scr)
+	pf.keyBar.Show(scr)
+	rows := issue863ScreenRows(scr)
+
+	if busyHeight != idleHeight {
+		t.Errorf("PTY height changed while cat ran: idle=%d busy=%d", idleHeight, busyHeight)
+	}
+	if got := issue863CountRow(rows, "1"); got != 1 {
+		t.Errorf("visible row 1 count = %d, want 1; screen:\n%s", got, strings.Join(rows, "\n"))
+	}
+	if got := issue863CountRow(rows, "2"); got != 1 {
+		t.Errorf("visible row 2 count = %d, want 1; screen:\n%s", got, strings.Join(rows, "\n"))
+	}
+	if got := issue863CountRow(rows, strings.TrimSpace(prompt)); got != 1 {
+		t.Errorf("active prompt row count = %d, want 1; screen:\n%s", got, strings.Join(rows, "\n"))
+	}
+	if pf.termView.Y2 != pf.cmdLine.Y1 {
+		t.Errorf("native and f4 prompts use different rows: terminal Y2=%d command line Y1=%d", pf.termView.Y2, pf.cmdLine.Y1)
+	}
 }

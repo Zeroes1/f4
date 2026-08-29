@@ -1345,18 +1345,13 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 			pf.drawHostConsoleOverlay()
 		}
 	} else {
-		// In the own terminal, the f4 command line is painted over the bottom
-		// row while the shell is idle. Reserve that row (and the configured
-		// keybar row) in the PTY viewport, even while the command is running,
-		// so a prompt after output without a trailing newline is not hidden by
-		// the command line (issue #863) and the shell size stays stable.
-		if pf.shellMode == ShellModeOwn && !pf.showPanels && !pf.termView.OnAltScreen() {
-			reserved := 1 // f4 command line
-			if pf.showKeyBar {
-				reserved++
-			}
-			termY2 = h - 1 - reserved
-		} else if pf.showKeyBar && !pf.termView.OnAltScreen() && !pf.isPtyBusy() {
+		// Keep the configured keybar row out of the own-terminal PTY even while
+		// a command is running. The keybar and command line are hidden then, but
+		// temporarily growing the PTY makes bash redraw its prompt on SIGWINCH.
+		// The command line intentionally still overlaps the PTY's bottom row so
+		// it paints over, rather than duplicates, the native shell prompt.
+		if pf.showKeyBar && !pf.termView.OnAltScreen() &&
+			(pf.shellMode == ShellModeOwn || !pf.isPtyBusy()) {
 			termY2 = h - 2
 		}
 		termH := termY2 - contentY1 + 1
