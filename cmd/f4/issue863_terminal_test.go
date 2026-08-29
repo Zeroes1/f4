@@ -52,9 +52,15 @@ func TestIssue863OwnTerminalDrawsLastOutputRow(t *testing.T) {
 	pf.showKeyBar = true
 	pf.pty = &mockPty{}
 
-	// bash produces this shape for: printf '1\n2' followed by its prompt.
-	pf.parser.Process([]byte("shell$ printf '1\\n2'\r\n1\r\n2shell$ "))
+	// Start with the shell prompt already in the viewport, then use the same
+	// clean-command path as f4's own command line. The shell echoes are muted
+	// by production while it runs the command, but its output and next prompt
+	// still reach the terminal view.
 	pf.ResizeConsole(80, 25)
+	pf.parser.Process([]byte("shell$ "))
+	pf.termView.PrintCleanCommand("cat cat_tst")
+	pf.termView.SetMuted(false)
+	pf.parser.Process([]byte("#!/bin/bash\r\necho \"test text\"shell$ "))
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
 	pf.Show(scr)
@@ -64,7 +70,7 @@ func TestIssue863OwnTerminalDrawsLastOutputRow(t *testing.T) {
 		for x := 0; x < scr.Width(); x++ {
 			row.WriteRune(rune(scr.GetCell(x, y).Char))
 		}
-		if strings.Contains(row.String(), "2shell$") {
+		if strings.Contains(row.String(), `echo "test text"shell$`) {
 			return
 		}
 	}
