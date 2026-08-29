@@ -4490,7 +4490,7 @@ func (ev *EditorView) showCodepageDialog() {
 		menu.Close()
 		if idx >= 0 && idx < len(menu.Items) {
 			if cpID, ok := menu.Items[idx].UserData.(int); ok {
-				if cpID == -1 {
+				if cpID == vfs.CodepageAutoDetect {
 					AppConfig.EditorAutodetectCodePage = !AppConfig.EditorAutodetectCodePage
 					SaveConfig()
 					ev.ReloadWithAutoDetect()
@@ -4512,7 +4512,7 @@ func (ev *EditorView) showConvertCodepageDialog() {
 	menu := vtui.NewVMenu(Msg("Codepage.ConvertTitle"))
 	realItems := 0
 	for _, item := range items {
-		if item.UserData == -1 {
+		if item.UserData == vfs.CodepageAutoDetect {
 			continue // Skip auto-detect
 		}
 		menu.AddItem(item)

@@ -1001,7 +1001,7 @@ func (vv *ViewerView) showCodepageDialog() {
 		menu.Close()
 		if idx >= 0 && idx < len(menu.Items) {
 			if cpID, ok := menu.Items[idx].UserData.(int); ok {
-				if cpID == -1 {
+				if cpID == vfs.CodepageAutoDetect {
 					AppConfig.ViewerAutodetectCodePage = !AppConfig.ViewerAutodetectCodePage
 					SaveConfig()
 					vv.ReloadWithAutoDetect()

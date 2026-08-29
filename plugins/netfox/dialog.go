@@ -3,6 +3,7 @@ package netfox
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/vfs"
@@ -128,13 +129,25 @@ func showConnectionDialog(app vfs.App, nf *NetFoxVFS, oldName string) {
 
 	cpItems := []string{}
 	for _, cp := range vfs.AvailableCodepages {
-		cpItems = append(cpItems, fmt.Sprintf("%d  %s", cp.ID, cp.Name))
+		cpItems = append(cpItems, vfs.CodepageMenuLabel(cp))
 	}
 	comboCp := vtui.NewComboBox(0, 0, 30, cpItems)
 	comboCp.DropdownOnly = true
 	currCpIdx := 0
+	if cfg.Codepage == "" {
+		for i, cp := range vfs.AvailableCodepages {
+			if cp.ID == 65001 {
+				currCpIdx = i
+				break
+			}
+		}
+	}
+	configuredCodepage := cfg.Codepage
+	if id, err := strconv.Atoi(configuredCodepage); err == nil {
+		configuredCodepage = strconv.Itoa(vfs.NormalizeCodepageID(id))
+	}
 	for i, cp := range vfs.AvailableCodepages {
-		if fmt.Sprintf("%d", cp.ID) == cfg.Codepage {
+		if fmt.Sprintf("%d", cp.ID) == configuredCodepage {
 			currCpIdx = i
 			break
 		}
