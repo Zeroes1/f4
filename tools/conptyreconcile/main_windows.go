@@ -33,6 +33,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -165,6 +166,15 @@ func (d *dump) size() int {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return len(d.raw)
+}
+
+// sawMarker reports whether the child's end-of-output marker has arrived.
+// The check is on the raw bytes rather than on any parse of them, so it is
+// unaffected by how conhost chose to break the output into rows.
+func (d *dump) sawMarker(marker string) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return bytes.Contains(d.raw, []byte(marker))
 }
 
 func (d *dump) markLiveEnd() {
@@ -706,10 +716,10 @@ func oneRound(self string, seed int64, width, height, lines int,
 		sess.resize(width-1, height)
 		time.Sleep(step)
 	} else {
-		time.Sleep(step)
+		waitForChildOutput(d, markerDone, 60*time.Second)
 		d.markLiveEnd()
 		sess.resize(width-1, height)
-		time.Sleep(step)
+		waitForFrame(d, step)
 	}
 
 	live, frame := d.split()
@@ -1052,6 +1062,54 @@ func runTerminal(self, logPath, dumpPath string, seed int64, width, height, line
 	holdOpen(noPause)
 }
 
+// waitForChildOutput blocks until the child's end marker appears in the
+// stream, or until the deadline passes.
+//
+// This replaces a fixed sleep, and the difference is not cosmetic. The probe
+// used to sleep `step` and assume the child had finished; on seed
+// 1788006508026299100 it had not -- the machine was slow that run (the first
+// bytes arrived at 1060ms and the output came in 87 chunks instead of 2), so
+// the live capture held 22 of 151 lines and the repaint that followed was a
+// picture of a mostly empty buffer with the rest of the output interleaved
+// into it. Both the mirror and the slice failed, and neither failure was
+// about conhost or the reconciler: the probe had cut its own capture in half.
+// A marker is a fact; a sleep is a guess about someone else's machine.
+func waitForChildOutput(d *dump, marker string, deadline time.Duration) bool {
+	const poll = 20 * time.Millisecond
+	for waited := time.Duration(0); waited < deadline; waited += poll {
+		if d.sawMarker(marker) {
+			// The marker is in the stream; give the tail of the write a
+			// moment to land before cutting.
+			time.Sleep(2 * poll)
+			return true
+		}
+		time.Sleep(poll)
+	}
+	return false
+}
+
+// waitForFrame waits for the repaint to stop growing. The resize triggers one
+// burst of output; when it stops arriving, the frame is complete. Waiting for
+// quiet costs less than a fixed sleep on a fast machine and, more importantly,
+// does not truncate the frame on a slow one.
+func waitForFrame(d *dump, budget time.Duration) {
+	const quiet = 150 * time.Millisecond
+	deadline := time.Now().Add(budget + 30*time.Second)
+	last := d.size()
+	stable := time.Now()
+	for time.Now().Before(deadline) {
+		time.Sleep(30 * time.Millisecond)
+		if n := d.size(); n != last {
+			last = n
+			stable = time.Now()
+			continue
+		}
+		if last > 0 && time.Since(stable) >= quiet {
+			return
+		}
+	}
+}
+
 func holdOpen(noPause bool) {
 	if !noPause {
 		fmt.Print("\npress Enter to close ")
@@ -1109,10 +1167,12 @@ func runTerminalOnce(self, logPath, dumpPath string, seed int64, width, height, 
 	}
 	defer sess.stop()
 
-	time.Sleep(step)
+	if !waitForChildOutput(d, markerDone, 60*time.Second) {
+		say("  WARN  the child did not finish within 60s; the capture is cut mid-output")
+	}
 	d.markLiveEnd()
 	sess.resize(width-1, height)
-	time.Sleep(step)
+	waitForFrame(d, step)
 
 	live, frame := d.split()
 	printed := trimTrailingBlanks(append(randomGroundTruth(seed, width, lines), markerDone))

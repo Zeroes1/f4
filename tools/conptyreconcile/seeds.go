@@ -17,4 +17,5 @@ var knownSeeds = []knownSeed{
 	{1788002866976838800, "failed the mirror on exact-width chains held merged by the legacy write path; fixed by porting WriteCharsLegacy"},
 	{1788003154672129800, "first green run with the reference-window stage"},
 	{1788003562700467700, "green alongside the first 300-seed mock sweep"},
+	{1788006508026299100, "the probe cut its own capture: a slow run had printed 22 of 151 lines when the fixed sleep expired, so the repaint pictured a mostly empty buffer; fixed by waiting for the child's marker"},
 }
