@@ -61,6 +61,7 @@ func main() {
 		emit       = flag.String("emit", "", "internal: run as the child inside a pseudoconsole")
 		dryRun     = flag.Bool("dryrun", false, "exercise the scheduler with fake steps and exit (no console work)")
 		fillLines  = flag.Int("fill", 150, "history lines the child prints per rung")
+		childWin   = flag.Int("window", 4000, "internal: ms the child leaves the parent for its resizes")
 		longWidth  = flag.Int("long", 600, "length of the long line used for the rejoin test")
 		width      = flag.Int("width", 120, "pseudoconsole width for the ladder")
 		wideWidth  = flag.Int("wide", 4000, "width to widen to for the rejoin frame")
@@ -77,7 +78,7 @@ func main() {
 	switch *emit {
 	case "":
 	case "main":
-		runChild(*fillLines, *longWidth)
+		runChild(*fillLines, *longWidth, *childWin)
 		return
 	case "topdraw":
 		runChildTopDraw()
@@ -323,6 +324,10 @@ func printSummary(r *reporter, budgetMs int64, started time.Time, path, why stri
 	}
 	for _, res := range rungs {
 		r.printf("%s", res.line())
+		if res.CreateOK {
+			r.printf("      child at reflow/wide/restore: %s | %s | %s",
+				res.ChildAtReflow, res.ChildAtWide, res.ChildAtRestore)
+		}
 		for _, n := range res.Notes {
 			r.printf("      note: %s", n)
 		}
@@ -511,7 +516,16 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	settle := settleFor(height)
 	limit := waitFor(height)
 
-	args := []string{self, "-emit", "main", "-fill", strconv.Itoa(fillLines), "-long", strconv.Itoa(longWidth)}
+	// The child holds the session open for this long after it has printed its
+	// history, which is the parent's whole window for the three resizes.
+	window := 3*settle + 3*time.Second
+	if window < 4*time.Second {
+		window = 4 * time.Second
+	}
+	args := []string{self, "-emit", "main",
+		"-fill", strconv.Itoa(fillLines),
+		"-long", strconv.Itoa(longWidth),
+		"-window", strconv.Itoa(int(window / time.Millisecond))}
 
 	t0 := time.Now()
 	s, err := newSession(width, height, args, host, useBundled)
@@ -556,6 +570,9 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	s.col.waitForMarker(off, markerReady, 10*time.Second)
 	s.col.waitQuiet(settle, limit)
 
+	// Liveness is recorded next to the resize, so "zero bytes came back" can
+	// never again be confused with "there was nobody left to answer".
+	res.ChildAtReflow = s.childStatus()
 	mark := s.col.mark()
 	t1 := time.Now()
 	if err := s.resize(width-1, height, host); err != nil {
@@ -572,6 +589,7 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	res.ReflowHidesCursor = shape.hidesCursor
 	res.ReflowSizeReport = shape.sizeReport
 
+	res.ChildAtWide = s.childStatus()
 	mark = s.col.mark()
 	t2 := time.Now()
 	if err := s.resize(wideWidth, height, host); err != nil {
@@ -584,6 +602,7 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 		res.WideLongRows = lineRows(wide, wideWidth, markerLongStart)
 	}
 
+	res.ChildAtRestore = s.childStatus()
 	mark = s.col.mark()
 	if err := s.resize(width, height, host); err != nil {
 		res.Notes = append(res.Notes, "restore failed: "+err.Error())
@@ -593,7 +612,6 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 		res.AfterRestoreM = analyseFrame(s.col.since(mark), width).fillMarkers
 	}
 
-	s.writeInput("\r\n")
 	if s.col.waitForMarker(mark, markerAltDone, 20*time.Second) < 0 {
 		res.Notes = append(res.Notes, "the alt-screen phase did not complete")
 	}
@@ -613,7 +631,11 @@ func measureRung(r *reporter, self string, host bundledHost, useBundled bool,
 	} else {
 		res.ChildSetBufTallerDetal = "(not reported)"
 	}
-	s.writeInput("\r\n")
+
+	if res.ReflowBytes == 0 && !strings.Contains(res.ChildAtReflow, "still running") {
+		res.Notes = append(res.Notes, "the child had already exited before the resizes: "+
+			res.ChildAtReflow+" -- the reflow numbers are missing, not zero")
+	}
 	return res
 }
 

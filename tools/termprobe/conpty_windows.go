@@ -51,6 +51,9 @@ const (
 	// keep that finding reproducible rather than folkloric.
 	createNoWindow = 0x08000000
 
+	// DETACHED_PROCESS: no console at all. This is what direction A needs.
+	detachedProcess = 0x00000008
+
 	th32csSnapProcess = 0x00000002
 
 	processQueryLimitedInformation = 0x1000
@@ -260,6 +263,13 @@ func newSession(width, height int, childArgs []string, host bundledHost, useBund
 // chosenStrategy is what the smoke test settled on; the rounds use it.
 var chosenStrategy = defaultStrategies()[0]
 
+// createMu serialises the create-and-identify-the-host window only. Creation
+// costs tens of milliseconds, so this does not undo the parallelism, but it
+// does fix the attribution: with three sessions starting at once, the "which
+// conhost is new" difference was being split between them and most rungs
+// reported no host at all.
+var createMu sync.Mutex
+
 func newSessionWith(st spawnStrategy, width, height int, childArgs []string,
 	host bundledHost, useBundled bool) (*session, error) {
 
@@ -292,7 +302,16 @@ func newSessionWith(st spawnStrategy, width, height int, childArgs []string,
 		create = host.create
 		viaDLL = true
 	}
+
+	createMu.Lock()
+	hostsBefore := snapshotConsoleHosts()
 	r, _, err := create.Call(uintptr(size), uintptr(inRead), uintptr(outWrite), 0, uintptr(unsafe.Pointer(&hpc)))
+	if r == 0 {
+		// Identify this session's host before anyone else creates one.
+		defer createMu.Unlock()
+	} else {
+		createMu.Unlock()
+	}
 	if r != 0 {
 		syscall.CloseHandle(inRead)
 		syscall.CloseHandle(inWrite)
@@ -306,8 +325,8 @@ func newSessionWith(st spawnStrategy, width, height int, childArgs []string,
 		inRead: inRead, outWrite: outWrite,
 		col: &collector{}, width: width, height: height,
 		viaBundledDLL: viaDLL, strategy: st,
+		hostsBefore: hostsBefore,
 	}
-	s.hostsBefore = snapshotConsoleHosts()
 
 	// Read before spawning. Microsoft's own guidance for ConPTY is that the
 	// output pipe must be drained promptly: conhost writes its first frame

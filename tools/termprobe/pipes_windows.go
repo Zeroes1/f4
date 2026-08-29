@@ -30,8 +30,13 @@ type pipeResult struct {
 func runPipe(name string, timeout time.Duration, env []string, argv ...string) pipeResult {
 	res := pipeResult{Name: name, Command: strings.Join(argv, " ")}
 	cmd := exec.Command(argv[0], argv[1:]...)
-	// No console at all: this is the whole point of the measurement.
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: createNoWindow}
+	// DETACHED_PROCESS, not CREATE_NO_WINDOW. The two are easy to confuse and
+	// the difference is the entire measurement: CREATE_NO_WINDOW gives the
+	// child a *hidden console*, so a run using it had `mode con` succeed and
+	// PowerShell 5.1 report pipe-ok -- which contradicted the recorded finding
+	// that PS5 needs a console, because the child had one. DETACHED_PROCESS
+	// gives no console at all, which is what direction A is about.
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: detachedProcess}
 	if len(env) > 0 {
 		cmd.Env = append(cmd.Environ(), env...)
 	}

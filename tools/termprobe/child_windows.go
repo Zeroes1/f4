@@ -77,23 +77,16 @@ func enableVT() {
 	procSetConsoleMode.Call(uintptr(h), uintptr(mode|enableVirtualTerminalProcessing))
 }
 
-// waitForGo blocks until the parent writes anything, or the timeout expires.
-// A timeout rather than a hard block: a probe that hangs teaches nothing, and
-// the markers make each phase identifiable even if the handshake slips.
-func waitForGo(timeout time.Duration) {
-	done := make(chan struct{})
-	go func() {
-		buf := make([]byte, 16)
-		os.Stdin.Read(buf)
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(timeout):
-	}
-}
-
-func runChild(fillLines, longWidth int) {
+// The child runs on its own clock rather than waiting for the parent.
+//
+// It used to block on stdin between phases, and in the field that read did not
+// block at all: the child raced through every phase and exited within a
+// hundred milliseconds, so by the time the parent resized there was no session
+// left to answer. The whole reflow column of that run read as zeroes, which
+// looked like a ConPTY finding and was a synchronisation bug. A fixed window,
+// sized by the parent and printed in the log, cannot fail that way: if the
+// parent runs late, the markers still say which phase each byte belongs to.
+func runChild(fillLines, longWidth, windowMs int) {
 	enableVT()
 	out := os.Stdout
 
@@ -115,9 +108,9 @@ func runChild(fillLines, longWidth int) {
 
 	fmt.Fprintf(out, "%s\r\n", markerDone)
 
-	// The parent now performs its width experiments.
-	fmt.Fprintf(out, "%s\r\n", markerReady)
-	waitForGo(90 * time.Second)
+	// The parent performs its width experiments during this window.
+	fmt.Fprintf(out, "%s;window=%dms\r\n", markerReady, windowMs)
+	time.Sleep(time.Duration(windowMs) * time.Millisecond)
 
 	// Phase 4: can a client set a buffer taller than the viewport under
 	// ConPTY? getset.cpp rejects only sizes smaller than the viewport, so
@@ -145,9 +138,11 @@ func runChild(fillLines, longWidth int) {
 	fmt.Fprintf(out, "%s\r\n", sizeLine("post-alt"))
 	fmt.Fprintf(out, "%s\r\n", markerAltDone)
 
-	waitForGo(30 * time.Second)
+	// Stay alive briefly so the parent can read the tail before the session
+	// ends; a child that exits immediately takes its pseudoconsole with it.
+	time.Sleep(1500 * time.Millisecond)
 	fmt.Fprintf(out, "%s\r\n", markerBye)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 }
 
 // runChildTopDraw exercises the risk that a program drawing at the top of the

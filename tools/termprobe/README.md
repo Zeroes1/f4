@@ -106,6 +106,23 @@ Inside a round the same rule applies: a rung whose first wait ends with zero
 bytes received skips its remaining seven phases and says so, so a dead
 session costs seconds rather than minutes.
 
+## Two mistakes this probe has already made, and how it now prevents them
+
+**A child that had already exited.** The child used to wait on stdin between
+phases; that read did not block, so it raced through everything and died in
+about a hundred milliseconds. Every resize afterwards measured a dead session
+and the whole reflow column came back as zeroes — which looked like a ConPTY
+finding and was a bug in the probe. The child now runs on its own clock with
+a window the parent sizes and passes in, and the parent records whether the
+child was alive next to *each* resize, so "no bytes came back" can never again
+be read as "conhost sent nothing".
+
+**`CREATE_NO_WINDOW` instead of `DETACHED_PROCESS`.** The first gives a child
+a *hidden console*; only the second gives no console at all. With the wrong
+one, `mode con` succeeded and PowerShell 5.1 reported `pipe-ok`, appearing to
+contradict the recorded finding that PS5 needs a console — because it had one.
+Direction A now uses `DETACHED_PROCESS`.
+
 ## Running it
 
 ```sh

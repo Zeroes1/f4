@@ -985,3 +985,84 @@ and strictly better than any byte-stream terminal over `ssh` can do. Depends
 on Step 17 and the Step 21 terminal channel; recorded so that "remote
 Windows" is read as a reason to *extend* the invariant, never to weaken it
 locally.
+
+## 12. Direction F, first measurements (2026-08-29, `tools/termprobe`, 10.0.22000.2538)
+
+The first run of the ladder on the machine that has answered every probe in
+this file. Recorded in two parts, because a probe with bugs of its own
+produced both kinds of line in the same log, and the distinction is the whole
+value of the run.
+
+### Measured, and load-bearing for F
+
+| Question | Answer |
+|---|---|
+| Can a ConPTY be created at each ladder height? | **Yes, all nine, 125 to 32000 rows.** No refusal at any rung. |
+| What does creation cost? | **24-104ms**, and *not* monotonic in height: 32000 rows created in 31-40ms, faster than 500. The buffer is plainly not committed up front. |
+| Does history reach f4 at every height? | **Yes**: 150 of 150 marked lines at every rung, in 37-114ms including 32000. |
+| What does the host cost in memory? | **~9.6MB** after filling, at the two rungs where attribution worked. |
+| What does the child believe its geometry is? | **window == buffer == the full height**, at every rung: `120x32000 / 120x32000` at the top. |
+| Can a client raise the buffer above the viewport under ConPTY? | **Yes** -- `SetConsoleScreenBufferSize` was accepted at every rung. |
+
+The first three lines are F's premise and they hold: a viewport tall enough to
+*be* the history is creatable, cheap, and carries what is written to it. That
+is the fact §10 was built on, now measured rather than argued.
+
+**The child-geometry line is risk 4, confirmed and no longer hypothetical.**
+A program in a 32000-row ConPTY is told its window is 32000 rows tall.
+`dir /p` and `more` will page on that; PowerShell's `Write-Progress` will draw
+at the top of it. F must answer this, and the answer cannot be "programs
+probably will not notice".
+
+**A correction to §10's own proposal.** That section suggested detecting a
+full-screen program by watching the buffer collapse to the viewport, since
+`_IsAltBuffer()` makes `_IsInPtyMode()` true. Under ConPTY that detector does
+not exist: the buffer already equals the viewport, and the measured alt buffer
+came back the same size as the main one (`inside alt 120x1000` at height
+1000). The alternate-screen detector has to be built from the stream or from
+the console mode, not from geometry.
+
+**One apparent ceiling that is not one.** At 32000 the buffer-raise was
+refused with `The parameter is incorrect`. The child had asked for width 119
+while the viewport was 120, and `SetConsoleScreenBufferSizeImpl` rejects any
+size smaller than the viewport in either axis. That is the probe's own race
+with the parent's resize, not a limit of the build.
+
+### Not measured, despite appearing in the log
+
+The run also produced `reflow 0B carrying 0`, `wide4000 0B` and
+`alt h/l=false/false` at every rung. **These are not ConPTY findings.** The
+probe's child waited on stdin between phases, that read did not block, and the
+child raced through everything and exited within about a hundred
+milliseconds; every resize afterwards was issued to a session that no longer
+had a client. The zeroes are the probe measuring a dead child. The same fault
+invalidates the `baseline` line of that run, which was read off one of those
+empty repaints.
+
+Two more lines are artefacts rather than results. Direction A's
+`powershell 5.1 -> works` used `CREATE_NO_WINDOW`, which gives a child a
+*hidden console* rather than no console, so it does not contradict the earlier
+finding that PowerShell 5.1 needs one. And direction C's `dir /w` gave
+identical output at 120 and 4000 columns because the fixture was a six-row
+directory, too small to make any width decision.
+
+All four faults are fixed in the probe (its README records them as traps);
+the numbers they produced are discarded rather than reinterpreted.
+
+### What the next run has to answer
+
+Everything about the *width* axis, which is where F's actual claim lives:
+does one `ResizePseudoConsole` make conhost re-wrap the whole tall buffer and
+re-transmit it, at what byte cost and what latency, and does the 4000-column
+frame rejoin the long lines. Plus the alternate-screen dance now that the
+geometry detector is known not to work, and a width-aware fixture large enough
+to react. Until then F has its premise and not its central claim.
+
+**Method note, since §3 exists for this reason.** The run took 46 seconds of
+its five-minute budget and no step hung. That is the supervised scheduler
+working: earlier versions of this probe lost two field trips to a
+`ClosePseudoConsole` that blocks until the host exits, and to fixed timeouts
+that turned a dead session into five minutes of silence. Every step now runs
+under a watchdog, independent heights run in parallel, results are printed as
+they are produced, and a hard deadline prints the summary and exits. A probe
+for this problem needs that as much as it needs its measurements.

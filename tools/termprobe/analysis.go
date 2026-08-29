@@ -427,6 +427,11 @@ type rungResult struct {
 	ChildSetBufTallerOK    bool
 	ChildSetBufTallerDetal string
 
+	// Whether the child was still alive when each resize was issued.
+	ChildAtReflow  string
+	ChildAtWide    string
+	ChildAtRestore string
+
 	// A width change: does conhost re-wrap and re-transmit the whole history?
 	ReflowMs           int64
 	ReflowBytes        int
