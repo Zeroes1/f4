@@ -7,6 +7,8 @@ package main
 // file are formatting, not data.
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -85,16 +87,50 @@ func unescapeDump(t *testing.T, path string) [][]byte {
 // resize, the frame is the repaint after it (the probe's step delay makes the
 // boundary unambiguous: the frame chunk arrives ~2s after the live ones).
 func TestFieldDump1788002866976838800(t *testing.T) {
-	const seed, width, lines = int64(1788002866976838800), 120, 150
-	chunks := unescapeDump(t, "testdata/conptydump-1788002866976838800.txt")
-	if len(chunks) < 2 {
-		t.Skipf("dump has %d chunks", len(chunks))
+	replayFieldDump(t, 1788002866976838800)
+}
+
+// TestFieldDumpsAll replays every field dump captured in this project. They
+// are real conhost bytes; each is worth more than any number of mock rounds,
+// because the mock shares this tool's model and can only disagree with it by
+// accident, while conhost disagrees on purpose.
+func TestFieldDumpsAll(t *testing.T) {
+	// Only dumps whose capture is intact are listed. Four of the five field
+	// dumps taken before the double-handle fix in main_windows.go begin with
+	// another handle's "END total 0 bytes" footer written over their first
+	// bytes, so their opening chunk is lost; replaying them measures the
+	// corruption, not the pipeline. They are kept in testdata as evidence of
+	// the bug, and this list grows again with the next capture.
+	for _, seed := range []int64{
+		1788002866976838800, // failed stage 1 on exact-width chains
+	} {
+		seed := seed
+		t.Run(fmt.Sprint(seed), func(t *testing.T) { replayFieldDump(t, seed) })
 	}
-	var live []byte
-	for _, c := range chunks[:len(chunks)-1] {
-		live = append(live, c...)
+}
+
+func replayFieldDump(t *testing.T, seed int64) {
+	t.Helper()
+	const width, lines = 120, 150
+	chunks := unescapeDump(t, fmt.Sprintf("testdata/conptydump-%d.txt", seed))
+	if len(chunks) == 0 {
+		t.Skip("empty dump")
 	}
-	frame := chunks[len(chunks)-1]
+	var all []byte
+	for _, c := range chunks {
+		all = append(all, c...)
+	}
+	// The live/frame boundary is not a chunk boundary: one ReadFile can carry
+	// the tail of the live output and the head of the repaint together, and
+	// the first version of this harness split on chunks and mis-replayed four
+	// of five dumps that had passed on Windows. The frame announces itself --
+	// conhost emits the XTWINOPS size report at the head of the repaint after
+	// the resize, which is the same marker frameWidthFromFrame reads.
+	i := bytes.Index(all, []byte("\x1b[8;"))
+	if i < 0 {
+		t.Skip("no size report in dump: cannot locate the frame")
+	}
+	live, frame := all[:i], all[i:]
 
 	printed := trimTrailingBlanks(append(randomGroundTruth(seed, width, lines), markerDone))
 	recovered := trimTrailingBlanks(reconcileOrdered(

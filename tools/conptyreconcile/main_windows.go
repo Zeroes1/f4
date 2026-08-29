@@ -59,9 +59,9 @@ var (
 
 	// Reading a real console's screen back, for the reference window of
 	// stage 2. ReadConsoleOutputW is Windows' own view of what is displayed.
-	procSetConsoleWindowInfo        = kernel32.NewProc("SetConsoleWindowInfo")
-	procSetConsoleScreenBufferSize  = kernel32.NewProc("SetConsoleScreenBufferSize")
-	procReadConsoleOutputW          = kernel32.NewProc("ReadConsoleOutputW")
+	procSetConsoleWindowInfo         = kernel32.NewProc("SetConsoleWindowInfo")
+	procSetConsoleScreenBufferSize   = kernel32.NewProc("SetConsoleScreenBufferSize")
+	procReadConsoleOutputW           = kernel32.NewProc("ReadConsoleOutputW")
 	procGetConsoleScreenBufferInfoEx = kernel32.NewProc("GetConsoleScreenBufferInfoEx")
 )
 
@@ -209,6 +209,8 @@ func main() {
 		rounds    = flag.Int("fuzz", 0, "run this many randomised rounds instead of one fixed case")
 		seed      = flag.Int64("seed", 0, "seed for a randomised round (0 = derived from the clock)")
 		during    = flag.Bool("resize-during-output", false, "resize while the child is still printing")
+		suite     = flag.Bool("suite", false, "run the built-in list of seeds that once failed, then -fresh extra random ones")
+		fresh     = flag.Int("fresh", 0, "with -suite: how many additional clock-derived seeds to run")
 		winOut    = flag.String("window-out", "", "internal: where the child-window mode writes the screen it read")
 		winCols   = flag.Int("window-cols", 100, "internal: reference window width")
 		winRows   = flag.Int("window-rows", 25, "internal: reference window height")
@@ -254,17 +256,45 @@ func main() {
 	if path == "" {
 		path = fmt.Sprintf("conptydump-%d.txt", *height)
 	}
-	d, err := newDump(path)
-	if err != nil {
-		fmt.Println("cannot create the dump:", err)
-		os.Exit(2)
-	}
-	defer d.close()
 
 	logPath := *logTo
 	if logPath == "" {
 		logPath = fmt.Sprintf("conptyreconcile-%d.log", *height)
 	}
+
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Println("cannot find own path:", err)
+		os.Exit(2)
+	}
+
+	// The whole-pipeline and real-command modes open the dump themselves.
+	// Opening it here as well left two handles on one file, each with its own
+	// offset, and the deferred close of this one wrote its "END total 0 bytes"
+	// footer over the first bytes the other handle had written. Four of the
+	// five field dumps captured in this project are corrupted that way: they
+	// begin mid-header and their first chunk is truncated, which is invisible
+	// to a run that only reads the log and fatal to any later replay.
+	if *realCmd != "" {
+		runRealCommand(logPath, path, *realCmd, *width, *height, *drag, *step, *noPause)
+		return
+	}
+	if *suite {
+		runSuite(self, logPath, path, *fresh, *seed, *width, *height, *lines, *step, *noPause)
+		return
+	}
+	if !*linesOnly && *rounds == 0 {
+		runTerminal(self, logPath, path, *seed, *width, *height, *lines, *step, *noPause)
+		return
+	}
+
+	d, derr := newDump(path)
+	if derr != nil {
+		fmt.Println("cannot create the dump:", derr)
+		os.Exit(2)
+	}
+	defer d.close()
+
 	lf, lerr := os.Create(logPath)
 	if lerr != nil {
 		fmt.Println("cannot create the log:", lerr)
@@ -275,23 +305,8 @@ func main() {
 	d.logf("conptyreconcile -- %dx%d, %d ground-truth lines, dump in %s",
 		*width, *height, *lines, path)
 
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Println("cannot find own path:", err)
-		os.Exit(2)
-	}
-
-	// The whole pipeline is the default. Running the tool without arguments
-	// should check everything it knows how to check; a narrower mode is for
-	// comparing against older logs and has to be asked for.
-	if *realCmd != "" {
-		runRealCommand(logPath, path, *realCmd, *width, *height, *drag, *step, *noPause)
-		return
-	}
-	if !*linesOnly && *rounds == 0 {
-		runTerminal(self, logPath, path, *seed, *width, *height, *lines, *step, *noPause)
-		return
-	}
+	// The whole pipeline is the default; those two modes returned above,
+	// before this dump handle was opened.
 	if *rounds > 0 {
 		runRounds(self, logPath, *rounds, *seed, *width, *height, *lines, *step, *during, *noPause)
 		return
@@ -726,7 +741,6 @@ func oneRound(self string, seed int64, width, height, lines int,
 // nothing crashed.
 // ---------------------------------------------------------------------------
 
-
 // realWindowRows returns what a real 100x25 console actually shows after the
 // same child has printed into it.
 //
@@ -950,9 +964,105 @@ type charInfo struct {
 
 type smallRect struct{ left, top, right, bottom int16 }
 
+// ---------------------------------------------------------------------------
+// the seed suite
+//
+// The probe carries its own list of seeds worth re-running: the ones that
+// failed at some point in this project's history, plus the ones that first
+// passed after each fix. A regression on any of them is the cheapest signal
+// this tool can produce, so it should not depend on a batch file being
+// present, correct, and remembered -- `conptyreconcile -suite` runs them all.
+//
+// Add a seed here whenever a field run fails. The comment matters as much as
+// the number: it is the only record of what the seed once caught.
+// ---------------------------------------------------------------------------
+
+func runSuite(self, logPath, dumpPattern string, extra int, baseSeed int64,
+	width, height, lines int, step time.Duration, noPause bool) {
+
+	type result struct {
+		seed int64
+		why  string
+		fail int
+	}
+
+	seeds := make([]knownSeed, 0, len(knownSeeds)+extra)
+	seeds = append(seeds, knownSeeds...)
+	if extra > 0 {
+		base := baseSeed
+		if base == 0 {
+			base = time.Now().UnixNano()
+		}
+		for i := 0; i < extra; i++ {
+			seeds = append(seeds, knownSeed{base + int64(i)*7919, "fresh"})
+		}
+	}
+
+	var results []result
+	for _, ks := range seeds {
+		log := fmt.Sprintf("conptyreconcile-%d.log", ks.seed)
+		dump := fmt.Sprintf("conptydump-%d.txt", ks.seed)
+		fmt.Printf("\n=== seed %d (%s)\n", ks.seed, ks.why)
+		fail := runTerminalOnce(self, log, dump, ks.seed, width, height, lines, step)
+		results = append(results, result{ks.seed, ks.why, fail})
+	}
+
+	lf, err := os.Create(logPath)
+	if err != nil {
+		fmt.Println("cannot create the suite log:", err)
+		os.Exit(2)
+	}
+	defer lf.Close()
+	say := func(format string, a ...any) {
+		line := fmt.Sprintf(format, a...)
+		fmt.Println(line)
+		fmt.Fprintln(lf, line)
+		lf.Sync()
+	}
+
+	bad := 0
+	say("")
+	say("conptyreconcile suite -- %d seeds (%d known, %d fresh)", len(seeds), len(knownSeeds), extra)
+	for _, r := range results {
+		verdict := "ok  "
+		if r.fail > 0 {
+			verdict = "FAIL"
+			bad++
+		}
+		say("  %s  %-20d %s", verdict, r.seed, r.why)
+	}
+	say("")
+	if bad == 0 {
+		say("PASS -- every seed agrees; per-seed logs and dumps are next to this file")
+	} else {
+		say("FAIL -- %d of %d seeds wrong; open conptyreconcile-<seed>.log and conptydump-<seed>.txt", bad, len(results))
+	}
+	holdOpen(noPause)
+	if bad > 0 {
+		os.Exit(1)
+	}
+}
 
 func runTerminal(self, logPath, dumpPath string, seed int64, width, height, lines int,
 	step time.Duration, noPause bool) {
+	if runTerminalOnce(self, logPath, dumpPath, seed, width, height, lines, step) > 0 {
+		holdOpen(noPause)
+		os.Exit(1)
+	}
+	holdOpen(noPause)
+}
+
+func holdOpen(noPause bool) {
+	if !noPause {
+		fmt.Print("\npress Enter to close ")
+		fmt.Fscanln(os.Stdin)
+	}
+}
+
+// runTerminalOnce is the whole pipeline for one seed. It returns the number of
+// failed stages instead of exiting, so -suite can run it over a list of seeds.
+func runTerminalOnce(self, logPath, dumpPath string, seed int64, width, height, lines int,
+	step time.Duration) int {
 
 	lf, err := os.Create(logPath)
 	if err != nil {
@@ -1161,13 +1271,7 @@ func runTerminal(self, logPath, dumpPath string, seed int64, width, height, line
 	} else {
 		say("FAIL -- %d stage(s) wrong; replay with -seed %d against the mock", fail, seed)
 	}
-	if !noPause {
-		fmt.Print("\npress Enter to close ")
-		fmt.Fscanln(os.Stdin)
-	}
-	if fail > 0 {
-		os.Exit(1)
-	}
+	return fail
 }
 
 // ---------------------------------------------------------------------------

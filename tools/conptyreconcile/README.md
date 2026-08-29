@@ -235,3 +235,13 @@ boundaries right, and boundaries are what conhost loses.
 The last two are the pattern worth remembering: a fixed fixture and a mock that
 only models what its author thought of will both agree with a wrong
 implementation. Randomised rounds and a real capture will not.
+
+## Re-running the seeds that once failed
+
+    conptyreconcile -suite            the built-in list (seeds.go)
+    conptyreconcile -suite -fresh 20  the list plus 20 clock-derived seeds
+
+Each seed writes `conptyreconcile-<seed>.log` and `conptydump-<seed>.txt`
+beside the executable, and the suite ends with a table and a non-zero exit
+code if any seed failed. There is no batch file: the list lives in the binary
+so it cannot be lost, mistyped, or left behind when the exe is copied.

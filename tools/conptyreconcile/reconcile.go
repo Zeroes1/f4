@@ -345,7 +345,6 @@ func reconcileOrdered(frameRuns []string, live []liveLine, frameWidth ...int) []
 	return frameRuns
 }
 
-
 // mergeChainEnd walks live lines from start and returns the end of the group
 // the BUFFER holds joined: conhost's legacy write path left wrapForced on
 // the line's last row (fillsRowsExactly, ported WriteCharsLegacy). This is
@@ -366,8 +365,6 @@ func mergeChainEnd(live []liveLine, start, frameWidth int) int {
 	return end
 }
 
-
-
 // frameAddsNothingBeyondLive: every frame run is a concatenation of whole,
 // consecutive live lines, and together the runs consume the live sequence
 // exactly. Texts are compared with spaces removed, because the frame's
@@ -380,6 +377,7 @@ func mergeChainEnd(live []liveLine, start, frameWidth int) int {
 //     the same bytes. A live sequence parsed at the wrong width fails here
 //     precisely because its boundaries land inside runs
 //     (TestFrameTakenAtADifferentWidthThanTheLinesWereWritten).
+//
 // When both hold, the frame cannot correct anything: its extra information
 // is only run boundaries, and those depend on renderer details (which rows
 // got an ESC[K, where a repaint broke) that the field dump of seed
