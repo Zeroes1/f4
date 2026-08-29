@@ -3,7 +3,7 @@ package netfox
 import (
 	"context"
 	"fmt"
-	"net"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +14,18 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
+
+// sshAgentReadWriter deliberately exposes only Read and Write. This makes
+// x/crypto/ssh/agent use its serialized client mode instead of starting a
+// background reader. The native Pageant transport is a request/response
+// connection whose Read returns EOF between requests, unlike a Unix socket;
+// treating it as a streaming io.ReadWriteCloser would make the first agent
+// response terminate the client before the SSH signature request.
+type sshAgentReadWriter struct{ io.ReadWriter }
+
+func newSSHAgentClient(rw io.ReadWriter) agent.ExtendedAgent {
+	return agent.NewClient(sshAgentReadWriter{ReadWriter: rw})
+}
 
 // sshTimeout turns the timeout a site configuration carries into a duration,
 // falling back to something sane when the field is empty or nonsense.
@@ -73,15 +85,12 @@ func DialSSH(host, port, user, pass, keyPath string, timeout int, px netproxy.Se
 	}
 
 	auths := []ssh.AuthMethod{}
-	var agentConn net.Conn
+	var agentConn io.ReadWriteCloser
 
-	if sock := os.Getenv("SSH_AUTH_SOCK"); sock != "" {
-		// #nosec G704 -- SSH_AUTH_SOCK is an explicit user-session Unix socket, not a network URL or remotely supplied address.
-		if conn, err := net.Dial("unix", sock); err == nil {
-			agentConn = conn
-			agentClient := agent.NewClient(conn)
-			auths = append(auths, ssh.PublicKeysCallback(agentClient.Signers))
-		}
+	if conn, err := openSSHAgent(); err == nil {
+		agentConn = conn
+		agentClient := newSSHAgentClient(conn)
+		auths = append(auths, ssh.PublicKeysCallback(agentClient.Signers))
 	}
 
 	if keyPath != "" {

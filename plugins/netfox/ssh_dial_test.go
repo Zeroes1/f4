@@ -1,6 +1,7 @@
 package netfox
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
@@ -14,8 +15,39 @@ import (
 
 	"github.com/unxed/f4/internal/netproxy"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
+
+func TestDialSSHAuthenticatesWithSSHAgent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SSH_AUTH_SOCK", startTestSSHAgent(t, agent.AddedKey{PrivateKey: privateKey}))
+	port, hostKey := startTestSSHServerWithPublicKey(t, sshPublicKeyFromEd25519(t, publicKey))
+	writeKnownHosts(t, home, knownhosts.Normalize("127.0.0.1:"+port), hostKey)
+
+	client, err := DialSSH("127.0.0.1", port, "agent-user", "", "", 3, netproxy.Settings{})
+	if err != nil {
+		t.Fatalf("SSH agent authentication failed: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Errorf("close SSH client: %v", err)
+	}
+}
+
+func sshPublicKeyFromEd25519(t *testing.T, public ed25519.PublicKey) ssh.PublicKey {
+	t.Helper()
+	key, err := ssh.NewPublicKey(public)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return key
+}
 
 func TestSSHHostKeyCallbackAcceptsKnownKey(t *testing.T) {
 	home := t.TempDir()
@@ -119,6 +151,10 @@ func writeKnownHosts(t *testing.T, home, address string, key ssh.PublicKey) {
 }
 
 func startTestSSHServer(t *testing.T) (string, ssh.PublicKey) {
+	return startTestSSHServerWithPublicKey(t, nil)
+}
+
+func startTestSSHServerWithPublicKey(t *testing.T, authKey ssh.PublicKey) (string, ssh.PublicKey) {
 	t.Helper()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -135,6 +171,14 @@ func startTestSSHServer(t *testing.T) (string, ssh.PublicKey) {
 			}
 			return nil, fmt.Errorf("test SSH server rejected credentials")
 		},
+	}
+	if authKey != nil {
+		config.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
+			if conn.User() == "agent-user" && bytes.Equal(key.Marshal(), authKey.Marshal()) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("test SSH server rejected public key")
+		}
 	}
 	config.AddHostKey(signer)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

@@ -66,7 +66,7 @@ func assertAgentNotForwarded(t *testing.T, forwarded <-chan struct{}) {
 	}
 }
 
-func startTestSSHAgent(t *testing.T) string {
+func startTestSSHAgent(t *testing.T, keys ...agent.AddedKey) string {
 	t.Helper()
 	// Darwin has a much shorter limit for Unix socket paths than Linux. Keep
 	// the socket directly under the system temp directory instead of nesting
@@ -77,6 +77,11 @@ func startTestSSHAgent(t *testing.T) string {
 		t.Fatalf("listen for test SSH agent: %v", err)
 	}
 	keyring := agent.NewKeyring()
+	for _, key := range keys {
+		if err := keyring.Add(key); err != nil {
+			t.Fatalf("add key to test SSH agent: %v", err)
+		}
+	}
 	t.Cleanup(func() {
 		if err := listener.Close(); err != nil {
 			t.Errorf("close test SSH agent listener: %v", err)
