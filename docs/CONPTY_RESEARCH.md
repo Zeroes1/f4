@@ -1066,3 +1066,148 @@ that turned a dead session into five minutes of silence. Every step now runs
 under a watchdog, independent heights run in parallel, results are printed as
 they are produced, and a hard deadline prints the summary and exits. A probe
 for this problem needs that as much as it needs its measurements.
+
+## 13. Direction F, the width axis measured (2026-08-29, `tools/conptydump`, 10.0.22000.2538)
+
+Section 12 established F's premise -- a tall viewport is creatable, cheap and
+carries what is written to it -- and left its central claim untested. Three raw
+dumps answer it, and the answer is better than the claim.
+
+The instrument changed shape for this. `tools/conptydump` decides nothing while
+it runs: it creates the pseudoconsole, starts a reader with no timeout, runs a
+child, calls `ResizePseudoConsole` on a fixed schedule, and writes every byte it
+receives to a file with the arrival time and a marked line at each call. Every
+earlier probe here decided *during* the run whether a phase had finished, and
+each of those decisions eventually produced a confident zero that was its own
+bug. A dump cannot: the bytes are in the file or they are not.
+
+### The central claim holds
+
+**One `ResizePseudoConsole` makes conhost re-wrap and re-transmit the entire
+buffer.** At 500, 2000 and 32000 rows the frame following a one-column
+narrowing carried all 150 marked lines including `~F000001~`, the oldest --
+not the viewport, not the tail, everything. That is the transfer channel §10
+predicted and §7 said did not exist.
+
+The frame has one shape at every height:
+
+    ESC[?25l  ESC[8;<rows>;<cols>t  ESC[H  <content>  ESC[<lastrow>;1H  ESC[?25h
+
+The size report (P14) is present and reports the *full* height. The frame
+starts at home, as P7 said. The closing cursor position is the end of the real
+content -- row 158 in a 2000-row buffer -- which incidentally tells a reader how
+much of the buffer is live.
+
+### The wrap flag arrives for free
+
+Every line in the frame is terminated by `ESC[K CR LF`. The 608-character long
+line, at a width of 119, arrives as **one unbroken run**: 600 characters
+between its markers with no CRLF and no escape sequence at all. conhost emits
+the logical line whole and lets the receiving terminal's autowrap place it.
+
+So in the frame the wrap question is not ambiguous: `ESC[K CR LF` ends a
+logical line, and everything between two of them is one logical line however
+long. That is the fact this document has spent nine sections trying to infer,
+provoke or fork its way to, delivered by an ordinary resize.
+
+### The cost, measured exactly
+
+    frame bytes = 3815 + 5.0 x buffer rows
+
+Fitted on three points and accurate to one byte: 6314 at 500 rows, 13815 at
+2000, 163816 at 32000, leaving 3814/3815/3816 as the content term. The five
+bytes per row are literally `ESC[K CR LF` -- conhost erases and terminates
+*every* row of the buffer, including the empty ones. The constant is a
+*content* term and scales with what the buffer actually holds.
+
+| Height | Frame | Latency |
+|---|---|---|
+| 500 | 6.3 KB | 16 ms |
+| 2000 | 13.8 KB | 48 ms |
+| 32000 | 164 KB | 470-520 ms |
+
+### A hard ceiling: 4000 columns by 32000 rows wedges the host
+
+At 500 and 2000 rows the widen to 4000 behaved like any other frame. At 32000
+rows `ResizePseudoConsole` returned `S_OK` and then **nothing came back at
+all** -- no frame, no further output, no EOF, and `ClosePseudoConsole` never
+returned. 4000 x 32000 is 128 million cells; the sizes that worked are 8
+million and 2 million. The limit is on the product and `tools/conptymatrix`
+sweeps for its position.
+
+## 14. The matrix probe, first results (2026-08-29, `tools/conptymatrix`, partial run)
+
+`conptymatrix` replaces a list of questions with a grid -- fill x height x
+width-op x line-shape x child -- because every probe before it covered the
+questions its author happened to think of, and each time the finding that
+mattered was one nobody had listed. Read from a partial run; the full log
+supersedes this.
+
+**Retirement is a number now.** At height 2000 with 3000 lines printed, the
+oldest line surviving a reflow was **1042 of 3000**. conhost's buffer is a
+plain ring: history depth equals buffer height and nothing above it is kept.
+For F this sets the sizing rule -- pick the height for the scrollback depth
+wanted, not for cheapness.
+
+**Repeated resizes do not degrade.** `restore` 58169B/64ms, `narrow-again`
+58151B/59ms, `restore-again` 58133B/46ms, each carrying 1994 lines with 1993
+terminators and `longWhole=true`. The marker range drifts by three lines per
+operation because the child keeps printing, which is the arithmetic working.
+
+**A resize during live output is clean**: 58115B, same line count, same shape.
+This is the situation that destroyed the absorber in §7. It cannot destroy
+anything here, because f4 does not merge a delta into its own history -- it
+replaces its mirror from a whole frame.
+
+**P13 is confirmed as a real ambiguity.** The line emitted at exactly the
+console width came back with **no `ESC[K` after it**, indistinguishable from a
+wrap. This is the one hole in the otherwise-free wrap flag of §13: logical
+structure is unambiguous except for lines whose length is an exact multiple of
+the width, and the error is always in one direction -- a hard break read as a
+wrap. No probe in this repository had ever emitted such a line before.
+
+**The ceiling reproduces.** At 32000 the narrow resize worked (160654B, 463ms,
+31993 terminators); the widen to 4000 produced zero bytes for every subsequent
+operation and `ClosePseudoConsole` did not return. The probe's watchdog
+terminated the host and continued, which is the behaviour that makes a sweep
+possible at all.
+
+## 15. Decision: f4 implements both paths
+
+Two independent ways to obtain logical lines now exist, and **f4 will support
+both**, not choose between them. They fail differently, which is the point.
+
+**Path 1 -- the native frame.** Take the logical lines out of the repaint that
+any width change already produces. `ESC[K CR LF` terminates a logical line;
+everything between two terminators is one logical line whatever its length.
+Costs nothing beyond a resize f4 was making anyway, works at every height
+measured, and is exact except for the P13 case.
+
+**Path 2 -- the wide frame.** Resize to a very large width for one frame and
+read lines that are rejoined by construction. Costs one extra round trip, and
+is bounded by the cell-product ceiling of §13, but it **resolves P13**: a line
+that is an exact multiple of the narrow width is not an exact multiple of 4000,
+so the ambiguity disappears. It is the check the native path cannot perform on
+itself.
+
+**How they combine.** The native frame is the default and carries ordinary
+work. The wide frame is used where exactness is worth a round trip -- the F4
+viewer or editor opening on terminal history, and as a periodic audit of the
+native reading at an idle prompt, in the spirit of the old oracle but without
+its fatal property: nothing here stamps flags into a history f4 also owns,
+because with the tall viewport conhost owns the grid and f4 holds a mirror.
+
+**Selection and fallback.** The width at which the wide frame is taken is
+chosen against the measured ceiling rather than fixed at 4000: with the cell
+product bounded, the safe width falls as the configured height rises, and a
+height where no useful wide width exists simply does not offer path 2. If a
+wide frame returns nothing -- the wedge signature of §13 -- f4 abandons that
+path for the session and continues on the native frame. Neither path may
+degrade into guessing: if both are unavailable, the terminal reflows nothing,
+which is the §7 fallback and remains correct.
+
+**What must be settled before implementation**, all of it inside what the
+matrix already sweeps: where the cell ceiling actually lies, whether the
+native frame's `ESC[K CR LF` reading holds for `cmd.exe` and full-screen
+children as it does for ours, what the alternate screen does to both paths,
+and the frame cost at a genuinely full buffer rather than a nearly empty one.
