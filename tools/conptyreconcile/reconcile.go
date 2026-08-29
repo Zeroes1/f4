@@ -299,6 +299,35 @@ func reconcileOrdered(frameRuns []string, live []liveLine, frameWidth ...int) []
 			}
 		}
 	}
+	// The aligners walk run boundaries, and run boundaries are the weakest
+	// part of the frame: they depend on where the renderer put its erases
+	// and breaks. If the frame turns out to carry exactly the live content
+	// and nothing more, the boundaries do not matter at all.
+	// One guard on this fallback, and it is the guard of a failure that
+	// shipped (TestFrameTakenAtADifferentWidthThanTheLinesWereWritten): a
+	// live sequence keyed on the FRAME width must never be rescued. Its
+	// texts can even come out right -- the ported terminal joins the
+	// spurious wraps back -- but its Width annotations are fiction, and
+	// everything downstream that consumes them would key on fiction. Right
+	// keying is visible in the annotations themselves: after a resize the
+	// live lines carry the write width, not the frame width. When the two
+	// widths are equal there was no resize, frames split cleanly, and the
+	// aligners above succeed without any fallback.
+	liveKeyedOnFrameWidth := width > 0
+	for _, l := range originalLive {
+		if l.Width != width {
+			liveKeyedOnFrameWidth = false
+			break
+		}
+	}
+	if !liveKeyedOnFrameWidth && frameAddsNothingBeyondLive(frameRuns, originalLive) {
+		out := make([]string, 0, len(originalLive))
+		for _, line := range originalLive {
+			out = append(out, line.Text)
+		}
+		return out
+	}
+
 	// A resize can interleave freshly written output into the middle of the
 	// repaint. In that case the frame and the live stream contain the same
 	// child text in different orders, so no single ordered walk can succeed.
@@ -316,19 +345,92 @@ func reconcileOrdered(frameRuns []string, live []liveLine, frameWidth ...int) []
 	return frameRuns
 }
 
+
+// mergeChainEnd walks live lines from start and returns the end of the group
+// the BUFFER holds joined: conhost's legacy write path left wrapForced on
+// the line's last row (fillsRowsExactly, ported WriteCharsLegacy). This is
+// deliberately only the buffer-level effect. The field dump of seed
+// 1788002866976838800 shows a second, renderer-level effect -- a repaint can
+// glue runs across buffer boundaries and break them inside joins -- and that
+// one is NOT modelled here, because its boundaries proved erratic; when it
+// strikes, the aligners fail and frameAddsNothingBeyondLive decides on
+// content instead of boundaries.
+func mergeChainEnd(live []liveLine, start, frameWidth int) int {
+	end := start
+	for end < len(live) {
+		end++
+		if !mergesAtWidth(live[end-1].Text, live[end-1].Width) {
+			break
+		}
+	}
+	return end
+}
+
+
+
+// frameAddsNothingBeyondLive: every frame run is a concatenation of whole,
+// consecutive live lines, and together the runs consume the live sequence
+// exactly. Texts are compared with spaces removed, because the frame's
+// rendering inserts spaces the logical text does not have (the padding
+// column of a wide glyph at a row edge renders as a space) and trailing
+// blanks are trimmed unevenly. Two things are established at once:
+//   - content: the frame carries the live text, in order, nothing more;
+//   - structure: every run boundary falls on a live line boundary, so the
+//     live lines are whole units of the frame, not a different reading of
+//     the same bytes. A live sequence parsed at the wrong width fails here
+//     precisely because its boundaries land inside runs
+//     (TestFrameTakenAtADifferentWidthThanTheLinesWereWritten).
+// When both hold, the frame cannot correct anything: its extra information
+// is only run boundaries, and those depend on renderer details (which rows
+// got an ESC[K, where a repaint broke) that the field dump of seed
+// 1788002866976838800 shows are richer than any split rule this tool has.
+// The frame earns its place only when it holds content the live stream
+// never saw, and then this check fails and the aligners above decide.
+func frameAddsNothingBeyondLive(frameRuns []string, live []liveLine) bool {
+	strip := func(s string) string {
+		var b strings.Builder
+		for _, r := range s {
+			if r != ' ' {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+	i := 0
+	skipEmpty := func() {
+		for i < len(live) && strip(live[i].Text) == "" {
+			i++
+		}
+	}
+	any := false
+	for runIdx, run := range frameRuns {
+		rest := strip(run)
+		for rest != "" {
+			skipEmpty()
+			if i >= len(live) {
+				return false
+			}
+			text := strip(live[i].Text)
+			if !strings.HasPrefix(rest, text) {
+				return false
+			}
+			rest = rest[len(text):]
+			i++
+			any = true
+		}
+		_ = runIdx
+	}
+	skipEmpty()
+	return any && i == len(live)
+}
+
 func frameStartCandidates(frameRuns []string, live []liveLine, width int) []int {
 	if len(frameRuns) == 0 {
 		return nil
 	}
 	starts := make([]int, 0, len(live))
 	for start := 0; start < len(live); start++ {
-		end := start
-		for end < len(live) {
-			end++
-			if !mergesAtWidth(live[end-1].Text, live[end-1].Width) {
-				break
-			}
-		}
+		end := mergeChainEnd(live, start, width)
 		if end == start {
 			continue
 		}
@@ -415,12 +517,7 @@ func alignFromStrict(frameRuns []string, live []liveLine, frameWidth ...int) ([]
 	i := 0
 	for _, run := range frameRuns {
 		start := i
-		for i < len(live) {
-			i++
-			if !mergesAtWidth(live[i-1].Text, live[i-1].Width) {
-				break
-			}
-		}
+		i = mergeChainEnd(live, start, width)
 		if start == i {
 			return nil, false
 		}
@@ -447,15 +544,7 @@ func alignFromExtended(frameRuns []string, live []liveLine, frameWidth ...int) (
 	i := 0
 	for _, run := range frameRuns {
 		start := i
-		baseEnd := i
-		for baseEnd < len(live) {
-			baseEnd++
-			// A line that exactly fills its rows gets no terminator and the
-			// ordinary frame run ends at its first non-merged source line.
-			if !mergesAtWidth(live[baseEnd-1].Text, live[baseEnd-1].Width) {
-				break
-			}
-		}
+		baseEnd := mergeChainEnd(live, start, width)
 		if start == baseEnd {
 			return nil, false
 		}

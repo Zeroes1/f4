@@ -159,31 +159,30 @@ func fillsRowsExactly(s string, width int) bool {
 	if width < 1 || s == "" {
 		return false
 	}
-	// Whether conhost merges this line into the next one is not a property of
-	// its length: it is ROW::WasWrapForced on the line's last row. conhost
-	// sets that flag in exactly one place -- AdaptDispatch::_DoLineFeed with
-	// wrapForced=true, which _WriteToBuffer calls when a write ran past the
-	// last column (delayed EOL wrap). "length is a multiple of the width" was
-	// this project's inference from that behaviour, and inferences are what
-	// THE RULE forbids: it is wrong for any line whose last row ends in a
-	// wide glyph that did not fit (WasDoubleBytePadded), among others.
+	// Whether conhost holds this line merged with the next one is decided by
+	// its legacy write path -- a WriteConsoleW child never goes through the
+	// VT dispatch -- so the line is written through the ported
+	// WriteCharsLegacy (msstream.go) and the answer is read from the buffer.
 	//
-	// So: write the line into a ported buffer of that width, exactly as a
-	// child process would, and ask the last row it occupies.
-	t := newMsTerminal(width, msRowsForSafely(s, width))
-	t.Feed([]byte(s))
-	t.flushPendingText()
-	b := t.disp.page.buffer
-	y := t.disp.page.cursor.GetPosition().y
-	if y < 0 || y >= b.Height() {
-		return false
+	// The previous version of this function replayed the line through the
+	// ported VT terminal. The field dump of seed 1788002866976838800 proved
+	// that wrong: the VT path clears wrapForced on the row an explicit line
+	// feed leaves, the legacy path clears it on the row the cursor has
+	// already wrapped onto, so a line that fills its last row to the edge
+	// stays merged only in the legacy buffer. Cell-count arithmetic is wrong
+	// twice over -- with wide-glyph padding a row can fill at many cell
+	// counts that are no multiple of the width.
+	si := newMsScreenInfo(width, msRowsForSafely(s, width))
+	msWriteCharsLegacy(si, utf16.Encode([]rune(s)), nil)
+	pos := si.cursor.GetPosition()
+	contentEnd := pos.y
+	if pos.x == 0 && pos.y > 0 {
+		// The write itself wrapped past the edge: the content's last row is
+		// the one above the cursor.
+		contentEnd = pos.y - 1
 	}
-	return b.GetRowByOffset(y).WasWrapForced() ||
-		// The delayed EOL wrap has not been acted on yet when the write ends
-		// exactly at the edge: the cursor sits pending at the last column and
-		// the flag is set by the *next* glyph (or by the line feed that a
-		// terminator would bring). Both mean the same thing for the merge.
-		t.disp.page.cursor.GetDelayEOLWrap() != nil
+	msWriteCharsLegacy(si, []uint16{'\r', '\n'}, nil)
+	return si.textBuffer.GetRowByOffset(contentEnd).WasWrapForced()
 }
 
 // msRowsForSafely sizes the scratch buffer so nothing this line writes can

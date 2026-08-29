@@ -23,9 +23,15 @@ if not exist "%EXE%" (
   exit /b 2
 )
 
-rem Seeds worth keeping: the one that failed before the conhost port, and the
-rem one that first passed after it. Regressions show up here first.
-set SEEDS=1787985364328457600 1788001644056794200
+rem Seeds worth keeping, oldest first:
+rem   1787985364328457600  failed before the conhost port
+rem   1788001644056794200  first green run after the port
+rem   1788002866976838800  failed stage 1 in the field on exact-width chains
+rem                        while passing on the mock -- the seed that has to
+rem                        stay red until the mock learns WriteCharsLegacy,
+rem                        or prove the field failure was environmental
+rem   1788003154672129800  first fully green run with the reference window
+set SEEDS=1787985364328457600 1788001644056794200 1788002866976838800 1788003154672129800
 
 set EXTRA=0
 if not "%~1"=="" set EXTRA=%~1
