@@ -1211,3 +1211,58 @@ matrix already sweeps: where the cell ceiling actually lies, whether the
 native frame's `ESC[K CR LF` reading holds for `cmd.exe` and full-screen
 children as it does for ours, what the alternate screen does to both paths,
 and the frame cost at a genuinely full buffer rather than a nearly empty one.
+
+## 16. Every constant in this file is a setting
+
+Nothing measured here is a law. `3815 + 5.0 x rows`, the 128-million-cell
+ceiling, `ESC[K CR LF` as a line terminator, `ESC[8;rows;cols t` as the size
+report, 4000 columns for the wide frame -- all of it is the behaviour of
+**one build**, 10.0.22000.2538, and §4 already records that ConPTY changed
+shape once between 19045 and 22000 and that the emitter was rewritten upstream
+again after that (#17510). A build where any of these differs must be
+correctable by editing the config, never by editing f4.
+
+So the implementation rule is explicit: **no measured value from sections 12
+through 15 may appear as a literal in the terminal code.** Each is a named
+setting with the measured value as its default, read through the existing
+`ini.GetString("Terminal", ...)` mechanism like every other f4 option, with
+`F4_*` environment overrides where a tester needs to change one without
+touching a file.
+
+### The settings, and what each one is for
+
+**Geometry.** `ConPtyHeight` is the tall viewport's row count, which §14 shows
+*is* the scrollback depth -- history equals buffer height and nothing above it
+survives. `ConPtyWidth` follows the real window by default but can be pinned.
+`ConPtyMaxCells` is the product ceiling of §13: the width of a wide frame is
+derived from it and the configured height rather than fixed, so a build with a
+different limit needs one number changed. `ConPtyWideWidth` pins that width
+directly for anyone who would rather set it than derive it.
+
+**The frame grammar.** `FrameLineTerminator` (default `ESC[K CR LF`),
+`FrameStartSequence` (the cursor hide), `FrameHomeSequence`, and
+`FrameSizeReport` (the `ESC[8;` XTWINOPS pattern) are what §13's reading of
+logical lines rests on. A build that terminates rows differently, or stops
+sending a size report, is then a config change and not a rewrite. The parser
+must treat these as patterns it was given, not as constants it knows.
+
+**Behaviour and limits.** `ReflowPath` selects `native`, `wide`, `both` or
+`off` -- the four states §15 defines, with `both` as the default and `off` as
+the §7 fallback that reflows nothing. `WideFrameAudit` controls whether the
+wide frame is taken periodically to check the native reading, and how often.
+`ResizeDebounceMs` covers the interactive drag, whose cost §13 measured per
+height. `FrameTimeoutMs` bounds a frame that never arrives -- the wedge
+signature of §13 -- after which the wide path is dropped for the session.
+
+**Diagnostics.** `ConPtyDumpPath`, when set, writes the raw stream the way
+`tools/conptydump` does, so a user on an unmeasured build can produce the same
+evidence these sections were written from without building anything.
+
+### Why this is a requirement rather than a preference
+
+The reflow of §7 was removed partly because a build change would have been
+invisible until it produced corruption in the field. Everything above is
+observable and adjustable from a config file, which is what makes an
+unmeasured build -- 19045, 24H2, 25H2, whatever ships next -- a support
+question instead of a release blocker. A single hard-coded `5` or `4000` puts
+that property back in the bin.
