@@ -29,7 +29,7 @@ without trace — is recovered, because the live sequence still has it.
 ## Running it
 
 ```
-conptyreconcile.exe                          # one fixed case
+conptyreconcile.exe                          # automatic real-ConPTY check
 conptyreconcile.exe -fuzz 10                 # ten randomised rounds
 conptyreconcile.exe -fuzz 5 -resize-during-output
 conptyreconcile.exe -lines-only              # line reconstruction only
@@ -50,7 +50,8 @@ mock on any machine — `go test ./tools/conptyreconcile` — with no Windows
 involved, because both sides use the same generator.
 
 The tool writes `conptyreconcile-<height>.log` and a raw dump beside it, and
-waits for Enter before closing so a run from Explorer leaves something to read.
+closes automatically. Use `-pause` only when launching it from Explorer and
+you want to keep the console window open.
 
 ## What the tests are for
 

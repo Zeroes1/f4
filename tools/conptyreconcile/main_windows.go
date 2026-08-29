@@ -197,7 +197,8 @@ func main() {
 		out       = flag.String("out", "", "dump file (default conptydump-<height>.txt)")
 		hold      = flag.Duration("hold", 3*time.Second, "how long the child stays alive after printing")
 		step      = flag.Duration("step", 2*time.Second, "delay between resize steps")
-		noPause   = flag.Bool("no-pause", false, "do not wait for Enter before closing")
+		noPause   = flag.Bool("no-pause", true, "do not wait for Enter before closing (default)")
+		pause     = flag.Bool("pause", false, "wait for Enter before closing")
 		rounds    = flag.Int("fuzz", 0, "run this many randomised rounds instead of one fixed case")
 		seed      = flag.Int64("seed", 0, "seed for a randomised round (0 = derived from the clock)")
 		during    = flag.Bool("resize-during-output", false, "resize while the child is still printing")
@@ -207,6 +208,9 @@ func main() {
 		logTo     = flag.String("log", "", "write the report here (default conptyreconcile-<height>.log)")
 	)
 	flag.Parse()
+	if *pause {
+		*noPause = false
+	}
 
 	if *emit == "child-random" {
 		w := newConsoleWriter()
