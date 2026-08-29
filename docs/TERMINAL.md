@@ -1,5 +1,15 @@
 # f4 Terminal Architecture Manifest
 
+> **THE RULE, before the philosophy and above every section below.** Where
+> Microsoft's source exists for a behaviour, the only permitted
+> implementation is a **1:1, transpilation-level port of that source**. It
+> is **strictly forbidden to assume anything** and **strictly forbidden to
+> change anything** in what is ported. If something cannot be ported as
+> written, stop and record the obstacle; do not invent. The longer statement
+> and the price of violating it are at the head of `CONPTY_RESEARCH.md`; the
+> paragraph in "How this component is verified" below is a consequence of
+> this rule, not its statement.
+
 The built-in terminal in `f4` is one of its most complex components. This document serves as a comprehensive guide for human developers and AI assistants. It explains the fundamental challenges of cross-platform terminal emulation (specifically Windows ConPTY), analyzes how industry-leading terminal emulators solve them, and justifies the final architectural design chosen for `f4`.
 
 ## 0. Philosophy: why this component exists at all
@@ -62,9 +72,11 @@ scope, whoever computed the wrap.
 
 ### How this component is verified
 
-One rule, arrived at expensively and now not negotiable: **where Microsoft's
-source exists for something, port it verbatim rather than reimplementing it
-from its observed behaviour.** `microsoft/terminal` is MIT and compatible with
+One rule, arrived at expensively and now not negotiable -- it is THE RULE at
+the head of this document and of `CONPTY_RESEARCH.md`: **where Microsoft's
+source exists for something, the implementation is a 1:1, transpilation-level
+port of it; assuming anything or changing anything is strictly forbidden.**
+Reimplementing from observed behaviour is a violation, not an alternative. `microsoft/terminal` is MIT and compatible with
 BSD-3-Clause; the "written from scratch" rule in `FISH+.md` is about GPL
 sources and does not apply. A width table written from memory disagreed with
 conhost about where rows end, and conhost is what decides where lines merge --

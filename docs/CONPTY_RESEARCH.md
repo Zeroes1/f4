@@ -1,5 +1,19 @@
 # ConPTY and line structure: the research, the algorithm it justifies, and how it held up
 
+> **THE RULE. Read this before reading anything else, and re-read it before
+> writing any code.** Where Microsoft's source exists for a behaviour
+> (`microsoft/terminal`, MIT-licensed, `src/buffer/out` and neighbours), the
+> only permitted implementation is a **1:1, transpilation-level port of that
+> source**. It is **strictly forbidden to assume anything** and **strictly
+> forbidden to change anything**: no simplifications, no "equivalent"
+> rewrites, no reordering, no filling a gap from observed behaviour, no
+> width table or wrap rule written from memory. If a line cannot be ported
+> as written, **stop and record the obstacle** in this document; do not
+> invent a substitute. A reimplementation from observed behaviour is a
+> violation of this rule even when every test passes, because the tests are
+> weaker than conhost. Everything §3 of this document paid for was paid for
+> guessing where a port was possible.
+
 This is the one-document version of a question that took two Windows builds,
 three probes, eight field runs and nine documents to answer: **how does a
 terminal running inside a ConPTY tell a line that wrapped from a line that
