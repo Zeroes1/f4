@@ -849,3 +849,139 @@ to be fixed.
 the D3 probe above, which is now the cheapest question with the largest
 consequence, D2 having closed; D as originally written (C++ in the build) only
 if bundling turns out to be impossible; C stays demoted; E is what ships.
+
+## 10. Two corrected facts, the channel invariant, and direction F: the tall viewport (2026-08-29)
+
+§9 closed idea 3 ("let conhost keep the history, widen to 4000 on F4") with
+"a long enough buffer cannot be arranged from outside". That verdict was
+wrong in an instructive way, and the correction opens the most promising
+direction this file has. The philosophy these decisions serve is now §0 of
+`TERMINAL.md`; this section is that philosophy applied to ConPTY.
+
+### Corrected fact 1: the clamp is one-directional
+
+`ApiRoutines::SetConsoleScreenBufferSizeImpl` (`src/host/getset.cpp`) rejects
+a buffer *smaller* than the viewport and accepts a larger one; the
+buffer==viewport coupling of pty mode lives on the viewport-resize path
+(`SetViewportSize` via `_IsInPtyMode()`), not on an explicit client request.
+So a taller-than-viewport buffer under ConPTY is not impossible -- a launcher
+stub could set it before exec'ing the shell. It is merely *useless alone*,
+because of fact 2. (Sizes are `COORD`, i.e. `SHORT`; a dimension equal to
+`SHORT_MAX` is rejected, so the type ceiling is 32766. ConPTY's conhost is
+headless, so the monitor-based window clamps are skipped.)
+
+### Corrected fact 2: the real blocker was the channel, not the height
+
+ConPTY's only output is a rendering of the **viewport**. Whatever the buffer
+holds above it never enters the stream -- that is the mechanism behind P16,
+and it is why a tall buffer *behind* a small viewport gains nothing, and why
+the 4000-wide trick could only ever return one screen. Every dead end in
+§§1-9 is this one sentence wearing different clothes.
+
+### Direction F: make the viewport be the history
+
+If the missing channel is "ConPTY only transmits the viewport", then make the
+viewport everything: **create the ConPTY as tall as the type allows is
+sensible (9,000-32,000 rows) and as wide as the real window.** f4 renders the
+bottom slice; the rest *is* the scrollback. Then:
+
+- **conhost owns the history**, in its own grid with its own wrap flags --
+  idea 3 as originally stated, vindicated.
+- **A width change is one `ResizePseudoConsole`:** conhost reflows the entire
+  buffer with its own `TextBuffer::Reflow` and the repaint -- which covers the
+  viewport, i.e. everything -- *transmits the re-wrapped history to f4*. The
+  transfer channel that "did not exist" is the repaint itself.
+- **F4's long lines are the original trick verbatim:** widen to 4000 for one
+  frame, the repaint carries every logical line rejoined, read, restore.
+- **§7's root cause dissolves by its own wording.** The fatal design put two
+  owners on the same rows: f4 held a re-wrapped history *above* the viewport
+  while ConPTY re-rendered the viewport, and the seam had no row identity.
+  Here there is no "above". One owner (conhost) for the whole grid; f4 keeps
+  a mirror and replaces it wholesale from each repaint. No seam, no absorber,
+  no hint.
+- **The channel invariant holds.** The child's output still reaches f4 as a
+  VT byte stream -- truecolor arrives as SGR, nothing is flattened to
+  `CHAR_INFO` -- and f4 still composes the screen. f4 additionally becomes a
+  **geometry converter** (Hypothesis 1 of `TERMINAL.md` §0, applied to one
+  more dimension): it shows the bottom slice and translates mouse and scroll
+  coordinates between the visible window and the tall grid.
+
+No fork, no bundled binary, no cgo, no undocumented interface. Stock ConPTY,
+used at an angle nobody uses it at.
+
+### What must be measured before any code (extend `tools/conptycprobe`)
+
+1. **Ceilings.** Create 251x9000 and 251x32000; fill with history; record
+   conhost RSS, creation time, and full-repaint time. (Post-#17510 the buffer
+   may commit lazily; measure, do not assume.)
+2. **Reflow at scale.** Fill thousands of rows, change width, verify the
+   repaint carries the whole history re-wrapped, and time it. Debounce policy
+   for interactive drags depends on this number.
+3. **The alt-screen dance.** Full-screen programs need a console of the real
+   size. Entering/leaving the alternate screen is an explicit protocol event
+   in the stream (`?1049h/l`; conhost translates
+   `SetConsoleActiveScreenBuffer` to the same) -- *not* the mode-guessing §7
+   closed. On `h`: resize to real geometry; on `l`: resize back. Measure the
+   race: a program that queries the size after `1049h` but before our resize
+   lands lays out wrong once; most TUIs re-query on the resize event. Run
+   vim, msedit, far, f4-in-f4.
+4. **Main-screen programs that believe the window is 9000 rows tall.**
+   `dir /p` and `more` page every 9000 lines (arguably fine); PowerShell 5's
+   `Write-Progress` draws at the top of the *window* -- row 0, far above the
+   visible slice. Enumerate, decide per case.
+5. **`cls` semantics.** Clearing the screen clears the whole buffer, i.e. the
+   whole history -- classic-console semantics, and the Terminal Log (E) keeps
+   its own copy regardless. Confirm what the stream shows and that the mirror
+   survives it.
+6. **Row retirement past the ceiling.** Beyond 32k rows conhost's circular
+   buffer evicts; rows leaving the top of the mirror carry whatever wrap
+   state the stream gave them. Decide whether 32k is simply enough, or the
+   Terminal Log absorbs the overflow.
+7. **Old builds.** 19045-era emission differences (P6/P11) against a tall
+   viewport; one run per build, third column of `conptyBehaviour`.
+
+### Where this leaves the tree
+
+**F first**: it is the only direction that satisfies idea 3 as stated, §7's
+own post-mortem, and the channel invariant simultaneously, at zero packaging
+cost. **D3 becomes the fallback**, not the plan: if F's probes kill it (an
+unacceptable alt-screen race, a repaint cost with no debounce answer), the
+bundled-OpenConsole channel from §9 buys the same facts with more machinery.
+**A** stays worth it for `wsl.exe`/pwsh regardless (there f4 wraps by
+construction). **E** stays the baseline and the safety net under `cls` and
+retirement. **B stays closed** -- not by measurement but by the invariant:
+`ReadConsoleOutput` hands f4 a composed grid, which is the overlay mode's
+job, and the overlay mode already ships.
+
+## 11. Remote sessions, restated under the invariant
+
+The wrap question one hop out: what matters is not local-vs-remote but *who
+is the terminal for the byte stream*.
+
+| Route | Who lays out the output | Reflow |
+|---|---|---|
+| `ssh` typed into f4's terminal | `ssh.exe` is a local console client: the local ConPTY session lays it out; the far pty wrapped it first | no |
+| f4's own SSH (NetFox/FISH+) | f4 speaks to the far side directly and is the terminal itself | **yes** |
+
+Under direction F the `ssh`-in-terminal case inherits everything F gives
+(tall history, width reflow of what the *local* session laid out), but a
+layout decided by the far pty stays as received -- the caveat D already
+recorded, unchanged.
+
+**The offer, never a substitution.** When a typed command line begins with
+`ssh`, f4 may offer -- once, dismissibly, like an IDE's "open in integrated
+terminal" -- to open the session through NetFox instead, naming the gain:
+real reflow, f4's scrollback, far2l extensions where the far side has them.
+Declining runs `ssh` in the terminal exactly as typed. Silent rerouting is
+banned: a terminal's one promise is that it runs what it was given.
+
+**Windows on the far side.** FISH+ Step 17 already plans Windows hosts, and
+its second form -- run `f4` itself remotely as the FISH+ helper -- is the
+general answer: the remote f4 hosts the child in its own local session
+(direction F applies *there*), and ships **logical lines, not a laid-out
+screen**, over the FISH+ channel. The wrap is decided by an f4 on the machine
+where the output was produced: the invariant, extended across the network,
+and strictly better than any byte-stream terminal over `ssh` can do. Depends
+on Step 17 and the Step 21 terminal channel; recorded so that "remote
+Windows" is read as a reason to *extend* the invariant, never to weaken it
+locally.

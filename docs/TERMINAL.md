@@ -2,6 +2,64 @@
 
 The built-in terminal in `f4` is one of its most complex components. This document serves as a comprehensive guide for human developers and AI assistants. It explains the fundamental challenges of cross-platform terminal emulation (specifically Windows ConPTY), analyzes how industry-leading terminal emulators solve them, and justifies the final architectural design chosen for `f4`.
 
+## 0. Philosophy: why this component exists at all
+
+far2l proved, by existing, several hypotheses nobody had even ventured before
+it -- too exotic for the *nix world and too foreign for the Windows one. This
+component inherits them as axioms, so they are written here first, before any
+mechanism.
+
+**Hypothesis 1 -- the isolated built-in terminal.** A dual-pane manager does
+not have to be an overlay over an existing console, the way Far and mc are. A
+fully-fledged, isolated built-in terminal is strictly stronger: it can support
+*more* than the hosting terminal does, acting as a **protocol converter**. The
+host only speaks win32-input-mode (Konsole does, kitty does not) while the
+application only speaks kitty (fish)? The built-in terminal translates. The
+host's line wrapping is worse than ours? The built-in terminal outclasses it.
+The terminal is not a window onto someone else's session; it is a session of
+our own that we present.
+
+**Hypothesis 2 -- win32 input events as the lingua franca.** The win32
+`INPUT_RECORD` shape is the ideal *internal* format for such a proxy: it
+converts losslessly to and from kitty and win32-input-mode, and far2l showed
+that wx/GNOME/Qt events (and for f4, X11 too) convert into it just as cleanly.
+f4's one extension: the record carries kitty's `unshifted` field, because
+without it a proxied keystroke can lose information.
+
+**Hypothesis 3 -- the win32-style cell grid as the visual model.** A grid of
+cells, each described by a win32-like structure extended for truecolor, with
+long-line (wrap) support worked in on top -- the same model conhost itself
+keeps internally -- is the ideal description of a terminal's visual state. In
+all of far2l's history, no terminal feature has ever failed to fit it.
+
+Nobody before far2l took a win32 idea into *nix for any reason other than
+compatibility (wine, ndiswrapper). far2l did it because the idea was simply
+*good*, and it turned out to be extraordinarily effective. f4 carries that
+forward and extends it where it asks to be extended -- and takes on the
+symmetric impossible task: an honest cross-platform Far, one codebase, no
+forks, with the far2l built-in-terminal UX reproduced **on Windows**.
+
+**The target matrix, by name.** The far2l terminal experience -- own
+scrollback, correct reflow, protocol conversion -- for: `dir /w` in `cmd.exe`;
+PowerShell; WSL; Linux over ssh; and Windows over ssh. All five. Anything less
+and the exercise loses its point.
+
+**The ethos.** An obstacle is a design input, not a stopping condition. Months
+of work are not the metric; the metric is whether the five columns above
+light up. The answer "impossible" is banned until the option tree is exhausted
+-- `CONPTY_RESEARCH.md` is the record of exhausting it, including every wrong
+turn, and its later sections show the tree is not exhausted yet.
+
+**The channel invariant (corrected form).** f4 consumes the child's output as
+a **byte stream** and composes the screen itself. f4 never consumes a
+pre-composed grid of cells made by someone else -- that is what the overlay
+mode over a real console is for, and it already exists. Metadata *about* the
+stream from whoever hosts the child -- wrap flags, logical-line boundaries --
+is not a violation; it is welcome, and several directions in
+`CONPTY_RESEARCH.md` exist to obtain exactly that. The review question is:
+*does f4 still build its screen from the stream?* If yes, the design is in
+scope, whoever computed the wrap.
+
 ## 1. The Fundamental Conflict: Streams vs. Grids
 
 To build a terminal that supports an infinite scrollback history (like `Ctrl+O` in Far Manager) while correctly displaying interactive applications, we must bridge two completely different OS philosophies:
