@@ -34,11 +34,17 @@ type textAttribute struct {
 // These are the Windows COMMON_LVB values consumed by TextAttribute. They
 // are kept named because the pinned source tests each edge independently.
 const (
+	commonLVBLeadingByte    uint16 = 0x0100
+	commonLVBTrailingByte   uint16 = 0x0200
 	commonLVBGridHorizontal uint16 = 0x0400
 	commonLVBGridLVertical  uint16 = 0x0800
 	commonLVBGridRVertical  uint16 = 0x1000
 	commonLVBUnderscore     uint16 = 0x8000
 )
+
+const metaAttrsMask = commonLVBLeadingByte | commonLVBTrailingByte |
+	commonLVBGridHorizontal | commonLVBGridLVertical | commonLVBGridRVertical |
+	0x4000 | commonLVBUnderscore
 
 const (
 	extBold             uint8 = 0x01
@@ -160,3 +166,24 @@ func (a *textAttribute) setReverseVideo(v bool) {
 }
 
 func (a textAttribute) isHyperlink() bool { return a.hyperlinkID != 0 }
+
+// hasIdenticalVisualRepresentationForBlankSpace is the pinned
+// TextAttribute::HasIdenticalVisualRepresentationForBlankSpace predicate used
+// by Renderer::_PaintBufferOutputHelper when it coalesces blank cells across
+// an attribute boundary. Keep the predicate separate from ordinary equality:
+// a foreground change is invisible on a blank cell unless reverse video makes
+// that foreground the displayed background.
+func (a textAttribute) hasIdenticalVisualRepresentationForBlankSpace(other textAttribute, inverted bool) bool {
+	checkForeground := inverted != a.isReverseVideo()
+	return !a.isAnyGridLineEnabled() &&
+		!a.isCrossedOut() && !a.isDoublyUnderlined() && !a.isUnderlined() &&
+		!a.isHyperlink() &&
+		a.legacy&metaAttrsMask == other.legacy&metaAttrsMask &&
+		((checkForeground && a.foreground == other.foreground) ||
+			(!checkForeground && a.background == other.background)) &&
+		a.extended == other.extended && a.isHyperlink() == other.isHyperlink()
+}
+
+func (a textAttribute) isAnyGridLineEnabled() bool {
+	return a.legacy&(commonLVBGridHorizontal|commonLVBGridLVertical|commonLVBGridRVertical|commonLVBUnderscore) != 0
+}

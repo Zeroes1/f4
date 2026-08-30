@@ -175,6 +175,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 	const printableControlChars = uint32(wcPrintableControl)
 	fUnprocessed := !buffer.processedOutput
 	fWrapAtEOL := buffer.wrapAtEOL
+	attributes := buffer.currentAttrs
 	position := buffer.cursor.position
 	originalXPosition := position.x
 	lineWidth := buffer.width
@@ -278,7 +279,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if len(local) > available {
 				local = local[:available]
 			}
-			_, cellDistance := buffer.write(outputCellsFromUTF16WithAttr(local, buffer.currentAttrs), buffer.cursor.position, nil)
+			_, cellDistance := buffer.write(outputCellsFromUTF16WithAttr(local, attributes), buffer.cursor.position, nil)
 			spaces += cellDistance
 			position = buffer.cursor.position
 			position.x = xPosition
@@ -321,7 +322,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 					position.x--
 					spaces--
 					if flags&wcDestructiveBackspace != 0 {
-						writeSpaceAt(buffer, position)
+						writeSpaceAt(buffer, position, attributes)
 					}
 					position.x--
 				case isGlyphFullWidth(last):
@@ -331,7 +332,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 						return consumed, spaces, err
 					}
 					if flags&wcDestructiveBackspace != 0 {
-						writeSpaceAt(buffer, buffer.cursor.position)
+						writeSpaceAt(buffer, buffer.cursor.position, attributes)
 					}
 					position.x--
 				default:
@@ -346,7 +347,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				return consumed, spaces, err
 			}
 			if flags&wcDestructiveBackspace != 0 {
-				writeSpaceAt(buffer, buffer.cursor.position)
+				writeSpaceAt(buffer, buffer.cursor.position, attributes)
 			}
 			if buffer.cursor.position.x == 0 && fWrapAtEOL && consumed > 0 && checkBisectProcess(buffer, input[:consumed], lineWidth-originalXPosition, originalXPosition, flags&printableControlChars != 0) {
 				position.x = lineWidth - 1
@@ -371,7 +372,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				buffer.rowByOffset(buffer.cursor.position.y).wrapForced = true
 			}
 			if numChars > 0 {
-				writeSpacesAt(buffer, buffer.cursor.position, numChars)
+				writeSpacesAt(buffer, buffer.cursor.position, numChars, attributes)
 			}
 			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
@@ -402,7 +403,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if char >= unicodeSpace && isGlyphFullWidth(char) && position.x >= lineWidth-1 && fWrapAtEOL {
 				target := buffer.cursor.position
 				if target.x >= 0 && target.x < buffer.width && buffer.rowByOffset(target.y).charRow.data[target.x].attr.isTrailing() {
-					writeSpacesAt(buffer, coordinate{x: target.x - 1, y: target.y}, 2)
+					writeSpacesAt(buffer, coordinate{x: target.x - 1, y: target.y}, 2, attributes)
 				}
 				position.x = 0
 				position.y = target.y + 1
@@ -413,11 +414,11 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				}
 				continue
 			}
+			// There is deliberately no fallback write or cursor adjustment
+			// here. The pinned switch only handles the full-width-at-EOL case;
+			// its ordinary default branch falls through to the common input
+			// advance below.
 			consumed++
-			position.x++
-			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
-				return consumed, spaces, err
-			}
 		}
 	}
 	return consumed, spaces, nil
@@ -480,7 +481,7 @@ func retrieveNumberOfSpaces(originalX int, input []uint16, current int) int {
 
 func checkBisectProcess(buffer *textBuffer, input []uint16, cBytes, originalX int, printableControlChars bool) bool {
 	if !buffer.processedOutput {
-		return false
+		return checkBisectString(input, cBytes)
 	}
 	words := len(input)
 	for words > 0 && cBytes > 0 {
@@ -534,18 +535,39 @@ func checkBisectProcess(buffer *textBuffer, input []uint16, cBytes, originalX in
 	return false
 }
 
-func writeSpaceAt(buffer *textBuffer, target coordinate) {
+// checkBisectString is CheckBisectStringW.  The unprocessed-output branch
+// deliberately does not apply control expansion or tab accounting; it scans
+// the raw UTF-16 units exactly as the pinned helper does.
+func checkBisectString(input []uint16, cBytes int) bool {
+	words := len(input)
+	for words > 0 && cBytes > 0 {
+		char := input[len(input)-words]
+		if isGlyphFullWidth(char) {
+			if cBytes < 2 {
+				return true
+			}
+			words--
+			cBytes -= 2
+			continue
+		}
+		words--
+		cBytes--
+	}
+	return false
+}
+
+func writeSpaceAt(buffer *textBuffer, target coordinate, attributes textAttribute) {
 	if target.x < 0 || target.y < 0 || target.x >= buffer.width || target.y >= buffer.height {
 		return
 	}
-	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, buffer.currentAttrs, 1), target, nil)
+	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, attributes, 1), target, nil)
 }
 
-func writeSpacesAt(buffer *textBuffer, target coordinate, count int) {
+func writeSpacesAt(buffer *textBuffer, target coordinate, count int, attributes textAttribute) {
 	if count <= 0 {
 		return
 	}
-	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, buffer.currentAttrs, count), target, nil)
+	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, attributes, count), target, nil)
 }
 
 var bufferWidth = newWidthDetector()
@@ -659,6 +681,17 @@ func outputCellsFromUTF16WithAttr(units []uint16, attr textAttribute) outputCell
 }
 
 func writeDefaultString(buffer *textBuffer, input []uint16) error {
+	if buffer == nil {
+		return fmt.Errorf("nil screen buffer")
+	}
+	// This is the pinned WriteBuffer::_DefaultStringCase order. The cursor is
+	// turned on before the legacy writer, and redraw is deferred for the whole
+	// call; neither operation belongs in WriteCharsLegacy itself.
+	if !buffer.cursor.on {
+		buffer.cursor.on = true
+	}
+	buffer.cursor.deferCursorRedraw = true
 	_, _, err := writeCharsLegacy(buffer, input, wcLimitBackspace|wcDelayEOLWrap)
+	buffer.cursor.deferCursorRedraw = false
 	return err
 }

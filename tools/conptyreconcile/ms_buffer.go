@@ -611,9 +611,6 @@ func (r *msRow) writeCells(input outputCellIterator, index int, wrap *bool, limi
 				r.clearColumn(currentIndex)
 				r.doubleBytePadded = true
 			} else {
-				if cell.behavior != attrCurrent {
-					r.attrs.set(currentIndex, cell.attr)
-				}
 				r.charRow.data[currentIndex].attr = cell.dbcs
 				r.charRow.setGlyph(currentIndex, cell.glyph)
 				it.advance()
@@ -691,31 +688,34 @@ type textBuffer struct {
 	// SCREEN_INFORMATION keeps these coordinates separately from TextBuffer.
 	// They are carried here because the standalone port has one screen-info
 	// owner for each active buffer and AdjustCursorPosition reads all of them.
-	viewportLeft       int
-	viewportWidth      int
-	viewportTop        int
-	viewportHeight     int
-	virtualBottom      int
-	terminalScrolling  bool
-	wrapAtEOL          bool
-	processedOutput    bool
-	returnOnNewline    bool
-	vtMode             bool
-	currentAttrs       textAttribute
-	cursorSize         uint32
-	tabStops           map[int]bool
-	savedCursor        coordinate
-	savedCursorState   cursorState
-	savedCursorAttrs   textAttribute
-	savedOriginMode    bool
-	originMode         bool
-	scrollTop          int
-	scrollBottom       int
-	hyperlinkMap       map[uint16]string
-	hyperlinkCustomID  map[string]uint16
-	currentHyperlinkID uint16
-	patterns           map[uint64]string
-	currentPatternID   uint64
+	viewportLeft        int
+	viewportWidth       int
+	viewportTop         int
+	viewportHeight      int
+	virtualBottom       int
+	terminalScrolling   bool
+	wrapAtEOL           bool
+	processedOutput     bool
+	returnOnNewline     bool
+	vtMode              bool
+	currentAttrs        textAttribute
+	cursorSize          uint32
+	tabStops            map[int]bool
+	tabStopsWidth       int
+	initDefaultTabStops bool
+	savedCursor         coordinate
+	savedCursorState    cursorState
+	savedCursorAttrs    textAttribute
+	savedOriginMode     bool
+	originMode          bool
+	scrollTop           int
+	scrollBottom        int
+	hyperlinkMap        map[uint16]string
+	hyperlinkCustomID   map[string]uint16
+	currentHyperlinkID  uint16
+	patterns            map[uint64]string
+	currentPatternID    uint64
+	renderer            *frameEmitter
 }
 
 func newTextBuffer(width, height int) *textBuffer {
@@ -735,12 +735,12 @@ func newTextBufferWithAttributes(width, height int, fill textAttribute) *textBuf
 		rows[i] = newMSRow(width, i, store)
 		rows[i].replaceAttrs(0, width, fill)
 	}
+	// AdaptDispatch owns a lazily-sized _tabStopColumns vector.  The
+	// TextBuffer constructor does not materialize default stops; the first
+	// tab operation calls _InitTabStopsForWidth instead.
 	tabStops := make(map[int]bool)
-	for i := 8; i < width; i += 8 {
-		tabStops[i] = true
-	}
 	cursor := cursorState{visible: true, on: true, blinkingAllowed: true, size: 25, style: cursorLegacy, color: 0xffffffff}
-	return &textBuffer{width: width, height: height, rows: rows, store: store, cursor: cursor, viewportWidth: width, viewportHeight: height, virtualBottom: height - 1, wrapAtEOL: true, processedOutput: true, returnOnNewline: true, currentAttrs: fill, cursorSize: 25, tabStops: tabStops, hyperlinkMap: make(map[uint16]string), hyperlinkCustomID: make(map[string]uint16), currentHyperlinkID: 1, patterns: make(map[uint64]string)}
+	return &textBuffer{width: width, height: height, rows: rows, store: store, cursor: cursor, viewportWidth: width, viewportHeight: height, virtualBottom: height - 1, wrapAtEOL: true, processedOutput: true, returnOnNewline: true, currentAttrs: fill, cursorSize: 25, tabStops: tabStops, tabStopsWidth: 0, initDefaultTabStops: true, hyperlinkMap: make(map[uint16]string), hyperlinkCustomID: make(map[string]uint16), currentHyperlinkID: 1, patterns: make(map[uint64]string)}
 }
 
 func (b *textBuffer) sizeInBounds(p coordinate) bool {
@@ -1073,9 +1073,6 @@ func (b *textBuffer) resizeTraditional(width, height int) error {
 	if width < 0 || height < 0 {
 		return fmt.Errorf("invalid traditional resize %dx%d", width, height)
 	}
-	if height == 0 {
-		return fmt.Errorf("traditional resize requires a non-zero height")
-	}
 	currentHeight := b.height
 	oldWidth := b.width
 	oldViewportWidth := b.viewportWidth
@@ -1181,10 +1178,18 @@ func (b *textBuffer) clearRangeWithAttr(row, left, right int, attr textAttribute
 	if right >= b.width {
 		right = b.width - 1
 	}
-	for col := left; col <= right; col++ {
-		b.rowByOffset(row).clearColumn(col)
-		b.rowByOffset(row).attrs.set(col, attr)
+	if left > right {
+		return
 	}
+	// DoSrvPrivateFillRegion constructs one fill iterator and enters the
+	// pinned TextBuffer::WriteLine/ROW::WriteCells path.  Going through that
+	// path is required for trailing/leading DBCS padding and for the
+	// wrap=false update at the final column; clearing cells directly would
+	// silently omit both source branches.
+	count := right - left + 1
+	fill := newOutputCellFillIterator(unicodeSpace, attr, count)
+	wrap := false
+	_, _ = b.writeLine(fill, coordinate{x: left, y: row}, &wrap, &right)
 }
 
 // resetLineRenditionRange is TextBuffer::ResetLineRenditionRange. It changes
@@ -1350,13 +1355,14 @@ func (b *textBuffer) scrollRectangle(source, clip *cellRect, targetOrigin coordi
 	}
 	for _, remaining := range subtractCellRect(fillView, targetView) {
 		for row := remaining.top; row < remaining.bottom; row++ {
-			for column := remaining.left; column < remaining.right; column++ {
-				cell := b.rowByOffset(row).charRow.data[column]
-				cell.attr = dbcsAttribute{}
-				b.rowByOffset(row).charRow.data[column] = cell
-				b.rowByOffset(row).charRow.setGlyph(column, []uint16{fillChar})
-				b.rowByOffset(row).attrs.set(column, fill)
-			}
+			// ScrollRegion constructs one infinite fill iterator and calls
+			// SCREEN_INFORMATION::WriteRect. WriteRect delegates each row to
+			// TextBuffer::WriteLine with wrap=false and the viewport's inclusive
+			// right limit; keep that exact row boundary here.
+			wrap := false
+			rowRight := remaining.right - 1
+			fillData := newOutputCellFillIterator(fillChar, fill, 0)
+			_, _ = b.writeLine(fillData, coordinate{x: remaining.left, y: row}, &wrap, &rowRight)
 			if remaining.left == 0 && remaining.right == b.width && targetOrigin.x == 0 {
 				b.rowByOffset(row).lineRendition = lineRenditionSingle
 			}
@@ -1436,6 +1442,11 @@ func (b *textBuffer) moveCursor(row, col int) {
 // cursorMove is the buffer-side transcription of
 // AdaptDispatch::_CursorMovePosition.
 func (b *textBuffer) cursorMove(rowOffset, colOffset int, rowAbsolute, colAbsolute, clampInMargins bool) {
+	// AdaptDispatch::_CursorMovePosition always restores the virtual viewport
+	// before reading cursor and margin coordinates.  This must precede even an
+	// absolute move: a user-scrolled viewport is not the coordinate frame used
+	// by the pinned adapter.
+	b.moveToBottom()
 	current := b.cursor.position
 	row := current.y
 	col := current.x
@@ -1498,6 +1509,11 @@ func (b *textBuffer) setScrollingMargins(top, bottom int) bool {
 // The public adapter entry point homes the cursor after this helper returns;
 // DECCOLM and DECALN use the helper directly, as in the pinned source.
 func (b *textBuffer) setScrollingMarginsRaw(top, bottom int) bool {
+	// AdaptDispatch::_DoSetTopBottomScrollingMargins first restores the
+	// virtual viewport with MoveToBottom before reading the screen geometry.
+	// Keep this inside the helper because SoftReset, DECALN, and DECSTBM all
+	// enter through the same pinned operation.
+	b.moveToBottom()
 	if top < 0 || bottom < 0 {
 		return false
 	}
@@ -1538,10 +1554,9 @@ func (b *textBuffer) setCurrentLineRendition(rendition lineRendition) {
 		fill := b.currentAttrs
 		fill.setStandardErase()
 		fillOffset := b.lineWidth(rowIndex)
-		for column := fillOffset; column < b.width; column++ {
-			row.charRow.clearCell(column)
-			row.attrs.set(column, fill)
-		}
+		fillData := newOutputCellFillIterator(unicodeSpace, fill, b.width-fillOffset)
+		wrap := false
+		_, _ = row.writeCells(fillData, fillOffset, &wrap, nil)
 		b.setCursor(b.clampPositionWithinLine(b.cursor.position))
 	}
 }
@@ -1672,19 +1687,41 @@ func cloneUint64StringMap(source map[uint64]string) map[uint64]string {
 	return result
 }
 
-func (b *textBuffer) setTab(column int) { b.tabStops[column] = true }
+func (b *textBuffer) initTabStopsForWidth(width int) {
+	initialWidth := b.tabStopsWidth
+	if width <= initialWidth {
+		return
+	}
+	if b.initDefaultTabStops {
+		for column := 8; column < width; column += 8 {
+			if column >= initialWidth {
+				b.tabStops[column] = true
+			}
+		}
+	}
+	b.tabStopsWidth = width
+}
 
-func (b *textBuffer) clearTab(column int) { delete(b.tabStops, column) }
-
-// resetTabStops follows AdaptDispatch::_ResetTabStops. The pinned adapter
-// clears its lazily-sized table and marks default stops for reinitialization;
-// this standalone buffer keeps the same observable result by materializing
-// those defaults for its current width.
-func (b *textBuffer) resetTabStops() {
-	b.tabStops = make(map[int]bool)
-	for column := 8; column < b.width; column += 8 {
+func (b *textBuffer) setTab(column int) {
+	b.initTabStopsForWidth(b.width)
+	if column >= 0 && column < b.width {
 		b.tabStops[column] = true
 	}
+}
+
+func (b *textBuffer) clearTab(column int) {
+	b.initTabStopsForWidth(b.width)
+	if column >= 0 && column < b.width {
+		delete(b.tabStops, column)
+	}
+}
+
+// resetTabStops follows AdaptDispatch::_ResetTabStops. The pinned adapter
+// clears its lazily-sized table and marks default stops for reinitialization.
+func (b *textBuffer) resetTabStops() {
+	b.tabStops = make(map[int]bool)
+	b.tabStopsWidth = 0
+	b.initDefaultTabStops = true
 }
 
 func (b *textBuffer) tab() {
@@ -1695,6 +1732,7 @@ func (b *textBuffer) tabForward(count int) {
 	if count < 0 {
 		return
 	}
+	b.initTabStopsForWidth(b.width)
 	start := b.cursor.position.x
 	for step := 0; step < count; step++ {
 		next := b.width - 1
@@ -1716,6 +1754,7 @@ func (b *textBuffer) tabBackward(count int) {
 	if count < 0 {
 		return
 	}
+	b.initTabStopsForWidth(b.width)
 	start := b.cursor.position.x
 	for step := 0; step < count; step++ {
 		previous := 0
@@ -1736,6 +1775,8 @@ func (b *textBuffer) clearTabs(mode int) {
 		b.clearTab(b.cursor.position.x)
 	case 3:
 		clear(b.tabStops)
+		b.tabStopsWidth = 0
+		b.initDefaultTabStops = false
 	}
 }
 
@@ -1957,6 +1998,7 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 	foundCursor := false
 	foundOldMutable := false
 	foundOldVisible := false
+	var reflowErr error
 
 	for oldRowIndex := 0; oldRowIndex < oldRowsTotal; oldRowIndex++ {
 		oldRow := oldBuffer.rowByOffset(oldRowIndex)
@@ -1971,14 +2013,20 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 		if newBuffer.cursor.position.x == 0 {
 			newBuffer.rowByOffset(newBuffer.cursor.position.y).lineRendition = oldRow.lineRendition
 		}
-		for oldCol := 0; oldCol < right; oldCol++ {
+		oldCol := 0
+		for ; oldCol < right; oldCol++ {
 			if oldCol == oldCursor.x && oldRowIndex == oldCursor.y && !foundCursor {
 				newCursor = newBuffer.cursor.position
 				foundCursor = true
 			}
 			cell := oldRow.charRow.data[oldCol]
 			if !copyCell(newBuffer, oldRow.charRow.glyphAt(oldCol), cell.attr, oldRow.attrs.at(oldCol)) {
-				return fmt.Errorf("reflow insertion failed at old row %d col %d", oldRowIndex, oldCol)
+				// TextBuffer::Reflow records E_OUTOFMEMORY and breaks the
+				// printable-cell loop. It still performs the attribute and
+				// PositionInformation work below, while newline/cursor-finalization
+				// branches are guarded by SUCCEEDED(hr).
+				reflowErr = fmt.Errorf("reflow insertion failed at old row %d col %d", oldRowIndex, oldCol)
+				break
 			}
 		}
 		// This is the pinned GH#32 attribute-row copy.  SetAttrToEnd is
@@ -1986,7 +2034,7 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 		// run operation and its ordering.
 		newRow := newBuffer.rowByOffset(newBuffer.cursor.position.y)
 		newAttrColumn := newBuffer.cursor.position.x
-		for copyAttrColumn := right; copyAttrColumn < oldWidth && newAttrColumn < newBuffer.lineWidth(newBuffer.cursor.position.y); copyAttrColumn++ {
+		for copyAttrColumn := oldCol; copyAttrColumn < oldWidth && newAttrColumn < newBuffer.lineWidth(newBuffer.cursor.position.y); copyAttrColumn++ {
 			if !newRow.setAttrToEnd(newAttrColumn, oldRow.attrs.at(copyAttrColumn)) {
 				break
 			}
@@ -2002,19 +2050,23 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 				foundOldVisible = true
 			}
 		}
-		if right < oldWidth && !oldRow.wrapForced && oldRowIndex < oldRowsTotal-1 {
+		if reflowErr == nil && right < oldWidth && !oldRow.wrapForced && oldRowIndex < oldRowsTotal-1 {
 			if !foundCursor && right == oldCursor.x && oldRowIndex == oldCursor.y {
 				newCursor = newBuffer.cursor.position
 				foundCursor = true
 			}
-			newBuffer.newlineCursor()
-		} else if right < oldWidth && !oldRow.wrapForced && oldRowIndex == oldRowsTotal-1 {
+			if !newBuffer.newlineCursor() {
+				reflowErr = fmt.Errorf("reflow newline failed after old row %d", oldRowIndex)
+			}
+		} else if reflowErr == nil && right < oldWidth && !oldRow.wrapForced && oldRowIndex == oldRowsTotal-1 {
 			// TextBuffer::Reflow preserves a final hard newline if the
 			// narrower buffer made the preceding row soft-wrap and thereby
 			// already moved the cursor to column zero.
 			newPosition := newBuffer.cursor.position
 			if newPosition.x == 0 && newPosition.y > 0 && newBuffer.rowByOffset(newPosition.y-1).wrapForced {
-				newBuffer.newlineCursor()
+				if !newBuffer.newlineCursor() {
+					reflowErr = fmt.Errorf("reflow final newline failed after old row %d", oldRowIndex)
+				}
 			}
 		}
 	}
@@ -2035,12 +2087,14 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 	// Cursor::CopyProperties deliberately excludes position, size, and delayed
 	// EOL state, so this ordering is observable for the remaining properties.
 	oldCursorSize := oldBuffer.cursor.size
-	newBuffer.cursor.copyProperties(oldBuffer.cursor)
-	newBuffer.copyHyperlinkMaps(oldBuffer)
-	newBuffer.copyPatterns(oldBuffer)
-	if foundCursor {
+	if reflowErr == nil {
+		newBuffer.cursor.copyProperties(oldBuffer.cursor)
+		newBuffer.copyHyperlinkMaps(oldBuffer)
+		newBuffer.copyPatterns(oldBuffer)
+	}
+	if reflowErr == nil && foundCursor {
 		newBuffer.setCursor(newCursor)
-	} else {
+	} else if reflowErr == nil {
 		// This is TextBuffer::Reflow's post-copy cursor advancement when the
 		// old cursor was not encountered while copying printable cells.
 		newlines := oldCursor.y - oldLast.y
@@ -2056,13 +2110,23 @@ func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *
 			}
 		}
 		for i := 0; i < newlines; i++ {
-			newBuffer.newlineCursor()
+			if !newBuffer.newlineCursor() {
+				reflowErr = fmt.Errorf("reflow cursor newline failed")
+				break
+			}
 		}
-		for col := 0; col < increments-1; col++ {
-			newBuffer.incrementCursor()
+		if reflowErr == nil {
+			for col := 0; col < increments-1; col++ {
+				if !newBuffer.incrementCursor() {
+					reflowErr = fmt.Errorf("reflow cursor increment failed")
+					break
+				}
+			}
 		}
 	}
 	// ResizeWithReflow restores the old cursor size after TextBuffer::Reflow.
-	newBuffer.cursor.size = oldCursorSize
-	return nil
+	if reflowErr == nil {
+		newBuffer.cursor.size = oldCursorSize
+	}
+	return reflowErr
 }

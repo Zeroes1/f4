@@ -74,45 +74,48 @@ func vtIDFromString(value string) uint64 {
 }
 
 type vtParser struct {
-	buffer            *textBuffer
-	mainBuffer        *textBuffer
-	altBuffer         *textBuffer
-	state             parserState
-	termOutput        terminalOutput
-	savedCursorState  [2]dispatchCursorState
-	params            []int
-	paramValue        int
-	paramStarted      bool
-	parameterLimit    bool
-	private           byte
-	intermediate      []uint16
-	identifier        vtIDBuilder
-	oscParam          int
-	oscDigits         []byte
-	oscString         []uint16
-	dcsPassThrough    bool
-	dcsData           []uint16
-	wideParser        *utf8WideParser
-	newLineAutoReturn bool
-	ansiMode          bool
-	vt52Params        []uint16
-	title             string
-	colorTable        map[uint8]uint32
-	defaultForeground uint32
-	defaultBackground uint32
-	bells             int
-	lastPrinted       uint16
-	printed           bool
-	sgrStack          sgrStackState
-	responses         [][]byte
-	cursorKeysMode    bool
-	keypadMode        bool
-	deccolmSupport    bool
-	screenMode        bool
-	mouseModes        map[int]bool
-	bracketedPaste    bool
-	win32InputMode    bool
-	failed            error
+	buffer             *textBuffer
+	mainBuffer         *textBuffer
+	altBuffer          *textBuffer
+	state              parserState
+	termOutput         terminalOutput
+	savedCursorState   [2]dispatchCursorState
+	params             []int
+	paramValue         int
+	paramStarted       bool
+	parameterLimit     bool
+	private            byte
+	intermediate       []uint16
+	identifier         vtIDBuilder
+	oscParam           int
+	oscDigits          []byte
+	oscString          []uint16
+	dcsPassThrough     bool
+	dcsData            []uint16
+	wideParser         *utf8WideParser
+	outputCodePage     uint32
+	initialCodePage    uint32
+	hasInitialCodePage bool
+	newLineAutoReturn  bool
+	ansiMode           bool
+	vt52Params         []uint16
+	title              string
+	colorTable         map[uint8]uint32
+	defaultForeground  uint32
+	defaultBackground  uint32
+	bells              int
+	lastPrinted        uint16
+	printed            bool
+	sgrStack           sgrStackState
+	responses          [][]byte
+	cursorKeysMode     bool
+	keypadMode         bool
+	deccolmSupport     bool
+	screenMode         bool
+	mouseModes         map[int]bool
+	bracketedPaste     bool
+	win32InputMode     bool
+	failed             error
 }
 
 // dispatchCursorState is AdaptDispatch::_savedCursorState. Coordinates are
@@ -124,6 +127,7 @@ type dispatchCursorState struct {
 	originMode bool
 	attrs      textAttribute
 	termOutput terminalOutput
+	codePage   uint32
 }
 
 func (p *vtParser) standardErase() textAttribute {
@@ -135,7 +139,7 @@ func (p *vtParser) standardErase() textAttribute {
 func newVTParser(width, height int) *vtParser {
 	b := newTextBuffer(width, height)
 	b.vtMode = true
-	return &vtParser{buffer: b, mainBuffer: b, state: stateGround, termOutput: newTerminalOutput(), wideParser: newUTF8WideParser(), newLineAutoReturn: true, ansiMode: true, mouseModes: make(map[int]bool), colorTable: make(map[uint8]uint32), defaultForeground: 0xffffffff, defaultBackground: 0xffffffff}
+	return &vtParser{buffer: b, mainBuffer: b, state: stateGround, termOutput: newTerminalOutput(), wideParser: newUTF8WideParser(), outputCodePage: 0, newLineAutoReturn: true, ansiMode: true, mouseModes: make(map[int]bool), colorTable: make(map[uint8]uint32), defaultForeground: 0xffffffff, defaultBackground: 0xffffffff}
 }
 
 func (p *vtParser) reset() {
@@ -158,6 +162,9 @@ func (p *vtParser) reset() {
 	p.dcsPassThrough = false
 	p.dcsData = nil
 	p.wideParser = newUTF8WideParser()
+	p.outputCodePage = 0
+	p.initialCodePage = 0
+	p.hasInitialCodePage = false
 	p.newLineAutoReturn = true
 	p.ansiMode = true
 	p.vt52Params = nil
@@ -180,9 +187,6 @@ func (p *vtParser) reset() {
 func (p *vtParser) feed(data []byte) error {
 	if p.failed != nil {
 		return p.failed
-	}
-	if len(data) != 0 {
-		p.buffer.moveToBottom()
 	}
 	units, err := p.wideParser.feed(data)
 	if err != nil {
@@ -255,15 +259,11 @@ func (p *vtParser) printUnits(units []uint16) {
 
 func (p *vtParser) consumeUnit(unit uint16) {
 	if unit == 0x18 || unit == 0x1a {
-		// OutputStateMachineEngine::DispatchControlCharsFromEscape returns
-		// false in the pinned source.  Consequently CAN/SUB in Escape is
-		// handled by _EventEscape as an ordinary execute action and leaves
-		// the parser in Escape; every other state takes the from-anywhere
-		// interrupt/execute/ground path.
-		if p.state == stateEscape {
-			p.execute(byte(unit))
-			return
-		}
+		// StateMachine::ProcessCharacter handles CAN/SUB in the
+		// from-anywhere branch before dispatching the current state. This also
+		// applies in Escape: DispatchControlCharsFromEscape is false, but the
+		// condition is negated, so the sequence is interrupted, executed, and
+		// enters Ground.
 		p.interruptDCS()
 		p.state = stateGround
 		// StateMachine::_EnterGround only changes the state.  It does not call
@@ -727,6 +727,34 @@ func (p *vtParser) interruptDCS() {
 	}
 }
 
+// designateCodingSystem is AdaptDispatch::DesignateCodingSystem. The
+// GetConsoleOutputCP/SetConsoleOutputCP calls are kept as an explicit
+// external-API boundary: their source implementation is in Windows, not in
+// the pinned OpenConsole tree. The probe's console adapter records the same
+// state and reports success for the two coding systems accepted by the pinned
+// switch; it does not invent conversion behavior for any other code page.
+func (p *vtParser) designateCodingSystem(coding uint64) bool {
+	if !p.hasInitialCodePage {
+		p.initialCodePage = p.outputCodePage
+		p.hasInitialCodePage = true
+	}
+	var codePage uint32
+	var enableGR bool
+	switch coding {
+	case vtIDFromString("@"):
+		codePage = 28591
+		enableGR = true
+	case vtIDFromString("G"):
+		codePage = codePageUTF8
+		enableGR = false
+	default:
+		return false
+	}
+	p.outputCodePage = codePage
+	p.termOutput.enableGrTranslation(enableGR)
+	return true
+}
+
 func (p *vtParser) dispatchEscape(final uint16) {
 	id := p.identifier.finalize(final)
 	switch id {
@@ -776,9 +804,9 @@ func (p *vtParser) dispatchEscape(final uint16) {
 	case vtIDFromString("\\"):
 		// EscActionCodes::ST_StringTerminator is a successful no-op.
 	case vtIDFromString("%@"):
-		p.termOutput.enableGrTranslation(true)
+		_ = p.designateCodingSystem(vtIDFromString("@"))
 	case vtIDFromString("%G"):
-		p.termOutput.enableGrTranslation(false)
+		_ = p.designateCodingSystem(vtIDFromString("G"))
 	case vtIDFromString("(0"):
 		p.termOutput.designate94Charset(0, "0")
 	case vtIDFromString("(B"):
@@ -839,7 +867,9 @@ func (p *vtParser) screenAlignmentPattern() {
 	p.buffer.currentAttrs = attrs
 	p.buffer.originMode = false
 	_ = p.buffer.setScrollingMarginsRaw(0, 0)
-	_ = p.buffer.setCursorPosition(coordinate{}, true)
+	// AdaptDispatch::CursorPosition(1,1) addresses the top-left of the
+	// current viewport, not backing-buffer coordinate (0,0).
+	p.buffer.cursorMove(0, 0, true, true, false)
 }
 
 func (p *vtParser) dispatchVT52(final uint16) {
@@ -866,12 +896,25 @@ func (p *vtParser) dispatchVT52(final uint16) {
 			col := int(p.vt52Params[1]) - int(' ')
 			p.buffer.cursorMove(row, col, true, true, false)
 		}
+	case 'F':
+		// Vt52ActionCodes::EnterGraphicsMode delegates to the pinned
+		// DEC-special-graphics designation.
+		p.termOutput.designate94Charset(0, "0")
+	case 'G':
+		// Vt52ActionCodes::ExitGraphicsMode delegates to the pinned ASCII
+		// designation.
+		p.termOutput.designate94Charset(0, "B")
+	case 'Z':
+		p.responses = append(p.responses, []byte("\x1b/Z"))
+	case '=':
+		p.keypadMode = true
+	case '>':
+		p.keypadMode = false
 	case '<':
 		p.ansiMode = true
-	case 'O', 'F', 'G', 'Z', '=', '>':
-		// These pinned OutputStateMachineEngine actions affect character
-		// sets, device identification, or keypad state, none of which changes
-		// the text buffer in this probe.
+	case 'O':
+		// Unknown VT52 dispatches are unsuccessful no-ops in the pinned
+		// OutputStateMachineEngine.
 	}
 	p.state = stateGround
 	p.vt52Params = nil
@@ -1097,16 +1140,11 @@ func parsePinnedHyperlink(value []uint16) (params, uri string, ok bool) {
 }
 
 func (p *vtParser) dispatchSS3(b uint16) {
-	switch b {
-	case 'A':
-		p.moveCursor(-1, 0)
-	case 'B':
-		p.moveCursor(1, 0)
-	case 'C':
-		p.moveCursor(0, 1)
-	case 'D':
-		p.moveCursor(0, -1)
-	}
+	// OutputStateMachineEngine::ActionSs3Dispatch is an unconditional
+	// failure/no-op in the pinned source. The normal ANSI state machine never
+	// reaches this helper because ParseControlSequenceAfterSs3 is false; keep
+	// the helper source-faithful for any direct state-machine exercise.
+	_ = b
 	p.state = stateGround
 	p.clearLastPrinted()
 }
@@ -1305,10 +1343,11 @@ func (p *vtParser) privateMode(enable bool, params []int) {
 				}
 				if err := p.buffer.setColumns(width); err == nil {
 					p.buffer.originMode = false
-					if err := p.buffer.setCursorPosition(coordinate{}, true); err != nil {
-						p.failed = err
-						break
-					}
+					// AdaptDispatch::_DoDECCOLMHelper calls the public
+					// CursorPosition(1, 1), which uses the current viewport
+					// origin after SetColumns; it is not a raw buffer (0,0)
+					// assignment.
+					p.buffer.cursorMove(0, 0, true, true, false)
 					p.eraseDisplay(2)
 					if !p.buffer.setScrollingMarginsRaw(0, 0) {
 						p.failed = fmt.Errorf("DECCOLM could not reset scrolling margins")
@@ -1535,17 +1574,21 @@ func (p *vtParser) windowManipulation(function, parameter1, parameter2 int) {
 }
 
 func (p *vtParser) softReset() {
-	p.buffer.wrapAtEOL = true
+	// AdaptDispatch::SoftReset preserves the source call order. The host calls
+	// below are represented by the corresponding standalone screen state.
+	p.buffer.cursor.visible = true
 	p.buffer.originMode = false
+	p.buffer.wrapAtEOL = true
 	p.cursorKeysMode = false
 	p.keypadMode = false
 	p.buffer.moveToBottom()
 	if !p.buffer.setScrollingMarginsRaw(0, 0) {
 		p.failed = fmt.Errorf("SoftReset could not reset scrolling margins")
 	}
-	p.buffer.cursor.visible = true
-	p.buffer.cursor.blinkingAllowed = true
 	p.termOutput = newTerminalOutput()
+	if p.hasInitialCodePage {
+		p.outputCodePage = p.initialCodePage
+	}
 	// AdaptDispatch::SoftReset calls SetGraphicsRendition with the default
 	// VTParameters value. VTParameters::size() exposes one omitted parameter,
 	// whose GraphicsOptions conversion is Off (SGR 0).
@@ -1560,7 +1603,11 @@ func (p *vtParser) softReset() {
 // connected application can receive the RIS sequence.
 func (p *vtParser) hardReset() {
 	if p.buffer == p.altBuffer {
-		p.useMain()
+		// HardReset calls the private host switch directly. Unlike
+		// AdaptDispatch::UseMainScreenBuffer, that call is not followed by
+		// CursorRestoreState; SoftReset immediately clears the saved states.
+		p.switchToMainBuffer()
+		p.altBuffer = nil
 	}
 
 	// The pinned implementation resets SGR before either erase operation so
@@ -1570,18 +1617,20 @@ func (p *vtParser) hardReset() {
 	p.eraseDisplay(3)
 
 	// AdaptDispatch::SetScreenMode is a NoOp failure for a ConPTY, so there is
-	// no state change here. Only the two mouse modes explicitly reset by the
-	// pinned HardReset are touched.
+	// no state change here.
+	// SoftReset makes addressing absolute; CursorPosition(1, 1) therefore
+	// homes to the active viewport origin before the mouse-mode calls.
+	p.buffer.cursorMove(0, 0, true, true, false)
+
+	// The pinned HardReset resets these two input modes after CursorPosition.
+	// Their private host calls are represented as state, while the ConPTY
+	// pass-through return remains an external connection behavior.
 	if p.mouseModes == nil {
 		p.mouseModes = make(map[int]bool)
 	}
 	p.mouseModes[1006] = false
 	p.mouseModes[1003] = false
 	p.buffer.resetTabStops()
-
-	// SoftReset makes addressing absolute; CursorPosition(1, 1) therefore
-	// homes to the active viewport origin.
-	p.buffer.cursorMove(0, 0, true, true, false)
 
 	// PrivateUpdateSoftFont({}, {}, false) and its font-buffer ownership have
 	// no text-buffer representation in this probe. This is an explicit source
@@ -1769,7 +1818,7 @@ func (p *vtParser) saveCursorState() {
 	position.y -= p.buffer.viewportTop
 	p.savedCursorState[index] = dispatchCursorState{
 		position: position, originMode: p.buffer.originMode,
-		attrs: p.buffer.currentAttrs, termOutput: p.termOutput,
+		attrs: p.buffer.currentAttrs, termOutput: p.termOutput, codePage: p.outputCodePage,
 	}
 }
 
@@ -1797,6 +1846,9 @@ func (p *vtParser) restoreCursorState() {
 	p.buffer.originMode = saved.originMode
 	p.buffer.currentAttrs = saved.attrs
 	p.termOutput = saved.termOutput
+	if saved.codePage != 0 {
+		p.outputCodePage = saved.codePage
+	}
 }
 
 func (p *vtParser) useAlternate() {
@@ -1806,19 +1858,31 @@ func (p *vtParser) useAlternate() {
 	// visibility, blinking policy, and viewport-relative position.
 	p.saveCursorState()
 	main := p.mainBuffer
+	width := main.viewportWidth
+	if width <= 0 {
+		width = main.width
+	}
 	height := main.viewportHeight
 	if height <= 0 {
 		height = main.height
 	}
 	initAttributes := main.currentAttrs
 	initAttributes.setStandardErase()
-	p.altBuffer = newTextBufferWithAttributes(main.width, height, initAttributes)
+	// SCREEN_INFORMATION::_CreateAltBuffer passes the current viewport
+	// dimensions as both the backing-buffer and viewport dimensions.  This is
+	// intentionally not main.width: the pinned path narrows an alt buffer when
+	// the active main viewport is narrower than its backing row.
+	p.altBuffer = newTextBufferWithAttributes(width, height, initAttributes)
 	p.altBuffer.vtMode = main.vtMode
 	p.altBuffer.cursor.size = main.cursor.size
 	p.altBuffer.cursor.style = main.cursor.style
 	p.altBuffer.cursor.color = main.cursor.color
 	p.altBuffer.cursor.visible = main.cursor.visible
 	p.altBuffer.cursor.blinkingAllowed = main.cursor.blinkingAllowed
+	// The pinned renderer is owned by the screen/render target, not by the
+	// discarded TextBuffer allocation. Keep its XtermEngine/VtEngine state
+	// across the alternate-buffer switch.
+	p.altBuffer.renderer = main.renderer
 	altPosition := main.cursor.position
 	altPosition.y -= main.virtualViewportTop()
 	p.altBuffer.cursor.position = altPosition
@@ -1833,6 +1897,19 @@ func (p *vtParser) useMain() {
 	if p.buffer == p.mainBuffer {
 		return
 	}
+	p.switchToMainBuffer()
+	p.restoreCursorState()
+	p.altBuffer = nil
+}
+
+// switchToMainBuffer is SCREEN_INFORMATION::UseMainScreenBuffer. The host
+// operation copies only cursor presentation properties from the discarded alt
+// buffer. AdaptDispatch::UseMainScreenBuffer adds CursorRestoreState; callers
+// such as HardReset intentionally do not.
+func (p *vtParser) switchToMainBuffer() {
+	if p.buffer == p.mainBuffer {
+		return
+	}
 	alt := p.altBuffer
 	p.buffer = p.mainBuffer
 	if alt != nil {
@@ -1842,30 +1919,32 @@ func (p *vtParser) useMain() {
 		p.mainBuffer.cursor.visible = alt.cursor.visible
 		p.mainBuffer.cursor.blinkingAllowed = alt.cursor.blinkingAllowed
 	}
-	p.restoreCursorState()
-	p.altBuffer = nil
 }
 
 func (p *vtParser) printRune(r rune) {
 	units := utf16Units(string(r))
+	// OutputStateMachineEngine::ActionPrint records the raw wchar before
+	// AdaptDispatch::Print applies charset translation or filters DEL.
+	if len(units) != 0 && units[len(units)-1] >= unicodeSpace {
+		p.lastPrinted = units[len(units)-1]
+		p.printed = true
+	}
 	p.buffer.returnOnNewline = p.newLineAutoReturn
 	if p.termOutput.needToTranslate() {
 		for i, unit := range units {
 			units[i] = p.termOutput.translateKey(unit)
 		}
 	}
+	// AdaptDispatch::Print filters DEL after charset translation. This filter
+	// is intentionally here, rather than in printUnits: PrintString forwards
+	// the whole string to WriteBuffer and does not apply the single-character
+	// DEL rule.
 	if len(units) == 1 && units[0] == 0x7f {
 		return
 	}
 	if err := writeDefaultString(p.buffer, units); err != nil {
 		p.failed = err
 		return
-	}
-	if len(units) != 0 && units[len(units)-1] >= unicodeSpace {
-		// OutputStateMachineEngine::_lastPrintedChar stores the last UTF-16
-		// code unit, not a Unicode scalar or grapheme.
-		p.lastPrinted = units[len(units)-1]
-		p.printed = true
 	}
 }
 
@@ -1896,9 +1975,6 @@ func (p *vtParser) execute(b byte) {
 	switch b {
 	case 0x00:
 		// OutputStateMachineEngine::ActionExecute explicitly filters NUL.
-	case 0x7f:
-		// ActionExecute does not special-case DEL. It routes it through Print;
-		// the pinned default WriteCharsLegacy path does not store it.
 	case 0x07:
 		p.bells++
 	case 0x08:
@@ -1923,11 +1999,10 @@ func (p *vtParser) execute(b byte) {
 		p.state = stateOSCParam
 	default:
 		// OutputStateMachineEngine::ActionExecute routes unhandled controls
-		// to ITermDispatch::Print. Print enters WriteBuffer::_DefaultCase
-		// directly; it does not pass through TerminalOutput::TranslateKey.
-		if err := writeDefaultString(p.buffer, []uint16{uint16(b)}); err != nil {
-			p.failed = err
-		}
+		// to ITermDispatch::Print. AdaptDispatch::Print applies the single
+		// character charset translation and DEL filter before entering
+		// WriteBuffer::_DefaultCase.
+		p.printRune(rune(b))
 	}
 	p.clearLastPrinted()
 }
@@ -2005,6 +2080,10 @@ func resizeBuffer(old *textBuffer, width, height int) (*textBuffer, error) {
 	cursorHeightDiff := newBuffer.cursor.position.y - old.cursor.position.y
 	newBuffer.currentAttrs = old.currentAttrs
 	newBuffer.cursorSize = old.cursorSize
+	// SCREEN_INFORMATION swaps TextBuffer storage while retaining the
+	// renderer/pipe state. Losing this pointer would incorrectly re-enter the
+	// pinned first-paint branch after every resize.
+	newBuffer.renderer = old.renderer
 	newBuffer.viewportHeight = height
 	if newBuffer.viewportHeight > newBuffer.height {
 		newBuffer.viewportHeight = newBuffer.height

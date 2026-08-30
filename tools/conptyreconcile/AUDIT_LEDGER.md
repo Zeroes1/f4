@@ -44,6 +44,14 @@ failure for invalid input). No other terminal or host implementation is used
 to fill this boundary. This reconstruction is isolated in `ms_utf8.go` and
 the final conversion in `ms_base64.go`.
 
+`AdaptDispatch::DesignateCodingSystem` also calls the Windows
+`GetConsoleOutputCP` and `SetConsoleOutputCP` APIs. Their implementation is
+outside OpenConsole; the mock keeps that dependency behind the recorded
+`outputCodePage` state and preserves the pinned call/order/success branches
+for ISO-2022 and UTF-8. This is an external API seam, not a replacement
+terminal implementation, and the Windows host gate must still exercise the
+actual pinned call path.
+
 The pinned source also delegates custom hyperlink identity to
 `std::hash<std::wstring_view>`. That standard-library implementation is not
 present in OpenConsole and its numeric result is not specified by the C++
@@ -87,6 +95,10 @@ empty before the mock test gate.
   complete.
 - `pending`: the current UTF-8 ingress has to be checked against the pinned
   UTF-16 conversion boundary; raw bytes must not be treated as C1 controls.
+- `pending`: `AdaptDispatch::DesignateCodingSystem` now records the pinned
+  code-page calls and GL/GR updates, but the external Windows API seam still
+  needs a direct check in the Windows-host path; a guessed code-page result is
+  not admissible.
 - `pending`: `WriteCharsLegacy` still depends on the pinned screen, cursor,
   margin, and conversion services that are not yet represented by the mock;
   its missing branches must not be replaced by a convenient buffer-only

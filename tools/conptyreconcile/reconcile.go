@@ -219,11 +219,21 @@ func frameCursorStateFrom(cursor cursorState) frameCursorState {
 // over the current rows. The returned bytes are generated frame data; child
 // input stays in the capture as streamInput events and is never conflated with
 // either live output or renderer output.
-func frameBytesFromBuffer(b *textBuffer) []byte {
+func frameBytesFromBuffer(b *textBuffer) ([]byte, error) {
 	// Renderer::_PaintBufferOutput maps buffer coordinates back to screen
 	// coordinates by subtracting the viewport origin. The emitter therefore
 	// receives the visible screen-sized rows, not the backing rows verbatim.
-	emitter := newFrameEmitter(b.viewportWidth, b.viewportHeight, 0)
+	emitter := b.renderer
+	if emitter == nil {
+		emitter = newFrameEmitter(b.viewportWidth, b.viewportHeight, 0)
+		b.renderer = emitter
+	} else {
+		oldViewport := emitter.viewport
+		emitter.resized = oldViewport.Width != b.viewportWidth || oldViewport.Height != b.viewportHeight
+		emitter.viewport = viewport{Width: b.viewportWidth, Height: b.viewportHeight}
+		emitter.output = nil
+		emitter.failed = nil
+	}
 	emitter.circled = b.circled
 	emitter.startPaint()
 	for screenRow := 0; screenRow < b.viewportHeight; screenRow++ {
@@ -234,32 +244,81 @@ func frameBytesFromBuffer(b *textBuffer) []byte {
 		row := b.rowByOffset(rowIndex)
 		left := b.viewportLeft
 		right := left + b.viewportWidth
-		limit := row.charRow.measureRight()
-		if row.wrapForced {
-			limit = b.lineWidth(rowIndex)
-			if row.doubleBytePadded && limit > 0 {
-				limit--
+		// Renderer::_PaintBufferOutput obtains a cell iterator for the whole
+		// dirty line, including trailing spaces. MeasureRight is a buffer-text
+		// helper and is not a renderer clipping rule: using it here would skip
+		// the source's ECH/blank-line decisions.
+		lineWrapped := row.wrapForced && right == b.width
+		for column := left; column < right; {
+			if column < 0 || column >= len(row.charRow.data) {
+				break
 			}
+			runAttr := row.attrs.at(column)
+			runStart := column
+			for column < right && column < len(row.charRow.data) {
+				candidate := row.attrs.at(column)
+				if candidate != runAttr &&
+					(!isBlankCell(row, column) || !candidate.hasIdenticalVisualRepresentationForBlankSpace(runAttr, false)) {
+					break
+				}
+				column++
+			}
+			if column == runStart {
+				column++
+			}
+			clusters := frameClustersForRange(row, runStart, column, runAttr)
+			paintX := runStart - left
+			// Renderer::_PaintBufferOutputHelper decrements screenPoint.X and
+			// sets trimLeft when a run begins on the trailing half of a wide
+			// cell. XtermEngine ignores trimLeft in its VT implementation, but
+			// the coordinate decrement still belongs to the pinned call order.
+			if row.charRow.data[runStart].attr.isTrailing() {
+				paintX--
+			}
+			emitter.paint(clusters, coordinate{x: paintX, y: screenRow}, lineWrapped)
 		}
-		clusters := make([]frameCluster, 0, limit)
-		for column := left; column < limit && column < right; column++ {
-			if row.charRow.data[column].attr.isTrailing() {
-				continue
-			}
-			columns := 1
-			if row.charRow.data[column].attr.isLeading() {
-				columns = 2
-			}
-			clusters = append(clusters, frameCluster{Units: row.charRow.glyphAt(column), Columns: columns})
-		}
-		emitter.paint(clusters, coordinate{x: 0, y: screenRow}, row.wrapForced)
 	}
 	cursor := b.cursor
 	cursor.position.y -= b.viewportTop
 	cursor.position.x -= b.viewportLeft
 	emitter.paintCursor(cursor)
 	emitter.endPaint()
-	return bytes.Clone(emitter.output)
+	if emitter.failed != nil {
+		return nil, emitter.failed
+	}
+	return bytes.Clone(emitter.output), nil
+}
+
+func isBlankCell(row *msRow, column int) bool {
+	if row.charRow.data[column].attr.isLeading() || row.charRow.data[column].attr.isTrailing() {
+		return false
+	}
+	return row.charRow.glyphAt(column)[0] == unicodeSpace
+}
+
+// frameClustersForRange is the narrow renderer-base iterator adaptation. It
+// preserves the pinned rule that a wide leading cell consumes the trailing
+// cell as one Cluster, while a trailing cell at the beginning of a dirty run
+// paints the complete glyph from the preceding column.
+func frameClustersForRange(row *msRow, left, right int, attr textAttribute) []frameCluster {
+	clusters := make([]frameCluster, 0, right-left)
+	for column := left; column < right; {
+		cell := row.charRow.data[column]
+		if cell.attr.isTrailing() {
+			if column > 0 {
+				clusters = append(clusters, frameCluster{Units: row.charRow.glyphAt(column - 1), Columns: 2, Attr: attr})
+			}
+			column++
+			continue
+		}
+		columns := 1
+		if cell.attr.isLeading() && column+1 < len(row.charRow.data) {
+			columns = 2
+		}
+		clusters = append(clusters, frameCluster{Units: row.charRow.glyphAt(column), Columns: columns, Attr: attr})
+		column += columns
+	}
+	return clusters
 }
 
 func (f frame) logicalLines() []logicalRow {

@@ -248,7 +248,11 @@ func runMockScenarioWithCapture(s scenario) (capture, error) {
 				return logged, fmt.Errorf("seed %d interleaved resize %dx%d: %w", s.Seed, event.resize.Width, event.resize.Height, err)
 			}
 			logged.append(streamResize, event.resize.Width, event.resize.Height, nil, "mock-resize")
-			logged.append(streamFrame, interleaved.buffer.width, interleaved.buffer.height, frameBytesFromBuffer(interleaved.buffer), "mock-frame")
+			frameBytes, frameErr := frameBytesFromBuffer(interleaved.buffer)
+			if frameErr != nil {
+				return logged, fmt.Errorf("seed %d frame emission: %w", s.Seed, frameErr)
+			}
+			logged.append(streamFrame, interleaved.buffer.width, interleaved.buffer.height, frameBytes, "mock-frame")
 		}
 	}
 	if err := interleaved.finish(); err != nil {

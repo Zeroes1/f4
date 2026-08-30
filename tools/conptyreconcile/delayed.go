@@ -57,12 +57,16 @@ func (s *delayedMockSession) result() (*vtParser, capture) {
 	return s.parser, s.capture
 }
 
-func (s *delayedMockSession) emitFrame(delay time.Duration) {
+func (s *delayedMockSession) emitFrame(delay time.Duration) error {
 	delayAtBoundary(delay)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data := frameBytesFromBuffer(s.parser.buffer)
+	data, err := frameBytesFromBuffer(s.parser.buffer)
+	if err != nil {
+		return err
+	}
 	s.capture.append(streamFrame, s.parser.buffer.width, s.parser.buffer.height, data, "delayed-frame")
+	return nil
 }
 
 func (s *delayedMockSession) finishAndEmitFrame() error {
@@ -71,7 +75,10 @@ func (s *delayedMockSession) finishAndEmitFrame() error {
 	if err := s.parser.finish(); err != nil {
 		return err
 	}
-	data := frameBytesFromBuffer(s.parser.buffer)
+	data, err := frameBytesFromBuffer(s.parser.buffer)
+	if err != nil {
+		return err
+	}
 	s.capture.append(streamFrame, s.parser.buffer.width, s.parser.buffer.height, data, "delayed-final-frame")
 	return nil
 }
@@ -161,7 +168,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 			case streamResize:
 				err = session.resize(operation.resize, operation.afterDelay)
 			case streamFrame:
-				session.emitFrame(operation.afterDelay)
+				err = session.emitFrame(operation.afterDelay)
 			}
 			results <- operationResult{index: index, err: err}
 		}(index, operation, gate)
