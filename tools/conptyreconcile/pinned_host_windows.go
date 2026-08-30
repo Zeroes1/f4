@@ -159,6 +159,9 @@ type pinnedConPTY struct {
 	childProcess windows.Handle
 	input        windows.Handle
 	output       windows.Handle
+	// ConptyConnection::_guid is created once for the connection and reused
+	// when _LaunchAttachedClient constructs WT_SESSION.
+	session string
 }
 
 func duplicateInheritable(handle windows.Handle) (windows.Handle, error) {
@@ -258,6 +261,18 @@ func waitPinnedClient(pty *pinnedConPTY) error {
 }
 
 func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPTY, error) {
+	// _CreatePseudoConsole rejects a null PseudoConsole and zero dimensions
+	// before opening any ConDrv or pipe handles.
+	if width == 0 || height == 0 {
+		return nil, fmt.Errorf("_CreatePseudoConsole: invalid dimensions %dx%d", width, height)
+	}
+	guid, err := windows.GenerateGUID()
+	if err != nil {
+		return nil, fmt.Errorf("CoCreateGuid: %w", err)
+	}
+	// Utils::GuidToString formats the GUID with braces; _LaunchAttachedClient
+	// removes those braces before assigning WT_SESSION.
+	session := strings.Trim(guid.String(), "{}")
 	server, err := createServerHandle()
 	if err != nil {
 		return nil, fmt.Errorf("DeviceHandle::CreateServerHandle: %w", err)
@@ -374,7 +389,7 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 	}
 	_ = windows.CloseHandle(server)
 	closeServer = false
-	return &pinnedConPTY{signal: signalOur, ptyReference: ptyReference, hostProcess: hostInfo.Process, input: inOur, output: outOur}, nil
+	return &pinnedConPTY{signal: signalOur, ptyReference: ptyReference, hostProcess: hostInfo.Process, input: inOur, output: outOur, session: session}, nil
 }
 
 func attachPinnedClient(pty *pinnedConPTY, command string) error {
@@ -405,7 +420,7 @@ func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	// this flag is nevertheless part of the pinned CreateProcess call.
 	startup.StartupInfo.Flags = windows.STARTF_USESTDHANDLES
 	startup.ProcThreadAttributeList = attrs.List()
-	_, environmentBlock, err := attachedClientEnvironment()
+	_, environmentBlock, err := attachedClientEnvironment(pty.session)
 	if err != nil {
 		return err
 	}
@@ -436,18 +451,13 @@ func expandEnvironmentStrings(command string) (string, error) {
 	}
 }
 
-func attachedClientEnvironment() ([]string, *uint16, error) {
+func attachedClientEnvironment(session string) ([]string, *uint16, error) {
 	// ConptyConnection::_LaunchAttachedClient starts from the current process
 	// environment, then uses Utils::EnvironmentVariableMapW.  The map is
 	// case-insensitive (_wcsicmp), try_emplace keeps the first spelling from
 	// GetEnvironmentStringsW, and insert_or_assign updates the existing value
 	// without changing that spelling.  Its final iteration is therefore sorted
 	// by the same comparator, not by the order returned by os.Environ.
-	guid, err := windows.GenerateGUID()
-	if err != nil {
-		return nil, nil, fmt.Errorf("CoCreateGuid: %w", err)
-	}
-	session := strings.Trim(guid.String(), "{}")
 	currentEnvironment := windows.Environ()
 	environment := make([]environmentVariable, 0, len(currentEnvironment)+1)
 	for _, entry := range currentEnvironment {
@@ -523,6 +533,9 @@ func insertEnvironmentVariable(environment *[]environmentVariable, name, value s
 }
 
 func resizePinnedPseudoConsole(pty *pinnedConPTY, width, height uint16) error {
+	if pty == nil {
+		return fmt.Errorf("_ResizePseudoConsole: nil PseudoConsole")
+	}
 	packet := []uint16{ptySignalResizeWindow, width, height}
 	// _ResizePseudoConsole passes nullptr for lpNumberOfBytesWritten and
 	// treats the WriteFile boolean as the complete result.  Keep that API
@@ -581,6 +594,9 @@ func runPinnedHost(path, reportPath string) error {
 	if err != nil {
 		return err
 	}
+	if err := pinnedHostCaptureBoundary(); err != nil {
+		return err
+	}
 	if reportPath == "" {
 		return fmt.Errorf("host report path is required")
 	}
@@ -621,6 +637,16 @@ func runPinnedHost(path, reportPath string) error {
 		MatrixWidths: edgeScenarioWidths(),
 		CompletedAt:  time.Now().UTC(),
 	})
+}
+
+// pinnedHostCaptureBoundary records a protocol limitation, not a test
+// result. The pinned winconpty.cpp path gives the client one hOutput pipe;
+// neither that source nor the stock OpenConsole process attaches provenance
+// to bytes on the pipe. Treating ReadFile calls, timestamps, markers, parser
+// state, or resize notifications as a live/frame tag would add semantics not
+// present in the pinned source.
+func pinnedHostCaptureBoundary() error {
+	return fmt.Errorf("pinned host gate blocked: stock ConPTY exposes one untagged output stream; live/frame bytes cannot be separated by the pinned API")
 }
 
 func runPinnedRecursiveDir(path string, identity pinnedHostIdentity, artifactDirectory string) error {

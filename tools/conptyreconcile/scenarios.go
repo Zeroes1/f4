@@ -231,24 +231,28 @@ func runMockScenarioWithCapture(s scenario) (capture, error) {
 			events = append(events, scheduledEvent{kind: streamResize, resize: resizes[resizeIndex]})
 			resizeIndex++
 		} else {
-			events = append(events, scheduledEvent{kind: streamInput, chunk: s.Chunks[liveIndex]})
+			events = append(events, scheduledEvent{kind: streamLive, chunk: s.Chunks[liveIndex]})
 			liveIndex++
 		}
 	}
 	logged := capture{Seed: s.Seed}
 	for _, event := range events {
 		switch event.kind {
-		case streamInput:
+		case streamLive:
 			if err := interleaved.feed(event.chunk); err != nil {
 				return logged, fmt.Errorf("seed %d interleaved live feed: %w", s.Seed, err)
 			}
-			logged.append(streamInput, interleaved.buffer.width, interleaved.buffer.height, event.chunk, "mock-input")
+			logged.append(streamLive, interleaved.buffer.width, interleaved.buffer.height, event.chunk, "mock-live")
 		case streamResize:
 			if err := interleaved.resize(event.resize.Width, event.resize.Height); err != nil {
 				return logged, fmt.Errorf("seed %d interleaved resize %dx%d: %w", s.Seed, event.resize.Width, event.resize.Height, err)
 			}
 			logged.append(streamResize, event.resize.Width, event.resize.Height, nil, "mock-resize")
-			logged.append(streamFrame, interleaved.buffer.width, interleaved.buffer.height, frameBytesFromBuffer(interleaved.buffer), "mock-frame")
+			frameBytes, frameErr := frameBytesFromBuffer(interleaved.buffer)
+			if frameErr != nil {
+				return logged, fmt.Errorf("seed %d frame emission: %w", s.Seed, frameErr)
+			}
+			logged.append(streamFrame, interleaved.buffer.width, interleaved.buffer.height, frameBytes, "mock-frame")
 		}
 	}
 	if err := interleaved.finish(); err != nil {
@@ -257,5 +261,10 @@ func runMockScenarioWithCapture(s scenario) (capture, error) {
 	if count := strings.Count(interleaved.buffer.text(), marker); count != 1 {
 		return logged, fmt.Errorf("seed %d interleaved marker multiplicity is %d, want exactly one", s.Seed, count)
 	}
+	rendered := frameFromBuffer(interleaved.buffer, "mock-frame-final", uint64(len(logged.Events)))
+	if err := reconcileParserState(rendered, interleaved); err != nil {
+		return logged, fmt.Errorf("seed %d frame/live reconciliation: %w", s.Seed, err)
+	}
+	s.Frame = rendered
 	return logged, nil
 }

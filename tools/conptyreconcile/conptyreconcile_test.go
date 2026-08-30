@@ -66,7 +66,7 @@ func TestEqualRowsRemainDistinctInReconciliation(t *testing.T) {
 	}}
 	live := []logicalRow{
 		{units: utf16Units("same"), rows: []int{0}},
-		{units: utf16Units("same"), rows: []int{1}},
+		{units: utf16Units("same"), rows: []int{1}, sourceStart: 1},
 	}
 	if err := reconcile(f, live); err != nil {
 		t.Fatal(err)

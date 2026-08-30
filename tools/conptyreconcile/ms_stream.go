@@ -55,13 +55,18 @@ func adjustCursorPosition(buffer *textBuffer, pos coordinate, keepCursorVisible 
 	marginsTop, marginsBottom := buffer.absoluteScrollMargins()
 	marginsSet := marginsBottom > marginsTop
 	currentCursor := buffer.cursor.position
+	// AdjustCursorPosition computes this directly from the absolute margins;
+	// it does not call SCREEN_INFORMATION::IsCursorInMargins here. With no
+	// margins, GetAbsoluteScrollMargins is the single viewport-top position.
 	cursorInMargins := currentCursor.y >= marginsTop && currentCursor.y <= marginsBottom
 	cursorAboveViewport := pos.y < 0 && inVtMode
 	scrollUp := marginsSet && cursorInMargins && pos.y < marginsTop
 	scrollUpWithoutMargins := !marginsSet && cursorAboveViewport
 	if scrollUpWithoutMargins {
 		scrollUp = true
-		marginsTop = viewportTop
+		// The pinned path deliberately uses the buffer's left/top origin for
+		// this implicit full-screen scroll, not the currently visible top.
+		marginsTop = 0
 		marginsBottom = viewportBottom
 	}
 	scrollDown := marginsSet && cursorInMargins && pos.y > marginsBottom
@@ -81,11 +86,13 @@ func adjustCursorPosition(buffer *textBuffer, pos coordinate, keepCursorVisible 
 			newViewTop--
 			scrollTop--
 		}
-		_ = moveToY // The target origin is consumed by the clipped scroll below.
-		if scrollTop <= bufferSizeY-1 {
-			if delta > 0 {
-				buffer.scrollRegionWithAttr(scrollTop, bufferSizeY-1, delta, true, fillAttributes)
-			}
+		// The pinned call passes no clip rectangle here. The source rectangle
+		// is below the margins, while its target may extend into the rows that
+		// were just exposed at the bottom of the backing buffer. Clipping the
+		// target to the source rectangle would change this scroll-down path.
+		source := cellRect{left: 0, top: scrollTop, right: bufferSizeX, bottom: bufferSizeY}
+		if source.valid() {
+			buffer.scrollRectangle(&source, nil, coordinate{y: moveToY}, unicodeSpace, fillAttributes)
 		}
 		if err := buffer.setViewportOrigin(true, coordinate{y: newViewTop}, true); err != nil {
 			return err
@@ -148,7 +155,9 @@ func adjustCursorPosition(buffer *textBuffer, pos coordinate, keepCursorVisible 
 	if keepCursorVisible {
 		buffer.makeCursorVisible(pos, true)
 	}
-	buffer.setCursor(pos)
+	if err := buffer.setCursorPosition(pos, keepCursorVisible); err != nil {
+		return err
+	}
 	if inVtMode && cursorMovedPastViewport && cursorMovedPastVirtualViewport {
 		buffer.initializeCursorRowAttributes()
 	}
@@ -166,6 +175,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 	const printableControlChars = uint32(wcPrintableControl)
 	fUnprocessed := !buffer.processedOutput
 	fWrapAtEOL := buffer.wrapAtEOL
+	attributes := buffer.currentAttrs
 	position := buffer.cursor.position
 	originalXPosition := position.x
 	lineWidth := buffer.width
@@ -218,7 +228,8 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 						goto endWhile
 					}
 					local = append(local, '^', char+'@')
-					xPosition += 2
+					xPosition++
+					xPosition++
 					consumed++
 					break
 				}
@@ -243,7 +254,8 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 						goto endWhile
 					}
 					local = append(local, '^', char+'@')
-					xPosition += 2
+					xPosition++
+					xPosition++
 					consumed++
 				} else {
 					if char == 0 {
@@ -267,7 +279,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if len(local) > available {
 				local = local[:available]
 			}
-			_, cellDistance := buffer.write(outputCellsFromUTF16WithAttr(local, buffer.currentAttrs), buffer.cursor.position, nil)
+			_, cellDistance := buffer.write(outputCellsFromUTF16WithAttr(local, attributes), buffer.cursor.position, nil)
 			spaces += cellDistance
 			position = buffer.cursor.position
 			position.x = xPosition
@@ -310,7 +322,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 					position.x--
 					spaces--
 					if flags&wcDestructiveBackspace != 0 {
-						writeSpaceAt(buffer, position)
+						writeSpaceAt(buffer, position, attributes)
 					}
 					position.x--
 				case isGlyphFullWidth(last):
@@ -320,7 +332,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 						return consumed, spaces, err
 					}
 					if flags&wcDestructiveBackspace != 0 {
-						writeSpaceAt(buffer, buffer.cursor.position)
+						writeSpaceAt(buffer, buffer.cursor.position, attributes)
 					}
 					position.x--
 				default:
@@ -335,7 +347,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				return consumed, spaces, err
 			}
 			if flags&wcDestructiveBackspace != 0 {
-				writeSpaceAt(buffer, buffer.cursor.position)
+				writeSpaceAt(buffer, buffer.cursor.position, attributes)
 			}
 			if buffer.cursor.position.x == 0 && fWrapAtEOL && consumed > 0 && checkBisectProcess(buffer, input[:consumed], lineWidth-originalXPosition, originalXPosition, flags&printableControlChars != 0) {
 				position.x = lineWidth - 1
@@ -360,7 +372,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				buffer.rowByOffset(buffer.cursor.position.y).wrapForced = true
 			}
 			if numChars > 0 {
-				writeSpacesAt(buffer, buffer.cursor.position, numChars)
+				writeSpacesAt(buffer, buffer.cursor.position, numChars, attributes)
 			}
 			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
 				return consumed, spaces, err
@@ -391,7 +403,7 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 			if char >= unicodeSpace && isGlyphFullWidth(char) && position.x >= lineWidth-1 && fWrapAtEOL {
 				target := buffer.cursor.position
 				if target.x >= 0 && target.x < buffer.width && buffer.rowByOffset(target.y).charRow.data[target.x].attr.isTrailing() {
-					writeSpacesAt(buffer, coordinate{x: target.x - 1, y: target.y}, 2)
+					writeSpacesAt(buffer, coordinate{x: target.x - 1, y: target.y}, 2, attributes)
 				}
 				position.x = 0
 				position.y = target.y + 1
@@ -402,11 +414,11 @@ func writeCharsLegacy(buffer *textBuffer, input []uint16, flags uint32) (consume
 				}
 				continue
 			}
+			// There is deliberately no fallback write or cursor adjustment
+			// here. The pinned switch only handles the full-width-at-EOL case;
+			// its ordinary default branch falls through to the common input
+			// advance below.
 			consumed++
-			position.x++
-			if err = adjustCursorPosition(buffer, position, flags&wcKeepCursorVisible != 0); err != nil {
-				return consumed, spaces, err
-			}
 		}
 	}
 	return consumed, spaces, nil
@@ -469,7 +481,7 @@ func retrieveNumberOfSpaces(originalX int, input []uint16, current int) int {
 
 func checkBisectProcess(buffer *textBuffer, input []uint16, cBytes, originalX int, printableControlChars bool) bool {
 	if !buffer.processedOutput {
-		return false
+		return checkBisectString(input, cBytes)
 	}
 	words := len(input)
 	for words > 0 && cBytes > 0 {
@@ -523,56 +535,163 @@ func checkBisectProcess(buffer *textBuffer, input []uint16, cBytes, originalX in
 	return false
 }
 
-func writeSpaceAt(buffer *textBuffer, target coordinate) {
+// checkBisectString is CheckBisectStringW.  The unprocessed-output branch
+// deliberately does not apply control expansion or tab accounting; it scans
+// the raw UTF-16 units exactly as the pinned helper does.
+func checkBisectString(input []uint16, cBytes int) bool {
+	words := len(input)
+	for words > 0 && cBytes > 0 {
+		char := input[len(input)-words]
+		if isGlyphFullWidth(char) {
+			if cBytes < 2 {
+				return true
+			}
+			words--
+			cBytes -= 2
+			continue
+		}
+		words--
+		cBytes--
+	}
+	return false
+}
+
+func writeSpaceAt(buffer *textBuffer, target coordinate, attributes textAttribute) {
 	if target.x < 0 || target.y < 0 || target.x >= buffer.width || target.y >= buffer.height {
 		return
 	}
-	_, _ = buffer.write([]outputCell{{glyph: []uint16{unicodeSpace}, attr: buffer.currentAttrs, behavior: attrStored}}, target, nil)
+	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, attributes, 1), target, nil)
 }
 
-func writeSpacesAt(buffer *textBuffer, target coordinate, count int) {
+func writeSpacesAt(buffer *textBuffer, target coordinate, count int, attributes textAttribute) {
 	if count <= 0 {
 		return
 	}
-	units := make([]uint16, count)
-	for i := range units {
-		units[i] = unicodeSpace
-	}
-	_, _ = buffer.write(outputCellsFromUTF16WithAttr(units, buffer.currentAttrs), target, nil)
+	_, _ = buffer.write(newOutputCellFillIterator(unicodeSpace, attributes, count), target, nil)
 }
 
 var bufferWidth = newWidthDetector()
 
-func outputCellsFromUTF16(units []uint16) []outputCell {
-	result := make([]outputCell, 0, len(units)*2)
-	// OutputCellIterator::operator++ advances by the current view's UTF-16
-	// length, not by the number of malformed units skipped by ParseNext.  A
-	// leading view is then exposed a second time as its trailing half without
-	// advancing the source position. Preserve that exact iterator behavior.
-	for offset := 0; offset < len(units); {
-		glyph := utf16ParseNext(units[offset:])
-		if bufferWidth.IsWide(glyph) {
-			result = append(result,
-				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsLeading}, behavior: attrStored},
-				outputCell{glyph: glyph, dbcs: dbcsAttribute{kind: dbcsTrailing}, behavior: attrStored},
-			)
-		} else {
-			result = append(result, outputCell{glyph: glyph, behavior: attrStored})
-		}
-		offset += len(glyph)
-	}
-	return result
+// outputCellIterator is OutputCellIterator's loose/fill state. In particular,
+// the source position is a UTF-16 offset and the leading DBCS view is changed
+// to a trailing view by operator++ before the source position advances.
+type outputCellIterator struct {
+	units     []uint16
+	cells     []outputCell
+	current   outputCell
+	attr      textAttribute
+	behavior  textAttrBehavior
+	pos       int
+	distance  int
+	fill      bool
+	cellMode  bool
+	fillLimit int
 }
 
-func outputCellsFromUTF16WithAttr(units []uint16, attr textAttribute) []outputCell {
-	cells := outputCellsFromUTF16(units)
-	for i := range cells {
-		cells[i].attr = attr
+func newOutputCellIterator(units []uint16, attr textAttribute, behavior textAttrBehavior) outputCellIterator {
+	it := outputCellIterator{units: units, attr: attr, behavior: behavior}
+	it.refresh()
+	return it
+}
+
+func newOutputCellFillIterator(unit uint16, attr textAttribute, fillLimit int) outputCellIterator {
+	it := outputCellIterator{units: []uint16{unit}, attr: attr, behavior: attrStored, fill: true, fillLimit: fillLimit}
+	it.refresh()
+	return it
+}
+
+// newOutputCellCellIterator is the Cell-mode constructor used by
+// output.cpp::_CopyRectangle. A cell iterator preserves the already-formed
+// DBCS view; unlike Loose mode it must not synthesize a trailing view for a
+// leading cell while advancing.
+func newOutputCellCellIterator(cell outputCell) outputCellIterator {
+	it := outputCellIterator{cells: []outputCell{cell}, cellMode: true}
+	it.refresh()
+	return it
+}
+
+func (it outputCellIterator) valid() bool {
+	if it.cellMode {
+		return it.pos < len(it.cells)
 	}
-	return cells
+	if it.fill {
+		return it.fillLimit == 0 || it.pos < it.fillLimit
+	}
+	return it.pos < len(it.units)
+}
+
+func (it *outputCellIterator) refresh() {
+	if it.cellMode {
+		it.current = it.cells[it.pos]
+		return
+	}
+	glyph := utf16ParseNext(it.units[it.pos:])
+	dbcs := dbcsAttribute{}
+	if bufferWidth.IsWide(glyph) {
+		dbcs.kind = dbcsLeading
+	}
+	it.current = outputCell{glyph: glyph, dbcs: dbcs, attr: it.attr, behavior: it.behavior}
+}
+
+// advance is OutputCellIterator::operator++. It returns the trailing half of
+// a wide view without consuming a UTF-16 unit, then consumes the view's UTF-16
+// length once the trailing view has been emitted.
+func (it *outputCellIterator) advance() {
+	it.distance++
+	if it.cellMode {
+		it.pos++
+		if it.valid() {
+			it.refresh()
+		}
+		return
+	}
+	if it.current.dbcs.isLeading() {
+		it.current.dbcs.kind = dbcsTrailing
+		return
+	}
+	if it.fill {
+		if it.current.dbcs.isTrailing() {
+			it.current.dbcs.kind = dbcsLeading
+		}
+		if it.fillLimit > 0 {
+			it.pos++
+		}
+		return
+	}
+	it.pos += len(it.current.glyph)
+	if it.valid() {
+		it.refresh()
+	}
+}
+
+func (it outputCellIterator) inputDistance(other outputCellIterator) int {
+	return it.pos - other.pos
+}
+
+func (it outputCellIterator) cellDistance(other outputCellIterator) int {
+	return it.distance - other.distance
+}
+
+func outputCellsFromUTF16(units []uint16) outputCellIterator {
+	return newOutputCellIterator(units, textAttribute{}, attrCurrent)
+}
+
+func outputCellsFromUTF16WithAttr(units []uint16, attr textAttribute) outputCellIterator {
+	return newOutputCellIterator(units, attr, attrStored)
 }
 
 func writeDefaultString(buffer *textBuffer, input []uint16) error {
+	if buffer == nil {
+		return fmt.Errorf("nil screen buffer")
+	}
+	// This is the pinned WriteBuffer::_DefaultStringCase order. The cursor is
+	// turned on before the legacy writer, and redraw is deferred for the whole
+	// call; neither operation belongs in WriteCharsLegacy itself.
+	if !buffer.cursor.on {
+		buffer.cursor.on = true
+	}
+	buffer.cursor.deferCursorRedraw = true
 	_, _, err := writeCharsLegacy(buffer, input, wcLimitBackspace|wcDelayEOLWrap)
+	buffer.cursor.deferCursorRedraw = false
 	return err
 }

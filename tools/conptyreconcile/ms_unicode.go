@@ -383,8 +383,16 @@ func getQuickCharWidth(wch uint16) codepointWidth {
 	return widthInvalid
 }
 
-func (d *widthDetector) lookupGlyphWidthWithCache(glyph []uint16) codepointWidth {
-	width := d.lookupGlyphWidth(glyph)
+func (d *widthDetector) lookupGlyphWidthWithCache(glyph []uint16) (width codepointWidth) {
+	// The pinned method is noexcept and catches failures from the table/cache
+	// path, preferring Wide when it cannot determine a narrower answer.
+	defer func() {
+		if recover() != nil {
+			width = widthWide
+		}
+	}()
+
+	width = d.lookupGlyphWidth(glyph)
 	if width == widthAmbiguous && d.fallback != nil {
 		if d.checkFallbackViaCache(glyph) {
 			return widthWide

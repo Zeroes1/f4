@@ -57,12 +57,16 @@ func (s *delayedMockSession) result() (*vtParser, capture) {
 	return s.parser, s.capture
 }
 
-func (s *delayedMockSession) emitFrame(delay time.Duration) {
+func (s *delayedMockSession) emitFrame(delay time.Duration) error {
 	delayAtBoundary(delay)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	data := frameBytesFromBuffer(s.parser.buffer)
+	data, err := frameBytesFromBuffer(s.parser.buffer)
+	if err != nil {
+		return err
+	}
 	s.capture.append(streamFrame, s.parser.buffer.width, s.parser.buffer.height, data, "delayed-frame")
+	return nil
 }
 
 func (s *delayedMockSession) finishAndEmitFrame() error {
@@ -71,7 +75,10 @@ func (s *delayedMockSession) finishAndEmitFrame() error {
 	if err := s.parser.finish(); err != nil {
 		return err
 	}
-	data := frameBytesFromBuffer(s.parser.buffer)
+	data, err := frameBytesFromBuffer(s.parser.buffer)
+	if err != nil {
+		return err
+	}
 	s.capture.append(streamFrame, s.parser.buffer.width, s.parser.buffer.height, data, "delayed-final-frame")
 	return nil
 }
@@ -117,7 +124,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 		// Split at arbitrary byte boundaries, including boundaries inside
 		// UTF-8, CSI, and OSC sequences.
 		for _, part := range splitDelayedChunk(s.Chunks[liveIndex], rng) {
-			base = append(base, delayedOperation{kind: streamInput, chunk: part})
+			base = append(base, delayedOperation{kind: streamLive, chunk: part})
 		}
 		liveIndex++
 	}
@@ -156,12 +163,12 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 			<-gate
 			var err error
 			switch operation.kind {
-			case streamInput:
+			case streamLive:
 				err = session.feedLive(operation.chunk, operation.afterDelay)
 			case streamResize:
 				err = session.resize(operation.resize, operation.afterDelay)
 			case streamFrame:
-				session.emitFrame(operation.afterDelay)
+				err = session.emitFrame(operation.afterDelay)
 			}
 			results <- operationResult{index: index, err: err}
 		}(index, operation, gate)
@@ -189,7 +196,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 	parser, logged := session.result()
 	var input bytes.Buffer
 	for _, event := range logged.Events {
-		if event.Kind == streamInput {
+		if event.Kind == streamLive {
 			input.Write(event.Bytes)
 		}
 	}
