@@ -79,6 +79,16 @@ func (p *utf8WideParser) feed(input []byte) ([]uint16, error) {
 		p.currentState = utf8AwaitingMoreBytes
 		return nil, nil
 	}
+	if len(valid) == 0 {
+		// _InvolvedParse still calls MultiByteToWideChar when invalid input
+		// removed every byte. The zero-length conversion fails and enters the
+		// source parser's Error state; an empty successful conversion would be
+		// a semantic substitution here.
+		p.currentState = utf8Error
+		p.bytesStored = 0
+		p.currentState = utf8Ready
+		return nil, fmt.Errorf("Utf8ToWideCharParser: no convertible bytes")
+	}
 	units, err := decodeUTF8Sequences(valid)
 	if err != nil {
 		p.currentState = utf8Error

@@ -11,6 +11,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 type parserState uint8
@@ -37,17 +38,55 @@ const (
 	stateVT52Param
 )
 
+// vtIDBuilder is the Go transcription of DispatchTypes::VTIDBuilder. VTIDs
+// are little-endian byte accumulators with an eight-byte ceiling; adding an
+// eighth intermediate clears the accumulator without advancing the shift,
+// exactly as the pinned source does.
+type vtIDBuilder struct {
+	accumulator uint64
+	shift       uint
+}
+
+func (b *vtIDBuilder) clear() {
+	b.accumulator = 0
+	b.shift = 0
+}
+
+func (b *vtIDBuilder) addIntermediate(unit uint16) {
+	if b.shift+8 >= 64 {
+		b.accumulator = 0
+	} else {
+		b.accumulator += uint64(unit) << b.shift
+		b.shift += 8
+	}
+}
+
+func (b vtIDBuilder) finalize(final uint16) uint64 {
+	return b.accumulator + (uint64(final) << b.shift)
+}
+
+func vtIDFromString(value string) uint64 {
+	var result uint64
+	for index := len(value) - 1; index >= 0; index-- {
+		result = (result << 8) + uint64(value[index])
+	}
+	return result
+}
+
 type vtParser struct {
 	buffer            *textBuffer
 	mainBuffer        *textBuffer
 	altBuffer         *textBuffer
 	state             parserState
+	termOutput        terminalOutput
+	savedCursorState  [2]dispatchCursorState
 	params            []int
 	paramValue        int
 	paramStarted      bool
 	parameterLimit    bool
 	private           byte
 	intermediate      []uint16
+	identifier        vtIDBuilder
 	oscParam          int
 	oscDigits         []byte
 	oscString         []uint16
@@ -58,10 +97,13 @@ type vtParser struct {
 	ansiMode          bool
 	vt52Params        []uint16
 	title             string
+	colorTable        map[uint8]uint32
+	defaultForeground uint32
+	defaultBackground uint32
 	bells             int
 	lastPrinted       uint16
 	printed           bool
-	sgrStack          []textAttribute
+	sgrStack          sgrStackState
 	responses         [][]byte
 	cursorKeysMode    bool
 	keypadMode        bool
@@ -73,6 +115,17 @@ type vtParser struct {
 	failed            error
 }
 
+// dispatchCursorState is AdaptDispatch::_savedCursorState. Coordinates are
+// stored zero-based after converting the source's one-based VT coordinates;
+// the saved origin, attributes, and TerminalOutput state remain separate from
+// TextBuffer::Cursor, exactly as in the pinned adapter.
+type dispatchCursorState struct {
+	position   coordinate
+	originMode bool
+	attrs      textAttribute
+	termOutput terminalOutput
+}
+
 func (p *vtParser) standardErase() textAttribute {
 	erase := p.buffer.currentAttrs
 	erase.setStandardErase()
@@ -82,7 +135,7 @@ func (p *vtParser) standardErase() textAttribute {
 func newVTParser(width, height int) *vtParser {
 	b := newTextBuffer(width, height)
 	b.vtMode = true
-	return &vtParser{buffer: b, mainBuffer: b, state: stateGround, wideParser: newUTF8WideParser(), newLineAutoReturn: true, ansiMode: true, mouseModes: make(map[int]bool)}
+	return &vtParser{buffer: b, mainBuffer: b, state: stateGround, termOutput: newTerminalOutput(), wideParser: newUTF8WideParser(), newLineAutoReturn: true, ansiMode: true, mouseModes: make(map[int]bool), colorTable: make(map[uint8]uint32), defaultForeground: 0xffffffff, defaultBackground: 0xffffffff}
 }
 
 func (p *vtParser) reset() {
@@ -90,12 +143,15 @@ func (p *vtParser) reset() {
 	p.mainBuffer = p.buffer
 	p.altBuffer = nil
 	p.state = stateGround
+	p.termOutput = newTerminalOutput()
+	p.savedCursorState = [2]dispatchCursorState{}
 	p.params = nil
 	p.paramValue = 0
 	p.paramStarted = false
 	p.parameterLimit = false
 	p.private = 0
 	p.intermediate = nil
+	p.identifier.clear()
 	p.oscParam = 0
 	p.oscDigits = nil
 	p.oscString = nil
@@ -109,7 +165,7 @@ func (p *vtParser) reset() {
 	p.bells = 0
 	p.lastPrinted = 0
 	p.printed = false
-	p.sgrStack = nil
+	p.sgrStack = sgrStackState{}
 	p.responses = nil
 	p.cursorKeysMode = false
 	p.keypadMode = false
@@ -124,6 +180,9 @@ func (p *vtParser) reset() {
 func (p *vtParser) feed(data []byte) error {
 	if p.failed != nil {
 		return p.failed
+	}
+	if len(data) != 0 {
+		p.buffer.moveToBottom()
 	}
 	units, err := p.wideParser.feed(data)
 	if err != nil {
@@ -160,15 +219,6 @@ func (p *vtParser) processUnits(units []uint16) {
 				continue
 			}
 		}
-		if p.state == stateOSCString && units[0] > 0x9f {
-			end := 1
-			for end < len(units) && units[end] > 0x9f {
-				end++
-			}
-			p.oscString = append(p.oscString, units[:end]...)
-			units = units[end:]
-			continue
-		}
 		p.consumeUnit(units[0])
 		units = units[1:]
 	}
@@ -179,25 +229,46 @@ func isActionableGroundUnit(unit uint16) bool {
 }
 
 func (p *vtParser) printUnits(units []uint16) {
+	var last uint16
+	if len(units) != 0 {
+		// OutputStateMachineEngine::ActionPrintString records the source
+		// wchar before WriteBuffer performs any character-set translation.
+		last = units[len(units)-1]
+	}
 	p.buffer.returnOnNewline = p.newLineAutoReturn
+	if p.termOutput.needToTranslate() {
+		translated := make([]uint16, len(units))
+		for i, unit := range units {
+			translated[i] = p.termOutput.translateKey(unit)
+		}
+		units = translated
+	}
 	if err := writeDefaultString(p.buffer, units); err != nil {
 		p.failed = err
 		return
 	}
-	if len(units) != 0 {
-		last := units[len(units)-1]
-		if last >= unicodeSpace {
-			p.lastPrinted = last
-			p.printed = true
-		}
+	if last >= unicodeSpace {
+		p.lastPrinted = last
+		p.printed = true
 	}
 }
 
 func (p *vtParser) consumeUnit(unit uint16) {
 	if unit == 0x18 || unit == 0x1a {
+		// OutputStateMachineEngine::DispatchControlCharsFromEscape returns
+		// false in the pinned source.  Consequently CAN/SUB in Escape is
+		// handled by _EventEscape as an ordinary execute action and leaves
+		// the parser in Escape; every other state takes the from-anywhere
+		// interrupt/execute/ground path.
+		if p.state == stateEscape {
+			p.execute(byte(unit))
+			return
+		}
 		p.interruptDCS()
 		p.state = stateGround
-		p.clearSequence()
+		// StateMachine::_EnterGround only changes the state.  It does not call
+		// ActionClear; the from-anywhere CAN/SUB path therefore leaves the
+		// collected sequence data untouched until the next dispatch/reset path.
 		p.execute(byte(unit))
 		return
 	}
@@ -234,19 +305,19 @@ func (p *vtParser) consumeNonASCIIUnit(unit uint16) {
 		if p.ansiMode {
 			p.dispatchEscape(unit)
 		} else {
-			p.dispatchVT52(' ')
+			p.dispatchVT52(unit)
 		}
 	case stateEscapeIntermediate:
 		if p.ansiMode {
 			p.dispatchEscape(unit)
 		} else {
-			p.dispatchVT52(' ')
+			p.dispatchVT52(unit)
 		}
 	case stateCSIEntry, stateCSIParam, stateCSIIntermediate:
 		// A non-ASCII wchar is neither a C0/delete, intermediate, invalid
 		// parameter, nor parameter delimiter in the pinned predicates. It is
 		// therefore the final wchar passed to ActionCsiDispatch.
-		p.dispatchCSI(0)
+		p.dispatchCSI(unit)
 		p.state = stateGround
 		p.clearSequence()
 	case stateCSIIgnore:
@@ -294,7 +365,40 @@ func (p *vtParser) consumeStateByte(b byte) {
 		}
 		return
 	}
-	if b == 0x7f && p.state != stateDCSParam {
+	// StateMachine::_EventOscTermination re-enters Escape and reprocesses any
+	// non-ST character through _EventEscape. This branch has to precede the
+	// generic C0/DEL dispatch below: Escape deliberately keeps C0 execution in
+	// Escape, while OSC termination itself is no longer active.
+	if p.state == stateOSCTermination {
+		if b == '\\' {
+			p.dispatchOSC()
+			return
+		}
+		p.state = stateEscape
+		p.clearSequence()
+		if b == 0x7f {
+			return
+		}
+		if b < 0x20 {
+			p.execute(b)
+			return
+		}
+		p.consumeEscape(b)
+		return
+	}
+	// DEL is state-dependent in StateMachine: Ground executes it (the output
+	// adapter then filters it), OSCString stores it, DCSParam reaches the
+	// source's fall-through dispatch after its Ignore action, and the other
+	// states ignore it.
+	if b == 0x7f {
+		switch p.state {
+		case stateGround:
+			p.execute(b)
+		case stateOSCString:
+			p.consumeOSCString(b)
+		case stateDCSParam:
+			p.dispatchDCS(uint16(b))
+		}
 		return
 	}
 	if b < 0x20 {
@@ -312,8 +416,8 @@ func (p *vtParser) consumeStateByte(b byte) {
 			p.dispatchDCS(uint16(b))
 		case stateDCSPassThrough:
 			// _EventDcsPassThrough passes C0 controls to the active source
-			// handler. RequestSetting accepts them and remains active.
-			p.dcsData = append(p.dcsData, uint16(b))
+			// handler. AdaptDispatch::RequestSetting's handler does not add
+			// C0 controls to the VTID, and remains active.
 		default:
 			p.execute(b)
 		}
@@ -325,11 +429,12 @@ func (p *vtParser) consumeStateByte(b byte) {
 	case stateEscapeIntermediate:
 		if b >= 0x20 && b <= 0x2f {
 			p.intermediate = append(p.intermediate, uint16(b))
+			p.identifier.addIntermediate(uint16(b))
 		} else if b >= 0x30 && b <= 0x7e {
 			if p.ansiMode {
 				p.dispatchEscape(uint16(b))
 			} else {
-				p.dispatchVT52(b)
+				p.dispatchVT52(uint16(b))
 			}
 		} else {
 			p.state = stateGround
@@ -340,16 +445,6 @@ func (p *vtParser) consumeStateByte(b byte) {
 		p.consumeOSCParam(b)
 	case stateOSCString:
 		p.consumeOSCString(b)
-	case stateOSCTermination:
-		if b == '\\' {
-			p.dispatchOSC()
-		} else {
-			// _EventOscTermination re-enters Escape and reprocesses the
-			// non-terminating byte as an Escape event.
-			p.state = stateEscape
-			p.clearSequence()
-			p.consumeEscape(b)
-		}
 	case stateSS3Entry:
 		p.dispatchSS3(uint16(b))
 	case stateDCSEntry, stateDCSParam, stateDCSIntermediate, stateDCSIgnore, stateDCSPassThrough:
@@ -365,6 +460,16 @@ func (p *vtParser) consumeStateByte(b byte) {
 }
 
 func (p *vtParser) consumeEscape(b byte) {
+	// StateMachine::_EventEscape treats every 0x20..0x2f character as an
+	// intermediate.  The parser must enter EscapeIntermediate before the final
+	// character; handling only the currently exercised two values would change
+	// the identifier for the other designated character sets.
+	if b >= 0x20 && b <= 0x2f {
+		p.intermediate = append(p.intermediate, uint16(b))
+		p.identifier.addIntermediate(uint16(b))
+		p.state = stateEscapeIntermediate
+		return
+	}
 	switch b {
 	case '[':
 		p.state = stateCSIEntry
@@ -388,22 +493,13 @@ func (p *vtParser) consumeEscape(b byte) {
 			p.dispatchVT52('O')
 		}
 	case '=':
-		p.keypadMode = true
-		p.state = stateGround
-		p.clearSequence()
-		p.clearLastPrinted()
+		p.dispatchEscape(uint16(b))
 	case '>':
-		p.keypadMode = false
-		p.state = stateGround
-		p.clearSequence()
-		p.clearLastPrinted()
+		p.dispatchEscape(uint16(b))
 	case 'P':
 		p.state = stateDCSEntry
 	case 'X', '^', '_':
 		p.state = stateSosPmApc
-	case ' ', '#':
-		p.intermediate = []uint16{uint16(b)}
-		p.state = stateEscapeIntermediate
 	case 'Y':
 		if p.ansiMode {
 			p.dispatchEscape(uint16(b))
@@ -412,22 +508,26 @@ func (p *vtParser) consumeEscape(b byte) {
 			p.state = stateVT52Param
 		}
 	case '7':
-		p.buffer.saveCursor()
+		p.saveCursorState()
 		p.state = stateGround
 		p.clearSequence()
 		p.clearLastPrinted()
 	case '8':
-		p.buffer.restoreCursor()
+		p.restoreCursorState()
 		p.state = stateGround
 		p.clearSequence()
 		p.clearLastPrinted()
 	case 'c':
-		p.reset()
+		if p.ansiMode {
+			p.dispatchEscape(uint16(b))
+		} else {
+			p.dispatchVT52(uint16(b))
+		}
 	default:
 		if p.ansiMode {
 			p.dispatchEscape(uint16(b))
 		} else {
-			p.dispatchVT52(b)
+			p.dispatchVT52(uint16(b))
 		}
 	}
 }
@@ -471,6 +571,7 @@ func (p *vtParser) consumeDCS(b byte) {
 	}
 	if b >= 0x20 && b <= 0x2f {
 		p.intermediate = append(p.intermediate, uint16(b))
+		p.identifier.addIntermediate(uint16(b))
 		p.state = stateDCSIntermediate
 		return
 	}
@@ -530,7 +631,7 @@ func (p *vtParser) reportSGRSetting() {
 	add(";8", attr.hasFlag(extInvisible))
 	add(";9", attr.hasFlag(extCrossedOut))
 	add(";21", attr.hasFlag(extDoublyUnderlined))
-	add(";53", attr.legacy&commonLVBGridHorizontal != 0)
+	add(";53", attr.isOverlined())
 	addColor := func(base int, color textColor) {
 		switch color.kind {
 		case textColorIndex16:
@@ -588,16 +689,27 @@ func (p *vtParser) addParameter(b byte) {
 		p.paramStarted = false
 		return
 	}
-	p.paramValue = p.paramValue*10 + int(b-'0')
+	p.paramValue = accumulateParameter(p.paramValue, int(b-'0'))
 	p.params[len(p.params)-1] = p.paramValue
 	p.paramStarted = true
+}
+
+const maxParameterValue = 32767
+
+// StateMachine::_AccumulateTo clamps after every appended digit. Once the
+// maximum is reached, subsequent digits therefore remain at that value.
+func accumulateParameter(value, digit int) int {
+	if value > (maxParameterValue-digit)/10 {
+		return maxParameterValue
+	}
+	return value*10 + digit
 }
 
 func (p *vtParser) dispatchDCS(final uint16) {
 	// OutputStateMachineEngine::ActionDcsDispatch recognizes DECRQSS (`$q`)
 	// and returns a string handler. Other identifiers return nullptr and enter
 	// DcsIgnore.
-	if string(runesFromUTF16(p.intermediate)) == "$" && final == 'q' {
+	if p.identifier.finalize(final) == vtIDFromString("$q") {
 		p.dcsPassThrough = true
 		p.dcsData = nil
 		p.intermediate = nil
@@ -616,44 +728,121 @@ func (p *vtParser) interruptDCS() {
 }
 
 func (p *vtParser) dispatchEscape(final uint16) {
-	identifier := append(append([]uint16(nil), p.intermediate...), final)
-	switch string(runesFromUTF16(identifier)) {
-	case "#8":
-		for y := 0; y < p.buffer.height; y++ {
-			for x := 0; x < p.buffer.width; x++ {
-				p.buffer.rowByOffset(y).charRow.setGlyph(x, []uint16{'E'})
-			}
-		}
-	case "#3":
+	id := p.identifier.finalize(final)
+	switch id {
+	case vtIDFromString("#8"):
+		p.screenAlignmentPattern()
+	case vtIDFromString("#3"):
 		p.buffer.setCurrentLineRendition(lineRenditionDoubleHeightTop)
-	case "#4":
+	case vtIDFromString("#4"):
 		p.buffer.setCurrentLineRendition(lineRenditionDoubleHeightBottom)
-	case "#5":
+	case vtIDFromString("#5"):
 		p.buffer.setCurrentLineRendition(lineRenditionSingle)
-	case "#6":
+	case vtIDFromString("#6"):
 		p.buffer.setCurrentLineRendition(lineRenditionDoubleWidth)
-	case "D":
+	case vtIDFromString("D"):
 		if err := p.buffer.lineFeed(false); err != nil {
 			p.failed = err
 		}
-	case "E":
+	case vtIDFromString("E"):
 		p.buffer.carriageReturn()
 		if err := p.buffer.lineFeed(true); err != nil {
 			p.failed = err
 		}
-	case "M":
+	case vtIDFromString("M"):
 		p.reverseLineFeed()
-	case "H":
+	case vtIDFromString("H"):
 		p.buffer.setTab(p.buffer.cursor.position.x)
-	case "c":
-		p.reset()
+	case vtIDFromString("N"):
+		p.termOutput.singleShift(2)
+	case vtIDFromString("O"):
+		p.termOutput.singleShift(3)
+	case vtIDFromString("="):
+		p.keypadMode = true
+	case vtIDFromString(">"):
+		p.keypadMode = false
+	case vtIDFromString("n"):
+		p.termOutput.lockingShift(2)
+	case vtIDFromString("o"):
+		p.termOutput.lockingShift(3)
+	case vtIDFromString("~"):
+		p.termOutput.lockingShiftRight(1)
+	case vtIDFromString("}"):
+		p.termOutput.lockingShiftRight(2)
+	case vtIDFromString("|"):
+		p.termOutput.lockingShiftRight(3)
+	case vtIDFromString("Z"):
+		p.responses = append(p.responses, []byte("\x1b[?1;0c"))
+	case vtIDFromString("\\"):
+		// EscActionCodes::ST_StringTerminator is a successful no-op.
+	case vtIDFromString("%@"):
+		p.termOutput.enableGrTranslation(true)
+	case vtIDFromString("%G"):
+		p.termOutput.enableGrTranslation(false)
+	case vtIDFromString("(0"):
+		p.termOutput.designate94Charset(0, "0")
+	case vtIDFromString("(B"):
+		p.termOutput.designate94Charset(0, "B")
+	case vtIDFromString(")0"):
+		p.termOutput.designate94Charset(1, "0")
+	case vtIDFromString(")B"):
+		p.termOutput.designate94Charset(1, "B")
+	case vtIDFromString("*0"):
+		p.termOutput.designate94Charset(2, "0")
+	case vtIDFromString("*B"):
+		p.termOutput.designate94Charset(2, "B")
+	case vtIDFromString("+0"):
+		p.termOutput.designate94Charset(3, "0")
+	case vtIDFromString("+B"):
+		p.termOutput.designate94Charset(3, "B")
+	case vtIDFromString("c"):
+		p.hardReset()
+	default:
+		commandChar := byte(id)
+		if id>>8 != 0 {
+			switch commandChar {
+			case '(', ')', '*', '+':
+				p.termOutput.designate94CharsetValue(int(commandChar-'('), id>>8)
+			case '-', '.', '/':
+				p.termOutput.designate96CharsetValue(int(commandChar-'-'+1), id>>8)
+			}
+		}
 	}
 	p.state = stateGround
 	p.clearSequence()
 	p.clearLastPrinted()
 }
 
-func (p *vtParser) dispatchVT52(final byte) {
+// screenAlignmentPattern follows AdaptDispatch::ScreenAlignmentPattern and
+// its pinned PrivateFillRegion/ResetLineRenditionRange path. DECALN writes
+// default-attribute E cells over the visible viewport, clears only line
+// rendition metadata, resets the current meta attributes, clears origin and
+// margins, and homes the cursor.
+func (p *vtParser) screenAlignmentPattern() {
+	// AdaptDispatch::ScreenAlignmentPattern first calls MoveToBottom before
+	// taking the viewport dimensions.
+	p.buffer.moveToBottom()
+	fillLength := (p.buffer.viewportHeight - 1) * p.buffer.width
+	if fillLength > 0 {
+		units := make([]uint16, fillLength)
+		for i := range units {
+			units[i] = 'E'
+		}
+		fillAttr := textAttribute{}
+		cells := outputCellsFromUTF16WithAttr(units, fillAttr)
+		wrap := false
+		_, _ = p.buffer.write(cells, coordinate{y: p.buffer.viewportTop}, &wrap)
+	}
+	p.buffer.resetLineRenditionRange(p.buffer.viewportTop, p.buffer.viewportTop+p.buffer.viewportHeight)
+	attrs := p.buffer.currentAttrs
+	attrs.setStandardErase()
+	p.buffer.currentAttrs = attrs
+	p.buffer.originMode = false
+	_ = p.buffer.setScrollingMarginsRaw(0, 0)
+	_ = p.buffer.setCursorPosition(coordinate{}, true)
+}
+
+func (p *vtParser) dispatchVT52(final uint16) {
 	switch final {
 	case 'A':
 		p.buffer.cursorMove(-1, 0, false, false, true)
@@ -709,16 +898,18 @@ func (p *vtParser) consumeCSI(b byte) {
 	}
 	if b >= '<' && b <= '?' && p.state == stateCSIEntry {
 		p.private = b
+		p.identifier.addIntermediate(uint16(b))
 		p.state = stateCSIParam
 		return
 	}
 	if b >= 0x20 && b <= 0x2f {
 		p.intermediate = append(p.intermediate, uint16(b))
+		p.identifier.addIntermediate(uint16(b))
 		p.state = stateCSIIntermediate
 		return
 	}
 	if b >= 0x40 && b <= 0x7e {
-		p.dispatchCSI(b)
+		p.dispatchCSI(uint16(b))
 		p.state = stateGround
 		p.clearSequence()
 		return
@@ -728,10 +919,9 @@ func (p *vtParser) consumeCSI(b byte) {
 
 func (p *vtParser) consumeOSCParam(b byte) {
 	if b >= '0' && b <= '9' {
-		// StateMachine::_ActionOscParam accumulates into size_t one digit at
-		// a time. Do not cap the textual digits: that would change overflow
-		// and delimiter behavior relative to the pinned source.
-		p.oscParam = p.oscParam*10 + int(b-'0')
+		// StateMachine::_ActionOscParam accumulates through _AccumulateTo,
+		// which clamps after each digit.
+		p.oscParam = accumulateParameter(p.oscParam, int(b-'0'))
 		return
 	}
 	if b == ';' {
@@ -760,18 +950,150 @@ func (p *vtParser) consumeOSCString(b byte) {
 	if b <= 0x17 || b == 0x19 || (b >= 0x1c && b <= 0x1f) {
 		return
 	}
-	if len(p.oscString) < 1<<20 {
-		p.oscString = append(p.oscString, uint16(b))
-	}
+	p.oscString = append(p.oscString, uint16(b))
 }
 
 func (p *vtParser) dispatchOSC() {
-	if p.oscParam == 0 || p.oscParam == 1 || p.oscParam == 2 {
-		p.title = string(runesFromUTF16(p.oscString))
+	switch p.oscParam {
+	case 0, 1, 2:
+		// OutputStateMachineEngine::_GetOscTitle rejects an empty string
+		// before calling SetWindowTitle.
+		if len(p.oscString) != 0 {
+			p.title = string(runesFromUTF16(p.oscString))
+		}
+	case 4:
+		p.oscSetColorTable()
+	case 10, 11, 12:
+		p.oscSetDefaultColors(p.oscParam)
+	case 52:
+		p.oscSetClipboard()
+	case 112:
+		// AdaptDispatch::SetCursorColor returns false immediately for ConPTY,
+		// including the INVALID_COLOR reset value.  The pinned dispatcher
+		// consequently leaves the buffer cursor color untouched here.
+	case 8:
+		p.oscHyperlink()
+	case 9:
+		// AdaptDispatch::DoConEmuAction is the pinned no-op failure path.
 	}
 	p.state = stateGround
 	p.clearSequence()
 	p.clearLastPrinted()
+}
+
+func (p *vtParser) oscSetColorTable() {
+	parts := splitPinnedString(p.oscString, ';')
+	if len(parts) < 2 {
+		return
+	}
+	for i, j := 0, 1; j < len(parts); i, j = i+2, j+2 {
+		index, indexOK := stringToPinnedUint(parts[i])
+		color, colorOK := colorFromXTermColor(string(runesFromUTF16(parts[j])))
+		if !indexOK || !colorOK || index >= 256 {
+			continue
+		}
+		// DoSrvPrivateSetColorTableEntry indexes the global Windows table
+		// through Xterm256ToWindowsIndex before storing the RGB value.
+		p.colorTable[xterm256ToWindowsIndex(int(index))] = color
+	}
+}
+
+func (p *vtParser) oscSetDefaultColors(command int) {
+	parts := splitPinnedString(p.oscString, ';')
+	if len(parts) < 1 {
+		return
+	}
+	// OutputStateMachineEngine::_GetOscSetColor retains one vector slot for
+	// every field and stores INVALID_COLOR for a failed parse. The dispatch
+	// loop advances over those slots but does not call the adapter for the
+	// invalid entries.
+	colors := make([]uint32, 0, len(parts))
+	for _, part := range parts {
+		if color, ok := colorFromXTermColor(string(runesFromUTF16(part))); ok {
+			colors = append(colors, color)
+		} else {
+			colors = append(colors, 0xffffffff)
+		}
+	}
+	colorIndex := 0
+	if command == 10 && len(colors) > colorIndex {
+		if colors[colorIndex] != 0xffffffff {
+			p.defaultForeground = colors[colorIndex]
+		}
+		command++
+		colorIndex++
+	}
+	if command == 11 && len(colors) > colorIndex {
+		if colors[colorIndex] != 0xffffffff {
+			p.defaultBackground = colors[colorIndex]
+		}
+		command++
+		colorIndex++
+	}
+	if command == 12 && len(colors) > colorIndex {
+		// AdaptDispatch::SetCursorColor is a ConPTY false-returning pass-through
+		// boundary, so it must not mutate the text-buffer cursor state.
+	}
+}
+
+func (p *vtParser) oscSetClipboard() {
+	separator := -1
+	for i, unit := range p.oscString {
+		if unit == ';' {
+			separator = i
+			break
+		}
+	}
+	if separator < 0 {
+		return
+	}
+	content := p.oscString[separator+1:]
+	if len(content) == 1 && content[0] == '?' {
+		return
+	}
+	// AdaptDispatch::SetClipboard is a pinned false-returning no-op. Decode
+	// first, exactly as ActionOscDispatch does, but do not invent clipboard
+	// state in the standalone buffer.
+	_, _ = pinnedBase64Decode(content)
+}
+
+func (p *vtParser) oscHyperlink() {
+	params, uri, ok := parsePinnedHyperlink(p.oscString)
+	if !ok {
+		return
+	}
+	if uri == "" {
+		p.buffer.currentAttrs.setHyperlinkID(0)
+		return
+	}
+	id := p.buffer.getHyperlinkID(uri, params)
+	p.buffer.currentAttrs.setHyperlinkID(id)
+	p.buffer.hyperlinkMap[id] = uri
+}
+
+func parsePinnedHyperlink(value []uint16) (params, uri string, ok bool) {
+	if len(value) == 1 && value[0] == ';' {
+		return "", "", true
+	}
+	mid := -1
+	for i, unit := range value {
+		if unit == ';' {
+			mid = i
+			break
+		}
+	}
+	if mid < 0 {
+		return "", "", false
+	}
+	uri = string(runesFromUTF16(value[mid+1:]))
+	for _, part := range splitPinnedString(value[:mid], ':') {
+		const hyperlinkIDParameter = "id="
+		partText := string(runesFromUTF16(part))
+		if index := strings.Index(partText, hyperlinkIDParameter); index >= 0 {
+			params = partText[index+len(hyperlinkIDParameter):]
+		}
+	}
+	return params, uri, true
 }
 
 func (p *vtParser) dispatchSS3(b uint16) {
@@ -789,7 +1111,7 @@ func (p *vtParser) dispatchSS3(b uint16) {
 	p.clearLastPrinted()
 }
 
-func (p *vtParser) dispatchCSI(final byte) {
+func (p *vtParser) dispatchCSI(final uint16) {
 	parameterValues := func() []int {
 		if len(p.params) == 0 {
 			return []int{0}
@@ -807,6 +1129,76 @@ func (p *vtParser) dispatchCSI(final byte) {
 			return 0
 		}
 		return p.params[index]
+	}
+	// The pinned state machine places CSI private markers and intermediate
+	// bytes in the VTID passed to ActionCsiDispatch. Keep the private marker
+	// separate as well because AdaptDispatch's mode helper receives it as the
+	// DEC-private discriminator.
+	identifier := p.identifier.finalize(final)
+
+	// These actions are selected by intermediate bytes in the pinned
+	// OutputStateMachineEngine. They must be checked before the final-byte
+	// switch: the same final character has different meaning under an
+	// intermediate identifier.
+	switch identifier {
+	case vtIDFromString(" q"):
+		p.setCursorStyle(n(0, 1))
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("!p"):
+		if p.private == 0 {
+			p.softReset()
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("#{"), vtIDFromString("#p"):
+		if p.private == 0 {
+			p.sgrStack.push(p.buffer.currentAttrs, parameterValues())
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("#}"), vtIDFromString("#q"):
+		if p.private == 0 {
+			p.buffer.currentAttrs = p.sgrStack.pop(p.buffer.currentAttrs)
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString(">c"):
+		if raw(0) == 0 {
+			p.responses = append(p.responses, []byte("\x1b[>0;10;1c"))
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("=c"):
+		if raw(0) == 0 {
+			p.responses = append(p.responses, []byte("\x1bP!|00000000\x1b\\"))
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("x"):
+		if p.private == 0 {
+			switch raw(0) {
+			case 0:
+				p.responses = append(p.responses, []byte("\x1b[2;1;1;128;128;1;0x"))
+			case 1:
+				p.responses = append(p.responses, []byte("\x1b[3;1;1;128;128;1;0x"))
+			}
+		}
+		p.clearLastPrinted()
+		return
+	case vtIDFromString("$|"):
+		// AdaptDispatch::SetColumns calls SetConsoleScreenBufferInfoEx, whose
+		// width-only resize is TextBuffer::ResizeTraditional in the pinned
+		// host path. It must not use the reflow path used by ConPTY resize.
+		if p.private == 0 {
+			_ = p.buffer.setColumns(n(0, 1))
+		}
+		p.clearLastPrinted()
+		return
+	}
+	if len(p.intermediate) != 0 || (p.private != 0 && !(p.private == '?' && (final == 'h' || final == 'l'))) {
+		p.clearLastPrinted()
+		return
 	}
 	switch final {
 	case 'A':
@@ -844,7 +1236,7 @@ func (p *vtParser) dispatchCSI(final byte) {
 			p.buffer.clearTabs(mode)
 		}
 	case 'X':
-		p.buffer.clearRange(p.buffer.cursor.position.y, p.buffer.cursor.position.x, p.buffer.cursor.position.x+n(0, 1)-1)
+		p.eraseCharacters(n(0, 1))
 	case '@':
 		p.insertCells(n(0, 1))
 	case 'P':
@@ -861,11 +1253,11 @@ func (p *vtParser) dispatchCSI(final byte) {
 		p.buffer.setScrollingMargins(raw(0), raw(1))
 	case 's':
 		if len(p.params) == 0 {
-			p.buffer.saveCursor()
+			p.saveCursorState()
 		}
 	case 'u':
 		if len(p.params) == 0 {
-			p.buffer.restoreCursor()
+			p.restoreCursorState()
 		}
 	case 'm':
 		p.setGraphicsRendition(parameterValues())
@@ -877,14 +1269,12 @@ func (p *vtParser) dispatchCSI(final byte) {
 		if p.private == 0 && raw(0) == 0 {
 			p.responses = append(p.responses, []byte("\x1b[?1;0c"))
 		}
-	case 'q':
-		p.setCursorStyle(raw(0))
 	case 'n':
 		p.deviceStatusReport(raw(0))
+	case 't':
+		p.windowManipulation(raw(0), raw(1), raw(2))
 	case 'p':
-		if len(p.intermediate) == 0 && p.private == 0 {
-			p.softReset()
-		}
+		// DECSTR is CSI ! p; bare CSI p is not an ActionCsiDispatch case.
 	}
 	p.clearLastPrinted()
 }
@@ -902,6 +1292,9 @@ func (p *vtParser) privateMode(enable bool, params []int) {
 			p.buffer.cursorMove(0, 0, true, true, false)
 		case 2:
 			p.ansiMode = enable
+			// AdaptDispatch::SetAnsiMode resets TerminalOutput on every
+			// mode update, even when the mode value itself is unchanged.
+			p.termOutput = newTerminalOutput()
 		case 7:
 			p.buffer.wrapAtEOL = enable
 		case 3:
@@ -910,14 +1303,23 @@ func (p *vtParser) privateMode(enable bool, params []int) {
 				if enable {
 					width = 132
 				}
-				if resized, err := resizeBuffer(p.buffer, width, p.buffer.height); err == nil {
-					p.replaceActiveBuffer(resized)
+				if err := p.buffer.setColumns(width); err == nil {
+					p.buffer.originMode = false
+					if err := p.buffer.setCursorPosition(coordinate{}, true); err != nil {
+						p.failed = err
+						break
+					}
+					p.eraseDisplay(2)
+					if !p.buffer.setScrollingMarginsRaw(0, 0) {
+						p.failed = fmt.Errorf("DECCOLM could not reset scrolling margins")
+					}
 				} else {
 					p.failed = err
 				}
 			}
 		case 5:
-			p.screenMode = enable
+			// AdaptDispatch::SetScreenMode is a NoOp failure for a ConPTY;
+			// the pinned PTY path does not change screen state here.
 		case 12:
 			p.buffer.cursor.blinkingAllowed = enable
 		case 25:
@@ -930,7 +1332,8 @@ func (p *vtParser) privateMode(enable bool, params []int) {
 			}
 			p.mouseModes[mode] = enable
 		case 2004:
-			p.bracketedPaste = enable
+			// AdaptDispatch::EnableXtermBracketedPasteMode is NoOp for the
+			// pinned adapter and returns false without changing state.
 		case 9001:
 			p.win32InputMode = enable
 		case 1049:
@@ -987,7 +1390,7 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 		case option == 29:
 			attr.setCrossedOut(false)
 		case option >= 30 && option <= 37:
-			attr.setIndexedForeground(uint8(option - 30))
+			attr.setIndexedForeground(uint8([]int{0, 4, 2, 6, 1, 5, 3, 7}[option-30]))
 		case option == 38:
 			consumed := 1
 			if i+1 < len(options) && options[i+1] == 2 {
@@ -1001,7 +1404,7 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 			} else if i+1 < len(options) && options[i+1] == 5 {
 				index := parameterAt(options, i+2)
 				if index <= 255 {
-					attr.setIndexedForeground256(uint8(index))
+					attr.setIndexedForeground256(xterm256ToWindowsIndex(index))
 				}
 				consumed = 2
 			}
@@ -1009,7 +1412,7 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 		case option == 39:
 			attr.setDefaultForeground()
 		case option >= 40 && option <= 47:
-			attr.setIndexedBackground(uint8(option - 40))
+			attr.setIndexedBackground(uint8([]int{0, 4, 2, 6, 1, 5, 3, 7}[option-40]))
 		case option == 48:
 			consumed := 1
 			if i+1 < len(options) && options[i+1] == 2 {
@@ -1021,7 +1424,7 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 			} else if i+1 < len(options) && options[i+1] == 5 {
 				index := parameterAt(options, i+2)
 				if index <= 255 {
-					attr.setIndexedBackground256(uint8(index))
+					attr.setIndexedBackground256(xterm256ToWindowsIndex(index))
 				}
 				consumed = 2
 			}
@@ -1033,9 +1436,9 @@ func (p *vtParser) setGraphicsRendition(options []int) {
 		case option == 55:
 			attr.setOverlined(false)
 		case option >= 90 && option <= 97:
-			attr.setIndexedForeground(uint8(option - 90 + 8))
+			attr.setIndexedForeground(uint8([]int{8, 12, 10, 14, 9, 13, 11, 15}[option-90]))
 		case option >= 100 && option <= 107:
-			attr.setIndexedBackground(uint8(option - 100 + 8))
+			attr.setIndexedBackground(uint8([]int{8, 12, 10, 14, 9, 13, 11, 15}[option-100]))
 		}
 	}
 	p.buffer.currentAttrs = attr
@@ -1049,27 +1452,30 @@ func parameterAt(options []int, index int) int {
 }
 
 func (p *vtParser) setCursorStyle(style int) {
-	p.buffer.cursor.blinkingAllowed = false
+	var cursor cursorType
+	var blinking bool
 	switch style {
 	case 0:
-		p.buffer.cursor.style = cursorLegacy
-		p.buffer.cursor.blinkingAllowed = true
+		cursor, blinking = cursorLegacy, true
 	case 1:
-		p.buffer.cursor.style = cursorFullBox
-		p.buffer.cursor.blinkingAllowed = true
+		cursor, blinking = cursorFullBox, true
 	case 2:
-		p.buffer.cursor.style = cursorFullBox
+		cursor, blinking = cursorFullBox, false
 	case 3:
-		p.buffer.cursor.style = cursorUnderscore
-		p.buffer.cursor.blinkingAllowed = true
+		cursor, blinking = cursorUnderscore, true
 	case 4:
-		p.buffer.cursor.style = cursorUnderscore
+		cursor, blinking = cursorUnderscore, false
 	case 5:
-		p.buffer.cursor.style = cursorVerticalBar
-		p.buffer.cursor.blinkingAllowed = true
+		cursor, blinking = cursorVerticalBar, true
 	case 6:
-		p.buffer.cursor.style = cursorVerticalBar
+		cursor, blinking = cursorVerticalBar, false
+	default:
+		// AdaptDispatch::SetCursorStyle rejects invalid cursor-style values
+		// before touching the host cursor.
+		return
 	}
+	p.buffer.cursor.style = cursor
+	p.buffer.cursor.blinkingAllowed = blinking
 }
 
 func (p *vtParser) deviceStatusReport(status int) {
@@ -1080,13 +1486,51 @@ func (p *vtParser) deviceStatusReport(status int) {
 	case 5:
 		p.responses = append(p.responses, []byte("\x1b[0n"))
 	case 6:
+		// AdaptDispatch::_CursorPositionReport moves the virtual viewport
+		// before reading the cursor; _OperatingStatus does not.
+		p.buffer.moveToBottom()
 		position := p.buffer.cursor.position
-		row := position.y + 1
+		row := position.y - p.buffer.viewportTop + 1
 		if p.buffer.originMode && p.buffer.marginsSet() {
-			top, _ := p.buffer.absoluteScrollMargins()
-			row -= top
+			row -= p.buffer.scrollTop
 		}
 		p.responses = append(p.responses, []byte(fmt.Sprintf("\x1b[%d;%dR", row, position.x+1)))
+	}
+}
+
+// eraseCharacters is AdaptDispatch::EraseCharacters. It fills only the
+// remaining cells of the current line and uses standard erase attributes.
+func (p *vtParser) eraseCharacters(count int) {
+	if count <= 0 {
+		return
+	}
+	position := p.buffer.cursor.position
+	// AdaptDispatch::EraseCharacters reads csbiex.dwSize.X, not
+	// PrivateGetLineWidth; the erase therefore uses the full backing row even
+	// when the current line rendition has a narrower VT line width.
+	remaining := p.buffer.width - position.x
+	if remaining < 0 {
+		remaining = 0
+	}
+	if count > remaining {
+		count = remaining
+	}
+	if count == 0 {
+		return
+	}
+	p.buffer.clearRangeWithAttr(position.y, position.x, position.x+count-1, p.standardErase())
+}
+
+// windowManipulation is AdaptDispatch::WindowManipulation. Function 7 only
+// asks the pinned host to repaint; it has no buffer mutation. Function 8 is
+// DispatchCommon::s_ResizeWindow with parameter order (width, height).
+func (p *vtParser) windowManipulation(function, parameter1, parameter2 int) {
+	switch function {
+	case 7:
+		// DispatchCommon::s_RefreshWindow calls only the host's private
+		// repaint operation; it does not mutate the text buffer.
+	case 8:
+		_ = p.buffer.resizeWindow(parameter2, parameter1)
 	}
 }
 
@@ -1095,16 +1539,53 @@ func (p *vtParser) softReset() {
 	p.buffer.originMode = false
 	p.cursorKeysMode = false
 	p.keypadMode = false
-	p.buffer.scrollTop = 0
-	p.buffer.scrollBottom = 0
+	p.buffer.moveToBottom()
+	if !p.buffer.setScrollingMarginsRaw(0, 0) {
+		p.failed = fmt.Errorf("SoftReset could not reset scrolling margins")
+	}
 	p.buffer.cursor.visible = true
 	p.buffer.cursor.blinkingAllowed = true
-	p.buffer.currentAttrs = textAttribute{}
+	p.termOutput = newTerminalOutput()
+	// AdaptDispatch::SoftReset calls SetGraphicsRendition with the default
+	// VTParameters value. VTParameters::size() exposes one omitted parameter,
+	// whose GraphicsOptions conversion is Off (SGR 0).
 	p.setGraphicsRendition([]int{0})
-	p.buffer.savedCursorState = cursorState{}
-	if p.altBuffer != nil {
-		p.altBuffer.savedCursorState = cursorState{}
+	p.savedCursorState = [2]dispatchCursorState{}
+}
+
+// hardReset follows AdaptDispatch::HardReset in the pinned OpenConsole
+// source. It deliberately is not parser reset: RIS resets the active
+// screen/adapter state in a specific order, preserves process-wide color and
+// title state, and in a ConPTY is ultimately reported as unhandled so the
+// connected application can receive the RIS sequence.
+func (p *vtParser) hardReset() {
+	if p.buffer == p.altBuffer {
+		p.useMain()
 	}
+
+	// The pinned implementation resets SGR before either erase operation so
+	// erased cells use the default background color.
+	p.softReset()
+	p.eraseDisplay(2)
+	p.eraseDisplay(3)
+
+	// AdaptDispatch::SetScreenMode is a NoOp failure for a ConPTY, so there is
+	// no state change here. Only the two mouse modes explicitly reset by the
+	// pinned HardReset are touched.
+	if p.mouseModes == nil {
+		p.mouseModes = make(map[int]bool)
+	}
+	p.mouseModes[1006] = false
+	p.mouseModes[1003] = false
+	p.buffer.resetTabStops()
+
+	// SoftReset makes addressing absolute; CursorPosition(1, 1) therefore
+	// homes to the active viewport origin.
+	p.buffer.cursorMove(0, 0, true, true, false)
+
+	// PrivateUpdateSoftFont({}, {}, false) and its font-buffer ownership have
+	// no text-buffer representation in this probe. This is an explicit source
+	// boundary, not a substituted rendering implementation.
 }
 
 func (p *vtParser) moveCursor(dy, dx int) {
@@ -1112,29 +1593,49 @@ func (p *vtParser) moveCursor(dy, dx int) {
 }
 
 func (p *vtParser) eraseDisplay(mode int) {
+	if mode == 0 || mode == 1 {
+		// AdaptDispatch::EraseInDisplay first restores the virtual viewport
+		// with MoveToBottom before reading cursor and window coordinates.
+		p.buffer.moveToBottom()
+	}
 	pos := p.buffer.cursor.position
-	eraseFullLine := func(row int) {
-		p.buffer.rowByOffset(row).lineRendition = lineRenditionSingle
-		p.buffer.clearRangeWithAttr(row, 0, p.buffer.lineWidth(row)-1, p.standardErase())
+	eraseSingleLine := func(row, lineMode, cursorColumn int) {
+		lineWidth := p.buffer.lineWidth(row)
+		left, right := 0, lineWidth-1
+		switch lineMode {
+		case 0: // AdaptDispatch::EraseType::ToEnd
+			left = cursorColumn
+		case 1: // AdaptDispatch::EraseType::FromBeginning
+			right = cursorColumn
+		}
+		p.buffer.clearRangeWithAttr(row, left, right, p.standardErase())
 	}
 	switch mode {
 	case 0:
+		// The pinned implementation resets line renditions only for complete
+		// rows. If the cursor is in column zero, its row is complete too.
+		startRow := pos.y + 1
 		if pos.x == 0 {
-			eraseFullLine(pos.y)
-		} else {
-			p.buffer.clearRangeWithAttr(pos.y, pos.x, p.buffer.lineWidth(pos.y)-1, p.standardErase())
+			startRow = pos.y
 		}
-		for y := pos.y + 1; y < p.buffer.height; y++ {
-			eraseFullLine(y)
+		p.buffer.resetLineRenditionRange(startRow, p.buffer.viewportBottom()+1)
+		eraseSingleLine(pos.y, 0, pos.x)
+		for y := pos.y + 1; y <= p.buffer.viewportBottom(); y++ {
+			eraseSingleLine(y, 2, 0)
 		}
 	case 1:
-		for y := 0; y < pos.y; y++ {
-			eraseFullLine(y)
+		p.buffer.resetLineRenditionRange(p.buffer.viewportTop, pos.y)
+		for y := p.buffer.viewportTop; y < pos.y; y++ {
+			eraseSingleLine(y, 2, 0)
 		}
-		p.buffer.clearRangeWithAttr(pos.y, 0, pos.x, p.standardErase())
-	case 2, 3:
-		for y := 0; y < p.buffer.height; y++ {
-			eraseFullLine(y)
+		eraseSingleLine(pos.y, 1, pos.x)
+	case 2:
+		if err := p.buffer.vtEraseAll(); err != nil {
+			p.failed = err
+		}
+	case 3:
+		if err := p.buffer.eraseScrollback(); err != nil {
+			p.failed = err
 		}
 	}
 }
@@ -1147,7 +1648,6 @@ func (p *vtParser) eraseLine(mode int) {
 	case 1:
 		p.buffer.clearRangeWithAttr(pos.y, 0, pos.x, p.standardErase())
 	case 2:
-		p.buffer.rowByOffset(pos.y).lineRendition = lineRenditionSingle
 		p.buffer.clearRangeWithAttr(pos.y, 0, p.buffer.lineWidth(pos.y)-1, p.standardErase())
 	}
 }
@@ -1172,51 +1672,27 @@ func (p *vtParser) deleteCells(count int) {
 	p.shiftCells(row, start, count, false)
 }
 
-// shiftCells is the cell-wise equivalent of the pinned PrivateScrollRegion
-// horizontal move. Copying through glyphAt/setGlyph is required because a
-// direct Go struct assignment would leave UnicodeStorage keyed to the old
-// column rather than performing ROW's cell-reference copy.
+// shiftCells is the pinned AdaptDispatch::_InsertDeleteHelper path: it cuts
+// the remainder of the current line and invokes host/output.cpp::ScrollRegion
+// with the source rectangle as its clip rectangle.
 func (p *vtParser) shiftCells(row *msRow, start, count int, insert bool) {
-	if count <= 0 || start < 0 || start >= len(row.charRow.data) {
+	if row == nil || count <= 0 || start < 0 || start >= len(row.charRow.data) {
 		return
 	}
 	end := p.buffer.lineWidth(p.buffer.cursor.position.y)
 	if end > len(row.charRow.data) {
 		end = len(row.charRow.data)
 	}
-	oldGlyphs := make([][]uint16, end)
-	oldAttrs := make([]dbcsAttribute, end)
-	oldTextAttrs := append([]textAttribute(nil), row.attrs[:end]...)
-	for x := 0; x < end; x++ {
-		oldGlyphs[x] = row.charRow.glyphAt(x)
-		oldAttrs[x] = row.charRow.data[x].attr
-		row.charRow.clearCell(x)
+	if end <= start {
+		return
 	}
-	for x := 0; x < end; x++ {
-		source := x
-		if insert {
-			source = x - count
-			if x >= start && x < start+count {
-				source = -1
-			}
-		} else if x >= start {
-			source = x + count
-			if source >= end {
-				source = -1
-			}
-		}
-		if x < start && insert || x < start && !insert {
-			source = x
-		}
-		if source >= 0 && source < end {
-			row.charRow.setGlyph(x, oldGlyphs[source])
-			row.charRow.data[x].attr = oldAttrs[source]
-			row.attrs[x] = oldTextAttrs[source]
-		} else {
-			row.charRow.clearCell(x)
-			row.attrs[x] = p.standardErase()
-		}
+	destination := start - count
+	if insert {
+		destination = start + count
 	}
+	source := &cellRect{left: start, top: p.buffer.cursor.position.y, right: end, bottom: p.buffer.cursor.position.y + 1}
+	fill := p.standardErase()
+	p.buffer.scrollRectangle(source, source, coordinate{x: destination, y: p.buffer.cursor.position.y}, unicodeSpace, fill)
 }
 
 func (p *vtParser) insertLines(count int) {
@@ -1283,12 +1759,52 @@ func (p *vtParser) reverseLineFeed() {
 	}
 }
 
+func (p *vtParser) saveCursorState() {
+	p.buffer.moveToBottom()
+	index := 0
+	if p.buffer == p.altBuffer {
+		index = 1
+	}
+	position := p.buffer.cursor.position
+	position.y -= p.buffer.viewportTop
+	p.savedCursorState[index] = dispatchCursorState{
+		position: position, originMode: p.buffer.originMode,
+		attrs: p.buffer.currentAttrs, termOutput: p.termOutput,
+	}
+}
+
+func (p *vtParser) restoreCursorState() {
+	p.buffer.moveToBottom()
+	index := 0
+	if p.buffer == p.altBuffer {
+		index = 1
+	}
+	saved := p.savedCursorState[index]
+	position := saved.position
+	if saved.originMode && p.buffer.scrollBottom != 0 {
+		if position.y < p.buffer.scrollTop {
+			position.y = p.buffer.scrollTop
+		}
+		if position.y > p.buffer.scrollBottom {
+			position.y = p.buffer.scrollBottom
+		}
+	}
+	p.buffer.originMode = false
+	position.y += p.buffer.viewportTop
+	if err := p.buffer.setCursorPosition(position, true); err != nil {
+		p.failed = err
+	}
+	p.buffer.originMode = saved.originMode
+	p.buffer.currentAttrs = saved.attrs
+	p.termOutput = saved.termOutput
+}
+
 func (p *vtParser) useAlternate() {
 	// AdaptDispatch::UseAlternateScreenBuffer first saves the active cursor,
 	// then SCREEN_INFORMATION::_CreateAltBuffer creates an initially erased
 	// buffer with the main viewport dimensions and copies only the cursor style,
 	// visibility, blinking policy, and viewport-relative position.
-	p.buffer.saveCursor()
+	p.saveCursorState()
 	main := p.mainBuffer
 	height := main.viewportHeight
 	if height <= 0 {
@@ -1326,13 +1842,21 @@ func (p *vtParser) useMain() {
 		p.mainBuffer.cursor.visible = alt.cursor.visible
 		p.mainBuffer.cursor.blinkingAllowed = alt.cursor.blinkingAllowed
 	}
-	p.mainBuffer.restoreCursor()
+	p.restoreCursorState()
 	p.altBuffer = nil
 }
 
 func (p *vtParser) printRune(r rune) {
 	units := utf16Units(string(r))
 	p.buffer.returnOnNewline = p.newLineAutoReturn
+	if p.termOutput.needToTranslate() {
+		for i, unit := range units {
+			units[i] = p.termOutput.translateKey(unit)
+		}
+	}
+	if len(units) == 1 && units[0] == 0x7f {
+		return
+	}
 	if err := writeDefaultString(p.buffer, units); err != nil {
 		p.failed = err
 		return
@@ -1365,9 +1889,7 @@ func (p *vtParser) repeatPrevious(count int) {
 	for i := range units {
 		units[i] = p.lastPrinted
 	}
-	if err := writeDefaultString(p.buffer, units); err != nil {
-		p.failed = err
-	}
+	p.printUnits(units)
 }
 
 func (p *vtParser) execute(b byte) {
@@ -1375,8 +1897,8 @@ func (p *vtParser) execute(b byte) {
 	case 0x00:
 		// OutputStateMachineEngine::ActionExecute explicitly filters NUL.
 	case 0x7f:
-		// AdaptDispatch::Print filters DEL unless a designated 96-character
-		// set translates it. The probe keeps the pinned default ASCII set.
+		// ActionExecute does not special-case DEL. It routes it through Print;
+		// the pinned default WriteCharsLegacy path does not store it.
 	case 0x07:
 		p.bells++
 	case 0x08:
@@ -1390,23 +1912,21 @@ func (p *vtParser) execute(b byte) {
 	case 0x0d:
 		p.buffer.carriageReturn()
 	case 0x0e, 0x0f:
-		// SI/SO are LockingShift callbacks in the pinned output engine.
-		// The text buffer has no charset state, so the callback has no text
-		// side effect.
+		if b == 0x0e {
+			p.termOutput.lockingShift(1)
+		} else {
+			p.termOutput.lockingShift(0)
+		}
 	case 0x9b:
 		p.state = stateCSIEntry
 	case 0x9d:
 		p.state = stateOSCParam
 	default:
-		if b >= 0x80 && b <= 0x9f {
-			// C1 controls not used by the probe are consumed by the pinned
-			// parser's execute action.
-		} else {
-			// OutputStateMachineEngine::ActionExecute routes unhandled C0
-			// characters to ITermDispatch::Print.
-			if err := writeDefaultString(p.buffer, []uint16{uint16(b)}); err != nil {
-				p.failed = err
-			}
+		// OutputStateMachineEngine::ActionExecute routes unhandled controls
+		// to ITermDispatch::Print. Print enters WriteBuffer::_DefaultCase
+		// directly; it does not pass through TerminalOutput::TranslateKey.
+		if err := writeDefaultString(p.buffer, []uint16{uint16(b)}); err != nil {
+			p.failed = err
 		}
 	}
 	p.clearLastPrinted()
@@ -1424,6 +1944,7 @@ func (p *vtParser) clearSequence() {
 	p.parameterLimit = false
 	p.private = 0
 	p.intermediate = nil
+	p.identifier.clear()
 	p.oscParam = 0
 	p.oscDigits = nil
 	p.oscString = nil
@@ -1438,6 +1959,12 @@ func (p *vtParser) snapshot() terminalSnapshot {
 func (p *vtParser) resize(width, height int) error {
 	if width <= 0 || height <= 0 {
 		return fmt.Errorf("invalid resize %dx%d", width, height)
+	}
+	// SCREEN_INFORMATION::ResizeScreenBuffer returns before selecting either
+	// the traditional or reflow path when the requested dimensions already
+	// match the active buffer.
+	if width == p.buffer.width && height == p.buffer.height {
+		return nil
 	}
 	oldBuffer := p.buffer
 	resized, err := resizeBuffer(oldBuffer, width, height)
@@ -1468,10 +1995,14 @@ func resizeBuffer(old *textBuffer, width, height int) (*textBuffer, error) {
 	// with default attributes.  The old current attributes are restored only
 	// after TextBuffer::Reflow, so overflow rows are erased with the new
 	// buffer's defaults exactly as in the pinned path.
-	cursorHeightBefore := old.cursor.position.y - old.viewportTop
 	if err := reflow(old, newBuffer); err != nil {
 		return nil, err
 	}
+	// SCREEN_INFORMATION::ResizeWithReflow adjusts the viewport by the
+	// difference between the new and old cursor heights in that viewport.
+	// The old viewport origin cancels algebraically; retaining it here avoids
+	// the previous double subtraction of old.viewportTop.
+	cursorHeightDiff := newBuffer.cursor.position.y - old.cursor.position.y
 	newBuffer.currentAttrs = old.currentAttrs
 	newBuffer.cursorSize = old.cursorSize
 	newBuffer.viewportHeight = height
@@ -1481,7 +2012,7 @@ func resizeBuffer(old *textBuffer, width, height int) (*textBuffer, error) {
 	if newBuffer.viewportHeight < 1 {
 		newBuffer.viewportHeight = 1
 	}
-	newBuffer.viewportTop = old.viewportTop + (newBuffer.cursor.position.y - cursorHeightBefore - old.viewportTop)
+	newBuffer.viewportTop = old.viewportTop + cursorHeightDiff
 	if maxTop := newBuffer.height - newBuffer.viewportHeight; newBuffer.viewportTop > maxTop {
 		newBuffer.viewportTop = maxTop
 	}

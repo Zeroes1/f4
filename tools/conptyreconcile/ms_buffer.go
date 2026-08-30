@@ -36,10 +36,9 @@ const (
 	attrStoredOnly
 )
 
-// outputCell is the small input record consumed by ROW::WriteCells.  It is
-// deliberately an iterator-like slice record rather than a text string: the
-// pinned row code advances one cell at a time and may consume no input when it
-// pads a leading/trailing DBCS boundary.
+// outputCell is OutputCellView's observable record. The iterator below keeps
+// the source UTF-16 run and exposes this view; it is not a pre-expanded cell
+// slice, because OutputCellIterator may expose a leading DBCS view twice.
 type outputCell struct {
 	glyph    []uint16
 	dbcs     dbcsAttribute
@@ -110,16 +109,19 @@ func newCharRowCell() charRowCell {
 	return charRowCell{char: unicodeSpace}
 }
 
-// eraseChars is CharRowCell::EraseChars: it removes extended storage and
-// returns the visible character to the default space.
-func (c *charRowCell) eraseChars(s unicodeStorage, key cellCoordinate) {
+// eraseChars is CharRowCell::EraseChars. The pinned method only changes the
+// cell payload and glyph-stored flag; UnicodeStorage cleanup is deliberately
+// not part of this method.
+func (c *charRowCell) eraseChars() {
 	if c.attr.glyphStored {
 		c.attr.glyphStored = false
 	}
 	c.char = unicodeSpace
 }
 
-func (c *charRowCell) reset(s unicodeStorage, key cellCoordinate) {
+// reset is CharRowCell::Reset. As in the pinned source, this does not touch
+// UnicodeStorage; callers only consult that storage while glyphStored is set.
+func (c *charRowCell) reset() {
 	c.attr = dbcsAttribute{}
 	c.char = unicodeSpace
 }
@@ -150,18 +152,13 @@ func (r *charRow) key(column int) cellCoordinate {
 
 func (r *charRow) reset() {
 	for i := range r.data {
-		r.data[i].reset(r.store, r.key(i))
+		r.data[i].reset()
 	}
 }
 
 func (r *charRow) resize(width int) {
 	if width < 0 {
 		panic("negative CharRow width")
-	}
-	for key := range r.store {
-		if key.y == r.rowID && key.x >= width {
-			delete(r.store, key)
-		}
 	}
 	r.data = append(r.data[:0:0], r.data...)
 	if width < len(r.data) {
@@ -198,7 +195,7 @@ func (r *charRow) clearCell(column int) {
 	if column < 0 || column >= len(r.data) {
 		panic("CharRow column out of range")
 	}
-	r.data[column].reset(r.store, r.key(column))
+	r.data[column].reset()
 }
 
 func (r *charRow) clearColumn(column int) { r.clearCell(column) }
@@ -238,9 +235,298 @@ func (r *charRow) text() []uint16 {
 	return result
 }
 
+// attrRun is the Go transcription of til::rle_pair<TextAttribute, uint16_t>.
+// The length is stored on the run, exactly as ATTR_ROW's small_rle does; the
+// row is not represented as one independent TextAttribute per column.
+type attrRun struct {
+	length uint16
+	value  textAttribute
+}
+
+// attrRow is ATTR_ROW's til::small_rle<TextAttribute, uint16_t, 1> surface.
+// Keeping the run boundaries matters: Replace and Resize are run operations
+// in the pinned source, and GetHyperlinks walks runs rather than cells.
+type attrRow struct {
+	runs []attrRun
+	size uint16
+}
+
+func newAttrRow(width int, attr textAttribute) attrRow {
+	if width < 0 || width > int(^uint16(0)) {
+		panic("invalid ATTR_ROW width")
+	}
+	row := attrRow{size: uint16(width)}
+	if width != 0 {
+		row.runs = []attrRun{{length: uint16(width), value: attr}}
+	}
+	return row
+}
+
+func (r *attrRow) reset(attr textAttribute) {
+	r.runs = r.runs[:0]
+	if r.size != 0 {
+		r.runs = append(r.runs, attrRun{length: r.size, value: attr})
+	}
+}
+
+func (r attrRow) at(column int) textAttribute {
+	if column < 0 || column >= int(r.size) {
+		panic("ATTR_ROW column out of range")
+	}
+	for _, run := range r.runs {
+		if column < int(run.length) {
+			return run.value
+		}
+		column -= int(run.length)
+	}
+	panic("ATTR_ROW run length mismatch")
+}
+
+func (r *attrRow) set(column int, attr textAttribute) {
+	if column < 0 || column >= int(r.size) {
+		panic("ATTR_ROW column out of range")
+	}
+	r.replace(column, column+1, attr)
+}
+
+func (r attrRow) expanded() []textAttribute {
+	result := make([]textAttribute, 0, r.size)
+	for _, run := range r.runs {
+		for i := uint16(0); i < run.length; i++ {
+			result = append(result, run.value)
+		}
+	}
+	return result
+}
+
+func (r attrRow) clone() attrRow {
+	return attrRow{runs: append([]attrRun(nil), r.runs...), size: r.size}
+}
+
+// resize is ATTR_ROW::Resize, backed by small_rle::resize_trailing_extent.
+func (r *attrRow) resize(newSize int) {
+	if newSize < 0 || newSize > int(^uint16(0)) {
+		panic("invalid ATTR_ROW resize")
+	}
+	oldSize := int(r.size)
+	if newSize == oldSize {
+		return
+	}
+	if newSize < oldSize {
+		r.truncate(newSize)
+		return
+	}
+	if newSize == 0 {
+		r.size = 0
+		r.runs = nil
+		return
+	}
+	if len(r.runs) == 0 {
+		panic("ATTR_ROW resize of an empty run vector")
+	}
+	r.runs[len(r.runs)-1].length += uint16(newSize - oldSize)
+	r.size = uint16(newSize)
+}
+
+func (r *attrRow) truncate(newSize int) {
+	if newSize < 0 || newSize > int(r.size) {
+		panic("invalid ATTR_ROW truncate")
+	}
+	remaining := newSize
+	kept := r.runs[:0]
+	for _, run := range r.runs {
+		if remaining <= 0 {
+			break
+		}
+		length := int(run.length)
+		if length > remaining {
+			length = remaining
+		}
+		kept = append(kept, attrRun{length: uint16(length), value: run.value})
+		remaining -= length
+	}
+	r.runs = kept
+	r.size = uint16(newSize)
+}
+
+// replace is til::small_rle::replace(begin,end,value), with an exclusive end.
+// The sequence below follows basic_rle::_replace_unchecked's eight steps;
+// retaining run-level mutation is important because expanding to cells would
+// be an equivalent implementation rather than the pinned container logic.
+func (r *attrRow) replace(begin, end int, attr textAttribute) {
+	if begin < 0 || end < begin {
+		panic("invalid ATTR_ROW replace range")
+	}
+	if end > int(r.size) {
+		end = int(r.size)
+	}
+	if begin > end {
+		panic("invalid ATTR_ROW replace range")
+	}
+	if begin == end {
+		return
+	}
+
+	type scanResult struct {
+		run int
+		pos int
+	}
+	scan := func(column int) scanResult {
+		position := 0
+		for run, value := range r.runs {
+			newTotal := position + int(value.length)
+			if newTotal > column {
+				return scanResult{run: run, pos: column - position}
+			}
+			position = newTotal
+		}
+		return scanResult{run: len(r.runs)}
+	}
+
+	beginScan := scan(begin)
+	endScan := scan(end)
+	beginRun, beginPos := beginScan.run, beginScan.pos
+	endRun, endPos := endScan.run, endScan.pos
+	replacement := attrRun{length: uint16(end - begin), value: attr}
+
+	// [Step1] Detect future adjacent runs.
+	beginAdditionalLength := 0
+	endAdditionalLength := 0
+	if begin != 0 {
+		previous := beginRun
+		if beginPos == 0 {
+			previous--
+		}
+		if r.runs[previous].value == replacement.value {
+			if beginPos != 0 {
+				beginAdditionalLength = beginPos
+			} else {
+				beginAdditionalLength = int(r.runs[previous].length)
+			}
+			beginPos = 0
+			beginRun = previous
+		}
+	}
+	if end != int(r.size) {
+		if r.runs[endRun].value == replacement.value {
+			endAdditionalLength = int(r.runs[endRun].length) - endPos
+			endPos = 0
+			endRun++
+		}
+	}
+
+	// [Step2] Detect a run that must be split to preserve its trailer.
+	var midInsertionTrailer *attrRun
+	if beginRun == endRun && beginPos != 0 {
+		trailer := attrRun{length: r.runs[beginRun].length - uint16(endPos), value: r.runs[beginRun].value}
+		midInsertionTrailer = &trailer
+		endPos = 0
+	}
+
+	// [Step3] Adjust lengths of existing runs around the replaced range.
+	if beginPos != 0 {
+		r.runs[beginRun].length = uint16(beginPos)
+		beginRun++
+	}
+	if endPos != 0 {
+		r.runs[endRun].length -= uint16(endPos)
+	}
+
+	// [Step4] Copy as many replacement runs as the existing range can hold.
+	availableSpace := 0
+	if beginRun < endRun {
+		availableSpace = endRun - beginRun
+	}
+	requiredSpace := 1
+	if midInsertionTrailer != nil {
+		requiredSpace++
+	}
+	beginIndex := beginRun
+	if availableSpace > 0 {
+		r.runs[beginRun] = replacement
+		beginRun++
+	}
+
+	if availableSpace >= requiredSpace {
+		// [Step6.1] Remove any existing runs left in the replaced range.
+		r.runs = append(r.runs[:beginRun], r.runs[endRun:]...)
+	} else if midInsertionTrailer != nil {
+		// [Step6.2] Make room for the replacement and its split-run trailer.
+		missing := requiredSpace - availableSpace
+		insertAt := beginRun
+		newRuns := make([]attrRun, 0, len(r.runs)+missing)
+		newRuns = append(newRuns, r.runs[:insertAt]...)
+		for i := 0; i < missing; i++ {
+			newRuns = append(newRuns, attrRun{})
+		}
+		newRuns = append(newRuns, r.runs[insertAt:]...)
+		r.runs = newRuns
+		// [Step4 remainder] Copy replacement runs not copied in place.
+		r.runs[beginIndex] = replacement
+		// [Step5] Copy the trailer from the run that was split.
+		r.runs[beginIndex+1] = *midInsertionTrailer
+	} else {
+		// [Step6.2] Insert replacement runs not copied in place.
+		insertAt := beginRun
+		newRuns := make([]attrRun, 0, len(r.runs)+requiredSpace-availableSpace)
+		newRuns = append(newRuns, r.runs[:insertAt]...)
+		newRuns = append(newRuns, replacement)
+		newRuns = append(newRuns, r.runs[insertAt:]...)
+		r.runs = newRuns
+	}
+
+	// [Step7] Apply the additional lengths for adjacent runs.
+	if beginAdditionalLength != 0 {
+		r.runs[beginIndex].length += uint16(beginAdditionalLength)
+	}
+	if endAdditionalLength != 0 {
+		endIndex := beginIndex + requiredSpace - 1
+		r.runs[endIndex].length += uint16(endAdditionalLength)
+	}
+
+	// [Step8] Recalculate the total length.
+	r.size = uint16(int(r.size) - (end - begin) + int(replacement.length))
+}
+
+func (r *attrRow) setAttrToEnd(begin int, attr textAttribute) bool {
+	if begin < 0 || begin > int(r.size) {
+		return false
+	}
+	r.replace(begin, int(r.size), attr)
+	return true
+}
+
+func (r *attrRow) replaceValues(oldAttr, newAttr textAttribute) {
+	for index := range r.runs {
+		if r.runs[index].value == oldAttr {
+			r.runs[index].value = newAttr
+		}
+	}
+	// replace_values merges adjacent equal runs in the pinned container.
+	merged := r.runs[:0]
+	for _, run := range r.runs {
+		if len(merged) != 0 && merged[len(merged)-1].value == run.value {
+			merged[len(merged)-1].length += run.length
+		} else {
+			merged = append(merged, run)
+		}
+	}
+	r.runs = merged
+}
+
+func (r attrRow) hyperlinks() map[uint16]struct{} {
+	ids := make(map[uint16]struct{})
+	for _, run := range r.runs {
+		if run.value.isHyperlink() {
+			ids[run.value.hyperlinkID] = struct{}{}
+		}
+	}
+	return ids
+}
+
 type msRow struct {
 	charRow          charRow
-	attrs            []textAttribute
+	attrs            attrRow
 	lineRendition    lineRendition
 	wrapForced       bool
 	doubleBytePadded bool
@@ -257,7 +543,7 @@ const (
 )
 
 func newMSRow(width, id int, store unicodeStorage) msRow {
-	return msRow{charRow: newCharRow(width, id, store), attrs: make([]textAttribute, width), lineRendition: lineRenditionSingle, id: id}
+	return msRow{charRow: newCharRow(width, id, store), attrs: newAttrRow(width, textAttribute{}), lineRendition: lineRenditionSingle, id: id}
 }
 
 func (r *msRow) reset(fill textAttribute) {
@@ -265,57 +551,30 @@ func (r *msRow) reset(fill textAttribute) {
 	r.wrapForced = false
 	r.doubleBytePadded = false
 	r.charRow.reset()
-	for i := range r.attrs {
-		r.attrs[i] = fill
-	}
+	r.attrs.reset(fill)
 }
 
 func (r *msRow) resize(width int) {
 	r.charRow.resize(width)
-	if width < len(r.attrs) {
-		r.attrs = append([]textAttribute(nil), r.attrs[:width]...)
-	} else {
-		var fill textAttribute
-		if len(r.attrs) != 0 {
-			fill = r.attrs[len(r.attrs)-1]
-		}
-		for len(r.attrs) < width {
-			r.attrs = append(r.attrs, fill)
-		}
-	}
+	r.attrs.resize(width)
 }
 
 func (r *msRow) clearColumn(column int) { r.charRow.clearColumn(column) }
 
 func (r *msRow) replaceAttrs(start, end int, attr textAttribute) {
-	if start < 0 {
-		start = 0
-	}
-	if end > len(r.attrs) {
-		end = len(r.attrs)
-	}
-	for i := start; i < end; i++ {
-		r.attrs[i] = attr
-	}
+	r.attrs.replace(start, end, attr)
 }
 
 // setAttrToEnd is ATTR_ROW::SetAttrToEnd.  The pinned attr row is a run
 // container; setting a column changes the run from that column through the
 // row's end, rather than changing one cell only.
 func (r *msRow) setAttrToEnd(begin int, attr textAttribute) bool {
-	if begin < 0 || begin >= len(r.attrs) {
-		return false
-	}
-	for i := begin; i < len(r.attrs); i++ {
-		r.attrs[i] = attr
-	}
-	return true
+	return r.attrs.setAttrToEnd(begin, attr)
 }
 
-// writeCells is a direct transcription of ROW::WriteCells' control flow.  A
-// returned index is the first input cell not consumed, equivalent to the
-// source OutputCellIterator return value.
-func (r *msRow) writeCells(input []outputCell, index int, wrap *bool, limitRight *int) (int, int) {
+// writeCells is a direct transcription of ROW::WriteCells' control flow. The
+// returned iterator is the first source view not consumed.
+func (r *msRow) writeCells(input outputCellIterator, index int, wrap *bool, limitRight *int) (outputCellIterator, int) {
 	if index < 0 || index >= r.charRow.size() {
 		panic("ROW::WriteCells index out of range")
 	}
@@ -326,17 +585,14 @@ func (r *msRow) writeCells(input []outputCell, index int, wrap *bool, limitRight
 		}
 		finalColumn = *limitRight
 	}
-	if len(input) == 0 {
-		return 0, 0
-	}
-	currentColor := input[0].attr
+	it := input
+	currentColor := it.current.attr
 	colorUses := 0
 	colorStarts := index
 	currentIndex := index
-	inputIndex := 0
 	distance := 0
-	for inputIndex < len(input) && currentIndex <= finalColumn {
-		cell := input[inputIndex]
+	for it.valid() && currentIndex <= finalColumn {
+		cell := it.current
 		if cell.behavior != attrCurrent {
 			if currentColor == cell.attr {
 				colorUses++
@@ -356,17 +612,17 @@ func (r *msRow) writeCells(input []outputCell, index int, wrap *bool, limitRight
 				r.doubleBytePadded = true
 			} else {
 				if cell.behavior != attrCurrent {
-					r.attrs[currentIndex] = cell.attr
+					r.attrs.set(currentIndex, cell.attr)
 				}
 				r.charRow.data[currentIndex].attr = cell.dbcs
 				r.charRow.setGlyph(currentIndex, cell.glyph)
-				inputIndex++
+				it.advance()
 			}
 			if wrap != nil && fillingLastColumn {
 				r.wrapForced = *wrap
 			}
 		} else {
-			inputIndex++
+			it.advance()
 		}
 		currentIndex++
 		distance++
@@ -374,7 +630,7 @@ func (r *msRow) writeCells(input []outputCell, index int, wrap *bool, limitRight
 	if colorUses != 0 {
 		r.replaceAttrs(colorStarts, currentIndex, currentColor)
 	}
-	return inputIndex, distance
+	return it, distance
 }
 
 type cursorState struct {
@@ -435,9 +691,12 @@ type textBuffer struct {
 	// SCREEN_INFORMATION keeps these coordinates separately from TextBuffer.
 	// They are carried here because the standalone port has one screen-info
 	// owner for each active buffer and AdjustCursorPosition reads all of them.
+	viewportLeft       int
+	viewportWidth      int
 	viewportTop        int
 	viewportHeight     int
 	virtualBottom      int
+	terminalScrolling  bool
 	wrapAtEOL          bool
 	processedOutput    bool
 	returnOnNewline    bool
@@ -481,7 +740,7 @@ func newTextBufferWithAttributes(width, height int, fill textAttribute) *textBuf
 		tabStops[i] = true
 	}
 	cursor := cursorState{visible: true, on: true, blinkingAllowed: true, size: 25, style: cursorLegacy, color: 0xffffffff}
-	return &textBuffer{width: width, height: height, rows: rows, store: store, cursor: cursor, viewportHeight: height, virtualBottom: height - 1, wrapAtEOL: true, processedOutput: true, returnOnNewline: true, currentAttrs: fill, cursorSize: 25, tabStops: tabStops, hyperlinkMap: make(map[uint16]string), hyperlinkCustomID: make(map[string]uint16), patterns: make(map[uint64]string)}
+	return &textBuffer{width: width, height: height, rows: rows, store: store, cursor: cursor, viewportWidth: width, viewportHeight: height, virtualBottom: height - 1, wrapAtEOL: true, processedOutput: true, returnOnNewline: true, currentAttrs: fill, cursorSize: 25, tabStops: tabStops, hyperlinkMap: make(map[uint16]string), hyperlinkCustomID: make(map[string]uint16), currentHyperlinkID: 1, patterns: make(map[uint64]string)}
 }
 
 func (b *textBuffer) sizeInBounds(p coordinate) bool {
@@ -527,13 +786,32 @@ func (b *textBuffer) virtualViewportTop() int {
 }
 
 func (b *textBuffer) setViewportOrigin(absolute bool, origin coordinate, updateBottom bool) error {
-	top := origin.y
+	if !absolute && origin.x == 0 && origin.y == 0 {
+		// SCREEN_INFORMATION::SetViewportOrigin returns before changing the
+		// viewport or calling UpdateBottom for a zero relative delta.
+		return nil
+	}
+	if absolute && origin.x == b.viewportLeft && origin.y == b.viewportTop {
+		// The pinned absolute path has the same no-op early return when the
+		// requested origin already is the current origin.
+		return nil
+	}
+	left, top := origin.x, origin.y
 	if !absolute {
+		left = b.viewportLeft + origin.x
 		top = b.viewportTop + origin.y
 	}
-	if top < 0 || top+b.viewportHeight > b.height {
-		return fmt.Errorf("viewport origin %d is outside buffer height %d", top, b.height)
+	// SCREEN_INFORMATION::SetViewportOrigin keeps a terminal-scrolling
+	// viewport from moving below the logical virtual bottom when the caller is
+	// only moving the visible window. The source adjusts both inclusive Y
+	// bounds by the same signed delta before validating the final rectangle.
+	if b.terminalScrolling && !updateBottom && top+b.viewportHeight-1 > b.virtualBottom {
+		top += b.virtualBottom - (top + b.viewportHeight - 1)
 	}
+	if left < 0 || top < 0 || left+b.viewportWidth > b.width || top+b.viewportHeight > b.height {
+		return fmt.Errorf("viewport origin %d,%d is outside buffer %dx%d", left, top, b.width, b.height)
+	}
+	b.viewportLeft = left
 	b.viewportTop = top
 	if updateBottom {
 		b.virtualBottom = b.viewportBottom()
@@ -542,15 +820,41 @@ func (b *textBuffer) setViewportOrigin(absolute bool, origin coordinate, updateB
 }
 
 func (b *textBuffer) makeCursorVisible(position coordinate, updateBottom bool) {
-	delta := 0
+	delta := coordinate{}
+	if position.x > b.viewportRight() {
+		delta.x = position.x - b.viewportRight()
+	} else if position.x < b.viewportLeft {
+		delta.x = position.x - b.viewportLeft
+	}
 	if position.y > b.viewportBottom() {
-		delta = position.y - b.viewportBottom()
+		delta.y = position.y - b.viewportBottom()
 	} else if position.y < b.viewportTop {
-		delta = position.y - b.viewportTop
+		delta.y = position.y - b.viewportTop
 	}
-	if delta != 0 {
-		_ = b.setViewportOrigin(false, coordinate{y: delta}, updateBottom)
+	if delta.x != 0 || delta.y != 0 {
+		_ = b.setViewportOrigin(false, delta, updateBottom)
 	}
+}
+
+func (b *textBuffer) viewportRight() int {
+	return b.viewportLeft + b.viewportWidth - 1
+}
+
+// moveToBottom follows SCREEN_INFORMATION::MoveToBottom. VT adapter calls
+// operate on the virtual viewport rather than a user-scrolled viewport.
+func (b *textBuffer) moveToBottom() {
+	top := b.virtualViewportTop()
+	if top < 0 {
+		top = 0
+	}
+	maxTop := b.height - b.viewportHeight
+	if top > maxTop {
+		top = maxTop
+	}
+	if top < 0 {
+		top = 0
+	}
+	_ = b.setViewportOrigin(true, coordinate{x: b.viewportLeft, y: top}, true)
 }
 
 func (b *textBuffer) initializeCursorRowAttributes() {
@@ -561,22 +865,34 @@ func (b *textBuffer) initializeCursorRowAttributes() {
 	row.lineRendition = lineRenditionSingle
 }
 
+// setCursor is Cursor::SetPosition. The Cursor method itself does not
+// validate or clamp coordinates and does not set HasMoved; SCREEN_INFORMATION
+// performs those responsibilities in SetCursorPosition.
 func (b *textBuffer) setCursor(p coordinate) {
-	if p.y < 0 {
-		p.y = 0
-	}
-	if p.y >= b.height {
-		p.y = b.height - 1
-	}
-	if p.x < 0 {
-		p.x = 0
-	}
-	if p.x >= b.width {
-		p.x = b.width - 1
-	}
 	b.cursor.position = p
 	b.cursor.delayed = false
+	b.cursor.delayedAt = coordinate{}
+}
+
+// setCursorPosition is SCREEN_INFORMATION::SetCursorPosition for the
+// standalone screen-info state. The probe has no unfocused-console mode, so
+// the pinned focus branch is the only observable branch here.
+func (b *textBuffer) setCursorPosition(p coordinate, turnOn bool) error {
+	if !b.sizeInBounds(p) {
+		return fmt.Errorf("cursor position (%d,%d) is outside buffer", p.x, p.y)
+	}
+	b.setCursor(p)
+	if turnOn {
+		b.cursor.delay = false
+		b.cursor.on = true
+	} else {
+		b.cursor.delay = true
+	}
 	b.cursor.hasMoved = true
+	if p.y > b.virtualBottom {
+		b.virtualBottom = p.y
+	}
+	return nil
 }
 
 func (b *textBuffer) clampPositionWithinLine(p coordinate) coordinate {
@@ -646,10 +962,13 @@ func (b *textBuffer) insertCharacter(glyph []uint16, attr dbcsAttribute) bool {
 }
 
 func (b *textBuffer) insertCharacterWithAttr(glyph []uint16, attr dbcsAttribute, textAttr textAttribute) bool {
-	if len(glyph) == 0 || !b.sizeInBounds(b.cursor.position) {
+	if len(glyph) == 0 {
 		return false
 	}
 	if !b.prepareForDoubleByteSequence(attr) {
+		return false
+	}
+	if !b.sizeInBounds(b.cursor.position) {
 		return false
 	}
 	p := b.cursor.position
@@ -663,27 +982,26 @@ func (b *textBuffer) insertCharacterWithAttr(glyph []uint16, attr dbcsAttribute,
 }
 
 // write and writeLine preserve TextBuffer::Write/WriteLine's row traversal.
-func (b *textBuffer) write(input []outputCell, target coordinate, wrap *bool) (int, int) {
-	inputIndex := 0
+func (b *textBuffer) write(input outputCellIterator, target coordinate, wrap *bool) (outputCellIterator, int) {
+	it := input
 	distance := 0
 	lineTarget := target
-	for inputIndex < len(input) && b.sizeInBounds(lineTarget) {
+	for it.valid() && b.sizeInBounds(lineTarget) {
 		var lineDistance int
-		inputIndex, lineDistance = b.writeLine(input, lineTarget, wrap, nil, inputIndex)
+		it, lineDistance = b.writeLine(it, lineTarget, wrap, nil)
 		distance += lineDistance
 		lineTarget.x = 0
 		lineTarget.y++
 	}
-	return inputIndex, distance
+	return it, distance
 }
 
-func (b *textBuffer) writeLine(input []outputCell, target coordinate, wrap *bool, limitRight *int, inputIndex int) (int, int) {
+func (b *textBuffer) writeLine(input outputCellIterator, target coordinate, wrap *bool, limitRight *int) (outputCellIterator, int) {
 	if !b.sizeInBounds(target) {
-		return inputIndex, 0
+		return input, 0
 	}
 	row := b.rowByOffset(target.y)
-	consumed, distance := row.writeCells(input[inputIndex:], target.x, wrap, limitRight)
-	return inputIndex + consumed, distance
+	return row.writeCells(input, target.x, wrap, limitRight)
 }
 
 // incrementCursor follows TextBuffer::IncrementCursor.
@@ -716,6 +1034,10 @@ func (b *textBuffer) incrementCircularBuffer(vtMode ...bool) bool {
 	if len(vtMode) != 0 && vtMode[0] {
 		fill.setStandardErase()
 	}
+	// TextBuffer::_PruneHyperlinks runs before the first physical row is
+	// reset. It is observable when a wrapped hyperlink is evicted from the
+	// circular buffer, even though ordinary text writes do not need it.
+	b.pruneHyperlinks()
 	b.rowByOffset(0).reset(fill)
 	b.firstRow++
 	if b.firstRow >= b.height {
@@ -755,6 +1077,8 @@ func (b *textBuffer) resizeTraditional(width, height int) error {
 		return fmt.Errorf("traditional resize requires a non-zero height")
 	}
 	currentHeight := b.height
+	oldWidth := b.width
+	oldViewportWidth := b.viewportWidth
 	topRow := 0
 	if height <= b.cursor.position.y {
 		topRow = b.cursor.position.y - height + 1
@@ -778,7 +1102,66 @@ func (b *textBuffer) resizeTraditional(width, height int) error {
 	}
 	b.width = width
 	b.height = height
+	if oldViewportWidth == oldWidth {
+		b.viewportWidth = width
+	} else if b.viewportWidth > width {
+		b.viewportWidth = width
+	}
 	b.refreshRowIDs(&width)
+	return nil
+}
+
+// setColumns is AdaptDispatch::SetColumns. The pinned operation changes only
+// the screen-buffer width through the traditional TextBuffer resize path; it
+// does not reflow logical rows.
+func (b *textBuffer) setColumns(width int) error {
+	if width <= 0 {
+		return fmt.Errorf("invalid screen-buffer width %d", width)
+	}
+	if width == b.width {
+		return nil
+	}
+	return b.resizeTraditional(width, b.height)
+}
+
+// resizeWindow is the state carried by DispatchCommon::s_ResizeWindow after
+// the host has accepted the new viewport. The requested backing height grows
+// when needed, while a smaller window leaves the backing rows intact.
+func (b *textBuffer) resizeWindow(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid window size %dx%d", width, height)
+	}
+	backingHeight := b.height
+	if height > backingHeight {
+		backingHeight = height
+	}
+	if width != b.width || backingHeight != b.height {
+		if err := b.resizeTraditional(width, backingHeight); err != nil {
+			return err
+		}
+	}
+	b.viewportWidth = width
+	if b.viewportWidth > b.width {
+		b.viewportWidth = b.width
+	}
+	b.viewportHeight = height
+	if b.viewportHeight > b.height {
+		b.viewportHeight = b.height
+	}
+	maxTop := b.height - b.viewportHeight
+	if b.viewportTop > maxTop {
+		b.viewportTop = maxTop
+	}
+	if b.viewportTop < 0 {
+		b.viewportTop = 0
+	}
+	maxLeft := b.width - b.viewportWidth
+	if b.viewportLeft > maxLeft {
+		b.viewportLeft = maxLeft
+	}
+	if b.viewportLeft < 0 {
+		b.viewportLeft = 0
+	}
 	return nil
 }
 
@@ -800,12 +1183,254 @@ func (b *textBuffer) clearRangeWithAttr(row, left, right int, attr textAttribute
 	}
 	for col := left; col <= right; col++ {
 		b.rowByOffset(row).clearColumn(col)
-		b.rowByOffset(row).attrs[col] = attr
+		b.rowByOffset(row).attrs.set(col, attr)
 	}
 }
 
+// resetLineRenditionRange is TextBuffer::ResetLineRenditionRange. It changes
+// only the rendition metadata; unlike ROW::Reset it leaves cell contents and
+// attributes untouched.
+func (b *textBuffer) resetLineRenditionRange(startRow, endRow int) {
+	if startRow < 0 {
+		startRow = 0
+	}
+	if endRow > b.height {
+		endRow = b.height
+	}
+	for row := startRow; row < endRow; row++ {
+		b.rowByOffset(row).lineRendition = lineRenditionSingle
+	}
+}
+
+type cellRect struct {
+	left, top, right, bottom int // right and bottom are exclusive
+}
+
+func (r cellRect) valid() bool { return r.left < r.right && r.top < r.bottom }
+
+func intersectCellRect(left, right cellRect) cellRect {
+	if left.left < right.left {
+		left.left = right.left
+	}
+	if left.top < right.top {
+		left.top = right.top
+	}
+	if left.right > right.right {
+		left.right = right.right
+	}
+	if left.bottom > right.bottom {
+		left.bottom = right.bottom
+	}
+	return left
+}
+
+// subtractCellRect is Viewport::Subtract for the two-dimensional regions used
+// by output.cpp::ScrollRegion.  The returned rectangles are disjoint and cover
+// original minus remove, in the same top/bottom/left/right decomposition used
+// by the pinned helper.
+func subtractCellRect(original, remove cellRect) []cellRect {
+	if !original.valid() {
+		return nil
+	}
+	intersection := intersectCellRect(original, remove)
+	if !intersection.valid() {
+		return []cellRect{original}
+	}
+	result := make([]cellRect, 0, 4)
+	if original.top < intersection.top {
+		result = append(result, cellRect{left: original.left, top: original.top, right: original.right, bottom: intersection.top})
+	}
+	if intersection.bottom < original.bottom {
+		result = append(result, cellRect{left: original.left, top: intersection.bottom, right: original.right, bottom: original.bottom})
+	}
+	if original.left < intersection.left {
+		result = append(result, cellRect{left: original.left, top: intersection.top, right: intersection.left, bottom: intersection.bottom})
+	}
+	if intersection.right < original.right {
+		result = append(result, cellRect{left: intersection.right, top: intersection.top, right: original.right, bottom: intersection.bottom})
+	}
+	return result
+}
+
+// copyRectangle is output.cpp::_CopyRectangle. The full-row branch delegates
+// to TextBuffer::ScrollRows; all other rectangles walk source and target in
+// Viewport::DetermineWalkDirection order so an overlap never overwrites a
+// source cell that has not yet been read.
+func (b *textBuffer) copyRectangle(source, target cellRect) {
+	if !source.valid() || !target.valid() || source.right-source.left != target.right-target.left || source.bottom-source.top != target.bottom-target.top {
+		return
+	}
+	if source.left == target.left && source.top == target.top {
+		return
+	}
+	if source.left == 0 && target.left == 0 && source.right-source.left == b.width {
+		b.scrollRows(source.top, source.bottom-source.top, target.top-source.top)
+		return
+	}
+
+	xStep := 1
+	if target.left >= source.left {
+		xStep = -1
+	}
+	yStep := 1
+	if target.top >= source.top {
+		yStep = -1
+	}
+	startX, startY := source.left, source.top
+	targetX, targetY := target.left, target.top
+	if xStep < 0 {
+		startX = source.right - 1
+		targetX = target.right - 1
+	}
+	if yStep < 0 {
+		startY = source.bottom - 1
+		targetY = target.bottom - 1
+	}
+	for sourceY, destinationY := startY, targetY; sourceY >= source.top && sourceY < source.bottom; sourceY, destinationY = sourceY+yStep, destinationY+yStep {
+		for sourceX, destinationX := startX, targetX; sourceX >= source.left && sourceX < source.right; sourceX, destinationX = sourceX+xStep, destinationX+xStep {
+			b.copyCell(coordinate{x: sourceX, y: sourceY}, coordinate{x: destinationX, y: destinationY})
+		}
+	}
+}
+
+// copyCell is the one-cell OutputCellIterator write used by
+// output.cpp::_CopyRectangle.  In particular, a clipped leading/trailing
+// DBCS cell is passed through ROW::WriteCells' boundary rules instead of being
+// copied as an ordinary scalar.
+func (b *textBuffer) copyCell(source, target coordinate) {
+	if !b.sizeInBounds(source) || !b.sizeInBounds(target) {
+		return
+	}
+	sourceRow := b.rowByOffset(source.y)
+	cell := outputCell{
+		glyph:    append([]uint16(nil), sourceRow.charRow.glyphAt(source.x)...),
+		dbcs:     sourceRow.charRow.data[source.x].attr,
+		attr:     sourceRow.attrs.at(source.x),
+		behavior: attrStored,
+	}
+	// The pinned path constructs OutputCell from the source view and then
+	// calls TextBuffer::Write with a one-element Cell-mode iterator. Let
+	// ROW::WriteCells apply the target boundary rules, including a clipped
+	// trailing or leading DBCS cell, instead of duplicating those branches here.
+	_, _ = b.write(newOutputCellCellIterator(cell), target, nil)
+}
+
+// scrollRectangle is ScrollRegion from host/output.cpp.  The source and
+// optional clip rectangles are clipped in the same order as Viewport::Intersect;
+// the fill is applied to the source area minus the clipped target.
+func (b *textBuffer) scrollRectangle(source, clip *cellRect, targetOrigin coordinate, fillChar uint16, fill textAttribute) {
+	buffer := cellRect{left: 0, top: 0, right: b.width, bottom: b.height}
+	originalSource := *source
+	sourceView := intersectCellRect(originalSource, buffer)
+	if !sourceView.valid() {
+		return
+	}
+	clipView := buffer
+	if clip != nil {
+		clipView = intersectCellRect(*clip, buffer)
+	}
+	fillView := intersectCellRect(clipView, sourceView)
+	if !fillView.valid() {
+		return
+	}
+	currentSourceOrigin := coordinate{x: sourceView.left, y: sourceView.top}
+	targetOrigin.x += currentSourceOrigin.x - originalSource.left
+	targetOrigin.y += currentSourceOrigin.y - originalSource.top
+	targetView := cellRect{left: targetOrigin.x, top: targetOrigin.y, right: targetOrigin.x + sourceView.right - sourceView.left, bottom: targetOrigin.y + sourceView.bottom - sourceView.top}
+	originalTargetOrigin := targetView
+	targetView = intersectCellRect(targetView, clipView)
+	if targetView.valid() {
+		sourceOrigin := coordinate{x: sourceView.left + targetView.left - originalTargetOrigin.left, y: sourceView.top + targetView.top - originalTargetOrigin.top}
+		sourceView = cellRect{left: sourceOrigin.x, top: sourceOrigin.y, right: sourceOrigin.x + targetView.right - targetView.left, bottom: sourceOrigin.y + targetView.bottom - targetView.top}
+		b.copyRectangle(sourceView, targetView)
+	}
+	if fillChar == 0 && fill == (textAttribute{}) {
+		fillChar = unicodeSpace
+		fill = b.currentAttrs
+	}
+	for _, remaining := range subtractCellRect(fillView, targetView) {
+		for row := remaining.top; row < remaining.bottom; row++ {
+			for column := remaining.left; column < remaining.right; column++ {
+				cell := b.rowByOffset(row).charRow.data[column]
+				cell.attr = dbcsAttribute{}
+				b.rowByOffset(row).charRow.data[column] = cell
+				b.rowByOffset(row).charRow.setGlyph(column, []uint16{fillChar})
+				b.rowByOffset(row).attrs.set(column, fill)
+			}
+			if remaining.left == 0 && remaining.right == b.width && targetOrigin.x == 0 {
+				b.rowByOffset(row).lineRendition = lineRenditionSingle
+			}
+		}
+	}
+}
+
+// vtEraseAll follows SCREEN_INFORMATION::VtEraseAll. It moves the virtual
+// viewport below the last non-space character, preserves the cursor's
+// viewport-relative position, fills the visible rows with standard-erase
+// attributes, and resets their line renditions.
+func (b *textBuffer) vtEraseAll() error {
+	last := b.lastNonSpaceCharacter()
+	newTop := last.y + 1
+	oldViewportTop := b.viewportTop
+	relativeCursor := b.cursor.position
+	relativeCursor.y -= oldViewportTop
+	delta := newTop + b.viewportHeight - b.height
+	for i := 0; i < delta; i++ {
+		if !b.incrementCircularBuffer() {
+			return fmt.Errorf("circular buffer increment failed")
+		}
+		newTop--
+	}
+	if err := b.setViewportOrigin(true, coordinate{y: newTop}, true); err != nil {
+		return err
+	}
+	relativeCursor.y += b.viewportTop
+	if err := b.setCursorPosition(relativeCursor, false); err != nil {
+		return err
+	}
+	fill := b.currentAttrs
+	fill.setStandardErase()
+	units := make([]uint16, b.viewportHeight*b.width)
+	for i := range units {
+		units[i] = unicodeSpace
+	}
+	wrap := false
+	_, _ = b.write(outputCellsFromUTF16WithAttr(units, fill), coordinate{y: b.viewportTop}, &wrap)
+	b.resetLineRenditionRange(b.viewportTop, b.viewportTop+b.viewportHeight)
+	return nil
+}
+
+// eraseScrollback follows AdaptDispatch::_EraseScrollback for the backing
+// rows represented by this standalone screen buffer. It moves the old
+// viewport to row zero, clears the rows below it with default attributes, and
+// preserves the cursor's viewport-relative location.
+func (b *textBuffer) eraseScrollback() error {
+	oldTop := b.viewportTop
+	height := b.viewportHeight
+	oldCursor := b.cursor.position
+	// AdaptDispatch::_EraseScrollback reads the old viewport, then calls
+	// SCREEN_INFORMATION::MoveToBottom before scrolling that saved rectangle.
+	b.moveToBottom()
+	// The source rectangle has an intentionally oversized bottom
+	// (SHORT_MAX), so after clipping it covers every backing row from the old
+	// viewport top through the bottom, not merely one viewport height. The
+	// target is unclipped; this is the distinction between the scrollback path
+	// and an ordinary viewport-local scroll.
+	source := &cellRect{left: 0, top: oldTop, right: b.width, bottom: b.height}
+	b.scrollRectangle(source, nil, coordinate{}, unicodeSpace, textAttribute{})
+	for row := height; row < b.height; row++ {
+		b.rowByOffset(row).reset(textAttribute{})
+	}
+	b.resetLineRenditionRange(height, b.height)
+	if err := b.setViewportOrigin(true, coordinate{}, true); err != nil {
+		return err
+	}
+	newCursor := coordinate{x: oldCursor.x, y: oldCursor.y - oldTop}
+	return b.setCursorPosition(newCursor, true)
+}
+
 func (b *textBuffer) moveCursor(row, col int) {
-	b.setCursor(coordinate{x: col, y: row})
+	_ = b.setCursorPosition(coordinate{x: col, y: row}, true)
 }
 
 // cursorMove is the buffer-side transcription of
@@ -847,7 +1472,7 @@ func (b *textBuffer) cursorMove(rowOffset, colOffset int, rowAbsolute, colAbsolu
 			row = bottom
 		}
 	}
-	b.setCursor(coordinate{x: col, y: row})
+	_ = b.setCursorPosition(coordinate{x: col, y: row}, true)
 }
 
 func (b *textBuffer) marginsSet() bool { return b.scrollTop < b.scrollBottom }
@@ -862,6 +1487,17 @@ func (b *textBuffer) absoluteScrollMargins() (top, bottom int) {
 // setScrollingMargins follows AdaptDispatch::_DoSetTopBottomScrollingMargins.
 // Parameters are VT's one-based inclusive line numbers.
 func (b *textBuffer) setScrollingMargins(top, bottom int) bool {
+	if !b.setScrollingMarginsRaw(top, bottom) {
+		return false
+	}
+	b.cursorMove(0, 0, true, true, false)
+	return true
+}
+
+// setScrollingMarginsRaw is AdaptDispatch::_DoSetTopBottomScrollingMargins.
+// The public adapter entry point homes the cursor after this helper returns;
+// DECCOLM and DECALN use the helper directly, as in the pinned source.
+func (b *textBuffer) setScrollingMarginsRaw(top, bottom int) bool {
 	if top < 0 || bottom < 0 {
 		return false
 	}
@@ -869,19 +1505,21 @@ func (b *textBuffer) setScrollingMargins(top, bottom int) bool {
 		top = 1
 	}
 	if bottom == 0 {
-		bottom = b.height
+		// AdaptDispatch measures the default bottom from the exclusive
+		// viewport height (srWindow.Bottom - srWindow.Top), not the backing
+		// TextBuffer height.
+		bottom = b.viewportHeight
 	}
-	if top >= bottom || bottom > b.height {
+	if top >= bottom || bottom > b.viewportHeight {
 		return false
 	}
-	if top == 1 && bottom == b.height {
+	if top == 1 && bottom == b.viewportHeight {
 		b.scrollTop = 0
 		b.scrollBottom = 0
 	} else {
 		b.scrollTop = top - 1
 		b.scrollBottom = bottom - 1
 	}
-	b.cursorMove(0, 0, true, true, false)
 	return true
 }
 
@@ -902,9 +1540,9 @@ func (b *textBuffer) setCurrentLineRendition(rendition lineRendition) {
 		fillOffset := b.lineWidth(rowIndex)
 		for column := fillOffset; column < b.width; column++ {
 			row.charRow.clearCell(column)
-			row.attrs[column] = fill
+			row.attrs.set(column, fill)
 		}
-		b.cursor.position = b.clampPositionWithinLine(b.cursor.position)
+		b.setCursor(b.clampPositionWithinLine(b.cursor.position))
 	}
 }
 
@@ -927,7 +1565,7 @@ func (b *textBuffer) restoreCursor() {
 	}
 	position.y += b.viewportTop
 	b.originMode = false
-	b.setCursor(position)
+	_ = b.setCursorPosition(position, true)
 	b.originMode = b.savedOriginMode
 	b.currentAttrs = b.savedCursorAttrs
 }
@@ -944,6 +1582,70 @@ func (b *textBuffer) copyHyperlinkMaps(other *textBuffer) {
 func (b *textBuffer) copyPatterns(other *textBuffer) {
 	b.patterns = cloneUint64StringMap(other.patterns)
 	b.currentPatternID = other.currentPatternID
+}
+
+// hyperlinksInRow is ATTR_ROW::GetHyperlinks. ATTR_ROW returns hyperlink IDs
+// from its runs; a set gives the same ID collection for the expanded Go row.
+func (r *msRow) hyperlinksInRow() map[uint16]struct{} {
+	return r.attrs.hyperlinks()
+}
+
+// removeHyperlinkFromMap follows TextBuffer::RemoveHyperlinkFromMap: remove
+// the URI entry and the first custom-id entry referring to the same numeric
+// ID. The custom-id key remains the isolated reconstruction documented above.
+func (b *textBuffer) removeHyperlinkFromMap(id uint16) {
+	delete(b.hyperlinkMap, id)
+	for key, value := range b.hyperlinkCustomID {
+		if value == id {
+			delete(b.hyperlinkCustomID, key)
+			break
+		}
+	}
+}
+
+// pruneHyperlinks is TextBuffer::_PruneHyperlinks. Only IDs present in the
+// physical first row are candidates; each is retained if found in any later
+// logical row and otherwise removed from the two maps.
+func (b *textBuffer) pruneHyperlinks() {
+	firstRowRefs := b.rowByOffset(0).hyperlinksInRow()
+	if len(firstRowRefs) == 0 {
+		return
+	}
+	for row := 1; row < b.height && len(firstRowRefs) != 0; row++ {
+		for id := range b.rowByOffset(row).hyperlinksInRow() {
+			delete(firstRowRefs, id)
+		}
+	}
+	for id := range firstRowRefs {
+		b.removeHyperlinkFromMap(id)
+	}
+}
+
+// getHyperlinkID follows TextBuffer::GetHyperlinkId for the observable
+// allocation, reuse, and zero-avoidance rules. The pinned source appends the
+// result of std::hash<std::wstring_view> to the custom-id key; that library
+// implementation is outside the pinned OpenConsole tree, so the isolated
+// key below preserves only the documented equality relation and is recorded
+// as a reconstruction in the audit ledger.
+func (b *textBuffer) getHyperlinkID(uri, customID string) uint16 {
+	var numericID uint16
+	if customID == "" {
+		numericID = b.currentHyperlinkID
+		b.currentHyperlinkID++
+	} else {
+		key := customID + "\x00" + uri
+		if existing, ok := b.hyperlinkCustomID[key]; ok {
+			numericID = existing
+		} else {
+			b.hyperlinkCustomID[key] = b.currentHyperlinkID
+			numericID = b.currentHyperlinkID
+			b.currentHyperlinkID++
+		}
+	}
+	if b.currentHyperlinkID == 0 {
+		b.currentHyperlinkID++
+	}
+	return numericID
 }
 
 func cloneUint16StringMap(source map[uint16]string) map[uint16]string {
@@ -973,6 +1675,17 @@ func cloneUint64StringMap(source map[uint64]string) map[uint64]string {
 func (b *textBuffer) setTab(column int) { b.tabStops[column] = true }
 
 func (b *textBuffer) clearTab(column int) { delete(b.tabStops, column) }
+
+// resetTabStops follows AdaptDispatch::_ResetTabStops. The pinned adapter
+// clears its lazily-sized table and marks default stops for reinitialization;
+// this standalone buffer keeps the same observable result by materializing
+// those defaults for its current width.
+func (b *textBuffer) resetTabStops() {
+	b.tabStops = make(map[int]bool)
+	for column := 8; column < b.width; column += 8 {
+		b.tabStops[column] = true
+	}
+}
 
 func (b *textBuffer) tab() {
 	b.tabForward(1)
@@ -1112,35 +1825,9 @@ func (b *textBuffer) scrollRegionWithAttr(top, bottom, count int, down bool, fil
 	if down {
 		delta = count
 	}
-	targetTop := top + delta
-	targetBottom := bottom + delta
-	clippedTop := targetTop
-	if clippedTop < top {
-		clippedTop = top
-	}
-	clippedBottom := targetBottom
-	if clippedBottom > bottom {
-		clippedBottom = bottom
-	}
-	if clippedTop <= clippedBottom {
-		sourceTop := top + clippedTop - targetTop
-		b.scrollRows(sourceTop, clippedBottom-clippedTop+1, delta)
-	}
-	fillTop, fillBottom := top, bottom
-	if delta < 0 {
-		fillTop = bottom + delta + 1
-	} else {
-		fillBottom = top + delta - 1
-	}
-	if fillTop < top {
-		fillTop = top
-	}
-	if fillBottom > bottom {
-		fillBottom = bottom
-	}
-	for row := fillTop; row <= fillBottom; row++ {
-		b.rowByOffset(row).reset(fill)
-	}
+	source := &cellRect{left: 0, top: top, right: b.width, bottom: bottom + 1}
+	clip := *source
+	b.scrollRectangle(source, &clip, coordinate{y: top + delta}, unicodeSpace, fill)
 }
 
 // rotateRows is std::rotate(first, middle, last) for a Go slice.  The caller
@@ -1190,28 +1877,51 @@ type logicalRow struct {
 	continues   bool
 }
 
+// reflowPositionInformation is TextBuffer::PositionInformation. The
+// standalone resize path currently passes nil, as pinned
+// SCREEN_INFORMATION::ResizeWithReflow does; the optional branch remains
+// represented for the TerminalCore caller in the pinned source.
+type reflowPositionInformation struct {
+	mutableViewportTop int
+	visibleViewportTop int
+}
+
 func (l logicalRow) text() string {
 	return string(runesFromUTF16(l.units))
 }
 
 func (b *textBuffer) lastNonSpaceCharacter() coordinate {
+	return b.lastNonSpaceCharacterIn(nil)
+}
+
+func (b *textBuffer) lastNonSpaceCharacterIn(view *cellRect) coordinate {
 	// TextBuffer::GetLastNonSpaceCharacter starts at the bottom of the
-	// requested viewport and backs up over empty rows.  Returning the bottom
-	// row merely because it exists would change Reflow's cOldRowsTotal for a
-	// buffer whose last visible rows are blank.
-	last := coordinate{}
-	for row := b.height - 1; row >= 0; row-- {
+	// requested viewport and backs up over empty rows. Returning the bottom row
+	// merely because it exists would change Reflow's cOldRowsTotal for a buffer
+	// whose last visible rows are blank.
+	top, bottom := 0, b.height
+	if view != nil {
+		top, bottom = view.top, view.bottom
+		if top < 0 {
+			top = 0
+		}
+		if bottom > b.height {
+			bottom = b.height
+		}
+	}
+	last := coordinate{y: bottom - 1}
+	for row := bottom - 1; row >= top; row-- {
 		right := b.rowByOffset(row).charRow.measureRight()
 		last.y = row
 		last.x = right - 1
-		if right >= 1 {
+		if last.x >= 0 || row == top {
 			break
 		}
 	}
 	if last.x < 0 {
 		last.x = 0
 	}
-	if last.y < 0 {
+	if last.y < top {
 		last.y = 0
 	}
 	return last
@@ -1236,11 +1946,17 @@ func copyCell(b *textBuffer, glyph []uint16, attr dbcsAttribute, textAttr textAt
 // row flags and copies cells in row order; no text comparison participates in
 // the operation.
 func reflow(oldBuffer, newBuffer *textBuffer) error {
+	return reflowWithOptions(oldBuffer, newBuffer, nil, nil)
+}
+
+func reflowWithOptions(oldBuffer, newBuffer *textBuffer, lastCharacterViewport *cellRect, positionInfo *reflowPositionInformation) error {
 	oldCursor := oldBuffer.cursor.position
-	oldLast := oldBuffer.lastNonSpaceCharacter()
+	oldLast := oldBuffer.lastNonSpaceCharacterIn(lastCharacterViewport)
 	oldRowsTotal := oldLast.y + 1
 	newCursor := coordinate{}
 	foundCursor := false
+	foundOldMutable := false
+	foundOldVisible := false
 
 	for oldRowIndex := 0; oldRowIndex < oldRowsTotal; oldRowIndex++ {
 		oldRow := oldBuffer.rowByOffset(oldRowIndex)
@@ -1261,7 +1977,7 @@ func reflow(oldBuffer, newBuffer *textBuffer) error {
 				foundCursor = true
 			}
 			cell := oldRow.charRow.data[oldCol]
-			if !copyCell(newBuffer, oldRow.charRow.glyphAt(oldCol), cell.attr, oldRow.attrs[oldCol]) {
+			if !copyCell(newBuffer, oldRow.charRow.glyphAt(oldCol), cell.attr, oldRow.attrs.at(oldCol)) {
 				return fmt.Errorf("reflow insertion failed at old row %d col %d", oldRowIndex, oldCol)
 			}
 		}
@@ -1271,10 +1987,20 @@ func reflow(oldBuffer, newBuffer *textBuffer) error {
 		newRow := newBuffer.rowByOffset(newBuffer.cursor.position.y)
 		newAttrColumn := newBuffer.cursor.position.x
 		for copyAttrColumn := right; copyAttrColumn < oldWidth && newAttrColumn < newBuffer.lineWidth(newBuffer.cursor.position.y); copyAttrColumn++ {
-			if !newRow.setAttrToEnd(newAttrColumn, oldRow.attrs[copyAttrColumn]) {
+			if !newRow.setAttrToEnd(newAttrColumn, oldRow.attrs.at(copyAttrColumn)) {
 				break
 			}
 			newAttrColumn++
+		}
+		if positionInfo != nil {
+			if !foundOldMutable && oldRowIndex >= positionInfo.mutableViewportTop {
+				positionInfo.mutableViewportTop = newBuffer.cursor.position.y
+				foundOldMutable = true
+			}
+			if !foundOldVisible && oldRowIndex >= positionInfo.visibleViewportTop {
+				positionInfo.visibleViewportTop = newBuffer.cursor.position.y
+				foundOldVisible = true
+			}
 		}
 		if right < oldWidth && !oldRow.wrapForced && oldRowIndex < oldRowsTotal-1 {
 			if !foundCursor && right == oldCursor.x && oldRowIndex == oldCursor.y {
@@ -1300,7 +2026,7 @@ func reflow(oldBuffer, newBuffer *textBuffer) error {
 	for oldRowIndex := oldRowsTotal; oldRowIndex < oldBuffer.height && newRowY < newBuffer.height; oldRowIndex++ {
 		oldRow := oldBuffer.rowByOffset(oldRowIndex)
 		newRow := newBuffer.rowByOffset(newRowY)
-		newRow.attrs = append(newRow.attrs[:0:0], oldRow.attrs...)
+		newRow.attrs = oldRow.attrs.clone()
 		newRow.resize(newBuffer.lineWidth(newRowY))
 		newRowY++
 	}

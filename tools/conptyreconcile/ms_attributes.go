@@ -99,22 +99,19 @@ func xterm256ToWindowsIndex(index int) uint8 {
 }
 
 func (a *textAttribute) setIndexedForeground(index uint8) {
-	a.foreground = textColor{kind: textColorIndex16, index: xtermToWindowsIndex(int(index))}
+	a.foreground = textColor{kind: textColorIndex16, index: index}
 }
 
 func (a *textAttribute) setIndexedBackground(index uint8) {
-	// Background legacy indices use the same xterm-to-Windows bit mapping,
-	// shifted in the serialized legacy word only; the TextColor itself stores
-	// the unshifted Windows index in the pinned implementation.
-	a.background = textColor{kind: textColorIndex16, index: xtermToWindowsIndex(int(index))}
+	a.background = textColor{kind: textColorIndex16, index: index}
 }
 
 func (a *textAttribute) setIndexedForeground256(index uint8) {
-	a.foreground = textColor{kind: textColorIndex256, index: xterm256ToWindowsIndex(int(index))}
+	a.foreground = textColor{kind: textColorIndex256, index: index}
 }
 
 func (a *textAttribute) setIndexedBackground256(index uint8) {
-	a.background = textColor{kind: textColorIndex256, index: xterm256ToWindowsIndex(int(index))}
+	a.background = textColor{kind: textColorIndex256, index: index}
 }
 
 func (a *textAttribute) setColor(rgb uint32, foreground bool) {

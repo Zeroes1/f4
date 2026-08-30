@@ -22,11 +22,13 @@ the documented reconstruction permitted by the plan.
 | Unicode widths | `src/types/CodepointWidthDetector.cpp`, `src/types/inc/CodepointWidthDetector.hpp`, `src/types/convert.cpp` | `GetWidth`, `IsWide`, `_lookupGlyphWidth`, `_extractCodepoint`, fallback cache, `GetQuickCharWidth`, Unicode 13.0.0 override table | MS port |
 | UTF-16 grouping | `src/types/Utf16Parser.cpp`, `src/types/inc/Utf16Parser.hpp` | `ParseNext`, `Parse`, leading/trailing surrogate tests | MS port |
 | cell storage | `src/buffer/out/CharRowCell.cpp/.hpp`, `CharRowCellReference.cpp/.hpp`, `UnicodeStorage.cpp/.hpp`, `DbcsAttribute.hpp` | reset/erase, stored glyphs, DBCS flags, coordinate-keyed storage and remap | MS port |
+| attribute rows | `src/buffer/out/AttrRow.cpp/.hpp` | `til::small_rle` run storage, `Reset`, `Resize`, `SetAttrToEnd`, `Replace`, and `GetHyperlinks` | MS port |
 | rows | `src/buffer/out/CharRow.cpp/.hpp`, `Row.cpp/.hpp` | measure bounds, glyph access, row wrap and double-byte-padding flags, cell writes | MS port |
 | text buffer | `src/buffer/out/textBuffer.cpp/.hpp` | `_AssertValidDoubleByteSequence`, `_PrepareForDoubleByteSequence`, `InsertCharacter`, `IncrementCursor`, `NewlineCursor`, `IncrementCircularBuffer`, `Reflow` | MS port |
 | legacy write path | `src/host/_stream.cpp/.h`, `src/host/outputStream.cpp/.hpp`, `src/host/cmdline.h`, `src/host/stream.cpp/.h`, `src/host/misc.cpp` | `AdjustCursorPosition`, `WriteCharsLegacy`, processed controls, delayed EOL, backspace accounting and bisect check | MS port |
 | parser | `src/terminal/parser/stateMachine.cpp/.hpp`, `OutputStateMachineEngine.cpp/.hpp` | ground/escape/CSI/OSC/DCS state persistence and dispatch limits | MS port |
 | VT dispatch | `src/terminal/adapter/adaptDispatch.cpp/.hpp`, `adaptDefaults.hpp`, `ITermDispatch.hpp` | cursor movement, erase, tab, scroll, alternate screen, DEC modes | MS port |
+| OSC color parsing and base64 | `src/types/utils.cpp`, `src/types/colorTable.cpp`, `src/types/inc/{utils,colorTable}.hpp`, `src/terminal/parser/base64.cpp/.hpp` | XParse/X.Org colors, OSC 4/10/11/12/52 helper branches, strict base64 state machine | MS port plus isolated conversion boundary |
 | VT emission | `src/renderer/vt/VtSequences.cpp`, `paint.cpp`, `XtermEngine.cpp/.hpp`, `vtrenderer.hpp` | cursor movement optimization, delayed EOL, UTF-8 line paint and frame order | MS port |
 | host launch | `src/winconpty/winconpty.cpp/.h`, `device.h`, `src/server/DeviceHandle.cpp/.h`, `src/server/WinNTControl.cpp/.h`, `src/cascadia/TerminalConnection/ConptyConnection.cpp` | pinned adjacent `OpenConsole.exe` process, ConDrv handles, attached-client attribute, and ConPTY resize/close lifecycle | MS API path with pinned-host gate |
 | bidi assertion | No text-buffer reorder function exists in the pinned execution path | Preserve UTF-8/UTF-16 order as an input invariant; no bidi visual oracle is invented | Input invariant |
@@ -35,11 +37,20 @@ the documented reconstruction permitted by the plan.
 
 The implementation of Windows `MultiByteToWideChar` is not present in the
 pinned OpenConsole tree.  The pinned source calls that OS API from
-`ConvertInputToUnicode` and `ConvertOutputToUnicode`; the mock's complete
-UTF-8 path therefore reconstructs only the documented `CP_UTF8`, flags-zero
-conversion result (including UTF-16 surrogate output and replacement handling).
-No other terminal or host implementation is used to fill this boundary.  This
-is the only documented reconstruction and it is isolated in `ms_utf8.go`.
+`ConvertInputToUnicode`, `ConvertOutputToUnicode`, and `Base64::s_Decode`; the
+mock's UTF-8 conversion boundary therefore reconstructs only the documented
+`CP_UTF8`, flags-zero conversion result (including UTF-16 surrogate output and
+failure for invalid input). No other terminal or host implementation is used
+to fill this boundary. This reconstruction is isolated in `ms_utf8.go` and
+the final conversion in `ms_base64.go`.
+
+The pinned source also delegates custom hyperlink identity to
+`std::hash<std::wstring_view>`. That standard-library implementation is not
+present in OpenConsole and its numeric result is not specified by the C++
+standard. The isolated `textBuffer.getHyperlinkID` reconstruction therefore
+preserves only the documented equality relation `(custom id, URI)`; it must not
+be treated as an exact numeric MS-port, and it remains a blocking boundary for
+the final gate.
 
 ## Three-pass self-audit record
 
@@ -80,11 +91,15 @@ empty before the mock test gate.
   margin, and conversion services that are not yet represented by the mock;
   its missing branches must not be replaced by a convenient buffer-only
   implementation.
-- `pending`: `ROW::WriteCells` and `OutputCellIterator` need a direct audit of
-  iterator advancement, surrogate grouping, DBCS lead/trail conversion,
-  and attribute behavior.
-- `pending`: `TextBuffer::Reflow` still lacks the complete attribute-row,
-  viewport-position, and final-row cursor branches from the pinned source.
+- `pending`: `OutputCellIterator` still needs a direct audit of iterator
+  advancement, surrogate grouping, DBCS lead/trail conversion, and attribute
+  behavior. `ATTR_ROW` run operations have now been isolated in the mock and
+  mapped to the pinned implementation; that change is not itself a test
+  result.
+- `pending`: `TextBuffer::Reflow` now carries the pinned optional
+  `PositionInformation` and `lastCharacterViewport` branches, but the direct
+  source comparison still has to verify every failure/exception path before
+  this row can become `MS port`.
 - `pending`: the Windows ConPTY launcher must be checked against the pinned
   `winconpty.cpp` path and must reject every executable except the pinned
   SHA-256.
@@ -94,3 +109,17 @@ empty before the mock test gate.
 - `pending`: source-backed frame emission must be checked against the pinned
   `XtermEngine::_MoveCursor`, `VtEngine::_PaintUtf8BufferLine`, and
   `VtSequences.cpp`; a frame made by a test fixture is not evidence.
+- `pending`: OSC parsing now has the pinned helper control flow, but the
+  custom hyperlink numeric identity depends on the unavailable
+  `std::hash<std::wstring_view>` implementation described above.
+- `pending`: RIS/HardReset now has the pinned operation order in the mock,
+  but still requires the direct source comparison, including the ConPTY
+  false-return/pass-through branch and the non-text soft-font boundary.
+- `blocked`: the stock pinned ConPTY API exposes one untagged output byte
+  stream. `ReadFile` on that pipe cannot identify which bytes came from the
+  client/live output and which bytes are renderer repaint output when they
+  are interleaved. A timestamp, read boundary, marker, parser heuristic, or
+  resize boundary would be a non-source inference and is forbidden by the
+  plan. The current host recorder therefore keeps the bytes as
+  `streamObservedOutput` and must not claim a live/frame split or pass the
+  host gate until a source-backed channel exists.

@@ -117,7 +117,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 		// Split at arbitrary byte boundaries, including boundaries inside
 		// UTF-8, CSI, and OSC sequences.
 		for _, part := range splitDelayedChunk(s.Chunks[liveIndex], rng) {
-			base = append(base, delayedOperation{kind: streamInput, chunk: part})
+			base = append(base, delayedOperation{kind: streamLive, chunk: part})
 		}
 		liveIndex++
 	}
@@ -156,7 +156,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 			<-gate
 			var err error
 			switch operation.kind {
-			case streamInput:
+			case streamLive:
 				err = session.feedLive(operation.chunk, operation.afterDelay)
 			case streamResize:
 				err = session.resize(operation.resize, operation.afterDelay)
@@ -189,7 +189,7 @@ func runDelayedMockScenarioWithCaptureOrdered(s scenario, delaySeed int64) (capt
 	parser, logged := session.result()
 	var input bytes.Buffer
 	for _, event := range logged.Events {
-		if event.Kind == streamInput {
+		if event.Kind == streamLive {
 			input.Write(event.Bytes)
 		}
 	}

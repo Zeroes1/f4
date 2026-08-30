@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -19,15 +20,12 @@ type streamKind uint8
 
 const (
 	streamInput streamKind = iota
+	streamLive
 	streamObservedOutput
 	streamFrame
 	streamResize
 	streamMarker
 )
-
-// streamLive is retained as a source-compatible name for the child input
-// event. It must never be used for bytes read from the ConPTY output pipe.
-const streamLive = streamInput
 
 type streamEvent struct {
 	Sequence uint64     `json:"sequence"`
@@ -61,7 +59,7 @@ func (c *capture) append(kind streamKind, width, height int, data []byte, cause 
 func (c capture) liveBytes() []byte {
 	var result []byte
 	for _, event := range c.Events {
-		if event.Kind == streamInput {
+		if event.Kind == streamLive || event.Kind == streamObservedOutput {
 			result = append(result, event.Bytes...)
 		}
 	}
@@ -138,7 +136,7 @@ type frame struct {
 func frameFromBuffer(b *textBuffer, cause string, sequence uint64) frame {
 	result := frame{
 		Width: b.width, Height: b.height,
-		Viewport: viewport{Top: b.viewportTop, Left: 0, Width: b.width, Height: b.viewportHeight},
+		Viewport: viewport{Top: b.viewportTop, Left: b.viewportLeft, Width: b.viewportWidth, Height: b.viewportHeight},
 		Cursor:   b.cursor.position, CursorState: frameCursorStateFrom(b.cursor),
 		Cause: cause, Sequence: sequence, EvictedRows: b.firstRow,
 		// VtEngine::PaintBufferGridLines is an intentional no-op in the pinned
@@ -158,8 +156,9 @@ func frameFromBuffer(b *textBuffer, cause string, sequence uint64) frame {
 		attributes := make([]frameAttribute, b.width)
 		grid := make([]frameGridLine, b.width)
 		for col := range attributes {
-			attributes[col] = frameAttributeFrom(row.attrs[col])
-			grid[col] = frameGridLineFrom(row.attrs[col])
+			attr := row.attrs.at(col)
+			attributes[col] = frameAttributeFrom(attr)
+			grid[col] = frameGridLineFrom(attr)
 		}
 		for col := 0; col < limit; col++ {
 			if row.charRow.data[col].attr.isTrailing() {
@@ -219,12 +218,12 @@ func frameCursorStateFrom(cursor cursorState) frameCursorState {
 // frameBytesFromBuffer drives the pinned VtEngine/XtermEngine transcription
 // over the current rows. The returned bytes are generated frame data; child
 // input stays in the capture as streamInput events and is never conflated with
-// renderer output.
+// either live output or renderer output.
 func frameBytesFromBuffer(b *textBuffer) []byte {
 	// Renderer::_PaintBufferOutput maps buffer coordinates back to screen
 	// coordinates by subtracting the viewport origin. The emitter therefore
 	// receives the visible screen-sized rows, not the backing rows verbatim.
-	emitter := newFrameEmitter(b.width, b.viewportHeight, 0)
+	emitter := newFrameEmitter(b.viewportWidth, b.viewportHeight, 0)
 	emitter.circled = b.circled
 	emitter.startPaint()
 	for screenRow := 0; screenRow < b.viewportHeight; screenRow++ {
@@ -233,6 +232,8 @@ func frameBytesFromBuffer(b *textBuffer) []byte {
 			continue
 		}
 		row := b.rowByOffset(rowIndex)
+		left := b.viewportLeft
+		right := left + b.viewportWidth
 		limit := row.charRow.measureRight()
 		if row.wrapForced {
 			limit = b.lineWidth(rowIndex)
@@ -241,7 +242,7 @@ func frameBytesFromBuffer(b *textBuffer) []byte {
 			}
 		}
 		clusters := make([]frameCluster, 0, limit)
-		for column := 0; column < limit; column++ {
+		for column := left; column < limit && column < right; column++ {
 			if row.charRow.data[column].attr.isTrailing() {
 				continue
 			}
@@ -255,6 +256,7 @@ func frameBytesFromBuffer(b *textBuffer) []byte {
 	}
 	cursor := b.cursor
 	cursor.position.y -= b.viewportTop
+	cursor.position.x -= b.viewportLeft
 	emitter.paintCursor(cursor)
 	emitter.endPaint()
 	return bytes.Clone(emitter.output)
@@ -264,7 +266,7 @@ func (f frame) logicalLines() []logicalRow {
 	result := make([]logicalRow, 0, len(f.Rows))
 	for i, row := range f.Rows {
 		if len(result) == 0 || !result[len(result)-1].continues {
-			result = append(result, logicalRow{sourceStart: i})
+			result = append(result, logicalRow{sourceStart: row.SourceIndex})
 		}
 		line := &result[len(result)-1]
 		line.rows = append(line.rows, i)
@@ -328,10 +330,11 @@ func parseWithChunks(width, height int, chunks [][]byte) (*vtParser, error) {
 	return parser, nil
 }
 
-// parseCapturedFrameEvents replays serialized renderer/observed-output events.
+// parseCapturedFrameEvents replays serialized live or observed-output events.
 // A resize is applied at the exact point at which the recorder observed it;
 // output bytes are either handed to the parser as ReadFile chunks or split at
-// every byte. Input events are intentionally ignored.
+// every byte. Input and frame events are intentionally ignored: a renderer
+// frame is a second output channel and must never be fed into the live parser.
 func parseCapturedFrameEvents(width, height int, events []streamEvent, byteAtATime bool) (*vtParser, error) {
 	parser := newVTParser(width, height)
 	for _, event := range events {
@@ -340,7 +343,7 @@ func parseCapturedFrameEvents(width, height int, events []streamEvent, byteAtATi
 			if err := parser.resize(event.Width, event.Height); err != nil {
 				return nil, err
 			}
-		case streamFrame, streamObservedOutput:
+		case streamLive, streamObservedOutput:
 			if byteAtATime {
 				for _, value := range event.Bytes {
 					if err := parser.feed([]byte{value}); err != nil {
@@ -516,22 +519,67 @@ func reconcile(frame frame, live []logicalRow) error {
 	if len(live) == 0 {
 		return fmt.Errorf("live mirror has no rows")
 	}
-	frameIndex := 0
-	liveIndex := 0
-	if frame.PartialTop && len(live[0].units) > 0 {
-		// A circular buffer may begin after the first physical row of a
-		// logical line.  Compare only the visible suffix, retaining order.
-		frameIndex++
-	}
-	for frameIndex < len(frameLines) && liveIndex < len(live) {
-		if frameLines[frameIndex].text() != live[liveIndex].text() {
-			return fmt.Errorf("ordered frame/live mismatch frame=%d live=%d frame=%q live=%q", frameIndex, liveIndex, frameLines[frameIndex].text(), live[liveIndex].text())
+	// SourceIndex is the identity carried by the frame row.  Locate the
+	// corresponding live logical row by that identity first; text is checked
+	// only after identity and multiplicity have been established.  This keeps
+	// equal lines distinct and prevents content from becoming a join key.
+	used := make([]bool, len(live))
+	lastLive := -1
+	for frameIndex, frameLine := range frameLines {
+		liveIndex := -1
+		for candidate, liveLine := range live {
+			if used[candidate] || candidate <= lastLive {
+				continue
+			}
+			if liveLine.sourceStart == frameLine.sourceStart {
+				liveIndex = candidate
+				break
+			}
+			if frame.PartialTop && frameIndex == 0 && containsInt(liveLine.rows, frameLine.sourceStart) {
+				liveIndex = candidate
+				break
+			}
 		}
-		frameIndex++
-		liveIndex++
+		if liveIndex < 0 {
+			return fmt.Errorf("frame/live identity mismatch frame=%d source_row=%d after_live=%d", frameIndex, frameLine.sourceStart, lastLive)
+		}
+		used[liveIndex] = true
+		lastLive = liveIndex
+		if frame.PartialTop && frameIndex == 0 {
+			if !strings.HasSuffix(live[liveIndex].text(), frameLine.text()) {
+				return fmt.Errorf("partial frame/live payload mismatch frame=%d live=%d frame=%q live=%q", frameIndex, liveIndex, frameLine.text(), live[liveIndex].text())
+			}
+		} else if frameLine.text() != live[liveIndex].text() {
+			return fmt.Errorf("ordered frame/live payload mismatch frame=%d live=%d frame=%q live=%q", frameIndex, liveIndex, frameLine.text(), live[liveIndex].text())
+		}
 	}
-	if frameIndex != len(frameLines) {
-		return fmt.Errorf("frame has %d unreconciled logical rows", len(frameLines)-frameIndex)
+	return nil
+}
+
+func containsInt(values []int, wanted int) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+// reconcileParserState adds the non-text state assertions required by the
+// frame/live boundary: source row identity is checked by reconcile, while the
+// cursor coordinate and every pinned cursor property are checked separately.
+func reconcileParserState(rendered frame, live *vtParser) error {
+	if live == nil {
+		return fmt.Errorf("live parser is nil")
+	}
+	if err := reconcile(rendered, live.buffer.logicalRows()); err != nil {
+		return err
+	}
+	if rendered.Cursor != live.buffer.cursor.position {
+		return fmt.Errorf("frame/live cursor mismatch frame=%+v live=%+v", rendered.Cursor, live.buffer.cursor.position)
+	}
+	if rendered.CursorState != frameCursorStateFrom(live.buffer.cursor) {
+		return fmt.Errorf("frame/live cursor state mismatch")
 	}
 	return nil
 }

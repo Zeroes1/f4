@@ -258,6 +258,11 @@ func waitPinnedClient(pty *pinnedConPTY) error {
 }
 
 func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPTY, error) {
+	// _CreatePseudoConsole rejects a null PseudoConsole and zero dimensions
+	// before opening any ConDrv or pipe handles.
+	if width == 0 || height == 0 {
+		return nil, fmt.Errorf("_CreatePseudoConsole: invalid dimensions %dx%d", width, height)
+	}
 	server, err := createServerHandle()
 	if err != nil {
 		return nil, fmt.Errorf("DeviceHandle::CreateServerHandle: %w", err)
@@ -523,6 +528,9 @@ func insertEnvironmentVariable(environment *[]environmentVariable, name, value s
 }
 
 func resizePinnedPseudoConsole(pty *pinnedConPTY, width, height uint16) error {
+	if pty == nil {
+		return fmt.Errorf("_ResizePseudoConsole: nil PseudoConsole")
+	}
 	packet := []uint16{ptySignalResizeWindow, width, height}
 	// _ResizePseudoConsole passes nullptr for lpNumberOfBytesWritten and
 	// treats the WriteFile boolean as the complete result.  Keep that API
@@ -581,6 +589,9 @@ func runPinnedHost(path, reportPath string) error {
 	if err != nil {
 		return err
 	}
+	if err := pinnedHostCaptureBoundary(); err != nil {
+		return err
+	}
 	if reportPath == "" {
 		return fmt.Errorf("host report path is required")
 	}
@@ -621,6 +632,16 @@ func runPinnedHost(path, reportPath string) error {
 		MatrixWidths: edgeScenarioWidths(),
 		CompletedAt:  time.Now().UTC(),
 	})
+}
+
+// pinnedHostCaptureBoundary records a protocol limitation, not a test
+// result. The pinned winconpty.cpp path gives the client one hOutput pipe;
+// neither that source nor the stock OpenConsole process attaches provenance
+// to bytes on the pipe. Treating ReadFile calls, timestamps, markers, parser
+// state, or resize notifications as a live/frame tag would add semantics not
+// present in the pinned source.
+func pinnedHostCaptureBoundary() error {
+	return fmt.Errorf("pinned host gate blocked: stock ConPTY exposes one untagged output stream; live/frame bytes cannot be separated by the pinned API")
 }
 
 func runPinnedRecursiveDir(path string, identity pinnedHostIdentity, artifactDirectory string) error {
