@@ -546,3 +546,18 @@ expected_lines=23906 observed_lines=23471 mismatch_count=19686 cup_before_crlf=1
 `proxysstub.dll`, тогда как redirected-файл содержит `proxystub.dll`.
 Это отдельное открытое расхождение, требующее чтения исходника и нового
 прицельного прогона; дедупликация по совпадающим символам запрещена.
+
+Дополнительный прогон с более узким source-derived правилом (только CUP,
+непосредственно предшествующий следующему `CRLF`; без попытки угадывать по
+`CRLF` перед CUP) дал:
+
+```text
+go run . -command-compare -report artifacts/pinned-conpty-command-compare-cup5.json
+pinned-conpty-probe: native command comparison found 28519 line mismatches (report artifacts/pinned-conpty-command-compare-cup5.json)
+expected_lines=23906 observed_lines=32680 mismatch_count=28519 cup_before_crlf=1
+```
+
+Это почти не меняет результат и подтверждает, что одно CUP→CRLF правило не
+объясняет основную массу расхождений. Вариант, который трактовал `CRLF` перед
+последне-колоночным CUP как продолжение, был отброшен: он ошибочно склеивал
+законные соседние строки (`observed_lines=23471`) и потому был бы эвристикой.

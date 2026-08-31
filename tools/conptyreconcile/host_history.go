@@ -17,14 +17,15 @@ type renderedHistoryLine struct {
 }
 
 type renderedHistory struct {
-	lines        []renderedHistoryLine
-	line         []rune
-	column       int
-	row          int
-	lineStartRow int
-	crossRow     bool
-	width        int
-	wrapPending  bool
+	lines          []renderedHistoryLine
+	line           []rune
+	column         int
+	row            int
+	lineStartRow   int
+	crossRow       bool
+	width          int
+	wrapPending    bool
+	cupPendingCRLF bool
 }
 
 func parseRenderedHistory(data []byte) renderedHistory {
@@ -42,11 +43,8 @@ func parseRenderedHistoryAtWidth(data []byte, width int) renderedHistory {
 	h.width = width
 	for i := 0; i < len(data); {
 		if data[i] == '\r' && i+1 < len(data) && data[i+1] == '\n' {
-			// A pinned-host cursor repair can be emitted immediately after the
-			// physical-row CRLF and before the continuation text. Keep that
-			// boundary provisional; the following last-column CUP identifies the
-			// continuation and the next CRLF closes the logical line.
-			if h.width > 0 && isLastColumnCUP(data[i+2:], h.width) && len(h.line) != 0 {
+			if h.cupPendingCRLF {
+				h.cupPendingCRLF = false
 				i += 2
 				continue
 			}
@@ -81,28 +79,6 @@ func parseRenderedHistoryAtWidth(data []byte, width int) renderedHistory {
 		i += size
 	}
 	return h
-}
-
-func isLastColumnCUP(data []byte, width int) bool {
-	if len(data) < 5 || data[0] != 0x1b || data[1] != '[' {
-		return false
-	}
-	end := 2
-	for end < len(data) && data[end] != 'H' && data[end] != 'f' {
-		if data[end] < '0' || data[end] > '9' && data[end] != ';' {
-			return false
-		}
-		end++
-	}
-	if end >= len(data) || (data[end] != 'H' && data[end] != 'f') {
-		return false
-	}
-	fields := strings.Split(string(data[2:end]), ";")
-	if len(fields) < 2 {
-		return false
-	}
-	col, err := strconv.Atoi(fields[len(fields)-1])
-	return err == nil && col == width
 }
 
 func (h *renderedHistory) commit(term []byte) {
@@ -229,6 +205,7 @@ func (h *renderedHistory) consumeCSI(params string, final byte) {
 			h.row = row - 1
 			h.column = len(h.line)
 			h.wrapPending = true
+			h.cupPendingCRLF = true
 			return
 		}
 		if row-1 != h.row {

@@ -21,27 +21,28 @@ type commandLineMismatch struct {
 }
 
 type commandCompareReport struct {
-	Mode                 string                `json:"mode"`
-	Host                 pinnedHostIdentity    `json:"host"`
-	Command              string                `json:"command"`
-	RedirectCommand      string                `json:"redirect_command"`
-	RedirectedBytes      int                   `json:"redirected_bytes"`
-	RedirectedSHA256     string                `json:"redirected_sha256"`
-	HostRawBytes         int                   `json:"host_raw_bytes"`
-	HostRawSHA256        string                `json:"host_raw_sha256"`
-	ExpectedLines        int                   `json:"expected_lines"`
-	ObservedLines        int                   `json:"observed_lines"`
-	MismatchCount        int                   `json:"mismatch_count"`
-	ContentMismatchCount int                   `json:"content_mismatch_count"`
-	TrailingPaddingOnly  int                   `json:"trailing_padding_only"`
-	CrossRowMismatch     int                   `json:"cross_row_mismatch"`
-	CUPBeforeCRLF        int                   `json:"cup_before_crlf"`
-	Mismatches           []commandLineMismatch `json:"mismatches,omitempty"`
-	ChildExitCode        uint32                `json:"child_exit_code"`
-	ChildExited          bool                  `json:"child_exited"`
-	HostExited           bool                  `json:"host_exited"`
-	HandlesClosed        bool                  `json:"handles_closed"`
-	CompletedAt          time.Time             `json:"completed_at"`
+	Mode                    string                `json:"mode"`
+	Host                    pinnedHostIdentity    `json:"host"`
+	Command                 string                `json:"command"`
+	RedirectCommand         string                `json:"redirect_command"`
+	RedirectedBytes         int                   `json:"redirected_bytes"`
+	RedirectedSHA256        string                `json:"redirected_sha256"`
+	HostRawBytes            int                   `json:"host_raw_bytes"`
+	HostRawSHA256           string                `json:"host_raw_sha256"`
+	ExpectedLines           int                   `json:"expected_lines"`
+	ObservedLines           int                   `json:"observed_lines"`
+	MismatchCount           int                   `json:"mismatch_count"`
+	NormalizedMismatchCount int                   `json:"normalized_mismatch_count"`
+	ContentMismatchCount    int                   `json:"content_mismatch_count"`
+	TrailingPaddingOnly     int                   `json:"trailing_padding_only"`
+	CrossRowMismatch        int                   `json:"cross_row_mismatch"`
+	CUPBeforeCRLF           int                   `json:"cup_before_crlf"`
+	Mismatches              []commandLineMismatch `json:"mismatches,omitempty"`
+	ChildExitCode           uint32                `json:"child_exit_code"`
+	ChildExited             bool                  `json:"child_exited"`
+	HostExited              bool                  `json:"host_exited"`
+	HandlesClosed           bool                  `json:"handles_closed"`
+	CompletedAt             time.Time             `json:"completed_at"`
 }
 
 // runNativeCommandCompare executes the same recursive dir command through a
@@ -120,6 +121,9 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 			if len(report.Mismatches) < 20 {
 				report.Mismatches = append(report.Mismatches, commandLineMismatch{Index: index, Expected: want, Observed: got, ObservedCrossRow: cross})
 			}
+		}
+		if want != strings.TrimRight(got, " ") {
+			report.NormalizedMismatchCount++
 		}
 	}
 	if err := writeJSON(reportPath, report); err != nil {
