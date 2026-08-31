@@ -98,9 +98,16 @@ func controlProbeWorkload() string {
 	b.WriteString(controlBeginMarker)
 	b.WriteString("\r\n")
 	b.WriteString("\x1b[31mred\x1b[0m\r\n")
+	b.WriteString("\x1b[1mbold\x1b[22m\r\n")
+	b.WriteString("\x1b[4munder\x1b[24m\r\n")
+	b.WriteString("\x1b[7mreverse\x1b[27m\r\n")
 	b.WriteString("old\x1b[2K\x1b[1Grewritten\r\n")
 	b.WriteString("cursor: one\x1b[1Gtwo\r\n")
-	b.WriteString("tabs:\tX\tY\r\n")
+	// A second explicit newline gives the host a fresh row after its tab-stop
+	// cursor reposition, so the tab expansion can be checked as a complete
+	// rendered line without inferring a boundary from the CUP itself.
+	b.WriteString("tabs:\tX\tY\r\n\r\n")
+	b.WriteString("\x1b]8;;https://example.test\x1b\\link\x1b]8;;\x1b\\\r\n")
 	b.WriteString("\x1b]0;pinned-conpty-probe\x07\r\n")
 	b.WriteString(controlEndMarker)
 	b.WriteString("\r\n")

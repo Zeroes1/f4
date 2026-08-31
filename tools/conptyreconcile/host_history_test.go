@@ -35,3 +35,18 @@ func TestRenderedHistoryIgnoresSGRAndOSC(t *testing.T) {
 		t.Fatalf("lines = %#v", lines)
 	}
 }
+
+func TestRenderedHistoryClearsScrollbackOnCSI3J(t *testing.T) {
+	lines := parseRenderedHistory([]byte("before\r\n\x1b[3Jafter\r\n")).Lines()
+	if len(lines) != 1 || !bytes.Equal(lines[0].Bytes, []byte("after")) {
+		t.Fatalf("history after clear = %#v", lines)
+	}
+}
+
+func TestRenderedHistorySkipsOSC8ST(t *testing.T) {
+	raw := []byte("\x1b]8;id=123;https://example.test\x1b\\link\x1b]8;;\x1b\\\r\n")
+	lines := parseRenderedHistory(raw).Lines()
+	if len(lines) != 1 || !bytes.Equal(lines[0].Bytes, []byte("link")) {
+		t.Fatalf("OSC 8 history = %#v", lines)
+	}
+}

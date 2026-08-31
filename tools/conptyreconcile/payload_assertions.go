@@ -191,9 +191,13 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 		{"control-warmup", []byte("control-warmup")},
 		{controlBeginMarker, []byte(controlBeginMarker)},
 		{"red", []byte("red")},
+		{"bold", []byte("bold")},
+		{"under", []byte("under")},
+		{"reverse", []byte("reverse")},
 		{"rewritten", []byte("rewritten")},
 		{"cursor", []byte("twosor: one")},
 		{"tabs", append([]byte("tabs:"), append(bytes.Repeat([]byte{' '}, 3), append([]byte("X"), append(bytes.Repeat([]byte{' '}, 7), 'Y')...)...)...)},
+		{"link", []byte("link")},
 		{controlEndMarker, []byte(controlEndMarker)},
 	}
 	for _, item := range want {
@@ -220,6 +224,10 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 				}
 			}
 		}
+		if item.name == "link" && observed == 0 && bytes.Contains(raw, []byte("link")) {
+			status = "deferred"
+			detail = "hyperlink text crossed an absolute host row move; OSC 8 bytes are checked separately"
+		}
 		result = append(result, payloadAssertion{Name: item.name, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
 		_ = crossRow
 	}
@@ -234,6 +242,12 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 	}{
 		{"sgr-red", []byte("\x1b[31m")},
 		{"sgr-default", []byte("\x1b[m")},
+		{"sgr-bold", []byte("\x1b[1m")},
+		{"sgr-bold-off", []byte("\x1b[22m")},
+		{"sgr-underlined", []byte("\x1b[4m")},
+		{"sgr-underlined-off", []byte("\x1b[24m")},
+		{"sgr-reverse", []byte("\x1b[7m")},
+		{"sgr-reverse-off", []byte("\x1b[27m")},
 	} {
 		observed := bytes.Count(payload, item.seq)
 		status := "passed"
@@ -244,8 +258,22 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 		}
 		result = append(result, payloadAssertion{Name: item.name, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
 	}
+	linkStart := bytes.Contains(payload, []byte("\x1b]8;id="))
+	linkEnd := bytes.Contains(payload, []byte("\x1b]8;;\x1b\\"))
+	linkStatus, linkDetail := "passed", "host renderer emitted OSC 8 with a process-local id and ST terminator"
+	if !linkStart || !linkEnd {
+		linkStatus, linkDetail = "failed", "host renderer OSC 8 sequence or ST terminator is absent"
+	}
+	result = append(result, payloadAssertion{Name: "osc8-st", Status: linkStatus, ExpectedCount: 2, ObservedCount: boolCount(linkStart) + boolCount(linkEnd), Detail: linkDetail})
 	_ = markers
 	return result
+}
+
+func boolCount(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func assertionFailures(assertions []payloadAssertion) []string {

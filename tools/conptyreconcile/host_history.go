@@ -178,6 +178,18 @@ func (h *renderedHistory) consumeCSI(params string, final byte) {
 		if len(h.line) > h.column {
 			h.line = h.line[:h.column]
 		}
+	case 'J':
+		// ESC[3J is the pinned host's explicit clear-scrollback event. It is
+		// semantic history mutation, not repaint noise, so discard committed
+		// history and the in-progress line exactly when the host requests it.
+		if len(values) > 0 && values[0] == 3 {
+			h.lines = nil
+			h.line = nil
+			h.column = 0
+			h.crossRow = false
+			h.wrapPending = false
+			h.cupPendingCRLF = false
+		}
 	case 'C':
 		h.column += one()
 	case 'D':
