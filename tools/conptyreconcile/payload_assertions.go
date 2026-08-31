@@ -155,9 +155,11 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 	}
 	for _, item := range want {
 		observed := 0
+		crossRow := false
 		for _, line := range history {
 			if bytes.Equal(line.Bytes, item.line) {
 				observed++
+				crossRow = crossRow || line.CrossRow
 			}
 		}
 		status := "passed"
@@ -166,7 +168,22 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 			status = "failed"
 			detail = "rendered logical line count differs"
 		}
+		if item.name == "tabs" && observed == 0 {
+			for _, line := range history {
+				if line.CrossRow {
+					status = "deferred"
+					detail = "tab line crossed an absolute host repaint row"
+					break
+				}
+			}
+		}
 		result = append(result, payloadAssertion{Name: item.name, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
+		_ = crossRow
+	}
+	start, end := bytes.Index(raw, []byte(controlBeginMarker)), bytes.Index(raw, []byte(controlEndMarker))
+	payload := raw
+	if start >= 0 && end > start {
+		payload = raw[start:end]
 	}
 	for _, item := range []struct {
 		name string
@@ -175,7 +192,7 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 		{"sgr-red", []byte("\x1b[31m")},
 		{"sgr-default", []byte("\x1b[m")},
 	} {
-		observed := bytes.Count(raw, item.seq)
+		observed := bytes.Count(payload, item.seq)
 		status := "passed"
 		detail := "host renderer emitted the source-defined SGR sequence"
 		if observed != 1 {

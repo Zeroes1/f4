@@ -104,6 +104,17 @@ func (h *renderedHistory) consumeEscape(data []byte) int {
 		}
 		return 0
 	}
+	if data[1] == '[' {
+		for i := 2; i < len(data); i++ {
+			if data[i] < 0x40 || data[i] > 0x7e {
+				continue
+			}
+			params := string(data[2:i])
+			h.consumeCSI(params, data[i])
+			return i + 1
+		}
+		return 0
+	}
 	if data[1] >= 0x40 && data[1] <= 0x7e {
 		if data[1] == 'D' || data[1] == 'E' || data[1] == 'M' {
 			h.row++
@@ -111,18 +122,7 @@ func (h *renderedHistory) consumeEscape(data []byte) int {
 		}
 		return 2
 	}
-	if data[1] != '[' {
-		return 2
-	}
-	for i := 2; i < len(data); i++ {
-		if data[i] < 0x40 || data[i] > 0x7e {
-			continue
-		}
-		params := string(data[2:i])
-		h.consumeCSI(params, data[i])
-		return i + 1
-	}
-	return 0
+	return 2
 }
 
 func (h *renderedHistory) consumeCSI(params string, final byte) {

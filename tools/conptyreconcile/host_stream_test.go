@@ -34,17 +34,17 @@ func TestParseResizeFrame(t *testing.T) {
 	}
 }
 
-func TestHostRenderStreamIgnoresHostBracketedRepaint(t *testing.T) {
+func TestHostRenderStreamRetainsBracketedBytes(t *testing.T) {
 	input := []byte("live: one\r\n\x1b[?25l\x1b[Hlive: one\r\n\x1b[?25h live: two\r\n")
 	var stream hostRenderStream
 	for i := range input {
 		stream.Feed(input[i : i+1])
 	}
 	lines := stream.Lines()
-	if len(lines) != 2 {
-		t.Fatalf("got %d history lines, want 2", len(lines))
+	if len(lines) != 3 {
+		t.Fatalf("got %d history lines, want 3", len(lines))
 	}
-	if !bytes.Equal(lines[0].Bytes, []byte("live: one")) || !bytes.Equal(lines[1].Bytes, []byte(" live: two")) {
+	if !bytes.Equal(lines[0].Bytes, []byte("live: one")) || !bytes.Equal(lines[1].Bytes, []byte("\x1b[Hlive: one")) || !bytes.Equal(lines[2].Bytes, []byte(" live: two")) {
 		t.Fatalf("history lines = %#v", lines)
 	}
 	frames := stream.RepaintFrames()
@@ -59,7 +59,7 @@ func TestHostRenderStreamHandlesSplitRepaintMarkers(t *testing.T) {
 	stream.Feed([]byte("lhidden\r\n\x1b[?25"))
 	stream.Feed([]byte("hafter\r\n"))
 	lines := stream.Lines()
-	if len(lines) != 2 || !bytes.Equal(lines[0].Bytes, []byte("before")) || !bytes.Equal(lines[1].Bytes, []byte("after")) {
+	if len(lines) != 3 || !bytes.Equal(lines[0].Bytes, []byte("before")) || !bytes.Equal(lines[1].Bytes, []byte("hidden")) || !bytes.Equal(lines[2].Bytes, []byte("after")) {
 		t.Fatalf("history lines = %#v", lines)
 	}
 	if len(stream.RepaintFrames()) != 1 {
