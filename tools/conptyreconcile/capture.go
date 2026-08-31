@@ -1,6 +1,10 @@
 package main
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+	"time"
+)
 
 type streamKind uint8
 
@@ -85,4 +89,38 @@ func (r *hostCaptureRecorder) outputOffset() int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.outputBytes
+}
+
+// waitOutputQuiescent gives the pinned renderer a bounded opportunity to
+// flush after the child exits. Child exit alone does not imply that ConPTY has
+// finished emitting its final paint; closing the pseudoconsole first can
+// truncate the tail or leave the reader blocked on the host-owned pipe.
+func waitOutputQuiescent(recorder *hostCaptureRecorder, quiet, timeout time.Duration) error {
+	if recorder == nil {
+		return fmt.Errorf("output recorder is nil")
+	}
+	if quiet <= 0 {
+		quiet = 300 * time.Millisecond
+	}
+	if timeout < quiet {
+		timeout = quiet
+	}
+	deadline := time.Now().Add(timeout)
+	last := recorder.outputOffset()
+	stable := time.Duration(0)
+	const interval = 100 * time.Millisecond
+	for time.Now().Before(deadline) {
+		time.Sleep(interval)
+		now := recorder.outputOffset()
+		if now == last {
+			stable += interval
+			if stable >= quiet {
+				return nil
+			}
+		} else {
+			last = now
+			stable = 0
+		}
+	}
+	return fmt.Errorf("pinned output did not quiesce within %s", timeout)
 }

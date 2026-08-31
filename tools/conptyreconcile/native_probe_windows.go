@@ -319,6 +319,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		_ = windows.CloseHandle(pty.input)
 		pty.input = 0
 	}
+	settleErr := waitOutputQuiescent(recorder, 300*time.Millisecond, 10*time.Second)
 	pty.close()
 	session.ChildExited = true
 	hostExited, hostExitErr := processExited(pty.hostPID)
@@ -331,6 +332,10 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	if result.err != nil {
 		session.Error = result.err.Error()
 		return session, result.err
+	}
+	if settleErr != nil {
+		session.Error = settleErr.Error()
+		return session, settleErr
 	}
 	pty.closePipes()
 	session.HandlesClosed = pty.signal == 0 && pty.ptyReference == 0 && pty.input == 0 && pty.output == 0 && pty.childProcess == 0
