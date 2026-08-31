@@ -15,6 +15,7 @@ go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-co
 go run ./tools/conptyreconcile -command-compare -command-compare-width 512 -report artifacts/pinned-conpty-command-compare-512.json
 go run ./tools/conptyreconcile -clear-probe -report artifacts/pinned-conpty-clear.json
 go run ./tools/conptyreconcile -scroll-probe -report artifacts/pinned-conpty-scroll.json
+go run ./tools/conptyreconcile -command-suite -report artifacts/pinned-conpty-command-suite.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -68,6 +69,10 @@ history while retaining the post-clear marker.
 `-scroll-probe` validates consumer-only scrollback: complete logical lines from
 a static pinned-host session are spilled to a bounded piece-table model, then
 scrolled and reflowed at several display sizes without changing history.
+
+`-command-suite` runs bounded `echo`, `type`, `findstr`, and PowerShell cases
+through the pinned host with exact marker-delimited rendered output and exit /
+lifecycle checks.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The

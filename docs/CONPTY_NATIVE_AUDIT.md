@@ -539,6 +539,22 @@ width=80  height=25 display_rows=7   cursor=(7,0)   layout_status=passed
 Каждый checkpoint содержит `screen_sha256`, `stored_history_sha256` и cursor
 координаты; история осталась неизменной при всех изменениях отображения.
 
+### Набор реальных команд (A4)
+
+Отдельный native suite прогнал обязательные ограниченные команды на pinned
+host с уникальными begin/end-маркерами и проверкой exit/lifecycle:
+
+```text
+native command suite complete: artifacts/pinned-conpty-command-suite-v2.json cases=4
+echo       exact=true exit=0 child_exited=true host_exited=true handles_closed=true
+type       exact=true exit=0 child_exited=true host_exited=true handles_closed=true
+findstr    exact=true exit=0 child_exited=true host_exited=true handles_closed=true
+powershell exact=true exit=0 child_exited=true host_exited=true handles_closed=true
+```
+
+`type` читает временный UTF-8 fixture, PowerShell запускается с
+`-NoProfile -NonInteractive`; каждый raw-файл сохранён и проверен побайтово.
+
 ### Независимая сверка `dir /s /b` через redirected-файл
 
 По пункту 11 выполнена одна и та же команда двумя путями: напрямую в файл

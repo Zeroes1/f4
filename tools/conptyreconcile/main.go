@@ -20,6 +20,7 @@ func main() {
 		commandProbe        = flag.Bool("command-probe", false, "measure recursive dir output on the pinned host")
 		commandCompare      = flag.Bool("command-compare", false, "compare recursive dir through pinned host with redirected output")
 		commandCompareWidth = flag.Int("command-compare-width", 80, "pinned-host capture width for -command-compare")
+		commandSuite        = flag.Bool("command-suite", false, "verify echo, type, findstr, and PowerShell commands")
 		clearProbe          = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
@@ -123,6 +124,12 @@ func main() {
 	}
 	if *commandCompare {
 		if err := runNativeCommandCompareAtWidth(*probeHost, *reportPath, *commandCompareWidth); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *commandSuite {
+		if err := runNativeCommandSuite(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return
