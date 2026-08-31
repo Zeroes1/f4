@@ -124,6 +124,107 @@ func TestNativeOpenConsoleF4Live(t *testing.T) {
 	assertLiveNativeLog(t, logBytes)
 }
 
+func TestNativeOpenConsoleF4WidthAndWhitespace(t *testing.T) {
+	if os.Getenv("F4_NATIVE_OPENCONSOLE") != "1" {
+		t.Skip("set F4_NATIVE_OPENCONSOLE=1 to run the live pinned OpenConsole gate")
+	}
+	for _, width := range []int{79, 80, 81, 161} { // N-1, N, N+1, 2N+1 edge
+		width := width
+		t.Run(fmt.Sprintf("width-%d", width), func(t *testing.T) {
+			lines := []string{
+				"__F4_NATIVE_WIDTH_BEGIN__",
+				strings.Repeat("A", width-1),
+				strings.Repeat("B", width),
+				strings.Repeat("C", width+1),
+				strings.Repeat("D", 2*width+1),
+				"repeat: SAME", "repeat: SAME", "repeat: SAME",
+				"    ", "",
+				"__F4_NATIVE_WIDTH_END__",
+			}
+			command := "echo " + strings.Join(lines[:1], "") + " & ping -n 2 127.0.0.1 >nul"
+			for _, line := range lines[1:] {
+				if line == "" {
+					command += " & echo."
+				} else {
+					command += " & echo " + line
+				}
+			}
+			logBytes := runLiveNativeCommand(t, width, 25, command)
+			clean := strings.ReplaceAll(logBytes, "\r", "")
+			for _, want := range lines {
+				if want == "    " || want == "" || want == "repeat: SAME" {
+					continue // asserted below without trimming ambiguity
+				}
+				if len(linesEqual(clean, want)) != 1 {
+					t.Fatalf("width %d lost or duplicated exact line %q", width, want)
+				}
+			}
+			if len(linesContaining(clean, "repeat: SAME")) != 3 {
+				t.Fatalf("width %d coalesced repeated lines", width)
+			}
+			long := strings.Repeat("D", 2*width+1)
+			if got := linesContaining(clean, long); len(got) != 1 || got[0] != long {
+				t.Fatalf("width %d changed 2N+1 line: %q", width, got)
+			}
+			if !strings.Contains(clean, "    ") {
+				t.Fatalf("width %d lost whitespace-only line", width)
+			}
+			if !strings.Contains(clean, "\n\n") {
+				t.Fatalf("width %d lost empty line", width)
+			}
+		})
+	}
+}
+
+func runLiveNativeCommand(t *testing.T, width, height int, command string) string {
+	t.Helper()
+	pty, err := newNativeOpenConsolePTY(width, height)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pf := NewPanelsFrame()
+	pf.ptyMutex.Lock()
+	pf.pty = pty
+	pf.termView.pty = pty
+	pf.parser.pty = pty
+	pf.ptyMutex.Unlock()
+	defer pf.Close()
+	if err := pty.Run("cmd.exe", "/d", "/c", command); err != nil {
+		t.Fatal(err)
+	}
+	readDone := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 113)
+		resized := false
+		for {
+			n, readErr := pty.Read(buf)
+			if n > 0 {
+				pf.consumeLocalOutput(pty, buf[:n])
+				if !resized {
+					for _, next := range [][2]int{{1, height}, {width - 1, height}, {width + 1, height}, {width, height}} {
+						pf.ResizeConsole(next[0], next[1])
+					}
+					resized = true
+				}
+			}
+			if readErr != nil {
+				readDone <- readErr
+				return
+			}
+		}
+	}()
+	if err := pty.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if err := pty.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
+		t.Fatal(err)
+	}
+	return string(pf.termView.GetAllLogBytes())
+}
+
 func assertLiveNativeLog(t *testing.T, logBytes string) {
 	t.Helper()
 	begin, end := "__F4_NATIVE_LIVE_BEGIN__", "__F4_NATIVE_LIVE_END__"
