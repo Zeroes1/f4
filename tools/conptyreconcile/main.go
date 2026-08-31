@@ -14,6 +14,7 @@ func main() {
 		probe       = flag.Bool("probe", false, "run the pinned-host probe with live resize")
 		probeStatic = flag.Bool("probe-static", false, "run the pinned-host probe without live resize")
 		gate        = flag.Bool("gate", false, "run the complete standalone native gate")
+		seeds       = flag.Bool("seeds", false, "run the 300-session native seed stage")
 		probeHost   = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath  = flag.String("report", "", "report path")
 		emitProbe   = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
@@ -39,6 +40,12 @@ func main() {
 	}
 	if *gate {
 		if err := runNativeGate(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *seeds {
+		if err := runNativeSeedGate(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return
