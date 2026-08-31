@@ -153,6 +153,8 @@ type pinnedConPTY struct {
 	ptyReference    windows.Handle
 	hostProcess     windows.Handle
 	childProcess    windows.Handle
+	hostPID         uint32
+	childPID        uint32
 	input           windows.Handle
 	output          windows.Handle
 	hostCommandLine string
@@ -199,6 +201,29 @@ func (p *pinnedConPTY) close() {
 		_ = windows.CloseHandle(p.ptyReference)
 		p.ptyReference = 0
 	}
+}
+
+// processExited checks the terminal state after the native close sequence.
+// Querying by PID is intentionally performed only for the process created by
+// this session; it is not a substitute host and does not inspect unrelated
+// system processes.
+func processExited(pid uint32) (bool, error) {
+	if pid == 0 {
+		return false, fmt.Errorf("process id is zero")
+	}
+	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		if err == windows.ERROR_INVALID_PARAMETER {
+			return true, nil
+		}
+		return false, err
+	}
+	defer windows.CloseHandle(handle)
+	var code uint32
+	if err := windows.GetExitCodeProcess(handle, &code); err != nil {
+		return false, err
+	}
+	return code != 259, nil // STILL_ACTIVE
 }
 
 func (p *pinnedConPTY) closePipes() {
@@ -446,6 +471,7 @@ func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	}
 	_ = windows.CloseHandle(info.Thread)
 	pty.childProcess = info.Process
+	pty.childPID = info.ProcessId
 	return nil
 }
 

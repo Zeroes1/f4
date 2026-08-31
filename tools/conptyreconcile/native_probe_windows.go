@@ -38,6 +38,7 @@ type nativeProbeSession struct {
 	ExpectedInput     []byte              `json:"expected_input"`
 	HostCommand       string              `json:"host_command"`
 	HostPID           uint32              `json:"host_pid"`
+	ChildPID          uint32              `json:"child_pid"`
 	HostProcess       pinnedHostIdentity  `json:"host_process"`
 	StartedAt         time.Time           `json:"started_at"`
 	FinishedAt        time.Time           `json:"finished_at"`
@@ -54,6 +55,9 @@ type nativeProbeSession struct {
 	Assertions        []payloadAssertion  `json:"assertions,omitempty"`
 	AssertionFailures []string            `json:"assertion_failures,omitempty"`
 	Chunking          []chunkingAssertion `json:"chunking_assertions,omitempty"`
+	ChildExited       bool                `json:"child_exited"`
+	HostExited        bool                `json:"host_exited"`
+	HandlesClosed     bool                `json:"handles_closed"`
 	Error             string              `json:"error,omitempty"`
 }
 
@@ -217,6 +221,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	}
 	session.HostPID = hostPID
 	session.HostProcess = hostIdentity
+	pty.hostPID = hostPID
 	session.HostCommand = pty.hostCommandLine
 	defer pty.close()
 	defer pty.closePipes()
@@ -237,6 +242,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		session.Error = err.Error()
 		return session, err
 	}
+	session.ChildPID = pty.childPID
 	resizeSchedule := [][2]int{{1, 1}, {width, height}, {121, 40}, {80, 25}}
 	if !resizeDuringOutput {
 		resizeSchedule = nil
@@ -274,11 +280,20 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		pty.input = 0
 	}
 	pty.close()
+	session.ChildExited = true
+	hostExited, hostExitErr := processExited(pty.hostPID)
+	session.HostExited = hostExited
+	if hostExitErr != nil {
+		session.Error = hostExitErr.Error()
+		return session, hostExitErr
+	}
 	result := <-outputReady
 	if result.err != nil {
 		session.Error = result.err.Error()
 		return session, result.err
 	}
+	pty.closePipes()
+	session.HandlesClosed = pty.signal == 0 && pty.ptyReference == 0 && pty.input == 0 && pty.output == 0 && pty.childProcess == 0
 	session.FinishedAt = time.Now().UTC()
 	session.RawOutput = result.data
 	var logical hostRenderStream

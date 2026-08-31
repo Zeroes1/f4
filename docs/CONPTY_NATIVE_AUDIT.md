@@ -186,7 +186,7 @@ UTF-8, CSI и CRLF. Это закрывает только транспортн�
 
 ### Повтор отдельного seed (D3)
 
-Добавлен явный `-seed` (также `F4_NATIVE_CONPTY_SEED`) для повторения одной
+Добавлен явный `-seed` (также `PINNED_CONPTY_SEED`) для повторения одной
 сессии с тем же проверенным cache host. Повтор командой
 `go run . -seed 21 -report ../../artifacts/pinned-conpty-seed-21-current.json`
 завершился с `exit=0`: width `1`, raw `654` байта, два маркера, три
@@ -194,6 +194,12 @@ chunking-проверки `passed`. Seed 115 повторён той же ком
 байтом, width `121`, двумя маркерами и тремя `passed` chunking-проверками.
 Эти повторы не закрывают D3: предыдущий полный прогон 300 seed записал ошибки
 21 и 115, а полные assertions истории, экрана и reflow пока отсутствуют.
+
+В том же повторе seed 21 lifecycle-поля получили `child_exited=true`,
+`host_exited=true`, `handles_closed=true` (`child_pid=11820`, `host_pid=2888`,
+`exit_code=0`). Это закрывает только штатный cleanup одной сессии; отмена,
+таймаут, broken pipe, обратные порядки закрытия и отсутствие утечек во всех
+300 сессиях ещё не проверены.
 
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
 разбор, который режет поток только по host-emitted `CRLF`; resize-frame
