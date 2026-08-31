@@ -17,5 +17,5 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeProbe(hostPath, reportPath+".dynamic", true); err != nil {
 		return fmt.Errorf("dynamic pinned-host stage: %w", err)
 	}
-	return nil
+	return fmt.Errorf("native gate incomplete: native transport artifacts passed, but logical history, reflow, extreme-condition, command, and 300-session assertions are not implemented")
 }
