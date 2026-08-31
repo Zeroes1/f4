@@ -22,6 +22,7 @@ func main() {
 		commandCompareWidth = flag.Int("command-compare-width", 80, "pinned-host capture width for -command-compare")
 		clearProbe          = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
+		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
 		reflowProbe         = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
 		probeHost           = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath          = flag.String("report", "", "report path")
@@ -134,6 +135,12 @@ func main() {
 	}
 	if *scrollProbe {
 		if err := runNativeScrollProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emptyProbe {
+		if err := runNativeEmptyProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

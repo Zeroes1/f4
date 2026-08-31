@@ -722,3 +722,17 @@ native clear probe complete: artifacts/pinned-conpty-clear.json esc3j=1 begin=0 
 Хост выдал ровно один `ESC[3J`; маркер до `Clear-Host` отсутствует в
 накопленной истории, маркер после него присутствует один раз. Процесс ребёнка,
 host и native handles закрылись, raw-файл проверен побайтово и по SHA.
+
+### Пустой ребёнок и quick-return (10.8)
+
+Запуск ребёнка без вывода показал 56 сырых байт стартовой внеполосной
+инициализации (`ESC[?9001h`, очистка, SGR/home, title и hide-cursor), но ни
+одной отрисованной логической строки:
+
+```text
+go run . -empty-probe -report artifacts/pinned-conpty-empty.json
+native empty probe complete: artifacts/pinned-conpty-empty.json raw_bytes=56 rendered_lines=0 child=true host=true handles=true
+```
+
+Критерий 10.8 проверяет именно `rendered_lines=0`, а не отсутствие startup
+controls. Raw-файл и SHA сохранены; процессы и handles закрыты.

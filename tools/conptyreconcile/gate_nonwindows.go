@@ -54,6 +54,12 @@ func runNativeScrollProbe(hostPath, reportPath string) error {
 	return fmt.Errorf("native scroll probe requires Windows")
 }
 
+func runNativeEmptyProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native empty probe requires Windows")
+}
+
 func runNativeReflowProbe(hostPath, reportPath string) error {
 	_ = hostPath
 	_ = reportPath
