@@ -31,10 +31,10 @@ func (c *capture) append(kind streamKind, data []byte, cause string) {
 }
 
 type hostCaptureRecorder struct {
-	mu      sync.Mutex
-	capture capture
-	width   int
-	height  int
+	mu          sync.Mutex
+	capture     capture
+	width       int
+	height      int
 	outputBytes int
 }
 

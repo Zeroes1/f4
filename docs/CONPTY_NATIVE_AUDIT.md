@@ -153,6 +153,28 @@ go run . -probe-static -report ../../artifacts/pinned-conpty-probe-static-curren
 Это повторно закрывает только целостность транспортного артефакта D4 для
 этой сессии; проверки A--C и путь f4 этим прогоном не закрыты.
 
+### Строгая A-проверка static-потока
+
+В static-прогоне с новым assertion layer (`-probe-static`, отчёт
+`pinned-conpty-probe-static-assertions.json`) только `exact-n-minus-1`,
+`spaces` и оба маркера получили `passed`. `ascii`, `exact-n`, `exact-n-plus-1`,
+`exact-2n-plus-1`, `width-edge`, `repeat-char`, `alternating`, `empty`,
+`unicode`, `tabs`, все три `repeat: SAME` и `long` получили `failed` с
+`observed_count=2` (для повторов ожидается 3, наблюдается 6); строки с SGR,
+erase, cursor и alternate screen получили явный `deferred`. Raw static был
+`2891` байт.
+
+Это не ошибка счётчика. В сыром потоке после `alternate-begin` host повторно
+выдаёт primary-содержимое, но управляющая последовательность `?1049l` наружу
+не попадает; после repaint те же plain-строки встречаются второй раз, а
+`long:` представлен физическими фрагментами. Источник по пиновке описывает
+рендеринг dirty-area (`Renderer::PaintFrame`, `renderer.cpp:107-157,668-745`),
+но не предоставляет в ConPTY pipe границу окончания такого кадра. Поэтому
+дедупликация по содержимому, склейка по ширине или удаление повторной строки
+были бы запрещёнными эвристиками. A1/A2/A3 остаются открыты до появления
+законного события, отделяющего repaint от нового вывода; assertion layer
+намеренно не объявляет этот поток зелёным.
+
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
 разбор, который режет поток только по host-emitted `CRLF`; resize-frame
 отмечается собственным output-offset при вызове `ResizePseudoConsole`.
