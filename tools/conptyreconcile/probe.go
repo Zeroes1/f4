@@ -14,6 +14,10 @@ const (
 	alternateEndMarker   = "__PINNED_CONPTY_PROBE_ALT_END__"
 	scrollBeginMarker    = "__PINNED_CONPTY_PROBE_SCROLL_BEGIN__"
 	scrollEndMarker      = "__PINNED_CONPTY_PROBE_SCROLL_END__"
+	edgeBeginMarker      = "__PINNED_CONPTY_PROBE_EDGE_BEGIN__"
+	edgeEndMarker        = "__PINNED_CONPTY_PROBE_EDGE_END__"
+	quirkBeginMarker     = "__PINNED_CONPTY_PROBE_QUIRK_BEGIN__"
+	quirkEndMarker       = "__PINNED_CONPTY_PROBE_QUIRK_END__"
 )
 
 // probeWorkload exercises host operations any terminal must handle. Logical
@@ -156,6 +160,54 @@ func emitScrollWorkload() error {
 func emitSemanticWorkload(kind string) error {
 	_, err := os.Stdout.Write([]byte(semanticProbeWorkload(kind, "__PINNED_CONPTY_PROBE_SEMANTIC_BEGIN__", "__PINNED_CONPTY_PROBE_SEMANTIC_END__")))
 	return err
+}
+
+func edgeProbeWorkload() []byte {
+	var b strings.Builder
+	b.WriteString("\x1b[?25l")
+	b.WriteString(edgeBeginMarker)
+	b.WriteString("\r\n")
+	b.WriteString("spaces-eight-top:        \r\n")
+	b.WriteString("spaces-nine-top:         \r\n")
+	for i := 0; i < 22; i++ {
+		b.WriteString("edge-filler-")
+		b.WriteString(string(rune('A' + i)))
+		b.WriteString("\r\n")
+	}
+	b.WriteString("spaces-eight-bottom:        \r\n")
+	b.WriteString("spaces-nine-bottom:         \r\n")
+	b.WriteString("blink: ")
+	b.WriteString("\x1b[?12h")
+	b.WriteString("visible")
+	b.WriteString("\x1b[?12l\r\n")
+	b.WriteString("\x1b[?7l")
+	b.WriteString("nowrap: ")
+	b.WriteString(strings.Repeat("W", 257))
+	b.WriteString("\r\n\x1b[?7h")
+	b.WriteString(edgeEndMarker)
+	b.WriteString("\r\n\x1b[?25h")
+	return []byte(b.String())
+}
+
+func emitEdgeWorkload() error {
+	_, err := os.Stdout.Write(edgeProbeWorkload())
+	return err
+}
+
+func quirkProbeWorkload() []byte {
+	var b strings.Builder
+	b.WriteString(quirkBeginMarker)
+	b.WriteString("\r\n")
+	for i := 0; i < 120; i++ {
+		b.WriteString("quirk-line-")
+		b.WriteString(string(rune('A' + i%26)))
+		b.WriteString(" ")
+		b.WriteString(strings.Repeat("Q", 96))
+		b.WriteString("\r\n")
+	}
+	b.WriteString(quirkEndMarker)
+	b.WriteString("\r\n")
+	return []byte(b.String())
 }
 
 // alternateProbeWorkload is a separate phase because leaving the alternate

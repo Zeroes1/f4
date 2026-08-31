@@ -37,6 +37,12 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeLifecycleProbe(hostPath, reportPath+".lifecycle"); err != nil {
 		return fmt.Errorf("lifecycle stage: %w", err)
 	}
+	if err := runNativeEdgeProbe(hostPath, reportPath+".edge"); err != nil {
+		return fmt.Errorf("edge payload stage: %w", err)
+	}
+	if err := runNativeQuirkProbe(hostPath, reportPath+".quirk"); err != nil {
+		return fmt.Errorf("resizeQuirk stage: %w", err)
+	}
 	for _, kind := range []string{"tabs", "link", "progress", "unicode"} {
 		if err := runNativeSemanticProbe(hostPath, reportPath+"."+kind, kind); err != nil {
 			return fmt.Errorf("%s semantic stage: %w", kind, err)
@@ -45,5 +51,5 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeSeedGate(hostPath, reportPath+".seeds"); err != nil {
 		return fmt.Errorf("300-seed native stage: %w", err)
 	}
-	return fmt.Errorf("native gate incomplete: tail-after-EOF and remaining source-only status probes are still open")
+	return nil
 }

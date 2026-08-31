@@ -84,3 +84,15 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 	_ = reportPath
 	return fmt.Errorf("native lifecycle probe requires Windows")
 }
+
+func runNativeEdgeProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native edge probe requires Windows")
+}
+
+func runNativeQuirkProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native resizeQuirk probe requires Windows")
+}

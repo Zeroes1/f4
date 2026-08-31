@@ -238,6 +238,14 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 }
 
 func runNativeProbeSessionWithWorkload(hostPath, executable string, width, height int, resizeDuringOutput bool, workload []byte, childCommand string, markers []string) (session nativeProbeSession, runErr error) {
+	return runNativeProbeSessionWithWorkloadQuirk(hostPath, executable, width, height, resizeDuringOutput, workload, childCommand, markers, true)
+}
+
+func runNativeProbeSessionWithWorkloadQuirk(hostPath, executable string, width, height int, resizeDuringOutput bool, workload []byte, childCommand string, markers []string, resizeQuirk bool) (session nativeProbeSession, runErr error) {
+	return runNativeProbeSessionWithWorkloadQuirkDelay(hostPath, executable, width, height, resizeDuringOutput, workload, childCommand, markers, resizeQuirk, 0)
+}
+
+func runNativeProbeSessionWithWorkloadQuirkDelay(hostPath, executable string, width, height int, resizeDuringOutput bool, workload []byte, childCommand string, markers []string, resizeQuirk bool, firstResizeDelay time.Duration) (session nativeProbeSession, runErr error) {
 	// resizeDuringOutput is retained for the inactive host-resize alternative
 	// documented by B1-0. The gate and all acceptance paths pass false; only
 	// the explicit diagnostic -probe command may exercise the old behavior.
@@ -245,7 +253,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	session.ExpectedInput = append([]byte(nil), workload...)
 	session.Command = childCommand
 	session.StartedAt = time.Now().UTC()
-	pty, err := createPinnedPseudoConsole(hostPath, width, height)
+	pty, err := createPinnedPseudoConsoleWithQuirk(hostPath, width, height, resizeQuirk)
 	if err != nil {
 		session.Error = err.Error()
 		return session, err
@@ -287,7 +295,11 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		// The child deliberately writes in short chunks.  These bounded pauses
 		// make at least one resize overlap active output without making timing a
 		// completion heuristic.
-		time.Sleep(time.Duration(2+index*3) * time.Millisecond)
+		delay := time.Duration(2+index*3) * time.Millisecond
+		if index == 0 && firstResizeDelay > 0 {
+			delay = firstResizeDelay
+		}
+		time.Sleep(delay)
 		resize := probeResize{At: time.Now().UTC(), Width: dimensions[0], Height: dimensions[1]}
 		// Record the beginning at the instant the resize request is issued.  The
 		// pinned host does not serialize a frame-end marker into the output pipe;

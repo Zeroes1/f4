@@ -257,6 +257,10 @@ func waitPinnedClient(pty *pinnedConPTY) error {
 }
 
 func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPTY, error) {
+	return createPinnedPseudoConsoleWithQuirk(hostPath, width, height, true)
+}
+
+func createPinnedPseudoConsoleWithQuirk(hostPath string, width, height int, resizeQuirk bool) (*pinnedConPTY, error) {
 	// _CreatePseudoConsole rejects a null PseudoConsole and zero dimensions
 	// before opening any ConDrv or pipe handles.
 	if width == 0 || height == 0 {
@@ -317,7 +321,10 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 		}
 	}
 
-	flags := uint32(pseudoconsoleResizeQuirk | pseudoconsoleWin32InputMode)
+	flags := uint32(pseudoconsoleWin32InputMode)
+	if resizeQuirk {
+		flags |= pseudoconsoleResizeQuirk
+	}
 	cmd := fmt.Sprintf(`"%s" --headless %s%s--width %d --height %d --signal 0x%x --server 0x%x`, hostPath,
 		func() string {
 			if flags&pseudoconsoleWin32InputMode != 0 {

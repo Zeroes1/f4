@@ -22,6 +22,7 @@ type lifecycleCaseReport struct {
 	HandlesClosed  bool   `json:"handles_closed"`
 	PromptObserved bool   `json:"prompt_observed,omitempty"`
 	OutputBytes    int    `json:"output_bytes,omitempty"`
+	TailClean      bool   `json:"tail_clean,omitempty"`
 }
 
 type lifecycleProbeReport struct {
@@ -66,6 +67,11 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 		return promptErr
 	}
 	report.Cases = append(report.Cases, promptCase)
+	tailCase, tailErr := runEOFWithTailCase(resolved, executable)
+	if tailErr != nil {
+		return tailErr
+	}
+	report.Cases = append(report.Cases, tailCase)
 	for _, item := range cases {
 		caseReport, caseErr := runManualLifecycleCase(resolved, executable, item.name, item.command, item.order, item.wait, item.breakOutput)
 		if caseErr != nil {
@@ -84,6 +90,12 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 			}
 			continue
 		}
+		if item.Name == "eof-tail" {
+			if item.ObservedWait != "exit" || !item.TailClean || !item.ChildExited || !item.HostExited || !item.HandlesClosed {
+				return fmt.Errorf("lifecycle EOF-tail case failed: %+v", item)
+			}
+			continue
+		}
 		if item.ExpectedWait == "exit" && (item.ObservedWait != "exit" || !item.ChildExited || !item.HostExited || !item.HandlesClosed) {
 			return fmt.Errorf("lifecycle EOF case failed: %+v", item)
 		}
@@ -93,6 +105,28 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 	}
 	fmt.Printf("native lifecycle probe complete: %s cases=%d\n", reportPath, len(report.Cases))
 	return nil
+}
+
+func runEOFWithTailCase(hostPath, executable string) (lifecycleCaseReport, error) {
+	result := lifecycleCaseReport{Name: "eof-tail", CloseOrder: "host-first", ExpectedWait: "exit"}
+	begin, end := "__PINNED_CONPTY_PROBE_EOF_BEGIN__", "__PINNED_CONPTY_PROBE_EOF_END__"
+	command := fmt.Sprintf(`cmd.exe /d /q /c "echo %s & echo %s & exit /b 0"`, begin, end)
+	workload := []byte(begin + "\r\n" + end + "\r\n")
+	session, err := runNativeProbeSessionWithWorkload(hostPath, executable, 512, 25, false, workload, command, []string{begin, end})
+	if err != nil {
+		return result, err
+	}
+	result.ObservedWait = "exit"
+	result.ChildExited = session.ChildExited
+	result.HostExited = session.HostExited
+	result.HandlesClosed = session.HandlesClosed
+	result.OutputBytes = len(session.RawOutput)
+	position := bytes.LastIndex(session.RawOutput, []byte(end))
+	if position >= 0 {
+		tail := bytes.TrimSpace(printableStream(session.RawOutput[position+len(end):]))
+		result.TailClean = len(tail) == 0
+	}
+	return result, nil
 }
 
 // runInteractivePromptCase proves that a real interactive child reaches its

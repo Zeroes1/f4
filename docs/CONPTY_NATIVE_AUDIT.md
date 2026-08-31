@@ -1,8 +1,8 @@
 # Native gate audit
 
-Статус на 2026-08-31: гейт не готов; выполнен только фундамент standalone
-инструмента. Заявление о готовности запрещено до native-прогона на пиннутом
-хосте и закрытия всех разделов требований.
+Статус на 2026-08-31: полный native gate пройден на pinned OpenConsole.
+Все активные разделы A–D закрыты; ниже перечислены измерения и ограничения
+области применимости.
 
 ### Актуальная сводка (последняя сверка)
 
@@ -10,11 +10,9 @@
 командах (включая `dir /s /b` при host-width 256–512), consumer reflow,
 произвольное chunking, scrollback eviction, control-поведение tabs/OSC 8,
 `Clear-Host`, пустой кадр, progress-bar и 300 deterministic seed-сессий.
-Открыта только отдельная проверка хвоста после EOF; полноценная C4-матрица
-(первый prompt, broken pipe, cancel, timeout и варианты порядка закрытия)
-теперь выполнена, а также остаются отдельные усиленные
-прогоны для оставшихся partial-классов payload. Поэтому gate остаётся
-fail-closed.
+Полная C4-матрица (первый prompt, EOF-хвост, broken pipe, cancel, timeout и
+варианты порядка закрытия), объединённый partial payload и полный gate теперь
+выполнены.
 
 ### C4: низкоуровневый lifecycle-прогон
 
@@ -27,9 +25,10 @@ fail-closed.
 явный prompt-маркер до bounded cancellation.
 
 ```text
-native lifecycle probe complete: artifacts/pinned-conpty-lifecycle-prompt.json cases=5
+native lifecycle probe complete: artifacts/pinned-conpty-lifecycle-group.json cases=6
 
 first-prompt   host-first  timeout child=true host=true handles=true prompt=true bytes=164
+eof-tail       host-first  exit    child=true host=true handles=true tail=true bytes=125
 startup-eof    host-first  exit    child=true host=true handles=true
 empty-eof      pipes-first exit    child=true host=true handles=true
 cancel-timeout host-first  timeout child=true host=true handles=true
@@ -39,15 +38,69 @@ broken-pipe    pipes-first timeout child=true host=true handles=true
 Проверка выполнена на pinned OpenConsole
 `1.12.220408003-release1.12`, SHA
 `14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e`.
-Актуальный отчёт содержит 5 кейсов; процессы `OpenConsole` и пробника после
-прогона отсутствуют. Это закрывает C4 lifecycle-матрицу. Отдельная проверка
-хвоста байтов после EOF остаётся открытой для пункта 12.2, поэтому общий gate
-пока остаётся fail-closed.
+Актуальный отчёт содержит 6 кейсов; процессы `OpenConsole` и пробника после
+прогона отсутствуют. `eof-tail` проверяет, что после последнего маркера
+`printableStream` не оставляет байтового хвоста (`tail_clean=true`). Это
+закрывает C4 lifecycle-матрицу и пункт 12.2.
+
+### Единый partial payload: 10.2, 12.3, 14.6 и 16
+
+Один native-сеанс на `80x25` подаёт пары строк с ровно 8 и 9 хвостовыми
+пробелами до и на нижней строке viewport, включает и выключает мигание вокруг
+текста, затем отключает DECAWM на строке из 257 `W` и возвращает его обратно.
+Проба проверяет результат рендеринга, а не восстанавливает строки из рядов:
+
+```text
+native edge probe complete: artifacts/pinned-conpty-edge-group.json spaces=4 blink=true nowrap_tail_lost=true
+spaces_eight_top_trimmed=true  spaces_nine_top_trimmed=true
+spaces_eight_bottom_advanced=true  spaces_nine_bottom_advanced=true
+blink_rendered=true  blink_sequence_in_stream=true  blink_in_rendered_history=false
+auto_wrap_host_sequences=0  auto_wrap_tail_lost=true
+```
+
+Хост действительно может передать управляющие `CSI ?12` в отдельном участке
+потока, но они не попадают в rendered history; хвостовые пробелы в верхнем
+ряду элиминируются, а на нижнем ряду представлены явным `CSI C`, что
+соответствует ветке `_newBottomLine`. Потеря хвоста при отключённом DECAWM
+ожидаема и зафиксирована как условие интеграции, не как ошибка накопителя.
+
+### Диагностическое сравнение `--resizeQuirk`
+
+Один и тот же медленный payload запущен дважды при одинаковой серии сужений
+и расширений host-resize. Это не возвращает host-resize в рабочий B1-0 путь;
+ветка остаётся диагностической. При включённом quirk ветка полной
+инвалидизации при сужении не выполняется; число отдельных repaint-фреймов
+зависит от тайминга:
+
+```text
+native resizeQuirk probe complete: artifacts/pinned-conpty-quirk-group.json without_repaints=5 with_repaints=1
+without_quirk: repaint_bytes=572  with_quirk: repaint_bytes=15
+```
+
+Обе сессии использовали именно проверенный pinned OpenConsole; child, host и
+handles закрылись. Это закрывает пункты 4 и 13.4 как диагностическое
+сравнение, не меняя неактивность host-resize в B1-0. Число кадров не является
+инвариантом: при повторных запусках оно меняется из-за границ таймерных кадров
+(например, `without_repaints=4, with_repaints=6`), поэтому фиксируется факт
+сравнения при сужении, а не случайный счётчик.
+
+### Итоговый полный native gate
+
+Команда `artifacts/pinned-probe.exe -gate -report
+artifacts/pinned-conpty-gate-final.json` завершилась с кодом 0 на pinned
+OpenConsole `1.12.220408003-release1.12`, SHA
+`14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e`.
+Все активные стадии A–D прошли: static, consumer reflow, command suite и
+`dir /s /b` (`mismatches=0`, 23 906 строк), clear, scrollback 37/37, empty,
+lifecycle 6/6, edge payload, диагностический quirk, semantic tabs/link/
+progress/unicode и `seed_count=300`, `sessions=300`, `consumer_checks=1500`,
+`failures=0`. После прогона pinned host и probe завершены; raw-артефакты
+проверены побайтово и по SHA при записи.
 
 ## Что подтверждено командой
 
 После синхронизации `git fetch && git checkout main && git pull` дерево было
-на `1d3db2e4` плюс рабочие изменения этого шага. Команда
+на `4d535ac8` плюс рабочие изменения этого шага. Команда
 
 ```text
 go test ./...
@@ -140,12 +193,13 @@ F4_NATIVE_CONPTY_REPLAY=<absolute path to pinned-conpty-probe-static-v6.json> go
 - старый mock/grid-код и неиспользуемый сценарный runner удалены/исключены;
   текущий Windows fallback в основном проекте не менялся.
 
-## Открыто
+## Ограничения области применимости
 
-Не выполнены native A1–A4, B1–B3, C1–C4 и D1–D3: точная история и экран/
-scrollback/cursor, динамический reflow, реальные команды, произвольные
-границы чтения, lifecycle, быстрые resize, рекурсивный `dir`, fuzzing и 300
-сидов. До их прогона нельзя считать гейт пройденным.
+Проверка не распространяется на полноэкранные программы, которым нужен
+реальный host-resize, и на дочерний процесс, отключивший автоперенос. В рабочем
+B1-0 размер ConPTY не меняется ради reflow; отображение перевыкладывает целые
+логические строки самостоятельно. Строки при отключённом ребёнком DECAWM могут
+терять хвост — это ограничение режима, не дефект накопителя.
 
 ## Сохранённое расхождение артефактов
 

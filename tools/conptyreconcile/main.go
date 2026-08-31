@@ -30,6 +30,8 @@ func main() {
 		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
 		reflowProbe         = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
 		lifecycleProbe      = flag.Bool("lifecycle-probe", false, "verify pinned-host lifecycle and close-order cleanup")
+		edgeProbe           = flag.Bool("edge-probe", false, "verify trailing spaces, cursor blink, and child auto-wrap semantics")
+		quirkProbe          = flag.Bool("quirk-probe", false, "compare pinned-host resize behavior with and without resizeQuirk")
 		probeHost           = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath          = flag.String("report", "", "report path")
 		emitProbe           = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
@@ -40,6 +42,8 @@ func main() {
 		emitControl         = flag.Bool("emit-control", false, "internal child control-sequence workload")
 		emitSemantic        = flag.Bool("emit-semantic", false, "internal child isolated semantic workload")
 		emitSemanticKind    = flag.String("emit-semantic-kind", "tabs", "internal semantic workload kind")
+		emitEdge            = flag.Bool("emit-edge", false, "internal child trailing-space and control workload")
+		emitQuirk           = flag.Bool("emit-quirk", false, "internal child resizeQuirk workload")
 		emitReflow          = flag.Bool("emit-reflow", false, "internal child static reflow workload")
 		emitScroll          = flag.Bool("emit-scroll", false, "internal child static scrollback workload")
 	)
@@ -89,6 +93,18 @@ func main() {
 	}
 	if *emitSemantic {
 		if err := emitSemanticWorkload(*emitSemanticKind); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emitEdge {
+		if err := emitEdgeWorkload(); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emitQuirk {
+		if err := emitQuirkWorkload(); err != nil {
 			fail(err)
 		}
 		return
@@ -189,6 +205,18 @@ func main() {
 	}
 	if *lifecycleProbe {
 		if err := runNativeLifecycleProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *edgeProbe {
+		if err := runNativeEdgeProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *quirkProbe {
+		if err := runNativeQuirkProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

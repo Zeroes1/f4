@@ -64,6 +64,30 @@ func emitPartialWorkload(width int) error {
 	return nil
 }
 
+func emitQuirkWorkload() error {
+	input := quirkProbeWorkload()
+	cut := 4096
+	if cut > len(input) {
+		cut = len(input)
+	}
+	if _, err := os.Stdout.Write(input[:cut]); err != nil {
+		return fmt.Errorf("emit quirk probe prefix: %w", err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	for offset := cut; offset < len(input); {
+		end := offset + 1 + (offset*7)%29
+		if end > len(input) {
+			end = len(input)
+		}
+		if _, err := os.Stdout.Write(input[offset:end]); err != nil {
+			return fmt.Errorf("emit quirk probe: %w", err)
+		}
+		offset = end
+		time.Sleep(500 * time.Microsecond)
+	}
+	return nil
+}
+
 func emitAlternateWorkload(width int) error {
 	input := []byte(alternateProbeWorkload(width))
 	if _, err := os.Stdout.Write(input); err != nil {
