@@ -56,8 +56,6 @@ type TerminalView struct {
 	GridHistory     [][]vtui.CharInfo
 	GridHistoryWrap []bool
 
-	// reflow accumulates per-pass losses; see reflowStats.
-	reflow   reflowStats
 	styles   []StyleChange
 	lastAttr uint64
 
@@ -1359,14 +1357,6 @@ func (tv *TerminalView) URLAt(x, y int) (string, bool) {
 	return link.URL, true
 }
 
-// terminalReflowEnabled gates re-wrapping the live grid on a width change.
-//
-// On Windows the reflow implementation is enabled only for the same explicit
-// native-gate run that owns a pinned OpenConsole session. This keeps the
-// rollout safe for ordinary users; the guard is removed once the native gate
-// proves long-line preservation after reflow in the same commit.
-var terminalReflowEnabled = terminalReflowDefaultEnabled()
-
 // GridHistory is the editable tail of the log: oracle corrections can still
 // update its row boundaries. Older rows are extruded into the PieceTable,
 // where a soft wrap is already encoded by the absence of a newline. Keeping a
@@ -1391,27 +1381,6 @@ const (
 	maxGridHistoryLines    = 2000
 	maxGridHistoryRowsHard = 20000
 )
-
-// Reflow accounting. Every place a row can stop existing increments one of
-// these, and reflowLocked prints all of them together at the end of a pass.
-//
-// They exist because this bug was chased across four field runs by adding one
-// log line at a time, and each round trip answered one question and raised the
-// next. A row can vanish in five distinct places -- truncated while being
-// collected, trimmed while being measured, pushed out of the viewport, dropped
-// past the history cap, or extruded from the cap into the PieceTable, which the
-// grid cannot read back -- and no single number distinguishes them. Counting
-// all five at once means one log answers the whole question.
-type reflowStats struct {
-	viewportRowsIn  int // rows collected from the viewport
-	historyRowsIn   int // rows collected from GridHistory
-	viewportSkipped int // viewport rows below lastRow, not collected at all
-	cellsTrimmed    int // cells dropped by significantWidthLocked
-	rowsOut         int // rows produced by the re-wrap
-	pushedToHistory int // rows that did not fit the viewport
-	droppedPastCap  int // rows extruded past the history bound: unrecoverable
-	blanksTrimmed   int // blank cells cut from wrapped rows: A5 says these are content
-}
 
 // OnAltScreen reports whether the alternate screen is active, under the
 // view's mutex: the read loop asks, and the parser on the UI goroutine
@@ -1450,10 +1419,12 @@ func (tv *TerminalView) Resize(w, h int) {
 	// not: the rows keep their contents, and the existing path below moves
 	// them between the viewport and GridHistory, which is what keeps the
 	// terminal's vertical "accordion" behaviour lossless.
-	if terminalReflowEnabled && !tv.UseAltScreen && w != tv.Width && w > 0 && h > 0 {
-		tv.reflowLocked(w, h)
-		return
-	}
+	// Горизонтальный reflow здесь НЕ делается. См. запрет в
+	// docs/CONPTY_GATE_REQUIREMENTS.md: восстанавливать логические строки из
+	// рядов сетки запрещено, потому что ряды не несут границ, и любая такая
+	// реализация вынуждена их угадывать. Длинные строки берутся целыми у
+	// пиннутого OpenConsole, а не собираются обратно здесь.
+
 	// The branch that does *not* re-wrap: the re-wrap is off, or only the
 	// height changed. It moves rows between the viewport and history by
 	// hand, so it reports when it actually moves any.
@@ -1601,38 +1572,6 @@ func (tv *TerminalView) Resize(w, h int) {
 	tv.lastCharWasCR = (tv.CursorX == 0)
 }
 
-// logicalLine is a run of cells that the shell wrote as one line, with the
-// soft wraps that split it across rows already removed.
-type logicalLine struct {
-	cells  []vtui.CharInfo
-	cursor int // offset of the cursor within this line, or -1
-}
-
-// significantWidthLocked returns how much of row carries information.
-//
-// A row that soft-wraps into the next one carries all of it: text reached the
-// right edge, so every cell up to that edge was written, trailing spaces
-// included. Those spaces are the column alignment of things like `ls -la`, and
-// trimming them glues the columns of the next row onto the previous one.
-//
-// A row that ended by itself is trimmed of its trailing default-attribute
-// blanks. A blank that changes the background still counts as significant, or
-// shrinking the window would eat coloured fills.
-func significantWidthLocked(row []vtui.CharInfo, wrapped bool) int {
-	if wrapped {
-		return len(row)
-	}
-	w := len(row)
-	for w > 0 {
-		c := row[w-1]
-		if c.Char != ' ' || c.Attributes != DefaultTermAttr {
-			break
-		}
-		w--
-	}
-	return w
-}
-
 // unwrapLocked flattens the primary screen into logical lines, joining rows
 // that a soft wrap split. It reaches back into GridHistory for the rows that
 // wrap into the top of the viewport, so that a line broken across the boundary
@@ -1660,7 +1599,6 @@ func (tv *TerminalView) trimGridHistoryLocked() {
 				vtui.DebugLog("REFLOW_DROP: history is over its %d-line bound; extruding %q to the PieceTable",
 					maxGridHistoryLines, clipRowText(tv.GridHistory[0]))
 			}
-			tv.reflow.droppedPastCap++
 			tv.extrudeGridHistoryRow(0)
 			tv.GridHistory = tv.GridHistory[1:]
 			tv.GridHistoryWrap = tv.GridHistoryWrap[1:]
@@ -1742,28 +1680,6 @@ func nonBlankCells(row []vtui.CharInfo) int {
 	return n
 }
 
-// blanksTrimmed reports how many *blank* cells sit past the significant width
-// -- the ones significantWidthLocked throws away.
-//
-// significantTrim, next to it, counts only non-blank cells there, so on the
-// loss it was written to detect it always answered zero: the trim cuts to the
-// last non-blank cell, and everything past it is by definition blank. Trailing
-// spaces on a soft-wrapped row are content, not padding (ledger A5) -- the
-// column alignment of `ls -la` is made of them -- so this is a real loss that
-// reported as none.
-func blanksTrimmed(row []vtui.CharInfo, width int, wrapped bool) int {
-	if !wrapped {
-		return 0
-	}
-	n := 0
-	for x := width; x < len(row); x++ {
-		if row[x].Char == ' ' || row[x].Char == 0 {
-			n++
-		}
-	}
-	return n
-}
-
 // significantTrim reports how many cells past the significant width still held
 // something other than a blank -- the cells a re-wrap throws away.
 func significantTrim(row []vtui.CharInfo, width int) int {
@@ -1786,249 +1702,6 @@ func (tv *TerminalView) rowsWithTextLocked() int {
 		}
 	}
 	return n
-}
-
-func (tv *TerminalView) unwrapLocked(h int) []logicalLine {
-	// Rows of the viewport worth carrying: everything up to the last row with
-	// text, and never less than the cursor row.
-	lastRow := 0
-	for y := tv.Height - 1; y >= 0; y-- {
-		if tv.rowHasText(y) {
-			lastRow = y
-			break
-		}
-	}
-	if tv.CursorY > lastRow {
-		lastRow = tv.CursorY
-	}
-	// Rows below lastRow are not collected. If any of them held text this is
-	// a loss, and the count says so rather than leaving it to be inferred.
-	for y := lastRow + 1; y < tv.Height; y++ {
-		if tv.rowHasText(y) {
-			tv.reflow.viewportSkipped++
-		}
-	}
-
-	type sourceRow struct {
-		cells   []vtui.CharInfo
-		wrapped bool
-		cursorX int // -1 when the cursor is not on this row
-	}
-	var rows []sourceRow
-	for y := 0; y <= lastRow && y < tv.Height; y++ {
-		wrapped := y < len(tv.WrapFlags) && tv.WrapFlags[y]
-		width := significantWidthLocked(tv.Lines[y], wrapped)
-		cursorX := -1
-		if y == tv.CursorY {
-			cursorX = tv.CursorX
-			// The cursor may sit past the text, on the blanks a prompt left
-			// behind. Keep enough of them for its offset to exist.
-			if cursorX > width {
-				width = cursorX
-			}
-		}
-		if width > len(tv.Lines[y]) {
-			width = len(tv.Lines[y])
-		}
-		cells := make([]vtui.CharInfo, width)
-		copy(cells, tv.Lines[y][:width])
-		tv.reflow.cellsTrimmed += significantTrim(tv.Lines[y], width)
-		tv.reflow.blanksTrimmed += blanksTrimmed(tv.Lines[y], width, wrapped)
-		tv.reflow.viewportRowsIn++
-		rows = append(rows, sourceRow{cells: cells, wrapped: wrapped, cursorX: cursorX})
-	}
-
-	// Pull the complete editable history tail back into the relayout. This is
-	// bounded by maxGridHistoryLines. Rows older than it are already logical
-	// text in the PieceTable and its WrapEngine receives the new width above.
-	// Reflowing only the viewport seam used to strand old rows at their former
-	// width; worse, a line crossing that cutoff could not be joined as a whole.
-	for len(tv.GridHistory) > 0 {
-		last := len(tv.GridHistory) - 1
-		wrapped := tv.GridHistoryWrap[last]
-		row := tv.GridHistory[last]
-		width := significantWidthLocked(row, wrapped)
-		cells := make([]vtui.CharInfo, width)
-		copy(cells, row[:width])
-		tv.reflow.cellsTrimmed += significantTrim(row, width)
-		tv.reflow.blanksTrimmed += blanksTrimmed(row, width, wrapped)
-		tv.reflow.historyRowsIn++
-		rows = append([]sourceRow{{cells: cells, wrapped: wrapped, cursorX: -1}}, rows...)
-		tv.GridHistory = tv.GridHistory[:last]
-		tv.GridHistoryWrap = tv.GridHistoryWrap[:last]
-	}
-
-	var lines []logicalLine
-	current := logicalLine{cursor: -1}
-	started := false
-	for _, row := range rows {
-		if row.cursorX >= 0 {
-			current.cursor = len(current.cells) + row.cursorX
-		}
-		current.cells = append(current.cells, row.cells...)
-		started = true
-		if !row.wrapped {
-			lines = append(lines, current)
-			current = logicalLine{cursor: -1}
-			started = false
-		}
-	}
-	if started {
-		lines = append(lines, current)
-	}
-	return lines
-}
-
-// reflowLocked re-wraps the primary screen to width w and height h.
-func (tv *TerminalView) reflowLocked(w, h int) {
-	// The one step with no log of its own, and the field runs kept arriving
-	// at it: the history is intact, the repaint no longer overwrites, and the
-	// rows still do not come back. These four numbers say which half is at
-	// fault -- whether unwrapLocked collected the history at all, and whether
-	// the re-wrap then put the rows on the screen or pushed them back out.
-	fromW, fromH, histBefore := tv.Width, tv.Height, len(tv.GridHistory)
-	charsBefore := tv.historyCellsLocked() + tv.viewportCellsLocked()
-	tv.reflow = reflowStats{}
-	lines := tv.unwrapLocked(h)
-	defer func() {
-		st := tv.reflow
-		charsAfter := tv.historyCellsLocked() + tv.viewportCellsLocked()
-		// Characters first: it is the only figure here that falls solely when
-		// content is destroyed. Rows are bounded by construction and logical
-		// lines fall when two are merged by a stuck wrap flag, with every
-		// character intact.
-		// Characters, not rows or logical lines: the only figure that falls
-		// solely when content is destroyed. Rows are pinned to the history
-		// bound by construction, and a stuck wrap flag merges two logical
-		// lines with every character intact.
-		vtui.DebugLog("REFLOW_WRAP: %dx%d -> %dx%d; chars %+d (%d); history %d -> %d rows; in %d+%d rows, %d lines; out %d rows",
-			fromW, fromH, w, h, charsAfter-charsBefore, charsAfter,
-			histBefore, len(tv.GridHistory),
-			st.viewportRowsIn, st.historyRowsIn, len(lines), st.rowsOut)
-		if lost := st.viewportSkipped + st.cellsTrimmed + st.blanksTrimmed + st.droppedPastCap; lost > 0 {
-			vtui.DebugLog("REFLOW_WRAP: lost %d skipped rows, %d non-blanks, %d blanks, %d past the bound",
-				st.viewportSkipped, st.cellsTrimmed, st.blanksTrimmed, st.droppedPastCap)
-		}
-	}()
-
-	blank := vtui.CharInfo{Char: ' ', Attributes: DefaultTermAttr}
-	padTo := func(row []vtui.CharInfo, n int) []vtui.CharInfo {
-		for len(row) < n {
-			row = append(row, blank)
-		}
-		return row
-	}
-
-	type outRow struct {
-		cells    []vtui.CharInfo
-		wrapped  bool
-		cursorAt int // column of the cursor on this row, or -1
-	}
-	var out []outRow
-	for _, line := range lines {
-		for start := 0; ; {
-			end := start + w
-			if end >= len(line.cells) {
-				end = len(line.cells)
-			} else if line.cells[end].Char == vtui.WideCharFiller {
-				// Never split a wide character from its filler cell.
-				end--
-			}
-			cells := make([]vtui.CharInfo, end-start)
-			copy(cells, line.cells[start:end])
-			row := outRow{cells: padTo(cells, w), wrapped: end < len(line.cells), cursorAt: -1}
-			if line.cursor >= start && (line.cursor < end || (end == len(line.cells) && line.cursor <= end)) {
-				if col := line.cursor - start; col <= w {
-					row.cursorAt = col
-				}
-			}
-			out = append(out, row)
-			start = end
-			if start >= len(line.cells) {
-				break
-			}
-		}
-	}
-
-	// Rows that no longer fit are the oldest ones; they leave through the
-	// same door as any scrolled-off row.
-	tv.reflow.rowsOut = len(out)
-	if len(out) > h {
-		tv.reflow.pushedToHistory = len(out) - h
-		for _, row := range out[:len(out)-h] {
-			tv.pushRowLocked(row.cells, row.wrapped)
-		}
-		out = out[len(out)-h:]
-	}
-
-	newLines := make([][]vtui.CharInfo, h)
-	newWrap := make([]bool, h)
-	cursorX, cursorY := 0, 0
-	cursorFound := false
-	for y := 0; y < h; y++ {
-		if y < len(out) {
-			newLines[y] = out[y].cells
-			newWrap[y] = out[y].wrapped
-			if out[y].cursorAt >= 0 && !cursorFound {
-				cursorX, cursorY = out[y].cursorAt, y
-				cursorFound = true
-			}
-		} else {
-			row := make([]vtui.CharInfo, w)
-			for x := range row {
-				row[x] = blank
-			}
-			newLines[y] = row
-		}
-	}
-	if !cursorFound {
-		// The cursor's row was pushed into history: park it on the first row
-		// that still exists.
-		cursorY = 0
-		if len(out) > 0 {
-			cursorY = len(out) - 1
-		}
-	}
-	if cursorX >= w {
-		cursorX = w - 1
-	}
-	if cursorY >= h {
-		cursorY = h - 1
-	}
-
-	newAlt := make([][]vtui.CharInfo, h)
-	for y := 0; y < h; y++ {
-		row := make([]vtui.CharInfo, w)
-		for x := range row {
-			row[x] = blank
-		}
-		if y < tv.Height && y < len(tv.AltLines) {
-			n := w
-			if tv.Width < n {
-				n = tv.Width
-			}
-			copy(row[:n], tv.AltLines[y][:n])
-		}
-		newAlt[y] = row
-	}
-
-	oldHeight := tv.Height
-	tv.Lines = newLines
-	tv.AltLines = newAlt
-	tv.WrapFlags = newWrap
-	tv.Width, tv.Height = w, h
-	tv.ScrollTop, tv.ScrollBottom = 0, h-1
-	tv.CursorX, tv.CursorY = cursorX, cursorY
-	tv.lastCharWasCR = (cursorX == 0)
-	if !tv.UseAltScreen {
-		// The next host frame may clear and repaint the resized viewport. Its
-		// old rows are already represented by the reflow result, so do not
-		// append that repaint to logical history a second time.
-		tv.suppressEraseHistory = true
-	}
-
-	tv.kittyResizePlacements(h-oldHeight, h)
-	tv.kittyRecomputeSpans()
 }
 
 // pushRowLocked sends an already-built row to GridHistory, extruding the
