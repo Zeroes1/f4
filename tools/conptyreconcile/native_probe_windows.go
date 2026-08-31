@@ -269,7 +269,7 @@ func ensureProbeHost(hostPath string) (string, error) {
 	if base == "" {
 		return "", fmt.Errorf("LOCALAPPDATA is unavailable; cannot choose native host cache")
 	}
-	root := filepath.Join(base, "f4", "native-conpty", "1.12.10983.0")
+	root := filepath.Join(base, "pinned-openconsole", "1.12.10983.0")
 	host := filepath.Join(root, strings.TrimSuffix(probePackageName, ".msix"), "OpenConsole.exe")
 	if _, err := verifyPinnedHost(host); err == nil {
 		return host, nil

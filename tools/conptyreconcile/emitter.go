@@ -12,7 +12,7 @@ import (
 // authored by the probe, while repaint bytes, chunking, cursor movement and
 // resize effects are produced by the pinned OpenConsole process.  Keeping the
 // payload here makes the expected logical markers independent of any parser
-// implementation that will eventually consume the captured stream in f4.
+// implementation that will eventually consume the captured stream.
 func emitProbeWorkload() error {
 	input := []byte(probeWorkload())
 	for offset := 0; offset < len(input); {

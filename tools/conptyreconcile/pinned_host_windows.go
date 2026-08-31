@@ -463,7 +463,7 @@ func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	// three fields of pinnedConPTY are the packed PseudoConsole members.
 	// UpdateProcThreadAttribute receives the HPCON value itself (the packed
 	// PseudoConsole pointer), matching ConptyConnection::_LaunchAttachedClient
-	// and the working public-ConPTY path in cmd/f4/pty_windows.go. Passing the
+	// and the ordinary public-ConPTY path. Passing the
 	// address of a local uintptr would describe a different, invalid handle.
 	if err := attrs.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, unsafe.Pointer(pty), unsafe.Sizeof(uintptr(0))); err != nil {
 		return fmt.Errorf("UpdateProcThreadAttribute(pseudoconsole): %w", err)

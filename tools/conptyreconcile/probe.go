@@ -3,13 +3,13 @@ package main
 import "strings"
 
 const (
-	probeBeginMarker = "__F4_NATIVE_PROBE_BEGIN__"
-	probeEndMarker   = "__F4_NATIVE_PROBE_END__"
+	probeBeginMarker = "__CONPTY_PROBE_BEGIN__"
+	probeEndMarker   = "__CONPTY_PROBE_END__"
 )
 
-// probeWorkload exercises host operations that affect the future f4 adapter,
+// probeWorkload exercises host operations any terminal must handle,
 // without trying to predict the host's repaint strategy.  The logical payload
-// between markers is the contract the eventual f4 integration must recover.
+// between markers is the contract any consumer of this stream must recover.
 func probeWorkload() string {
 	var b strings.Builder
 	b.WriteString("\x1b[2J\x1b[H")
@@ -29,7 +29,7 @@ func probeWorkload() string {
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
-	b.WriteString("\x1b]0;f4-native-openconsole-probe\x07")
+	b.WriteString("\x1b]0;pinned-openconsole-probe\x07")
 	b.WriteString("alternate-begin\r\n")
 	b.WriteString("\x1b[?1049halt-screen\r\n")
 	b.WriteString("alternate-end\x1b[?1049l\r\n")
