@@ -686,8 +686,11 @@
     ├── docs
     │   ├── COLORS.md
     │   ├── CONSOLE_MODES.md
+    │   ├── CONPTY_NATIVE_AGENT.md
+    │   ├── CONPTY_NATIVE_AUDIT.md
     │   ├── CONPTY_NATIVE_PROBE.md
     │   ├── CONPTY_NATIVE_TEST.md
+    │   ├── PINNED_CONSOLE.md
     │   ├── CURSOR.md
     │   ├── DRAGDROP.md
     │   ├── FFI.md
