@@ -335,7 +335,13 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		return session, err
 	}
 	if !resizeDuringOutput {
-		session.Assertions = assertStaticPayload(workload, result.data, markers...)
+		if len(markers) > 0 && markers[0] == alternateBeginMarker {
+			session.Assertions = assertAlternatePayload(result.data, markers...)
+		} else if len(markers) > 0 && markers[0] == controlBeginMarker {
+			session.Assertions = assertControlPayload(result.data, markers...)
+		} else {
+			session.Assertions = assertStaticPayload(workload, result.data, markers...)
+		}
 		session.AssertionFailures = assertionFailures(session.Assertions)
 	}
 	snapshot := recorder.snapshot()
