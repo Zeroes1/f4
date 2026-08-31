@@ -50,21 +50,22 @@ type nativeProbeSession struct {
 }
 
 type nativeProbeReport struct {
-	Mode          string               `json:"mode"`
-	Host          pinnedHostIdentity   `json:"host"`
-	BundleURL     string               `json:"bundle_url"`
-	Package       string               `json:"package"`
-	GOOS          string               `json:"goos"`
-	GOARCH        string               `json:"goarch"`
-	WorkingDir    string               `json:"working_dir"`
-	Executable    string               `json:"probe_executable"`
-	Environment   map[string]string    `json:"environment"`
-	ExpectedInput []byte               `json:"expected_input"`
-	Sessions      []nativeProbeSession `json:"sessions"`
-	CompletedAt   time.Time            `json:"completed_at"`
+	Mode               string               `json:"mode"`
+	Host               pinnedHostIdentity   `json:"host"`
+	BundleURL          string               `json:"bundle_url"`
+	Package            string               `json:"package"`
+	GOOS               string               `json:"goos"`
+	GOARCH             string               `json:"goarch"`
+	WorkingDir         string               `json:"working_dir"`
+	Executable         string               `json:"probe_executable"`
+	Environment        map[string]string    `json:"environment"`
+	ExpectedInput      []byte               `json:"expected_input"`
+	ResizeDuringOutput bool                 `json:"resize_during_output"`
+	Sessions           []nativeProbeSession `json:"sessions"`
+	CompletedAt        time.Time            `json:"completed_at"`
 }
 
-func runNativeProbe(hostPath, reportPath string) error {
+func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error {
 	if reportPath == "" {
 		reportPath = filepath.Join(filepath.Dir(os.Args[0]), "native-openconsole-probe.json")
 	}
@@ -91,9 +92,17 @@ func runNativeProbe(hostPath, reportPath string) error {
 		Mode: "native-openconsole-probe", Host: identity, BundleURL: probeBundleURL,
 		Package: probePackageName, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		WorkingDir: workingDir, Executable: executable, Environment: probeEnvironment(), ExpectedInput: []byte(probeWorkload()),
+		ResizeDuringOutput: resizeDuringOutput,
 	}
-	for _, dimensions := range [][2]int{{80, 25}, {1, 1}, {121, 40}} {
-		session, runErr := runNativeProbeSession(resolved, executable, dimensions[0], dimensions[1])
+	dimensionsList := [][2]int{{80, 25}, {1, 1}, {121, 40}}
+	if !resizeDuringOutput {
+		// The control run isolates the same 80x25 workload used by the normal
+		// probe. Static 1x1 output can legitimately block a terminal child on
+		// this pinned host because there is no resize/reflow escape hatch.
+		dimensionsList = [][2]int{{80, 25}}
+	}
+	for _, dimensions := range dimensionsList {
+		session, runErr := runNativeProbeSession(resolved, executable, dimensions[0], dimensions[1], resizeDuringOutput)
 		report.Sessions = append(report.Sessions, session)
 		artifactDir := reportPath + ".sessions"
 		if err := os.MkdirAll(artifactDir, 0o755); err != nil {
@@ -126,7 +135,7 @@ func probeEnvironment() map[string]string {
 	return result
 }
 
-func runNativeProbeSession(hostPath, executable string, width, height int) (session nativeProbeSession, runErr error) {
+func runNativeProbeSession(hostPath, executable string, width, height int, resizeDuringOutput bool) (session nativeProbeSession, runErr error) {
 	session.InitialWidth, session.InitialHeight = width, height
 	session.Command = fmt.Sprintf("%s -emit-probe", executable)
 	session.StartedAt = time.Now().UTC()
@@ -163,6 +172,9 @@ func runNativeProbeSession(hostPath, executable string, width, height int) (sess
 		return session, err
 	}
 	resizeSchedule := [][2]int{{1, 1}, {width, height}, {121, 40}, {80, 25}}
+	if !resizeDuringOutput {
+		resizeSchedule = nil
+	}
 	for index, dimensions := range resizeSchedule {
 		// The child deliberately writes in short chunks.  These bounded pauses
 		// make at least one resize overlap active output without making timing a
