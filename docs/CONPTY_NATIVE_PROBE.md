@@ -60,5 +60,8 @@ The probe itself only establishes host identity, native plumbing, timing,
 resize interleaving, lifecycle and the bytes that actually came from this
 specific OpenConsole build.
 
+An example sanitized capture is checked in under
+[`artifacts/native-openconsole-probe.json`](../artifacts/native-openconsole-probe.json).
+
 Linux and other non-Windows builds fail explicitly; they cannot close the
 native gate.
