@@ -72,6 +72,8 @@ func probeWorkloadForWidth(width int) string {
 	}
 	b.WriteString("\r\n")
 	b.WriteString("spaces:       \r\n")
+	b.WriteString("spaces-eight:        \r\n")
+	b.WriteString("spaces-nine:         \r\n")
 	b.WriteString("empty:\r\n")
 	b.WriteString("unicode: 漢字 e\u0301 ☕️ 😀 👩‍💻 אבג العربية\r\n")
 	// Repeated identical records catch accidental line coalescing, loss, or
