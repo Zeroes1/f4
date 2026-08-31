@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,13 +13,15 @@ import (
 )
 
 type lifecycleCaseReport struct {
-	Name          string `json:"name"`
-	CloseOrder    string `json:"close_order"`
-	ExpectedWait  string `json:"expected_wait"`
-	ObservedWait  string `json:"observed_wait"`
-	ChildExited   bool   `json:"child_exited"`
-	HostExited    bool   `json:"host_exited"`
-	HandlesClosed bool   `json:"handles_closed"`
+	Name           string `json:"name"`
+	CloseOrder     string `json:"close_order"`
+	ExpectedWait   string `json:"expected_wait"`
+	ObservedWait   string `json:"observed_wait"`
+	ChildExited    bool   `json:"child_exited"`
+	HostExited     bool   `json:"host_exited"`
+	HandlesClosed  bool   `json:"handles_closed"`
+	PromptObserved bool   `json:"prompt_observed,omitempty"`
+	OutputBytes    int    `json:"output_bytes,omitempty"`
 }
 
 type lifecycleProbeReport struct {
@@ -58,6 +61,11 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 		{"broken-pipe", `powershell.exe -NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 5"`, "pipes-first", 250 * time.Millisecond, true},
 	}
 	report := lifecycleProbeReport{Mode: "pinned-conpty-lifecycle", Host: identity}
+	promptCase, promptErr := runInteractivePromptCase(resolved, `cmd.exe /d /q /k "prompt __PINNED_CONPTY_PROBE_PROMPT__$G"`)
+	if promptErr != nil {
+		return promptErr
+	}
+	report.Cases = append(report.Cases, promptCase)
 	for _, item := range cases {
 		caseReport, caseErr := runManualLifecycleCase(resolved, executable, item.name, item.command, item.order, item.wait, item.breakOutput)
 		if caseErr != nil {
@@ -70,6 +78,12 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 		return err
 	}
 	for _, item := range report.Cases {
+		if item.Name == "first-prompt" {
+			if item.ObservedWait != "timeout" || !item.PromptObserved || !item.ChildExited || !item.HostExited || !item.HandlesClosed {
+				return fmt.Errorf("lifecycle prompt case failed: %+v", item)
+			}
+			continue
+		}
 		if item.ExpectedWait == "exit" && (item.ObservedWait != "exit" || !item.ChildExited || !item.HostExited || !item.HandlesClosed) {
 			return fmt.Errorf("lifecycle EOF case failed: %+v", item)
 		}
@@ -79,6 +93,90 @@ func runNativeLifecycleProbe(hostPath, reportPath string) error {
 	}
 	fmt.Printf("native lifecycle probe complete: %s cases=%d\n", reportPath, len(report.Cases))
 	return nil
+}
+
+// runInteractivePromptCase proves that a real interactive child reaches its
+// first prompt before the bounded cancellation path closes the session. The
+// reader exits as soon as the explicit prompt marker is observed; cleanup then
+// closes the output handle and verifies that the reader cannot leak.
+func runInteractivePromptCase(hostPath, command string) (lifecycleCaseReport, error) {
+	result := lifecycleCaseReport{Name: "first-prompt", CloseOrder: "host-first", ExpectedWait: "timeout"}
+	pty, err := createPinnedPseudoConsole(hostPath, 512, 25)
+	if err != nil {
+		return result, err
+	}
+	hostPID, _, err := verifyPinnedHostProcess(pty.hostProcess, hostPath)
+	if err != nil {
+		pty.close()
+		pty.closePipes()
+		return result, err
+	}
+	if err := attachPinnedClient(pty, command); err != nil {
+		pty.close()
+		pty.closePipes()
+		return result, err
+	}
+	childPID := pty.childPID
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	readReady := make(chan readResult, 1)
+	const promptMarker = "__PINNED_CONPTY_PROBE_PROMPT__>"
+	go func() {
+		var all bytes.Buffer
+		buffer := make([]byte, 32*1024)
+		for {
+			var read uint32
+			err := windows.ReadFile(pty.output, buffer, &read, nil)
+			if read > 0 {
+				_, _ = all.Write(buffer[:read])
+				if bytes.Contains(all.Bytes(), []byte(promptMarker)) {
+					readReady <- readResult{data: all.Bytes()}
+					return
+				}
+			}
+			if err != nil {
+				readReady <- readResult{data: all.Bytes(), err: err}
+				return
+			}
+		}
+	}()
+	var read readResult
+	select {
+	case read = <-readReady:
+		result.OutputBytes = len(read.data)
+		result.PromptObserved = bytes.Contains(read.data, []byte(promptMarker))
+	case <-time.After(5 * time.Second):
+		_ = windows.CloseHandle(pty.output)
+		pty.output = 0
+		read = <-readReady
+		result.OutputBytes = len(read.data)
+	}
+	event, waitErr := windows.WaitForSingleObject(pty.childProcess, 250)
+	if waitErr != nil {
+		terminatePinnedClient(pty)
+		pty.close()
+		pty.closePipes()
+		return result, waitErr
+	}
+	if event == uint32(windows.WAIT_TIMEOUT) {
+		result.ObservedWait = "timeout"
+		terminatePinnedClient(pty)
+	} else if event == windows.WAIT_OBJECT_0 {
+		result.ObservedWait = "exit"
+		_ = windows.CloseHandle(pty.childProcess)
+		pty.childProcess = 0
+	} else {
+		result.ObservedWait = fmt.Sprintf("wait-%d", event)
+		terminatePinnedClient(pty)
+	}
+	pty.close()
+	pty.closePipes()
+	result.ChildExited, _ = processExited(childPID)
+	result.HostExited, _ = processExited(hostPID)
+	result.HandlesClosed = pty.signal == 0 && pty.ptyReference == 0 && pty.input == 0 && pty.output == 0 && pty.childProcess == 0 && pty.hostProcess == 0
+	return result, nil
 }
 
 func runManualLifecycleCase(hostPath, executable, name, command, order string, wait time.Duration, breakOutput bool) (lifecycleCaseReport, error) {
