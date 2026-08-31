@@ -33,3 +33,53 @@ jobs:
         with:
           name: conpty-probe-output
           path: probe-out/
+
+  bundled-conpty:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch a post-rewrite ConPTY from a Windows Terminal release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          New-Item -ItemType Directory -Force -Path probe-out, conpty | Out-Null
+          $tag = gh release list --repo microsoft/terminal --limit 60 --json tagName `
+                 | ConvertFrom-Json `
+                 | Where-Object { $_.tagName -match '^v1\.(2[2-9]|[3-9][0-9])\.' } `
+                 | Select-Object -First 1 -ExpandProperty tagName
+          if (-not $tag) { throw "no release >= v1.22 found" }
+          "release: $tag" | Tee-Object -FilePath probe-out/bundle.txt
+          gh release view $tag --repo microsoft/terminal --json assets `
+            | ConvertFrom-Json | ForEach-Object { $_.assets.name } `
+            | Tee-Object -FilePath probe-out/bundle.txt -Append
+          gh release download $tag --repo microsoft/terminal --pattern "*.msixbundle" --dir dl
+          $bundle = Get-ChildItem dl -Filter *.msixbundle | Select-Object -First 1
+          if (-not $bundle) { throw "no msixbundle asset in $tag" }
+          "bundle:  $($bundle.Name)" | Tee-Object -FilePath probe-out/bundle.txt -Append
+          Copy-Item $bundle.FullName dl/bundle.zip
+          Expand-Archive dl/bundle.zip -DestinationPath dl/bundle -Force
+          $msix = Get-ChildItem dl/bundle -Filter "*x64*.msix" | Select-Object -First 1
+          if (-not $msix) { throw "no x64 msix inside the bundle" }
+          "msix:    $($msix.Name)" | Tee-Object -FilePath probe-out/bundle.txt -Append
+          Copy-Item $msix.FullName dl/pkg.zip
+          Expand-Archive dl/pkg.zip -DestinationPath dl/pkg -Force
+          Copy-Item (Get-ChildItem dl/pkg -Recurse -Filter conpty.dll | Select-Object -First 1).FullName conpty/
+          Copy-Item (Get-ChildItem dl/pkg -Recurse -Filter OpenConsole.exe | Select-Object -First 1).FullName conpty/
+          Get-ChildItem conpty | ForEach-Object {
+            "$($_.Name)  $($_.VersionInfo.FileVersion)"
+          } | Tee-Object -FilePath probe-out/bundle.txt -Append
+
+      - name: Probe bundled ConPTY
+        run: python tools/conpty_probe_bundled.py conpty/conpty.dll bundled
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conpty-probe-output-bundled
+          path: probe-out/
