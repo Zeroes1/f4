@@ -111,6 +111,28 @@ k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 k32.WaitForSingleObject.restype = wintypes.DWORD
 k32.CloseHandle.argtypes = [wintypes.HANDLE]
 k32.CloseHandle.restype = wintypes.BOOL
+k32.GetStdHandle.argtypes = [wintypes.DWORD]
+k32.GetStdHandle.restype = wintypes.HANDLE
+k32.SetHandleInformation.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD]
+k32.SetHandleInformation.restype = wintypes.BOOL
+
+HANDLE_FLAG_INHERIT = 0x1
+STD_HANDLES = (-10, -11, -12)  # input, output, error
+
+
+def detach_parent_std_handles():
+    """Stop our own stdio from reaching the child.
+
+    Attaching a pseudoconsole gives the child the right *console* - cmd.exe
+    sets its title through it - but its std handles still come from us. When
+    the parent's stdout is a pipe (a CI log, say) the child writes there and
+    the pty stream carries nothing but the ConPTY handshake. EchoCon never
+    hits this because its parent owns a real console.
+    """
+    for std in STD_HANDLES:
+        h = k32.GetStdHandle(std)
+        if h and h != wintypes.HANDLE(-1).value:
+            k32.SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0)
 
 
 def _check(ok, what):
@@ -184,6 +206,8 @@ def run(dll_path, timeout_s=20):
     # signals end-of-stream on the read side.
     k32.CloseHandle(in_read)
     k32.CloseHandle(out_write)
+
+    detach_parent_std_handles()
 
     _check(k32.CreateProcessW(
         None, ctypes.create_unicode_buffer(CMD), None, None, False,
