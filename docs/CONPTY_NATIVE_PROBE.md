@@ -18,6 +18,7 @@ go run ./tools/conptyreconcile -scroll-probe -report artifacts/pinned-conpty-scr
 go run ./tools/conptyreconcile -command-suite -report artifacts/pinned-conpty-command-suite.json
 go run ./tools/conptyreconcile -tabs-probe -report artifacts/pinned-conpty-tabs.json
 go run ./tools/conptyreconcile -link-probe -report artifacts/pinned-conpty-link.json
+go run ./tools/conptyreconcile -progress-probe -report artifacts/pinned-conpty-progress.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -79,6 +80,9 @@ lifecycle checks.
 `-tabs-probe` and `-link-probe` isolate tab-stop and OSC 8 rendering at a wide
 static host size so their rendered text can be compared without unrelated
 control-phase cursor movement.
+
+`-progress-probe` checks that intermediate carriage-return updates are not
+mistaken for history records while the final state is retained.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The

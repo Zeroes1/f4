@@ -48,10 +48,10 @@ func runNativeCommandSuite(hostPath, reportPath string) error {
 	return fmt.Errorf("native command suite requires Windows")
 }
 
-func runNativeSemanticProbe(hostPath, reportPath string, tabs bool) error {
+func runNativeSemanticProbe(hostPath, reportPath, kind string) error {
 	_ = hostPath
 	_ = reportPath
-	_ = tabs
+	_ = kind
 	return fmt.Errorf("native semantic probe requires Windows")
 }
 

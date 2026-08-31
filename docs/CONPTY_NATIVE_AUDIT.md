@@ -569,6 +569,15 @@ native semantic probe complete: artifacts/pinned-conpty-link.json kind=link exac
 нет, хост выдал перемещения по табостопам. Для OSC 8 текст `link` совпал,
 а последовательность завершилась ST (`ESC\\`); оба raw-файла и SHA проверены.
 
+Прогресс-бар проверен отдельно тем же способом:
+
+```text
+native semantic probe complete: artifacts/pinned-conpty-progress.json kind=progress exact=true
+```
+
+Промежуточные состояния `0%` и `50%` не стали историческими строками;
+финальное `progress: 100%` совпало побайтово.
+
 ### Независимая сверка `dir /s /b` через redirected-файл
 
 По пункту 11 выполнена одна и та же команда двумя путями: напрямую в файл

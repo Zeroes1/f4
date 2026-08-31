@@ -24,12 +24,8 @@ type semanticProbeReport struct {
 	CompletedAt   time.Time          `json:"completed_at"`
 }
 
-func runNativeSemanticProbe(hostPath, reportPath string, tabs bool) error {
+func runNativeSemanticProbe(hostPath, reportPath, kind string) error {
 	if reportPath == "" {
-		kind := "link"
-		if tabs {
-			kind = "tabs"
-		}
 		reportPath = filepath.Join("artifacts", "pinned-conpty-"+kind+".json")
 	}
 	resolved, err := ensureProbeHost(hostPath)
@@ -46,13 +42,13 @@ func runNativeSemanticProbe(hostPath, reportPath string, tabs bool) error {
 	}
 	begin := "__PINNED_CONPTY_PROBE_SEMANTIC_BEGIN__"
 	end := "__PINNED_CONPTY_PROBE_SEMANTIC_END__"
-	kind := "link"
 	expected := "link"
-	if tabs {
-		kind = "tabs"
+	if kind == "tabs" {
 		expected = "tabs:   X       Y"
+	} else if kind == "progress" {
+		expected = "progress: 100%"
 	}
-	workload := []byte(semanticProbeWorkload(tabs, begin, end))
+	workload := []byte(semanticProbeWorkload(kind, begin, end))
 	command := fmt.Sprintf(`"%s" -emit-semantic -emit-probe-width 512 -emit-semantic-kind %s`, executable, kind)
 	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, 512, 25, false, workload, command, []string{begin, end})
 	lines := parseRenderedHistoryAtWidth(session.RawOutput, 512).Lines()
@@ -60,7 +56,7 @@ func runNativeSemanticProbe(hostPath, reportPath string, tabs bool) error {
 	if segment, ok := renderedMarkerSegment(lines, begin, end); ok {
 		for _, line := range segment {
 			trimmed := bytes.TrimRight(line.Bytes, " ")
-			if bytes.HasPrefix(trimmed, []byte("tabs:")) || bytes.Equal(trimmed, []byte("link")) {
+			if bytes.HasPrefix(trimmed, []byte("tabs:")) || bytes.Equal(trimmed, []byte("link")) || bytes.HasPrefix(trimmed, []byte("progress:")) {
 				observed = string(trimmed)
 				break
 			}
@@ -87,9 +83,12 @@ func runNativeSemanticProbe(hostPath, reportPath string, tabs bool) error {
 	return nil
 }
 
-func semanticProbeWorkload(tabs bool, begin, end string) string {
-	if tabs {
+func semanticProbeWorkload(kind, begin, end string) string {
+	if kind == "tabs" {
 		return "\x1b[?25l" + begin + "\r\ntabs:\tX\tY\r\n" + end + "\r\n\x1b[?25h"
+	}
+	if kind == "progress" {
+		return "\x1b[?25l" + begin + "\r\nprogress: 0%\rprogress: 50%\rprogress: 100%\r\n" + end + "\r\n\x1b[?25h"
 	}
 	return "\x1b[?25l" + begin + "\r\n\x1b]8;;https://example.test\x1b\\link\x1b]8;;\x1b\\\r\n" + end + "\r\n\x1b[?25h"
 }

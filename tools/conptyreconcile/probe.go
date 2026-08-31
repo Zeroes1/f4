@@ -154,8 +154,7 @@ func emitScrollWorkload() error {
 }
 
 func emitSemanticWorkload(kind string) error {
-	tabs := kind == "tabs"
-	_, err := os.Stdout.Write([]byte(semanticProbeWorkload(tabs, "__PINNED_CONPTY_PROBE_SEMANTIC_BEGIN__", "__PINNED_CONPTY_PROBE_SEMANTIC_END__")))
+	_, err := os.Stdout.Write([]byte(semanticProbeWorkload(kind, "__PINNED_CONPTY_PROBE_SEMANTIC_BEGIN__", "__PINNED_CONPTY_PROBE_SEMANTIC_END__")))
 	return err
 }
 

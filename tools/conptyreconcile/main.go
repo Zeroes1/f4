@@ -23,6 +23,7 @@ func main() {
 		commandSuite        = flag.Bool("command-suite", false, "verify echo, type, findstr, and PowerShell commands")
 		tabsProbe           = flag.Bool("tabs-probe", false, "verify tab-stop rendering in isolation")
 		linkProbe           = flag.Bool("link-probe", false, "verify OSC 8 rendering in isolation")
+		progressProbe       = flag.Bool("progress-probe", false, "verify in-place progress rendering")
 		clearProbe          = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
@@ -144,8 +145,15 @@ func main() {
 		}
 		return
 	}
-	if *tabsProbe || *linkProbe {
-		if err := runNativeSemanticProbe(*probeHost, *reportPath, *tabsProbe); err != nil {
+	if *tabsProbe || *linkProbe || *progressProbe {
+		kind := "link"
+		if *tabsProbe {
+			kind = "tabs"
+		}
+		if *progressProbe {
+			kind = "progress"
+		}
+		if err := runNativeSemanticProbe(*probeHost, *reportPath, kind); err != nil {
 			fail(err)
 		}
 		return
