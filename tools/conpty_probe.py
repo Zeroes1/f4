@@ -248,14 +248,22 @@ def probe_cmd(label, conpty, say):
     path = os.path.abspath(f"{OUTDIR}/longline.txt")
     with open(path, "w", newline="\r\n") as f:
         f.write("A" * 160 + "\n")
-    raw, _ = run(conpty, f'cmd /c type "{path}"', "default")
+    # We clear HANDLE_FLAG_INHERIT on our own std handles so the child does
+    # not write into the CI log, which leaves cmd without a usable stdout.
+    # Our Python child opens CONOUT$ itself; cmd has to be redirected.
+    raw, _ = run(conpty, f'cmd /c type "{path}" >CONOUT$', "default")
     with open(f"{OUTDIR}/stream-{label}-cmd-type.bin", "wb") as f:
         f.write(raw)
     breaks = raw.count(b"\r\n")
+    got = rows(raw)
     say(f"  cmd /c type (one 160-char line) -> {breaks} CRLF in the stream, "
-        f"rows {rows(raw)}")
-    say("    1 = the file's own newline, passthrough; "
-        "2 = one was injected, legacy path")
+        f"rows {got}")
+    if sum(got) < 160:
+        say("    only {} chars of text arrived - cmd never wrote to the pty, "
+            "this run measured nothing".format(sum(got)))
+    else:
+        say("    1 = the file's own newline, passthrough; "
+            "2 = one was injected, legacy path")
     say("")
 
 
