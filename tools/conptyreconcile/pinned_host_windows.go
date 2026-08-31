@@ -637,7 +637,7 @@ func runPinnedHost(path, reportPath string) error {
 	}
 	for _, seed := range recordedSeeds {
 		scenarioCase := scenarioForSeed(int64(seed))
-		if err := runPinnedScenario(path, identity, scenarioCase, int64(seed^0x9e3779b97f4a7c15), artifactDirectory, false); err != nil {
+		if err := runPinnedScenario(path, identity, scenarioCase, int64(seed^11400714819323198485), artifactDirectory, false); err != nil {
 			return err
 		}
 	}

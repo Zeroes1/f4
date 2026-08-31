@@ -184,6 +184,17 @@ frames побайтово совпали с цельным чтением. Unit-
 UTF-8, CSI и CRLF. Это закрывает только транспортную устойчивость chunking;
 границы repaint, история, прокрутка и reflow по-прежнему открыты.
 
+### Повтор отдельного seed (D3)
+
+Добавлен явный `-seed` (также `F4_NATIVE_CONPTY_SEED`) для повторения одной
+сессии с тем же проверенным cache host. Повтор командой
+`go run . -seed 21 -report ../../artifacts/pinned-conpty-seed-21-current.json`
+завершился с `exit=0`: width `1`, raw `654` байта, два маркера, три
+chunking-проверки `passed`. Seed 115 повторён той же командой с raw `921`
+байтом, width `121`, двумя маркерами и тремя `passed` chunking-проверками.
+Эти повторы не закрывают D3: предыдущий полный прогон 300 seed записал ошибки
+21 и 115, а полные assertions истории, экрана и reflow пока отсутствуют.
+
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
 разбор, который режет поток только по host-emitted `CRLF`; resize-frame
 отмечается собственным output-offset при вызове `ResizePseudoConsole`.

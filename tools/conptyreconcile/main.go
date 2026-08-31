@@ -15,6 +15,7 @@ func main() {
 		probeStatic = flag.Bool("probe-static", false, "run the pinned-host probe without live resize")
 		gate        = flag.Bool("gate", false, "run the complete standalone native gate")
 		seeds       = flag.Bool("seeds", false, "run the 300-session native seed stage")
+		seed        = flag.Uint64("seed", 0, "run one deterministic native seed")
 		partial     = flag.Bool("partial", false, "run resize during an incomplete line")
 		probeHost   = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath  = flag.String("report", "", "report path")
@@ -24,6 +25,15 @@ func main() {
 		emitPartial = flag.Bool("emit-partial", false, "internal child incomplete-line workload")
 	)
 	flag.Parse()
+	if *seed == 0 {
+		if value := os.Getenv("PINNED_CONPTY_SEED"); value != "" {
+			parsed, err := strconv.ParseUint(value, 0, 64)
+			if err != nil || parsed == 0 {
+				fail(fmt.Errorf("invalid PINNED_CONPTY_SEED %q", value))
+			}
+			*seed = parsed
+		}
+	}
 	if *emitProbe {
 		if err := emitProbeWorkloadWidth(*emitWidth); err != nil {
 			fail(err)
@@ -54,6 +64,12 @@ func main() {
 	}
 	if *seeds {
 		if err := runNativeSeedGate(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *seed != 0 {
+		if err := runNativeSingleSeed(*probeHost, *reportPath, *seed); err != nil {
 			fail(err)
 		}
 		return

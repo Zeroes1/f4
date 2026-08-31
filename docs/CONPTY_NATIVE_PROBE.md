@@ -14,6 +14,18 @@ go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-pro
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
 
+Проблемный seed можно повторить отдельной свежей native-сессией без повторной
+загрузки уже проверенного host:
+
+```text
+go run ./tools/conptyreconcile -seed 21 -report artifacts/pinned-conpty-seed-21.json
+PINNED_CONPTY_SEED=21 go run ./tools/conptyreconcile -report artifacts/pinned-conpty-seed-21.json
+```
+
+Параметр предназначен для воспроизводимого разбора конкретного seed; он не
+заменяет полный прогон `-seeds` и не превращает единичный успех в результат
+гейта.
+
 The probe downloads the pinned Windows Terminal bundle into
 `%LOCALAPPDATA%\pinned-conpty\1.12.10983.0\`, verifies the nested x64 package
 and `OpenConsole.exe` version/SHA-256, and reuses the verified cache. An
