@@ -15,11 +15,21 @@ jobs:
 
       - name: Report host
         run: |
-          cmd /c ver
-          (Get-Item C:\Windows\System32\conhost.exe).VersionInfo.FileVersion
+          New-Item -ItemType Directory -Force -Path probe-out | Out-Null
+          $log = "probe-out/host.txt"
+          cmd /c ver | Tee-Object -FilePath $log
+          "conhost: " + (Get-Item C:\Windows\System32\conhost.exe).VersionInfo.FileVersion | Tee-Object -FilePath $log -Append
+          "image:   $env:ImageVersion" | Tee-Object -FilePath $log -Append
 
       - name: Install pywinpty
         run: pip install pywinpty
 
       - name: Probe
         run: python tools/conpty_probe.py
+
+      - name: Upload probe output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conpty-probe-output
+          path: probe-out/
