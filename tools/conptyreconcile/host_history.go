@@ -17,12 +17,12 @@ type renderedHistoryLine struct {
 }
 
 type renderedHistory struct {
-	lines       []renderedHistoryLine
-	line        []rune
-	column      int
-	row         int
+	lines        []renderedHistoryLine
+	line         []rune
+	column       int
+	row          int
 	lineStartRow int
-	crossRow    bool
+	crossRow     bool
 }
 
 func parseRenderedHistory(data []byte) renderedHistory {
@@ -140,7 +140,12 @@ func (h *renderedHistory) consumeCSI(params string, final byte) {
 		}
 		values = append(values, n)
 	}
-	one := func() int { if len(values) == 0 || values[0] == 0 { return 1 }; return values[0] }
+	one := func() int {
+		if len(values) == 0 || values[0] == 0 {
+			return 1
+		}
+		return values[0]
+	}
 	switch final {
 	case 'm', 'h', 'l', 'r', 's', 'u':
 		_ = private
@@ -152,15 +157,25 @@ func (h *renderedHistory) consumeCSI(params string, final byte) {
 		h.column += one()
 	case 'D':
 		h.column -= one()
-		if h.column < 0 { h.column = 0 }
+		if h.column < 0 {
+			h.column = 0
+		}
 	case 'G', '`':
 		h.column = one() - 1
-		if h.column < 0 { h.column = 0 }
+		if h.column < 0 {
+			h.column = 0
+		}
 	case 'H', 'f':
 		row, col := 1, 1
-		if len(values) > 0 && values[0] != 0 { row = values[0] }
-		if len(values) > 1 && values[1] != 0 { col = values[1] }
-		if row-1 != h.row { h.crossRow = true }
+		if len(values) > 0 && values[0] != 0 {
+			row = values[0]
+		}
+		if len(values) > 1 && values[1] != 0 {
+			col = values[1]
+		}
+		if row-1 != h.row {
+			h.crossRow = true
+		}
 		h.row, h.column = row-1, col-1
 	}
 }
