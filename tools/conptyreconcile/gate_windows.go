@@ -41,12 +41,13 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 		command := fmt.Sprintf(`"%s" -emit-seed %016x -emit-probe-width %d`, executable, seed, width)
 		session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 25, true, workload, command, []string{begin, end})
 		report.Sessions = append(report.Sessions, session)
+		fmt.Printf("native seed gate: %d/300 (%d%%) width=%d\n", i+1, (i+1)*100/300, width)
 		artifactDir := reportPath + ".sessions"
 		if err := os.MkdirAll(artifactDir, 0o755); err != nil {
 			return err
 		}
 		artifact := filepath.Join(artifactDir, fmt.Sprintf("%03d-%dx25.raw", i+1, width))
-		if err := os.WriteFile(artifact, session.RawOutput, 0o644); err != nil {
+		if err := writeAndVerifyRawArtifact(artifact, session.RawOutput, session.RawSHA256); err != nil {
 			return err
 		}
 		if runErr != nil {

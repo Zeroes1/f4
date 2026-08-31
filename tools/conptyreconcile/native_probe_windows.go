@@ -113,7 +113,7 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 			return fmt.Errorf("create native probe artifact directory: %w", err)
 		}
 		artifact := filepath.Join(artifactDir, fmt.Sprintf("%dx%d.raw", dimensions[0], dimensions[1]))
-		if err := os.WriteFile(artifact, session.RawOutput, 0o644); err != nil {
+		if err := writeAndVerifyRawArtifact(artifact, session.RawOutput, session.RawSHA256); err != nil {
 			return fmt.Errorf("write native probe raw output: %w", err)
 		}
 		if runErr != nil {
@@ -126,6 +126,24 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 		return err
 	}
 	fmt.Printf("native OpenConsole probe complete: %s\n", reportPath)
+	return nil
+}
+
+func writeAndVerifyRawArtifact(path string, data []byte, expectedSHA string) error {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return err
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(got, data) {
+		return fmt.Errorf("artifact bytes differ from captured raw output: got %d bytes want %d", len(got), len(data))
+	}
+	hash := sha256.Sum256(got)
+	if hex.EncodeToString(hash[:]) != expectedSHA {
+		return fmt.Errorf("artifact SHA-256 differs from report: got %s want %s", hex.EncodeToString(hash[:]), expectedSHA)
+	}
 	return nil
 }
 
