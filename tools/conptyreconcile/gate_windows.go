@@ -67,6 +67,12 @@ func runNativeSingleSeed(hostPath, reportPath string, seed uint64) error {
 	if failures := assertionFailures(session.Assertions); len(failures) != 0 {
 		report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d assertions: %s", seed, width, strings.Join(failures, "; ")))
 	}
+	consumerChecks, consumerErr := verifySeedConsumerChecks(session, begin, end)
+	session.ConsumerChecks = consumerChecks
+	report.Sessions[0] = session
+	if consumerErr != nil {
+		report.Failures = append(report.Failures, fmt.Sprintf("seed %d consumer checks: %v", seed, consumerErr))
+	}
 	if err := writeJSON(reportPath, report); err != nil {
 		return err
 	}
@@ -120,6 +126,12 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 		}
 		if failures := assertionFailures(session.Assertions); len(failures) != 0 {
 			report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d assertions: %s", seed, width, strings.Join(failures, "; ")))
+		}
+		consumerChecks, consumerErr := verifySeedConsumerChecks(session, begin, end)
+		session.ConsumerChecks = consumerChecks
+		report.Sessions[len(report.Sessions)-1] = session
+		if consumerErr != nil {
+			report.Failures = append(report.Failures, fmt.Sprintf("seed %d consumer checks: %v", seed, consumerErr))
 		}
 	}
 	report.SeedCount = len(report.Sessions)

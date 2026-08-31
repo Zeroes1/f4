@@ -57,6 +57,7 @@ type nativeProbeSession struct {
 	Assertions        []payloadAssertion    `json:"assertions,omitempty"`
 	AssertionFailures []string              `json:"assertion_failures,omitempty"`
 	Chunking          []chunkingAssertion   `json:"chunking_assertions,omitempty"`
+	ConsumerChecks    []seedConsumerCheck   `json:"consumer_checks,omitempty"`
 	ChildExited       bool                  `json:"child_exited"`
 	HostExited        bool                  `json:"host_exited"`
 	HandlesClosed     bool                  `json:"handles_closed"`

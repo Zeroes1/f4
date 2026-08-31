@@ -589,6 +589,15 @@ native semantic probe complete: artifacts/pinned-conpty-progress.json kind=progr
 Промежуточные состояния `0%` и `50%` не стали историческими строками;
 финальное `progress: 100%` совпало побайтово.
 
+Изолированная Unicode-проверка (10.5) также прошла:
+
+```text
+native semantic probe complete: artifacts/pinned-conpty-unicode.json kind=unicode exact=true
+```
+
+Ожидаемая и наблюдаемая строка совпали побайтово для CJK, combining mark,
+emoji, ZWJ `👩‍💻`, иврита и арабского; ширины дисплея в assertion не входят.
+
 ### D3: 300 детерминированных seed-сессий
 
 Полный запуск после фиксации host-width=512 завершён без ошибок:
@@ -604,6 +613,18 @@ handles; после прогона активных процессов pinned pr
 reflow, а не к размеру ConPTY, поэтому известное зависание host 1x1 не искажает
 этот этап. Это закрывает воспроизводимый seed-stage; полная C4-матрица
 cancel/timeout/close-order всё ещё отдельный незакрытый пункт.
+
+Повтор D3 после добавления consumer-проверок к каждой сессии:
+
+```text
+seed_count=300 sessions=300 consumer_checks=1500 failures=0
+```
+
+Каждый seed дополнительно прошёл пять consumer checkpoints (1x1, 79x24,
+80x25, 121x40, 512x25): SHA единой истории не изменился после scroll/reflow,
+screen SHA зафиксирован, piece-table spill проверен. Это не заменяет C4
+жизненного цикла, но закрывает требование запускать B/C consumer assertions на
+каждом из 300 native seed.
 
 ### Независимая сверка `dir /s /b` через redirected-файл
 

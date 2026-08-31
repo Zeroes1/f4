@@ -19,6 +19,7 @@ go run ./tools/conptyreconcile -command-suite -report artifacts/pinned-conpty-co
 go run ./tools/conptyreconcile -tabs-probe -report artifacts/pinned-conpty-tabs.json
 go run ./tools/conptyreconcile -link-probe -report artifacts/pinned-conpty-link.json
 go run ./tools/conptyreconcile -progress-probe -report artifacts/pinned-conpty-progress.json
+go run ./tools/conptyreconcile -unicode-probe -report artifacts/pinned-conpty-unicode.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -83,6 +84,9 @@ control-phase cursor movement.
 
 `-progress-probe` checks that intermediate carriage-return updates are not
 mistaken for history records while the final state is retained.
+
+`-unicode-probe` checks byte-exact CJK, combining mark, emoji, ZWJ and bidi
+text at a wide static host size; display widths are not used as an expectation.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The

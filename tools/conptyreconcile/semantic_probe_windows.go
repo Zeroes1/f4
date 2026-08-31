@@ -47,6 +47,8 @@ func runNativeSemanticProbe(hostPath, reportPath, kind string) error {
 		expected = "tabs:   X       Y"
 	} else if kind == "progress" {
 		expected = "progress: 100%"
+	} else if kind == "unicode" {
+		expected = "unicode: 漢字 e\u0301 ☕️ 😀 👩‍💻 אבג العربية"
 	}
 	workload := []byte(semanticProbeWorkload(kind, begin, end))
 	command := fmt.Sprintf(`"%s" -emit-semantic -emit-probe-width 512 -emit-semantic-kind %s`, executable, kind)
@@ -56,7 +58,7 @@ func runNativeSemanticProbe(hostPath, reportPath, kind string) error {
 	if segment, ok := renderedMarkerSegment(lines, begin, end); ok {
 		for _, line := range segment {
 			trimmed := bytes.TrimRight(line.Bytes, " ")
-			if bytes.HasPrefix(trimmed, []byte("tabs:")) || bytes.Equal(trimmed, []byte("link")) || bytes.HasPrefix(trimmed, []byte("progress:")) {
+			if bytes.HasPrefix(trimmed, []byte("tabs:")) || bytes.Equal(trimmed, []byte("link")) || bytes.HasPrefix(trimmed, []byte("progress:")) || bytes.HasPrefix(trimmed, []byte("unicode:")) {
 				observed = string(trimmed)
 				break
 			}
@@ -89,6 +91,9 @@ func semanticProbeWorkload(kind, begin, end string) string {
 	}
 	if kind == "progress" {
 		return "\x1b[?25l" + begin + "\r\nprogress: 0%\rprogress: 50%\rprogress: 100%\r\n" + end + "\r\n\x1b[?25h"
+	}
+	if kind == "unicode" {
+		return "\x1b[?25l" + begin + "\r\nunicode: 漢字 e\u0301 ☕️ 😀 👩‍💻 אבג العربية\r\n" + end + "\r\n\x1b[?25h"
 	}
 	return "\x1b[?25l" + begin + "\r\n\x1b]8;;https://example.test\x1b\\link\x1b]8;;\x1b\\\r\n" + end + "\r\n\x1b[?25h"
 }
