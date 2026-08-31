@@ -16,10 +16,11 @@ func main() {
 		probeHost   = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath  = flag.String("report", "", "report path")
 		emitProbe   = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
+		emitWidth   = flag.Int("emit-probe-width", 0, "internal child workload width")
 	)
 	flag.Parse()
 	if *emitProbe {
-		if err := emitProbeWorkload(); err != nil {
+		if err := emitProbeWorkloadWidth(*emitWidth); err != nil {
 			fail(err)
 		}
 		return

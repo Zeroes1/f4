@@ -12,7 +12,11 @@ import (
 // payload here makes the expected logical markers independent of any parser
 // implementation that will eventually consume the captured stream.
 func emitProbeWorkload() error {
-	input := []byte(probeWorkload())
+	return emitProbeWorkloadWidth(80)
+}
+
+func emitProbeWorkloadWidth(width int) error {
+	input := []byte(probeWorkloadForWidth(width))
 	for offset := 0; offset < len(input); {
 		end := offset + 1
 		if end < len(input) {

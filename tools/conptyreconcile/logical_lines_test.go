@@ -39,3 +39,46 @@ func TestReflowDoesNotChangeLogicalLines(t *testing.T) {
 		}
 	}
 }
+
+func TestProbePayloadCoversRequiredLineClasses(t *testing.T) {
+	var stream logicalLineStream
+	stream.Feed([]byte(probeWorkload()))
+	lines := stream.Lines()
+	if len(lines) < 20 {
+		t.Fatalf("probe has only %d explicit lines", len(lines))
+	}
+	joined := stream.Bytes()
+	if !bytes.Equal(joined, []byte(probeWorkload())) {
+		t.Fatal("probe logical splitter changed authored bytes")
+	}
+	if bytes.Count(joined, []byte("repeat: SAME\r\n")) != 3 {
+		t.Fatal("probe must contain exactly three identical records")
+	}
+	for _, prefix := range []string{"exact-n-minus-1: ", "exact-n: ", "exact-n-plus-1: ", "exact-2n-plus-1: ", "repeat-char: ", "alternating: ", "spaces:       ", "empty:", "unicode: ", "long: "} {
+		if !bytes.Contains(joined, []byte(prefix)) {
+			t.Fatalf("probe missing required line %q", prefix)
+		}
+	}
+	for _, want := range []struct {
+		prefix string
+		length int
+	}{
+		{"exact-n-minus-1: ", 79},
+		{"exact-n: ", 80},
+		{"exact-n-plus-1: ", 81},
+		{"exact-2n-plus-1: ", 161},
+	} {
+		found := false
+		for _, line := range lines {
+			if bytes.HasPrefix(line.Bytes, []byte(want.prefix)) {
+				if len(line.Bytes) != want.length {
+					t.Fatalf("%s length=%d, want %d", want.prefix, len(line.Bytes), want.length)
+				}
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("line %q not found", want.prefix)
+		}
+	}
+}
