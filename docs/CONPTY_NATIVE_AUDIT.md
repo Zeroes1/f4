@@ -589,6 +589,15 @@ native semantic probe complete: artifacts/pinned-conpty-progress.json kind=progr
 Промежуточные состояния `0%` и `50%` не стали историческими строками;
 финальное `progress: 100%` совпало побайтово.
 
+Изолированная Unicode-проверка (10.5) также прошла:
+
+```text
+native semantic probe complete: artifacts/pinned-conpty-unicode.json kind=unicode exact=true
+```
+
+Ожидаемая и наблюдаемая строка совпали побайтово для CJK, combining mark,
+emoji, ZWJ `👩‍💻`, иврита и арабского; ширины дисплея в assertion не входят.
+
 ### D3: 300 детерминированных seed-сессий
 
 Полный запуск после фиксации host-width=512 завершён без ошибок:
