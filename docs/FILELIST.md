@@ -686,6 +686,7 @@
     ├── docs
     │   ├── COLORS.md
     │   ├── CONSOLE_MODES.md
+    │   ├── CONPTY_NATIVE_PROBE.md
     │   ├── CONPTY_NATIVE_TEST.md
     │   ├── CURSOR.md
     │   ├── DRAGDROP.md

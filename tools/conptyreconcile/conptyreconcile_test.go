@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +77,27 @@ func TestEqualRowsRemainDistinctInReconciliation(t *testing.T) {
 func TestRecordedSeedsAreExactly300AndUnique(t *testing.T) {
 	if err := validateRecordedSeeds(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNativeProbeWorkloadHasStableHandoffMarkers(t *testing.T) {
+	workload := probeWorkload()
+	if workload == "" {
+		t.Fatal("native probe workload is empty")
+	}
+	last := -1
+	for _, marker := range probeExpectedMarkers() {
+		position := strings.Index(workload, marker)
+		if position <= last {
+			t.Fatalf("marker %q is missing or out of order in workload", marker)
+		}
+		if strings.Count(workload, marker) != 1 {
+			t.Fatalf("marker %q occurs %d times, want one", marker, strings.Count(workload, marker))
+		}
+		last = position
+	}
+	if !strings.Contains(workload, strings.Repeat("C", 257)) {
+		t.Fatal("long-line fixture is missing")
 	}
 }
 
