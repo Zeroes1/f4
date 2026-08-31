@@ -690,6 +690,7 @@
     │   ├── CONPTY_NATIVE_AGENT.md
     │   ├── CONPTY_NATIVE_AUDIT.md
     │   ├── CONPTY_NATIVE_PROBE.md
+    │   ├── CONPTY_FUTURE_IDEAS.md
     │   ├── CONPTY_NATIVE_TEST.md
     │   ├── PINNED_CONSOLE.md
     │   ├── PINNED_HOST_FACTS.md
