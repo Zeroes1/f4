@@ -97,5 +97,14 @@ func sameHostRenderStream(left, right hostRenderStream) bool {
 			return false
 		}
 	}
+	leftRepaints, rightRepaints := left.RepaintFrames(), right.RepaintFrames()
+	if len(leftRepaints) != len(rightRepaints) {
+		return false
+	}
+	for i := range leftRepaints {
+		if leftRepaints[i] != rightRepaints[i] {
+			return false
+		}
+	}
 	return true
 }

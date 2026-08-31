@@ -5,6 +5,8 @@ import "strings"
 const (
 	probeBeginMarker     = "__PINNED_CONPTY_PROBE_BEGIN__"
 	probeEndMarker       = "__PINNED_CONPTY_PROBE_END__"
+	controlBeginMarker   = "__PINNED_CONPTY_PROBE_CONTROL_BEGIN__"
+	controlEndMarker     = "__PINNED_CONPTY_PROBE_CONTROL_END__"
 	alternateBeginMarker = "__PINNED_CONPTY_PROBE_ALT_BEGIN__"
 	alternateEndMarker   = "__PINNED_CONPTY_PROBE_ALT_END__"
 )
@@ -26,8 +28,12 @@ func probeWorkloadForWidth(width int) string {
 		width = 80
 	}
 	var b strings.Builder
-	b.WriteString("\x1b[2J\x1b[H")
 	b.WriteString(probeBeginMarker)
+	b.WriteString("\r\n")
+	// Keep the principal long-line proof at the top of the buffer, before
+	// cursor/rewrite and alternate-screen operations can trigger repaint.
+	b.WriteString("long: ")
+	b.WriteString(strings.Repeat("C", 257))
 	b.WriteString("\r\n")
 	b.WriteString("ascii: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\n")
 	for _, item := range []struct {
@@ -64,22 +70,30 @@ func probeWorkloadForWidth(width int) string {
 	b.WriteString("spaces:       \r\n")
 	b.WriteString("empty:\r\n")
 	b.WriteString("unicode: 漢字 e\u0301 ☕️ 😀 👩‍💻 אבג العربية\r\n")
-	b.WriteString("\x1b[31mred\x1b[0m ")
-	b.WriteString("\x1b[2K\x1b[1Grewritten\r\n")
-	b.WriteString("cursor: one\x1b[1Gtwo\r\n")
-	b.WriteString("tabs:\tX\tY\r\n")
 	// Repeated identical records catch accidental line coalescing, loss, or
 	// deduplication in the terminal history path.
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
-	b.WriteString("\x1b]0;pinned-conpty-probe\x07")
-	b.WriteString("\r\n")
-	b.WriteString("long: ")
-	b.WriteString(strings.Repeat("C", 257))
-	b.WriteString("\r\n")
 	b.WriteString(probeEndMarker)
 	b.WriteString("\r\n")
+	return b.String()
+}
+
+func controlProbeWorkload() string {
+	var b strings.Builder
+	b.WriteString(controlBeginMarker)
+	b.WriteString("\r\n")
+	b.WriteString("\x1b[31mred\x1b[0m ")
+	b.WriteString("\x1b[2K\x1b[1Grewritten\r\n")
+	b.WriteString("cursor: one\x1b[1Gtwo\r\n")
+	b.WriteString("tabs:\tX\tY\r\n")
+	b.WriteString("\x1b]0;pinned-conpty-probe\x07\r\n")
+	b.WriteString(controlEndMarker)
+	b.WriteString("\r\n")
+	// Keep the initial screen erase outside the marked control payload: it can
+	// itself trigger an absolute repaint before the marker-bearing phase ends.
+	b.WriteString("\x1b[2J\x1b[H")
 	return b.String()
 }
 
@@ -92,10 +106,12 @@ func alternateProbeWorkload(width int) string {
 		width = 80
 	}
 	var b strings.Builder
+	b.WriteString("\x1b[?1049halt-screen\r\n")
+	b.WriteString("alternate-end\r\n\x1b[?1049l\r\n")
+	// Emit the stable handoff markers after the alternate buffer is restored;
+	// the repaint caused by leaving it must not swallow new history markers.
 	b.WriteString(alternateBeginMarker)
 	b.WriteString("\r\n")
-	b.WriteString("\x1b[?1049halt-screen\r\n")
-	b.WriteString("alternate-end\x1b[?1049l\r\n")
 	b.WriteString(alternateEndMarker)
 	b.WriteString("\r\n")
 	return b.String()
@@ -114,6 +130,10 @@ func probeExpectedMarkers() []string {
 	// the alternate buffer was active. The outer markers survive repaint and
 	// are the stable handoff contract for this probe.
 	return []string{probeBeginMarker, probeEndMarker}
+}
+
+func controlExpectedMarkers() []string {
+	return []string{controlBeginMarker, controlEndMarker}
 }
 
 func alternateExpectedMarkers() []string {

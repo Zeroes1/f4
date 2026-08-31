@@ -50,6 +50,7 @@ type nativeProbeSession struct {
 	RawOutput         []byte              `json:"raw_output"`
 	LogicalLines      []logicalLine       `json:"logical_lines"`
 	Frames            []hostFrame         `json:"frames"`
+	RepaintFrames     []repaintFrame      `json:"repaint_frames"`
 	ResizeOffsets     []int               `json:"resize_offsets"`
 	Events            []streamEvent       `json:"events"`
 	Assertions        []payloadAssertion  `json:"assertions,omitempty"`
@@ -111,7 +112,7 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 		// The control run isolates the same 80x25 workload used by the normal
 		// probe. Static 1x1 output can legitimately block a terminal child on
 		// this pinned host because there is no resize/reflow escape hatch.
-		dimensionsList = [][2]int{{80, 25}}
+		dimensionsList = [][2]int{{80, 80}}
 	}
 	for _, dimensions := range dimensionsList {
 		session, runErr := runNativeProbeSession(resolved, executable, dimensions[0], dimensions[1], resizeDuringOutput)
@@ -130,6 +131,18 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 		}
 		if resizeDuringOutput {
 			continue
+		}
+		controlWorkload := []byte(controlProbeWorkload())
+		controlCommand := fmt.Sprintf(`"%s" -emit-control -emit-probe-width %d`, executable, dimensions[0])
+		control, controlErr := runNativeProbeSessionWithWorkload(resolved, executable, dimensions[0], dimensions[1], resizeDuringOutput, controlWorkload, controlCommand, controlExpectedMarkers())
+		report.Sessions = append(report.Sessions, control)
+		controlArtifact := filepath.Join(artifactDir, fmt.Sprintf("%dx%d-control.raw", dimensions[0], dimensions[1]))
+		if err := writeAndVerifyRawArtifact(controlArtifact, control.RawOutput, control.RawSHA256); err != nil {
+			return fmt.Errorf("write native control probe raw output: %w", err)
+		}
+		if controlErr != nil {
+			_ = writeJSON(reportPath, report)
+			return fmt.Errorf("native control probe %dx%d: %w", dimensions[0], dimensions[1], controlErr)
 		}
 		alternateWorkload := []byte(alternateProbeWorkload(dimensions[0]))
 		alternateCommand := fmt.Sprintf(`"%s" -emit-alternate -emit-probe-width %d`, executable, dimensions[0])
@@ -315,6 +328,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	logical.Feed(result.data)
 	session.LogicalLines = logical.Lines()
 	session.Frames = logical.Frames()
+	session.RepaintFrames = logical.RepaintFrames()
 	session.Chunking, err = verifyHostStreamChunking(result.data, uint64(width)*uint64(height)+uint64(len(workload)))
 	if err != nil {
 		session.Error = err.Error()

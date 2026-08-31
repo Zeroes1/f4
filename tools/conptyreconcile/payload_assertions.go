@@ -25,7 +25,13 @@ func assertStaticPayload(expected, raw []byte, markers ...string) []payloadAsser
 	var expectedStream logicalLineStream
 	expectedStream.Feed(expected)
 	lines := expectedStream.Lines()
-	printable := printableStream(raw)
+	stream := parseHostRenderStream(raw, 0)
+	var history []byte
+	for _, line := range stream.Lines() {
+		history = append(history, line.Bytes...)
+		history = append(history, line.Terminator...)
+	}
+	printable := printableStream(history)
 	result := make([]payloadAssertion, 0, len(lines)+3)
 	lineFrequency := make(map[string]int)
 	for _, line := range lines {

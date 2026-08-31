@@ -44,7 +44,7 @@ func TestProbePayloadCoversRequiredLineClasses(t *testing.T) {
 	var stream logicalLineStream
 	stream.Feed([]byte(probeWorkload()))
 	lines := stream.Lines()
-	if len(lines) < 20 {
+	if len(lines) < 17 {
 		t.Fatalf("probe has only %d explicit lines", len(lines))
 	}
 	joined := stream.Bytes()

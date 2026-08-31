@@ -24,6 +24,7 @@ func main() {
 		emitSeed      = flag.String("emit-seed", "", "internal child deterministic seed")
 		emitPartial   = flag.Bool("emit-partial", false, "internal child incomplete-line workload")
 		emitAlternate = flag.Bool("emit-alternate", false, "internal child alternate-screen workload")
+		emitControl   = flag.Bool("emit-control", false, "internal child control-sequence workload")
 	)
 	flag.Parse()
 	if *seed == 0 {
@@ -59,6 +60,12 @@ func main() {
 	}
 	if *emitAlternate {
 		if err := emitAlternateWorkload(*emitWidth); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emitControl {
+		if err := emitControlWorkload(); err != nil {
 			fail(err)
 		}
 		return

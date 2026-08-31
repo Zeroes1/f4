@@ -14,20 +14,49 @@ type hostFrame struct {
 	Height int `json:"height"`
 }
 
+type repaintFrame struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
 // hostRenderStream consumes the pinned host's renderer stream. Logical lines
 // end only at host-emitted CRLF. Child LF bytes and terminal row geometry are
 // never consulted.
 type hostRenderStream struct {
-	raw       []byte
-	lineStart int
-	scan      int
-	lines     []logicalLine
-	frames    []hostFrame
+	raw           []byte
+	scan          int
+	pending       []byte
+	lines         []logicalLine
+	frames        []hostFrame
+	repaintFrames []repaintFrame
+	inRepaint     bool
+	repaintStart  int
 }
 
 func (s *hostRenderStream) Feed(data []byte) {
 	s.raw = append(s.raw, data...)
 	for s.scan < len(s.raw) {
+		if s.inRepaint {
+			close := []byte("\x1b[?25h")
+			offset := bytes.Index(s.raw[s.scan:], close)
+			if offset < 0 {
+				return
+			}
+			s.scan += offset + len(close)
+			s.repaintFrames = append(s.repaintFrames, repaintFrame{Start: s.repaintStart, End: s.scan})
+			s.inRepaint = false
+			continue
+		}
+		open := []byte("\x1b[?25l")
+		if bytes.HasPrefix(s.raw[s.scan:], open) {
+			s.repaintStart = s.scan
+			s.scan += len(open)
+			s.inRepaint = true
+			continue
+		}
+		if isTokenPrefix(s.raw[s.scan:], open) {
+			return
+		}
 		if width, height, size, ok := parseResizeFrame(s.raw[s.scan:]); ok {
 			s.frames = append(s.frames, hostFrame{Offset: s.scan, Width: width, Height: height})
 			s.scan += size
@@ -39,10 +68,10 @@ func (s *hostRenderStream) Feed(data []byte) {
 		}
 		if s.raw[s.scan] == '\r' && s.scan+1 < len(s.raw) && s.raw[s.scan+1] == '\n' {
 			s.lines = append(s.lines, logicalLine{
-				Bytes:      append([]byte(nil), s.raw[s.lineStart:s.scan]...),
+				Bytes:      append([]byte(nil), s.pending...),
 				Terminator: []byte{'\r', '\n'},
 			})
-			s.lineStart = s.scan + 2
+			s.pending = s.pending[:0]
 			s.scan += 2
 			continue
 		}
@@ -50,8 +79,13 @@ func (s *hostRenderStream) Feed(data []byte) {
 			// CRLF may be split across reads.
 			break
 		}
+		s.pending = append(s.pending, s.raw[s.scan])
 		s.scan++
 	}
+}
+
+func isTokenPrefix(data, token []byte) bool {
+	return len(data) < len(token) && bytes.Equal(data, token[:len(data)])
 }
 
 func potentialResizePrefix(data []byte) bool {
@@ -72,6 +106,10 @@ func (s *hostRenderStream) Lines() []logicalLine {
 
 func (s *hostRenderStream) Frames() []hostFrame {
 	return append([]hostFrame(nil), s.frames...)
+}
+
+func (s *hostRenderStream) RepaintFrames() []repaintFrame {
+	return append([]repaintFrame(nil), s.repaintFrames...)
 }
 
 func parseResizeFrame(data []byte) (width, height, size int, ok bool) {
