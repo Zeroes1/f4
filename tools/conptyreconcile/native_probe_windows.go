@@ -299,7 +299,8 @@ func ensureProbeHost(hostPath string) (string, error) {
 
 func downloadProbeBundle(destination string) error {
 	part := destination + ".part"
-	response, err := http.Get(probeBundleURL)
+	client := http.Client{Timeout: 5 * time.Minute}
+	response, err := client.Get(probeBundleURL)
 	if err != nil {
 		return fmt.Errorf("download pinned MSIX bundle: %w", err)
 	}
