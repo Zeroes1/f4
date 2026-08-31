@@ -16,6 +16,8 @@ go run ./tools/conptyreconcile -command-compare -command-compare-width 512 -repo
 go run ./tools/conptyreconcile -clear-probe -report artifacts/pinned-conpty-clear.json
 go run ./tools/conptyreconcile -scroll-probe -report artifacts/pinned-conpty-scroll.json
 go run ./tools/conptyreconcile -command-suite -report artifacts/pinned-conpty-command-suite.json
+go run ./tools/conptyreconcile -tabs-probe -report artifacts/pinned-conpty-tabs.json
+go run ./tools/conptyreconcile -link-probe -report artifacts/pinned-conpty-link.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -73,6 +75,10 @@ scrolled and reflowed at several display sizes without changing history.
 `-command-suite` runs bounded `echo`, `type`, `findstr`, and PowerShell cases
 through the pinned host with exact marker-delimited rendered output and exit /
 lifecycle checks.
+
+`-tabs-probe` and `-link-probe` isolate tab-stop and OSC 8 rendering at a wide
+static host size so their rendered text can be compared without unrelated
+control-phase cursor movement.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The

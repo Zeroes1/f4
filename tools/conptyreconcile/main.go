@@ -21,6 +21,8 @@ func main() {
 		commandCompare      = flag.Bool("command-compare", false, "compare recursive dir through pinned host with redirected output")
 		commandCompareWidth = flag.Int("command-compare-width", 80, "pinned-host capture width for -command-compare")
 		commandSuite        = flag.Bool("command-suite", false, "verify echo, type, findstr, and PowerShell commands")
+		tabsProbe           = flag.Bool("tabs-probe", false, "verify tab-stop rendering in isolation")
+		linkProbe           = flag.Bool("link-probe", false, "verify OSC 8 rendering in isolation")
 		clearProbe          = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
@@ -33,6 +35,8 @@ func main() {
 		emitPartial         = flag.Bool("emit-partial", false, "internal child incomplete-line workload")
 		emitAlternate       = flag.Bool("emit-alternate", false, "internal child alternate-screen workload")
 		emitControl         = flag.Bool("emit-control", false, "internal child control-sequence workload")
+		emitSemantic        = flag.Bool("emit-semantic", false, "internal child isolated semantic workload")
+		emitSemanticKind    = flag.String("emit-semantic-kind", "tabs", "internal semantic workload kind")
 		emitReflow          = flag.Bool("emit-reflow", false, "internal child static reflow workload")
 		emitScroll          = flag.Bool("emit-scroll", false, "internal child static scrollback workload")
 	)
@@ -76,6 +80,12 @@ func main() {
 	}
 	if *emitControl {
 		if err := emitControlWorkload(); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emitSemantic {
+		if err := emitSemanticWorkload(*emitSemanticKind); err != nil {
 			fail(err)
 		}
 		return
@@ -130,6 +140,12 @@ func main() {
 	}
 	if *commandSuite {
 		if err := runNativeCommandSuite(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *tabsProbe || *linkProbe {
+		if err := runNativeSemanticProbe(*probeHost, *reportPath, *tabsProbe); err != nil {
 			fail(err)
 		}
 		return

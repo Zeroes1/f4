@@ -555,6 +555,20 @@ powershell exact=true exit=0 child_exited=true host_exited=true handles_closed=t
 `type` читает временный UTF-8 fixture, PowerShell запускается с
 `-NoProfile -NonInteractive`; каждый raw-файл сохранён и проверен побайтово.
 
+### Изолированные табы и OSC 8 (10.3, 14.3)
+
+После того как общий control-сеанс показал repaint-смешение, оба поведения
+проверены отдельными статическими сессиями pinned host 512x25:
+
+```text
+native semantic probe complete: artifacts/pinned-conpty-tabs.json kind=tabs exact=true
+native semantic probe complete: artifacts/pinned-conpty-link.json kind=link exact=true
+```
+
+Для `tabs` наблюдалась ровно строка `tabs:   X       Y`: табуляций в потоке
+нет, хост выдал перемещения по табостопам. Для OSC 8 текст `link` совпал,
+а последовательность завершилась ST (`ESC\\`); оба raw-файла и SHA проверены.
+
 ### Независимая сверка `dir /s /b` через redirected-файл
 
 По пункту 11 выполнена одна и та же команда двумя путями: напрямую в файл

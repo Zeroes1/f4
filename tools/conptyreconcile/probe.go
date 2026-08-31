@@ -153,6 +153,12 @@ func emitScrollWorkload() error {
 	return err
 }
 
+func emitSemanticWorkload(kind string) error {
+	tabs := kind == "tabs"
+	_, err := os.Stdout.Write([]byte(semanticProbeWorkload(tabs, "__PINNED_CONPTY_PROBE_SEMANTIC_BEGIN__", "__PINNED_CONPTY_PROBE_SEMANTIC_END__")))
+	return err
+}
+
 // alternateProbeWorkload is a separate phase because leaving the alternate
 // buffer causes the host to repaint the primary buffer.  Keeping that repaint
 // out of the primary payload makes the exact-line assertion about history,

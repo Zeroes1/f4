@@ -134,10 +134,13 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 			continue
 		}
 		controlWorkload := []byte(controlProbeWorkload())
-		controlCommand := fmt.Sprintf(`"%s" -emit-control -emit-probe-width %d`, executable, dimensions[0])
-		control, controlErr := runNativeProbeSessionWithWorkload(resolved, executable, dimensions[0], dimensions[1], resizeDuringOutput, controlWorkload, controlCommand, controlExpectedMarkers())
+		// Keep the semantic-control phase in a wide, otherwise static host so
+		// tab stops and OSC 8 are observed without unrelated row wrapping.
+		controlWidth, controlHeight := 512, 25
+		controlCommand := fmt.Sprintf(`"%s" -emit-control -emit-probe-width %d`, executable, controlWidth)
+		control, controlErr := runNativeProbeSessionWithWorkload(resolved, executable, controlWidth, controlHeight, resizeDuringOutput, controlWorkload, controlCommand, controlExpectedMarkers())
 		report.Sessions = append(report.Sessions, control)
-		controlArtifact := filepath.Join(artifactDir, fmt.Sprintf("%dx%d-control.raw", dimensions[0], dimensions[1]))
+		controlArtifact := filepath.Join(artifactDir, fmt.Sprintf("%dx%d-control.raw", controlWidth, controlHeight))
 		if err := writeAndVerifyRawArtifact(controlArtifact, control.RawOutput, control.RawSHA256); err != nil {
 			return fmt.Errorf("write native control probe raw output: %w", err)
 		}
