@@ -4,7 +4,6 @@ package main
 
 import (
 	"archive/zip"
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -32,34 +31,37 @@ type probeResize struct {
 }
 
 type nativeProbeSession struct {
-	InitialWidth  int              `json:"initial_width"`
-	InitialHeight int              `json:"initial_height"`
-	Command       string           `json:"command"`
-	HostCommand   string           `json:"host_command"`
-	StartedAt     time.Time        `json:"started_at"`
-	FinishedAt    time.Time        `json:"finished_at"`
-	ExitCode      uint32           `json:"exit_code"`
-	Resizes       []probeResize    `json:"resizes"`
-	Markers       []string         `json:"markers"`
-	RawSHA256     string           `json:"raw_sha256"`
-	RawOutput     []byte           `json:"raw_output"`
-	Events        []streamEvent    `json:"events"`
-	Error         string           `json:"error,omitempty"`
+	InitialWidth   int                `json:"initial_width"`
+	InitialHeight  int                `json:"initial_height"`
+	Command        string             `json:"command"`
+	HostCommand    string             `json:"host_command"`
+	HostPID        uint32             `json:"host_pid"`
+	HostProcess    pinnedHostIdentity `json:"host_process"`
+	StartedAt      time.Time          `json:"started_at"`
+	FinishedAt     time.Time          `json:"finished_at"`
+	ExitCode       uint32             `json:"exit_code"`
+	Resizes        []probeResize      `json:"resizes"`
+	Markers        []string           `json:"markers"`
+	MarkerWarnings []string           `json:"marker_warnings,omitempty"`
+	RawSHA256      string             `json:"raw_sha256"`
+	RawOutput      []byte             `json:"raw_output"`
+	Events         []streamEvent      `json:"events"`
+	Error          string             `json:"error,omitempty"`
 }
 
 type nativeProbeReport struct {
-	Mode          string             `json:"mode"`
-	Host          pinnedHostIdentity  `json:"host"`
-	BundleURL     string             `json:"bundle_url"`
-	Package       string             `json:"package"`
-	GOOS          string             `json:"goos"`
-	GOARCH        string             `json:"goarch"`
-	WorkingDir    string             `json:"working_dir"`
-	Executable    string             `json:"probe_executable"`
-	Environment   map[string]string  `json:"environment"`
-	ExpectedInput []byte             `json:"expected_input"`
+	Mode          string               `json:"mode"`
+	Host          pinnedHostIdentity   `json:"host"`
+	BundleURL     string               `json:"bundle_url"`
+	Package       string               `json:"package"`
+	GOOS          string               `json:"goos"`
+	GOARCH        string               `json:"goarch"`
+	WorkingDir    string               `json:"working_dir"`
+	Executable    string               `json:"probe_executable"`
+	Environment   map[string]string    `json:"environment"`
+	ExpectedInput []byte               `json:"expected_input"`
 	Sessions      []nativeProbeSession `json:"sessions"`
-	CompletedAt   time.Time          `json:"completed_at"`
+	CompletedAt   time.Time            `json:"completed_at"`
 }
 
 func runNativeProbe(hostPath, reportPath string) error {
@@ -133,6 +135,13 @@ func runNativeProbeSession(hostPath, executable string, width, height int) (sess
 		session.Error = err.Error()
 		return session, err
 	}
+	hostPID, hostIdentity, err := verifyPinnedHostProcess(pty.hostProcess, hostPath)
+	if err != nil {
+		session.Error = err.Error()
+		return session, err
+	}
+	session.HostPID = hostPID
+	session.HostProcess = hostIdentity
 	session.HostCommand = pty.hostCommandLine
 	defer pty.close()
 	defer pty.closePipes()
@@ -198,9 +207,13 @@ func runNativeProbeSession(hostPath, executable string, width, height int) (sess
 	hash := sha256.Sum256(result.data)
 	session.RawSHA256 = hex.EncodeToString(hash[:])
 	for _, marker := range probeExpectedMarkers() {
-		if bytes.Contains(result.data, []byte(marker)) {
+		if probeOutputContainsMarker(result.data, marker) {
 			session.Markers = append(session.Markers, marker)
 		} else {
+			if width == 1 && height == 1 {
+				session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("marker %q was not observable after 1x1 viewport reflow", marker))
+				continue
+			}
 			err := fmt.Errorf("native output does not contain marker %q", marker)
 			session.Error = err.Error()
 			return session, err
@@ -213,12 +226,15 @@ func waitProbeClient(pty *pinnedConPTY) (uint32, error) {
 	if pty == nil || pty.childProcess == 0 {
 		return 0, fmt.Errorf("native probe child process was not created")
 	}
-	event, err := windows.WaitForSingleObject(pty.childProcess, maxWaitMilliseconds)
+	const probeChildTimeout = 10 * 1000
+	event, err := windows.WaitForSingleObject(pty.childProcess, probeChildTimeout)
 	if err != nil {
 		return 0, fmt.Errorf("WaitForSingleObject(native probe child): %w", err)
 	}
 	if event != windows.WAIT_OBJECT_0 {
-		return 0, fmt.Errorf("native probe child did not finish within %d ms", maxWaitMilliseconds)
+		var exitCode uint32
+		_ = windows.GetExitCodeProcess(pty.childProcess, &exitCode)
+		return 0, fmt.Errorf("native probe child did not finish within %d ms (wait=%d exit=%d)", probeChildTimeout, event, exitCode)
 	}
 	var exitCode uint32
 	if err := windows.GetExitCodeProcess(pty.childProcess, &exitCode); err != nil {

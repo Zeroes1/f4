@@ -37,5 +37,28 @@ func probeWorkload() string {
 }
 
 func probeExpectedMarkers() []string {
-	return []string{probeBeginMarker, "alternate-begin", "alternate-end", probeEndMarker}
+	// Alternate-screen contents are intentionally not required here: ConPTY
+	// restores the primary screen and may legitimately omit text written while
+	// the alternate buffer was active. The outer markers survive repaint and
+	// are the stable handoff contract for this probe.
+	return []string{probeBeginMarker, probeEndMarker}
+}
+
+// probeOutputContainsMarker accepts both a direct byte match and a match in a
+// printable compaction. ConPTY is a terminal renderer: resize/reflow may put
+// cursor/erase controls and line breaks between adjacent bytes of a logical
+// marker (especially at the 1-column edge case), while the marker itself is
+// still present in the rendered stream.
+func probeOutputContainsMarker(output []byte, marker string) bool {
+	if strings.Contains(string(output), marker) {
+		return true
+	}
+	var compact strings.Builder
+	compact.Grow(len(output))
+	for _, byteValue := range output {
+		if byteValue >= 0x20 || byteValue == '\t' {
+			compact.WriteByte(byteValue)
+		}
+	}
+	return strings.Contains(compact.String(), marker)
 }

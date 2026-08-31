@@ -153,12 +153,12 @@ type pinnedConPTY struct {
 	// The first three fields are the exact layout of the pinned
 	// `PseudoConsole` struct. The packed pointer is passed to
 	// PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE as an HPCON.
-	signal       windows.Handle
-	ptyReference windows.Handle
-	hostProcess  windows.Handle
-	childProcess windows.Handle
-	input        windows.Handle
-	output       windows.Handle
+	signal          windows.Handle
+	ptyReference    windows.Handle
+	hostProcess     windows.Handle
+	childProcess    windows.Handle
+	input           windows.Handle
+	output          windows.Handle
 	hostCommandLine string
 	// ConptyConnection::_guid is created once for the connection and reused
 	// when _LaunchAttachedClient constructs WT_SESSION.
@@ -219,7 +219,14 @@ func (p *pinnedConPTY) close() {
 	if p.hostProcess != 0 {
 		var exitCode uint32
 		if windows.GetExitCodeProcess(p.hostProcess, &exitCode) == nil && exitCode == 259 { // STILL_ACTIVE
-			_, _ = windows.WaitForSingleObject(p.hostProcess, windows.INFINITE)
+			// A healthy host exits after the signal handle is closed.  Keep that
+			// flush opportunity bounded: this cleanup also runs on timeout and
+			// must never turn a failed probe into an unkillable test process.
+			const hostFlushTimeout = 10 * 1000
+			if event, _ := windows.WaitForSingleObject(p.hostProcess, hostFlushTimeout); event != windows.WAIT_OBJECT_0 {
+				_ = windows.TerminateProcess(p.hostProcess, 1)
+				_, _ = windows.WaitForSingleObject(p.hostProcess, 5000)
+			}
 		}
 		_ = windows.TerminateProcess(p.hostProcess, 0)
 		_ = windows.CloseHandle(p.hostProcess)
@@ -305,18 +312,6 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 			}
 		}
 	}()
-	inheritedInput, err := duplicateInheritable(inPseudo)
-	if err != nil {
-		return nil, fmt.Errorf("DuplicateHandle(input): %w", err)
-	}
-	inheritedOutput, err := duplicateInheritable(outPseudo)
-	if err != nil {
-		_ = windows.CloseHandle(inheritedInput)
-		return nil, fmt.Errorf("DuplicateHandle(output): %w", err)
-	}
-	defer windows.CloseHandle(inheritedInput)
-	defer windows.CloseHandle(inheritedOutput)
-
 	var signalHost, signalOur windows.Handle
 	if err := windows.CreatePipe(&signalHost, &signalOur, nil, 0); err != nil {
 		return nil, fmt.Errorf("CreatePipe(signal): %w", err)
@@ -325,6 +320,13 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 		_ = windows.CloseHandle(signalHost)
 		_ = windows.CloseHandle(signalOur)
 		return nil, fmt.Errorf("SetHandleInformation(signal): %w", err)
+	}
+	// The pinned implementation passes the pipe ends in the explicit handle
+	// list; CreateProcess requires every listed handle to be inheritable.
+	for name, handle := range map[string]windows.Handle{"input": inPseudo, "output": outPseudo} {
+		if err := windows.SetHandleInformation(handle, windows.HANDLE_FLAG_INHERIT, windows.HANDLE_FLAG_INHERIT); err != nil {
+			return nil, fmt.Errorf("SetHandleInformation(%s): %w", name, err)
+		}
 	}
 
 	flags := uint32(pseudoconsoleResizeQuirk | pseudoconsoleWin32InputMode)
@@ -349,7 +351,7 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 	if err != nil {
 		return nil, err
 	}
-	inherited := []windows.Handle{server, inheritedInput, inheritedOutput, signalHost}
+	inherited := []windows.Handle{server, inPseudo, outPseudo, signalHost}
 	attrs, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
 		return nil, fmt.Errorf("InitializeProcThreadAttributeList(host): %w", err)
@@ -363,9 +365,9 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 	startup := windows.StartupInfoEx{}
 	startup.StartupInfo.Cb = uint32(unsafe.Sizeof(startup))
 	startup.StartupInfo.Flags = windows.STARTF_USESTDHANDLES
-	startup.StartupInfo.StdInput = inheritedInput
-	startup.StartupInfo.StdOutput = inheritedOutput
-	startup.StartupInfo.StdErr = inheritedOutput
+	startup.StartupInfo.StdInput = inPseudo
+	startup.StartupInfo.StdOutput = outPseudo
+	startup.StartupInfo.StdErr = outPseudo
 	startup.ProcThreadAttributeList = attrs.List()
 	var hostInfo windows.ProcessInformation
 	if err := windows.CreateProcess(&host16[0], &cmd16[0], nil, nil, true, windows.EXTENDED_STARTUPINFO_PRESENT, nil, nil, &startup.StartupInfo, &hostInfo); err != nil {
@@ -393,6 +395,55 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 	return &pinnedConPTY{signal: signalOur, ptyReference: ptyReference, hostProcess: hostInfo.Process, input: inOur, output: outOur, session: session, hostCommandLine: cmd}, nil
 }
 
+// processImagePath resolves the executable behind a live process handle. This
+// is deliberately checked in addition to the requested CreateProcess path:
+// the native probe must fail closed if a launcher, package registration, or
+// filesystem redirection substituted the system OpenConsole.
+func processImagePath(process windows.Handle) (string, error) {
+	buffer := make([]uint16, 512)
+	for {
+		size := uint32(len(buffer))
+		err := windows.QueryFullProcessImageName(process, 0, &buffer[0], &size)
+		if err == nil {
+			return windows.UTF16ToString(buffer[:size]), nil
+		}
+		if err != windows.ERROR_INSUFFICIENT_BUFFER || len(buffer) >= 32768 {
+			return "", fmt.Errorf("QueryFullProcessImageName: %w", err)
+		}
+		buffer = make([]uint16, len(buffer)*2)
+	}
+}
+
+func verifyPinnedHostProcess(process windows.Handle, expectedPath string) (uint32, pinnedHostIdentity, error) {
+	if process == 0 {
+		return 0, pinnedHostIdentity{}, fmt.Errorf("pinned host process handle is invalid")
+	}
+	pid, err := windows.GetProcessId(process)
+	if err != nil {
+		return 0, pinnedHostIdentity{}, fmt.Errorf("GetProcessId(pinned OpenConsole): %w", err)
+	}
+	actualPath, err := processImagePath(process)
+	if err != nil {
+		return pid, pinnedHostIdentity{}, err
+	}
+	expectedAbs, err := filepath.Abs(expectedPath)
+	if err != nil {
+		return pid, pinnedHostIdentity{}, fmt.Errorf("resolve pinned host path: %w", err)
+	}
+	actualAbs, err := filepath.Abs(actualPath)
+	if err != nil {
+		return pid, pinnedHostIdentity{}, fmt.Errorf("resolve launched host path: %w", err)
+	}
+	if !strings.EqualFold(filepath.Clean(actualAbs), filepath.Clean(expectedAbs)) {
+		return pid, pinnedHostIdentity{Path: actualPath}, fmt.Errorf("pinned host process path mismatch: got %q want %q", actualPath, expectedPath)
+	}
+	identity, err := verifyPinnedHost(actualPath)
+	if err != nil {
+		return pid, identity, fmt.Errorf("launched host failed pinned identity check: %w", err)
+	}
+	return pid, identity, nil
+}
+
 func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	expanded, err := expandEnvironmentStrings(command)
 	if err != nil {
@@ -410,15 +461,16 @@ func attachPinnedClient(pty *pinnedConPTY, command string) error {
 	// ConptyConnection::_LaunchAttachedClient passes the HPCON value, not the
 	// reference handle, as PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE. The first
 	// three fields of pinnedConPTY are the packed PseudoConsole members.
-	hpc := uintptr(unsafe.Pointer(pty))
-	if err := attrs.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, unsafe.Pointer(&hpc), unsafe.Sizeof(hpc)); err != nil {
+	// UpdateProcThreadAttribute receives the HPCON value itself (the packed
+	// PseudoConsole pointer), matching ConptyConnection::_LaunchAttachedClient
+	// and the working public-ConPTY path in cmd/f4/pty_windows.go. Passing the
+	// address of a local uintptr would describe a different, invalid handle.
+	if err := attrs.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, unsafe.Pointer(pty), unsafe.Sizeof(uintptr(0))); err != nil {
 		return fmt.Errorf("UpdateProcThreadAttribute(pseudoconsole): %w", err)
 	}
 	startup := windows.StartupInfoEx{}
 	startup.StartupInfo.Cb = uint32(unsafe.Sizeof(startup))
-	// ConptyConnection::_LaunchAttachedClient sets STARTF_USESTDHANDLES on a
-	// zeroed STARTUPINFOEX.  The pseudoconsole supplies the console handles;
-	// this flag is nevertheless part of the pinned CreateProcess call.
+	// Match ConptyConnection::_LaunchAttachedClient.
 	startup.StartupInfo.Flags = windows.STARTF_USESTDHANDLES
 	startup.ProcThreadAttributeList = attrs.List()
 	_, environmentBlock, err := attachedClientEnvironment(pty.session)
