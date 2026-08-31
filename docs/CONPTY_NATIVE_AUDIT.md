@@ -736,3 +736,16 @@ native empty probe complete: artifacts/pinned-conpty-empty.json raw_bytes=56 ren
 
 Критерий 10.8 проверяет именно `rendered_lines=0`, а не отсутствие startup
 controls. Raw-файл и SHA сохранены; процессы и handles закрыты.
+
+### Заголовок окна (10.6)
+
+В control-прогоне assertion считает OSC-title по всему raw-потоку, поскольку
+хост выдаёт его после `controlEnd`, вне логического payload:
+
+```text
+go run . -probe-static -report artifacts/pinned-conpty-probe-static-title.json
+title-osc: passed observed_count=1
+```
+
+Последовательность ровно `ESC]0;pinned-conpty-probe BEL`; в `RenderedLines` она
+не попадает.

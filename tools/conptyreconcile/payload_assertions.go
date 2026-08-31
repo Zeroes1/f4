@@ -265,6 +265,15 @@ func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
 		linkStatus, linkDetail = "failed", "host renderer OSC 8 sequence or ST terminator is absent"
 	}
 	result = append(result, payloadAssertion{Name: "osc8-st", Status: linkStatus, ExpectedCount: 2, ObservedCount: boolCount(linkStart) + boolCount(linkEnd), Detail: linkDetail})
+	titleSequence := []byte("\x1b]0;pinned-conpty-probe\x07")
+	// OSC title is emitted after the marked payload and is intentionally
+	// out-of-band; count it in the complete host stream, not the payload slice.
+	titleCount := bytes.Count(raw, titleSequence)
+	titleStatus, titleDetail := "passed", "host emitted the expected out-of-band title sequence"
+	if titleCount != 1 {
+		titleStatus, titleDetail = "failed", "host title sequence count differs"
+	}
+	result = append(result, payloadAssertion{Name: "title-osc", Status: titleStatus, ExpectedCount: 1, ObservedCount: titleCount, Detail: titleDetail})
 	_ = markers
 	return result
 }
