@@ -11,23 +11,24 @@ import (
 
 func main() {
 	var (
-		probe         = flag.Bool("probe", false, "run the pinned-host probe with live resize")
-		probeStatic   = flag.Bool("probe-static", false, "run the pinned-host probe without live resize")
-		gate          = flag.Bool("gate", false, "run the complete standalone native gate")
-		seeds         = flag.Bool("seeds", false, "run the 300-session native seed stage")
-		seed          = flag.Uint64("seed", 0, "run one deterministic native seed")
-		partial       = flag.Bool("partial", false, "run resize during an incomplete line")
-		commandProbe  = flag.Bool("command-probe", false, "measure recursive dir output on the pinned host")
-		reflowProbe   = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
-		probeHost     = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
-		reportPath    = flag.String("report", "", "report path")
-		emitProbe     = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
-		emitWidth     = flag.Int("emit-probe-width", 0, "internal child workload width")
-		emitSeed      = flag.String("emit-seed", "", "internal child deterministic seed")
-		emitPartial   = flag.Bool("emit-partial", false, "internal child incomplete-line workload")
-		emitAlternate = flag.Bool("emit-alternate", false, "internal child alternate-screen workload")
-		emitControl   = flag.Bool("emit-control", false, "internal child control-sequence workload")
-		emitReflow    = flag.Bool("emit-reflow", false, "internal child static reflow workload")
+		probe          = flag.Bool("probe", false, "run the pinned-host probe with live resize")
+		probeStatic    = flag.Bool("probe-static", false, "run the pinned-host probe without live resize")
+		gate           = flag.Bool("gate", false, "run the complete standalone native gate")
+		seeds          = flag.Bool("seeds", false, "run the 300-session native seed stage")
+		seed           = flag.Uint64("seed", 0, "run one deterministic native seed")
+		partial        = flag.Bool("partial", false, "run resize during an incomplete line")
+		commandProbe   = flag.Bool("command-probe", false, "measure recursive dir output on the pinned host")
+		commandCompare = flag.Bool("command-compare", false, "compare recursive dir through pinned host with redirected output")
+		reflowProbe    = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
+		probeHost      = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
+		reportPath     = flag.String("report", "", "report path")
+		emitProbe      = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
+		emitWidth      = flag.Int("emit-probe-width", 0, "internal child workload width")
+		emitSeed       = flag.String("emit-seed", "", "internal child deterministic seed")
+		emitPartial    = flag.Bool("emit-partial", false, "internal child incomplete-line workload")
+		emitAlternate  = flag.Bool("emit-alternate", false, "internal child alternate-screen workload")
+		emitControl    = flag.Bool("emit-control", false, "internal child control-sequence workload")
+		emitReflow     = flag.Bool("emit-reflow", false, "internal child static reflow workload")
 	)
 	flag.Parse()
 	if *seed == 0 {
@@ -105,6 +106,12 @@ func main() {
 	}
 	if *commandProbe {
 		if err := runNativeCommandProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *commandCompare {
+		if err := runNativeCommandCompare(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

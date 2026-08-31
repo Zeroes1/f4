@@ -29,6 +29,12 @@ func runNativeCommandProbe(hostPath, reportPath string) error {
 	return fmt.Errorf("native command probe requires Windows")
 }
 
+func runNativeCommandCompare(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native command comparison requires Windows")
+}
+
 func runNativeReflowProbe(hostPath, reportPath string) error {
 	_ = hostPath
 	_ = reportPath

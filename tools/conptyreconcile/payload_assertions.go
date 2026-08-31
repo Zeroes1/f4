@@ -26,75 +26,110 @@ func assertStaticPayload(expected, raw []byte, markers ...string) []payloadAsser
 	expectedStream.Feed(stripCursorVisibilityWrapper(expected))
 	lines := expectedStream.Lines()
 	rendered := parseRenderedHistory(raw).Lines()
-	var history []byte
-	for _, line := range rendered {
-		history = append(history, line.Bytes...)
-		history = append(history, line.Terminator...)
+	segment, segmentOK := renderedMarkerSegment(rendered, markers[0], markers[len(markers)-1])
+	result := make([]payloadAssertion, 0, len(lines)+4)
+	if !segmentOK {
+		result = append(result, payloadAssertion{
+			Name: "history-order", Status: "failed", ExpectedCount: len(lines),
+			Detail: "begin/end markers do not delimit a rendered logical sequence",
+		})
+	} else if len(segment) != len(lines) {
+		result = append(result, payloadAssertion{
+			Name: "history-order", Status: "failed", ExpectedCount: len(lines),
+			ObservedCount: len(segment), Detail: "rendered record count differs",
+		})
+	} else {
+		result = append(result, payloadAssertion{
+			Name: "history-order", Status: "passed", ExpectedCount: len(lines),
+			ObservedCount: len(segment), Detail: "rendered records match in order",
+		})
 	}
-	printable := printableStream(history)
-	result := make([]payloadAssertion, 0, len(lines)+3)
+
 	lineFrequency := make(map[string]int)
 	for _, line := range lines {
-		if !bytes.Contains(line.Bytes, []byte{0x1b}) {
+		if !bytes.Contains(line.Bytes, []byte{0x1b}) && !bytes.Contains(line.Bytes, []byte{'\t'}) {
 			needle := append(append([]byte(nil), line.Bytes...), line.Terminator...)
 			lineFrequency[string(needle)]++
 		}
 	}
-
 	for index, line := range lines {
 		name := fmt.Sprintf("line[%d]", index)
 		if colon := bytes.IndexByte(line.Bytes, ':'); colon > 0 {
 			name = string(line.Bytes[:colon])
 		}
 		if bytes.Contains(line.Bytes, []byte{0x1b}) || bytes.Contains(line.Bytes, []byte{'\t'}) {
-			result = append(result, payloadAssertion{
-				Name:   name,
-				Status: "deferred",
-				Detail: "line contains VT controls; raw transport is not a logical history",
-			})
+			result = append(result, payloadAssertion{Name: name, Status: "deferred", Detail: "line contains VT controls; rendered control history is checked separately"})
 			continue
 		}
 		needle := append(append([]byte(nil), line.Bytes...), line.Terminator...)
-		observed := bytes.Count(printable, needle)
+		observed := countRenderedLine(segment, line.Bytes, line.Terminator)
 		if bytes.HasPrefix(line.Bytes, []byte("spaces-nine:")) && observed == 0 {
-			// The pinned renderer's documented ECH threshold removes more than
-			// eight trailing spaces from a non-wrapped line. Accept only the
-			// source-defined trimmed form, never an arbitrary width heuristic.
-			trimmed := append([]byte(nil), bytes.TrimRight(line.Bytes, " ")...)
-			trimmed = append(trimmed, line.Terminator...)
-			observed = bytes.Count(printable, trimmed)
+			// The source-defined ECH threshold permits only this exact trimmed
+			// alternative; no width or row heuristic is used.
+			trimmedBytes := bytes.TrimRight(line.Bytes, " ")
+			observed = countRenderedLine(segment, trimmedBytes, line.Terminator)
 		}
 		expectedCount := lineFrequency[string(needle)]
-		status := "passed"
-		detail := "exact host-emitted logical line found"
+		status, detail := "passed", "exact rendered logical line found in order"
 		if observed != expectedCount {
-			status = "failed"
-			detail = "plain logical line count differs"
+			status, detail = "failed", "rendered logical line count differs"
 		}
-		result = append(result, payloadAssertion{
-			Name: name, Status: status, ExpectedCount: expectedCount,
-			ObservedCount: observed, Detail: detail,
-		})
+		positionMatch := segmentOK && index < len(segment) && bytes.Equal(segment[index].Bytes, line.Bytes) && bytes.Equal(segment[index].Terminator, line.Terminator)
+		if bytes.HasPrefix(line.Bytes, []byte("spaces-nine:")) && segmentOK && index < len(segment) {
+			positionMatch = bytes.Equal(segment[index].Bytes, bytes.TrimRight(line.Bytes, " ")) && bytes.Equal(segment[index].Terminator, line.Terminator)
+		}
+		if !positionMatch {
+			status, detail = "failed", "rendered records are out of order or differ"
+		}
+		if segmentOK && index < len(segment) && segment[index].CrossRow {
+			status, detail = "deferred", "rendered record crossed an explicit host row move"
+		}
+		result = append(result, payloadAssertion{Name: name, Status: status, ExpectedCount: expectedCount, ObservedCount: observed, Detail: detail})
 	}
-
-	// Marker checks are independent from line checks.  CR/LF inserted between
-	// marker bytes by a narrow viewport is not silently removed here: that is
-	// precisely a history-layer responsibility.
-	withoutNewlines := strings.NewReplacer("\r", "", "\n", "").Replace(string(printable))
+	var markerBytes []byte
+	for _, line := range segment {
+		markerBytes = append(markerBytes, line.Bytes...)
+		markerBytes = append(markerBytes, line.Terminator...)
+	}
+	withoutNewlines := strings.NewReplacer("\r", "", "\n", "").Replace(string(markerBytes))
 	for _, marker := range markers {
 		observed := strings.Count(withoutNewlines, marker)
-		status := "passed"
-		detail := "marker count is exact in the static stream"
+		status, detail := "passed", "marker count is exact in rendered sequence"
 		if observed != 1 {
-			status = "failed"
-			detail = "marker count is not exactly one"
+			status, detail = "failed", "marker count is not exactly one"
 		}
-		result = append(result, payloadAssertion{
-			Name: marker, Status: status, ExpectedCount: 1,
-			ObservedCount: observed, Detail: detail,
-		})
+		result = append(result, payloadAssertion{Name: marker, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
 	}
 	return result
+}
+
+func renderedMarkerSegment(lines []renderedHistoryLine, begin, end string) ([]renderedHistoryLine, bool) {
+	start := -1
+	for index, line := range lines {
+		if bytes.Equal(line.Bytes, []byte(begin)) {
+			start = index
+			break
+		}
+	}
+	if start < 0 {
+		return nil, false
+	}
+	for index := start + 1; index < len(lines); index++ {
+		if bytes.Equal(lines[index].Bytes, []byte(end)) {
+			return append([]renderedHistoryLine(nil), lines[start:index+1]...), true
+		}
+	}
+	return nil, false
+}
+
+func countRenderedLine(lines []renderedHistoryLine, bytesValue, term []byte) int {
+	count := 0
+	for _, line := range lines {
+		if bytes.Equal(line.Bytes, bytesValue) && bytes.Equal(line.Terminator, term) {
+			count++
+		}
+	}
+	return count
 }
 
 // assertAlternatePayload treats text written while the alternate buffer is

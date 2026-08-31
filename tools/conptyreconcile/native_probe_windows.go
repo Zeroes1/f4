@@ -234,6 +234,9 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 }
 
 func runNativeProbeSessionWithWorkload(hostPath, executable string, width, height int, resizeDuringOutput bool, workload []byte, childCommand string, markers []string) (session nativeProbeSession, runErr error) {
+	// resizeDuringOutput is retained for the inactive host-resize alternative
+	// documented by B1-0. The gate and all acceptance paths pass false; only
+	// the explicit diagnostic -probe command may exercise the old behavior.
 	session.InitialWidth, session.InitialHeight = width, height
 	session.ExpectedInput = append([]byte(nil), workload...)
 	session.Command = childCommand
