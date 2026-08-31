@@ -28,6 +28,10 @@ func probeWorkloadForWidth(width int) string {
 		width = 80
 	}
 	var b strings.Builder
+	// Keep the cursor hidden while the long-line payload is rendered. The
+	// pinned host then does not invoke PaintCursor, isolating line wrapping
+	// from the cursor-side state reset documented in PINNED_HOST_FACTS.md:11.
+	b.WriteString("\x1b[?25l")
 	b.WriteString(probeBeginMarker)
 	b.WriteString("\r\n")
 	// Keep the principal long-line proof at the top of the buffer, before
@@ -77,6 +81,7 @@ func probeWorkloadForWidth(width int) string {
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString(probeEndMarker)
 	b.WriteString("\r\n")
+	b.WriteString("\x1b[?25h")
 	return b.String()
 }
 

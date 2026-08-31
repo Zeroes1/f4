@@ -23,7 +23,7 @@ func assertStaticPayload(expected, raw []byte, markers ...string) []payloadAsser
 		markers = []string{probeBeginMarker, probeEndMarker}
 	}
 	var expectedStream logicalLineStream
-	expectedStream.Feed(expected)
+	expectedStream.Feed(stripCursorVisibilityWrapper(expected))
 	lines := expectedStream.Lines()
 	stream := parseHostRenderStream(raw, 0)
 	var history []byte
@@ -124,6 +124,18 @@ func assertAlternatePayload(raw []byte, markers ...string) []payloadAssertion {
 		result = append(result, payloadAssertion{Name: record, Status: status, ExpectedCount: 0, ObservedCount: observed, Detail: detail})
 	}
 	return result
+}
+
+func stripCursorVisibilityWrapper(expected []byte) []byte {
+	const hide = "\x1b[?25l"
+	const show = "\x1b[?25h"
+	if bytes.HasPrefix(expected, []byte(hide)) {
+		expected = expected[len(hide):]
+	}
+	if bytes.HasSuffix(expected, []byte(show)) {
+		expected = expected[:len(expected)-len(show)]
+	}
+	return expected
 }
 
 func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
