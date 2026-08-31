@@ -161,7 +161,8 @@ def run(conpty, chunk, mode):
         if h and h != wintypes.HANDLE(-1).value:
             k32.SetHandleInformation(h, 1, 0)  # HANDLE_FLAG_INHERIT off
 
-    cmd = f'"{sys.executable}" "{CHILD}" {chunk} {mode}'
+    cmd = (chunk if isinstance(chunk, str)
+           else f'"{sys.executable}" "{CHILD}" {chunk} {mode}')
     if not k32.CreateProcessW(None, ctypes.create_unicode_buffer(cmd), None,
                               None, False, EXTENDED_STARTUPINFO_PRESENT, None,
                               None, ctypes.byref(siex), ctypes.byref(pi)):
@@ -237,6 +238,27 @@ def probe(label, path, say):
         say("")
 
 
+def probe_cmd(label, conpty, say):
+    """What does a real Console API app get? cmd's `type` of a 160-char line.
+
+    160 is two full rows, so the write ends exactly on the margin. On the
+    legacy path that earns an injected CRLF on top of the one the file
+    already has; on the passthrough path there is only the file's own.
+    """
+    path = os.path.abspath(f"{OUTDIR}/longline.txt")
+    with open(path, "w", newline="\r\n") as f:
+        f.write("A" * 160 + "\n")
+    raw, _ = run(conpty, f'cmd /c type "{path}"', "default")
+    with open(f"{OUTDIR}/stream-{label}-cmd-type.bin", "wb") as f:
+        f.write(raw)
+    breaks = raw.count(b"\r\n")
+    say(f"  cmd /c type (one 160-char line) -> {breaks} CRLF in the stream, "
+        f"rows {rows(raw)}")
+    say("    1 = the file's own newline, passthrough; "
+        "2 = one was injected, legacy path")
+    say("")
+
+
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
     report = []
@@ -257,6 +279,7 @@ def main():
     for label, path in targets:
         try:
             probe(label, path, say)
+            probe_cmd(label, load_conpty(path), say)
         except Exception as exc:
             say(f"  FAILED: {exc}")
             say("")
