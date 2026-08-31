@@ -1,6 +1,6 @@
 # Аудит на пути к нативному ConPTY-гейту
 
-Дата: 2026-08-31. Состояние на `c8374430` плюс локальный контрольный прогон.
+Дата: 2026-08-31. Состояние на текущем `main` плюс native runtime-прогоны.
 
 Это промежуточный аудит, а не отчёт о пройденном гейте. Он фиксирует, что
 именно уже доказано, что ещё нет, и какие два расхождения найдены в
@@ -39,8 +39,10 @@ events через настоящий `PanelsFrame → AnsiParser → TerminalVie
 integration gate и не считается его прохождением.
 
 **Гейта из `CONPTY_GATE_REQUIREMENTS.md` ещё нет в полном виде.** Bridge-файлы
-`cmd/f4/native_openconsole_*` появились, но собственный pinned transport f4 и
-live resize/reflow пока не реализованы. Не покрыты точные длины `N-1/N/N+1/2N+1`,
+`cmd/f4/native_openconsole_*` появились. Собственный pinned ConDrv transport
+теперь создаёт живую сессию из `cmd/f4`, проверяет identity процесса и
+передаёт чанки в `PanelsFrame`; минимальный runtime-сценарий прошёл. Но не
+покрыты точные длины `N-1/N/N+1/2N+1`,
 повторяющийся символ/пробелы/пустые строки, реальные команды (`dir`, `echo`,
 `type`, `findstr`, PowerShell), scrollback/viewport/cursor, произвольные split
 points, lifecycle и 300 сидов. Фаззинга времени нет — payload пока синтетический.
@@ -49,7 +51,9 @@ points, lifecycle и 300 сидов. Фаззинга времени нет — 
 `cmd/f4/terminal_view.go` теперь использует `terminalReflowEnabled = true`.
 Это снимает прежний silent bypass, но само по себе не доказывает свойства B:
 нужны live resize-сессии, экран, история и позиция курсора после каждого
-изменения размера. Runtime-прогон bridge от 2026-08-31 это подтвердил:
+изменения размера. Минимальный live-прогон `TestNativeOpenConsoleF4Live`
+успешен с реальным resize во время cmd-вывода, но полный runtime-прогон
+подтвердил проблему истории:
 `TestNativeOpenConsoleF4Pipeline` падает на static 80x25, потому что
 `GetAllLogBytes()` возвращает `long:` с урезанным числом `C`, а не ожидаемые
 257. Это открытая поломка reflow/history, а не зелёный gate.

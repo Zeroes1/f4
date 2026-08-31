@@ -3,10 +3,14 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 type nativeOpenConsoleReplayPTY struct{}
@@ -55,6 +59,82 @@ func TestNativeOpenConsoleF4Pipeline(t *testing.T) {
 		logBytes := string(pf.termView.GetAllLogBytes())
 		pf.Close()
 		assertNativeF4Log(t, logBytes, report.ExpectedInput, session.InitialWidth, session.InitialHeight)
+	}
+}
+
+// TestNativeOpenConsoleF4Live owns a real pinned ConPTY session from the f4
+// package itself. It is intentionally opt-in because it starts cmd.exe and
+// exercises the machine's pinned host, but unlike the replay diagnostic above
+// it fails hard when that host is unavailable.
+func TestNativeOpenConsoleF4Live(t *testing.T) {
+	if os.Getenv("F4_NATIVE_OPENCONSOLE") != "1" {
+		t.Skip("set F4_NATIVE_OPENCONSOLE=1 to run the live pinned OpenConsole gate")
+	}
+	pty, err := newNativeOpenConsolePTY(80, 25)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pf := NewPanelsFrame()
+	pf.ptyMutex.Lock()
+	pf.pty = pty
+	pf.termView.pty = pty
+	pf.parser.pty = pty
+	pf.ptyMutex.Unlock()
+	defer pf.Close()
+	long := "long: " + strings.Repeat("C", 257)
+	command := fmt.Sprintf("echo __F4_NATIVE_LIVE_BEGIN__ & echo ascii: LIVE & echo repeat: SAME & echo repeat: SAME & echo repeat: SAME & ping -n 2 127.0.0.1 >nul & echo %s & ping -n 2 127.0.0.1 >nul & echo __F4_NATIVE_LIVE_END__", long)
+	if err := pty.Run("cmd.exe", "/d", "/c", command); err != nil {
+		t.Fatal(err)
+	}
+	readDone := make(chan error, 1)
+	go func() {
+		buf := make([]byte, 127) // deliberately crosses arbitrary read boundaries
+		resized := false
+		total := 0
+		for {
+			n, readErr := pty.Read(buf)
+			if n > 0 {
+				total += n
+				pf.consumeLocalOutput(pty, buf[:n])
+				if !resized {
+					// Resize while output is active, then restore the original size.
+					pf.ResizeConsole(41, 25)
+					pf.ResizeConsole(80, 25)
+					resized = true
+				}
+			}
+			if readErr != nil {
+				t.Logf("live native bytes read=%d", total)
+				readDone <- readErr
+				return
+			}
+		}
+	}()
+	if err := pty.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if err := pty.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
+		t.Fatal(err)
+	}
+	logBytes := strings.ReplaceAll(string(pf.termView.GetAllLogBytes()), "\r", "")
+	t.Logf("live log bytes=%d gridHistory=%d viewport=%dx%d cursor=%d,%d", len(logBytes), len(pf.termView.GridHistory), pf.termView.Width, pf.termView.Height, pf.termView.CursorX, pf.termView.CursorY)
+	assertLiveNativeLog(t, logBytes)
+}
+
+func assertLiveNativeLog(t *testing.T, logBytes string) {
+	t.Helper()
+	begin, end := "__F4_NATIVE_LIVE_BEGIN__", "__F4_NATIVE_LIVE_END__"
+	if strings.Count(logBytes, begin) != 1 || strings.Count(logBytes, end) != 1 || strings.Index(logBytes, begin) >= strings.Index(logBytes, end) {
+		t.Fatalf("live markers missing, duplicated, or reordered: %q", logBytes)
+	}
+	if got := linesContaining(logBytes, "long: "); len(got) != 1 || got[0] != "long: "+strings.Repeat("C", 257) {
+		t.Fatalf("live long line changed: %q", got)
+	}
+	if len(linesContaining(logBytes, "ascii: LIVE")) != 1 || len(linesContaining(logBytes, "repeat: SAME")) != 3 {
+		t.Fatalf("live repeated payload was lost or coalesced: %q", logBytes)
 	}
 }
 
