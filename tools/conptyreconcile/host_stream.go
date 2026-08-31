@@ -5,9 +5,9 @@ import (
 	"strconv"
 )
 
-// hostFrame records a resize repaint boundary emitted by VtEngine. The
-// contents are deliberately not interpreted as rows: they are renderer bytes
-// for the current buffer and may repeat already-rendered data.
+// hostFrame records an XTWINOPS sequence observed in renderer output. PTY
+// resize boundaries are not inferred from this sequence: the native harness
+// records its own ResizePseudoConsole output offset instead.
 type hostFrame struct {
 	Offset int `json:"offset"`
 	Width  int `json:"width"`

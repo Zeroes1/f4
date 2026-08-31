@@ -49,6 +49,7 @@ type nativeProbeSession struct {
 	RawOutput      []byte             `json:"raw_output"`
 	LogicalLines   []logicalLine      `json:"logical_lines"`
 	Frames         []hostFrame        `json:"frames"`
+	ResizeOffsets  []int              `json:"resize_offsets"`
 	Events         []streamEvent      `json:"events"`
 	Error          string             `json:"error,omitempty"`
 }
@@ -127,6 +128,39 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 	}
 	fmt.Printf("native OpenConsole probe complete: %s\n", reportPath)
 	return nil
+}
+
+func runNativePartialProbe(hostPath, reportPath string) error {
+	if reportPath == "" {
+		reportPath = filepath.Join("artifacts", "pinned-conpty-partial.json")
+	}
+	resolved, err := ensureProbeHost(hostPath)
+	if err != nil {
+		return err
+	}
+	identity, err := verifyPinnedHost(resolved)
+	if err != nil {
+		return err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	workload := partialProbeWorkload(80)
+	command := fmt.Sprintf(`"%s" -emit-partial -emit-probe-width 80`, executable)
+	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, 80, 25, true, workload, command, nil)
+	report := nativeProbeReport{Mode: "pinned-conpty-partial", Host: identity, ExpectedInput: workload, ResizeDuringOutput: true, Sessions: []nativeProbeSession{session}, CompletedAt: time.Now().UTC()}
+	artifactDir := reportPath + ".sessions"
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		return err
+	}
+	if err := writeAndVerifyRawArtifact(filepath.Join(artifactDir, "80x25.raw"), session.RawOutput, session.RawSHA256); err != nil {
+		return err
+	}
+	if err := writeJSON(reportPath, report); err != nil {
+		return err
+	}
+	return runErr
 }
 
 func writeAndVerifyRawArtifact(path string, data []byte, expectedSHA string) error {
@@ -248,7 +282,13 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	logical.Feed(result.data)
 	session.LogicalLines = logical.Lines()
 	session.Frames = logical.Frames()
-	session.Events = recorder.snapshot().Events
+	snapshot := recorder.snapshot()
+	session.Events = snapshot.Events
+	for _, event := range snapshot.Events {
+		if event.Kind == streamResize {
+			session.ResizeOffsets = append(session.ResizeOffsets, event.OutputOffset)
+		}
+	}
 	hash := sha256.Sum256(result.data)
 	session.RawSHA256 = hex.EncodeToString(hash[:])
 	previous := -1

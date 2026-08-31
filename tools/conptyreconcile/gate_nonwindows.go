@@ -9,3 +9,9 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 	_ = reportPath
 	return fmt.Errorf("native seed gate requires Windows")
 }
+
+func runNativePartialProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native partial probe requires Windows")
+}

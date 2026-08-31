@@ -12,6 +12,13 @@ const (
 // row is used as a line boundary.
 func probeWorkload() string { return probeWorkloadForWidth(80) }
 
+func partialProbeWorkload(width int) []byte {
+	if width < 1 {
+		width = 80
+	}
+	return []byte("partial: " + strings.Repeat("P", width+40) + "\r\n")
+}
+
 func probeWorkloadForWidth(width int) string {
 	if width < 1 {
 		width = 80

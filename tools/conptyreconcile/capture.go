@@ -11,11 +11,12 @@ const (
 )
 
 type streamEvent struct {
-	Kind   streamKind `json:"kind"`
-	Bytes  []byte     `json:"bytes,omitempty"`
-	Width  int        `json:"width,omitempty"`
-	Height int        `json:"height,omitempty"`
-	Cause  string     `json:"cause,omitempty"`
+	Kind         streamKind `json:"kind"`
+	Bytes        []byte     `json:"bytes,omitempty"`
+	OutputOffset int        `json:"output_offset,omitempty"`
+	Width        int        `json:"width,omitempty"`
+	Height       int        `json:"height,omitempty"`
+	Cause        string     `json:"cause,omitempty"`
 }
 
 type capture struct {
@@ -34,6 +35,7 @@ type hostCaptureRecorder struct {
 	capture capture
 	width   int
 	height  int
+	outputBytes int
 }
 
 func newHostCaptureRecorder(_ int64, width, height int) *hostCaptureRecorder {
@@ -44,13 +46,16 @@ func (r *hostCaptureRecorder) append(kind streamKind, data []byte, cause string)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.capture.append(kind, data, cause)
+	if kind == streamObservedOutput {
+		r.outputBytes += len(data)
+	}
 }
 
 func (r *hostCaptureRecorder) resize(width, height int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.width, r.height = width, height
-	r.capture.Events = append(r.capture.Events, streamEvent{Kind: streamResize, Width: width, Height: height, Cause: "pinned-host-resize"})
+	r.capture.Events = append(r.capture.Events, streamEvent{Kind: streamResize, OutputOffset: r.outputBytes, Width: width, Height: height, Cause: "pinned-host-resize"})
 }
 
 func (r *hostCaptureRecorder) snapshot() capture {

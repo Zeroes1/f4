@@ -50,3 +50,16 @@ func emitSeedWorkload(seed uint64, width int) error {
 	}
 	return nil
 }
+
+func emitPartialWorkload(width int) error {
+	input := partialProbeWorkload(width)
+	cut := len(input) / 2
+	if _, err := os.Stdout.Write(input[:cut]); err != nil {
+		return fmt.Errorf("emit partial probe prefix: %w", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, err := os.Stdout.Write(input[cut:]); err != nil {
+		return fmt.Errorf("emit partial probe suffix: %w", err)
+	}
+	return nil
+}
