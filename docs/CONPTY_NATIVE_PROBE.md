@@ -12,7 +12,7 @@ come only from explicit newline bytes.
 go run ./tools/conptyreconcile -probe -report artifacts/pinned-conpty-probe.json
 go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-probe-static.json
 go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-command.json
-go run ./tools/conptyreconcile -command-compare -report artifacts/pinned-conpty-command-compare.json
+go run ./tools/conptyreconcile -command-compare -command-compare-width 512 -report artifacts/pinned-conpty-command-compare-512.json
 go run ./tools/conptyreconcile -clear-probe -report artifacts/pinned-conpty-clear.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
@@ -55,8 +55,10 @@ pinned host, never a rule for reconstructing history.
 
 `-command-compare` repeats `dir /s /b` once through a redirected file and once
 through the pinned host, then compares the host's rendered logical lines with
-the file after only CRLF normalization. It is an independent diagnostic and
-fails closed on any mismatch; it is not yet a gate pass.
+the file after only CRLF normalization. `-command-compare-width` selects the
+fixed capture width (the consumer reflow path does not resize the host). It is
+an independent diagnostic and fails closed on any mismatch; it is not yet a
+gate pass.
 
 `-clear-probe` runs a PowerShell `Clear-Host` sequence and checks that the
 pinned host emits exactly one `ESC[3J`, removing the pre-clear marker from

@@ -35,6 +35,13 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	return fmt.Errorf("native command comparison requires Windows")
 }
 
+func runNativeCommandCompareAtWidth(hostPath, reportPath string, width int) error {
+	_ = hostPath
+	_ = reportPath
+	_ = width
+	return fmt.Errorf("native command comparison requires Windows")
+}
+
 func runNativeClearProbe(hostPath, reportPath string) error {
 	_ = hostPath
 	_ = reportPath

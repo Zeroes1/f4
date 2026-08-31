@@ -26,6 +26,8 @@ type commandLineMismatch struct {
 type commandCompareReport struct {
 	Mode                    string                `json:"mode"`
 	Host                    pinnedHostIdentity    `json:"host"`
+	SessionWidth            int                   `json:"session_width"`
+	SessionHeight           int                   `json:"session_height"`
 	Command                 string                `json:"command"`
 	RedirectCommand         string                `json:"redirect_command"`
 	RedirectedBytes         int                   `json:"redirected_bytes"`
@@ -58,8 +60,15 @@ type commandCompareReport struct {
 // ground truth for child line boundaries; host rendering is compared only
 // after stripping the renderer's out-of-band controls via RenderedLines.
 func runNativeCommandCompare(hostPath, reportPath string) error {
+	return runNativeCommandCompareAtWidth(hostPath, reportPath, 80)
+}
+
+func runNativeCommandCompareAtWidth(hostPath, reportPath string, width int) error {
+	if width < 1 {
+		return fmt.Errorf("command comparison width must be positive, got %d", width)
+	}
 	if reportPath == "" {
-		reportPath = filepath.Join("artifacts", "pinned-conpty-command-compare.json")
+		reportPath = filepath.Join("artifacts", fmt.Sprintf("pinned-conpty-command-compare-%d.json", width))
 	}
 	resolved, err := ensureProbeHost(hostPath)
 	if err != nil {
@@ -83,19 +92,19 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	if err != nil {
 		return err
 	}
-	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, 80, 1000, false, nil, command, []string{begin, end})
+	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 1000, false, nil, command, []string{begin, end})
 	if runErr != nil {
 		return fmt.Errorf("pinned command comparison session: %w", runErr)
 	}
 	expected := splitCommandLines(redirected)
-	rendered := parseRenderedHistoryAtWidth(session.RawOutput, 80).Lines()
+	rendered := parseRenderedHistoryAtWidth(session.RawOutput, width).Lines()
 	segment, ok := renderedMarkerSegment(rendered, begin, end)
 	if !ok || len(segment) < 2 {
 		return fmt.Errorf("pinned command comparison markers did not delimit rendered output")
 	}
 	observed := segment[1 : len(segment)-1]
 	report := commandCompareReport{
-		Mode: "pinned-conpty-command-compare", Host: identity, Command: command,
+		Mode: "pinned-conpty-command-compare", Host: identity, SessionWidth: width, SessionHeight: 1000, Command: command,
 		RedirectCommand: redirectCommand, RedirectedBytes: len(redirected),
 		HostRawBytes: len(session.RawOutput), HostRawSHA256: session.RawSHA256,
 		ExpectedLines: len(expected), ObservedLines: len(observed),
@@ -171,7 +180,7 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
 		return err
 	}
-	if err := writeAndVerifyRawArtifact(filepath.Join(artifactDir, "80x1000.raw"), session.RawOutput, session.RawSHA256); err != nil {
+	if err := writeAndVerifyRawArtifact(filepath.Join(artifactDir, fmt.Sprintf("%dx1000.raw", width)), session.RawOutput, session.RawSHA256); err != nil {
 		return err
 	}
 	if report.MismatchCount != 0 {

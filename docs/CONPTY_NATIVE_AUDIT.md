@@ -638,6 +638,46 @@ Redirected-файл принудительно получен в UTF-8 (`chcp 65
 для правила склейки. Последовательность также не является CUP→CRLF-кандидатом:
 она имеет `CRLF → ESC[999;80H → stub.dll → CRLF`. Тем самым измерение
 подтверждает пункт 11 (`cup_before_crlf=0` в этом прогоне), а основная масса
-расхождений относится к другому механизму (повторные/физические render-записи),
-который пока не объяснён. Накопитель до чтения соответствующего исходника не
-меняется.
+расхождений объясняется пунктом 15 `PINNED_HOST_FACTS.md`: `_wrappedRow`
+сбрасывается безусловно на границе кадра, поэтому видимый курсор может
+превратить физический перенос в обычный `CRLF` без CUP. Накопитель по этому
+результату не менялся и не получает эвристику склейки.
+
+### Проверка ширины захвата по пункту 15.2
+
+После чтения пункта 15 повторена одна и та же сверка `dir /s /b` с
+redirected-файлом, менялась только ширина pinned-host сессии через новый
+параметр `-command-compare-width`. Максимальная строка независимого файла в
+этом дереве — 199 символов. Результаты:
+
+```text
+width=512  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=384  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=320  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=256  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=224  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=208  mismatches=0  expected=23906 observed=23906 cross_row=0
+width=207  mismatches=1
+width=206  mismatches=2
+width=205  mismatches=2
+width=204  mismatches=2
+width=201  mismatches=8
+width=200  mismatches=16685 (LCS: one deletion, далее позиционный сдвиг)
+width=199  mismatches=16685 (LCS: two deletions, далее позиционный сдвиг)
+width=198  mismatches=11
+```
+
+Команда первого прогона:
+
+```text
+go run . -command-compare -command-compare-width 512 -report artifacts/pinned-conpty-command-compare-512.json
+native command comparison complete: artifacts/pinned-conpty-command-compare-512.json mismatches=0 expected_lines=23906 observed_lines=23906 cup_before_crlf=0
+```
+
+Таким образом, при ширине 512 доказан строгий байтовый результат, а среди
+проверенных значений практическая граница без расхождений — 208: это первая
+проверенная ширина выше максимальной строки, тогда как 207 ещё дал один
+кандидат. Результаты 199/200 отдельно показывают, почему нельзя объявлять
+минимальную ширину по одной точке: там единичное удаление превращает
+позиционный счётчик в тысячи последствий. Правило CUP из пункта 11 оставлено
+без изменений; на широком захвате `cup_before_crlf=0`.
