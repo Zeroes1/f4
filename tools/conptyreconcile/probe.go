@@ -24,6 +24,11 @@ func probeWorkload() string {
 	b.WriteString("\x1b[2K\x1b[1Grewritten\r\n")
 	b.WriteString("cursor: one\x1b[1Gtwo\r\n")
 	b.WriteString("tabs:\tX\tY\r\n")
+	// Repeated identical records catch accidental line coalescing, loss, or
+	// deduplication in the terminal history path.
+	b.WriteString("repeat: SAME\r\n")
+	b.WriteString("repeat: SAME\r\n")
+	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("\x1b]0;f4-native-openconsole-probe\x07")
 	b.WriteString("alternate-begin\r\n")
 	b.WriteString("\x1b[?1049halt-screen\r\n")

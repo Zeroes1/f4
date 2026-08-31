@@ -46,6 +46,7 @@ foreach ($session in $report.sessions) {
 function Sanitize-Object($Node) {
     if ($null -eq $Node) { return }
     if ($Node -is [string]) { return }
+    if ($Node -is [ValueType]) { return }
     if ($Node -is [System.Collections.IEnumerable] -and $Node -isnot [string]) {
         foreach ($item in $Node) { Sanitize-Object $item }
         return
