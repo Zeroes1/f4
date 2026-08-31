@@ -648,7 +648,8 @@ Redirected-файл принудительно получен в UTF-8 (`chcp 65
 После чтения пункта 15 повторена одна и та же сверка `dir /s /b` с
 redirected-файлом, менялась только ширина pinned-host сессии через новый
 параметр `-command-compare-width`. Максимальная строка независимого файла в
-этом дереве — 199 символов. Результаты (это проверка рабочего правила, а не
+этом дереве — 199 символов; все строки ASCII, поэтому это также 199 колонок.
+Результаты (это проверка рабочего правила, а не
 поиск минимального порога):
 
 ```text
@@ -658,10 +659,10 @@ width=320  mismatches=0  expected=23906 observed=23906 cross_row=0
 width=256  mismatches=0  expected=23906 observed=23906 cross_row=0
 width=224  mismatches=0  expected=23906 observed=23906 cross_row=0
 width=208  mismatches=0  expected=23906 observed=23906 cross_row=0
-width=207  mismatches=1
-width=206  mismatches=2
-width=205  mismatches=2
-width=204  mismatches=2
+width=207  strict=1 normalized=0 content=0 trailing_padding=1
+width=206  strict=2 normalized=0 content=0 trailing_padding=2
+width=205  strict=2 normalized=0 content=0 trailing_padding=2
+width=204  strict=2 normalized=0 content=0 trailing_padding=2
 width=201  mismatches=8
 width=200  mismatches=16685 (LCS: one deletion, далее позиционный сдвиг)
 width=199  mismatches=16685 (LCS: two deletions, далее позиционный сдвиг)
@@ -681,7 +682,11 @@ native command comparison complete: artifacts/pinned-conpty-command-compare-512.
 повторяемым `mismatch=0`. Значения 198–207 и 199/200 показывают не
 характеристику хоста и не минимальный порог, а плавающий результат в области,
 где строки начинают переноситься и границы кадров случайно совпадают:
-единичное удаление может дать тысячи позиционных последствий. Правило CUP
+единичное удаление может дать тысячи позиционных последствий. В самом
+redirected-файле строки на 208 колонок не найдено: все строки ASCII и максимум
+равен 199. Поэтому 208 не записывается как свойство данных или хоста, а
+результаты узких ширин остаются диагностикой плавающих границ кадра и
+padding/переноса. Правило CUP
 из пункта 11 оставлено без изменений; на широком захвате `cup_before_crlf=0`.
 
 ### Native scrollback и вытеснение (C3)
