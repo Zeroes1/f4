@@ -414,10 +414,10 @@ def probe_programs(label, conpty, say):
     say("")
 
     for name, command in PROGRAMS:
-        for how, line in (
-                ("direct", command),
-                ("cmd+redirect", f"cmd /c {command} >CONOUT$"),
-                ("cmd+setmode", f"cmd /c {SETMODE} & {command} >CONOUT$")):
+        # Only the direct launch is measurable: cmd hands its children mode
+        # 0x0001, where wrap-at-EOL is clear and nothing wraps at all, and
+        # console output mode is per-handle so it cannot be fixed from here.
+        for how, line in (("direct", command),):
             try:
                 raw, _mode = run(conpty, line, "default", timeout_s=30,
                                  quiesce_s=1.5, cols=PROG_COLS)
