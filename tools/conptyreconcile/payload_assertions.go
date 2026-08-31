@@ -126,6 +126,56 @@ func assertAlternatePayload(raw []byte, markers ...string) []payloadAssertion {
 	return result
 }
 
+func assertControlPayload(raw []byte, markers ...string) []payloadAssertion {
+	history := parseRenderedHistory(raw).Lines()
+	result := make([]payloadAssertion, 0, 10)
+	want := []struct {
+		name string
+		line []byte
+	}{
+		{"control-warmup", []byte("control-warmup")},
+		{controlBeginMarker, []byte(controlBeginMarker)},
+		{"red", []byte("red")},
+		{"rewritten", []byte("rewritten")},
+		{"cursor", []byte("twosor: one")},
+		{"tabs", append([]byte("tabs:"), append(bytes.Repeat([]byte{' '}, 3), append([]byte("X"), append(bytes.Repeat([]byte{' '}, 7), 'Y')...)...)...)},
+		{controlEndMarker, []byte(controlEndMarker)},
+	}
+	for _, item := range want {
+		observed := 0
+		for _, line := range history {
+			if bytes.Equal(line.Bytes, item.line) {
+				observed++
+			}
+		}
+		status := "passed"
+		detail := "rendered logical line matches exact expected bytes"
+		if observed != 1 {
+			status = "failed"
+			detail = "rendered logical line count differs"
+		}
+		result = append(result, payloadAssertion{Name: item.name, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
+	}
+	for _, item := range []struct {
+		name string
+		seq  []byte
+	}{
+		{"sgr-red", []byte("\x1b[31m")},
+		{"sgr-default", []byte("\x1b[m")},
+	} {
+		observed := bytes.Count(raw, item.seq)
+		status := "passed"
+		detail := "host renderer emitted the source-defined SGR sequence"
+		if observed != 1 {
+			status = "failed"
+			detail = "host renderer SGR sequence count differs"
+		}
+		result = append(result, payloadAssertion{Name: item.name, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
+	}
+	_ = markers
+	return result
+}
+
 func assertionFailures(assertions []payloadAssertion) []string {
 	var failures []string
 	for _, assertion := range assertions {

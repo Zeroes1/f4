@@ -29,32 +29,33 @@ type hostRenderStream struct {
 	lines         []logicalLine
 	frames        []hostFrame
 	repaintFrames []repaintFrame
-	inRepaint     bool
+	repaintOpen   bool
 	repaintStart  int
 }
 
 func (s *hostRenderStream) Feed(data []byte) {
 	s.raw = append(s.raw, data...)
 	for s.scan < len(s.raw) {
-		if s.inRepaint {
-			close := []byte("\x1b[?25h")
-			offset := bytes.Index(s.raw[s.scan:], close)
-			if offset < 0 {
-				return
-			}
-			s.scan += offset + len(close)
-			s.repaintFrames = append(s.repaintFrames, repaintFrame{Start: s.repaintStart, End: s.scan})
-			s.inRepaint = false
-			continue
-		}
 		open := []byte("\x1b[?25l")
 		if bytes.HasPrefix(s.raw[s.scan:], open) {
 			s.repaintStart = s.scan
 			s.scan += len(open)
-			s.inRepaint = true
+			s.repaintOpen = true
 			continue
 		}
 		if isTokenPrefix(s.raw[s.scan:], open) {
+			return
+		}
+		close := []byte("\x1b[?25h")
+		if bytes.HasPrefix(s.raw[s.scan:], close) {
+			s.scan += len(close)
+			if s.repaintOpen {
+				s.repaintFrames = append(s.repaintFrames, repaintFrame{Start: s.repaintStart, End: s.scan})
+				s.repaintOpen = false
+			}
+			continue
+		}
+		if isTokenPrefix(s.raw[s.scan:], close) {
 			return
 		}
 		if width, height, size, ok := parseResizeFrame(s.raw[s.scan:]); ok {

@@ -82,10 +82,11 @@ func probeWorkloadForWidth(width int) string {
 
 func controlProbeWorkload() string {
 	var b strings.Builder
+	b.WriteString("control-warmup\r\n")
 	b.WriteString(controlBeginMarker)
 	b.WriteString("\r\n")
-	b.WriteString("\x1b[31mred\x1b[0m ")
-	b.WriteString("\x1b[2K\x1b[1Grewritten\r\n")
+	b.WriteString("\x1b[31mred\x1b[0m\r\n")
+	b.WriteString("old\x1b[2K\x1b[1Grewritten\r\n")
 	b.WriteString("cursor: one\x1b[1Gtwo\r\n")
 	b.WriteString("tabs:\tX\tY\r\n")
 	b.WriteString("\x1b]0;pinned-conpty-probe\x07\r\n")
