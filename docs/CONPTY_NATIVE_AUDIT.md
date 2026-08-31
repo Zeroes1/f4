@@ -598,6 +598,15 @@ native semantic probe complete: artifacts/pinned-conpty-unicode.json kind=unicod
 Ожидаемая и наблюдаемая строка совпали побайтово для CJK, combining mark,
 emoji, ZWJ `👩‍💻`, иврита и арабского; ширины дисплея в assertion не входят.
 
+### Завершение native output после child exit
+
+Пиннутый renderer может дописывать финальный paint уже после завершения child.
+Адаптер теперь ждёт bounded quiescence output (300 мс без новых байт, максимум
+10 секунд) перед закрытием pseudoconsole. Это предотвращает усечение хвоста и
+не использует содержимое/форму потока как границу логической строки. После
+изменения повторные native empty, command-suite и static-прогоны завершились
+успешно с закрытыми child/host/handles.
+
 ### D3: 300 детерминированных seed-сессий
 
 Полный запуск после фиксации host-width=512 завершён без ошибок:
