@@ -390,6 +390,22 @@ def probe_programs(label, conpty, say):
     setup_programs()
     say(f"  real programs in a {PROG_COLS}-column pty, "
         "longest run of text in each:")
+
+    # Every external program comes back with autowrap off and control
+    # characters as glyphs, while cmd's own built-ins do not. Answering the
+    # device attributes query did not change that, so stop guessing at the
+    # console mode and read it: the child exits with whatever GetConsoleMode
+    # returned, and here it is launched exactly like the real programs are.
+    for how, command in (("direct", f'"{sys.executable}" "{CHILD}" 1 default 0'),
+                         ("under cmd", f'cmd /c "{sys.executable}" "{CHILD}" '
+                                       f'1 default 0 >CONOUT$')):
+        try:
+            _raw, mode = run(conpty, command, "default", timeout_s=30,
+                             quiesce_s=0.5, cols=PROG_COLS)
+            say(f"    console mode seen by a child launched {how:<9}: "
+                f"0x{mode:04x}")
+        except OSError as exc:
+            say(f"    console mode {how}: FAILED: {exc}")
     for name, command in PROGRAMS:
         try:
             raw, _mode = run(conpty, f'cmd /c {command} >CONOUT$', "default",
