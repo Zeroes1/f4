@@ -13,6 +13,7 @@ Usage: python tools/conpty_probe_bundled.py <path-to-conpty.dll> [tag]
 import ctypes
 import os
 import sys
+import threading
 from ctypes import wintypes
 
 COLS = 80
@@ -86,27 +87,33 @@ def _check(ok, what):
         raise OSError(f"{what} failed, GetLastError={err}")
 
 
-def load_create_pseudo_console(dll_path):
-    """Return (callable, exported_name) from the given conpty.dll."""
+def load_conpty(dll_path):
+    """Return (dll, create, close, exported_name) from the given conpty.dll."""
     dll = ctypes.WinDLL(dll_path, use_last_error=True)
+    create = close = None
+    used = None
     for name in ("ConptyCreatePseudoConsole", "CreatePseudoConsole"):
-        try:
-            fn = getattr(dll, name)
-        except AttributeError:
-            continue
-        fn.restype = ctypes.c_long  # HRESULT
-        fn.argtypes = [COORD, wintypes.HANDLE, wintypes.HANDLE,
+        if hasattr(dll, name):
+            create = getattr(dll, name)
+            used = name
+            break
+    if create is None:
+        raise OSError(f"no CreatePseudoConsole export found in {dll_path}")
+    create.restype = ctypes.c_long  # HRESULT
+    create.argtypes = [COORD, wintypes.HANDLE, wintypes.HANDLE,
                        wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p)]
-        return dll, fn, name
-    raise OSError(f"no CreatePseudoConsole export found in {dll_path}")
+    for name in ("ConptyClosePseudoConsole", "ClosePseudoConsole"):
+        if hasattr(dll, name):
+            close = getattr(dll, name)
+            break
+    if close is not None:
+        close.restype = None
+        close.argtypes = [ctypes.c_void_p]
+    return dll, create, close, used
 
 
-def run(dll_path):
-    dll, create_pc, export_name = load_create_pseudo_console(dll_path)
-
-    sa = SECURITY_ATTRIBUTES()
-    sa.nLength = ctypes.sizeof(sa)
-    sa.bInheritHandle = True
+def run(dll_path, timeout_s=20):
+    dll, create_pc, close_pc, export_name = load_conpty(dll_path)
 
     in_read = wintypes.HANDLE()
     in_write = wintypes.HANDLE()
@@ -141,26 +148,45 @@ def run(dll_path):
         EXTENDED_STARTUPINFO_PRESENT, None, None,
         ctypes.byref(siex), ctypes.byref(pi)), "CreateProcessW")
 
-    # Our copies of the pseudoconsole's ends must go, or the read never ends.
+    # Our duplicates of the ends handed to the pseudoconsole must go, or
+    # nothing will ever signal end-of-stream on the read side.
     k32.CloseHandle(in_read)
     k32.CloseHandle(out_write)
 
+    # The pseudoconsole keeps the write end open until it is closed, so a
+    # plain blocking read here would hang forever once the child exits.
+    # Read on a thread, wait for the child, then close the pseudoconsole:
+    # that drops the write end and the reader falls out on a broken pipe.
     chunks = []
-    buf = (ctypes.c_char * 4096)()
-    got = wintypes.DWORD()
-    while True:
-        ok = k32.ReadFile(out_read, buf, 4096, ctypes.byref(got), None)
-        if not ok or got.value == 0:
-            if ctypes.get_last_error() in (0, ERROR_BROKEN_PIPE):
-                break
-            break
-        chunks.append(bytes(buf[:got.value]))
+
+    def reader():
+        buf = (ctypes.c_char * 4096)()
+        got = wintypes.DWORD()
+        while True:
+            ok = k32.ReadFile(out_read, buf, 4096, ctypes.byref(got), None)
+            if not ok or got.value == 0:
+                return
+            chunks.append(bytes(buf[:got.value]))
+
+    th = threading.Thread(target=reader, daemon=True)
+    th.start()
+
+    waited = k32.WaitForSingleObject(pi.hProcess, int(timeout_s * 1000))
+    if close_pc is not None:
+        close_pc(hpc)
+    th.join(5)
 
     k32.CloseHandle(pi.hThread)
     k32.CloseHandle(pi.hProcess)
     k32.CloseHandle(in_write)
     k32.CloseHandle(out_read)
-    return b"".join(chunks), export_name
+
+    note = f"child wait -> {waited}"
+    if close_pc is None:
+        note += "; no ClosePseudoConsole export, stream may be truncated"
+    if th.is_alive():
+        note += "; reader still blocked, reporting what arrived"
+    return b"".join(chunks), export_name, note
 
 
 def hexdump(data, limit=2048):
@@ -194,7 +220,7 @@ def main():
     say()
 
     try:
-        raw, export_name = run(dll_path)
+        raw, export_name, note = run(dll_path)
     except Exception:
         import traceback
         say("--- FAILED ---")
@@ -204,6 +230,7 @@ def main():
         raise
 
     say(f"export used: {export_name}")
+    say(f"note:        {note}")
     say()
 
     with open(f"{OUTDIR}/stream-{tag}.bin", "wb") as f:
