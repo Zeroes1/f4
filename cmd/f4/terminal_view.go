@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/base64"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -1354,11 +1353,10 @@ func (tv *TerminalView) URLAt(x, y int) (string, bool) {
 
 // terminalReflowEnabled gates re-wrapping the live grid on a width change.
 //
-// It remains the platform default for ordinary views. A Windows view whose
-// resize oracle has established line boundaries opts in independently through
-// ReflowOnResize: the local pass reflows retained history, then ConPTY's normal
-// repaint supplies the current viewport. See docs/TERMINAL_LEDGER.md §3.3.
-var terminalReflowEnabled = runtime.GOOS != "windows"
+// The native ConPTY gate is the regression contract on every supported OS;
+// leaving this disabled on Windows makes the property impossible to test and
+// silently preserves the old history-corrupting behavior.
+var terminalReflowEnabled = true
 
 // GridHistory is the editable tail of the log: oracle corrections can still
 // update its row boundaries. Older rows are extruded into the PieceTable,

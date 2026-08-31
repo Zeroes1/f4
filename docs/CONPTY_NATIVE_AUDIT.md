@@ -38,17 +38,18 @@ events через настоящий `PanelsFrame → AnsiParser → TerminalVie
 а не сам `cmd/f4` adapter; replay после получения событий не заменяет live
 integration gate и не считается его прохождением.
 
-**Гейта из `CONPTY_NATIVE_TEST.md` ещё нет в полном виде.** Bridge-файлы
+**Гейта из `CONPTY_GATE_REQUIREMENTS.md` ещё нет в полном виде.** Bridge-файлы
 `cmd/f4/native_openconsole_*` появились, но собственный pinned transport f4 и
-live resize/reflow пока не реализованы. 300 сидов не прогонялись. Фаззинга времени
-нет. Реальных команд (`dir`, `findstr`, PowerShell) в нагрузке нет — payload
-синтетический, около килобайта на сессию.
+live resize/reflow пока не реализованы. Не покрыты точные длины `N-1/N/N+1/2N+1`,
+повторяющийся символ/пробелы/пустые строки, реальные команды (`dir`, `echo`,
+`type`, `findstr`, PowerShell), scrollback/viewport/cursor, произвольные split
+points, lifecycle и 300 сидов. Фаззинга времени нет — payload пока синтетический.
 
-**Горизонтальный reflow на Windows выключен:**
-`cmd/f4/terminal_view.go` — `terminalReflowEnabled = runtime.GOOS != "windows"`.
-Именно эта способность — перевыкладывать логические строки при смене ширины —
-и есть цель направления. Пока она отключена, переносить в f4 нечего: код там
-уже есть и не работает на целевой платформе.
+**Горизонтальный reflow на Windows включён, но ещё не доказан native gate-ом.**
+`cmd/f4/terminal_view.go` теперь использует `terminalReflowEnabled = true`.
+Это снимает прежний silent bypass, но само по себе не доказывает свойства B:
+нужны live resize-сессии, экран, история и позиция курсора после каждого
+изменения размера.
 
 ## Расхождение 1: опубликованный артефакт не сходится сам с собой (открыто)
 

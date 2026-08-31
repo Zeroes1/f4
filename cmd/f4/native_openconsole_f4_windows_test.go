@@ -89,8 +89,8 @@ func assertNativeF4Log(t *testing.T, logBytes string, expectedInput []byte, widt
 		{"width-edge: ", expectedLine(expected, "width-edge: ")},
 		{"unicode: ", expectedLine(expected, "unicode: ")},
 		{"rewritten", "rewritten"},
-		{"cursor: ", "cursor: "},
-		{"tabs: ", "tabs: "},
+		{"cursor: ", "twosor: one"},
+		{"tabs: ", "tabs:   X       Y"},
 		{"alternate-begin", "alternate-begin"},
 		{"alternate-end", "alternate-end"},
 	}
@@ -98,18 +98,15 @@ func assertNativeF4Log(t *testing.T, logBytes string, expectedInput []byte, widt
 		if check.want == "" {
 			t.Fatalf("missing expected payload line %q", check.prefix)
 		}
-		if check.prefix == "cursor: " || check.prefix == "tabs: " {
-			if len(linesContaining(clean, check.prefix)) != 1 {
-				t.Fatalf("payload line %q was lost/duplicated for %dx%d", check.prefix, width, height)
-			}
-			continue
-		}
-		if len(linesContaining(clean, check.prefix)) != 1 || !strings.Contains(clean, check.want) {
+		if len(linesEqual(clean, check.want)) != 1 || (check.prefix != "rewritten" && !strings.Contains(clean, check.want)) {
 			t.Fatalf("payload line %q was lost/changed for %dx%d", check.prefix, width, height)
 		}
 	}
 	if len(linesContaining(clean, "repeat: SAME")) != 3 {
 		t.Fatalf("repeated payload lines were coalesced/lost for %dx%d", width, height)
+	}
+	if strings.Contains(clean, "alt-screen") {
+		t.Fatalf("alternate-screen contents leaked into primary history for %dx%d", width, height)
 	}
 }
 
@@ -126,6 +123,16 @@ func linesContaining(logBytes, needle string) []string {
 	var result []string
 	for _, line := range strings.Split(logBytes, "\n") {
 		if strings.Contains(line, needle) {
+			result = append(result, line)
+		}
+	}
+	return result
+}
+
+func linesEqual(logBytes, want string) []string {
+	var result []string
+	for _, line := range strings.Split(logBytes, "\n") {
+		if line == want {
 			result = append(result, line)
 		}
 	}
