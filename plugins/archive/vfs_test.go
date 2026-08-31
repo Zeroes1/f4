@@ -934,11 +934,18 @@ func TestArchiveVFSCopyBulk_ConcurrentQueue(t *testing.T) {
 
 type mockTickerReporter struct {
 	calls atomic.Int32
+	ticks chan struct{}
 }
 
 func (m *mockTickerReporter) UpdateScan(string, int64, int64) {}
 func (m *mockTickerReporter) UpdateTransfer(action, filename string, currentPct int, totalText string, totalPct int, speedText string) {
 	m.calls.Add(1)
+	if m.ticks != nil {
+		select {
+		case m.ticks <- struct{}{}:
+		default:
+		}
+	}
 }
 func (m *mockTickerReporter) IsCancelled() bool { return false }
 
@@ -948,7 +955,7 @@ func (m *mockTickerReporter) IsCancelled() bool { return false }
 func TestIssue149_TimeTicksDuringBlockingIO(t *testing.T) {
 	ctx := context.Background()
 	done := make(chan struct{})
-	rep := &mockTickerReporter{}
+	rep := &mockTickerReporter{ticks: make(chan struct{}, 4)}
 
 	getStatus := func() (string, string, int) {
 		return "Extracting", "file.txt", 50
@@ -956,12 +963,23 @@ func TestIssue149_TimeTicksDuringBlockingIO(t *testing.T) {
 
 	go runProgressTicker(ctx, done, rep, getStatus)
 
-	// Simulate blocking I/O for 1.2 seconds
-	time.Sleep(1200 * time.Millisecond)
+	// Wait for four updates while the ticker remains blocked in its simulated
+	// I/O phase. Waiting for actual ticks avoids coupling this test to scheduler
+	// timing on slower CI runners.
+	const expectedTicks = 4
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
+	for i := 0; i < expectedTicks; i++ {
+		select {
+		case <-rep.ticks:
+		case <-timeout.C:
+			close(done)
+			t.Fatalf("Expected progress ticker to fire at least %d times during blocking I/O, but got %d", expectedTicks, rep.calls.Load())
+		}
+	}
 	close(done)
 
-	// The ticker runs every 250ms. In 1.2 seconds, it should tick at least 4 times.
-	if calls := rep.calls.Load(); calls < 4 {
-		t.Errorf("Expected progress ticker to fire at least 4 times during blocking I/O, but got %d", calls)
+	if calls := rep.calls.Load(); calls < expectedTicks {
+		t.Errorf("Expected progress ticker to fire at least %d times during blocking I/O, but got %d", expectedTicks, calls)
 	}
 }

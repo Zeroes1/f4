@@ -637,15 +637,6 @@ func TestTerminalView_Resize_HorizontalPreservation(t *testing.T) {
 	}
 }
 
-// rowText renders a grid row as a string with its trailing blanks removed.
-func rowText(row []vtui.CharInfo) string {
-	var sb strings.Builder
-	for _, c := range row {
-		sb.WriteString(vtui.CellString(c.Char))
-	}
-	return strings.TrimRight(sb.String(), " ")
-}
-
 func TestTerminalView_PrintCleanCommandBehavior(t *testing.T) {
 	tv := NewTerminalView(80, 24) // Курсор изначально на Y=23
 	defer tv.Close()

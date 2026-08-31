@@ -961,8 +961,14 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 	// the model still holds rows. That pairing is the black area of 6.16 and
 	// cannot be inferred from any model-side counter.
 	if offset > tv.Height/2 && len(tv.GridHistory) > 0 && offset != tv.showOffset {
+		rowsWithText := 0
+		for y := 0; y < tv.Height && y < len(tv.Lines); y++ {
+			if tv.rowHasText(y) {
+				rowsWithText++
+			}
+		}
 		vtui.DebugLog("REFLOW_SHOW: %dx%d drawn with %d blank rows on top, %d rows of text, history %d",
-			tv.Width, tv.Height, offset, tv.rowsWithTextLocked(), len(tv.GridHistory))
+			tv.Width, tv.Height, offset, rowsWithText, len(tv.GridHistory))
 	}
 	tv.showOffset = offset
 
@@ -1588,6 +1594,10 @@ func (tv *TerminalView) Resize(w, h int) {
 // worse than dropping the line: the re-wrap would join the fragment to
 // whatever now precedes it. So each eviction removes a complete logical line,
 // leading rows first, and stops as soon as the bound is met.
+// extrusionsLogged bounds the per-row extrusion log: a long run extrudes
+// thousands of rows and one line each would bury everything else.
+var extrusionsLogged int
+
 func (tv *TerminalView) trimGridHistoryLocked() {
 	for tv.historyLogicalLinesLocked() > maxGridHistoryLines ||
 		len(tv.GridHistory) > maxGridHistoryRowsHard {
@@ -1644,81 +1654,6 @@ func clipRowText(row []vtui.CharInfo) string {
 		}
 	}
 	return strings.TrimRight(string(b), " ")
-}
-
-// historyCellsLocked and viewportCellsLocked count every non-blank character
-// in the buffer, ignoring how it is divided into rows or logical lines.
-//
-// Both exist because the metrics used so far could not tell loss from
-// repacking. The logical-line count falls when two lines are joined by a
-// stuck wrap flag even though every character survives, and the row count is
-// pinned to the history bound by construction. A character total falls only
-// when characters are actually destroyed, which is the question.
-func (tv *TerminalView) historyCellsLocked() int {
-	n := 0
-	for _, row := range tv.GridHistory {
-		n += nonBlankCells(row)
-	}
-	return n
-}
-
-func (tv *TerminalView) viewportCellsLocked() int {
-	n := 0
-	for y := 0; y < tv.Height && y < len(tv.Lines); y++ {
-		n += nonBlankCells(tv.Lines[y])
-	}
-	return n
-}
-
-func nonBlankCells(row []vtui.CharInfo) int {
-	n := 0
-	for _, c := range row {
-		if c.Char != ' ' && c.Char != 0 {
-			n++
-		}
-	}
-	return n
-}
-
-// significantTrim reports how many cells past the significant width still held
-// something other than a blank -- the cells a re-wrap throws away.
-func significantTrim(row []vtui.CharInfo, width int) int {
-	n := 0
-	for x := width; x < len(row); x++ {
-		if row[x].Char != ' ' && row[x].Char != 0 {
-			n++
-		}
-	}
-	return n
-}
-
-// rowsWithTextLocked counts viewport rows carrying anything, so a log line can
-// say whether a widen actually filled the screen or left it blank.
-func (tv *TerminalView) rowsWithTextLocked() int {
-	n := 0
-	for y := 0; y < tv.Height && y < len(tv.Lines); y++ {
-		if tv.rowHasText(y) {
-			n++
-		}
-	}
-	return n
-}
-
-// pushRowLocked sends an already-built row to GridHistory, extruding the
-// oldest entry into the PieceTable when the buffer is full. It is
-// pushRowToGridHistory for rows that are not (or are no longer) in tv.Lines.
-// extrusionsLogged bounds the per-row extrusion log: a long run extrudes
-// thousands of rows and one line each would bury everything else. The count is
-// what matters, and reflowLocked and ScrollUp already report it; this only
-// names the first few so the shape of the content leaving is visible once.
-var extrusionsLogged int
-
-func (tv *TerminalView) pushRowLocked(cells []vtui.CharInfo, wrapped bool) {
-	lineCopy := make([]vtui.CharInfo, len(cells))
-	copy(lineCopy, cells)
-	tv.GridHistory = append(tv.GridHistory, lineCopy)
-	tv.GridHistoryWrap = append(tv.GridHistoryWrap, wrapped)
-	tv.trimGridHistoryLocked()
 }
 
 // ResetKeyboardProtocols turns off the keyboard encodings a shell may have
