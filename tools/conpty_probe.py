@@ -28,6 +28,11 @@ import time
 from ctypes import wintypes
 
 COLS, ROWS = 80, 25
+# Real programs print lines well under 80 columns, so at the default width
+# almost every case came back "nothing long enough to tell". Give them a
+# narrow pty instead: at 20 columns even ipconfig's short lines have to
+# wrap, and whether they arrive whole becomes a real question.
+PROG_COLS = 20
 TOTAL = 200
 CHUNKS = (200, 15, 16, 1)
 MODES = ("default", "legacy")
@@ -123,7 +128,8 @@ def load_conpty(path):
     return create, close, resize
 
 
-def run(conpty, chunk, mode, during=None, timeout_s=20, quiesce_s=0.75):
+def run(conpty, chunk, mode, during=None, timeout_s=20,
+        quiesce_s=0.75, cols=COLS):
     """Run the child in a fresh pseudoconsole.
 
     Returns (stream, console mode the child actually had). The child reports
@@ -136,7 +142,7 @@ def run(conpty, chunk, mode, during=None, timeout_s=20, quiesce_s=0.75):
     k32.CreatePipe(ctypes.byref(hout_r), ctypes.byref(hout_w), None, 0)
 
     hpc = ctypes.c_void_p()
-    hr = create_pc(COORD(COLS, ROWS), hin_r, hout_w, 0, ctypes.byref(hpc))
+    hr = create_pc(COORD(cols, ROWS), hin_r, hout_w, 0, ctypes.byref(hpc))
     if hr:
         raise OSError(f"CreatePseudoConsole -> 0x{hr & 0xFFFFFFFF:08x}")
 
@@ -382,11 +388,12 @@ def probe_programs(label, conpty, say):
     saying so is better than printing a number.
     """
     setup_programs()
-    say("  real programs, longest run of text in each:")
+    say(f"  real programs in a {PROG_COLS}-column pty, "
+        "longest run of text in each:")
     for name, command in PROGRAMS:
         try:
             raw, _mode = run(conpty, f'cmd /c {command} >CONOUT$', "default",
-                             timeout_s=30, quiesce_s=1.5)
+                             timeout_s=30, quiesce_s=1.5, cols=PROG_COLS)
         except OSError as exc:
             say(f"    {name:<16} FAILED: {exc}")
             continue
@@ -407,19 +414,19 @@ def probe_programs(label, conpty, say):
 
         got = rows(raw)
         longest = max(got)
-        full = sum(1 for n in got if n == COLS)
-        if longest > COLS:
+        full = sum(1 for n in got if n == PROG_COLS)
+        if longest > PROG_COLS:
             verdict = f"longest {longest}, arrived whole"
-        elif longest == COLS:
+        elif longest == PROG_COLS:
             verdict = f"longest {longest} = the pty width, likely split"
         else:
             verdict = f"longest {longest}, nothing long enough to tell"
-        extra = f", {full} row(s) exactly {COLS} wide" if full else ""
+        extra = f", {full} row(s) exactly {PROG_COLS} wide" if full else ""
         say(f"    {name:<16} {len(got):>3} rows, {verdict}{extra}")
-    say("    a line longer than the pty width means ConPTY passed it through")
-    say("    and the terminal wrapped it; rows capped at the width mean the "
-        "split")
-    say("    happened before the terminal saw it")
+    say(f"    a run longer than {PROG_COLS} means ConPTY passed the line "
+        "through and the")
+    say(f"    terminal wrapped it; runs capped at {PROG_COLS} mean the split "
+        "happened first")
     say("")
 
 
