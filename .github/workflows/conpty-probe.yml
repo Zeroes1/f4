@@ -54,22 +54,25 @@ jobs:
                  | Select-Object -First 1 -ExpandProperty tagName
           if (-not $tag) { throw "no release >= v1.22 found" }
           "release: $tag" | Tee-Object -FilePath probe-out/bundle.txt
-          gh release view $tag --repo microsoft/terminal --json assets `
-            | ConvertFrom-Json | ForEach-Object { $_.assets.name } `
-            | Tee-Object -FilePath probe-out/bundle.txt -Append
-          gh release download $tag --repo microsoft/terminal --pattern "*.msixbundle" --dir dl
-          $bundle = Get-ChildItem dl -Filter *.msixbundle | Select-Object -First 1
-          if (-not $bundle) { throw "no msixbundle asset in $tag" }
-          "bundle:  $($bundle.Name)" | Tee-Object -FilePath probe-out/bundle.txt -Append
-          Copy-Item $bundle.FullName dl/bundle.zip
-          Expand-Archive dl/bundle.zip -DestinationPath dl/bundle -Force
-          $msix = Get-ChildItem dl/bundle -Filter "*x64*.msix" | Select-Object -First 1
-          if (-not $msix) { throw "no x64 msix inside the bundle" }
-          "msix:    $($msix.Name)" | Tee-Object -FilePath probe-out/bundle.txt -Append
-          Copy-Item $msix.FullName dl/pkg.zip
+          gh release download $tag --repo microsoft/terminal --pattern "*ConPTY*.nupkg" --dir dl
+          $pkg = Get-ChildItem dl -Filter *.nupkg | Select-Object -First 1
+          if (-not $pkg) { throw "no ConPTY nupkg asset in $tag" }
+          "package: $($pkg.Name)" | Tee-Object -FilePath probe-out/bundle.txt -Append
+          Copy-Item $pkg.FullName dl/pkg.zip
           Expand-Archive dl/pkg.zip -DestinationPath dl/pkg -Force
-          Copy-Item (Get-ChildItem dl/pkg -Recurse -Filter conpty.dll | Select-Object -First 1).FullName conpty/
-          Copy-Item (Get-ChildItem dl/pkg -Recurse -Filter OpenConsole.exe | Select-Object -First 1).FullName conpty/
+          Get-ChildItem dl/pkg -Recurse -File | ForEach-Object {
+            $_.FullName.Substring((Resolve-Path dl/pkg).Path.Length + 1)
+          } | Tee-Object -FilePath probe-out/pkg-contents.txt | Out-Null
+          $dll = Get-ChildItem dl/pkg -Recurse -Filter conpty.dll `
+                 | Where-Object { $_.FullName -match 'x64|win10-x64|native' } `
+                 | Select-Object -First 1
+          if (-not $dll) { $dll = Get-ChildItem dl/pkg -Recurse -Filter conpty.dll | Select-Object -First 1 }
+          if (-not $dll) { throw "conpty.dll not found - see probe-out/pkg-contents.txt" }
+          $exe = Get-ChildItem $dll.DirectoryName -Filter OpenConsole.exe | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem dl/pkg -Recurse -Filter OpenConsole.exe | Select-Object -First 1 }
+          if (-not $exe) { throw "OpenConsole.exe not found - see probe-out/pkg-contents.txt" }
+          Copy-Item $dll.FullName conpty/
+          Copy-Item $exe.FullName conpty/
           Get-ChildItem conpty | ForEach-Object {
             "$($_.Name)  $($_.VersionInfo.FileVersion)"
           } | Tee-Object -FilePath probe-out/bundle.txt -Append
