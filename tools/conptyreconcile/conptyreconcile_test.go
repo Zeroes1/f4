@@ -101,6 +101,13 @@ func TestNativeProbeWorkloadHasStableHandoffMarkers(t *testing.T) {
 	}
 }
 
+func TestNativeProbeMarkerSurvivesTerminalControls(t *testing.T) {
+	output := []byte("__F4_NATIVE_\x1b[2J\r\nPROBE_END__")
+	if !probeOutputContainsMarker(output, probeEndMarker) {
+		t.Fatalf("marker was not recovered from terminal-control-separated output")
+	}
+}
+
 func TestMockMatrixAndRecordedSeeds(t *testing.T) {
 	for _, width := range edgeScenarioWidths() {
 		if err := runMockScenario(edgeScenario(width)); err != nil {
