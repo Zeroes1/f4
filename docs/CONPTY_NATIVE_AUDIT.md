@@ -399,3 +399,62 @@ primary-сессия дала `passed=19`, `failed=0`, `repaint_frames=0`.
 alternate static-сессии в этом же отчёте не являются закрытием A7: control
 имеет межстрочный repaint, для которого пункт 8 определяет историю как
 `deferred`, а полная A/B/C/D-проверка ещё не выполнена.
+
+### Partial-строка через resize и граница кадра
+
+После чтения pinned-исходника по `_invalidMap` и `_quickReturn` выполнен новый
+прицельный native-прогон:
+
+```text
+go run . -partial -report artifacts/pinned-conpty-partial-next.json
+```
+
+Хост в отчёте проверен как `OpenConsole.exe` версии
+`1.12.220408003-release1.12` с SHA
+`14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e`.
+Скриптовая проверка отчёта получила `raw=246`, `expected=131`, один явный
+`CRLF`, resize-offset `0,0,8,180`. Единственная запись
+`rendered_lines` имеет `129` байт текста и `2` байта терминатора; их
+конкатенация (`131` байт) побайтово равна `expected_input`. Завершение также
+подтверждено полями `child_exited=true`, `host_exited=true`,
+`handles_closed=true`; все три проверки произвольного chunking — `passed`.
+Это подтверждает конкретную последовательность «половина строки → resize →
+хвост» на живом хосте и не разрешает склеивать строки по ширине.
+
+В этом же изменении resize-offset стал записываться до вызова
+`WriteFile(PTY_SIGNAL_RESIZE_WINDOW)`, то есть на начало собственной операции,
+а не после неё. Это устраняет гонку измерения, но не создаёт несуществующий
+конец кадра.
+
+Исходник pinned-коммита уточняет открытый вопрос. `VtEngine::StartPaint`
+(`src/renderer/vt/paint.cpp:21-42`) возвращает `S_FALSE` при пустых
+`_invalidMap`/`_scrollDelta`/`_cursorMoved`/`_titleChanged`; это внутренний
+ранний возврат и наружу не сериализуется. `VtEngine::EndPaint`
+(`paint.cpp:54-65`) только сбрасывает состояние, а
+`Renderer::_PaintFrameForEngine` (`src/renderer/base/renderer.cpp:107-181`)
+обходит dirty-area и завершает paint. В pipe нет байтового события «repaint
+закончился». Поэтому после собственного resize нельзя отбрасывать весь поток
+до следующего наблюдаемого события: ребёнок может уже продолжать новый
+дописывающий вывод. Надёжный внешний протокол границы пока не найден; это
+открытый blocker динамической истории и C1, а не основание для эвристической
+дедупликации.
+
+Повтор после фиксации offset перед `WriteFile` выполнен командой:
+
+```text
+go run . -partial -report artifacts/pinned-conpty-partial-next2.json
+```
+
+Проверка отчёта и приложенного `.raw` вывела:
+
+```text
+raw=247 expected=131 rendered=131 exact=True
+raw_sha=98e2eb0fb54046ca482375dec30a1f5a8ca71c422054d6b3803ef59a3faf586a
+file_sha=98e2eb0fb54046ca482375dec30a1f5a8ca71c422054d6b3803ef59a3faf586a
+offsets=0,0,8,116 child=True host=True handles=True
+```
+
+Размер сырого потока меняется из-за асинхронного порядка paint, но логическая
+строка после «половина → resize → хвост» остаётся ровно 131 байтом; это
+повторяемое подтверждение транспорта, а не разрешение на вывод границы из
+репейнта.

@@ -282,6 +282,11 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		// completion heuristic.
 		time.Sleep(time.Duration(2+index*3) * time.Millisecond)
 		resize := probeResize{At: time.Now().UTC(), Width: dimensions[0], Height: dimensions[1]}
+		// Record the beginning at the instant the resize request is issued.  The
+		// pinned host does not serialize a frame-end marker into the output pipe;
+		// recording after WriteFile would move the checkpoint past any bytes that
+		// raced with the request.
+		recorder.resize(dimensions[0], dimensions[1])
 		if err := resizePinnedPseudoConsole(pty, uint16(dimensions[0]), uint16(dimensions[1])); err != nil {
 			resize.Error = err.Error()
 			session.Resizes = append(session.Resizes, resize)
@@ -289,7 +294,6 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 			terminatePinnedClient(pty)
 			return session, err
 		}
-		recorder.resize(dimensions[0], dimensions[1])
 		session.Resizes = append(session.Resizes, resize)
 	}
 	exitCode, err := waitProbeClient(pty)

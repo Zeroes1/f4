@@ -42,13 +42,17 @@ func TestReflowDoesNotChangeLogicalLines(t *testing.T) {
 
 func TestProbePayloadCoversRequiredLineClasses(t *testing.T) {
 	var stream logicalLineStream
-	stream.Feed([]byte(probeWorkload()))
+	// Cursor visibility wrappers are out-of-band renderer controls and do not
+	// terminate a logical record.  The authored payload itself is what this
+	// round-trip test measures.
+	authored := stripCursorVisibilityWrapper([]byte(probeWorkload()))
+	stream.Feed(authored)
 	lines := stream.Lines()
 	if len(lines) < 17 {
 		t.Fatalf("probe has only %d explicit lines", len(lines))
 	}
 	joined := stream.Bytes()
-	if !bytes.Equal(joined, []byte(probeWorkload())) {
+	if !bytes.Equal(joined, authored) {
 		t.Fatal("probe logical splitter changed authored bytes")
 	}
 	if bytes.Count(joined, []byte("repeat: SAME\r\n")) != 3 {
