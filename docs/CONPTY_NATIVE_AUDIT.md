@@ -578,6 +578,22 @@ native semantic probe complete: artifacts/pinned-conpty-progress.json kind=progr
 Промежуточные состояния `0%` и `50%` не стали историческими строками;
 финальное `progress: 100%` совпало побайтово.
 
+### D3: 300 детерминированных seed-сессий
+
+Полный запуск после фиксации host-width=512 завершён без ошибок:
+
+```text
+native seed gate: 300/300 (100%) width=121
+seed_count=300 failures=0 sessions=300
+```
+
+Каждая сессия сохранила raw-артефакт с проверенным SHA и закрытыми child/host/
+handles; после прогона активных процессов pinned probe/OpenConsole не осталось.
+Разнообразие `width=1,79,80,81,121` теперь относится к payload и consumer
+reflow, а не к размеру ConPTY, поэтому известное зависание host 1x1 не искажает
+этот этап. Это закрывает воспроизводимый seed-stage; полная C4-матрица
+cancel/timeout/close-order всё ещё отдельный незакрытый пункт.
+
 ### Независимая сверка `dir /s /b` через redirected-файл
 
 По пункту 11 выполнена одна и та же команда двумя путями: напрямую в файл
