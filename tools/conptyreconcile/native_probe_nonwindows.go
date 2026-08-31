@@ -7,6 +7,6 @@ import (
 	"runtime"
 )
 
-func runNativeProbe(hostPath, reportPath string) error {
+func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error {
 	return fmt.Errorf("native OpenConsole probe requires Windows (current OS: %s)", runtime.GOOS)
 }

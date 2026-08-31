@@ -14,6 +14,17 @@ From a Windows checkout with Go installed:
 go run ./tools/conptyreconcile -probe -probe-report native-openconsole-probe.json
 ```
 
+Для диагностики влияния reflow/resize можно выполнить тот же workload без
+изменений размера во время вывода:
+
+```text
+go run ./tools/conptyreconcile -probe-static -probe-report native-openconsole-probe-static.json
+```
+
+Контрольный режим намеренно запускает одну `80x25` сессию: static `1x1` на
+этом host может блокировать child из-за отсутствия resize/reflow, что само по
+себе является диагностическим результатом, а не успешным gate.
+
 The probe downloads the pinned Windows Terminal MSIX bundle into
 `%LOCALAPPDATA%\f4\native-conpty\1.12.10983.0\`, verifies the nested x64
 package and `OpenConsole.exe` version/SHA-256, and reuses the verified cache on
@@ -48,6 +59,8 @@ The JSON report records:
 - exit code, resize timestamps, marker presence (with an explicit warning when
   a 1x1 viewport reflow makes a marker unobservable), raw-output SHA-256 and every
   observed output event with timestamp, dimensions and read chunk bytes.
+- `resize_during_output`, distinguishing the static-size control run from the
+  run that deliberately interleaves resize packets with child output.
 
 Each session's unmodified ConPTY stream is also written beside the report in
 `native-openconsole-probe.json.sessions\<width>x<height>.raw` (the directory
