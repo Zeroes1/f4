@@ -122,6 +122,19 @@ scrollback/cursor, динамический reflow, реальные коман�
 
 ## Новый host-stream прогон
 
+Свежий static-прогон после синхронизации `main` выполнен командой:
+
+```text
+go run . -probe-static -report ../../artifacts/pinned-conpty-probe-static-current.json
+```
+
+Он завершился успешно. Скриптовая проверка отчёта и `.raw` получила:
+`decoded=2891`, `raw=2891`, `bytes_equal=True`, `decoded_cr=92`,
+`raw_cr=92`, `sha_equal=True`; SHA файла и `raw_sha256` равны
+`7dc18add97587c6349c7887a86f7ac104548cc5b278d1ba4dabab12d75a71d3f`.
+Это повторно закрывает только целостность транспортного артефакта D4 для
+этой сессии; проверки A--C и путь f4 этим прогоном не закрыты.
+
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
 разбор, который режет поток только по host-emitted `CRLF`; resize-frame
 отмечается собственным output-offset при вызове `ResizePseudoConsole`.
