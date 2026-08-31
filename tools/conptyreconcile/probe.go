@@ -89,6 +89,11 @@ func probeWorkloadForWidth(width int) string {
 
 func controlProbeWorkload() string {
 	var b strings.Builder
+	// Keep cursor painting out of this semantic-control phase. The control
+	// assertions target the rendered effect of SGR/erase/CUP/tabs/title; the
+	// cursor-side wrap interaction is covered separately by the long-line
+	// visible-cursor diagnostic.
+	b.WriteString("\x1b[?25l")
 	b.WriteString("control-warmup\r\n")
 	b.WriteString(controlBeginMarker)
 	b.WriteString("\r\n")
@@ -99,6 +104,7 @@ func controlProbeWorkload() string {
 	b.WriteString("\x1b]0;pinned-conpty-probe\x07\r\n")
 	b.WriteString(controlEndMarker)
 	b.WriteString("\r\n")
+	b.WriteString("\x1b[?25h")
 	// Keep the initial screen erase outside the marked control payload: it can
 	// itself trigger an absolute repaint before the marker-bearing phase ends.
 	b.WriteString("\x1b[2J\x1b[H")

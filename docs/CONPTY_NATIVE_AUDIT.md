@@ -561,3 +561,19 @@ expected_lines=23906 observed_lines=32680 mismatch_count=28519 cup_before_crlf=1
 объясняет основную массу расхождений. Вариант, который трактовал `CRLF` перед
 последне-колоночным CUP как продолжение, был отброшен: он ошибочно склеивал
 законные соседние строки (`observed_lines=23471`) и потому был бы эвристикой.
+
+### Контрольный payload после изоляции от отрисовки курсора
+
+Контрольная фаза также выполнена со скрытым курсором, чтобы отделить SGR,
+стирание, CUP и табуляции от известного cursor-wrap ограничения:
+
+```text
+go run . -probe-static -report artifacts/pinned-conpty-probe-static-control-hidden.json
+```
+
+`red`, `rewritten`, `cursor`, SGR и alternate-screen assertions прошли.
+`tabs` остался `deferred`: живой поток содержит
+`tabs:\x1b[3CX\x1b[7CY\x1b[8;1H__PINNED_CONPTY_PROBE_CONTROL_END__` без `CRLF`
+между табличной строкой и следующим маркером. Текущий накопитель не угадывает
+границу по одному CUP и не превращает этот результат в проход; пункт 10.3
+остаётся открытым до source-derived решения и отдельного прогона.
