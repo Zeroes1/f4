@@ -88,6 +88,13 @@ type TerminalView struct {
 	Muted         bool
 	lastCharWasCR bool
 
+	// suppressEraseHistory stays set after a primary-screen reflow until the
+	// next printable cell arrives. ConPTY/OpenConsole commonly repaints a
+	// resized screen with one or more ED2 sequences before redrawing it. The
+	// rows have already been preserved by reflow; pushing the same viewport
+	// again would manufacture duplicate logical output in scrollback.
+	suppressEraseHistory bool
+
 	// promptOverlaysLastRow records that f4 paints its own command line over
 	// the grid's bottom row, so that row belongs to the shell prompt alone.
 	// Written by the layout on the UI goroutine, read by the parser on the
@@ -500,6 +507,7 @@ func (tv *TerminalView) PutChar(r rune, attr uint64) {
 			buf[tv.CursorY][tv.CursorX+i] = vtui.CharInfo{Char: vtui.WideCharFiller, Attributes: attr}
 		}
 		tv.CursorX += w
+		tv.suppressEraseHistory = false
 	}
 	tv.lastCharWasCR = false
 }
@@ -772,7 +780,7 @@ func (tv *TerminalView) EraseDisplay(mode int, attr uint64) {
 		tv.selActive = false
 	}
 
-	if (mode == 2 || mode == 3) && !tv.UseAltScreen {
+	if (mode == 2 || mode == 3) && !tv.UseAltScreen && !tv.suppressEraseHistory {
 		// Сохраняем экран в историю перед очисткой (игнорируя пустоту снизу)
 		lastRow := -1
 		for y := 0; y < tv.Height; y++ {
@@ -2012,6 +2020,12 @@ func (tv *TerminalView) reflowLocked(w, h int) {
 	tv.ScrollTop, tv.ScrollBottom = 0, h-1
 	tv.CursorX, tv.CursorY = cursorX, cursorY
 	tv.lastCharWasCR = (cursorX == 0)
+	if !tv.UseAltScreen {
+		// The next host frame may clear and repaint the resized viewport. Its
+		// old rows are already represented by the reflow result, so do not
+		// append that repaint to logical history a second time.
+		tv.suppressEraseHistory = true
+	}
 
 	tv.kittyResizePlacements(h-oldHeight, h)
 	tv.kittyRecomputeSpans()

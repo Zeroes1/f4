@@ -173,3 +173,17 @@ func (p *nativeOpenConsolePTY) Close() error {
 	pty.closePipes()
 	return nil
 }
+
+// shutdownHost closes the pinned host side after the child has exited but
+// leaves the output handle open. Readers can therefore drain the final frame
+// before Close releases the pipe; closing both at once can discard unread
+// bytes from a fast command.
+func (p *nativeOpenConsolePTY) shutdownHost() {
+	p.mu.Lock()
+	pty := p.pty
+	p.mu.Unlock()
+	if pty == nil {
+		return
+	}
+	pty.close()
+}

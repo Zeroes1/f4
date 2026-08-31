@@ -116,10 +116,11 @@ func TestNativeOpenConsoleF4Live(t *testing.T) {
 	if code, err := pty.ExitCode(); err != nil || code != 0 {
 		t.Fatalf("live child exit code=%d err=%v", code, err)
 	}
-	if err := pty.Close(); err != nil {
+	pty.shutdownHost()
+	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
 		t.Fatal(err)
 	}
-	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
+	if err := pty.Close(); err != nil {
 		t.Fatal(err)
 	}
 	logBytes := strings.ReplaceAll(string(pf.termView.GetAllLogBytes()), "\r", "")
@@ -146,7 +147,11 @@ func TestNativeOpenConsoleF4WidthAndWhitespace(t *testing.T) {
 			}
 			command := "echo " + strings.Join(lines[:1], "") + " & ping -n 2 127.0.0.1 >nul"
 			for _, line := range lines[1:] {
-				if line == "" {
+				if line == "    " {
+					// `echo     ` is the cmd state query, not a spaces-only
+					// line. The parenthesized form emits the payload literally.
+					command += " & echo(    "
+				} else if line == "" {
 					command += " & echo."
 				} else {
 					command += " & echo " + line
@@ -254,12 +259,13 @@ func runLiveNativeCommand(t *testing.T, width, height int, command string) strin
 		t.Fatal(err)
 	}
 	if code, err := pty.ExitCode(); err != nil || code != 0 {
-		t.Fatalf("width %d child exit code=%d err=%v", width, code, err)
+		t.Fatalf("native child exit code=%d err=%v", code, err)
 	}
-	if err := pty.Close(); err != nil {
+	pty.shutdownHost()
+	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
 		t.Fatal(err)
 	}
-	if err := <-readDone; err != nil && !errors.Is(err, os.ErrClosed) && !errors.Is(err, windows.ERROR_BROKEN_PIPE) && !errors.Is(err, windows.ERROR_HANDLE_EOF) {
+	if err := pty.Close(); err != nil {
 		t.Fatal(err)
 	}
 	return string(pf.termView.GetAllLogBytes())
