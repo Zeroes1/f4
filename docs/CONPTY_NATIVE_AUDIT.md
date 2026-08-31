@@ -63,6 +63,27 @@ resize и запись артефактов; logical history/reflow пока н�
 static/dynamic стадий с сообщением `native gate incomplete ...`: это защитный
 гейт от ложной зелени, пока не реализованы проверки A–D.
 
+## Handoff через текущий f4 pipeline
+
+Добавлен opt-in диагностический тест `cmd/f4/TestNativeConPTYReplay`. Он
+подаёт сохранённый native raw через `PanelsFrame.consumeLocalOutput` и
+`AnsiParser` в настоящий `TerminalView`, после чего сверяет marker count и
+полный payload. Это пока replay, а не live native session, поэтому D1 ещё не
+закрыт и тест не включён в обычный прогон.
+
+Команда на Windows:
+
+```text
+F4_NATIVE_CONPTY_REPLAY=<absolute path to pinned-conpty-probe-static-v6.json> go test ./cmd/f4 -run '^TestNativeConPTYReplay$' -count=1 -v
+```
+
+Прогон получил `raw=2852`, `f4_log=1293`, `begin=1`, `end=1`, но завершился
+первым строгим несоответствием payload: `actual=1236`, `expected=1326`,
+`first_diff=1`. В фактическом логе присутствуют две лишние начальные пустые
+строки, а строка cursor/rewrite также имеет изменённое содержимое. Это
+первое прямое измерение потери/перестановки на пути f4; оно оставлено
+красным и не маскируется удалением control-последовательностей.
+
 ## Текущая реализация
 
 - модуль инструмента самостоятельный: `github.com/unxed/pinned-conpty-probe`;
@@ -98,9 +119,10 @@ scrollback/cursor, динамический reflow, реальные коман�
 ## Новый host-stream прогон
 
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
-разбор, который режет поток только по host-emitted `CRLF`, а `ESC[8;H;Wt`
-фиксирует resize-frame. Ни экранная сетка, ни флаг wrap, ни хвостовые пробелы
-в этом разборе не используются. Unit-тесты проходят с системным кэшем
+разбор, который режет поток только по host-emitted `CRLF`; resize-frame
+отмечается собственным output-offset при вызове `ResizePseudoConsole`.
+Ни экранная сетка, ни флаг wrap, ни хвостовые пробелы в этом разборе не
+используются. Unit-тесты проходят с системным кэшем
 `C:\Users\Windows\AppData\Local\go-build`.
 
 Команда:
