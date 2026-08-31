@@ -4315,15 +4315,34 @@ func TestFileSystemPanel_CachedEnterStaysResponsiveAndCoalescesRefresh(t *testin
 	if got := remote.GetPath(); got != "/sdcard" {
 		t.Fatalf("path after cached Enter = %q, want /sdcard", got)
 	}
-	if got := fp.currentTitle; !strings.Contains(got, "/sdcard") || !strings.HasSuffix(got, panelLoadingPulse[0]) {
+	// The spinner is deferred (panelLoadingShowDelay), so a just-started load
+	// shows the current path immediately but not the marker yet.
+	if got := fp.currentTitle; !strings.Contains(got, "/sdcard") {
 		t.Fatalf("loading title was not updated immediately: %q", got)
+	}
+	if fp.loadingVisible {
+		t.Fatalf("spinner became visible before the deferred delay: %q", fp.currentTitle)
 	}
 	if got := fp.getRawSelectedName(); got != ".." {
 		t.Fatalf("sdcard cache was not rendered synchronously, cursor = %q", got)
 	}
 
+	// Wait for the deferred spinner to appear (proving the in-flight load keeps
+	// running), then for it to advance at least one frame to confirm it pulses.
+	markerDeadline := time.After(2 * time.Second)
+	for !fp.loadingVisible {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-markerDeadline:
+			t.Fatalf("loading spinner never became visible: %q", fp.currentTitle)
+		}
+	}
+	if got := fp.currentTitle; !strings.Contains(got, "/sdcard") || !strings.HasSuffix(got, panelLoadingPulse[0]) {
+		t.Fatalf("first spinner frame was not shown: %q", got)
+	}
 	initialLoadingTitle := fp.currentTitle
-	pulseDeadline := time.After(time.Second)
+	pulseDeadline := time.After(2 * time.Second)
 	for fp.currentTitle == initialLoadingTitle {
 		select {
 		case task := <-vtui.FrameManager.TaskChan:
