@@ -14,6 +14,7 @@ go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-pro
 go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-command.json
 go run ./tools/conptyreconcile -command-compare -command-compare-width 512 -report artifacts/pinned-conpty-command-compare-512.json
 go run ./tools/conptyreconcile -clear-probe -report artifacts/pinned-conpty-clear.json
+go run ./tools/conptyreconcile -scroll-probe -report artifacts/pinned-conpty-scroll.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -63,6 +64,10 @@ gate pass.
 `-clear-probe` runs a PowerShell `Clear-Host` sequence and checks that the
 pinned host emits exactly one `ESC[3J`, removing the pre-clear marker from
 history while retaining the post-clear marker.
+
+`-scroll-probe` validates consumer-only scrollback: complete logical lines from
+a static pinned-host session are spilled to a bounded piece-table model, then
+scrolled and reflowed at several display sizes without changing history.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The

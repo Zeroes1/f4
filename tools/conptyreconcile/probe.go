@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 const (
 	probeBeginMarker     = "__PINNED_CONPTY_PROBE_BEGIN__"
@@ -9,6 +12,8 @@ const (
 	controlEndMarker     = "__PINNED_CONPTY_PROBE_CONTROL_END__"
 	alternateBeginMarker = "__PINNED_CONPTY_PROBE_ALT_BEGIN__"
 	alternateEndMarker   = "__PINNED_CONPTY_PROBE_ALT_END__"
+	scrollBeginMarker    = "__PINNED_CONPTY_PROBE_SCROLL_BEGIN__"
+	scrollEndMarker      = "__PINNED_CONPTY_PROBE_SCROLL_END__"
 )
 
 // probeWorkload exercises host operations any terminal must handle. Logical
@@ -116,6 +121,36 @@ func controlProbeWorkload() string {
 	// itself trigger an absolute repaint before the marker-bearing phase ends.
 	b.WriteString("\x1b[2J\x1b[H")
 	return b.String()
+}
+
+func scrollProbeWorkload() []byte {
+	var b strings.Builder
+	b.WriteString("\x1b[?25l")
+	b.WriteString(scrollBeginMarker)
+	b.WriteString("\r\n")
+	for i := 0; i < 4; i++ {
+		b.WriteString("before-")
+		b.WriteString(string(rune('0' + i)))
+		b.WriteString("\r\n")
+	}
+	b.WriteString("eviction-boundary: ")
+	b.WriteString(strings.Repeat("E", 257))
+	b.WriteString("\r\n")
+	for i := 0; i < 32; i++ {
+		b.WriteString("scroll-line-")
+		b.WriteString(string(rune('A' + i%26)))
+		b.WriteString(" ")
+		b.WriteString(strings.Repeat(string(rune('a'+i%26)), 23))
+		b.WriteString("\r\n")
+	}
+	b.WriteString(scrollEndMarker)
+	b.WriteString("\r\n\x1b[?25h")
+	return []byte(b.String())
+}
+
+func emitScrollWorkload() error {
+	_, err := os.Stdout.Write(scrollProbeWorkload())
+	return err
 }
 
 // alternateProbeWorkload is a separate phase because leaving the alternate

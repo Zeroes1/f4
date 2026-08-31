@@ -21,6 +21,7 @@ func main() {
 		commandCompare      = flag.Bool("command-compare", false, "compare recursive dir through pinned host with redirected output")
 		commandCompareWidth = flag.Int("command-compare-width", 80, "pinned-host capture width for -command-compare")
 		clearProbe          = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
+		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		reflowProbe         = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
 		probeHost           = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath          = flag.String("report", "", "report path")
@@ -31,6 +32,7 @@ func main() {
 		emitAlternate       = flag.Bool("emit-alternate", false, "internal child alternate-screen workload")
 		emitControl         = flag.Bool("emit-control", false, "internal child control-sequence workload")
 		emitReflow          = flag.Bool("emit-reflow", false, "internal child static reflow workload")
+		emitScroll          = flag.Bool("emit-scroll", false, "internal child static scrollback workload")
 	)
 	flag.Parse()
 	if *seed == 0 {
@@ -82,6 +84,12 @@ func main() {
 		}
 		return
 	}
+	if *emitScroll {
+		if err := emitScrollWorkload(); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if *gate {
 		if err := runNativeGate(*probeHost, *reportPath); err != nil {
 			fail(err)
@@ -120,6 +128,12 @@ func main() {
 	}
 	if *clearProbe {
 		if err := runNativeClearProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *scrollProbe {
+		if err := runNativeScrollProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

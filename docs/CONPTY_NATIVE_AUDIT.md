@@ -517,7 +517,7 @@ go run . -reflow-probe -report artifacts/pinned-conpty-reflow-next.json
 
 Это закрывает для текущего consumer-only слоя сохранность целых строк и
 перевыкладку по ширине без host repaint; это не выдаётся за полный B2: отдельные
-снимки screen/history/cursor и C3 пока не реализованы. Нативная исходная
+снимки screen/history/cursor пока не реализованы. Нативная исходная
 история при этом получена живым pinned host, а не второй моделью консоли.
 
 ### Независимая сверка `dir /s /b` через redirected-файл
@@ -683,3 +683,23 @@ native command comparison complete: artifacts/pinned-conpty-command-compare-512.
 где строки начинают переноситься и границы кадров случайно совпадают:
 единичное удаление может дать тысячи позиционных последствий. Правило CUP
 из пункта 11 оставлено без изменений; на широком захвате `cup_before_crlf=0`.
+
+### Native scrollback и вытеснение (C3)
+
+Добавлен отдельный `-scroll-probe`: он получает статический поток pinned host
+на `512x8` со спрятанным курсором, сверяет 37 строк с authored payload, затем
+передаёт их в consumer-модель. Модель хранит хвост из 8 целых логических
+строк, старшие записи складывает в piece-table spill, а отображение получает
+только через reflow этих записей.
+
+```text
+go run . -scroll-probe -report artifacts/pinned-conpty-scroll.json
+native scrollback probe complete: artifacts/pinned-conpty-scroll.json lines=37 spilled=29 history_sha256=bce1f058e4006c14feeacfdd5a7f0f09886ad48f4785b800242d2282998f8906
+```
+
+Отчёт: `expected_lines=37`, `observed_lines=37`, `spilled_pieces=29`,
+`spilled_bytes=1254`, `eviction_boundary_preserved=true`. Все семь
+контрольных точек прокрутки до/после consumer-only изменения ширины/высоты
+имеют `status=passed`; SHA истории не менялся. Длинная строка на границе
+вытеснения сохранилась одним piece байт-в-байт. Сырой native поток и его SHA
+проверены тем же `writeAndVerifyRawArtifact`, что и остальные прогоны.
