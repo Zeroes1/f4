@@ -12,6 +12,7 @@ come only from explicit newline bytes.
 go run ./tools/conptyreconcile -probe -report artifacts/pinned-conpty-probe.json
 go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-probe-static.json
 go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-command.json
+go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
 
@@ -49,6 +50,11 @@ the child writes.
 `dir /s /b` at normal and narrow widths. It reports observed absolute-CUP plus
 `CRLF` frequency and lifecycle status; those counts are measurements of the
 pinned host, never a rule for reconstructing history.
+
+`-reflow-probe` keeps the pinned host at its original size and applies the
+display-width matrix only to the consumer's complete logical lines. The
+host-resize interleaving behind `-probe` remains an inactive future alternative
+and is not part of the gate.
 
 Each report stores the verified host identity, exact child input, session
 dimensions, resize events, process identity, raw output and SHA-256. The raw

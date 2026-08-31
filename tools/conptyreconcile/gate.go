@@ -14,8 +14,8 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeProbe(hostPath, reportPath+".static", false); err != nil {
 		return fmt.Errorf("static pinned-host stage: %w", err)
 	}
-	if err := runNativeProbe(hostPath, reportPath+".dynamic", true); err != nil {
-		return fmt.Errorf("dynamic pinned-host stage: %w", err)
+	if err := runNativeReflowProbe(hostPath, reportPath+".reflow"); err != nil {
+		return fmt.Errorf("consumer reflow stage: %w", err)
 	}
 	if err := runNativeSeedGate(hostPath, reportPath+".seeds"); err != nil {
 		return fmt.Errorf("300-seed native stage: %w", err)

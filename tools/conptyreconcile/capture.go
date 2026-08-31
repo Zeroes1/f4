@@ -65,3 +65,24 @@ func (r *hostCaptureRecorder) snapshot() capture {
 	copy(result.Events, r.capture.Events)
 	return result
 }
+
+// observedOutputSnapshot returns only bytes read from the host output pipe so
+// a native session can wait for a semantic marker without using a sleep as a
+// synchronization primitive.
+func (r *hostCaptureRecorder) observedOutputSnapshot() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var result []byte
+	for _, event := range r.capture.Events {
+		if event.Kind == streamObservedOutput {
+			result = append(result, event.Bytes...)
+		}
+	}
+	return result
+}
+
+func (r *hostCaptureRecorder) outputOffset() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.outputBytes
+}

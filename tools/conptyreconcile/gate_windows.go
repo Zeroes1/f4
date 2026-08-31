@@ -43,7 +43,9 @@ func runNativeSingleSeed(hostPath, reportPath string, seed uint64) error {
 	begin := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_BEGIN__", seed)
 	end := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_END__", seed)
 	command := fmt.Sprintf(`"%s" -emit-seed %016x -emit-probe-width %d`, executable, seed, width)
-	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 25, true, workload, command, []string{begin, end})
+	// B1-0 keeps the host size fixed. The old host-resize interleaving remains
+	// available only through the diagnostic -probe path, not this gate.
+	session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 25, false, workload, command, []string{begin, end})
 	report := seedGateReport{Mode: "pinned-conpty-seed", Host: identity, SeedCount: 1, Sessions: []nativeProbeSession{session}, CompletedAt: time.Now().UTC()}
 	if reportPath == "" {
 		reportPath = filepath.Join("artifacts", fmt.Sprintf("pinned-conpty-seed-%d.json", seed))
@@ -92,7 +94,10 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 		begin := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_BEGIN__", seed)
 		end := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_END__", seed)
 		command := fmt.Sprintf(`"%s" -emit-seed %016x -emit-probe-width %d`, executable, seed, width)
-		session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 25, true, workload, command, []string{begin, end})
+		// The gate changes display width in its consumer, never the ConPTY host.
+		// The resizeDuringOutput=true alternative is retained in -probe solely
+		// for historical diagnostics and is inactive for this requirement.
+		session, runErr := runNativeProbeSessionWithWorkload(resolved, executable, width, 25, false, workload, command, []string{begin, end})
 		report.Sessions = append(report.Sessions, session)
 		fmt.Printf("native seed gate: %d/300 (%d%%) width=%d\n", i+1, (i+1)*100/300, width)
 		artifactDir := reportPath + ".sessions"

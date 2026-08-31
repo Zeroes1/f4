@@ -79,3 +79,19 @@ func emitControlWorkload() error {
 	}
 	return nil
 }
+
+func emitReflowWorkload(width int) error {
+	input := reflowProbeWorkload(width)
+	for offset := 0; offset < len(input); {
+		end := offset + 1 + (offset*11)%23
+		if end > len(input) {
+			end = len(input)
+		}
+		if _, err := os.Stdout.Write(input[offset:end]); err != nil {
+			return fmt.Errorf("emit reflow probe: %w", err)
+		}
+		offset = end
+		time.Sleep(time.Duration((offset*7)%200) * time.Microsecond)
+	}
+	return nil
+}
