@@ -35,6 +35,7 @@ type nativeProbeSession struct {
 	InitialWidth   int                `json:"initial_width"`
 	InitialHeight  int                `json:"initial_height"`
 	Command        string             `json:"command"`
+	ExpectedInput  []byte             `json:"expected_input"`
 	HostCommand    string             `json:"host_command"`
 	HostPID        uint32             `json:"host_pid"`
 	HostProcess    pinnedHostIdentity `json:"host_process"`
@@ -47,6 +48,7 @@ type nativeProbeSession struct {
 	RawSHA256      string             `json:"raw_sha256"`
 	RawOutput      []byte             `json:"raw_output"`
 	LogicalLines   []logicalLine      `json:"logical_lines"`
+	Frames         []hostFrame        `json:"frames"`
 	Events         []streamEvent      `json:"events"`
 	Error          string             `json:"error,omitempty"`
 }
@@ -138,8 +140,15 @@ func probeEnvironment() map[string]string {
 }
 
 func runNativeProbeSession(hostPath, executable string, width, height int, resizeDuringOutput bool) (session nativeProbeSession, runErr error) {
+	workload := []byte(probeWorkloadForWidth(width))
+	return runNativeProbeSessionWithWorkload(hostPath, executable, width, height, resizeDuringOutput, workload,
+		fmt.Sprintf(`"%s" -emit-probe -emit-probe-width %d`, executable, width), probeExpectedMarkers())
+}
+
+func runNativeProbeSessionWithWorkload(hostPath, executable string, width, height int, resizeDuringOutput bool, workload []byte, childCommand string, markers []string) (session nativeProbeSession, runErr error) {
 	session.InitialWidth, session.InitialHeight = width, height
-	session.Command = fmt.Sprintf("%s -emit-probe", executable)
+	session.ExpectedInput = append([]byte(nil), workload...)
+	session.Command = childCommand
 	session.StartedAt = time.Now().UTC()
 	pty, err := createPinnedPseudoConsole(hostPath, width, height)
 	if err != nil {
@@ -157,7 +166,7 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 	defer pty.close()
 	defer pty.closePipes()
 	recorder := newHostCaptureRecorder(0, width, height)
-	recorder.append(streamInput, []byte(probeWorkload()), "native-probe-child-payload")
+	recorder.append(streamInput, workload, "native-probe-child-payload")
 	outputReady := make(chan struct {
 		data []byte
 		err  error
@@ -169,7 +178,7 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 			err  error
 		}{data: data, err: readErr}
 	}()
-	if err := attachPinnedClient(pty, fmt.Sprintf(`"%s" -emit-probe`, executable)); err != nil {
+	if err := attachPinnedClient(pty, childCommand); err != nil {
 		session.Error = err.Error()
 		return session, err
 	}
@@ -217,20 +226,36 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 	}
 	session.FinishedAt = time.Now().UTC()
 	session.RawOutput = result.data
-	var logical logicalLineStream
+	var logical hostRenderStream
 	logical.Feed(result.data)
 	session.LogicalLines = logical.Lines()
+	session.Frames = logical.Frames()
 	session.Events = recorder.snapshot().Events
 	hash := sha256.Sum256(result.data)
 	session.RawSHA256 = hex.EncodeToString(hash[:])
-	markers := probeExpectedMarkers()
 	previous := -1
 	for _, marker := range markers {
-		count := bytes.Count(result.data, []byte(marker))
+		observed := result.data
+		if bytes.Count(observed, []byte(marker)) == 0 {
+			observed = printableStream(result.data)
+			if bytes.Count(observed, []byte(marker)) == 0 {
+				// Host repaint can insert CR/LF between adjacent marker bytes;
+				// this stream is used only to locate the handoff marker, never
+				// to construct logical lines.
+				observed = bytes.ReplaceAll(observed, []byte{'\r'}, nil)
+				observed = bytes.ReplaceAll(observed, []byte{'\n'}, nil)
+			}
+		}
+		count := bytes.Count(observed, []byte(marker))
 		if count != 1 {
 			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output contains marker %q %d times; logical history must reconcile repaint", marker, count))
 		}
-		position := bytes.Index(result.data, []byte(marker))
+		position := bytes.Index(observed, []byte(marker))
+		if position < 0 {
+			err := fmt.Errorf("native output does not contain marker %q", marker)
+			session.Error = err.Error()
+			return session, err
+		}
 		if position <= previous {
 			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output marker %q is out of order; logical history must reconcile repaint", marker))
 		}

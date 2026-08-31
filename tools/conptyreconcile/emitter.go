@@ -33,3 +33,20 @@ func emitProbeWorkloadWidth(width int) error {
 	}
 	return nil
 }
+
+func emitSeedWorkload(seed uint64, width int) error {
+	input := seedWorkload(seed, width)
+	for offset := 0; offset < len(input); {
+		end := offset + 1 + int(seed%31)
+		if end > len(input) {
+			end = len(input)
+		}
+		if _, err := os.Stdout.Write(input[offset:end]); err != nil {
+			return fmt.Errorf("emit seed %016x: %w", seed, err)
+		}
+		offset = end
+		seed = seed*6364136223846793005 + 1
+		time.Sleep(time.Duration(seed%200) * time.Microsecond)
+	}
+	return nil
+}

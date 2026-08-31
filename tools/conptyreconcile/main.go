@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 func main() {
@@ -17,10 +18,21 @@ func main() {
 		reportPath  = flag.String("report", "", "report path")
 		emitProbe   = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
 		emitWidth   = flag.Int("emit-probe-width", 0, "internal child workload width")
+		emitSeed    = flag.String("emit-seed", "", "internal child deterministic seed")
 	)
 	flag.Parse()
 	if *emitProbe {
 		if err := emitProbeWorkloadWidth(*emitWidth); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *emitSeed != "" {
+		seed, err := strconv.ParseUint(*emitSeed, 16, 64)
+		if err != nil {
+			fail(fmt.Errorf("invalid seed %q: %w", *emitSeed, err))
+		}
+		if err := emitSeedWorkload(seed, *emitWidth); err != nil {
 			fail(err)
 		}
 		return

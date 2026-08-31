@@ -17,5 +17,8 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeProbe(hostPath, reportPath+".dynamic", true); err != nil {
 		return fmt.Errorf("dynamic pinned-host stage: %w", err)
 	}
+	if err := runNativeSeedGate(hostPath, reportPath+".seeds"); err != nil {
+		return fmt.Errorf("300-seed native stage: %w", err)
+	}
 	return fmt.Errorf("native gate incomplete: native transport artifacts passed, but logical history, reflow, extreme-condition, command, and 300-session assertions are not implemented")
 }
