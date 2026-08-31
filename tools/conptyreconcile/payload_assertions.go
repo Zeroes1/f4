@@ -89,6 +89,43 @@ func assertStaticPayload(expected, raw []byte, markers ...string) []payloadAsser
 	return result
 }
 
+// assertAlternatePayload treats text written while the alternate buffer is
+// active as deliberately non-history. The handoff markers are still required
+// exactly once, while both alternate records must be absent from the live
+// logical history. No row shape or content-based deduplication is used.
+func assertAlternatePayload(raw []byte, markers ...string) []payloadAssertion {
+	stream := parseHostRenderStream(raw, 0)
+	var history []byte
+	for _, line := range stream.Lines() {
+		history = append(history, line.Bytes...)
+		history = append(history, line.Terminator...)
+	}
+	printable := printableStream(history)
+	withoutNewlines := strings.NewReplacer("\r", "", "\n", "").Replace(string(printable))
+	result := make([]payloadAssertion, 0, len(markers)+2)
+	for _, marker := range markers {
+		observed := strings.Count(withoutNewlines, marker)
+		status := "passed"
+		detail := "alternate handoff marker count is exact"
+		if observed != 1 {
+			status = "failed"
+			detail = "alternate handoff marker count is not exactly one"
+		}
+		result = append(result, payloadAssertion{Name: marker, Status: status, ExpectedCount: 1, ObservedCount: observed, Detail: detail})
+	}
+	for _, record := range []string{"alternate-end", "alt-screen"} {
+		observed := strings.Count(string(printable), record+"\r\n")
+		status := "passed"
+		detail := "alternate-buffer record is absent from primary history"
+		if observed != 0 {
+			status = "failed"
+			detail = "alternate-buffer record leaked into primary history"
+		}
+		result = append(result, payloadAssertion{Name: record, Status: status, ExpectedCount: 0, ObservedCount: observed, Detail: detail})
+	}
+	return result
+}
+
 func assertionFailures(assertions []payloadAssertion) []string {
 	var failures []string
 	for _, assertion := range assertions {

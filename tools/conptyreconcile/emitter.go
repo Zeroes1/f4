@@ -66,32 +66,16 @@ func emitPartialWorkload(width int) error {
 
 func emitAlternateWorkload(width int) error {
 	input := []byte(alternateProbeWorkload(width))
-	for offset := 0; offset < len(input); {
-		end := offset + 1 + (offset*7)%17
-		if end > len(input) {
-			end = len(input)
-		}
-		if _, err := os.Stdout.Write(input[offset:end]); err != nil {
-			return fmt.Errorf("emit alternate probe: %w", err)
-		}
-		offset = end
-		time.Sleep(time.Duration((offset*11)%250) * time.Microsecond)
+	if _, err := os.Stdout.Write(input); err != nil {
+		return fmt.Errorf("emit alternate probe: %w", err)
 	}
 	return nil
 }
 
 func emitControlWorkload() error {
 	input := []byte(controlProbeWorkload())
-	for offset := 0; offset < len(input); {
-		end := offset + 1 + (offset*5)%19
-		if end > len(input) {
-			end = len(input)
-		}
-		if _, err := os.Stdout.Write(input[offset:end]); err != nil {
-			return fmt.Errorf("emit control probe: %w", err)
-		}
-		offset = end
-		time.Sleep(time.Duration((offset*17)%250) * time.Microsecond)
+	if _, err := os.Stdout.Write(input); err != nil {
+		return fmt.Errorf("emit control probe: %w", err)
 	}
 	return nil
 }
