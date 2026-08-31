@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -62,11 +63,14 @@ func runNativeSingleSeed(hostPath, reportPath string, seed uint64) error {
 	if runErr != nil {
 		report.Failures = []string{fmt.Sprintf("seed %d width %d: %v", seed, width, runErr)}
 	}
+	if failures := assertionFailures(session.Assertions); len(failures) != 0 {
+		report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d assertions: %s", seed, width, strings.Join(failures, "; ")))
+	}
 	if err := writeJSON(reportPath, report); err != nil {
 		return err
 	}
-	if runErr != nil {
-		return runErr
+	if len(report.Failures) != 0 {
+		return fmt.Errorf("native seed failed: %s", strings.Join(report.Failures, "; "))
 	}
 	fmt.Printf("native seed complete: seed=%d width=%d report=%s\n", seed, width, reportPath)
 	return nil
@@ -111,6 +115,9 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 		if runErr != nil {
 			report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d: %v", seed, width, runErr))
 			fmt.Printf("native seed gate: seed %d recorded failure: %v\n", seed, runErr)
+		}
+		if failures := assertionFailures(session.Assertions); len(failures) != 0 {
+			report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d assertions: %s", seed, width, strings.Join(failures, "; ")))
 		}
 	}
 	report.SeedCount = len(report.Sessions)
