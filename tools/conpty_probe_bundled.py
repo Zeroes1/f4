@@ -1,13 +1,22 @@
-"""Probe a bundled (post-rewrite) ConPTY for injected line breaks.
+"""Probe ConPTY for manufactured line breaks, in-box and bundled.
 
-Same experiment as conpty_probe.py, but instead of the in-box pseudoconsole
-it loads a conpty.dll brought along with the repo, so we can compare the
-behaviour of a modern ConPTY against the one shipped with the OS.
+Runs the case matrix from conpty_wrap_cases.py through a pseudoconsole and
+reports, for every case, where line breaks landed in the VT stream.
 
-conpty.dll spawns OpenConsole.exe from its own directory, so both files must
-sit side by side.
+The payload of every case is printable text only - no CR, no LF, no tab, no
+escape sequence - so every break in the output was inserted by ConPTY. See
+conpty_wrap_cases.py for the reasoning and for the code in conhost this is
+aimed at.
+
+The same code drives both pseudoconsoles: "system" exercises the in-box
+CreatePseudoConsole as a control, and the bundled conpty.dll exercises a
+post-#17510 build. conpty.dll spawns OpenConsole.exe from its own directory,
+so both files must sit side by side.
 
 Usage: python tools/conpty_probe_bundled.py <path-to-conpty.dll> [tag]
+
+Meant to run on a real Windows host (see the conpty-probe workflow). Output
+goes to probe-out/, which the workflow uploads as an artifact.
 """
 
 import ctypes
@@ -17,31 +26,22 @@ import threading
 import time
 from ctypes import wintypes
 
-COLS = 80
-ROWS = 25
-FILL = 100  # > COLS, so the line must wrap once
-OUTDIR = "probe-out"
-# Redirect to CONOUT$ so the write goes to the pseudoconsole no matter
-# what the child inherited for stdout: attaching a pty gives the child
-# the right console, but its std handles still come from us, and ours
-# is a pipe to the CI log.
-CMD = f'cmd /c echo {"A" * FILL} >CONOUT$'
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import conpty_wrap_cases as cases  # noqa: E402
+
+COLS = cases.COLS
+ROWS = cases.ROWS
+OUTDIR = cases.OUTDIR
+CHILD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "conpty_probe_child.py")
 
 PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016
 EXTENDED_STARTUPINFO_PRESENT = 0x00080000
-ERROR_BROKEN_PIPE = 109
+STILL_ACTIVE = 259
 
 
 class COORD(ctypes.Structure):
     _fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
-
-
-class SECURITY_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [
-        ("nLength", wintypes.DWORD),
-        ("lpSecurityDescriptor", ctypes.c_void_p),
-        ("bInheritHandle", wintypes.BOOL),
-    ]
 
 
 class STARTUPINFOW(ctypes.Structure):
@@ -113,11 +113,15 @@ k32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
 k32.ReadFile.restype = wintypes.BOOL
 k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 k32.WaitForSingleObject.restype = wintypes.DWORD
+k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE,
+                                   ctypes.POINTER(wintypes.DWORD)]
+k32.GetExitCodeProcess.restype = wintypes.BOOL
 k32.CloseHandle.argtypes = [wintypes.HANDLE]
 k32.CloseHandle.restype = wintypes.BOOL
 k32.GetStdHandle.argtypes = [wintypes.DWORD]
 k32.GetStdHandle.restype = wintypes.HANDLE
-k32.SetHandleInformation.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD]
+k32.SetHandleInformation.argtypes = [wintypes.HANDLE, wintypes.DWORD,
+                                     wintypes.DWORD]
 k32.SetHandleInformation.restype = wintypes.BOOL
 
 HANDLE_FLAG_INHERIT = 0x1
@@ -151,7 +155,8 @@ def load_conpty(dll_path):
     dll_path may be "system" to exercise the in-box pseudoconsole through
     exactly the same code, which is the control for this experiment.
     """
-    dll = k32 if dll_path == "system" else ctypes.WinDLL(dll_path, use_last_error=True)
+    dll = k32 if dll_path == "system" else ctypes.WinDLL(dll_path,
+                                                        use_last_error=True)
     create = close = None
     used = None
     for name in ("ConptyCreatePseudoConsole", "CreatePseudoConsole"):
@@ -174,27 +179,37 @@ def load_conpty(dll_path):
     return dll, create, close, used
 
 
-def run(dll_path, timeout_s=20):
-    dll, create_pc, close_pc, export_name = load_conpty(dll_path)
+class Result:
+    def __init__(self, raw, exit_code, note):
+        self.raw = raw
+        self.exit_code = exit_code
+        self.note = note
+
+
+def run(conpty, command, timeout_s=20, quiesce_s=0.75):
+    """Run `command` in a fresh pseudoconsole and return everything it emits."""
+    _dll, create_pc, close_pc, _export = conpty
 
     in_read = wintypes.HANDLE()
     in_write = wintypes.HANDLE()
     out_read = wintypes.HANDLE()
     out_write = wintypes.HANDLE()
-    _check(k32.CreatePipe(ctypes.byref(in_read), ctypes.byref(in_write), None, 0),
-           "CreatePipe(in)")
-    _check(k32.CreatePipe(ctypes.byref(out_read), ctypes.byref(out_write), None, 0),
-           "CreatePipe(out)")
+    _check(k32.CreatePipe(ctypes.byref(in_read), ctypes.byref(in_write),
+                          None, 0), "CreatePipe(in)")
+    _check(k32.CreatePipe(ctypes.byref(out_read), ctypes.byref(out_write),
+                          None, 0), "CreatePipe(out)")
 
     hpc = ctypes.c_void_p()
     hr = create_pc(COORD(COLS, ROWS), in_read, out_write, 0, ctypes.byref(hpc))
     if hr != 0:
-        raise OSError(f"{export_name} returned HRESULT 0x{hr & 0xFFFFFFFF:08x}")
+        raise OSError(f"CreatePseudoConsole returned HRESULT "
+                      f"0x{hr & 0xFFFFFFFF:08x}")
 
     size = ctypes.c_size_t(0)
     k32.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(size))
     attrs = (ctypes.c_byte * size.value)()
-    _check(k32.InitializeProcThreadAttributeList(attrs, 1, 0, ctypes.byref(size)),
+    _check(k32.InitializeProcThreadAttributeList(attrs, 1, 0,
+                                                 ctypes.byref(size)),
            "InitializeProcThreadAttributeList")
     _check(k32.UpdateProcThreadAttribute(
         attrs, 0, ctypes.c_size_t(PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE),
@@ -214,7 +229,7 @@ def run(dll_path, timeout_s=20):
     detach_parent_std_handles()
 
     _check(k32.CreateProcessW(
-        None, ctypes.create_unicode_buffer(CMD), None, None, False,
+        None, ctypes.create_unicode_buffer(command), None, None, False,
         EXTENDED_STARTUPINFO_PRESENT, None, None,
         ctypes.byref(siex), ctypes.byref(pi)), "CreateProcessW")
 
@@ -237,19 +252,21 @@ def run(dll_path, timeout_s=20):
     th.start()
 
     waited = k32.WaitForSingleObject(pi.hProcess, int(timeout_s * 1000))
+    code = wintypes.DWORD(STILL_ACTIVE)
+    k32.GetExitCodeProcess(pi.hProcess, ctypes.byref(code))
 
     # The child exiting does not mean its output has been rendered and
     # pushed through yet; closing the pseudoconsole right away truncates
     # the stream. Wait for the byte count to stop growing instead.
-    settled = 0
+    settled = 0.0
     last = -1
-    while settled < 3.0:
+    while settled < quiesce_s:
         now = len(chunks)
         if now != last:
             last = now
-            settled = 0
-        time.sleep(0.1)
-        settled += 0.1
+            settled = 0.0
+        time.sleep(0.05)
+        settled += 0.05
 
     if close_pc is not None:
         close_pc(hpc)
@@ -261,29 +278,92 @@ def run(dll_path, timeout_s=20):
     k32.CloseHandle(in_write)
     k32.CloseHandle(out_read)
 
-    note = f"child wait -> {waited}, {len(chunks)} chunk(s)"
+    note = f"wait={waited} exit={code.value} chunks={len(chunks)}"
     if close_pc is None:
         note += "; no ClosePseudoConsole export, stream may be truncated"
     if th.is_alive():
         note += "; reader still blocked, reporting what arrived"
-    return b"".join(chunks), export_name, note
+    return Result(b"".join(chunks), code.value, note)
 
 
-def hexdump(data, limit=2048):
+def hexdump(data, limit=512):
     lines = []
-    data = data[:limit]
-    for off in range(0, len(data), 16):
-        row = data[off:off + 16]
+    clipped = data[:limit]
+    for off in range(0, len(clipped), 16):
+        row = clipped[off:off + 16]
         hexpart = " ".join(f"{b:02x}" for b in row)
         txt = "".join(chr(b) if 32 <= b < 127 else "." for b in row)
-        lines.append(f"  {off:04x}  {hexpart:<47}  {txt}")
+        lines.append(f"    {off:04x}  {hexpart:<47}  {txt}")
+    if len(data) > limit:
+        lines.append(f"    ... {len(data) - limit} more bytes")
     return "\n".join(lines)
+
+
+def probe(label, dll_path, say, keep_dumps):
+    """Run every case against one pseudoconsole; return {case name: Parsed}."""
+    say(f"================ {label} ================")
+    say(f"dll: {dll_path}")
+    try:
+        conpty = load_conpty(dll_path)
+    except OSError as exc:
+        say(f"  FAILED to load: {exc}")
+        say()
+        return {}
+    say(f"export used: {conpty[3]}")
+    say(f"pty: {COLS}x{ROWS}")
+    say()
+
+    results = {}
+    group = None
+    for case in cases.CASES:
+        if case.group != group:
+            group = case.group
+            say(f"--- {group} ---")
+        side = os.path.join(OUTDIR, f"child-{label}-{case.name}.txt")
+        command = f'"{sys.executable}" "{CHILD}" {case.name} "{side}"'
+        try:
+            res = run(conpty, command)
+        except OSError as exc:
+            say(f"  {case.name:<14} FAILED: {exc}")
+            continue
+
+        if keep_dumps:
+            with open(os.path.join(OUTDIR, f"stream-{label}-{case.name}.bin"),
+                      "wb") as f:
+                f.write(res.raw)
+
+        parsed = cases.parse_stream(res.raw)
+        results[case.name] = parsed
+        say(cases.describe(case, parsed))
+        if res.exit_code != 0:
+            say(f"                 child exited {res.exit_code} ({res.note})")
+    say()
+
+    say("--- sample dump: the two cases that write the same 200 chars ---")
+    for name in ("bulk-200", "chunk16-200"):
+        path = os.path.join(OUTDIR, f"stream-{label}-{name}.bin")
+        if keep_dumps and os.path.exists(path):
+            with open(path, "rb") as f:
+                say(f"  {name}:")
+                say(hexdump(f.read()))
+    say()
+
+    say("--- same text, different buffering ---")
+    ok, lines = cases.summarise_same_text(results)
+    for line in lines:
+        say(line)
+    say()
+    say("--- length sweep ---")
+    for line in cases.summarise_lengths(results):
+        say(line)
+    say()
+    return results
 
 
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
-        sys.exit(2)
+        return 2
     bundled = os.path.abspath(sys.argv[1])
     tag = sys.argv[2] if len(sys.argv) > 2 else "bundled"
 
@@ -295,45 +375,21 @@ def main():
         report.append(line)
 
     say(f"python  {sys.version.split()[0]}")
-    say(f"pty     {COLS}x{ROWS}, echoing {FILL} 'A'")
+    say(f"cases   {len(cases.CASES)}")
     say()
 
     for label, path in (("system", "system"), (tag, bundled)):
-        say(f"================ {label} ================")
-        say(f"dll: {path}")
         try:
-            raw, export_name, note = run(path)
+            probe(label, path, say, keep_dumps=True)
         except Exception:
             import traceback
-            say("--- FAILED ---")
+            say(f"--- {label} FAILED ---")
             say(traceback.format_exc())
-            continue
-
-        with open(f"{OUTDIR}/stream-{label}.bin", "wb") as f:
-            f.write(raw)
-
-        say(f"export used: {export_name}")
-        say(f"note:        {note}")
-        say()
-        say("--- raw stream ---")
-        say(hexdump(raw))
-        say(f"(total {len(raw)} bytes, dump truncated at 2048)")
-        say()
-
-        text = raw.decode("utf-8", errors="replace")
-        runs = [len(r) for r in text.split("\r\n") if "A" in r]
-        say(f"runs of text between CRLFs: {runs}")
-        if any(n >= FILL for n in runs):
-            say(f"VERDICT: long line passed through whole ({FILL} chars, no break)")
-        elif COLS in runs:
-            say(f"VERDICT: break injected at column {COLS}")
-        else:
-            say("VERDICT: unrecognised - see the dump above")
-        say()
-
-        with open(f"{OUTDIR}/report-{tag}.txt", "w", encoding="utf-8") as f:
+        with open(os.path.join(OUTDIR, f"report-{tag}.txt"), "w",
+                  encoding="utf-8") as f:
             f.write("\n".join(report) + "\n")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
