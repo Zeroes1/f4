@@ -64,13 +64,15 @@ jobs:
             $_.FullName.Substring((Resolve-Path dl/pkg).Path.Length + 1)
           } | Tee-Object -FilePath probe-out/pkg-contents.txt | Out-Null
           $dll = Get-ChildItem dl/pkg -Recurse -Filter conpty.dll `
-                 | Where-Object { $_.FullName -match 'x64|win10-x64|native' } `
+                 | Where-Object { $_.FullName -match '\\win-x64\\' } `
                  | Select-Object -First 1
-          if (-not $dll) { $dll = Get-ChildItem dl/pkg -Recurse -Filter conpty.dll | Select-Object -First 1 }
-          if (-not $dll) { throw "conpty.dll not found - see probe-out/pkg-contents.txt" }
-          $exe = Get-ChildItem $dll.DirectoryName -Filter OpenConsole.exe | Select-Object -First 1
-          if (-not $exe) { $exe = Get-ChildItem dl/pkg -Recurse -Filter OpenConsole.exe | Select-Object -First 1 }
-          if (-not $exe) { throw "OpenConsole.exe not found - see probe-out/pkg-contents.txt" }
+          if (-not $dll) { throw "x64 conpty.dll not found - see probe-out/pkg-contents.txt" }
+          $exe = Get-ChildItem dl/pkg -Recurse -Filter OpenConsole.exe `
+                 | Where-Object { $_.FullName -match '\\x64\\' } `
+                 | Select-Object -First 1
+          if (-not $exe) { throw "x64 OpenConsole.exe not found - see probe-out/pkg-contents.txt" }
+          "picked:  $($dll.FullName)" | Tee-Object -FilePath probe-out/bundle.txt -Append
+          "picked:  $($exe.FullName)" | Tee-Object -FilePath probe-out/bundle.txt -Append
           Copy-Item $dll.FullName conpty/
           Copy-Item $exe.FullName conpty/
           Get-ChildItem conpty | ForEach-Object {

@@ -193,7 +193,16 @@ def main():
     say(f"pty         {COLS}x{ROWS}, echoing {FILL} 'A'")
     say()
 
-    raw, export_name = run(dll_path)
+    try:
+        raw, export_name = run(dll_path)
+    except Exception:
+        import traceback
+        say("--- FAILED ---")
+        say(traceback.format_exc())
+        with open(f"{OUTDIR}/report-{tag}.txt", "w", encoding="utf-8") as f:
+            f.write("\n".join(report) + "\n")
+        raise
+
     say(f"export used: {export_name}")
     say()
 
