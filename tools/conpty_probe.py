@@ -316,10 +316,13 @@ def probe_cmd(label, conpty, say):
     path = os.path.abspath(f"{OUTDIR}/longline.txt")
     with open(path, "w", newline="\r\n") as f:
         f.write("A" * 160 + "\n")
-    # We clear HANDLE_FLAG_INHERIT on our own std handles so the child does
-    # not write into the CI log, which leaves cmd without a usable stdout.
-    # Our Python child opens CONOUT$ itself; cmd has to be redirected.
-    raw, _ = run(conpty, f'cmd /c type "{path}" >CONOUT$', "default")
+    # This used to redirect to CONOUT$ to give cmd a stdout. That redirect
+    # silently dropped the console mode to 0x0001 - no wrap at EOL - and in
+    # that mode WriteCharsLegacy never injects, because `wrapped` is
+    # `wrapAtEOL && ...`. The single CRLF this case reported was therefore
+    # not evidence of passthrough. Rely on the console to hand cmd its std
+    # handles instead.
+    raw, _ = run(conpty, f'cmd /c type "{path}"', "default")
     with open(f"{OUTDIR}/stream-{label}-cmd-type.bin", "wb") as f:
         f.write(raw)
     breaks = raw.count(b"\r\n")
@@ -391,24 +394,29 @@ def probe_programs(label, conpty, say):
     say(f"  real programs in a {PROG_COLS}-column pty, "
         "longest run of text in each:")
 
-    # Every external program comes back with autowrap off and control
-    # characters as glyphs, while cmd's own built-ins do not. Answering the
-    # device attributes query did not change that, so stop guessing at the
-    # console mode and read it: the child exits with whatever GetConsoleMode
-    # returned, and here it is launched exactly like the real programs are.
-    for how, command in (("direct", f'"{sys.executable}" "{CHILD}" 1 default 0'),
-                         ("under cmd", f'cmd /c "{sys.executable}" "{CHILD}" '
-                                       f'1 default 0 >CONOUT$')):
+    # The redirect we used to give these programs a stdout turned out to
+    # change the console mode: a child launched as `cmd /c ... >CONOUT$`
+    # sees 0x0001, processed output only, with neither wrap-at-EOL nor VT
+    # processing. Nothing wraps in that mode, which is why ConPTY announced
+    # ESC[?7l and why long lines looked like they "arrived whole" - nobody
+    # had wrapped them. Launch without the redirect instead and let the
+    # console hand the child its std handles, and keep printing the mode so
+    # a silent change cannot pass for a result again.
+    for how, command in (
+            ("direct", f'"{sys.executable}" "{CHILD}" 1 default 0'),
+            ("cmd, redirect", f'cmd /c "{sys.executable}" "{CHILD}" '
+                              f'1 default 0 >CONOUT$'),
+            ("cmd, plain", f'cmd /c "{sys.executable}" "{CHILD}" 1 default 0')):
         try:
             _raw, mode = run(conpty, command, "default", timeout_s=30,
                              quiesce_s=0.5, cols=PROG_COLS)
-            say(f"    console mode seen by a child launched {how:<9}: "
-                f"0x{mode:04x}")
+            say(f"    console mode, child launched {how:<14}: 0x{mode:04x}"
+                f"{'  <- the one the cases use' if how == 'cmd, plain' else ''}")
         except OSError as exc:
-            say(f"    console mode {how}: FAILED: {exc}")
+            say(f"    console mode, child launched {how}: FAILED: {exc}")
     for name, command in PROGRAMS:
         try:
-            raw, _mode = run(conpty, f'cmd /c {command} >CONOUT$', "default",
+            raw, _mode = run(conpty, f'cmd /c {command}', "default",
                              timeout_s=30, quiesce_s=1.5, cols=PROG_COLS)
         except OSError as exc:
             say(f"    {name:<16} FAILED: {exc}")
@@ -418,6 +426,10 @@ def probe_programs(label, conpty, say):
 
         # CR and LF arriving as printable CP437 glyphs, or autowrap turned
         # off, both mean this run was not in the mode the others were.
+        if not rows(raw) or max(rows(raw)) == 0:
+            say(f"    {name:<16} no text reached the pty at all")
+            continue
+
         odd = []
         if b"\x1b[?7l" in raw:
             odd.append("autowrap off")
