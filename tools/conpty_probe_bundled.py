@@ -120,8 +120,12 @@ def _check(ok, what):
 
 
 def load_conpty(dll_path):
-    """Return (dll, create, close, exported_name) from the given conpty.dll."""
-    dll = ctypes.WinDLL(dll_path, use_last_error=True)
+    """Return (dll, create, close, exported_name).
+
+    dll_path may be "system" to exercise the in-box pseudoconsole through
+    exactly the same code, which is the control for this experiment.
+    """
+    dll = k32 if dll_path == "system" else ctypes.WinDLL(dll_path, use_last_error=True)
     create = close = None
     used = None
     for name in ("ConptyCreatePseudoConsole", "CreatePseudoConsole"):
@@ -252,7 +256,7 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(2)
-    dll_path = os.path.abspath(sys.argv[1])
+    bundled = os.path.abspath(sys.argv[1])
     tag = sys.argv[2] if len(sys.argv) > 2 else "bundled"
 
     os.makedirs(OUTDIR, exist_ok=True)
@@ -262,47 +266,45 @@ def main():
         print(line, flush=True)
         report.append(line)
 
-    say(f"conpty.dll  {dll_path}")
-    say(f"python      {sys.version.split()[0]}")
-    say(f"pty         {COLS}x{ROWS}, echoing {FILL} 'A'")
+    say(f"python  {sys.version.split()[0]}")
+    say(f"pty     {COLS}x{ROWS}, echoing {FILL} 'A'")
     say()
 
-    try:
-        raw, export_name, note = run(dll_path)
-    except Exception:
-        import traceback
-        say("--- FAILED ---")
-        say(traceback.format_exc())
+    for label, path in (("system", "system"), (tag, bundled)):
+        say(f"================ {label} ================")
+        say(f"dll: {path}")
+        try:
+            raw, export_name, note = run(path)
+        except Exception:
+            import traceback
+            say("--- FAILED ---")
+            say(traceback.format_exc())
+            continue
+
+        with open(f"{OUTDIR}/stream-{label}.bin", "wb") as f:
+            f.write(raw)
+
+        say(f"export used: {export_name}")
+        say(f"note:        {note}")
+        say()
+        say("--- raw stream ---")
+        say(hexdump(raw))
+        say(f"(total {len(raw)} bytes, dump truncated at 2048)")
+        say()
+
+        text = raw.decode("utf-8", errors="replace")
+        runs = [len(r) for r in text.split("\r\n") if "A" in r]
+        say(f"runs of text between CRLFs: {runs}")
+        if any(n >= FILL for n in runs):
+            say(f"VERDICT: long line passed through whole ({FILL} chars, no break)")
+        elif COLS in runs:
+            say(f"VERDICT: break injected at column {COLS}")
+        else:
+            say("VERDICT: unrecognised - see the dump above")
+        say()
+
         with open(f"{OUTDIR}/report-{tag}.txt", "w", encoding="utf-8") as f:
             f.write("\n".join(report) + "\n")
-        raise
-
-    say(f"export used: {export_name}")
-    say(f"note:        {note}")
-    say()
-
-    with open(f"{OUTDIR}/stream-{tag}.bin", "wb") as f:
-        f.write(raw)
-
-    say("--- raw stream ---")
-    say(hexdump(raw))
-    say(f"(total {len(raw)} bytes, dump truncated at 2048)")
-    say()
-
-    text = raw.decode("utf-8", errors="replace")
-    runs = [len(r) for r in text.split("\r\n") if "A" in r]
-    say("--- analysis ---")
-    say(f"runs of text between CRLFs: {runs}")
-
-    if any(n >= FILL for n in runs):
-        say(f"VERDICT: long line passed through whole ({FILL} chars, no break)")
-    elif COLS in runs:
-        say(f"VERDICT: break injected at column {COLS}")
-    else:
-        say("VERDICT: unrecognised - see the dump above")
-
-    with open(f"{OUTDIR}/report-{tag}.txt", "w", encoding="utf-8") as f:
-        f.write("\n".join(report) + "\n")
 
 
 if __name__ == "__main__":
