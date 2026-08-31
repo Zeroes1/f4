@@ -108,22 +108,26 @@ def load_conpty(path):
                      getattr(dll, "CreatePseudoConsole", None))
     close = getattr(dll, "ConptyClosePseudoConsole",
                     getattr(dll, "ClosePseudoConsole", None))
+    resize = getattr(dll, "ConptyResizePseudoConsole",
+                     getattr(dll, "ResizePseudoConsole", None))
     if create is None:
         raise OSError(f"no CreatePseudoConsole export in {path}")
     create.restype = ctypes.c_long  # HRESULT
     create.argtypes = [COORD, wintypes.HANDLE, wintypes.HANDLE, wintypes.DWORD,
                        ctypes.POINTER(ctypes.c_void_p)]
     close.argtypes = [ctypes.c_void_p]
-    return create, close
+    resize.restype = ctypes.c_long  # HRESULT
+    resize.argtypes = [ctypes.c_void_p, COORD]
+    return create, close, resize
 
 
-def run(conpty, chunk, mode):
+def run(conpty, chunk, mode, during=None):
     """Run the child in a fresh pseudoconsole.
 
     Returns (stream, console mode the child actually had). The child reports
     the mode through its exit code so nothing extra lands in the stream.
     """
-    create_pc, close_pc = conpty
+    create_pc, close_pc, _resize_pc = conpty
     hin_r, hin_w = wintypes.HANDLE(), wintypes.HANDLE()
     hout_r, hout_w = wintypes.HANDLE(), wintypes.HANDLE()
     k32.CreatePipe(ctypes.byref(hin_r), ctypes.byref(hin_w), None, 0)
@@ -181,6 +185,8 @@ def run(conpty, chunk, mode):
 
     th = threading.Thread(target=reader, daemon=True)
     th.start()
+    if during is not None:
+        during(hpc, lambda: sum(len(c) for c in out))
     k32.WaitForSingleObject(pi.hProcess, 20000)
 
     # The child exiting does not mean its output has been pushed through
@@ -202,6 +208,7 @@ def run(conpty, chunk, mode):
     return b"".join(out), got_mode.value
 
 
+CRLF = b"\r\n"
 ESCAPES = re.compile(r"\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.")
 
 
@@ -267,6 +274,54 @@ def probe_cmd(label, conpty, say):
     say("")
 
 
+def probe_resize(label, conpty, say):
+    """Write one 200-char line, then resize the pty underneath it.
+
+    #17510 says in its own description that forcing the wrap this way
+    breaks text reflow on window resize. Nothing above ever resized, so
+    that part was never measured. Here the child writes 200 characters as
+    one line and then just waits; the parent widens the pty to 100 columns
+    and narrows it to 60, recording where in the stream each resize
+    happened. What ConPTY repaints in between is the answer: 200 characters
+    in a row means the line survived, rows split by CRLF means the repaint
+    turned a wrap into a line ending.
+    """
+    _create, _close, resize_pc = conpty
+    marks = []
+
+    def during(hpc, offset):
+        time.sleep(1.5)
+        for cols in (100, 60):
+            marks.append((offset(), cols))
+            resize_pc(hpc, COORD(cols, ROWS))
+            time.sleep(1.5)
+        marks.append((offset(), None))
+
+    hold = 2 + 1.5 * 3
+    child = f'"{sys.executable}" "{CHILD}" 200 default {hold}'
+    raw, _mode = run(conpty, child, "default", during=during)
+    with open(f"{OUTDIR}/stream-{label}-resize.bin", "wb") as f:
+        f.write(raw)
+
+    say("  200 chars written at 80 columns, then resized:")
+    start = 0
+    for i, (offset, cols) in enumerate(marks):
+        piece = raw[start:offset]
+        start = offset
+        what = ("before any resize" if i == 0
+                else f"after resizing to {marks[i - 1][1]}")
+        say(f"    {what:<24} {len(piece):>4} bytes, "
+            f"{piece.count(CRLF)} CRLF, rows {rows(piece)}")
+    tail = raw[start:]
+    if tail:
+        say(f"    {'after the last resize':<24} {len(tail):>4} bytes, "
+            f"{tail.count(CRLF)} CRLF, rows {rows(tail)}")
+    say("    a repaint that keeps the line whole shows one long run; "
+        "one that splits it")
+    say("    shows rows of the new width separated by CRLF")
+    say("")
+
+
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
     report = []
@@ -288,6 +343,7 @@ def main():
         try:
             probe(label, path, say)
             probe_cmd(label, load_conpty(path), say)
+            probe_resize(label, load_conpty(path), say)
         except Exception as exc:
             say(f"  FAILED: {exc}")
             say("")

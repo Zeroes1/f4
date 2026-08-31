@@ -1,6 +1,9 @@
 """Write 200 'A' to CONOUT$ in <n>-char WriteConsoleW calls, nothing else.
 
-    python tools/conpty_probe_child.py <n> default|legacy
+    python tools/conpty_probe_child.py <n> default|legacy [hold-seconds]
+
+With hold-seconds the child stays alive after writing, so the parent can
+resize the pseudoconsole underneath it and watch what gets repainted.
 
 "default" leaves the console mode exactly as ConPTY handed it over, which
 is what an application that never calls SetConsoleMode gets. "legacy"
@@ -16,6 +19,7 @@ without writing anything into the stream. 0xFFFF means the run failed.
 
 import ctypes
 import sys
+import time
 from ctypes import wintypes
 
 TOTAL = 200
@@ -35,6 +39,7 @@ k32.WriteConsoleW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
 
 n = int(sys.argv[1])
 want_legacy = len(sys.argv) > 2 and sys.argv[2] == "legacy"
+hold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
 
 h = k32.CreateFileW("CONOUT$", 0xC0000000, 3, None, 3, 0, None)
 if h == wintypes.HANDLE(-1).value:
@@ -53,5 +58,8 @@ for i in range(0, TOTAL, n):
     if not k32.WriteConsoleW(h, ctypes.create_unicode_buffer(chunk),
                              len(chunk), ctypes.byref(written), None):
         sys.exit(FAILED)
+
+if hold:
+    time.sleep(hold)
 
 sys.exit(mode.value)
