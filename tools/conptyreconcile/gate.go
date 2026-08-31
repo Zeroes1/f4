@@ -17,8 +17,27 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeReflowProbe(hostPath, reportPath+".reflow"); err != nil {
 		return fmt.Errorf("consumer reflow stage: %w", err)
 	}
+	stages := []struct {
+		name string
+		run  func(string, string) error
+	}{
+		{"command-suite", runNativeCommandSuite},
+		{"clear", runNativeClearProbe},
+		{"scroll", runNativeScrollProbe},
+		{"empty", runNativeEmptyProbe},
+	}
+	for _, stage := range stages {
+		if err := stage.run(hostPath, reportPath+"."+stage.name); err != nil {
+			return fmt.Errorf("%s stage: %w", stage.name, err)
+		}
+	}
+	for _, kind := range []string{"tabs", "link", "progress"} {
+		if err := runNativeSemanticProbe(hostPath, reportPath+"."+kind, kind); err != nil {
+			return fmt.Errorf("%s semantic stage: %w", kind, err)
+		}
+	}
 	if err := runNativeSeedGate(hostPath, reportPath+".seeds"); err != nil {
 		return fmt.Errorf("300-seed native stage: %w", err)
 	}
-	return fmt.Errorf("native gate incomplete: native transport artifacts passed, but logical history, reflow, extreme-condition, command, and 300-session assertions are not implemented")
+	return fmt.Errorf("native gate incomplete: C4 lifecycle matrix and remaining source-only status probes are still open")
 }
