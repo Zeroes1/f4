@@ -14,6 +14,7 @@ import ctypes
 import os
 import sys
 import threading
+import time
 from ctypes import wintypes
 
 COLS = 80
@@ -172,6 +173,20 @@ def run(dll_path, timeout_s=20):
     th.start()
 
     waited = k32.WaitForSingleObject(pi.hProcess, int(timeout_s * 1000))
+
+    # The child exiting does not mean its output has been rendered and
+    # pushed through yet; closing the pseudoconsole right away truncates
+    # the stream. Wait for the byte count to stop growing instead.
+    settled = 0
+    last = -1
+    while settled < 3.0:
+        now = len(chunks)
+        if now != last:
+            last = now
+            settled = 0
+        time.sleep(0.1)
+        settled += 0.1
+
     if close_pc is not None:
         close_pc(hpc)
     th.join(5)
@@ -181,7 +196,7 @@ def run(dll_path, timeout_s=20):
     k32.CloseHandle(in_write)
     k32.CloseHandle(out_read)
 
-    note = f"child wait -> {waited}"
+    note = f"child wait -> {waited}, {len(chunks)} chunk(s)"
     if close_pc is None:
         note += "; no ClosePseudoConsole export, stream may be truncated"
     if th.is_alive():
