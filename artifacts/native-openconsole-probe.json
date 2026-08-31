@@ -1,0 +1,495 @@
+﻿{
+    "mode":  "native-openconsole-probe",
+    "host":  {
+                 "path":  "\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe",
+                 "version":  "1.12.220408003-release1.12",
+                 "sha256":  "14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e"
+             },
+    "bundle_url":  "https://github.com/microsoft/terminal/releases/download/v1.12.10982.0/Microsoft.WindowsTerminal_Win11_1.12.10983.0_8wekyb3d8bbwe.msixbundle",
+    "package":  "CascadiaPackage_1.12.10983.0_x64.msix",
+    "goos":  "windows",
+    "goarch":  "amd64",
+    "working_dir":  "\u003cworkspace\u003e\\tools\\conptyreconcile",
+    "probe_executable":  "\u003ctemp\u003e\\f4-conptyprobe-final.exe",
+    "environment":  {
+                        "TERM":  "dumb"
+                    },
+    "expected_input":  "G1syShtbSF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18NCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUENCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KG1szMW1yZWQbWzBtIBtbMksbWzFHcmV3cml0dGVuDQpjdXJzb3I6IG9uZRtbMUd0d28NCnRhYnM6CVgJWQ0KG10wO2Y0LW5hdGl2ZS1vcGVuY29uc29sZS1wcm9iZQdhbHRlcm5hdGUtYmVnaW4NChtbPzEwNDloYWx0LXNjcmVlbg0KYWx0ZXJuYXRlLWVuZBtbPzEwNDlsDQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+    "sessions":  [
+                     {
+                         "initial_width":  80,
+                         "initial_height":  25,
+                         "command":  "\u003ctemp\u003e\\f4-conptyprobe-final.exe -emit-probe",
+                         "host_command":  "\"\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe\" --headless --win32input --resizeQuirk --width 80 --height 25 --signal 0xHANDLE --server 0xHANDLE",
+                         "host_pid":  12976,
+                         "host_process":  {
+                                              "path":  "\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe",
+                                              "version":  "1.12.220408003-release1.12",
+                                              "sha256":  "14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e"
+                                          },
+                         "started_at":  "2026-08-31T03:18:40.5190606Z",
+                         "finished_at":  "2026-08-31T03:18:40.7188414Z",
+                         "exit_code":  0,
+                         "resizes":  [
+                                         {
+                                             "at":  "2026-08-31T03:18:40.6069472Z",
+                                             "width":  1,
+                                             "height":  1
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.6119888Z",
+                                             "width":  80,
+                                             "height":  25
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.6208423Z",
+                                             "width":  121,
+                                             "height":  40
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.6409721Z",
+                                             "width":  80,
+                                             "height":  25
+                                         }
+                                     ],
+                         "markers":  [
+                                         "__F4_NATIVE_PROBE_BEGIN__",
+                                         "__F4_NATIVE_PROBE_END__"
+                                     ],
+                         "raw_sha256":  "a8a5472b0ba6b558a9b14b416837580c316b13267b1a50bba2a5784bb2cb1856",
+                         "raw_output":  "G1s/OTAwMWgbWzJKG1ttG1tIG10wOzx0ZW1wPlxmNC1jb25wdHlwcm9iZS1maW5hbC5leGUHG1s/MjVoG1syShtbPzI1bF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18bW0sNCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEbW0sNCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sbWzM7MzZIG1s/MjVoQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KcmV3cml0dGVuG1tLDQp0d29zb3I6IG9uZQ0KdGFiczobWzNDWBtbN0MbWz8yNWwbW0hfX0Y0X05BVElWRV9QUk9CRV9CRUdJTl9fG1tLDQphc2NpaTogQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBG1tLDQp3aWR0aC1lZGdlOiBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQhtbSw0KdW5pY29kZTog5ryi5a2XIGXMgSDimJXvuI8g8J+YgCDwn5Gp4oCN8J+SuyDXkNeR15Ig2KfZhNi52LHYqNmK2KkbW0sNCnJld3JpdHRlbhtbSw0KdHdvc29yOiBvbmUbW0sNCnRhYnM6ICAgWCAgICAgICBZG1tLDQphbHRlcm5hdGUtYmVnaW4bW0sNChtbSw0KbG9uZzogQ0NDQ0NDQxtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sbWzExOzE0SBtdMDtmNC1uYXRpdmUtb3BlbmNvbnNvbGUtcHJvYmUHG1s/MjVoQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                         "events":  [
+                                        {
+                                            "sequence":  0,
+                                            "at":  "2026-08-31T03:18:40.5807577Z",
+                                            "kind":  0,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1syShtbSF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18NCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUENCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KG1szMW1yZWQbWzBtIBtbMksbWzFHcmV3cml0dGVuDQpjdXJzb3I6IG9uZRtbMUd0d28NCnRhYnM6CVgJWQ0KG10wO2Y0LW5hdGl2ZS1vcGVuY29uc29sZS1wcm9iZQdhbHRlcm5hdGUtYmVnaW4NChtbPzEwNDloYWx0LXNjcmVlbg0KYWx0ZXJuYXRlLWVuZBtbPzEwNDlsDQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                                            "cause":  "native-probe-child-payload"
+                                        },
+                                        {
+                                            "sequence":  1,
+                                            "at":  "2026-08-31T03:18:40.6069472Z",
+                                            "kind":  4,
+                                            "width":  1,
+                                            "height":  1,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  2,
+                                            "at":  "2026-08-31T03:18:40.6119888Z",
+                                            "kind":  4,
+                                            "width":  80,
+                                            "height":  25,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  3,
+                                            "at":  "2026-08-31T03:18:40.6208423Z",
+                                            "kind":  4,
+                                            "width":  121,
+                                            "height":  40,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  4,
+                                            "at":  "2026-08-31T03:18:40.6278832Z",
+                                            "kind":  2,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1s/OTAwMWg=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  5,
+                                            "at":  "2026-08-31T03:18:40.6278832Z",
+                                            "kind":  2,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1syShtbbRtbSBtdMDs8dGVtcD5cZjQtY29ucHR5cHJvYmUtZmluYWwuZXhlBxtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  6,
+                                            "at":  "2026-08-31T03:18:40.6409721Z",
+                                            "kind":  4,
+                                            "width":  80,
+                                            "height":  25,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  7,
+                                            "at":  "2026-08-31T03:18:40.6418257Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Gw==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  8,
+                                            "at":  "2026-08-31T03:18:40.6418257Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "WzJK",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  9,
+                                            "at":  "2026-08-31T03:18:40.6574717Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1s/MjVsX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQRtbSw0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkIbW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSxtbMzszNkgbWz8yNWg=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  10,
+                                            "at":  "2026-08-31T03:18:40.6743826Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KcmV3cml0dGVuG1tLDQp0d29zb3I6IG9uZQ0KdGFiczobWzNDWBtbN0M=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  11,
+                                            "at":  "2026-08-31T03:18:40.687016Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1s/MjVsG1tIX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQRtbSw0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkIbW0sNCnVuaWNvZGU6IOa8ouWtlyBlzIEg4piV77iPIPCfmIAg8J+RqeKAjfCfkrsg15DXkdeSINin2YTYudix2KjZitipG1tLDQpyZXdyaXR0ZW4bW0sNCnR3b3Nvcjogb25lG1tLDQp0YWJzOiAgIFggICAgICAgWRtbSw0KYWx0ZXJuYXRlLWJlZ2luG1tLDQobW0sNCmxvbmc6IENDQ0NDQ0MbW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1sxMTsxNEgbXTA7ZjQtbmF0aXZlLW9wZW5jb25zb2xlLXByb2JlBxtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  12,
+                                            "at":  "2026-08-31T03:18:40.6992218Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Q0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  13,
+                                            "at":  "2026-08-31T03:18:40.7149675Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Q0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDDQpfX0Y0X05BVElWRV9QUk9CRV9FTkRfXw0K",
+                                            "cause":  "pinned-host-observed-output"
+                                        }
+                                    ]
+                     },
+                     {
+                         "initial_width":  1,
+                         "initial_height":  1,
+                         "command":  "\u003ctemp\u003e\\f4-conptyprobe-final.exe -emit-probe",
+                         "host_command":  "\"\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe\" --headless --win32input --resizeQuirk --width 1 --height 1 --signal 0xHANDLE --server 0xHANDLE",
+                         "host_pid":  3040,
+                         "host_process":  {
+                                              "path":  "\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe",
+                                              "version":  "1.12.220408003-release1.12",
+                                              "sha256":  "14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e"
+                                          },
+                         "started_at":  "2026-08-31T03:18:40.7188414Z",
+                         "finished_at":  "2026-08-31T03:18:40.9093906Z",
+                         "exit_code":  0,
+                         "resizes":  [
+                                         {
+                                             "at":  "2026-08-31T03:18:40.8273759Z",
+                                             "width":  1,
+                                             "height":  1
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.8341967Z",
+                                             "width":  1,
+                                             "height":  1
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.8479732Z",
+                                             "width":  121,
+                                             "height":  40
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.8605113Z",
+                                             "width":  80,
+                                             "height":  25
+                                         }
+                                     ],
+                         "markers":  [
+                                         "__F4_NATIVE_PROBE_BEGIN__",
+                                         "__F4_NATIVE_PROBE_END__"
+                                     ],
+                         "raw_sha256":  "21efebbd99fe70a1c4fb862949361c9d5db4f7711dbff33b6416bd40a2a90575",
+                         "raw_output":  "G1s/OTAwMWgbWzJKG1ttG1tIG10wOzx0ZW1wPlxmNC1jb25wdHlwcm9iZS1maW5hbC5leGUHG1s/MjVoG1syShtbPzI1bF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18bW0sNCmFzY2lpOiBBQUFBQUEbW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1syOzE0SBtbPzI1aBtbPzI1bBtbSF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18bW0sNCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEbW0sNCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCG1tLDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqRtbSw0KcmV3cml0dGVuG1tLDQp0d29zb3I6IG9uZRtbSw0KdGFiczogICBYICAgICAgIFkbW0sNCmFsdGVybmF0ZS1iZWdpbhtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1sxMDsxSBtdMDtmNC1uYXRpdmUtb3BlbmNvbnNvbGUtcHJvYmUHG1s/MjVoDQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                         "events":  [
+                                        {
+                                            "sequence":  0,
+                                            "at":  "2026-08-31T03:18:40.8106991Z",
+                                            "kind":  0,
+                                            "width":  1,
+                                            "height":  1,
+                                            "bytes":  "G1syShtbSF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18NCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUENCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KG1szMW1yZWQbWzBtIBtbMksbWzFHcmV3cml0dGVuDQpjdXJzb3I6IG9uZRtbMUd0d28NCnRhYnM6CVgJWQ0KG10wO2Y0LW5hdGl2ZS1vcGVuY29uc29sZS1wcm9iZQdhbHRlcm5hdGUtYmVnaW4NChtbPzEwNDloYWx0LXNjcmVlbg0KYWx0ZXJuYXRlLWVuZBtbPzEwNDlsDQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                                            "cause":  "native-probe-child-payload"
+                                        },
+                                        {
+                                            "sequence":  1,
+                                            "at":  "2026-08-31T03:18:40.8273759Z",
+                                            "kind":  4,
+                                            "width":  1,
+                                            "height":  1,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  2,
+                                            "at":  "2026-08-31T03:18:40.8341967Z",
+                                            "kind":  4,
+                                            "width":  1,
+                                            "height":  1,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  3,
+                                            "at":  "2026-08-31T03:18:40.8479732Z",
+                                            "kind":  4,
+                                            "width":  121,
+                                            "height":  40,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  4,
+                                            "at":  "2026-08-31T03:18:40.8479732Z",
+                                            "kind":  2,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1s/OTAwMWg=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  5,
+                                            "at":  "2026-08-31T03:18:40.8479732Z",
+                                            "kind":  2,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1syShtbbRtbSBtdMDs8dGVtcD5cZjQtY29ucHR5cHJvYmUtZmluYWwuZXhlBxtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  6,
+                                            "at":  "2026-08-31T03:18:40.8605113Z",
+                                            "kind":  4,
+                                            "width":  80,
+                                            "height":  25,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  7,
+                                            "at":  "2026-08-31T03:18:40.8639138Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Gw==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  8,
+                                            "at":  "2026-08-31T03:18:40.8639138Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "WzJK",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  9,
+                                            "at":  "2026-08-31T03:18:40.8659189Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1s/MjVsX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQRtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sbWzI7MTRIG1s/MjVo",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  10,
+                                            "at":  "2026-08-31T03:18:40.8811059Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1s/MjVsG1tIX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQRtbSw0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkIbW0sNCnVuaWNvZGU6IOa8ouWtlyBlzIEg4piV77iPIPCfmIAg8J+RqeKAjfCfkrsg15DXkdeSINin2YTYudix2KjZitipG1tLDQpyZXdyaXR0ZW4bW0sNCnR3b3Nvcjogb25lG1tLDQp0YWJzOiAgIFggICAgICAgWRtbSw0KYWx0ZXJuYXRlLWJlZ2luG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sbWzEwOzFIG10wO2Y0LW5hdGl2ZS1vcGVuY29uc29sZS1wcm9iZQcbWz8yNWg=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  11,
+                                            "at":  "2026-08-31T03:18:40.8983858Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "DQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                                            "cause":  "pinned-host-observed-output"
+                                        }
+                                    ]
+                     },
+                     {
+                         "initial_width":  121,
+                         "initial_height":  40,
+                         "command":  "\u003ctemp\u003e\\f4-conptyprobe-final.exe -emit-probe",
+                         "host_command":  "\"\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe\" --headless --win32input --resizeQuirk --width 121 --height 40 --signal 0xHANDLE --server 0xHANDLE",
+                         "host_pid":  7864,
+                         "host_process":  {
+                                              "path":  "\u003cpinned-host-cache\u003e\\1.12.10983.0\\CascadiaPackage_1.12.10983.0_x64\\OpenConsole.exe",
+                                              "version":  "1.12.220408003-release1.12",
+                                              "sha256":  "14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e"
+                                          },
+                         "started_at":  "2026-08-31T03:18:40.9099019Z",
+                         "finished_at":  "2026-08-31T03:18:41.09288Z",
+                         "exit_code":  0,
+                         "resizes":  [
+                                         {
+                                             "at":  "2026-08-31T03:18:40.9750286Z",
+                                             "width":  1,
+                                             "height":  1
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.9869128Z",
+                                             "width":  121,
+                                             "height":  40
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:40.9965537Z",
+                                             "width":  121,
+                                             "height":  40
+                                         },
+                                         {
+                                             "at":  "2026-08-31T03:18:41.0083221Z",
+                                             "width":  80,
+                                             "height":  25
+                                         }
+                                     ],
+                         "markers":  [
+                                         "__F4_NATIVE_PROBE_BEGIN__",
+                                         "__F4_NATIVE_PROBE_END__"
+                                     ],
+                         "raw_sha256":  "27cd845cc4b565fb8e4ff1632b8c7e5c374d09c8cf551b96948f0032694324eb",
+                         "raw_output":  "G1s/OTAwMWgbWzJKG1ttG1tIG10wOzx0ZW1wPlxmNC1jb25wdHlwcm9iZS1maW5hbC5leGUHG1s/MjVoG1syShtbPzI1bF9fRjRfTkFUSVZFXxtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSxtbMTsxM0gbWz8yNWhQUk9CRV9CRUdJTl9fDQphc2NpaTogQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBDQp3aWR0aC1lZGdlOiBCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQg0KdW5pY29kZTog5ryi5a2XIGXMgSDimJXvuI8g8J+YgCDwn5Gp4oCN8J+SuyDXkNeR15Ig2KfZhNi52LHYqNmK2KkNCnJld3JpdHRlbhtbSw0KdHdvc29yOiBvbmUNCnRhYnM6G1szQ1gbWzdDG1s/MjVsG1tIX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQRtbSw0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkIbW0sNCnVuaWNvZGU6IOa8ouWtlyBlzIEg4piV77iPIPCfmIAg8J+RqeKAjfCfkrsg15DXkdeSINin2YTYudix2KjZitipG1tLDQpyZXdyaXR0ZW4bW0sNCnR3b3Nvcjogb25lG1tLDQp0YWJzOiAgIFggICAgICAgWRtbSw0KYWx0ZXJuYXRlLWJlZ2luG1tLDQobW0sNCmxvbmc6IENDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQxtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1sxMjs2OEgbXTA7ZjQtbmF0aXZlLW9wZW5jb25zb2xlLXByb2JlBxtbPzI1aENDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDDQpfX0Y0X05BVElWRV9QUk9CRV9FTkRfXw0K",
+                         "events":  [
+                                        {
+                                            "sequence":  0,
+                                            "at":  "2026-08-31T03:18:40.9683279Z",
+                                            "kind":  0,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1syShtbSF9fRjRfTkFUSVZFX1BST0JFX0JFR0lOX18NCmFzY2lpOiBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUENCndpZHRoLWVkZ2U6IEJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KG1szMW1yZWQbWzBtIBtbMksbWzFHcmV3cml0dGVuDQpjdXJzb3I6IG9uZRtbMUd0d28NCnRhYnM6CVgJWQ0KG10wO2Y0LW5hdGl2ZS1vcGVuY29uc29sZS1wcm9iZQdhbHRlcm5hdGUtYmVnaW4NChtbPzEwNDloYWx0LXNjcmVlbg0KYWx0ZXJuYXRlLWVuZBtbPzEwNDlsDQpsb25nOiBDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQw0KX19GNF9OQVRJVkVfUFJPQkVfRU5EX18NCg==",
+                                            "cause":  "native-probe-child-payload"
+                                        },
+                                        {
+                                            "sequence":  1,
+                                            "at":  "2026-08-31T03:18:40.9750286Z",
+                                            "kind":  4,
+                                            "width":  1,
+                                            "height":  1,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  2,
+                                            "at":  "2026-08-31T03:18:40.9869128Z",
+                                            "kind":  4,
+                                            "width":  121,
+                                            "height":  40,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  3,
+                                            "at":  "2026-08-31T03:18:40.9965537Z",
+                                            "kind":  4,
+                                            "width":  121,
+                                            "height":  40,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  4,
+                                            "at":  "2026-08-31T03:18:40.9970592Z",
+                                            "kind":  2,
+                                            "width":  121,
+                                            "height":  40,
+                                            "bytes":  "G1s/OTAwMWg=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  5,
+                                            "at":  "2026-08-31T03:18:41.0083221Z",
+                                            "kind":  4,
+                                            "width":  80,
+                                            "height":  25,
+                                            "cause":  "pinned-host-resize"
+                                        },
+                                        {
+                                            "sequence":  6,
+                                            "at":  "2026-08-31T03:18:41.0090318Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1syShtbbRtbSBtdMDs8dGVtcD5cZjQtY29ucHR5cHJvYmUtZmluYWwuZXhlBxtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  7,
+                                            "at":  "2026-08-31T03:18:41.026258Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Gw==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  8,
+                                            "at":  "2026-08-31T03:18:41.026258Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "WzJKG1s/MjVsX19GNF9OQVRJVkVfG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1sxOzEzSBtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  9,
+                                            "at":  "2026-08-31T03:18:41.0351098Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "UFJPQkVfQkVHSU5fXw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQ0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  10,
+                                            "at":  "2026-08-31T03:18:41.0531445Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCDQp1bmljb2RlOiDmvKLlrZcgZcyBIOKYle+4jyDwn5iAIPCfkanigI3wn5K7INeQ15HXkiDYp9mE2LnYsdio2YrYqQ0KcmV3cml0dGVuG1tLDQp0d29zb3I6IG9uZQ0KdGFiczobWzNDWBtbN0M=",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  11,
+                                            "at":  "2026-08-31T03:18:41.0698675Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "G1s/MjVsG1tIX19GNF9OQVRJVkVfUFJPQkVfQkVHSU5fXxtbSw0KYXNjaWk6IEFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQRtbSw0Kd2lkdGgtZWRnZTogQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkIbW0sNCnVuaWNvZGU6IOa8ouWtlyBlzIEg4piV77iPIPCfmIAg8J+RqeKAjfCfkrsg15DXkdeSINin2YTYudix2KjZitipG1tLDQpyZXdyaXR0ZW4bW0sNCnR3b3Nvcjogb25lG1tLDQp0YWJzOiAgIFggICAgICAgWRtbSw0KYWx0ZXJuYXRlLWJlZ2luG1tLDQobW0sNCmxvbmc6IENDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQxtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLDQobW0sNChtbSw0KG1tLG1sxMjs2OEgbXTA7ZjQtbmF0aXZlLW9wZW5jb25zb2xlLXByb2JlBxtbPzI1aA==",
+                                            "cause":  "pinned-host-observed-output"
+                                        },
+                                        {
+                                            "sequence":  12,
+                                            "at":  "2026-08-31T03:18:41.0848405Z",
+                                            "kind":  2,
+                                            "width":  80,
+                                            "height":  25,
+                                            "bytes":  "Q0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0MNCl9fRjRfTkFUSVZFX1BST0JFX0VORF9fDQo=",
+                                            "cause":  "pinned-host-observed-output"
+                                        }
+                                    ]
+                     }
+                 ],
+    "completed_at":  "2026-08-31T03:18:41.0933866Z"
+}

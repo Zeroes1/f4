@@ -14,15 +14,31 @@ func main() {
 		sourceRoot = flag.String("source-root", "", "extracted pinned Microsoft Terminal source tree")
 		hostPath   = flag.String("host", "", "verified adjacent pinned OpenConsole.exe")
 		reportPath = flag.String("report", "", "audit or run report path")
+		probe      = flag.Bool("probe", false, "run the standalone native OpenConsole probe")
+		probeReport = flag.String("probe-report", "", "native probe report path")
+		probeHost  = flag.String("probe-host", "", "optional verified pinned OpenConsole.exe; otherwise download the pinned package")
 		emitSeed   = flag.String("emit-seed", "", "internal pinned-host client mode: emit one recorded seed")
 		emitWidth  = flag.String("emit-width", "", "internal pinned-host client mode: emit one edge width")
+		emitProbe  = flag.Bool("emit-probe", false, "internal native-probe client mode")
 	)
 	flag.Parse()
-	if *emitSeed != "" || *emitWidth != "" {
-		if *emitSeed != "" && *emitWidth != "" {
-			fail(fmt.Errorf("-emit-seed and -emit-width are mutually exclusive"))
+	if *emitSeed != "" || *emitWidth != "" || *emitProbe {
+		if (*emitSeed != "" && *emitWidth != "") || (*emitProbe && (*emitSeed != "" || *emitWidth != "")) {
+			fail(fmt.Errorf("-emit-probe, -emit-seed, and -emit-width are mutually exclusive"))
+		}
+		if *emitProbe {
+			if err := emitProbeWorkload(); err != nil {
+				fail(err)
+			}
+			return
 		}
 		if err := emitScenario(*emitSeed, *emitWidth); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *probe {
+		if err := runNativeProbe(*probeHost, *probeReport); err != nil {
 			fail(err)
 		}
 		return

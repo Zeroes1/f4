@@ -922,7 +922,9 @@ jobs:
     - name: Compile standalone ConPTY probe
       if: matrix.shard == 'rest'
       working-directory: tools/conptyreconcile
-      run: go test -run '^$' ./...
+      run: |
+        go test -run '^$' ./...
+        GOOS=windows GOARCH=amd64 go test -c -run '^$' -o /tmp/conptyreconcile-windows.test.exe ./...
 
     - name: Restore Go build cache (lint shard)
       uses: actions/cache@v4
