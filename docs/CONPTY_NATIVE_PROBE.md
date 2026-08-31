@@ -13,6 +13,7 @@ go run ./tools/conptyreconcile -probe -report artifacts/pinned-conpty-probe.json
 go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-probe-static.json
 go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-command.json
 go run ./tools/conptyreconcile -command-compare -report artifacts/pinned-conpty-command-compare.json
+go run ./tools/conptyreconcile -clear-probe -report artifacts/pinned-conpty-clear.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
@@ -56,6 +57,10 @@ pinned host, never a rule for reconstructing history.
 through the pinned host, then compares the host's rendered logical lines with
 the file after only CRLF normalization. It is an independent diagnostic and
 fails closed on any mismatch; it is not yet a gate pass.
+
+`-clear-probe` runs a PowerShell `Clear-Host` sequence and checks that the
+pinned host emits exactly one `ESC[3J`, removing the pre-clear marker from
+history while retaining the post-clear marker.
 
 `-reflow-probe` keeps the pinned host at its original size and applies the
 display-width matrix only to the consumer's complete logical lines. The
