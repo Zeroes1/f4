@@ -63,13 +63,17 @@ resize и запись артефактов; logical history/reflow пока н�
 static/dynamic стадий с сообщением `native gate incomplete ...`: это защитный
 гейт от ложной зелени, пока не реализованы проверки A–D.
 
-## Handoff через текущий f4 pipeline
+## Наблюдение: поток пиннутого хоста в нынешнем f4 (не критерий гейта)
 
-Добавлен opt-in диагностический тест `cmd/f4/TestNativeConPTYReplay`. Он
-подаёт сохранённый native raw через `PanelsFrame.consumeLocalOutput` и
-`AnsiParser` в настоящий `TerminalView`, после чего сверяет marker count и
-полный payload. Это пока replay, а не live native session, поэтому D1 ещё не
-закрыт и тест не включён в обычный прогон.
+Измерение выполнено разово тестом, который читал артефакт пробника и подавал
+его через `PanelsFrame.consumeLocalOutput` и `AnsiParser` в `TerminalView`.
+Тест удалён: код гейта в `cmd/f4` не живёт (см. запрет в начале
+`CONPTY_GATE_REQUIREMENTS.md`). Он появился потому, что пункт D1 требовал
+прогона «через настоящий путь f4» — формулировка от старой постановки,
+противоречившая запрету; D1 переписан.
+
+Результат сохранён как наблюдение о **текущем fallback**, а не как результат
+гейта.
 
 Команда на Windows:
 
