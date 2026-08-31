@@ -124,15 +124,15 @@ human decision at review time:
       leaving `pty` owned by the destination `PanelsFrame`. The clone's own
       `initPTY` goroutine therefore cannot race with the source workspace. The
       regression is covered by `TestTerminalView_CloneStateFromDoesNotSharePTY`;
-      the broader terminal follow-up remains in `TERMINAL_WINDOWS.md` section 5.
+      the broader terminal follow-up remains separate from this regression.
 
       ## The sync excision also mangles commands a human typed
 
       The fallback branch in `AnsiParser.Process` removes `cd /d "..." & ` even when
       the `rem f4_sync` marker is absent, so a `cd /d "X" & dir` typed by the user
       loses its first half in the log. Fixing it properly means marking our own
-      writes rather than pattern-matching text, which is `TERMINAL_WINDOWS.md`
-      section 6.
+      writes rather than pattern-matching text, which remains a separate
+      Windows terminal follow-up.
       ## Colorer and Go disagree on how to count malformed UTF-8
 
       Colorer's region offsets are rune indices, and the editor now takes them as

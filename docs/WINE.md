@@ -3,7 +3,7 @@
 Диздок и план работ. Исполнителю: читать целиком до написания первой строки кода.
 Раздел 12 — список файлов, которые нужно иметь под рукой.
 Смежные документы: `CONSOLE_MODES.md` (там описан весь механизм режимов Ctrl+O),
-`TERMINAL.md`, `TERMINAL_WINDOWS.md`, `UX_GUIDELINES.md`, `I18N.md`.
+`TERMINAL.md`, `UX_GUIDELINES.md`, `I18N.md`.
 
 ## 0. Зачем это нужно
 
@@ -1682,7 +1682,7 @@ wine f4.exe --tty=ansi
 **Часть A:** `action_registry.go`, `panels_frame.go`, `console_passthrough.go`,
 `simple_exec.go`, `simple_exec_windows.go`, `simple_exec_other.go`, `shell_mode.go`,
 `config.go`, `actions.go`, `main.go`, `session_windows.go`, `hotkeys.go`,
-`lang/en.lng`, `lang/ru.lng`, `help/en.hlf`, `help/ru.hlf`, `CONSOLE_MODES.md`, `TERMINAL_WINDOWS.md`.
+`lang/en.lng`, `lang/ru.lng`, `help/en.hlf`, `help/ru.hlf`, `CONSOLE_MODES.md`, `TERMINAL.md`.
 Тесты-образцы: `simple_exec_test.go`, `panels_frame_test.go`, `win32_backend_test.go`.
 vtui: `terminal_env.go`, `terminal_env_windows.go`, `win32_console_windows.go`,
 `win32_console_common.go`, `screenbuf.go`, `framemanager.go`.
@@ -2350,7 +2350,7 @@ ASCII only, если шрифт не нашёлся — писать в лог �
 `vfs/hidden_unix.go`, `drives_unix.go`.
 Тесты-образцы: `portable_test.go`, `path_hints_test.go`, `vfs/os_vfs_test.go`,
 `vfs/isabs_test.go`, `child_env_test.go`.
-Документы: этот файл целиком, `VFS.md`, `CONSOLE_MODES.md`, `TERMINAL_WINDOWS.md`,
+Документы: этот файл целиком, `VFS.md`, `CONSOLE_MODES.md`, `TERMINAL.md`,
 `I18N.md`, `UX_GUIDELINES.md`.
 
 **vtui (v0.1.222):** `x11_host.go`, `x11_renderer.go`, `x11_render_common.go`,

@@ -1,15 +1,5 @@
 # f4 Terminal Architecture Manifest
 
-> **THE RULE, before the philosophy and above every section below.** Where
-> Microsoft's source exists for a behaviour, the only permitted
-> implementation is a **1:1, transpilation-level port of that source**. It
-> is **strictly forbidden to assume anything** and **strictly forbidden to
-> change anything** in what is ported. If something cannot be ported as
-> written, stop and record the obstacle; do not invent. The longer statement
-> and the price of violating it are at the head of `CONPTY_RESEARCH.md`; the
-> paragraph in "How this component is verified" below is a consequence of
-> this rule, not its statement.
-
 The built-in terminal in `f4` is one of its most complex components. This document serves as a comprehensive guide for human developers and AI assistants. It explains the fundamental challenges of cross-platform terminal emulation (specifically Windows ConPTY), analyzes how industry-leading terminal emulators solve them, and justifies the final architectural design chosen for `f4`.
 
 ## 0. Philosophy: why this component exists at all
@@ -38,9 +28,9 @@ without it a proxied keystroke can lose information.
 
 **Hypothesis 3 -- the win32-style cell grid as the visual model.** A grid of
 cells, each described by a win32-like structure extended for truecolor, with
-long-line (wrap) support worked in on top -- the same model conhost itself
-keeps internally -- is the ideal description of a terminal's visual state. In
-all of far2l's history, no terminal feature has ever failed to fit it.
+long-line (wrap) support worked in on top, is the ideal description of a
+terminal's visual state. In all of far2l's history, no terminal feature has
+ever failed to fit it.
 
 Nobody before far2l took a win32 idea into *nix for any reason other than
 compatibility (wine, ndiswrapper). far2l did it because the idea was simply
@@ -54,55 +44,29 @@ scrollback, correct reflow, protocol conversion -- for: `dir /w` in `cmd.exe`;
 PowerShell; WSL; Linux over ssh; and Windows over ssh. All five. Anything less
 and the exercise loses its point.
 
-**The ethos.** An obstacle is a design input, not a stopping condition. Months
-of work are not the metric; the metric is whether the five columns above
-light up. The answer "impossible" is banned until the option tree is exhausted
--- `CONPTY_RESEARCH.md` is the record of exhausting it, including every wrong
-turn, and its later sections show the tree is not exhausted yet.
-
 **The channel invariant (corrected form).** f4 consumes the child's output as
 a **byte stream** and composes the screen itself. f4 never consumes a
 pre-composed grid of cells made by someone else -- that is what the overlay
 mode over a real console is for, and it already exists. Metadata *about* the
-stream from whoever hosts the child -- wrap flags, logical-line boundaries --
-is not a violation; it is welcome, and several directions in
-`CONPTY_RESEARCH.md` exist to obtain exactly that. The review question is:
+stream from whoever hosts the child is not a replacement for the stream. The
+review question is:
 *does f4 still build its screen from the stream?* If yes, the design is in
 scope, whoever computed the wrap.
 
 ### How this component is verified
 
-One rule, arrived at expensively and now not negotiable -- it is THE RULE at
-the head of this document and of `CONPTY_RESEARCH.md`: **where Microsoft's
-source exists for something, the implementation is a 1:1, transpilation-level
-port of it; assuming anything or changing anything is strictly forbidden.**
-Reimplementing from observed behaviour is a violation, not an alternative. `microsoft/terminal` is MIT and compatible with
-BSD-3-Clause; the "written from scratch" rule in `FISH+.md` is about GPL
-sources and does not apply. A width table written from memory disagreed with
-conhost about where rows end, and conhost is what decides where lines merge --
-the reconstruction of a non-ASCII capture fell from 151 lines to 66, and a mock
-built on the same assumption agreed with the bug.
+ConPTY correctness is checked at two different levels. Platform-independent
+tests cover f4's parser, screen state, reflow, and lifecycle invariants. The
+Windows integration gate runs the same algorithm against a real, explicitly
+selected `OpenConsole.exe`; it does not replace that host with a copied or
+reimplemented console model. The complete procedure, including host download,
+version checks, diagnostics, and the 300-seed reliability run, is in
+[`CONPTY_NATIVE_TEST.md`](CONPTY_NATIVE_TEST.md).
 
-The rest of the method, in short, with the full account and the failures behind
-each in `CONPTY_RESEARCH.md` §17:
-
-- mocks are built from the vendor's code and then validated against real
-  captures, not against expectations;
-- fixtures are randomised and print their seed, so a failure on Windows
-  replays on any machine;
-- parsers are fuzzed, and the test's own oracle is expected to be wrong as
-  often as the code;
-- every step is assumed to be able to hang and runs under a watchdog; a hung
-  step is abandoned and reported, never waited on;
-- independent measurements run in parallel and smallest-first, so an early
-  stop still leaves a usable result;
-- nothing decides anything while measuring -- capture raw, analyse afterwards;
-- real commands under a real corner drag are exercised alongside the
-  deterministic fixture;
-- platform-specific parts sit behind interfaces, and where a Windows check is
-  unavoidable it uses something every Windows has;
-- and "what does the mock not model?" is asked out loud, periodically, because
-  a passing test says nothing about the cases it does not contain.
+Test doubles may cover f4 lifecycle failures and malformed input. They are not
+evidence about Windows console semantics. The Windows gate must use the native
+host, real child processes, real ConPTY output, synchronized resizes, and
+replayable failure artifacts.
 
 ## 1. The Fundamental Conflict: Streams vs. Grids
 
@@ -151,7 +115,14 @@ Before finalizing the `f4` architecture, we analyzed the source code of the most
 
 ### Concrete Arguments for VTE Mirror:
 1.  **Domain-Specific Optimization:** `f4` is a file manager, not just a terminal emulator. It already possesses a highly optimized, zero-allocation `PieceTable` engine used for its Editor and Viewer. Extruding the terminal log directly into a `PieceTable` allows the internal Viewer (`F3`) to open a 10-gigabyte terminal log instantly without allocating memory for millions of `Cell` structs.
-2.  **Active Reflow on Unix, Horizontal Preservation on Windows:** on Unix a width change re-wraps the live 2D grid (`reflowLocked` in `cmd/f4/terminal_view.go`). On Windows it does not, and the grid instead keeps off-screen characters without deleting them (**Horizontal Preservation**) until the ConPTY questions in `TERMINAL_REFLOW.md` are settled. A height-only change never reflows on either platform: it moves rows between the viewport and `GridHistory`, which was never broken. The `PieceTable`'s `WrapEngine` still reflows the scrollback when the user views it (e.g. via `Ctrl+O`).
+2.  **Active Reflow on Unix, native validation on Windows:** on Unix a width
+    change re-wraps the live 2D grid (`reflowLocked` in
+    `cmd/f4/terminal_view.go`). On Windows, resize and reflow behavior is
+    changed only after a run through the native ConPTY test described in
+    [`CONPTY_NATIVE_TEST.md`](CONPTY_NATIVE_TEST.md). A height-only change
+    never reflows on either platform: it moves rows between the viewport and
+    `GridHistory`, which was never broken. The `PieceTable`'s `WrapEngine`
+    still reflows the scrollback when the user views it (e.g. via `Ctrl+O`).
 
     This section used to claim that reflowing the live grid is *impossible* because the shell tracks its own cursor and would desync. That claim was wrong, and it talked people out of a design that works. `far2l` reflows exactly this live grid (`WinPort/src/ConsoleBuffer.cpp`, `SetSizeRecomposing`), on two decisions worth copying:
 
@@ -160,7 +131,10 @@ Before finalizing the `f4` architecture, we analyzed the source code of the most
 
     The reflow itself is then short: walk the rows, trim the irrelevant trailing spaces, append the significant cells into one flat vector, and lay that vector back out at the new width, breaking on the markers. Rows pushed off the top go to the scrollback through a callback, the same role `GridHistory` plays here. Two details are load-bearing: cells left of a trimmed space tail get marked "important" so a *second* reflow does not eat legitimate spaces, and the reflow-vs-truncate choice is made by output mode, not by alt-screen — a raw-mode TUI like a Python REPL wants truncation even though it raised no alternate screen.
 
-    What remains genuinely hard is Windows, and for an unrelated reason: ConPTY runs its own reflow and repaints the whole viewport afterwards, so a second reflow in `f4` would fight it. That is what `PSEUDOCONSOLE_RESIZE_QUIRK` (flag `0x2`) exists for — it tells ConPTY not to invalidate on resize and to trust the terminal to re-wrap. Unverified for `f4`, and the 2024 ConPTY rewrite (microsoft/terminal#17510) admits it now emits `\r\n` on delayed EOL wrap, which can destroy the soft-wrap signal on recent builds. So: the Unix side is open, the Windows side needs those two experiments first. The full survey — how far2l, WezTerm, Alacritty and xterm.js each solve this, and which parts are worth copying — is in `TERMINAL_REFLOW.md`; the Windows bug list is in `TERMINAL_WINDOWS.md`; the ledger of every finding and the plan for what comes next is `TERMINAL_LEDGER.md`.
+    Windows behavior is intentionally not assigned from a local transcript or
+    a second implementation of the host. The native test records the actual
+    stream, resize timeline, f4 state, and a reproducible seed so that a
+    failure can be debugged on the same Windows build.
 
 ### Why the Unix managed command runs through `eval`
 
@@ -417,12 +391,9 @@ Read this list before concluding that something is broken.
     starts with the cursor at `(0, height-1)`, so a picture printed before
     anything else is placed on the bottom row and scrolls the screen.
 
-## Windows: the reflow switch
+## Windows: reflow verification
 
-`[Terminal] WindowsReflow = auto | off | hint | oracle` in the config, with
-`F4_WIN_REFLOW` in the environment taking precedence. `auto` is the oracle.
-`off` returns the terminal to Horizontal Preservation and asks nothing of
-ConPTY beyond what every build since 1809 has done; use it on a build where
-the `REFLOW_*` log lines show one of the measured behaviours failing. The
-research behind the default, and what each mode assumes, is in
-`CONPTY_RESEARCH.md`.
+Windows reflow changes must be validated with the native ConPTY test in
+[`CONPTY_NATIVE_TEST.md`](CONPTY_NATIVE_TEST.md). A copied console
+implementation, a captured transcript used as a substitute for the host, or a
+heuristic result from another console is not an acceptance oracle.

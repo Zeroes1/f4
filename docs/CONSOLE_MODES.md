@@ -306,7 +306,7 @@ func (s *ScreenBuf) WritePassthrough(p []byte)
 * [x] **Этап 7.** Настройки и локализация (радиогруппа и чекбокс в `Panel Settings`, строки в `en.lng`/`ru.lng`, автолейаут-тест).
 * [x] **Этап 8.** Документация и граничные случаи (интеграция с сессиями Unix daemon/detach, раздел в `TERMINAL.md`).
 
-**Этап 0. Чтение.** `TERMINAL.md`, `TERMINAL_WINDOWS.md` (там таблица «где что лежит»),
+**Этап 0. Чтение.** `TERMINAL.md` (и `CONPTY_NATIVE_TEST.md` для Windows-проверки),
 `UX_GUIDELINES.md`, `I18N.md`, `vtui/UI_TESTING.md`. Кода не писать.
 
 **Этап 1. Конфиг и разрешение режима.** Новый `shell_mode.go` + `shell_mode_test.go`.
@@ -383,7 +383,7 @@ func (s *ScreenBuf) WritePassthrough(p []byte)
 `detach_unix.go`, `command_runner.go`, `remote_command.go`, `terminal_log_vfs.go`,
 `commands.go`.
 
-**f4, документация и i18n:** `TERMINAL.md`, `TERMINAL_WINDOWS.md`, `UX_GUIDELINES.md`,
+**f4, документация и i18n:** `TERMINAL.md`, `CONPTY_NATIVE_TEST.md`, `UX_GUIDELINES.md`,
 `I18N.md`, `README.md`, `lang/en.lng`, `lang/ru.lng`, `help.hlf`.
 
 **f4, образцы стиля тестов:** `panels_frame_test.go`, `ansi_parser_test.go`, `pty_test.go`,

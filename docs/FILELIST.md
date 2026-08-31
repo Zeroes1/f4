@@ -686,6 +686,7 @@
     ├── docs
     │   ├── COLORS.md
     │   ├── CONSOLE_MODES.md
+    │   ├── CONPTY_NATIVE_TEST.md
     │   ├── CURSOR.md
     │   ├── DRAGDROP.md
     │   ├── FFI.md
@@ -744,8 +745,6 @@
     │   ├── PORTABILITY_BSD.md
     │   ├── REVIEW.md
     │   ├── TERMINAL.md
-    │   ├── TERMINAL_REFLOW.md
-    │   ├── TERMINAL_WINDOWS.md
     │   ├── TEST_OPTIMIZATION_PLAN.md
     │   ├── TTYX.md
     │   ├── USER_MENU.md
