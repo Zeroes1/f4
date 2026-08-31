@@ -29,6 +29,7 @@ func main() {
 		scrollProbe         = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		emptyProbe          = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
 		reflowProbe         = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
+		lifecycleProbe      = flag.Bool("lifecycle-probe", false, "verify pinned-host lifecycle and close-order cleanup")
 		probeHost           = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath          = flag.String("report", "", "report path")
 		emitProbe           = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
@@ -182,6 +183,12 @@ func main() {
 	}
 	if *reflowProbe {
 		if err := runNativeReflowProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *lifecycleProbe {
+		if err := runNativeLifecycleProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

@@ -21,6 +21,7 @@ go run ./tools/conptyreconcile -link-probe -report artifacts/pinned-conpty-link.
 go run ./tools/conptyreconcile -progress-probe -report artifacts/pinned-conpty-progress.json
 go run ./tools/conptyreconcile -unicode-probe -report artifacts/pinned-conpty-unicode.json
 go run ./tools/conptyreconcile -reflow-probe -report artifacts/pinned-conpty-reflow.json
+go run ./tools/conptyreconcile -lifecycle-probe -report artifacts/pinned-conpty-lifecycle.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
 

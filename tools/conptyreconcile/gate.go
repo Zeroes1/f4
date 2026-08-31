@@ -22,6 +22,9 @@ func runNativeGate(hostPath, reportPath string) error {
 		run  func(string, string) error
 	}{
 		{"command-suite", runNativeCommandSuite},
+		{"command-compare", func(host, report string) error {
+			return runNativeCommandCompareAtWidth(host, report, 512)
+		}},
 		{"clear", runNativeClearProbe},
 		{"scroll", runNativeScrollProbe},
 		{"empty", runNativeEmptyProbe},
@@ -31,6 +34,9 @@ func runNativeGate(hostPath, reportPath string) error {
 			return fmt.Errorf("%s stage: %w", stage.name, err)
 		}
 	}
+	if err := runNativeLifecycleProbe(hostPath, reportPath+".lifecycle"); err != nil {
+		return fmt.Errorf("lifecycle stage: %w", err)
+	}
 	for _, kind := range []string{"tabs", "link", "progress", "unicode"} {
 		if err := runNativeSemanticProbe(hostPath, reportPath+"."+kind, kind); err != nil {
 			return fmt.Errorf("%s semantic stage: %w", kind, err)
@@ -39,5 +45,5 @@ func runNativeGate(hostPath, reportPath string) error {
 	if err := runNativeSeedGate(hostPath, reportPath+".seeds"); err != nil {
 		return fmt.Errorf("300-seed native stage: %w", err)
 	}
-	return fmt.Errorf("native gate incomplete: C4 lifecycle matrix and remaining source-only status probes are still open")
+	return fmt.Errorf("native gate incomplete: tail-after-EOF and remaining source-only status probes are still open")
 }

@@ -10,10 +10,39 @@
 командах (включая `dir /s /b` при host-width 256–512), consumer reflow,
 произвольное chunking, scrollback eviction, control-поведение tabs/OSC 8,
 `Clear-Host`, пустой кадр, progress-bar и 300 deterministic seed-сессий.
-Открыты полноценная C4-матрица (broken pipe, cancel, timeout и варианты
-порядка закрытия в одном доказательном прогоне), а также отдельные усиленные
+Открыта только отдельная проверка хвоста после EOF; полноценная C4-матрица
+(первый prompt, broken pipe, cancel, timeout и варианты порядка закрытия)
+теперь выполнена, а также остаются отдельные усиленные
 прогоны для оставшихся partial-классов payload. Поэтому gate остаётся
 fail-closed.
+
+### C4: низкоуровневый lifecycle-прогон
+
+Добавлен отдельный `-lifecycle-probe`, который не запускает reader-горутины
+для обычных EOF/timeout-кейсов и отдельно дожидается реального prompt:
+он напрямую наблюдает `WaitForSingleObject` у дочернего процесса, проверяет
+принудительное завершение при timeout, закрытие output pipe для broken-pipe,
+два порядка закрытия (`host-first` и `pipes-first`), завершение pinned host и
+освобождение всех нативных handles. Интерактивный кейс дополнительно ждёт
+явный prompt-маркер до bounded cancellation.
+
+```text
+native lifecycle probe complete: artifacts/pinned-conpty-lifecycle-prompt.json cases=5
+
+first-prompt   host-first  timeout child=true host=true handles=true prompt=true bytes=164
+startup-eof    host-first  exit    child=true host=true handles=true
+empty-eof      pipes-first exit    child=true host=true handles=true
+cancel-timeout host-first  timeout child=true host=true handles=true
+broken-pipe    pipes-first timeout child=true host=true handles=true
+```
+
+Проверка выполнена на pinned OpenConsole
+`1.12.220408003-release1.12`, SHA
+`14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e`.
+Актуальный отчёт содержит 5 кейсов; процессы `OpenConsole` и пробника после
+прогона отсутствуют. Это закрывает C4 lifecycle-матрицу. Отдельная проверка
+хвоста байтов после EOF остаётся открытой для пункта 12.2, поэтому общий gate
+пока остаётся fail-closed.
 
 ## Что подтверждено командой
 
