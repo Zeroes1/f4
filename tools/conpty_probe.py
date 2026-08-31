@@ -121,7 +121,7 @@ def load_conpty(path):
     return create, close, resize
 
 
-def run(conpty, chunk, mode, during=None):
+def run(conpty, chunk, mode, during=None, timeout_s=20):
     """Run the child in a fresh pseudoconsole.
 
     Returns (stream, console mode the child actually had). The child reports
@@ -187,7 +187,7 @@ def run(conpty, chunk, mode, during=None):
     th.start()
     if during is not None:
         during(hpc, lambda: sum(len(c) for c in out))
-    k32.WaitForSingleObject(pi.hProcess, 20000)
+    k32.WaitForSingleObject(pi.hProcess, int(timeout_s * 1000))
 
     # The child exiting does not mean its output has been pushed through
     # yet; wait for the byte count to stop growing before closing.
@@ -288,22 +288,35 @@ def probe_resize(label, conpty, say):
     """
     _create, _close, resize_pc = conpty
     marks = []
+    errors = []
 
     def during(hpc, offset):
-        time.sleep(1.5)
+        # Python takes seconds to start on Windows, and the bundled path
+        # spawns its own OpenConsole first. Resizing on a timer resized an
+        # empty screen, so wait for the payload to actually show up.
+        deadline = time.time() + 20
+        while offset() < 200 and time.time() < deadline:
+            time.sleep(0.1)
+        time.sleep(1.0)
         for cols in (100, 60):
             marks.append((offset(), cols))
-            resize_pc(hpc, COORD(cols, ROWS))
-            time.sleep(1.5)
+            hr = resize_pc(hpc, COORD(cols, ROWS))
+            if hr:
+                errors.append(f"resize to {cols} -> 0x{hr & 0xFFFFFFFF:08x}")
+            time.sleep(2.0)
         marks.append((offset(), None))
 
-    hold = 2 + 1.5 * 3
-    child = f'"{sys.executable}" "{CHILD}" 200 default {hold}'
-    raw, _mode = run(conpty, child, "default", during=during)
+    child = f'"{sys.executable}" "{CHILD}" 200 default 40'
+    raw, _mode = run(conpty, child, "default", during=during, timeout_s=45)
     with open(f"{OUTDIR}/stream-{label}-resize.bin", "wb") as f:
         f.write(raw)
 
     say("  200 chars written at 80 columns, then resized:")
+    for err in errors:
+        say(f"    ResizePseudoConsole FAILED: {err}")
+    if not marks or marks[0][0] < 200:
+        say("    the payload never reached us before the resize; "
+            "this run measured nothing")
     start = 0
     for i, (offset, cols) in enumerate(marks):
         piece = raw[start:offset]
