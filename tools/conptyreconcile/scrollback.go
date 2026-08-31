@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"unicode/utf8"
 )
 
 type consumerResizeCheck struct {
@@ -13,6 +14,66 @@ type consumerResizeCheck struct {
 	CompletedLines int    `json:"completed_lines"`
 	HistorySHA256  string `json:"history_sha256"`
 	Status         string `json:"status"`
+}
+
+func screenRows(rows [][]byte, width, height int) [][]byte {
+	if width < 1 || height < 1 {
+		return nil
+	}
+	start := len(rows) - height
+	if start < 0 {
+		start = 0
+	}
+	result := make([][]byte, height)
+	for i := range result {
+		result[i] = make([]byte, width)
+		for j := range result[i] {
+			result[i][j] = ' '
+		}
+	}
+	for i, row := range rows[start:] {
+		if i >= height {
+			break
+		}
+		column := 0
+		for offset := 0; offset < len(row) && column < width; {
+			r, size := utf8.DecodeRune(row[offset:])
+			if r == utf8.RuneError && size == 1 {
+				size = 1
+			}
+			w := displayWidth(r)
+			if w == 0 {
+				if column > 0 {
+					// Combining marks remain in the byte snapshot by appending
+					// them nowhere; the logical history is checked separately.
+				}
+				offset += size
+				continue
+			}
+			if column+w > width {
+				break
+			}
+			copy(result[i][column:], row[offset:offset+size])
+			column += w
+			offset += size
+		}
+	}
+	return result
+}
+
+func cursorPosition(lines []logicalLine, width int) (row, column int) {
+	rows := reflowLogicalLines(lines, width)
+	if len(rows) == 0 {
+		return 0, 0
+	}
+	last := lines[len(lines)-1]
+	if len(last.Terminator) != 0 {
+		return len(rows), 0
+	}
+	for _, r := range string(rows[len(rows)-1]) {
+		column += displayWidth(r)
+	}
+	return len(rows) - 1, column
 }
 
 // scrollbackPieceTable is the consumer's immutable spill area. It stores

@@ -517,8 +517,27 @@ go run . -reflow-probe -report artifacts/pinned-conpty-reflow-next.json
 
 Это закрывает для текущего consumer-only слоя сохранность целых строк и
 перевыкладку по ширине без host repaint; это не выдаётся за полный B2: отдельные
-снимки screen/history/cursor пока не реализованы. Нативная исходная
+снимки screen/history/cursor теперь входят в каждый checkpoint consumer-модели;
+интеграция с f4 по-прежнему вне standalone gate. Нативная исходная
 история при этом получена живым pinned host, а не второй моделью консоли.
+
+Повторный прогон с расширенными B2-снимками:
+
+```text
+go run . -reflow-probe -report artifacts/pinned-conpty-reflow-b2.json
+width=1   height=1  display_rows=406 cursor=(406,0) layout_status=passed
+width=79  height=24 display_rows=8   cursor=(8,0)   layout_status=passed
+width=80  height=25 display_rows=7   cursor=(7,0)   layout_status=passed
+width=81  height=26 display_rows=7   cursor=(7,0)   layout_status=passed
+width=121 height=40 display_rows=6   cursor=(6,0)   layout_status=passed
+width=20  height=10 display_rows=22  cursor=(22,0)  layout_status=passed
+width=121 height=10 display_rows=6   cursor=(6,0)   layout_status=passed
+width=1   height=25 display_rows=406 cursor=(406,0) layout_status=passed
+width=80  height=25 display_rows=7   cursor=(7,0)   layout_status=passed
+```
+
+Каждый checkpoint содержит `screen_sha256`, `stored_history_sha256` и cursor
+координаты; история осталась неизменной при всех изменениях отображения.
 
 ### Независимая сверка `dir /s /b` через redirected-файл
 

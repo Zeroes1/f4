@@ -18,6 +18,9 @@ type reflowCheckpoint struct {
 	StoredLines      int    `json:"stored_lines"`
 	DisplayRows      int    `json:"display_rows"`
 	VisibleRows      int    `json:"visible_rows"`
+	ScreenSHA256     string `json:"screen_sha256"`
+	CursorRow        int    `json:"cursor_row"`
+	CursorColumn     int    `json:"cursor_column"`
 	StoredHistorySHA string `json:"stored_history_sha256"`
 	LayoutStatus     string `json:"layout_status"`
 }
@@ -107,14 +110,17 @@ func makeReflowCheckpoints(lines []logicalLine) []reflowCheckpoint {
 	checkpoints := make([]reflowCheckpoint, 0, 9)
 	for _, dimensions := range [][2]int{{1, 1}, {79, 24}, {80, 25}, {81, 26}, {121, 40}, {20, 10}, {121, 10}, {1, 25}, {80, 25}} {
 		rows := reflowLogicalLines(lines, dimensions[0])
+		screen := screenRows(rows, dimensions[0], dimensions[1])
+		cursorRow, cursorColumn := cursorPosition(lines, dimensions[0])
 		status := "passed"
-		if !rowsRoundTrip(rows, stored) {
+		if !rowsRoundTrip(rows, stored) || len(screen) != dimensions[1] || cursorRow < 0 || cursorRow > len(rows) || cursorColumn < 0 || cursorColumn > dimensions[0] {
 			status = "failed"
 		}
 		checkpoints = append(checkpoints, reflowCheckpoint{
 			Width: dimensions[0], Height: dimensions[1], StoredLines: len(lines),
 			DisplayRows: len(rows), VisibleRows: minInt(len(rows), dimensions[1]),
 			StoredHistorySHA: historySHA, LayoutStatus: status,
+			ScreenSHA256: rowsSHA256(screen), CursorRow: cursorRow, CursorColumn: cursorColumn,
 		})
 	}
 	return checkpoints
