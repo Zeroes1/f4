@@ -692,6 +692,7 @@
     │   ├── CONPTY_NATIVE_PROBE.md
     │   ├── CONPTY_NATIVE_TEST.md
     │   ├── PINNED_CONSOLE.md
+    │   ├── PINNED_HOST_FACTS.md
     │   ├── CURSOR.md
     │   ├── DRAGDROP.md
     │   ├── FFI.md
