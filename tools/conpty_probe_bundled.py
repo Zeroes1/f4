@@ -21,7 +21,11 @@ COLS = 80
 ROWS = 25
 FILL = 100  # > COLS, so the line must wrap once
 OUTDIR = "probe-out"
-CMD = f'cmd /c echo {"A" * FILL}'
+# Redirect to CONOUT$ so the write goes to the pseudoconsole no matter
+# what the child inherited for stdout: attaching a pty gives the child
+# the right console, but its std handles still come from us, and ours
+# is a pipe to the CI log.
+CMD = f'cmd /c echo {"A" * FILL} >CONOUT$'
 
 PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016
 EXTENDED_STARTUPINFO_PRESENT = 0x00080000
