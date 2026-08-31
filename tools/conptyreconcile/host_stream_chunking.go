@@ -17,6 +17,8 @@ type chunkingAssertion struct {
 // diagnostic resize sequences; it never derives a line from a grid row.
 func verifyHostStreamChunking(data []byte, seed uint64) ([]chunkingAssertion, error) {
 	baseline := parseHostRenderStream(data, 0)
+	var logicalBaseline logicalLineStream
+	logicalBaseline.Feed(data)
 	checks := []struct {
 		name string
 		feed func(*hostRenderStream)
@@ -67,6 +69,64 @@ func verifyHostStreamChunking(data []byte, seed uint64) ([]chunkingAssertion, er
 	for _, assertion := range result {
 		if assertion.Status != "passed" {
 			return result, fmt.Errorf("host stream chunking assertion %s failed: %s", assertion.Mode, assertion.Detail)
+		}
+	}
+	logicalChecks := []struct {
+		name string
+		feed func(*logicalLineStream)
+	}{
+		{name: "logical-one-byte", feed: func(stream *logicalLineStream) {
+			for i := range data {
+				stream.Feed(data[i : i+1])
+			}
+		}},
+		{name: "logical-fixed-7", feed: func(stream *logicalLineStream) {
+			for offset := 0; offset < len(data); {
+				end := offset + 7
+				if end > len(data) {
+					end = len(data)
+				}
+				stream.Feed(data[offset:end])
+				offset = end
+			}
+		}},
+		{name: "logical-prng", feed: func(stream *logicalLineStream) {
+			state := seed | 1
+			for offset := 0; offset < len(data); {
+				state = state*6364136223846793005 + 1
+				size := int((state>>32)%31) + 1
+				end := offset + size
+				if end > len(data) {
+					end = len(data)
+				}
+				stream.Feed(data[offset:end])
+				offset = end
+			}
+		}},
+	}
+	for _, check := range logicalChecks {
+		got := logicalLineStream{}
+		check.feed(&got)
+		left, right := logicalBaseline.Lines(), got.Lines()
+		status := "passed"
+		detail := "logical lines are invariant under chunking"
+		if len(left) != len(right) {
+			status = "failed"
+			detail = fmt.Sprintf("logical line count changed (baseline=%d got=%d)", len(left), len(right))
+		} else {
+			for i := range left {
+				if !bytes.Equal(left[i].Bytes, right[i].Bytes) || !bytes.Equal(left[i].Terminator, right[i].Terminator) {
+					status = "failed"
+					detail = fmt.Sprintf("logical line %d changed under chunking", i)
+					break
+				}
+			}
+		}
+		result = append(result, chunkingAssertion{Mode: check.name, Status: status, Detail: detail})
+	}
+	for _, assertion := range result[3:] {
+		if assertion.Status != "passed" {
+			return result, fmt.Errorf("logical stream chunking assertion %s failed: %s", assertion.Mode, assertion.Detail)
 		}
 	}
 	return result, nil

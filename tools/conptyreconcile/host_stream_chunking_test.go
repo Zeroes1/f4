@@ -8,8 +8,8 @@ func TestVerifyHostStreamChunkingIncludesEscapeAndUTF8Boundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(checks) != 3 {
-		t.Fatalf("got %d chunking checks, want 3", len(checks))
+	if len(checks) != 6 {
+		t.Fatalf("got %d chunking checks, want 6", len(checks))
 	}
 	for _, check := range checks {
 		if check.Status != "passed" {

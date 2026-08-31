@@ -749,3 +749,23 @@ title-osc: passed observed_count=1
 
 Последовательность ровно `ESC]0;pinned-conpty-probe BEL`; в `RenderedLines` она
 не попадает.
+
+### Усиление проверки произвольных границ чтения (C2)
+
+Static native-прогон теперь проверяет три расписания chunking не только для
+диагностического host-stream состояния, но и для основного накопителя целых
+логических строк:
+
+```text
+go run . -probe-static -report artifacts/pinned-conpty-probe-static-c2-final.json
+one-byte         passed
+fixed-7          passed
+prng             passed
+logical-one-byte passed
+logical-fixed-7  passed
+logical-prng     passed
+```
+
+Сравниваются байты записей и их явные терминаторы; в расписаниях присутствуют
+разрывы UTF-8, CSI/OSC и CRLF. Все шесть проверок прошли на raw-потоке живого
+pinned host.
