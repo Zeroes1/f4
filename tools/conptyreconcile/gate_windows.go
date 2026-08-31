@@ -13,6 +13,7 @@ type seedGateReport struct {
 	Mode        string               `json:"mode"`
 	Host        pinnedHostIdentity   `json:"host"`
 	SeedCount   int                  `json:"seed_count"`
+	Failures    []string             `json:"failures,omitempty"`
 	Sessions    []nativeProbeSession `json:"sessions"`
 	CompletedAt time.Time            `json:"completed_at"`
 }
@@ -51,11 +52,17 @@ func runNativeSeedGate(hostPath, reportPath string) error {
 			return err
 		}
 		if runErr != nil {
-			_ = writeJSON(reportPath, report)
-			return fmt.Errorf("seed %d width %d: %w", seed, width, runErr)
+			report.Failures = append(report.Failures, fmt.Sprintf("seed %d width %d: %v", seed, width, runErr))
+			fmt.Printf("native seed gate: seed %d recorded failure: %v\n", seed, runErr)
 		}
 	}
 	report.SeedCount = len(report.Sessions)
 	report.CompletedAt = time.Now().UTC()
-	return writeJSON(reportPath, report)
+	if err := writeJSON(reportPath, report); err != nil {
+		return err
+	}
+	if len(report.Failures) != 0 {
+		return fmt.Errorf("300-seed native stage recorded %d failures", len(report.Failures))
+	}
+	return nil
 }
