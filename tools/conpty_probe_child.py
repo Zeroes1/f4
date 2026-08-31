@@ -1,6 +1,6 @@
 """Write 200 'A' to CONOUT$ in <n>-char WriteConsoleW calls, nothing else.
 
-    python tools/conpty_probe_child.py <n> default|legacy|bufapi [hold-seconds]
+    python tools/conpty_probe_child.py <n> default|legacy|bufapi [hold] [total]
 
 With hold-seconds the child stays alive after writing, so the parent can
 resize the pseudoconsole underneath it and watch what gets repainted.
@@ -54,6 +54,8 @@ api = sys.argv[2] if len(sys.argv) > 2 else "default"
 want_legacy = api == "legacy"
 use_buffer = api == "bufapi"
 hold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+if len(sys.argv) > 4:
+    TOTAL = int(sys.argv[4])
 
 h = k32.CreateFileW("CONOUT$", 0xC0000000, 3, None, 3, 0, None)
 if h == wintypes.HANDLE(-1).value:
@@ -70,7 +72,7 @@ if use_buffer:
     # Cells straight into the buffer at (0, 0). No cursor movement, no
     # WriteChars, nothing that could set a wrap bit.
     written = wintypes.DWORD()
-    if not k32.WriteConsoleOutputCharacterW(h, text, TOTAL, COORD(0, 0),
+    if not k32.WriteConsoleOutputCharacterW(h, text, len(text), COORD(0, 0),
                                             ctypes.byref(written)):
         sys.exit(FAILED)
 else:

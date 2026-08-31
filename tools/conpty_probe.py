@@ -209,13 +209,40 @@ def run(conpty, chunk, mode, during=None, timeout_s=20):
 
 
 CRLF = b"\r\n"
-ESCAPES = re.compile(r"\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.")
+
+# Every escape sequence, plus the newlines, as one token stream.
+TOKEN = re.compile(
+    rb"\x1b\][^\x07]*\x07"           # OSC
+    rb"|\x1b\[[0-9;?]*[Hf]"           # cursor position
+    rb"|\x1b\[[0-9;]*B"               # cursor down
+    rb"|\x1b[DEM]"                    # index, next line, reverse index
+    rb"|\x1b\[[0-9;?]*[ -/]*[@-~]"    # any other CSI
+    rb"|\x1b."                        # ESC + one byte
+    rb"|\r\n|\n")
+
+# A CRLF is not the only way to end a row. Repainting a buffer row by row
+# with absolute cursor positioning splits a line just as thoroughly, and
+# leaves no wrap flag on the terminal side either. Counting only CRLF made
+# that case read as one intact 200-character line when it was three rows.
+BREAK = re.compile(rb"^(\x1b\[[0-9;?]*[HfB]|\x1b[DEM]|\r\n|\n)$")
+CONTROL = re.compile(rb"[\x00-\x1f\x7f]")
 
 
 def rows(raw):
-    """Strip escape sequences, return the length of each row of text."""
-    text = ESCAPES.sub("", raw.decode("utf-8", errors="replace"))
-    return [len(r) for r in text.split("\r\n")]
+    """Length of each row of text, counting cursor moves as row endings."""
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8", "replace")
+    lengths, current, pos = [], 0, 0
+    for m in TOKEN.finditer(raw):
+        current += len(CONTROL.sub(b"", raw[pos:m.start()]).decode(
+            "utf-8", "replace"))
+        pos = m.end()
+        if BREAK.match(m.group()):
+            lengths.append(current)
+            current = 0
+    current += len(CONTROL.sub(b"", raw[pos:]).decode("utf-8", "replace"))
+    lengths.append(current)
+    return [n for n in lengths if n] or [0]
 
 
 def probe(label, path, say):
@@ -288,16 +315,20 @@ def probe_bufapi(label, conpty, say):
     with open(f"{OUTDIR}/stream-{label}-bufapi.bin", "wb") as f:
         f.write(raw)
     got = rows(raw)
-    say(f"  WriteConsoleOutputCharacterW (200 chars at 0,0) -> "
-        f"{raw.count(CRLF)} CRLF, rows {got}")
+    say(f"  WriteConsoleOutputCharacterW (200 chars at 0,0) -> rows {got}")
     if sum(got) < 200:
         say(f"    only {sum(got)} chars of text arrived - "
             "this run measured nothing")
+    elif len(got) == 1:
+        say("    one run: ConPTY streamed the cells contiguously and the "
+            "terminal wraps them itself")
     else:
-        say("    [200] = painted as one run, the terminal wraps it itself; "
-            "rows of 80")
-        say("    = ConPTY emitted the buffer row by row and the wrap became "
-            "a line ending")
+        say("    split into rows: ConPTY repainted the buffer row by row, so "
+            "the terminal")
+        say("    records no wrap. note conhost has no wrap bit here either - "
+            "SetWrapForced")
+        say("    is only ever called from WriteCharsLegacy, never from the "
+            "buffer writes")
     say("")
 
 
