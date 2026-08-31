@@ -34,6 +34,25 @@ native OpenConsole probe complete: ../../artifacts/pinned-conpty-probe-static.js
 Это закрывает только транспортную запись static-прогона; логическая история
 и reflow ещё не сверены.
 
+Dynamic-прогон командой
+
+```text
+go run . -probe -report ../../artifacts/pinned-conpty-probe.json
+```
+
+показал в сыром потоке повторную отрисовку begin-маркера при resize (в
+первой сессии было 2 вхождения) и перестановку raw end-маркера в сессии
+`121x40`. Это repaint-байты ConPTY; строгая проверка ровно одного маркера и
+порядка должна выполняться после восстановления logical history, а не на
+сыром потоке. Raw-слой сохраняет оба факта как предупреждения.
+
+После перевода raw reorder в предупреждения dynamic-прогон завершился:
+`80x25` — 1351 байт, 4 resize, 1 repaint warning; `1x1` — 1361 байт, 4
+resize, 1 repaint warning; `121x40` — 1381 байт, 4 resize, без warning. Для
+всех трёх сессий проверка `len(base64decode(raw_output)) == len(.raw)` и
+побайтовое равенство дала `True`. Это подтверждает только native transport,
+resize и запись артефактов; logical history/reflow пока не доказаны.
+
 ## Текущая реализация
 
 - модуль инструмента самостоятельный: `github.com/unxed/pinned-conpty-probe`;

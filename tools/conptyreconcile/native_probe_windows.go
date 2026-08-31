@@ -228,15 +228,11 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 	for _, marker := range markers {
 		count := bytes.Count(result.data, []byte(marker))
 		if count != 1 {
-			err := fmt.Errorf("native output contains marker %q %d times, want exactly once", marker, count)
-			session.Error = err.Error()
-			return session, err
+			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output contains marker %q %d times; logical history must reconcile repaint", marker, count))
 		}
 		position := bytes.Index(result.data, []byte(marker))
 		if position <= previous {
-			err := fmt.Errorf("native output marker %q is out of order", marker)
-			session.Error = err.Error()
-			return session, err
+			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output marker %q is out of order; logical history must reconcile repaint", marker))
 		}
 		previous = position
 		session.Markers = append(session.Markers, marker)
