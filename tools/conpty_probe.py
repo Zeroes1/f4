@@ -274,6 +274,33 @@ def probe_cmd(label, conpty, say):
     say("")
 
 
+def probe_bufapi(label, conpty, say):
+    """What a TUI application gets: cells painted straight into the buffer.
+
+    Everything measured so far went through WriteConsoleW. Applications
+    that paint with WriteConsoleOutput and friends never reach WriteChars,
+    and conhost holds only cells for them, with no notion of where a
+    logical line starts or ends. How ConPTY turns that buffer back into VT
+    is the last untested path, and the one a file manager actually uses.
+    """
+    child = f'"{sys.executable}" "{CHILD}" 200 bufapi 2'
+    raw, _mode = run(conpty, child, "bufapi")
+    with open(f"{OUTDIR}/stream-{label}-bufapi.bin", "wb") as f:
+        f.write(raw)
+    got = rows(raw)
+    say(f"  WriteConsoleOutputCharacterW (200 chars at 0,0) -> "
+        f"{raw.count(CRLF)} CRLF, rows {got}")
+    if sum(got) < 200:
+        say(f"    only {sum(got)} chars of text arrived - "
+            "this run measured nothing")
+    else:
+        say("    [200] = painted as one run, the terminal wraps it itself; "
+            "rows of 80")
+        say("    = ConPTY emitted the buffer row by row and the wrap became "
+            "a line ending")
+    say("")
+
+
 def probe_resize(label, conpty, say):
     """Write one 200-char line, then resize the pty underneath it.
 
@@ -356,6 +383,7 @@ def main():
         try:
             probe(label, path, say)
             probe_cmd(label, load_conpty(path), say)
+            probe_bufapi(label, load_conpty(path), say)
             probe_resize(label, load_conpty(path), say)
         except Exception as exc:
             say(f"  FAILED: {exc}")
