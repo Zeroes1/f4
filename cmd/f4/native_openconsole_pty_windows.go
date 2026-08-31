@@ -127,6 +127,20 @@ func (p *nativeOpenConsolePTY) Wait() error {
 	return nil
 }
 
+func (p *nativeOpenConsolePTY) ExitCode() (uint32, error) {
+	p.mu.Lock()
+	pty := p.pty
+	p.mu.Unlock()
+	if pty == nil || pty.childProcess == 0 {
+		return 0, os.ErrClosed
+	}
+	var code uint32
+	if err := windows.GetExitCodeProcess(pty.childProcess, &code); err != nil {
+		return 0, err
+	}
+	return code, nil
+}
+
 func (p *nativeOpenConsolePTY) IsBusy() bool {
 	p.mu.Lock()
 	pty := p.pty

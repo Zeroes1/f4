@@ -113,6 +113,9 @@ func TestNativeOpenConsoleF4Live(t *testing.T) {
 	if err := pty.Wait(); err != nil {
 		t.Fatal(err)
 	}
+	if code, err := pty.ExitCode(); err != nil || code != 0 {
+		t.Fatalf("live child exit code=%d err=%v", code, err)
+	}
 	if err := pty.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -176,6 +179,40 @@ func TestNativeOpenConsoleF4WidthAndWhitespace(t *testing.T) {
 	}
 }
 
+func TestNativeOpenConsoleF4RealCommands(t *testing.T) {
+	if os.Getenv("F4_NATIVE_OPENCONSOLE") != "1" {
+		t.Skip("set F4_NATIVE_OPENCONSOLE=1 to run the live pinned OpenConsole gate")
+	}
+	input := filepath.Join(t.TempDir(), "native-command-input.txt")
+	if err := os.WriteFile(input, []byte("needle first\nsecond line\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	quoted := `"` + input + `"`
+	cases := []struct {
+		name string
+		cmd  string
+		want string
+	}{
+		{"dir", `dir /s /b C:\Windows\System32\kernel32.dll`, `C:\Windows\System32\kernel32.dll`},
+		{"echo", `echo F4_REAL_ECHO`, `F4_REAL_ECHO`},
+		{"type", `type ` + quoted, `needle first`},
+		{"findstr", `findstr needle ` + quoted, `needle first`},
+		{"powershell", `powershell -NoProfile -NonInteractive -Command "Write-Output F4_REAL_POWERSHELL"`, `F4_REAL_POWERSHELL`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			command := fmt.Sprintf("echo __F4_REAL_BEGIN__ & %s & echo __F4_REAL_END__", tc.cmd)
+			logBytes := strings.ReplaceAll(runLiveNativeCommand(t, 80, 25, command), "\r", "")
+			if strings.Count(logBytes, "__F4_REAL_BEGIN__") != 1 || strings.Count(logBytes, "__F4_REAL_END__") != 1 || strings.Index(logBytes, "__F4_REAL_BEGIN__") >= strings.Index(logBytes, "__F4_REAL_END__") {
+				t.Fatalf("real command markers invalid: %q", logBytes)
+			}
+			if len(linesContaining(logBytes, tc.want)) != 1 {
+				t.Fatalf("real %s output missing/duplicated %q: %q", tc.name, tc.want, logBytes)
+			}
+		})
+	}
+}
+
 func runLiveNativeCommand(t *testing.T, width, height int, command string) string {
 	t.Helper()
 	pty, err := newNativeOpenConsolePTY(width, height)
@@ -215,6 +252,9 @@ func runLiveNativeCommand(t *testing.T, width, height int, command string) strin
 	}()
 	if err := pty.Wait(); err != nil {
 		t.Fatal(err)
+	}
+	if code, err := pty.ExitCode(); err != nil || code != 0 {
+		t.Fatalf("width %d child exit code=%d err=%v", width, code, err)
 	}
 	if err := pty.Close(); err != nil {
 		t.Fatal(err)

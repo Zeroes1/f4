@@ -47,9 +47,16 @@ integration gate и не считается его прохождением.
 `type`, `findstr`, PowerShell), scrollback/viewport/cursor, произвольные split
 points, lifecycle и 300 сидов. Фаззинга времени нет — payload пока синтетический.
 
-**Горизонтальный reflow на Windows включён, но ещё не доказан native gate-ом.**
-`cmd/f4/terminal_view.go` теперь использует `terminalReflowEnabled = true`.
-Это снимает прежний silent bypass, но само по себе не доказывает свойства B:
+Живой `TestNativeOpenConsoleF4RealCommands` теперь прошёл пять подпроверок:
+`dir /s`, `echo`, `type`, `findstr` и `powershell -NoProfile -NonInteractive`.
+Это закрывает только базовый A4 smoke-case; рекурсивный большой `dir` с
+быстрой resize-серией C1 и полные snapshot-проверки ещё впереди.
+
+**Горизонтальный reflow на Windows включается только внутри native gate, но ещё не доказан им.**
+`cmd/f4/terminal_view.go` получает значение из `terminalReflowDefaultEnabled()`;
+на Windows это тот же явный `F4_NATIVE_OPENCONSOLE=1`, который запускает gate.
+Обычный запуск и обычные пользователи пока сохраняют выключенный rollout.
+Это убирает silent bypass в gate, но само по себе не доказывает свойства B:
 нужны live resize-сессии, экран, история и позиция курсора после каждого
 изменения размера. Минимальный live-прогон `TestNativeOpenConsoleF4Live`
 успешен с реальным resize во время cmd-вывода, но полный runtime-прогон

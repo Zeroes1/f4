@@ -1353,10 +1353,11 @@ func (tv *TerminalView) URLAt(x, y int) (string, bool) {
 
 // terminalReflowEnabled gates re-wrapping the live grid on a width change.
 //
-// The native ConPTY gate is the regression contract on every supported OS;
-// leaving this disabled on Windows makes the property impossible to test and
-// silently preserves the old history-corrupting behavior.
-var terminalReflowEnabled = true
+// On Windows the reflow implementation is enabled only for the same explicit
+// native-gate run that owns a pinned OpenConsole session. This keeps the
+// rollout safe for ordinary users; the guard is removed once the native gate
+// proves long-line preservation after reflow in the same commit.
+var terminalReflowEnabled = terminalReflowDefaultEnabled()
 
 // GridHistory is the editable tail of the log: oracle corrections can still
 // update its row boundaries. Older rows are extruded into the PieceTable,
