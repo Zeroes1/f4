@@ -31,7 +31,7 @@ func runNativeGate(hostPath, reportPath string) error {
 			return fmt.Errorf("%s stage: %w", stage.name, err)
 		}
 	}
-	for _, kind := range []string{"tabs", "link", "progress"} {
+	for _, kind := range []string{"tabs", "link", "progress", "unicode"} {
 		if err := runNativeSemanticProbe(hostPath, reportPath+"."+kind, kind); err != nil {
 			return fmt.Errorf("%s semantic stage: %w", kind, err)
 		}
