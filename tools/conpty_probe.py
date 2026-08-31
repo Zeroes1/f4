@@ -30,6 +30,7 @@ from ctypes import wintypes
 COLS, ROWS = 80, 25
 TOTAL = 200
 CHUNKS = (200, 15, 16, 1)
+MODES = ("default", "legacy")
 OUTDIR = "probe-out"
 CHILD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                      "conpty_probe_child.py")
@@ -90,6 +91,8 @@ k32.CreateProcessW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR,
 k32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
                          ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
 k32.GetStdHandle.restype = wintypes.HANDLE
+k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE,
+                                   ctypes.POINTER(wintypes.DWORD)]
 k32.SetHandleInformation.argtypes = [wintypes.HANDLE, wintypes.DWORD,
                                      wintypes.DWORD]
 
@@ -114,8 +117,12 @@ def load_conpty(path):
     return create, close
 
 
-def run(conpty, chunk):
-    """Run the child in a fresh pseudoconsole; return everything it emits."""
+def run(conpty, chunk, mode):
+    """Run the child in a fresh pseudoconsole.
+
+    Returns (stream, console mode the child actually had). The child reports
+    the mode through its exit code so nothing extra lands in the stream.
+    """
     create_pc, close_pc = conpty
     hin_r, hin_w = wintypes.HANDLE(), wintypes.HANDLE()
     hout_r, hout_w = wintypes.HANDLE(), wintypes.HANDLE()
@@ -154,7 +161,7 @@ def run(conpty, chunk):
         if h and h != wintypes.HANDLE(-1).value:
             k32.SetHandleInformation(h, 1, 0)  # HANDLE_FLAG_INHERIT off
 
-    cmd = f'"{sys.executable}" "{CHILD}" {chunk}'
+    cmd = f'"{sys.executable}" "{CHILD}" {chunk} {mode}'
     if not k32.CreateProcessW(None, ctypes.create_unicode_buffer(cmd), None,
                               None, False, EXTENDED_STARTUPINFO_PRESENT, None,
                               None, ctypes.byref(siex), ctypes.byref(pi)):
@@ -184,12 +191,14 @@ def run(conpty, chunk):
         time.sleep(0.05)
         settled += 0.05
 
+    got_mode = wintypes.DWORD()
+    k32.GetExitCodeProcess(pi.hProcess, ctypes.byref(got_mode))
     close_pc(hpc)
     th.join(5)
     k32.DeleteProcThreadAttributeList(ctypes.cast(attrs, ctypes.c_void_p))
     for h in (pi.hThread, pi.hProcess, hin_w, hout_r):
         k32.CloseHandle(h)
-    return b"".join(out)
+    return b"".join(out), got_mode.value
 
 
 ESCAPES = re.compile(r"\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b.")
@@ -204,27 +213,28 @@ def rows(raw):
 def probe(label, path, say):
     say(f"=== {label} ===")
     conpty = load_conpty(path)
-    shapes = {}
-    for chunk in CHUNKS:
-        raw = run(conpty, chunk)
-        with open(f"{OUTDIR}/stream-{label}-{chunk}.bin", "wb") as f:
-            f.write(raw)
-        got = rows(raw)
-        shapes[chunk] = tuple(got)
-        calls = -(-TOTAL // chunk)
-        say(f"  {calls:>3} write(s) of {chunk:<4} -> rows {got}"
-            f"{'' if len(got) == 1 else '   <- breaks ConPTY added'}")
-
-    say("")
-    if len(set(shapes.values())) == 1:
-        say(f"  every write size gave rows {list(shapes[CHUNKS[0]])}"
-            " - nothing to report")
-    else:
-        say(f"  the same {TOTAL} characters, the same screen, and the line"
-            " structure a")
-        say("  terminal ends up with depends on how the writer happened to"
-            " buffer.")
-    say("")
+    for mode in MODES:
+        shapes = {}
+        seen = set()
+        for chunk in CHUNKS:
+            raw, got_mode = run(conpty, chunk, mode)
+            with open(f"{OUTDIR}/stream-{label}-{mode}-{chunk}.bin", "wb") as f:
+                f.write(raw)
+            got = rows(raw)
+            shapes[chunk] = tuple(got)
+            seen.add(got_mode)
+            calls = -(-TOTAL // chunk)
+            plural = "write " if calls == 1 else "writes"
+            say(f"  {calls:>3} {plural} of {chunk:<4} -> "
+                f"{len(got)} logical line{'' if len(got) == 1 else 's'}: {got}"
+                f"{'' if len(got) == 1 else f'   <- {len(got) - 1} CRLF added by ConPTY'}")
+        modes = "/".join(f"0x{m:04x}" for m in sorted(seen))
+        head = f"  ^ console mode {modes}"
+        if len(set(shapes.values())) == 1:
+            say(f"{head}: every write size gave {list(shapes[CHUNKS[0]])}")
+        else:
+            say(f"{head}: the line structure depends on the write size")
+        say("")
 
 
 def main():
@@ -237,6 +247,8 @@ def main():
 
     say(f"python {sys.version.split()[0]}, pty {COLS}x{ROWS}, "
         f"{TOTAL} chars per run")
+    say("'default' leaves the console mode as ConPTY set it; "
+        "'legacy' clears VT processing.")
     say("")
     targets = [("system", "system")]
     if len(sys.argv) > 1:
