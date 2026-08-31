@@ -3,8 +3,10 @@ package main
 import "strings"
 
 const (
-	probeBeginMarker = "__PINNED_CONPTY_PROBE_BEGIN__"
-	probeEndMarker   = "__PINNED_CONPTY_PROBE_END__"
+	probeBeginMarker     = "__PINNED_CONPTY_PROBE_BEGIN__"
+	probeEndMarker       = "__PINNED_CONPTY_PROBE_END__"
+	alternateBeginMarker = "__PINNED_CONPTY_PROBE_ALT_BEGIN__"
+	alternateEndMarker   = "__PINNED_CONPTY_PROBE_ALT_END__"
 )
 
 // probeWorkload exercises host operations any terminal must handle. Logical
@@ -72,13 +74,29 @@ func probeWorkloadForWidth(width int) string {
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("\x1b]0;pinned-conpty-probe\x07")
-	b.WriteString("alternate-begin\r\n")
-	b.WriteString("\x1b[?1049halt-screen\r\n")
-	b.WriteString("alternate-end\x1b[?1049l\r\n")
+	b.WriteString("\r\n")
 	b.WriteString("long: ")
 	b.WriteString(strings.Repeat("C", 257))
 	b.WriteString("\r\n")
 	b.WriteString(probeEndMarker)
+	b.WriteString("\r\n")
+	return b.String()
+}
+
+// alternateProbeWorkload is a separate phase because leaving the alternate
+// buffer causes the host to repaint the primary buffer.  Keeping that repaint
+// out of the primary payload makes the exact-line assertion about history,
+// rather than about a frame that the source explicitly describes as redraw.
+func alternateProbeWorkload(width int) string {
+	if width < 1 {
+		width = 80
+	}
+	var b strings.Builder
+	b.WriteString(alternateBeginMarker)
+	b.WriteString("\r\n")
+	b.WriteString("\x1b[?1049halt-screen\r\n")
+	b.WriteString("alternate-end\x1b[?1049l\r\n")
+	b.WriteString(alternateEndMarker)
 	b.WriteString("\r\n")
 	return b.String()
 }
@@ -96,6 +114,10 @@ func probeExpectedMarkers() []string {
 	// the alternate buffer was active. The outer markers survive repaint and
 	// are the stable handoff contract for this probe.
 	return []string{probeBeginMarker, probeEndMarker}
+}
+
+func alternateExpectedMarkers() []string {
+	return []string{alternateBeginMarker, alternateEndMarker}
 }
 
 func probeOutputContainsMarker(output []byte, marker string) bool {

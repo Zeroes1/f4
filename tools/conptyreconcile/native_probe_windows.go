@@ -128,6 +128,21 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 			_ = writeJSON(reportPath, report)
 			return fmt.Errorf("native probe %dx%d: %w", dimensions[0], dimensions[1], runErr)
 		}
+		if resizeDuringOutput {
+			continue
+		}
+		alternateWorkload := []byte(alternateProbeWorkload(dimensions[0]))
+		alternateCommand := fmt.Sprintf(`"%s" -emit-alternate -emit-probe-width %d`, executable, dimensions[0])
+		alternate, alternateErr := runNativeProbeSessionWithWorkload(resolved, executable, dimensions[0], dimensions[1], resizeDuringOutput, alternateWorkload, alternateCommand, alternateExpectedMarkers())
+		report.Sessions = append(report.Sessions, alternate)
+		alternateArtifact := filepath.Join(artifactDir, fmt.Sprintf("%dx%d-alternate.raw", dimensions[0], dimensions[1]))
+		if err := writeAndVerifyRawArtifact(alternateArtifact, alternate.RawOutput, alternate.RawSHA256); err != nil {
+			return fmt.Errorf("write native alternate probe raw output: %w", err)
+		}
+		if alternateErr != nil {
+			_ = writeJSON(reportPath, report)
+			return fmt.Errorf("native alternate probe %dx%d: %w", dimensions[0], dimensions[1], alternateErr)
+		}
 	}
 	report.CompletedAt = time.Now().UTC()
 	if err := writeJSON(reportPath, report); err != nil {
@@ -306,7 +321,7 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 		return session, err
 	}
 	if !resizeDuringOutput {
-		session.Assertions = assertStaticPayload(workload, result.data)
+		session.Assertions = assertStaticPayload(workload, result.data, markers...)
 		session.AssertionFailures = assertionFailures(session.Assertions)
 	}
 	snapshot := recorder.snapshot()

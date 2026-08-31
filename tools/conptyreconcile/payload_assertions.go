@@ -18,7 +18,10 @@ type payloadAssertion struct {
 	Detail        string `json:"detail,omitempty"`
 }
 
-func assertStaticPayload(expected, raw []byte) []payloadAssertion {
+func assertStaticPayload(expected, raw []byte, markers ...string) []payloadAssertion {
+	if len(markers) == 0 {
+		markers = []string{probeBeginMarker, probeEndMarker}
+	}
 	var expectedStream logicalLineStream
 	expectedStream.Feed(expected)
 	lines := expectedStream.Lines()
@@ -37,7 +40,7 @@ func assertStaticPayload(expected, raw []byte) []payloadAssertion {
 		if colon := bytes.IndexByte(line.Bytes, ':'); colon > 0 {
 			name = string(line.Bytes[:colon])
 		}
-		if bytes.Contains(line.Bytes, []byte{0x1b}) {
+		if bytes.Contains(line.Bytes, []byte{0x1b}) || bytes.Contains(line.Bytes, []byte{'\t'}) {
 			result = append(result, payloadAssertion{
 				Name:   name,
 				Status: "deferred",
@@ -64,7 +67,7 @@ func assertStaticPayload(expected, raw []byte) []payloadAssertion {
 	// marker bytes by a narrow viewport is not silently removed here: that is
 	// precisely a history-layer responsibility.
 	withoutNewlines := strings.NewReplacer("\r", "", "\n", "").Replace(string(printable))
-	for _, marker := range []string{probeBeginMarker, probeEndMarker} {
+	for _, marker := range markers {
 		observed := strings.Count(withoutNewlines, marker)
 		status := "passed"
 		detail := "marker count is exact in the static stream"
