@@ -519,3 +519,30 @@ go run . -reflow-probe -report artifacts/pinned-conpty-reflow-next.json
 перевыкладку по ширине без host repaint; это не выдаётся за полный B2: отдельные
 снимки screen/history/cursor и C3 пока не реализованы. Нативная исходная
 история при этом получена живым pinned host, а не второй моделью консоли.
+
+### Независимая сверка `dir /s /b` через redirected-файл
+
+По пункту 11 выполнена одна и та же команда двумя путями: напрямую в файл
+(`cmd.exe /d /q /c "set DIRCMD= & dir /s /b C:\\Windows\\System32"`) и через
+pinned ConPTY с маркерами. Файл — независимый источник настоящих границ строк;
+переводы `CRLF` нормализованы к `LF`, содержимое строк не изменялось.
+
+Первый прогон до source-derived CUP-правила дал `28525` несовпадений при
+`23906` ожидаемых и `32679` наблюдаемых строках. После включения правила для
+абсолютного CUP в последний столбец и повторной проверки:
+
+```text
+go run . -command-compare -report artifacts/pinned-conpty-command-compare-cup2.json
+pinned-conpty-probe: native command comparison found 19686 line mismatches (report artifacts/pinned-conpty-command-compare-cup2.json)
+expected_lines=23906 observed_lines=23471 mismatch_count=19686 cup_before_crlf=1
+```
+
+Классификация последнего отчёта: `content_mismatch_count=19679`,
+`trailing_padding_only=7`, `cross_row_mismatch=57`. Правило уменьшило число
+расхождений, но не свело его к нулю; следовательно, оно пока не может быть
+критерием закрытия A и не включается в общий gate как доказанное решение.
+В частности, один наблюдённый фрагмент содержит
+`...proxys\r\nESC[999;80Hstub.dll`, что после механического продолжения даёт
+`proxysstub.dll`, тогда как redirected-файл содержит `proxystub.dll`.
+Это отдельное открытое расхождение, требующее чтения исходника и нового
+прицельного прогона; дедупликация по совпадающим символам запрещена.
