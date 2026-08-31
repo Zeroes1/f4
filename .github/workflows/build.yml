@@ -919,6 +919,11 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: go.sum
 
+    - name: Compile standalone ConPTY probe
+      if: matrix.shard == 'rest'
+      working-directory: tools/conptyreconcile
+      run: go test -run '^$' ./...
+
     - name: Restore Go build cache (lint shard)
       uses: actions/cache@v4
       with:
