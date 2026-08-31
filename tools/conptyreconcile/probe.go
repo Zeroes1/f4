@@ -3,8 +3,8 @@ package main
 import "strings"
 
 const (
-	probeBeginMarker = "__CONPTY_PROBE_BEGIN__"
-	probeEndMarker   = "__CONPTY_PROBE_END__"
+	probeBeginMarker = "__PINNED_CONPTY_PROBE_BEGIN__"
+	probeEndMarker   = "__PINNED_CONPTY_PROBE_END__"
 )
 
 // probeWorkload exercises host operations any terminal must handle,
@@ -29,7 +29,7 @@ func probeWorkload() string {
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
 	b.WriteString("repeat: SAME\r\n")
-	b.WriteString("\x1b]0;pinned-openconsole-probe\x07")
+	b.WriteString("\x1b]0;pinned-conpty-probe\x07")
 	b.WriteString("alternate-begin\r\n")
 	b.WriteString("\x1b[?1049halt-screen\r\n")
 	b.WriteString("alternate-end\x1b[?1049l\r\n")
@@ -49,21 +49,6 @@ func probeExpectedMarkers() []string {
 	return []string{probeBeginMarker, probeEndMarker}
 }
 
-// probeOutputContainsMarker accepts both a direct byte match and a match in a
-// printable compaction. ConPTY is a terminal renderer: resize/reflow may put
-// cursor/erase controls and line breaks between adjacent bytes of a logical
-// marker (especially at the 1-column edge case), while the marker itself is
-// still present in the rendered stream.
 func probeOutputContainsMarker(output []byte, marker string) bool {
-	if strings.Contains(string(output), marker) {
-		return true
-	}
-	var compact strings.Builder
-	compact.Grow(len(output))
-	for _, byteValue := range output {
-		if byteValue >= 0x20 || byteValue == '\t' {
-			compact.WriteByte(byteValue)
-		}
-	}
-	return strings.Contains(compact.String(), marker)
+	return strings.Contains(string(output), marker)
 }

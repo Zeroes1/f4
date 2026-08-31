@@ -10,103 +10,42 @@ import (
 
 func main() {
 	var (
-		stage       = flag.String("stage", "all", "audit, mock, host, or all")
-		sourceRoot  = flag.String("source-root", "", "extracted pinned Microsoft Terminal source tree")
-		hostPath    = flag.String("host", "", "verified adjacent pinned OpenConsole.exe")
-		reportPath  = flag.String("report", "", "audit or run report path")
-		probe       = flag.Bool("probe", false, "run the standalone native OpenConsole probe")
-		probeStatic = flag.Bool("probe-static", false, "run the native probe without resize during output")
-		probeReport = flag.String("probe-report", "", "native probe report path")
-		probeHost   = flag.String("probe-host", "", "optional verified pinned OpenConsole.exe; otherwise download the pinned package")
-		emitSeed    = flag.String("emit-seed", "", "internal pinned-host client mode: emit one recorded seed")
-		emitWidth   = flag.String("emit-width", "", "internal pinned-host client mode: emit one edge width")
-		emitProbe   = flag.Bool("emit-probe", false, "internal native-probe client mode")
+		probe       = flag.Bool("probe", false, "run the pinned-host probe with live resize")
+		probeStatic = flag.Bool("probe-static", false, "run the pinned-host probe without live resize")
+		gate        = flag.Bool("gate", false, "run the complete standalone native gate")
+		probeHost   = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
+		reportPath  = flag.String("report", "", "report path")
+		emitProbe   = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
 	)
 	flag.Parse()
-	if *emitSeed != "" || *emitWidth != "" || *emitProbe {
-		if (*emitSeed != "" && *emitWidth != "") || (*emitProbe && (*emitSeed != "" || *emitWidth != "")) {
-			fail(fmt.Errorf("-emit-probe, -emit-seed, and -emit-width are mutually exclusive"))
+	if *emitProbe {
+		if err := emitProbeWorkload(); err != nil {
+			fail(err)
 		}
-		if *emitProbe {
-			if err := emitProbeWorkload(); err != nil {
-				fail(err)
-			}
-			return
-		}
-		if err := emitScenario(*emitSeed, *emitWidth); err != nil {
+		return
+	}
+	if *gate {
+		if err := runNativeGate(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return
 	}
 	if *probe || *probeStatic {
-		if err := runNativeProbe(*probeHost, *probeReport, !*probeStatic); err != nil {
+		if err := runNativeProbe(*probeHost, *reportPath, !*probeStatic); err != nil {
 			fail(err)
 		}
 		return
 	}
-
-	executable, err := os.Executable()
-	if err != nil {
-		fail(err)
-	}
-	toolRoot := filepath.Dir(executable)
-	if *hostPath == "" {
-		*hostPath = filepath.Join(toolRoot, "OpenConsole.exe")
-	}
-	if *reportPath == "" {
-		*reportPath = filepath.Join(toolRoot, "conptyreconcile-report.json")
-	}
-
-	// Every executable stage is a verification stage.  The source-fidelity
-	// audit is therefore mandatory before mock, host, or the combined gate; a
-	// caller cannot bypass the three-pass prerequisite by selecting a stage.
-	if *stage != "audit" && *stage != "mock" && *stage != "host" && *stage != "all" {
-		fail(fmt.Errorf("unknown -stage %q", *stage))
-	}
-	if *sourceRoot == "" {
-		fail(fmt.Errorf("-source-root is required before any verification stage"))
-	}
-	{
-		if *sourceRoot == "" {
-			fail(fmt.Errorf("-source-root is required for the three-pass audit"))
-		}
-		report := runThreeAudits(*sourceRoot, toolRoot)
-		if err := writeJSON(*reportPath, report); err != nil {
-			fail(err)
-		}
-		if !report.passed() {
-			fail(fmt.Errorf("three-pass source-fidelity audit failed; see %s", *reportPath))
-		}
-		if *stage == "audit" {
-			return
-		}
-	}
-
-	if *stage == "mock" {
-		if err := runMockGate(*reportPath); err != nil {
-			fail(err)
-		}
-		return
-	}
-	if *stage == "host" {
-		if err := runPinnedHost(*hostPath, *reportPath); err != nil {
-			fail(err)
-		}
-		return
-	}
-	if *stage == "all" {
-		if err := runMockGate(*reportPath); err != nil {
-			fail(err)
-		}
-		if err := runPinnedHost(*hostPath, *reportPath); err != nil {
-			fail(err)
-		}
-		return
-	}
-	fail(fmt.Errorf("unknown -stage %q", *stage))
+	fail(fmt.Errorf("select -gate, -probe, or -probe-static"))
 }
 
 func writeJSON(path string, value any) error {
+	if path == "" {
+		return fmt.Errorf("report path is required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
@@ -116,6 +55,6 @@ func writeJSON(path string, value any) error {
 }
 
 func fail(err error) {
-	fmt.Fprintln(os.Stderr, "conptyreconcile:", err)
+	fmt.Fprintln(os.Stderr, "pinned-conpty-probe:", err)
 	os.Exit(1)
 }
