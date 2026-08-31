@@ -10,9 +10,35 @@
 командах (включая `dir /s /b` при host-width 256–512), consumer reflow,
 произвольное chunking, scrollback eviction, control-поведение tabs/OSC 8,
 `Clear-Host`, пустой кадр, progress-bar и 300 deterministic seed-сессий.
-Открыты полноценная C4-матрица (broken pipe, cancel, timeout и варианты
-порядка закрытия в одном доказательном прогоне), а также отдельные усиленные
+Открыты полноценная C4-матрица (первый prompt и хвост после EOF ещё не
+проверены; broken pipe, cancel, timeout и варианты порядка закрытия уже есть), а также отдельные усиленные
 прогоны для оставшихся partial-классов payload. Поэтому gate остаётся
+fail-closed.
+
+### C4: низкоуровневый lifecycle-прогон
+
+Добавлен отдельный `-lifecycle-probe`, который не запускает reader-горутины:
+он напрямую наблюдает `WaitForSingleObject` у дочернего процесса, проверяет
+принудительное завершение при timeout, закрытие output pipe для broken-pipe,
+два порядка закрытия (`host-first` и `pipes-first`), завершение pinned host и
+освобождение всех нативных handles. Это закрывает только наблюдаемые части C4;
+первый интерактивный prompt и отсутствие хвоста байтов после EOF пока остаются
+открытыми.
+
+```text
+native lifecycle probe complete: artifacts/pinned-conpty-lifecycle.json cases=4
+
+startup-eof    host-first  exit    child=true host=true handles=true
+empty-eof      pipes-first exit    child=true host=true handles=true
+cancel-timeout host-first  timeout child=true host=true handles=true
+broken-pipe    pipes-first timeout child=true host=true handles=true
+```
+
+Проверка выполнена на pinned OpenConsole
+`1.12.220408003-release1.12`, SHA
+`14e0857b37f6c5e5e90bab786a4db8fceb4166afe75e617519d942656976481e`.
+Артефакт содержит только JSON-отчёт; процессы `OpenConsole` и пробника после
+прогона отсутствуют. Поэтому C4 в целом остаётся частичным, а gate —
 fail-closed.
 
 ## Что подтверждено командой

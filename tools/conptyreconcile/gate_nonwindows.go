@@ -78,3 +78,9 @@ func runNativeReflowProbe(hostPath, reportPath string) error {
 	_ = reportPath
 	return fmt.Errorf("native reflow probe requires Windows")
 }
+
+func runNativeLifecycleProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native lifecycle probe requires Windows")
+}
