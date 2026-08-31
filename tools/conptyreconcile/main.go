@@ -19,6 +19,7 @@ func main() {
 		partial        = flag.Bool("partial", false, "run resize during an incomplete line")
 		commandProbe   = flag.Bool("command-probe", false, "measure recursive dir output on the pinned host")
 		commandCompare = flag.Bool("command-compare", false, "compare recursive dir through pinned host with redirected output")
+		clearProbe     = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		reflowProbe    = flag.Bool("reflow-probe", false, "verify consumer reflow after a static pinned-host session")
 		probeHost      = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath     = flag.String("report", "", "report path")
@@ -112,6 +113,12 @@ func main() {
 	}
 	if *commandCompare {
 		if err := runNativeCommandCompare(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *clearProbe {
+		if err := runNativeClearProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return
