@@ -92,7 +92,6 @@ func assertNativeF4Log(t *testing.T, logBytes string, expectedInput []byte, widt
 		{"cursor: ", "twosor: one"},
 		{"tabs: ", "tabs:   X       Y"},
 		{"alternate-begin", "alternate-begin"},
-		{"alternate-end", "alternate-end"},
 	}
 	for _, check := range checks {
 		if check.want == "" {
@@ -105,7 +104,7 @@ func assertNativeF4Log(t *testing.T, logBytes string, expectedInput []byte, widt
 	if len(linesContaining(clean, "repeat: SAME")) != 3 {
 		t.Fatalf("repeated payload lines were coalesced/lost for %dx%d", width, height)
 	}
-	if strings.Contains(clean, "alt-screen") {
+	if strings.Contains(clean, "alt-screen") || strings.Contains(clean, "alternate-end") {
 		t.Fatalf("alternate-screen contents leaked into primary history for %dx%d", width, height)
 	}
 }
