@@ -175,6 +175,15 @@ erase, cursor и alternate screen получили явный `deferred`. Raw st
 законного события, отделяющего repaint от нового вывода; assertion layer
 намеренно не объявляет этот поток зелёным.
 
+### Произвольные границы чтения (C2)
+
+В native static-прогоне добавлена проверка captured stream тремя
+детерминированными разбиениями: `one-byte`, `fixed-7` и PRNG-размеры 1..31.
+Все три получили `status=passed`; explicit host-CRLF lines и диагностические
+frames побайтово совпали с цельным чтением. Unit-тест отдельно включает разрыв
+UTF-8, CSI и CRLF. Это закрывает только транспортную устойчивость chunking;
+границы repaint, история, прокрутка и reflow по-прежнему открыты.
+
 После чтения `docs/PINNED_HOST_FACTS.md` и исходника `e9b4e2e` добавлен
 разбор, который режет поток только по host-emitted `CRLF`; resize-frame
 отмечается собственным output-offset при вызове `ResizePseudoConsole`.

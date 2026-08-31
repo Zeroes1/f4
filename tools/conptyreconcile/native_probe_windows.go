@@ -32,28 +32,29 @@ type probeResize struct {
 }
 
 type nativeProbeSession struct {
-	InitialWidth      int                `json:"initial_width"`
-	InitialHeight     int                `json:"initial_height"`
-	Command           string             `json:"command"`
-	ExpectedInput     []byte             `json:"expected_input"`
-	HostCommand       string             `json:"host_command"`
-	HostPID           uint32             `json:"host_pid"`
-	HostProcess       pinnedHostIdentity `json:"host_process"`
-	StartedAt         time.Time          `json:"started_at"`
-	FinishedAt        time.Time          `json:"finished_at"`
-	ExitCode          uint32             `json:"exit_code"`
-	Resizes           []probeResize      `json:"resizes"`
-	Markers           []string           `json:"markers"`
-	MarkerWarnings    []string           `json:"marker_warnings,omitempty"`
-	RawSHA256         string             `json:"raw_sha256"`
-	RawOutput         []byte             `json:"raw_output"`
-	LogicalLines      []logicalLine      `json:"logical_lines"`
-	Frames            []hostFrame        `json:"frames"`
-	ResizeOffsets     []int              `json:"resize_offsets"`
-	Events            []streamEvent      `json:"events"`
-	Assertions        []payloadAssertion `json:"assertions,omitempty"`
-	AssertionFailures []string           `json:"assertion_failures,omitempty"`
-	Error             string             `json:"error,omitempty"`
+	InitialWidth      int                 `json:"initial_width"`
+	InitialHeight     int                 `json:"initial_height"`
+	Command           string              `json:"command"`
+	ExpectedInput     []byte              `json:"expected_input"`
+	HostCommand       string              `json:"host_command"`
+	HostPID           uint32              `json:"host_pid"`
+	HostProcess       pinnedHostIdentity  `json:"host_process"`
+	StartedAt         time.Time           `json:"started_at"`
+	FinishedAt        time.Time           `json:"finished_at"`
+	ExitCode          uint32              `json:"exit_code"`
+	Resizes           []probeResize       `json:"resizes"`
+	Markers           []string            `json:"markers"`
+	MarkerWarnings    []string            `json:"marker_warnings,omitempty"`
+	RawSHA256         string              `json:"raw_sha256"`
+	RawOutput         []byte              `json:"raw_output"`
+	LogicalLines      []logicalLine       `json:"logical_lines"`
+	Frames            []hostFrame         `json:"frames"`
+	ResizeOffsets     []int               `json:"resize_offsets"`
+	Events            []streamEvent       `json:"events"`
+	Assertions        []payloadAssertion  `json:"assertions,omitempty"`
+	AssertionFailures []string            `json:"assertion_failures,omitempty"`
+	Chunking          []chunkingAssertion `json:"chunking_assertions,omitempty"`
+	Error             string              `json:"error,omitempty"`
 }
 
 type nativeProbeReport struct {
@@ -284,6 +285,11 @@ func runNativeProbeSessionWithWorkload(hostPath, executable string, width, heigh
 	logical.Feed(result.data)
 	session.LogicalLines = logical.Lines()
 	session.Frames = logical.Frames()
+	session.Chunking, err = verifyHostStreamChunking(result.data, uint64(width)*uint64(height)+uint64(len(workload)))
+	if err != nil {
+		session.Error = err.Error()
+		return session, err
+	}
 	if !resizeDuringOutput {
 		session.Assertions = assertStaticPayload(workload, result.data)
 		session.AssertionFailures = assertionFailures(session.Assertions)
