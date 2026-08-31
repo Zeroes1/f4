@@ -703,3 +703,17 @@ native scrollback probe complete: artifacts/pinned-conpty-scroll.json lines=37 s
 имеют `status=passed`; SHA истории не менялся. Длинная строка на границе
 вытеснения сохранилась одним piece байт-в-байт. Сырой native поток и его SHA
 проверены тем же `writeAndVerifyRawArtifact`, что и остальные прогоны.
+
+### `Clear-Host` и `ESC[3J` (14.4)
+
+Отдельный native-прогон PowerShell проверил семантическое очищение
+scrollback:
+
+```text
+go run . -clear-probe -report artifacts/pinned-conpty-clear.json
+native clear probe complete: artifacts/pinned-conpty-clear.json esc3j=1 begin=0 end=1
+```
+
+Хост выдал ровно один `ESC[3J`; маркер до `Clear-Host` отсутствует в
+накопленной истории, маркер после него присутствует один раз. Процесс ребёнка,
+host и native handles закрылись, raw-файл проверен побайтово и по SHA.
