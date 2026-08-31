@@ -750,6 +750,27 @@ title-osc: passed observed_count=1
 Последовательность ровно `ESC]0;pinned-conpty-probe BEL`; в `RenderedLines` она
 не попадает.
 
+### Consumer-only resize во время реального `dir` (C1)
+
+Для B1-0 host оставался фиксированным (`512x1000`), а captured output
+подавался в накопитель incremental chunks. На контрольных offsets менялась
+только ширина consumer display:
+
+```text
+artifacts/pinned-conpty-command-compare-c1.json
+expected_lines=23906 observed_lines=23906 mismatch_count=0
+width=1   offset=287392  completed_lines=5478  passed
+width=79  offset=574758  completed_lines=7260  passed
+width=80  offset=862127  completed_lines=11778 passed
+width=121 offset=1149514 completed_lines=14679 passed
+width=20  offset=1436871 completed_lines=19658 passed
+width=512 offset=1724241 completed_lines=23906 passed
+```
+
+SHA истории на каждой контрольной точке записан в отчёте и не изменяет
+канонический результат. Это native подтверждение C1 для consumer-only resize;
+host-resize ветка остаётся неактивной по B1-0.
+
 ### Усиление проверки произвольных границ чтения (C2)
 
 Static native-прогон теперь проверяет три расписания chunking не только для

@@ -398,7 +398,10 @@ func waitProbeClient(pty *pinnedConPTY) (uint32, error) {
 	if pty == nil || pty.childProcess == 0 {
 		return 0, fmt.Errorf("native probe child process was not created")
 	}
-	const probeChildTimeout = 10 * 1000
+	// Recursive real-command probes can legitimately take longer than ten
+	// seconds on a loaded Windows host. Keep a bounded watchdog, but leave
+	// enough time for the pinned ConPTY to drain its output.
+	const probeChildTimeout = 60 * 1000
 	event, err := windows.WaitForSingleObject(pty.childProcess, probeChildTimeout)
 	if err != nil {
 		return 0, fmt.Errorf("WaitForSingleObject(native probe child): %w", err)

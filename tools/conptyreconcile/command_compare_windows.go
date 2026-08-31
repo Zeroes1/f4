@@ -48,6 +48,7 @@ type commandCompareReport struct {
 	LCSReplacements         int                   `json:"lcs_replacements"`
 	Mismatches              []commandLineMismatch `json:"mismatches,omitempty"`
 	FirstMismatchContext    []commandLineMismatch `json:"first_mismatch_context,omitempty"`
+	ConsumerResizes         []consumerResizeCheck `json:"consumer_resizes,omitempty"`
 	ChildExitCode           uint32                `json:"child_exit_code"`
 	ChildExited             bool                  `json:"child_exited"`
 	HostExited              bool                  `json:"host_exited"`
@@ -103,6 +104,14 @@ func runNativeCommandCompareAtWidth(hostPath, reportPath string, width int) erro
 		return fmt.Errorf("pinned command comparison markers did not delimit rendered output")
 	}
 	observed := segment[1 : len(segment)-1]
+	observedLogical := make([]logicalLine, 0, len(observed))
+	for _, line := range observed {
+		observedLogical = append(observedLogical, logicalLine{Bytes: append([]byte(nil), line.Bytes...), Terminator: append([]byte(nil), line.Terminator...)})
+	}
+	consumerResizes, resizeErr := verifyConsumerResizeDuringFeed(observedLogical, []int{1, 79, 80, 121, 20, width})
+	if resizeErr != nil {
+		return fmt.Errorf("consumer resize replay: %w", resizeErr)
+	}
 	report := commandCompareReport{
 		Mode: "pinned-conpty-command-compare", Host: identity, SessionWidth: width, SessionHeight: 1000, Command: command,
 		RedirectCommand: redirectCommand, RedirectedBytes: len(redirected),
@@ -111,7 +120,8 @@ func runNativeCommandCompareAtWidth(hostPath, reportPath string, width int) erro
 		CUPBeforeCRLF: len(cupPattern.FindAll(session.RawOutput, -1)),
 		ChildExitCode: session.ExitCode, ChildExited: session.ChildExited,
 		HostExited: session.HostExited, HandlesClosed: session.HandlesClosed,
-		CompletedAt: time.Now().UTC(),
+		CompletedAt:     time.Now().UTC(),
+		ConsumerResizes: consumerResizes,
 	}
 	redirectHash := sha256.Sum256(redirected)
 	report.RedirectedSHA256 = fmt.Sprintf("%x", redirectHash[:])

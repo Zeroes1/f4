@@ -4,7 +4,16 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 )
+
+type consumerResizeCheck struct {
+	Width          int    `json:"width"`
+	Offset         int    `json:"offset"`
+	CompletedLines int    `json:"completed_lines"`
+	HistorySHA256  string `json:"history_sha256"`
+	Status         string `json:"status"`
+}
 
 // scrollbackPieceTable is the consumer's immutable spill area. It stores
 // complete logical records, including their explicit terminators; no display
@@ -124,4 +133,50 @@ func rowsEqual(a, b [][]byte) bool {
 		}
 	}
 	return true
+}
+
+// verifyConsumerResizeDuringFeed replays complete host-rendered records in
+// chunks while changing only the consumer display width. Width changes occur
+// while bytes are still arriving; the stored logical history must stay
+// byte-identical at every checkpoint.
+func verifyConsumerResizeDuringFeed(lines []logicalLine, widths []int) ([]consumerResizeCheck, error) {
+	if len(widths) == 0 {
+		return nil, nil
+	}
+	var input []byte
+	for _, line := range lines {
+		input = append(input, line.Bytes...)
+		input = append(input, line.Terminator...)
+	}
+	model := newConsumerScrollback(len(lines) + 1)
+	checks := make([]consumerResizeCheck, 0, len(widths))
+	state := uint64(1)
+	nextWidth := 0
+	feed := logicalLineStream{}
+	for offset := 0; offset < len(input); {
+		state = state*6364136223846793005 + 1
+		size := int((state>>32)%23) + 1
+		end := offset + size
+		if end > len(input) {
+			end = len(input)
+		}
+		// Feed incrementally; parser state, rather than a row heuristic,
+		// controls which records are complete at each checkpoint.
+		feed.Feed(input[offset:end])
+		for nextWidth < len(widths) && (end >= (nextWidth+1)*len(input)/len(widths) || end == len(input)) {
+			model.tail = feed.Lines()
+			width := widths[nextWidth]
+			_ = model.visible(0, 25, width)
+			checks = append(checks, consumerResizeCheck{Width: width, Offset: end, CompletedLines: len(model.tail), HistorySHA256: model.historySHA256(), Status: "passed"})
+			nextWidth++
+		}
+		offset = end
+	}
+	if nextWidth != len(widths) {
+		return checks, fmt.Errorf("consumer resize replay reached %d/%d checkpoints", nextWidth, len(widths))
+	}
+	if !bytes.Equal(model.historyBytes(), input) {
+		return checks, fmt.Errorf("consumer resize replay changed final history")
+	}
+	return checks, nil
 }
