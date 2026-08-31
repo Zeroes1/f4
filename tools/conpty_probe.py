@@ -90,6 +90,8 @@ k32.CreateProcessW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR,
                                ctypes.POINTER(PROCESS_INFORMATION)]
 k32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
                          ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+k32.WriteFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                          ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
 k32.GetStdHandle.restype = wintypes.HANDLE
 k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE,
                                    ctypes.POINTER(wintypes.DWORD)]
@@ -177,11 +179,23 @@ def run(conpty, chunk, mode, during=None, timeout_s=20, quiesce_s=0.75):
     # the child, then close the pseudoconsole to drop the write end.
     out = []
 
+    def answer(chunk):
+        for query, reply in QUERIES:
+            if query in chunk:
+                written = wintypes.DWORD()
+                try:
+                    k32.WriteFile(hin_w, reply, len(reply),
+                                  ctypes.byref(written), None)
+                except OSError:
+                    return
+
     def reader():
         buf = (ctypes.c_char * 4096)()
         got = wintypes.DWORD()
         while k32.ReadFile(hout_r, buf, 4096, ctypes.byref(got), None) and got.value:
-            out.append(bytes(buf[:got.value]))
+            chunk = bytes(buf[:got.value])
+            out.append(chunk)
+            answer(chunk)
 
     th = threading.Thread(target=reader, daemon=True)
     th.start()
@@ -209,6 +223,20 @@ def run(conpty, chunk, mode, during=None, timeout_s=20, quiesce_s=0.75):
 
 
 CRLF = b"\r\n"
+
+# ConPTY introduces itself and asks the terminal to do the same. We never
+# answered, and a pseudoconsole talking to a terminal that never replies
+# does not behave like one talking to a real one: from the fifth program
+# onwards every stream came back with autowrap off and control characters
+# rendered as glyphs. Answer the usual queries the way a plain VT100 would.
+QUERIES = (
+    (b"\x1b[c", b"\x1b[?1;0c"),        # primary device attributes
+    (b"\x1b[0c", b"\x1b[?1;0c"),
+    (b"\x1b[>c", b"\x1b[>0;10;1c"),    # secondary device attributes
+    (b"\x1b[>0c", b"\x1b[>0;10;1c"),
+    (b"\x1b[5n", b"\x1b[0n"),          # device status: report ok
+    (b"\x1b[6n", b"\x1b[1;1R"),        # cursor position
+)
 
 # Every escape sequence, plus the newlines, as one token stream.
 TOKEN = re.compile(
@@ -319,8 +347,7 @@ PROGRAMS = [
     ("python", 'python -c "print(\'A\'*200)"'),
     ("node", 'node -e "console.log(\'A\'.repeat(200))"'),
     ("git-log", "git -C probe-out\\repo log -1 --format=oneline"),
-    ("bash", '"C:\\Program Files\\Git\\bin\\bash.exe" -c '
-             '"cat probe-out/long200.txt"'),
+    ("bash", 'bash -c "cat probe-out/long200.txt"'),
 ]
 
 
