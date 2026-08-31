@@ -35,6 +35,7 @@ type nativeProbeSession struct {
 	InitialWidth  int              `json:"initial_width"`
 	InitialHeight int              `json:"initial_height"`
 	Command       string           `json:"command"`
+	HostCommand   string           `json:"host_command"`
 	StartedAt     time.Time        `json:"started_at"`
 	FinishedAt    time.Time        `json:"finished_at"`
 	ExitCode      uint32           `json:"exit_code"`
@@ -55,6 +56,7 @@ type nativeProbeReport struct {
 	GOARCH        string             `json:"goarch"`
 	WorkingDir    string             `json:"working_dir"`
 	Executable    string             `json:"probe_executable"`
+	Environment   map[string]string  `json:"environment"`
 	ExpectedInput []byte             `json:"expected_input"`
 	Sessions      []nativeProbeSession `json:"sessions"`
 	CompletedAt   time.Time          `json:"completed_at"`
@@ -86,15 +88,11 @@ func runNativeProbe(hostPath, reportPath string) error {
 	report := nativeProbeReport{
 		Mode: "native-openconsole-probe", Host: identity, BundleURL: probeBundleURL,
 		Package: probePackageName, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
-		WorkingDir: workingDir, Executable: executable, ExpectedInput: []byte(probeWorkload()),
+		WorkingDir: workingDir, Executable: executable, Environment: probeEnvironment(), ExpectedInput: []byte(probeWorkload()),
 	}
 	for _, dimensions := range [][2]int{{80, 25}, {1, 1}, {121, 40}} {
 		session, runErr := runNativeProbeSession(resolved, executable, dimensions[0], dimensions[1])
 		report.Sessions = append(report.Sessions, session)
-		if runErr != nil {
-			_ = writeJSON(reportPath, report)
-			return fmt.Errorf("native probe %dx%d: %w", dimensions[0], dimensions[1], runErr)
-		}
 		artifactDir := reportPath + ".sessions"
 		if err := os.MkdirAll(artifactDir, 0o755); err != nil {
 			return fmt.Errorf("create native probe artifact directory: %w", err)
@@ -103,6 +101,10 @@ func runNativeProbe(hostPath, reportPath string) error {
 		if err := os.WriteFile(artifact, session.RawOutput, 0o644); err != nil {
 			return fmt.Errorf("write native probe raw output: %w", err)
 		}
+		if runErr != nil {
+			_ = writeJSON(reportPath, report)
+			return fmt.Errorf("native probe %dx%d: %w", dimensions[0], dimensions[1], runErr)
+		}
 	}
 	report.CompletedAt = time.Now().UTC()
 	if err := writeJSON(reportPath, report); err != nil {
@@ -110,6 +112,16 @@ func runNativeProbe(hostPath, reportPath string) error {
 	}
 	fmt.Printf("native OpenConsole probe complete: %s\n", reportPath)
 	return nil
+}
+
+func probeEnvironment() map[string]string {
+	result := make(map[string]string)
+	for _, name := range []string{"WT_SESSION", "WT_PROFILE_ID", "TERM", "TERM_PROGRAM", "WSLENV", "ConEmuANSI", "PROMPT", "CHCP"} {
+		if value, ok := os.LookupEnv(name); ok {
+			result[name] = value
+		}
+	}
+	return result
 }
 
 func runNativeProbeSession(hostPath, executable string, width, height int) (session nativeProbeSession, runErr error) {
@@ -121,6 +133,7 @@ func runNativeProbeSession(hostPath, executable string, width, height int) (sess
 		session.Error = err.Error()
 		return session, err
 	}
+	session.HostCommand = pty.hostCommandLine
 	defer pty.close()
 	defer pty.closePipes()
 	recorder := newHostCaptureRecorder(0, width, height)

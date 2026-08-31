@@ -34,8 +34,9 @@ including a `1x1` minimum and a wide `121x40` window.
 The JSON report records:
 
 - pinned host path, version, SHA-256, package URL, process architecture and
-  working directory;
-- the exact child payload (`expected_input`), command line and dimensions;
+  working directory, plus non-secret terminal environment variables;
+- the exact child and host command lines (`command`, `host_command`), payload
+  (`expected_input`) and dimensions;
 - exit code, resize timestamps, marker presence, raw-output SHA-256 and every
   observed output event with timestamp, dimensions and read chunk bytes.
 

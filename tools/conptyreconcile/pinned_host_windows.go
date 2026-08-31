@@ -159,6 +159,7 @@ type pinnedConPTY struct {
 	childProcess windows.Handle
 	input        windows.Handle
 	output       windows.Handle
+	hostCommandLine string
 	// ConptyConnection::_guid is created once for the connection and reused
 	// when _LaunchAttachedClient constructs WT_SESSION.
 	session string
@@ -389,7 +390,7 @@ func createPinnedPseudoConsole(hostPath string, width, height int) (*pinnedConPT
 	}
 	_ = windows.CloseHandle(server)
 	closeServer = false
-	return &pinnedConPTY{signal: signalOur, ptyReference: ptyReference, hostProcess: hostInfo.Process, input: inOur, output: outOur, session: session}, nil
+	return &pinnedConPTY{signal: signalOur, ptyReference: ptyReference, hostProcess: hostInfo.Process, input: inOur, output: outOur, session: session, hostCommandLine: cmd}, nil
 }
 
 func attachPinnedClient(pty *pinnedConPTY, command string) error {
