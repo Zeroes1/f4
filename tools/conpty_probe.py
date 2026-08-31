@@ -339,25 +339,20 @@ def probe_cmd(label, conpty, say):
 
 
 PROGRAMS = [
-    # cmd built-ins
-    ("cmd-echo", "echo " + "A" * 200),
-    ("cmd-set-path", "path"),
-    ("cmd-type", "type probe-out\\long200.txt"),
-    ("cmd-dir-longname", "dir /b probe-out\\longname"),
-    # native Windows utilities
     ("findstr", "findstr AAA probe-out\\long200.txt"),
     ("certutil", "certutil -hashfile probe-out\\long200.txt SHA512"),
     ("reg-query", 'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT'
                   '\\CurrentVersion" /v BuildLabEx'),
     ("tasklist", "tasklist"),
     ("ipconfig", "ipconfig /all"),
-    # runtimes and ported tooling
     ("powershell", 'powershell -NoProfile -Command "Write-Host (\'A\'*200)"'),
     ("python", 'python -c "print(\'A\'*200)"'),
     ("node", 'node -e "console.log(\'A\'.repeat(200))"'),
     ("git-log", "git -C probe-out\\repo log -1 --format=oneline"),
     ("bash", 'bash -c "cat probe-out/long200.txt"'),
 ]
+
+SETMODE = f'"{sys.executable}" "{CHILD}" 1 setmode 0'
 
 
 def setup_programs():
@@ -376,85 +371,79 @@ def setup_programs():
 
 
 def probe_programs(label, conpty, say):
-    """Do real programs lose long lines? Everything above was synthetic.
+    """Do real programs lose long lines? Three launch styles, all reported.
 
-    Each case runs as `cmd /c <command> >CONOUT$`. The redirect is needed
-    because we clear HANDLE_FLAG_INHERIT on our std handles, so a program
-    left to its own stdout writes nowhere.
+    Two things have to be true at once for a case to mean anything: the
+    output has to reach the pty, and the console mode has to be the one
+    ConPTY hands out. Every earlier attempt got one and lost the other.
 
-    An earlier version put each command in a .cmd file to avoid quoting it
-    twice. That silently changed the console mode: the streams came back
-    with ESC[?7l and with CR and LF rendered as CP437 glyphs instead of
-    moving the cursor, so every newline vanished and every program looked
-    like one enormous intact line. Hence the guard below - a stream that
-    is not in the default mode is not comparable with one that is, and
-    saying so is better than printing a number.
+      direct        CreateProcessW with no shell. Mode stays 0x0007, but
+                    the child's stdout is whatever the console gives it.
+      cmd+redirect  `cmd /c ... >CONOUT$`. Output always arrives, but cmd
+                    drops the mode to 0x0001 - no wrap at EOL - so nothing
+                    wraps and the numbers say nothing.
+      cmd+setmode   the same, with the mode put back to 0x0007 first by a
+                    helper that writes nothing.
+
+    Rather than bet on one, run all three and label them. A case is only
+    worth reading where text arrived AND autowrap was on.
     """
     setup_programs()
-    say(f"  real programs in a {PROG_COLS}-column pty, "
-        "longest run of text in each:")
+    say(f"  real programs in a {PROG_COLS}-column pty:")
 
-    # The redirect we used to give these programs a stdout turned out to
-    # change the console mode: a child launched as `cmd /c ... >CONOUT$`
-    # sees 0x0001, processed output only, with neither wrap-at-EOL nor VT
-    # processing. Nothing wraps in that mode, which is why ConPTY announced
-    # ESC[?7l and why long lines looked like they "arrived whole" - nobody
-    # had wrapped them. Launch without the redirect instead and let the
-    # console hand the child its std handles, and keep printing the mode so
-    # a silent change cannot pass for a result again.
     for how, command in (
             ("direct", f'"{sys.executable}" "{CHILD}" 1 default 0'),
-            ("cmd, redirect", f'cmd /c "{sys.executable}" "{CHILD}" '
-                              f'1 default 0 >CONOUT$'),
-            ("cmd, plain", f'cmd /c "{sys.executable}" "{CHILD}" 1 default 0')):
+            ("cmd+redirect", f'cmd /c "{sys.executable}" "{CHILD}" '
+                             f'1 default 0 >CONOUT$'),
+            ("cmd+setmode", f'cmd /c {SETMODE} & "{sys.executable}" '
+                            f'"{CHILD}" 1 default 0 >CONOUT$')):
         try:
             _raw, mode = run(conpty, command, "default", timeout_s=30,
                              quiesce_s=0.5, cols=PROG_COLS)
-            say(f"    console mode, child launched {how:<14}: 0x{mode:04x}"
-                f"{'  <- the one the cases use' if how == 'cmd, plain' else ''}")
+            say(f"    console mode via {how:<13}: 0x{mode:04x}")
         except OSError as exc:
-            say(f"    console mode, child launched {how}: FAILED: {exc}")
+            say(f"    console mode via {how:<13}: FAILED: {exc}")
+    say("")
+
     for name, command in PROGRAMS:
-        try:
-            raw, _mode = run(conpty, f'cmd /c {command}', "default",
-                             timeout_s=30, quiesce_s=1.5, cols=PROG_COLS)
-        except OSError as exc:
-            say(f"    {name:<16} FAILED: {exc}")
-            continue
-        with open(f"{OUTDIR}/stream-{label}-prog-{name}.bin", "wb") as f:
-            f.write(raw)
+        for how, line in (
+                ("direct", command),
+                ("cmd+redirect", f"cmd /c {command} >CONOUT$"),
+                ("cmd+setmode", f"cmd /c {SETMODE} & {command} >CONOUT$")):
+            try:
+                raw, _mode = run(conpty, line, "default", timeout_s=30,
+                                 quiesce_s=1.5, cols=PROG_COLS)
+            except OSError as exc:
+                say(f"    {name:<11} {how:<13} FAILED: {exc}")
+                continue
+            with open(f"{OUTDIR}/stream-{label}-prog-{name}-{how}.bin",
+                      "wb") as f:
+                f.write(raw)
 
-        # CR and LF arriving as printable CP437 glyphs, or autowrap turned
-        # off, both mean this run was not in the mode the others were.
-        if not rows(raw) or max(rows(raw)) == 0:
-            say(f"    {name:<16} no text reached the pty at all")
-            continue
+            got = rows(raw)
+            if not got or max(got) == 0:
+                say(f"    {name:<11} {how:<13} no text reached the pty")
+                continue
+            if b"\x1b[?7l" in raw:
+                say(f"    {name:<11} {how:<13} {max(got):>5} longest, "
+                    "but autowrap was off - not comparable")
+                continue
 
-        odd = []
-        if b"\x1b[?7l" in raw:
-            odd.append("autowrap off")
-        if "\u266a".encode() in raw or "\u25d9".encode() in raw:
-            odd.append("newlines came through as glyphs")
-        if odd:
-            say(f"    {name:<16} not the default console mode "
-                f"({', '.join(odd)}), not comparable")
-            continue
-
-        got = rows(raw)
-        longest = max(got)
-        full = sum(1 for n in got if n == PROG_COLS)
-        if longest > PROG_COLS:
-            verdict = f"longest {longest}, arrived whole"
-        elif longest == PROG_COLS:
-            verdict = f"longest {longest} = the pty width, likely split"
-        else:
-            verdict = f"longest {longest}, nothing long enough to tell"
-        extra = f", {full} row(s) exactly {PROG_COLS} wide" if full else ""
-        say(f"    {name:<16} {len(got):>3} rows, {verdict}{extra}")
-    say(f"    a run longer than {PROG_COLS} means ConPTY passed the line "
-        "through and the")
-    say(f"    terminal wrapped it; runs capped at {PROG_COLS} mean the split "
-        "happened first")
+            longest = max(got)
+            full = sum(1 for n in got if n == PROG_COLS)
+            if longest > PROG_COLS:
+                verdict = "arrived whole"
+            elif longest == PROG_COLS:
+                verdict = f"= the {PROG_COLS}-column width, split first"
+            else:
+                verdict = "nothing long enough to tell"
+            extra = f", {full} row(s) exactly {PROG_COLS}" if full else ""
+            say(f"    {name:<11} {how:<13} {longest:>5} longest, "
+                f"{len(got):>3} rows, {verdict}{extra}")
+    say("")
+    say(f"    only a line reaching the pty with autowrap on says anything;")
+    say(f"    longer than {PROG_COLS} means ConPTY passed it through and the "
+        "terminal wrapped it")
     say("")
 
 

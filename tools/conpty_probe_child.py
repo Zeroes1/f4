@@ -29,6 +29,7 @@ from ctypes import wintypes
 
 TOTAL = 200
 VT_PROCESSING = 0x0004
+FULL_MODE = 0x0007  # processed output | wrap at EOL | VT processing
 FAILED = 0xFFFF
 
 
@@ -53,6 +54,11 @@ n = int(sys.argv[1])
 api = sys.argv[2] if len(sys.argv) > 2 else "default"
 want_legacy = api == "legacy"
 use_buffer = api == "bufapi"
+# "setmode" writes nothing: it only puts the screen buffer back into the
+# mode ConPTY hands out, so a program cmd starts afterwards runs in it.
+# cmd gives its children 0x0001 - no wrap at EOL, no VT - and in that mode
+# nothing wraps and the measurement is meaningless.
+set_full = api == "setmode"
 hold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
 if len(sys.argv) > 4:
     TOTAL = int(sys.argv[4])
@@ -63,6 +69,10 @@ if h == wintypes.HANDLE(-1).value:
 
 mode = wintypes.DWORD()
 k32.GetConsoleMode(h, ctypes.byref(mode))
+if set_full:
+    k32.SetConsoleMode(h, FULL_MODE)
+    k32.GetConsoleMode(h, ctypes.byref(mode))
+    sys.exit(mode.value)
 if want_legacy:
     k32.SetConsoleMode(h, mode.value & ~VT_PROCESSING)
     k32.GetConsoleMode(h, ctypes.byref(mode))
