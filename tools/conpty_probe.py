@@ -301,6 +301,84 @@ def probe_cmd(label, conpty, say):
     say("")
 
 
+PROGRAMS = [
+    # cmd built-ins
+    ("cmd-echo", "echo " + "A" * 200),
+    ("cmd-set-path", "set PATH"),
+    ("cmd-type", "type probe-out\\long200.txt"),
+    ("cmd-dir-longname", "dir /b probe-out\\longname"),
+    # native Windows utilities
+    ("findstr", "findstr AAA probe-out\\long200.txt"),
+    ("more", "more < probe-out\\long200.txt"),
+    ("certutil", "certutil -hashfile probe-out\\long200.txt SHA512"),
+    ("reg-query", 'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT'
+                  '\\CurrentVersion" /v BuildLabEx'),
+    ("tasklist", "tasklist"),
+    ("systeminfo-path", "path"),
+    # runtimes and ported tooling
+    ("powershell", "powershell -NoProfile -Command \"Write-Host ('A'*200)\""),
+    ("python", "python -c \"print('A'*200)\""),
+    ("node", "node -e \"console.log('A'.repeat(200))\""),
+    ("git-log", "git -C probe-out\\repo log -1 --format=oneline"),
+    ("bash", '"C:\\Program Files\\Git\\bin\\bash.exe" -c '
+             '"cat probe-out/long200.txt"'),
+]
+
+
+def setup_programs():
+    """Files the program cases read from. Cheap, and idempotent."""
+    os.makedirs(f"{OUTDIR}/longname", exist_ok=True)
+    with open(f"{OUTDIR}/long200.txt", "w", newline="\r\n") as f:
+        f.write("A" * 200 + "\n")
+    with open(f"{OUTDIR}/longname/" + "n" * 200 + ".txt", "w") as f:
+        f.write("x")
+    if not os.path.isdir(f"{OUTDIR}/repo/.git"):
+        os.makedirs(f"{OUTDIR}/repo", exist_ok=True)
+        quiet = " >nul 2>&1"
+        os.system(f"git init {OUTDIR}/repo" + quiet)
+        os.system(f'git -C {OUTDIR}/repo -c user.email=p@l -c user.name=p '
+                  f'commit --allow-empty -m "{"A" * 200}"' + quiet)
+
+
+def probe_programs(label, conpty, say):
+    """Do real programs lose long lines? Everything above was synthetic.
+
+    Each case runs through `cmd /c <batch> >CONOUT$`: we clear
+    HANDLE_FLAG_INHERIT on our std handles, so a program left to its own
+    stdout writes nowhere. The batch file avoids quoting the command twice.
+    """
+    setup_programs()
+    say("  real programs, longest run of text in each:")
+    for name, command in PROGRAMS:
+        script = os.path.abspath(f"{OUTDIR}/prog-{name}.cmd")
+        with open(script, "w", newline="\r\n") as f:
+            f.write("@echo off\n" + command + "\n")
+        try:
+            raw, _mode = run(conpty, f'cmd /c "{script}" >CONOUT$',
+                             "default", timeout_s=30)
+        except OSError as exc:
+            say(f"    {name:<16} FAILED: {exc}")
+            continue
+        with open(f"{OUTDIR}/stream-{label}-prog-{name}.bin", "wb") as f:
+            f.write(raw)
+        got = rows(raw)
+        longest = max(got)
+        full = sum(1 for n in got if n == COLS)
+        if longest > COLS:
+            verdict = f"longest {longest}, arrived whole"
+        elif longest == COLS:
+            verdict = f"longest {longest} = the pty width, likely split"
+        else:
+            verdict = f"longest {longest}, nothing long enough to tell"
+        extra = f", {full} row(s) exactly {COLS} wide" if full else ""
+        say(f"    {name:<16} {len(got):>3} rows, {verdict}{extra}")
+    say("    a line longer than the pty width means ConPTY passed it through")
+    say("    and the terminal wrapped it; rows capped at the width mean the "
+        "split")
+    say("    happened before the terminal saw it")
+    say("")
+
+
 def probe_bufapi(label, conpty, say):
     """What a TUI application gets: cells painted straight into the buffer.
 
@@ -414,6 +492,7 @@ def main():
         try:
             probe(label, path, say)
             probe_cmd(label, load_conpty(path), say)
+            probe_programs(label, load_conpty(path), say)
             probe_bufapi(label, load_conpty(path), say)
             probe_resize(label, load_conpty(path), say)
         except Exception as exc:
