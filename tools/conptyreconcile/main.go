@@ -17,6 +17,7 @@ func main() {
 		seeds         = flag.Bool("seeds", false, "run the 300-session native seed stage")
 		seed          = flag.Uint64("seed", 0, "run one deterministic native seed")
 		partial       = flag.Bool("partial", false, "run resize during an incomplete line")
+		commandProbe  = flag.Bool("command-probe", false, "measure recursive dir output on the pinned host")
 		probeHost     = flag.String("probe-host", "", "verified pinned OpenConsole.exe")
 		reportPath    = flag.String("report", "", "report path")
 		emitProbe     = flag.Bool("emit-probe", false, "internal child mode for the pinned-host probe")
@@ -90,6 +91,12 @@ func main() {
 	}
 	if *partial {
 		if err := runNativePartialProbe(*probeHost, *reportPath); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *commandProbe {
+		if err := runNativeCommandProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

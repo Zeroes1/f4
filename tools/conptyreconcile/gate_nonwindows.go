@@ -22,3 +22,9 @@ func runNativePartialProbe(hostPath, reportPath string) error {
 	_ = reportPath
 	return fmt.Errorf("native partial probe requires Windows")
 }
+
+func runNativeCommandProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native command probe requires Windows")
+}

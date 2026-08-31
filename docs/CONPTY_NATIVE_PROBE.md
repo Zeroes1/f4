@@ -11,6 +11,7 @@ come only from explicit newline bytes.
 ```text
 go run ./tools/conptyreconcile -probe -report artifacts/pinned-conpty-probe.json
 go run ./tools/conptyreconcile -probe-static -report artifacts/pinned-conpty-probe-static.json
+go run ./tools/conptyreconcile -command-probe -report artifacts/pinned-conpty-command.json
 go run ./tools/conptyreconcile -gate -report artifacts/pinned-conpty-gate.json
 ```
 
@@ -43,6 +44,11 @@ the exact-width boundaries, repeated and blank records, Unicode/Bidi,
 controls, alternate-screen transitions, and a 257-character line. Static mode
 keeps the viewport at `80x25`; normal mode interleaves resize operations while
 the child writes.
+
+`-command-probe` is a diagnostic native run of `cmd.exe` with recursive
+`dir /s /b` at normal and narrow widths. It reports observed absolute-CUP plus
+`CRLF` frequency and lifecycle status; those counts are measurements of the
+pinned host, never a rule for reconstructing history.
 
 Each report stores the verified host identity, exact child input, session
 dimensions, resize events, process identity, raw output and SHA-256. The raw
