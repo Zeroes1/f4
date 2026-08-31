@@ -80,7 +80,7 @@ jobs:
           } | Tee-Object -FilePath probe-out/bundle.txt -Append
 
       - name: Probe bundled ConPTY
-        run: python tools/conpty_probe_bundled.py conpty/conpty.dll bundled
+        run: python tools/conpty_probe.py conpty/conpty.dll
 
       - name: Upload probe output
         if: always()
