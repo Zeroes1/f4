@@ -81,6 +81,37 @@ class PROCESS_INFORMATION(ctypes.Structure):
 
 k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
+# Spell out every signature. Without argtypes, ctypes pushes plain Python
+# ints as 32-bit, while UpdateProcThreadAttribute declares dwFlags and
+# Attribute as DWORD_PTR: the call then "succeeds" with a mangled attribute
+# and the child quietly keeps the parent's console instead of the pty.
+PSIZE_T = ctypes.POINTER(ctypes.c_size_t)
+k32.CreatePipe.argtypes = [ctypes.POINTER(wintypes.HANDLE),
+                           ctypes.POINTER(wintypes.HANDLE),
+                           ctypes.c_void_p, wintypes.DWORD]
+k32.CreatePipe.restype = wintypes.BOOL
+k32.InitializeProcThreadAttributeList.argtypes = [
+    ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD, PSIZE_T]
+k32.InitializeProcThreadAttributeList.restype = wintypes.BOOL
+k32.UpdateProcThreadAttribute.argtypes = [
+    ctypes.c_void_p, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_void_p,
+    ctypes.c_size_t, ctypes.c_void_p, PSIZE_T]
+k32.UpdateProcThreadAttribute.restype = wintypes.BOOL
+k32.DeleteProcThreadAttributeList.argtypes = [ctypes.c_void_p]
+k32.DeleteProcThreadAttributeList.restype = None
+k32.CreateProcessW.argtypes = [
+    wintypes.LPCWSTR, wintypes.LPWSTR, ctypes.c_void_p, ctypes.c_void_p,
+    wintypes.BOOL, wintypes.DWORD, ctypes.c_void_p, wintypes.LPCWSTR,
+    ctypes.POINTER(STARTUPINFOEXW), ctypes.POINTER(PROCESS_INFORMATION)]
+k32.CreateProcessW.restype = wintypes.BOOL
+k32.ReadFile.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                         ctypes.POINTER(wintypes.DWORD), ctypes.c_void_p]
+k32.ReadFile.restype = wintypes.BOOL
+k32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+k32.WaitForSingleObject.restype = wintypes.DWORD
+k32.CloseHandle.argtypes = [wintypes.HANDLE]
+k32.CloseHandle.restype = wintypes.BOOL
+
 
 def _check(ok, what):
     if not ok:
@@ -144,15 +175,16 @@ def run(dll_path, timeout_s=20):
     siex.lpAttributeList = ctypes.cast(attrs, ctypes.c_void_p)
     pi = PROCESS_INFORMATION()
 
+    # CreatePseudoConsole dups these into conhost, so drop our copies now
+    # (this is what samples/ConPTY/EchoCon does); otherwise nothing ever
+    # signals end-of-stream on the read side.
+    k32.CloseHandle(in_read)
+    k32.CloseHandle(out_write)
+
     _check(k32.CreateProcessW(
         None, ctypes.create_unicode_buffer(CMD), None, None, False,
         EXTENDED_STARTUPINFO_PRESENT, None, None,
         ctypes.byref(siex), ctypes.byref(pi)), "CreateProcessW")
-
-    # Our duplicates of the ends handed to the pseudoconsole must go, or
-    # nothing will ever signal end-of-stream on the read side.
-    k32.CloseHandle(in_read)
-    k32.CloseHandle(out_write)
 
     # The pseudoconsole keeps the write end open until it is closed, so a
     # plain blocking read here would hang forever once the child exits.
@@ -191,6 +223,7 @@ def run(dll_path, timeout_s=20):
         close_pc(hpc)
     th.join(5)
 
+    k32.DeleteProcThreadAttributeList(ctypes.cast(attrs, ctypes.c_void_p))
     k32.CloseHandle(pi.hThread)
     k32.CloseHandle(pi.hProcess)
     k32.CloseHandle(in_write)
