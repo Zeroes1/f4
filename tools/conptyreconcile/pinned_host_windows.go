@@ -5,14 +5,10 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -171,39 +167,6 @@ func duplicateInheritable(handle windows.Handle) (windows.Handle, error) {
 		return 0, err
 	}
 	return duplicate, nil
-}
-
-type hostCaptureRecorder struct {
-	mu      sync.Mutex
-	capture capture
-	width   int
-	height  int
-}
-
-func newHostCaptureRecorder(seed int64, width, height int) *hostCaptureRecorder {
-	return &hostCaptureRecorder{capture: capture{Seed: seed}, width: width, height: height}
-}
-
-func (r *hostCaptureRecorder) append(kind streamKind, data []byte, cause string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.capture.append(kind, r.width, r.height, data, cause)
-}
-
-func (r *hostCaptureRecorder) resize(width, height int) {
-	r.mu.Lock()
-	r.width = width
-	r.height = height
-	r.capture.append(streamResize, width, height, nil, "pinned-host-resize")
-	r.mu.Unlock()
-}
-
-func (r *hostCaptureRecorder) snapshot() capture {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	result := r.capture
-	result.Events = append([]streamEvent(nil), r.capture.Events...)
-	return result
 }
 
 func (p *pinnedConPTY) close() {
@@ -642,6 +605,9 @@ func terminatePinnedClient(pty *pinnedConPTY) {
 	pty.childProcess = 0
 }
 
+/*
+The former scenario runner was intentionally removed. The standalone gate
+must never execute a simulated or grid-reconciliation path.
 func runPinnedHost(path, reportPath string) error {
 	identity, err := verifyPinnedHost(path)
 	if err != nil {
@@ -865,3 +831,4 @@ func bytesForKind(c capture, kind streamKind) []byte {
 	}
 	return result
 }
+*/

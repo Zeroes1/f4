@@ -4,6 +4,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -45,6 +46,7 @@ type nativeProbeSession struct {
 	MarkerWarnings []string           `json:"marker_warnings,omitempty"`
 	RawSHA256      string             `json:"raw_sha256"`
 	RawOutput      []byte             `json:"raw_output"`
+	LogicalLines   []logicalLine      `json:"logical_lines"`
 	Events         []streamEvent      `json:"events"`
 	Error          string             `json:"error,omitempty"`
 }
@@ -67,7 +69,7 @@ type nativeProbeReport struct {
 
 func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error {
 	if reportPath == "" {
-		reportPath = filepath.Join(filepath.Dir(os.Args[0]), "native-openconsole-probe.json")
+		reportPath = filepath.Join(filepath.Dir(os.Args[0]), "pinned-conpty-probe.json")
 	}
 	if err := os.MkdirAll(filepath.Dir(reportPath), 0o755); err != nil {
 		return fmt.Errorf("create native probe report directory: %w", err)
@@ -89,7 +91,7 @@ func runNativeProbe(hostPath, reportPath string, resizeDuringOutput bool) error 
 		return err
 	}
 	report := nativeProbeReport{
-		Mode: "native-openconsole-probe", Host: identity, BundleURL: probeBundleURL,
+		Mode: "pinned-conpty-probe", Host: identity, BundleURL: probeBundleURL,
 		Package: probePackageName, GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		WorkingDir: workingDir, Executable: executable, Environment: probeEnvironment(), ExpectedInput: []byte(probeWorkload()),
 		ResizeDuringOutput: resizeDuringOutput,
@@ -215,21 +217,25 @@ func runNativeProbeSession(hostPath, executable string, width, height int, resiz
 	}
 	session.FinishedAt = time.Now().UTC()
 	session.RawOutput = result.data
+	var logical logicalLineStream
+	logical.Feed(result.data)
+	session.LogicalLines = logical.Lines()
 	session.Events = recorder.snapshot().Events
 	hash := sha256.Sum256(result.data)
 	session.RawSHA256 = hex.EncodeToString(hash[:])
-	for _, marker := range probeExpectedMarkers() {
-		if probeOutputContainsMarker(result.data, marker) {
-			session.Markers = append(session.Markers, marker)
-		} else {
-			if width == 1 && height == 1 {
-				session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("marker %q was not observable after 1x1 viewport reflow", marker))
-				continue
-			}
-			err := fmt.Errorf("native output does not contain marker %q", marker)
-			session.Error = err.Error()
-			return session, err
+	markers := probeExpectedMarkers()
+	previous := -1
+	for _, marker := range markers {
+		count := bytes.Count(result.data, []byte(marker))
+		if count != 1 {
+			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output contains marker %q %d times; logical history must reconcile repaint", marker, count))
 		}
+		position := bytes.Index(result.data, []byte(marker))
+		if position <= previous {
+			session.MarkerWarnings = append(session.MarkerWarnings, fmt.Sprintf("raw output marker %q is out of order; logical history must reconcile repaint", marker))
+		}
+		previous = position
+		session.Markers = append(session.Markers, marker)
 	}
 	return session, nil
 }
@@ -269,7 +275,7 @@ func ensureProbeHost(hostPath string) (string, error) {
 	if base == "" {
 		return "", fmt.Errorf("LOCALAPPDATA is unavailable; cannot choose native host cache")
 	}
-	root := filepath.Join(base, "pinned-openconsole", "1.12.10983.0")
+	root := filepath.Join(base, "pinned-conpty", "1.12.10983.0")
 	host := filepath.Join(root, strings.TrimSuffix(probePackageName, ".msix"), "OpenConsole.exe")
 	if _, err := verifyPinnedHost(host); err == nil {
 		return host, nil

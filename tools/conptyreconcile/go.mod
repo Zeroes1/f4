@@ -1,4 +1,4 @@
-module github.com/unxed/f4/tools/conptyreconcile
+module github.com/unxed/pinned-conpty-probe
 
 go 1.26.6
 
