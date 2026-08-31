@@ -686,6 +686,7 @@
     ├── docs
     │   ├── COLORS.md
     │   ├── CONSOLE_MODES.md
+    │   ├── CONPTY_GATE_REQUIREMENTS.md
     │   ├── CONPTY_NATIVE_AGENT.md
     │   ├── CONPTY_NATIVE_AUDIT.md
     │   ├── CONPTY_NATIVE_PROBE.md
