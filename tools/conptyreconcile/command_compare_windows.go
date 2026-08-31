@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,8 @@ type commandLineMismatch struct {
 	Index            int    `json:"index"`
 	Expected         string `json:"expected"`
 	Observed         string `json:"observed"`
+	ExpectedHex      string `json:"expected_hex,omitempty"`
+	ObservedHex      string `json:"observed_hex,omitempty"`
 	ObservedCrossRow bool   `json:"observed_cross_row,omitempty"`
 }
 
@@ -37,7 +40,12 @@ type commandCompareReport struct {
 	TrailingPaddingOnly     int                   `json:"trailing_padding_only"`
 	CrossRowMismatch        int                   `json:"cross_row_mismatch"`
 	CUPBeforeCRLF           int                   `json:"cup_before_crlf"`
+	LCSLength               int                   `json:"lcs_length"`
+	LCSInsertions           int                   `json:"lcs_insertions"`
+	LCSDeletions            int                   `json:"lcs_deletions"`
+	LCSReplacements         int                   `json:"lcs_replacements"`
 	Mismatches              []commandLineMismatch `json:"mismatches,omitempty"`
+	FirstMismatchContext    []commandLineMismatch `json:"first_mismatch_context,omitempty"`
 	ChildExitCode           uint32                `json:"child_exit_code"`
 	ChildExited             bool                  `json:"child_exited"`
 	HostExited              bool                  `json:"host_exited"`
@@ -68,8 +76,8 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	root := `C:\Windows\System32`
 	begin := "__PINNED_CONPTY_PROBE_DIR_COMPARE_BEGIN__"
 	end := "__PINNED_CONPTY_PROBE_DIR_COMPARE_END__"
-	command := fmt.Sprintf(`cmd.exe /d /q /c "echo %s & set DIRCMD= & dir /s /b %s & echo %s & exit /b 0"`, begin, root, end)
-	redirectCommand := fmt.Sprintf(`cmd.exe /d /q /c "set DIRCMD= & dir /s /b %s"`, root)
+	command := fmt.Sprintf(`cmd.exe /d /q /c "chcp 65001 >nul & echo %s & set DIRCMD= & dir /s /b %s & echo %s & exit /b 0"`, begin, root, end)
+	redirectCommand := fmt.Sprintf(`cmd.exe /d /q /c "chcp 65001 >nul & set DIRCMD= & dir /s /b %s"`, root)
 	redirectPath := reportPath + ".redirected.raw"
 	redirected, err := runRedirectedDir(root, redirectPath)
 	if err != nil {
@@ -98,6 +106,14 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	}
 	redirectHash := sha256.Sum256(redirected)
 	report.RedirectedSHA256 = fmt.Sprintf("%x", redirectHash[:])
+	diffStats := lcsLineStats(expected, func() [][]byte {
+		result := make([][]byte, len(observed))
+		for index, line := range observed {
+			result[index] = line.Bytes
+		}
+		return result
+	}())
+	report.LCSLength, report.LCSInsertions, report.LCSDeletions, report.LCSReplacements = diffStats.LCS, diffStats.Insertions, diffStats.Deletions, diffStats.Replacements
 	for index := 0; index < len(expected) || index < len(observed); index++ {
 		want, got := "", ""
 		var cross bool
@@ -119,7 +135,29 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 				report.ContentMismatchCount++
 			}
 			if len(report.Mismatches) < 20 {
-				report.Mismatches = append(report.Mismatches, commandLineMismatch{Index: index, Expected: want, Observed: got, ObservedCrossRow: cross})
+				report.Mismatches = append(report.Mismatches, commandLineMismatch{
+					Index: index, Expected: want, Observed: got,
+					ExpectedHex: hex.EncodeToString([]byte(want)), ObservedHex: hex.EncodeToString([]byte(got)),
+					ObservedCrossRow: cross,
+				})
+			}
+			if len(report.FirstMismatchContext) == 0 && strings.TrimRight(got, " ") != strings.TrimRight(want, " ") {
+				for contextIndex := maxInt(0, index-2); contextIndex <= minCommandInt(len(expected), index+3); contextIndex++ {
+					contextWant, contextGot := "", ""
+					contextCross := false
+					if contextIndex < len(expected) {
+						contextWant = string(expected[contextIndex])
+					}
+					if contextIndex < len(observed) {
+						contextGot = string(observed[contextIndex].Bytes)
+						contextCross = observed[contextIndex].CrossRow
+					}
+					report.FirstMismatchContext = append(report.FirstMismatchContext, commandLineMismatch{
+						Index: contextIndex, Expected: contextWant, Observed: contextGot,
+						ExpectedHex: hex.EncodeToString([]byte(contextWant)), ObservedHex: hex.EncodeToString([]byte(contextGot)),
+						ObservedCrossRow: contextCross,
+					})
+				}
 			}
 		}
 		if want != strings.TrimRight(got, " ") {
@@ -143,12 +181,19 @@ func runNativeCommandCompare(hostPath, reportPath string) error {
 	return nil
 }
 
+func minCommandInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func runRedirectedDir(root, path string) ([]byte, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("cmd.exe", "/d", "/q", "/c", fmt.Sprintf("set DIRCMD= & dir /s /b %s", root))
+	cmd := exec.Command("cmd.exe", "/d", "/q", "/c", fmt.Sprintf("chcp 65001 >nul & set DIRCMD= & dir /s /b %s", root))
 	cmd.Stdout = file
 	cmd.Stderr = file
 	cmd.Env = append(os.Environ(), "DIRCMD=", "PAGER=", "GIT_PAGER=", "GIT_TERMINAL_PROMPT=0")

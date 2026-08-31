@@ -577,3 +577,36 @@ go run . -probe-static -report artifacts/pinned-conpty-probe-static-control-hidd
 между табличной строкой и следующим маркером. Текущий накопитель не угадывает
 границу по одному CUP и не превращает этот результат в проход; пункт 10.3
 остаётся открытым до source-derived решения и отдельного прогона.
+
+### Проверка состоятельности метрики `dir`
+
+Позиционный счётчик дополнен первым содержательным расхождением (с hex),
+контекстом двух строк с каждой стороны и разреженным LCS по нормализованным
+только для этой диагностики хвостовым пробелам. Повторный прогон:
+
+```text
+go run . -command-compare -report artifacts/pinned-conpty-command-compare-lcs.json
+pinned-conpty-probe: native command comparison found 28517 line mismatches (report artifacts/pinned-conpty-command-compare-lcs.json)
+expected_lines=23906 observed_lines=32671 mismatch_count=28517 normalized_mismatch_count=28513
+lcs_length=15805 lcs_insertions=8765 lcs_deletions=8101 lcs_replacements=8101 cup_before_crlf=0
+```
+
+Первое строгое несовпадение — только renderer padding: ожидаемая строка
+`...NearShareExperience.dll` (hex заканчивается `646c6c`), наблюдаемая та же
+строка с четырьмя байтами `20 20 20 20`. Первое содержательное несовпадение
+в контексте индекса `4158`:
+
+```text
+expected: C:\\Windows\\System32\\windows.applicationmodel.conversationalagent.internal.proxystub.dll
+observed: C:\\Windows\\System32\\windows.applicationmodel.conversationalagent.internal.proxys
+next observed: 104 пробела + stub.dll (cross_row=true)
+```
+
+Redirected-файл принудительно получен в UTF-8 (`chcp 65001 >nul`), не содержит
+ошибочных UTF-8 replacement-символов; его хвост — ровно `0d 0a`, после
+нормализации это `23906` непустых строк. Заголовка или итоговой строки `dir`
+в файл не попало. Поэтому OEM/UTF-8 и лишний финальный перевод строки не
+объясняют результат. LCS показывает не «один сдвиг»: после нормализации есть
+`8765` чистых вставок, `8101` удалений и `8101` замен. Это измеряет смесь
+повторных render-записей и разорванных строк, а не число независимых дефектов;
+причину нужно разбирать по кадрам, не по позиционному счётчику.
