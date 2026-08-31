@@ -121,7 +121,7 @@ def load_conpty(path):
     return create, close, resize
 
 
-def run(conpty, chunk, mode, during=None, timeout_s=20):
+def run(conpty, chunk, mode, during=None, timeout_s=20, quiesce_s=0.75):
     """Run the child in a fresh pseudoconsole.
 
     Returns (stream, console mode the child actually had). The child reports
@@ -192,7 +192,7 @@ def run(conpty, chunk, mode, during=None, timeout_s=20):
     # The child exiting does not mean its output has been pushed through
     # yet; wait for the byte count to stop growing before closing.
     settled, last = 0.0, -1
-    while settled < 0.75:
+    while settled < quiesce_s:
         if len(out) != last:
             last, settled = len(out), 0.0
         time.sleep(0.05)
@@ -304,21 +304,20 @@ def probe_cmd(label, conpty, say):
 PROGRAMS = [
     # cmd built-ins
     ("cmd-echo", "echo " + "A" * 200),
-    ("cmd-set-path", "set PATH"),
+    ("cmd-set-path", "path"),
     ("cmd-type", "type probe-out\\long200.txt"),
     ("cmd-dir-longname", "dir /b probe-out\\longname"),
     # native Windows utilities
     ("findstr", "findstr AAA probe-out\\long200.txt"),
-    ("more", "more < probe-out\\long200.txt"),
     ("certutil", "certutil -hashfile probe-out\\long200.txt SHA512"),
     ("reg-query", 'reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT'
                   '\\CurrentVersion" /v BuildLabEx'),
     ("tasklist", "tasklist"),
-    ("systeminfo-path", "path"),
+    ("ipconfig", "ipconfig /all"),
     # runtimes and ported tooling
-    ("powershell", "powershell -NoProfile -Command \"Write-Host ('A'*200)\""),
-    ("python", "python -c \"print('A'*200)\""),
-    ("node", "node -e \"console.log('A'.repeat(200))\""),
+    ("powershell", 'powershell -NoProfile -Command "Write-Host (\'A\'*200)"'),
+    ("python", 'python -c "print(\'A\'*200)"'),
+    ("node", 'node -e "console.log(\'A\'.repeat(200))"'),
     ("git-log", "git -C probe-out\\repo log -1 --format=oneline"),
     ("bash", '"C:\\Program Files\\Git\\bin\\bash.exe" -c '
              '"cat probe-out/long200.txt"'),
@@ -343,24 +342,42 @@ def setup_programs():
 def probe_programs(label, conpty, say):
     """Do real programs lose long lines? Everything above was synthetic.
 
-    Each case runs through `cmd /c <batch> >CONOUT$`: we clear
-    HANDLE_FLAG_INHERIT on our std handles, so a program left to its own
-    stdout writes nowhere. The batch file avoids quoting the command twice.
+    Each case runs as `cmd /c <command> >CONOUT$`. The redirect is needed
+    because we clear HANDLE_FLAG_INHERIT on our std handles, so a program
+    left to its own stdout writes nowhere.
+
+    An earlier version put each command in a .cmd file to avoid quoting it
+    twice. That silently changed the console mode: the streams came back
+    with ESC[?7l and with CR and LF rendered as CP437 glyphs instead of
+    moving the cursor, so every newline vanished and every program looked
+    like one enormous intact line. Hence the guard below - a stream that
+    is not in the default mode is not comparable with one that is, and
+    saying so is better than printing a number.
     """
     setup_programs()
     say("  real programs, longest run of text in each:")
     for name, command in PROGRAMS:
-        script = os.path.abspath(f"{OUTDIR}/prog-{name}.cmd")
-        with open(script, "w", newline="\r\n") as f:
-            f.write("@echo off\n" + command + "\n")
         try:
-            raw, _mode = run(conpty, f'cmd /c "{script}" >CONOUT$',
-                             "default", timeout_s=30)
+            raw, _mode = run(conpty, f'cmd /c {command} >CONOUT$', "default",
+                             timeout_s=30, quiesce_s=1.5)
         except OSError as exc:
             say(f"    {name:<16} FAILED: {exc}")
             continue
         with open(f"{OUTDIR}/stream-{label}-prog-{name}.bin", "wb") as f:
             f.write(raw)
+
+        # CR and LF arriving as printable CP437 glyphs, or autowrap turned
+        # off, both mean this run was not in the mode the others were.
+        odd = []
+        if b"\x1b[?7l" in raw:
+            odd.append("autowrap off")
+        if "\u266a".encode() in raw or "\u25d9".encode() in raw:
+            odd.append("newlines came through as glyphs")
+        if odd:
+            say(f"    {name:<16} not the default console mode "
+                f"({', '.join(odd)}), not comparable")
+            continue
+
         got = rows(raw)
         longest = max(got)
         full = sum(1 for n in got if n == COLS)
