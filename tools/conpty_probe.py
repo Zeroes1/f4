@@ -42,6 +42,7 @@ CHILD = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016
 EXTENDED_STARTUPINFO_PRESENT = 0x00080000
+STARTF_USESTDHANDLES = 0x00000100
 
 
 class COORD(ctypes.Structure):
@@ -156,6 +157,13 @@ def run(conpty, chunk, mode, during=None, timeout_s=20,
 
     siex = STARTUPINFOEXW()
     siex.StartupInfo.cb = ctypes.sizeof(STARTUPINFOEXW)
+    # Straight from ConptyConnection::_LaunchAttachedClient: declare that we
+    # supply the std handles, and supply NULL. Without the flag,
+    # CreateProcessW copies the parent's handle values into the child even
+    # with bInheritHandles false; ours are pipes, invalid over there, so a
+    # program writing to stdout wrote nowhere and every direct launch came
+    # back empty. With the flag the console assigns them on attach.
+    siex.StartupInfo.dwFlags = STARTF_USESTDHANDLES
     siex.lpAttributeList = ctypes.cast(attrs, ctypes.c_void_p)
     pi = PROCESS_INFORMATION()
 
