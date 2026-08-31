@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -190,7 +191,20 @@ func edgeProbeWorkload() []byte {
 }
 
 func emitEdgeWorkload() error {
-	_, err := os.Stdout.Write(edgeProbeWorkload())
+	input := edgeProbeWorkload()
+	// Let the host paint the two top-of-viewport threshold records before the
+	// later filler scrolls them out. Without this synchronization a single
+	// child write can leave those rows unpainted, which cannot test the
+	// eight-vs-nine ECH threshold at all.
+	cut := strings.Index(string(input), "edge-filler-A")
+	if cut < 0 {
+		cut = len(input)
+	}
+	if _, err := os.Stdout.Write(input[:cut]); err != nil {
+		return err
+	}
+	time.Sleep(100 * time.Millisecond)
+	_, err := os.Stdout.Write(input[cut:])
 	return err
 }
 

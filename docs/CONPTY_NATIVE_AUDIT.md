@@ -52,17 +52,23 @@ broken-pipe    pipes-first timeout child=true host=true handles=true
 
 ```text
 native edge probe complete: artifacts/pinned-conpty-edge-group.json spaces=4 blink=true nowrap_tail_lost=true
-spaces_eight_top_trimmed=true  spaces_nine_top_trimmed=true
+spaces_eight_top_elided=true  spaces_nine_top_elided=true
 spaces_eight_bottom_advanced=true  spaces_nine_bottom_advanced=true
 blink_rendered=true  blink_sequence_in_stream=true  blink_in_rendered_history=false
 auto_wrap_host_sequences=0  auto_wrap_tail_lost=true
 ```
 
-Хост действительно может передать управляющие `CSI ?12` в отдельном участке
-потока, но они не попадают в rendered history; хвостовые пробелы в верхнем
-ряду элиминируются, а на нижнем ряду представлены явным `CSI C`, что
-соответствует ветке `_newBottomLine`. Потеря хвоста при отключённом DECAWM
-ожидаема и зафиксирована как условие интеграции, не как ошибка накопителя.
+Поля `spaces_*_top_elided` — наблюдательные: они фиксируют отсутствие ровно
+заданного хвоста в сыром рендере верхних строк и не объявляют срабатывание ECH.
+Порог хоста проверен отдельным static-контролем
+`pinned-conpty-probe-static-c2-final.json`: `spaces-eight` пришла с восемью
+пробелами, а `spaces-nine` — как `ESC[9X`, что соответствует
+`numSpaces > ERASE_CHARACTER_STRING_LENGTH`. В edge-сеансе хвост верхних строк
+элиминируется при viewport paint, а на нижнем ряду представлен явным `CSI C`,
+что соответствует ветке `_newBottomLine`. Хост действительно может передать
+управляющие `CSI ?12` в отдельном участке потока, но они не попадают в
+rendered history. Потеря хвоста при отключённом DECAWM ожидаема и зафиксирована
+как условие интеграции, не как ошибка накопителя.
 
 ### Диагностическое сравнение `--resizeQuirk`
 
