@@ -16,6 +16,10 @@ func seedWorkload(seed uint64, width int) []byte {
 	begin := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_BEGIN__", seed)
 	end := fmt.Sprintf("__PINNED_CONPTY_PROBE_SEED_%016x_END__", seed)
 	var b strings.Builder
+	// Keep cursor painting out of the deterministic seed so A/B/C assertions
+	// measure stream and consumer behavior, not the host's documented visible
+	// cursor wrap-state reset.
+	b.WriteString("\x1b[?25l")
 	b.WriteString(begin)
 	b.WriteString("\r\n")
 	b.WriteString(fmt.Sprintf("ascii: seed-%016x\r\n", seed))
@@ -29,5 +33,6 @@ func seedWorkload(seed uint64, width int) []byte {
 	b.WriteString("\r\n")
 	b.WriteString(end)
 	b.WriteString("\r\n")
+	b.WriteString("\x1b[?25h")
 	return []byte(b.String())
 }
