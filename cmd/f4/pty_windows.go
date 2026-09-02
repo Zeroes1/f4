@@ -225,6 +225,12 @@ func (p *PTY) IsBusy() bool {
 
 	for {
 		if pe32.ParentProcessID == p.process.ProcessId {
+			if processIsGUI(pe32.ProcessID) {
+				if err := windows.Process32Next(snapshot, &pe32); err != nil {
+					break
+				}
+				continue
+			}
 			p.lastBusyState = true
 			p.lastBusyCheck = time.Now()
 			return true
