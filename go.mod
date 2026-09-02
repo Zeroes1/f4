@@ -36,7 +36,7 @@ require (
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.6
-	github.com/unxed/vtui v0.1.305
+	github.com/unxed/vtui v0.1.306
 	github.com/unxed/zip v0.1.129
 	github.com/unxed/zipper v0.1.151
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -173,11 +173,11 @@ require (
 	software.sslmate.com/src/go-pkcs12 v0.7.2 // indirect
 )
 
-replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.17
+replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.19
 
 replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 
-replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.5
+replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.7
 
 // replace github.com/unxed/colorer4go => ../../../dev/colorer4go
 // replace github.com/unxed/vtui => ../../../dev/vtui
