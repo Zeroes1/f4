@@ -52,23 +52,33 @@ everything, which is fine for local development and not for anything else.
 Builds made with the `noffi` tag, and platforms `pureffi` does not cover, keep
 the whole plugin system working and only report the bridge as unsupported.
 
-## Linux release flavors
+## Linux release artifacts
 
-The Linux release artifacts come in two flavors, and the difference is exactly
-whether this bridge works.
+`f4-linux-amd64.tar.gz` and `f4-linux-arm64.tar.gz` are universal builds
+(`-tags goffi_universal`, goffi's "Profile U"): one file per architecture that
+keeps this bridge and every backend on glibc and musl alike — Debian, Ubuntu,
+Alpine, postmarketOS. There is no separate musl download any more, and no
+static flavor without the bridge.
 
-`f4-linux-<arch>.tar.gz` is fully static. It starts on any Linux, including
-musl systems and empty containers, but a static binary cannot `dlopen`
-anything, so the bridge reports itself unsupported there and vtui falls back
-to its pure-Go X11 and ANSI paths.
+The trick is that these binaries name no libc. Every libc symbol is imported
+with an empty `SONAME`, so the linker records the undefined symbols but emits
+no `DT_NEEDED`; the ELF interpreter is stripped after linking, so the kernel
+loads the file directly the way it loads a static one; and at startup, before
+any libc symbol is touched, the process re-execs itself through whichever
+dynamic loader the host actually has, with that host's libc pre-loaded. Every
+symbol then binds against it.
 
-`f4-linux-musl-<arch>.tar.gz` is built against musl's libc instead
-(`-tags goffi_musl`). It runs only on musl systems — Alpine, postmarketOS —
-and keeps the bridge and every backend. If you are on Alpine, this is the one
-to take; the updater in a musl build asks for it by name.
+The cost is the one thing the old static artifact could do that this cannot: a
+host with no loader goffi recognises — a scratch container, a distribution
+that keeps `ld.so` somewhere else — cannot start these binaries at all, where
+the static build would have run with the bridge reported as unsupported.
 
-Everything else on Linux (the cross-built architectures marked `noffi`) has no
-bridge by construction.
+An already-installed musl build keeps updating: it asks for the musl asset by
+name, does not find it, and falls back to the generic one — which is now the
+universal build, and runs on musl.
+
+Everything else on Linux — the cross-built architectures, most of them marked
+`noffi` — is still static and has no bridge by construction.
 
 ## Reaching the bridge from a sandbox
 
