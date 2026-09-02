@@ -32,25 +32,25 @@ concurrency:
 
 jobs:
   # The build matrix is deliberately inline data. Pull requests build all
-  # eight cells because those are the artifacts anyone actually downloads
-  # from a PR: six desktop OS/architecture pairs plus two musl flavors.
+  # six cells because those are the artifacts anyone actually downloads
+  # from a PR: the six desktop OS/architecture pairs.
   # Exotic targets live in build-batch below and run outside pull requests.
+  #
+  # There is no separate musl cell any more. linux/amd64 and linux/arm64 are
+  # built once, in goffi's universal ("Profile U") mode, and the single file
+  # runs on glibc and musl alike -- see the Build binaries step below.
   build:
-    name: Build (${{ matrix.goos }}/${{ matrix.goarch }}${{ matrix.libc == 'musl' && ' musl' || '' }})
+    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }, { goos: linux, goarch: amd64, libc: musl }, { goos: linux, goarch: arm64, libc: musl }] }
+      matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }] }
     env:
       CGO_ENABLED: 0
       BUILD_TAGS: ''
-      LIBC: ${{ matrix.libc || '' }}
-      # Artifact and archive basename. The musl cells build the same
-      # GOOS/GOARCH pair as the generic Linux cells, so they need a name of
-      # their own or the two would collide. Everything else keeps the exact
-      # name it has always had -- the updater and the Homebrew job match on
-      # these suffixes.
-      ASSET: ${{ matrix.libc == 'musl' && format('f4-linux-musl-{0}', matrix.goarch) || format('f4-{0}-{1}', matrix.goos, matrix.goarch) }}
+      # Artifact and archive basename, unchanged -- the updater and the
+      # Homebrew job match on these suffixes.
+      ASSET: ${{ format('f4-{0}-{1}', matrix.goos, matrix.goarch) }}
 
     steps:
     - name: Checkout code
@@ -69,11 +69,10 @@ jobs:
       uses: ./.github/actions/affected-packages
 
     - name: Check formatting
-      # The musl amd64 cell builds the same tree as the generic amd64
-      # cell, so these repo-wide checks belong to one of them, not both.
+      # One cell carries the repo-wide checks; linux/amd64 is the fastest.
       # Deliberately not gated on build impact: gofmt covers test files too,
       # so a tests-only pull request still needs this check.
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
         if [ -n "$(gofmt -s -l .)" ]; then
           echo "The following files are not properly formatted:"
@@ -83,15 +82,13 @@ jobs:
         fi
 
     - name: Check language file formatting
-      # The musl amd64 cell builds the same tree as the generic amd64
-      # cell, so these repo-wide checks belong to one of them, not both.
-      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
+      # One cell carries the repo-wide checks; linux/amd64 is the fastest.
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: go run ./tools/langfmt -check cmd/f4/lang/*.lng
 
     - name: Verify generated application icons
-      # The musl amd64 cell builds the same tree as the generic amd64
-      # cell, so these repo-wide checks belong to one of them, not both.
-      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64' && matrix.libc != 'musl'
+      # One cell carries the repo-wide checks; linux/amd64 is the fastest.
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
         go generate ./cmd/f4
         git diff --exit-code -- \
@@ -109,34 +106,40 @@ jobs:
         EXT=""
         if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
 
-        # Truly static binaries on Linux.
+        # One Linux binary per architecture, with FFI, for glibc and musl
+        # both.
         #
-        # -extldflags '-static' used to live here and never did anything: it is
-        # forwarded to the external linker, and a CGO_ENABLED=0 build never
-        # invokes one. What actually made these binaries dynamic was goffi's
-        # //go:cgo_import_dynamic directives -- dlopen from libdl.so.2,
-        # __errno_location from libc.so.6, fakecgo's pthread_* from
-        # libpthread.so.0 -- which make the Go linker emit PT_INTERP and
-        # DT_NEEDED whatever the flags say.
+        # This used to be a pair of trades, neither of them good. The generic
+        # cells linked statically (goffi_static): they started anywhere but
+        # could not dlopen, so the FFI bridge, the GPU, Wayland and Ebiten
+        # backends were all gone and vtui fell back to its pure-Go X11 and
+        # ANSI paths. The musl cells kept every backend by pointing goffi's
+        # imports at musl's libc and baking /lib/ld-musl-<arch>.so.1 into
+        # PT_INTERP -- which is precisely what made those artifacts unable to
+        # start anywhere else, hence a second set of downloads and a flavor
+        # the updater had to know about.
         #
-        # Our goffi fork drops those directives under the goffi_static tag, so
-        # the linker has nothing left to import. FFI goes with them: the GPU,
-        # Wayland and Ebiten backends are unavailable in these builds and vtui
-        # falls back to its pure-Go X11 and ANSI paths. See unxed/f4#693 and
-        # docs/STATIC_BUILDS.md in unxed/goffi.
+        # goffi's universal mode ("Profile U") removes the choice. It imports
+        # every libc symbol with an empty SONAME, so the linker records the
+        # undefined symbols but no DT_NEEDED and the binary names no libc at
+        # all; the interpreter is then stripped after linking (below), so the
+        # kernel loads the file directly the way it loads a static one. At
+        # startup, before any libc symbol is touched, goffi re-execs the
+        # process through whatever dynamic loader the host actually has, with
+        # that host's libc pre-loaded, and every symbol binds against it.
+        # One file, FFI alive, glibc and musl both. See docs/PROFILE_U.md in
+        # unxed/goffi.
         #
-        # The musl cells make the opposite trade. A static binary runs on
-        # Alpine but without FFI; goffi_musl instead points the same
-        # directives at musl's single libc object and bakes the musl loader
-        # path into PT_INTERP, so those artifacts are dynamic on purpose and
-        # keep every backend. See docs/MUSL.md in unxed/goffi.
+        # Unlike goffi_musl this needs no -gcflags, and unlike goffi_static it
+        # keeps every backend. What it does need is a host loader it
+        # recognises: on a system that has none -- a scratch container, a
+        # distro that keeps ld.so somewhere else -- the process cannot bring
+        # up libc and dies at startup, where the old static artifact would
+        # have run without FFI. That is the one thing the static flavor could
+        # do that this cannot.
         LDFLAGS="-s -w"
         if [ "$GOOS" = "linux" ]; then
-          if [ "$LIBC" = "musl" ]; then
-            BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_musl"
-          else
-            BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_static"
-          fi
+          BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_universal"
         fi
 
         # Go embeds the commit in release artifacts, but not the tag. Keep
@@ -149,14 +152,6 @@ jobs:
         GCFLAGS=""
         if [ "$GOOS" = "freebsd" ]; then
           GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
-        fi
-        # goffi bakes the musl loader path in with //go:cgo_dynamic_linker,
-        # which the compiler allows only in cgo-generated code. Same
-        # mechanism as the FreeBSD shim above, different package. Dropping
-        # the flag is a compile error naming the directive, not a silently
-        # mislinked binary.
-        if [ "$LIBC" = "musl" ]; then
-          GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"
         fi
 
         BUILD_TAG_ARGS=()
@@ -197,132 +192,86 @@ jobs:
         cd plugins/dummy_internal
         go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$LDFLAGS" -o ../../build/plugins/dummy_internal/f4-internal-dummy-plugin$EXT .
 
+    # The universal contract, asserted rather than assumed: no PT_INTERP and
+    # no DT_NEEDED. Both halves matter and neither is visible later -- a
+    # binary that kept its interpreter starts fine on this runner and fails
+    # only on Alpine, and a stray DT_NEEDED from any dependency pins the
+    # artifact to one libc exactly as the old musl flavor was pinned.
+    #
+    # goffi-strip-interp and goffi-audit come from the goffi the build just
+    # linked against (go.mod pins the fork), so there is no separate tool to
+    # install or keep in sync. This step deliberately does not set GOOS or
+    # GOARCH: the tools run on the runner and take the cross-built file as an
+    # argument.
+    #
+    # Only build/f4 is an executable. plugins/dummy_internal is a library
+    # package, so the file the build step writes next to it is a Go archive
+    # with no ELF headers of its own.
+    - name: Make the Linux binary libc-independent
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux'
+      run: |
+        set -euo pipefail
+        go run github.com/go-webgpu/goffi/cmd/goffi-strip-interp build/f4
+        go run github.com/go-webgpu/goffi/cmd/goffi-audit build/f4
+
+    # Running the arm64 artifact means running a foreign-architecture
+    # container, which needs the binfmt handlers this action registers. The
+    # "fix binary" flag it sets is not a detail: the universal binary re-execs
+    # itself through the host loader, and without that flag the kernel would
+    # have no interpreter registered for the exec'd image.
+    - name: Set up QEMU
+      if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux' && matrix.goarch != 'amd64' && github.event_name != 'pull_request'
+      uses: docker/setup-qemu-action@v3
+
     # A cross-built binary nobody ever started is not evidence of anything,
-    # and the release publishes it all the same. Every Linux binary is now
-    # static, so qemu-user runs them with no rootfs and no binfmt setup, and
-    # Go runs every package's init() before main -- so a single --version
-    # call is enough to catch a broken toolchain or an architecture a
-    # dependency cannot actually handle. --version returns before any
-    # terminal setup, so no tty is needed.
+    # and the release publishes it all the same. Go runs every package's
+    # init() before main, so a single --version call is enough to catch a
+    # broken toolchain or an architecture a dependency cannot actually
+    # handle. --version returns before any terminal setup, so no tty is
+    # needed.
+    #
+    # One artifact now claims to cover both libcs, so proving it takes real
+    # userlands of both: a glibc one and a musl one, running the very file
+    # that gets packaged. qemu-user's -L sysroot cannot stand in for them --
+    # it redirects the interpreter lookup, while goffi's re-exec bridge
+    # probes the loader paths itself with raw syscalls and so would find the
+    # runner's own glibc and report a pass that means nothing.
+    #
+    # The container runs ride with pushes and tags, where the nightly and
+    # release jobs publish and a red run blocks them via needs. Pull requests
+    # keep the ELF contract above (which catches the realistic breakage: a
+    # tag not applying, a dependency dragging a SONAME in) plus the native
+    # run of the amd64 cell.
     - name: Smoke test the binary
       if: steps.affected.outputs.build == 'yes' && matrix.goos == 'linux'
       env:
         GOARCH_CELL: ${{ matrix.goarch }}
-        QEMU_SMOKE: ${{ github.event_name != 'pull_request' }}
+        CROSS_LIBC_SMOKE: ${{ github.event_name != 'pull_request' }}
       run: |
         set -euo pipefail
 
-        # Alpine userland used to execute the musl artifacts, pinned by
-        # digest so a rebuilt upstream image cannot change what this proves.
-        ALPINE_VERSION=3.24.1
-        ALPINE_BRANCH=v3.24
-
-        # GOARCH and qemu-user spell five of these differently.
-        case "$GOARCH_CELL" in
-          amd64)    QEMU=x86_64 ;;
-          386)      QEMU=i386 ;;
-          arm64)    QEMU=aarch64 ;;
-          mipsle)   QEMU=mipsel ;;
-          mips64le) QEMU=mips64el ;;
-          loong64)  QEMU=loongarch64 ;;
-          *)        QEMU="$GOARCH_CELL" ;;
-        esac
-
-        if [ "$LIBC" = "musl" ]; then
-          # These artifacts are dynamic on purpose -- that is what keeps FFI
-          # alive on Alpine -- so the static assertion below would be exactly
-          # backwards here. Assert instead the two properties that decide
-          # whether the binary can start on a musl system at all, both of
-          # which are baked in at link time and neither of which any later
-          # step could repair.
-          case "$GOARCH_CELL" in
-            amd64) MUSL_ARCH=x86_64 ;;
-            arm64) MUSL_ARCH=aarch64 ;;
-            *) echo "::error::no musl mapping for $GOARCH_CELL"; exit 1 ;;
-          esac
-
-          interp=$(readelf -lW build/f4 | sed -n 's/.*Requesting program interpreter: \(.*\)\]/\1/p')
-          if [ "$interp" != "/lib/ld-musl-${MUSL_ARCH}.so.1" ]; then
-            echo "::error::interpreter is '$interp', expected /lib/ld-musl-${MUSL_ARCH}.so.1 -- the goffi_musl tag did not take effect"
-            exit 1
-          fi
-
-          # Exactly one DT_NEEDED, and it is musl's. A stray glibc SONAME
-          # from any dependency would make the binary unstartable on Alpine
-          # while still running fine here on the runner's own glibc.
-          needed=$(readelf -dW build/f4 | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
-          if [ "$needed" != "libc.musl-${MUSL_ARCH}.so.1" ]; then
-            echo "::error::DT_NEEDED is '$needed', expected exactly libc.musl-${MUSL_ARCH}.so.1"
-            exit 1
-          fi
-
-          # The readelf assertions above catch the realistic breakage (the
-          # tag not applying, a glibc SONAME leaking in) and cost nothing.
-          # The rest of this branch -- executing the artifact against real
-          # musl and the flavor-specific updater tests -- guards what gets
-          # *published*, so it rides with pushes and tags, where the nightly
-          # and release jobs actually publish; a red run there blocks them
-          # via needs. Skipping it keeps ~40 seconds off every PR.
-          if [ "$QEMU_SMOKE" != "true" ]; then
-            echo "Pull request: readelf assertions only."
-            exit 0
-          fi
-
-          # Now actually start it, against a real musl libc. qemu-user
-          # resolves PT_INTERP inside the sysroot given with -L, so one
-          # mechanism covers both architectures and needs no root, no
-          # binfmt registration and no container.
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-user-static
-          base="https://dl-cdn.alpinelinux.org/alpine/${ALPINE_BRANCH}/releases/${MUSL_ARCH}"
-          tarball="alpine-minirootfs-${ALPINE_VERSION}-${MUSL_ARCH}.tar.gz"
-          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$tarball" "$base/$tarball"
-          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o "$tarball.sha256" "$base/$tarball.sha256"
-          sha256sum -c "$tarball.sha256"
-          mkdir -p alpine-rootfs
-          tar xzf "$tarball" -C alpine-rootfs
-          "qemu-$QEMU-static" -L alpine-rootfs build/f4 --version
-
-          # A musl-tagged test binary cannot run on the runner, so the one
-          # assertion that only holds in this flavor rides along here: that
-          # the binary knows it is a musl build, and so asks the updater for
-          # the musl release asset rather than quietly replacing itself with
-          # the static one. The rootfs and qemu are already in place.
-          # Rebuilt here rather than carried over: each step is its own
-          # shell, so the Build step's variables are gone by now -- GOARCH
-          # included. Without it the test binary is built for the runner's
-          # own amd64, and the arm64 cell hands qemu-aarch64 an x86_64 ELF.
-          # -trimpath matches the Build step above: the build cache keys
-          # compiled packages by their flags, so without it every package
-          # compiles a second time here (~100 extra seconds) instead of
-          # reusing the objects that step just produced.
-          GOOS=linux GOARCH="$GOARCH_CELL" go test -c -trimpath -tags "${BUILD_TAGS:+$BUILD_TAGS,}goffi_musl" \
-            -gcflags=github.com/go-webgpu/goffi/internal/dl=-std \
-            -o /tmp/f4-libc.test ./cmd/f4
-          "qemu-$QEMU-static" -L alpine-rootfs /tmp/f4-libc.test \
-            -test.run 'TestBuildLibcIsMusl|TestUpdateAssetSuffixes' -test.v
-          exit 0
-        fi
-
-        # The claim the release makes about these artifacts, checked rather
-        # than assumed. A binary that grew an interpreter back would still run
-        # here on the runner's own glibc and would fail only later, on Alpine
-        # or in a scratch container, where nobody is watching.
-        if file build/f4 | grep -q 'dynamically linked'; then
-          echo "::error::build/f4 is dynamically linked; the goffi_static tag did not take effect"
-          file build/f4
-          exit 1
-        fi
+        # Pinned so a rebuilt upstream image cannot change what this proves.
+        GLIBC_IMAGE=debian:bookworm-slim
+        MUSL_IMAGE=alpine:3.24.1
 
         if [ "$GOARCH_CELL" = "amd64" ]; then
           ./build/f4 --version
+        fi
+
+        if [ "$CROSS_LIBC_SMOKE" != "true" ]; then
+          echo "Pull request: ELF contract and the native run only."
           exit 0
         fi
 
-        # Static, so qemu-user needs no target sysroot: no -L, no libc6-*-cross.
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq qemu-user-static
-        "qemu-$QEMU-static" build/f4 --version
+        run_args=(--rm --volume "$PWD/build:/mnt:ro")
+        if [ "$GOARCH_CELL" != "amd64" ]; then
+          run_args+=(--platform "linux/$GOARCH_CELL")
+        fi
+
+        for image in "$GLIBC_IMAGE" "$MUSL_IMAGE"; do
+          echo "==> $image"
+          docker run "${run_args[@]}" "$image" /mnt/f4 --version
+        done
 
     - name: Package
       if: steps.affected.outputs.build == 'yes'
@@ -399,23 +348,23 @@ jobs:
           GOOS=$(jq -r '.goos' <<<"$cell")
           GOARCH=$(jq -r '.goarch' <<<"$cell")
           BUILD_TAGS=$(jq -r '.build_tags // ""' <<<"$cell")
-          LIBC=$(jq -r '.libc // ""' <<<"$cell")
           export GOOS GOARCH
 
-          CELL_KEY="${GOOS}-${GOARCH}${LIBC:+-$LIBC}"
+          CELL_KEY="${GOOS}-${GOARCH}"
           BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
           mkdir -p "$BUILD_DIR/plugins/dummy_internal"
 
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
 
+          # These are the architectures goffi's universal mode does not
+          # cover -- it targets linux/amd64 and linux/arm64, which the build
+          # job above owns. Everything here keeps the static flavor: it
+          # starts anywhere and has no FFI, which is what the noffi rows
+          # assume anyway.
           LDFLAGS="-s -w"
           if [ "$GOOS" = "linux" ]; then
-            if [ "$LIBC" = "musl" ]; then
-              BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_musl"
-            else
-              BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_static"
-            fi
+            BUILD_TAGS="${BUILD_TAGS:+$BUILD_TAGS,}goffi_static"
           fi
 
           APP_LDFLAGS="$LDFLAGS"
@@ -426,9 +375,6 @@ jobs:
           GCFLAGS=""
           if [ "$GOOS" = "freebsd" ]; then
             GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
-          fi
-          if [ "$LIBC" = "musl" ]; then
-            GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"
           fi
 
           BUILD_TAG_ARGS=()
@@ -476,12 +422,11 @@ jobs:
         while IFS= read -r cell; do
           GOOS=$(jq -r '.goos' <<<"$cell")
           GOARCH_CELL=$(jq -r '.goarch' <<<"$cell")
-          LIBC=$(jq -r '.libc // ""' <<<"$cell")
           if [ "$GOOS" != "linux" ]; then
             continue
           fi
 
-          CELL_KEY="${GOOS}-${GOARCH_CELL}${LIBC:+-$LIBC}"
+          CELL_KEY="${GOOS}-${GOARCH_CELL}"
           BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
 
           case "$GOARCH_CELL" in
@@ -516,15 +461,10 @@ jobs:
         while IFS= read -r cell; do
           GOOS=$(jq -r '.goos' <<<"$cell")
           GOARCH=$(jq -r '.goarch' <<<"$cell")
-          LIBC=$(jq -r '.libc // ""' <<<"$cell")
-          CELL_KEY="${GOOS}-${GOARCH}${LIBC:+-$LIBC}"
+          CELL_KEY="${GOOS}-${GOARCH}"
           BUILD_DIR="$BATCH_ROOT/builds/$CELL_KEY"
 
-          if [ "$LIBC" = "musl" ]; then
-            ASSET="f4-linux-musl-$GOARCH"
-          else
-            ASSET="f4-$GOOS-$GOARCH"
-          fi
+          ASSET="f4-$GOOS-$GOARCH"
           ARTIFACT_DIR="$BATCH_ROOT/artifacts/$ASSET"
           mkdir -p "$ARTIFACT_DIR"
 
@@ -780,14 +720,16 @@ jobs:
   # fails the build.
   #
   # Cell notes, in full-matrix cell order:
-  # - linux/arm carries goffi_static: Linux release builds use it, so vet
-  #   the files the build actually compiles -- the stubs, not the dlopen
-  #   wrappers. The only arm32 compile anywhere in a PR run, so it is the
-  #   one cell PRs keep.
-  # - linux/amd64 carries goffi_musl, which compiles the real dlopen
-  #   wrappers instead of those stubs; nothing else vets that code on
-  #   Linux. The gcflags mirror the build step (same for freebsd's
-  #   fakecgo shim below).
+  # - linux/arm carries goffi_static: the cross-built Linux artifacts that
+  #   universal mode does not cover are built with it, so vet the files
+  #   those builds actually compile -- the stubs, not the dlopen wrappers.
+  #   The only arm32 compile anywhere in a PR run, so it is the one cell
+  #   PRs keep.
+  # - linux/amd64 carries goffi_universal, which is what the released
+  #   amd64 and arm64 binaries are built with: it compiles the real dlopen
+  #   wrappers and the re-exec bridge instead of those stubs, and nothing
+  #   else vets that code on Linux. It needs no gcflags, unlike the
+  #   goffi_musl cell it replaces (and unlike freebsd's fakecgo shim below).
   # Pull requests run only the linux/arm cell: every other target is
   # already compiled in the same PR run by its build and test jobs (and
   # go test runs vet's high-confidence checks natively), or -- for the
@@ -799,7 +741,7 @@ jobs:
     strategy:
       fail-fast: false
       # One long line on purpose: actionlint chews minutes on a folded variant.
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_musl","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/dl=-std"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
       CGO_ENABLED: 0
       CELLS: ${{ toJSON(matrix.cells) }}
