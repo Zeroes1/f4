@@ -3294,6 +3294,16 @@ func (ev *EditorView) StartIndexing() {
 	// need the safety scan before wrapping can be enabled. A mapped file has
 	// neither: it starts with an empty index the scan below fills, and that
 	// scan runs the same safety check on every chunk it reads.
+	//
+	// The table is read here, on the UI thread, and handed to the scans
+	// below rather than reached through ev.pt from inside them. A piece
+	// table is safe to share -- it locks its own pieces -- but the field
+	// that names one is not: SetText builds a replacement and assigns it,
+	// so a scan that dereferenced the field per chunk would sooner or later
+	// follow it into a table New is still filling in. One pointer taken
+	// once is also one consistent view of the text, which is what the scan
+	// wants anyway.
+	pt := ev.pt
 	if ev.asyncBuf == nil && ev.mapped == nil {
 		// Fully read files (non-UTF-8 codepages) have a complete index and no
 		// line scan; resolve a pending restore here or Loading waits forever.
@@ -3307,7 +3317,7 @@ func (ev *EditorView) StartIndexing() {
 			// zoin-bot keeps mapped-file faults recoverable in the fully-read
 			// indexing path just like in the lazy-buffer indexing goroutine.
 			defer ev.guardMapping("indexing fully-read buffer")()
-			ev.scanFullyReadForUnsafeWordWrap(ctx, sessionID)
+			ev.scanFullyReadForUnsafeWordWrap(ctx, sessionID, pt)
 		}()
 		return
 	}
@@ -3317,15 +3327,21 @@ func (ev *EditorView) StartIndexing() {
 	ev.indexing = true
 	ev.setIndexStatus(IndexStatus{
 		Phase:   IndexScanning,
-		Total:   int64(ev.pt.Size()),
+		Total:   int64(pt.Size()),
 		Scanned: int64(ev.li.GetLineOffset(ev.li.LineCount() - 1)),
 		Lines:   ev.li.LineCount(),
 	})
 
 	// Captured here, on the UI thread, so the scan reads one consistent view
 	// of the buffer, the file and the mapping rather than whatever they are
-	// when each chunk comes round.
+	// when each chunk comes round. The buffer and the index join pt above
+	// for the same reason: the fields naming them are the UI thread's.
 	readFromFile := ev.chunkReader()
+	buf := ev.asyncBuf
+	li := ev.li
+	// The logical size, not the file's: the scan reads the text as it is
+	// now, including whatever has been typed into it.
+	maxSize := pt.Size()
 
 	ev.indexWG.Add(1)
 	// Read on the goroutine that starts this work, not inside it: the
@@ -3371,12 +3387,6 @@ func (ev *EditorView) StartIndexing() {
 		}()
 
 		poll := indexPollMin
-		buf := ev.asyncBuf
-		li := ev.li
-		pt := ev.pt
-		// The logical size, not the file's: the scan reads the text as it is
-		// now, including whatever has been typed into it.
-		maxSize := ev.pt.Size()
 
 		if indexer, ok := ev.vfs.(vfs.LineIndexer); ok && ev.Codepage == 65001 {
 			vtui.DebugLog("EDITOR_INDEX: Using remote LineIndexer")

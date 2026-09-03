@@ -114,10 +114,15 @@ func (ev *EditorView) currentLineUnsafeForWordWrap() bool {
 // scanFullyReadForUnsafeWordWrap covers codepage-decoded files. Those files
 // do not need a line-index scan, but they still need the same safety check as
 // lazily loaded UTF-8 files before the user can enable wrapping.
-func (ev *EditorView) scanFullyReadForUnsafeWordWrap(ctx context.Context, sessionID int) {
+//
+// The table comes in as an argument rather than off ev: this runs on its own
+// goroutine, and ev.pt belongs to the UI thread, which replaces it whenever
+// the text is set wholesale. Reading the field from here would race that
+// assignment and, worse, could reach the replacement before it is built.
+func (ev *EditorView) scanFullyReadForUnsafeWordWrap(ctx context.Context, sessionID int, pt *piecetable.PieceTable) {
 	const chunkSize = 256 * 1024
 	lineLen := 0
-	for pos := 0; pos < ev.pt.Size(); {
+	for pos := 0; pos < pt.Size(); {
 		select {
 		case <-ctx.Done():
 			return
@@ -127,11 +132,11 @@ func (ev *EditorView) scanFullyReadForUnsafeWordWrap(ctx context.Context, sessio
 			return
 		}
 
-		take := min(chunkSize, ev.pt.Size()-pos)
-		data, ok := ev.pt.View(pos, take)
+		take := min(chunkSize, pt.Size()-pos)
+		data, ok := pt.View(pos, take)
 		if !ok {
 			var err error
-			data, err = ev.pt.GetRange(pos, take)
+			data, err = pt.GetRange(pos, take)
 			if err != nil {
 				if err == piecetable.ErrLoading {
 					continue
