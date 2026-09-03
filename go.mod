@@ -29,7 +29,7 @@ require (
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/unxed/archives v0.0.0-20260826172907-54073a78974d
 	github.com/unxed/colorer4go v0.1.14
-	github.com/unxed/ffibridge v0.1.3
+	github.com/unxed/ffibridge v0.1.4
 	github.com/unxed/id3-go v0.1.1
 	github.com/unxed/libwinescape v0.1.5
 	github.com/unxed/localecp v0.1.5
