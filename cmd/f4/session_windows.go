@@ -67,6 +67,13 @@ func ManageSessions() {
 
 	reader := vtinput.NewReader(os.Stdin, false)
 	vtui.FrameManager.Run(reader)
+
+	// Run() returns in good order when the input channel closes, and the
+	// input channel closes when the console host has died (#397). Say so,
+	// or the log just stops after the session is saved.
+	if cause := consoleHostGone(); cause != nil {
+		reportConsoleHostGone(cause)
+	}
 }
 
 func runServer(sockPath string)                {}
