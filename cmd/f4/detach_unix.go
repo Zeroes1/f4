@@ -4,7 +4,6 @@ package main
 
 import (
 	"os"
-	"os/exec"
 	"syscall"
 )
 
@@ -18,7 +17,7 @@ func checkAndDetach(attached bool) {
 		return
 	}
 
-	cmd := exec.Command(exe, os.Args[1:]...)
+	cmd := selfCommand(exe, os.Args[1:]...)
 	cmd.Env = append(os.Environ(), "F4_DETACHED=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -141,7 +140,7 @@ func startNewSession() {
 	sockPath := filepath.Join(sessionDir(), fmt.Sprintf("f4-new-%d-%d.sock", pid, time.Now().Unix()))
 	vtui.DebugLog("SESSION: Starting new daemon server at %s", sockPath)
 
-	cmd := exec.Command(os.Args[0], "--server", sockPath)
+	cmd := selfCommand(os.Args[0], "--server", sockPath)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // Detach from terminal
 
 	// Crucial for GUI startup: redirect daemon's own I/O to null so it doesn't
@@ -152,7 +151,7 @@ func startNewSession() {
 	cmd.Stderr = null
 
 	if err := cmd.Start(); err != nil {
-		vtui.DebugLog("SESSION: CRITICAL: Failed to spawn daemon process (path: %s): %v", os.Args[0], err)
+		vtui.DebugLog("SESSION: CRITICAL: Failed to spawn daemon process (path: %s): %v", cmd.Path, err)
 		if null != nil {
 			null.Close()
 		}
