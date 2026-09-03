@@ -149,10 +149,17 @@ jobs:
           APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
         fi
 
+        # fakecgo supplies environ/__progname (and __ps_strings on NetBSD)
+        # in place of the crt0 these cgo-free builds do not link. Those
+        # symbols have to reach the *dynamic* symbol table, which needs
+        # //go:cgo_export_dynamic, which the compiler only accepts in a
+        # package built as std. Both BSDs need it; nothing else does.
         GCFLAGS=""
-        if [ "$GOOS" = "freebsd" ]; then
-          GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
-        fi
+        case "$GOOS" in
+          freebsd|netbsd)
+            GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
+            ;;
+        esac
 
         BUILD_TAG_ARGS=()
         if [ -n "$BUILD_TAGS" ]; then
@@ -372,10 +379,17 @@ jobs:
             APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
           fi
 
+          # fakecgo supplies environ/__progname (and __ps_strings on NetBSD)
+          # in place of the crt0 these cgo-free builds do not link. Those
+          # symbols have to reach the *dynamic* symbol table, which needs
+          # //go:cgo_export_dynamic, which the compiler only accepts in a
+          # package built as std. Both BSDs need it; nothing else does.
           GCFLAGS=""
-          if [ "$GOOS" = "freebsd" ]; then
-            GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
-          fi
+          case "$GOOS" in
+            freebsd|netbsd)
+              GCFLAGS="-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"
+              ;;
+          esac
 
           BUILD_TAG_ARGS=()
           if [ -n "$BUILD_TAGS" ]; then
@@ -741,7 +755,7 @@ jobs:
     strategy:
       fail-fast: false
       # One long line on purpose: actionlint chews minutes on a folded variant.
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
       CGO_ENABLED: 0
       CELLS: ${{ toJSON(matrix.cells) }}
