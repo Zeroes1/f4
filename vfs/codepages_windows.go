@@ -5,6 +5,8 @@ package vfs
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"unicode/utf16"
 	"unsafe"
 
@@ -18,75 +20,201 @@ const cpSupported = 2
 var (
 	kernel32             = windows.NewLazySystemDLL("kernel32.dll")
 	enumSystemCodePagesW = kernel32.NewProc("EnumSystemCodePagesW")
-	getCPInfoExW         = kernel32.NewProc("GetCPInfoExW")
 	getACP               = kernel32.NewProc("GetACP")
 	getOEMCP             = kernel32.NewProc("GetOEMCP")
 	wideCharToMultiByte  = kernel32.NewProc("WideCharToMultiByte")
 )
 
-// CPINFOEXW is the Win32 structure returned by GetCPInfoExW. Keeping this
-// small declaration here avoids depending on a generated API package for the
-// codepage enumeration path.
-type cpInfoExW struct {
-	MaxCharSize        uint32
-	DefaultChar        [2]byte
-	LeadByte           [12]byte
-	UnicodeDefaultChar [2]uint16
-	CodePage           uint32
-	CodePageName       [260]uint16
-}
-
+// platformCodepages asks Windows which code pages it can convert beyond the
+// built-in table.
+//
+// This runs from package init: before main, before the log file exists,
+// before the console has been touched. Anything that wedges here leaves a
+// process that sits in memory with nothing on screen and nothing on disk to
+// explain itself (#895). So the rule is that startup only *lists* code
+// pages; it never asks Windows to *open* one.
+//
+// Opening is what GetCPInfoExW does. A .nls code page is cheap, but the
+// DLL-backed ones (c_gsm7.dll for 55000, c_iscii.dll, c_is2022.dll, ...)
+// are LoadLibrary'd on first touch, with their DllMains -- and msvcrt.dll,
+// which nothing else in f4 links -- running under the loader lock. Doing
+// that a hundred times at startup was slow everywhere, and it was done
+// from inside the EnumSystemCodePagesW callback, nested in the enumeration
+// with the Go runtime's callback trampoline in between. That is exactly
+// where #895 stops: c_gsm7.dll is mapped, and the process never returns
+// from the callback.
+//
+// Now the callback records numbers and nothing else. Names come from the
+// table below rather than from the code page's own DLL, and the DLL is
+// loaded by MultiByteToWideChar the first time somebody actually converts
+// text in that code page -- long after startup, from a place that can
+// report a failure.
 func platformCodepages() []Codepage {
-	var result []Codepage
-	callback := windows.NewCallback(func(name *uint16) uintptr {
-		cp, err := parseWindowsCodepage(name)
-		if err != nil || cp == 0 {
-			return 1
-		}
-		if _, exists := FindCodepage(cp); exists {
-			return 1
-		}
+	ids := enumerateWindowsCodepages()
+	if len(ids) == 0 {
+		return nil
+	}
+	sort.Ints(ids)
 
-		info, ok := getWindowsCodepageInfo(cp)
-		if !ok {
-			return 1
+	result := make([]Codepage, 0, len(ids))
+	for _, cp := range ids {
+		if _, exists := FindCodepage(cp); exists {
+			continue
 		}
 		result = append(result, Codepage{
 			ID:    cp,
-			Name:  windowsCodepageName(info, cp),
+			Name:  windowsCodepageName(cp),
 			Enc:   windowsCodepageEncoding(cp),
 			group: codepageOther,
 		})
+	}
+	return result
+}
+
+// enumerateWindowsCodepages returns the IDs Windows reports as supported.
+// The callback must not call back into Win32: it is invoked from inside
+// EnumSystemCodePagesW, and everything it needs (a decimal string to an
+// int) is plain Go.
+func enumerateWindowsCodepages() []int {
+	var ids []int
+	seen := make(map[int]struct{})
+	callback := windows.NewCallback(func(name *uint16) uintptr {
+		cp, err := parseWindowsCodepage(name)
+		if err != nil || cp <= 0 {
+			return 1
+		}
+		if _, dup := seen[cp]; dup {
+			return 1
+		}
+		seen[cp] = struct{}{}
+		ids = append(ids, cp)
 		return 1
 	})
 
 	if resultCode, _, _ := enumSystemCodePagesW.Call(callback, cpSupported); resultCode == 0 {
 		return nil
 	}
-	return result
+	return ids
 }
 
 func parseWindowsCodepage(name *uint16) (int, error) {
-	text := windows.UTF16PtrToString(name)
-	var cp int
-	if _, err := fmt.Sscanf(text, "%d", &cp); err != nil {
-		return 0, err
+	if name == nil {
+		return 0, fmt.Errorf("nil code page name")
 	}
-	return cp, nil
+	return strconv.Atoi(windows.UTF16PtrToString(name))
 }
 
-func getWindowsCodepageInfo(cp int) (cpInfoExW, bool) {
-	var info cpInfoExW
-	result, _, _ := getCPInfoExW.Call(uintptr(cp), 0, uintptr(unsafe.Pointer(&info)))
-	return info, result != 0
+func windowsCodepageName(cp int) string {
+	if name, ok := windowsCodepageNames[cp]; ok {
+		return name
+	}
+	return fmt.Sprintf("Windows codepage %d", cp)
 }
 
-func windowsCodepageName(info cpInfoExW, cp int) string {
-	name := windows.UTF16ToString(info.CodePageName[:])
-	if name == "" {
-		return fmt.Sprintf("Windows codepage %d", cp)
-	}
-	return name
+// windowsCodepageNames names the code pages Windows can enumerate that are
+// not in the built-in table, after Microsoft's code page identifier list.
+// Static on purpose: see platformCodepages.
+var windowsCodepageNames = map[int]string{
+	500:   "IBM EBCDIC International",
+	708:   "Arabic (ASMO 708)",
+	720:   "DOS Arabic (Transparent ASMO)",
+	737:   "DOS Greek",
+	775:   "DOS Baltic",
+	857:   "DOS Turkish",
+	861:   "DOS Icelandic",
+	864:   "DOS Arabic",
+	869:   "DOS Modern Greek",
+	870:   "IBM EBCDIC Multilingual Latin 2",
+	875:   "IBM EBCDIC Greek Modern",
+	949:   "Korean (ks_c_5601-1987)",
+	1026:  "IBM EBCDIC Turkish (Latin 5)",
+	1141:  "IBM EBCDIC Germany (Euro)",
+	1142:  "IBM EBCDIC Denmark-Norway (Euro)",
+	1143:  "IBM EBCDIC Finland-Sweden (Euro)",
+	1144:  "IBM EBCDIC Italy (Euro)",
+	1145:  "IBM EBCDIC Latin America-Spain (Euro)",
+	1146:  "IBM EBCDIC United Kingdom (Euro)",
+	1147:  "IBM EBCDIC France (Euro)",
+	1148:  "IBM EBCDIC International (Euro)",
+	1149:  "IBM EBCDIC Icelandic (Euro)",
+	1361:  "Korean (Johab)",
+	10000: "Mac Roman",
+	10001: "Mac Japanese",
+	10002: "Mac Traditional Chinese (Big5)",
+	10003: "Mac Korean",
+	10004: "Mac Arabic",
+	10005: "Mac Hebrew",
+	10006: "Mac Greek",
+	10007: "Mac Cyrillic",
+	10008: "Mac Simplified Chinese (GB 2312)",
+	10010: "Mac Romanian",
+	10017: "Mac Ukrainian",
+	10021: "Mac Thai",
+	10029: "Mac Latin 2",
+	10079: "Mac Icelandic",
+	10081: "Mac Turkish",
+	10082: "Mac Croatian",
+	20000: "CNS Taiwan",
+	20001: "TCA Taiwan",
+	20002: "Eten Taiwan",
+	20003: "IBM5550 Taiwan",
+	20004: "TeleText Taiwan",
+	20005: "Wang Taiwan",
+	20105: "IA5 (IRV International Alphabet No. 5)",
+	20106: "IA5 German (7-bit)",
+	20107: "IA5 Swedish (7-bit)",
+	20108: "IA5 Norwegian (7-bit)",
+	20261: "T.61",
+	20269: "ISO 6937 Non-Spacing Accent",
+	20273: "IBM EBCDIC Germany",
+	20277: "IBM EBCDIC Denmark-Norway",
+	20278: "IBM EBCDIC Finland-Sweden",
+	20280: "IBM EBCDIC Italy",
+	20284: "IBM EBCDIC Latin America-Spain",
+	20285: "IBM EBCDIC United Kingdom",
+	20290: "IBM EBCDIC Japanese Katakana Extended",
+	20297: "IBM EBCDIC France",
+	20420: "IBM EBCDIC Arabic",
+	20423: "IBM EBCDIC Greek",
+	20424: "IBM EBCDIC Hebrew",
+	20833: "IBM EBCDIC Korean Extended",
+	20838: "IBM EBCDIC Thai",
+	20871: "IBM EBCDIC Icelandic",
+	20880: "IBM EBCDIC Cyrillic Russian",
+	20905: "IBM EBCDIC Turkish",
+	20924: "IBM EBCDIC Latin 1/Open System (Euro)",
+	20932: "EUC-JP (JIS 0208-1990 and 0212-1990)",
+	20936: "GB2312-80 (Simplified Chinese)",
+	20949: "Korean Wansung",
+	21025: "IBM EBCDIC Cyrillic Serbian-Bulgarian",
+	29001: "Europa 3",
+	38598: "ISO 8859-8 Hebrew (logical)",
+	50221: "ISO 2022 JP (allow 1 byte Kana)",
+	50222: "ISO 2022 JP (allow 1 byte Kana - SO/SI)",
+	50225: "ISO 2022 Korean",
+	50227: "ISO 2022 Simplified Chinese",
+	50229: "ISO 2022 Traditional Chinese",
+	50930: "EBCDIC Japanese (Katakana) Extended",
+	50931: "EBCDIC US-Canada and Japanese",
+	50933: "EBCDIC Korean Extended and Korean",
+	50935: "EBCDIC Simplified Chinese Extended and Simplified Chinese",
+	50936: "EBCDIC Simplified Chinese",
+	50937: "EBCDIC US-Canada and Traditional Chinese",
+	50939: "EBCDIC Japanese (Latin) Extended and Japanese",
+	51936: "EUC Simplified Chinese",
+	51950: "EUC Traditional Chinese",
+	55000: "GSM 7-bit",
+	57002: "ISCII Devanagari",
+	57003: "ISCII Bengali",
+	57004: "ISCII Tamil",
+	57005: "ISCII Telugu",
+	57006: "ISCII Assamese",
+	57007: "ISCII Oriya",
+	57008: "ISCII Kannada",
+	57009: "ISCII Malayalam",
+	57010: "ISCII Gujarati",
+	57011: "ISCII Punjabi",
+	65000: "UTF-7",
 }
 
 func windowsSystemCodepage(proc *windows.LazyProc) int {
