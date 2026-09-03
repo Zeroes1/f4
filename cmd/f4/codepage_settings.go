@@ -15,6 +15,70 @@ func codepageSettingChoices() ([]int, []string) {
 	return ids, labels
 }
 
+// codepageMenuChrome is what a VMenu row spends on something other than the
+// item text: the two border columns, the space it draws before every item,
+// and one column kept clear so a scrollbar never lands on a glyph.
+const codepageMenuChrome = 4
+
+// newCodepageMenu builds a codepage menu sized to the list it is showing.
+//
+// The three codepage menus all used to be a fixed 45 columns wide, which was
+// enough back when the list held a dozen built-in names. Now that f4 offers
+// every codepage the system knows about, Windows contributes entries like
+// "1141 (IBM EBCDIC - German (20273 + Euro))" -- and VMenu draws item text
+// without clipping it, so a longer name was painted over the right border and
+// on across whatever was behind the menu. Anything that still does not fit,
+// on a narrow terminal, is cut here instead of by the screen edge.
+func newCodepageMenu(title string, items []vtui.MenuItem) *vtui.VMenu {
+	screenW := vtui.FrameManager.GetScreenSize()
+	screenH := vtui.FrameManager.GetScreenHeight()
+
+	// Separators are drawn as a rule across the menu, never as text, so
+	// their captions must not widen it.
+	w := vtui.StringWidth(title) + 6
+	for _, item := range items {
+		if item.Separator {
+			continue
+		}
+		if itemW := vtui.StringWidth(item.Text) + codepageMenuChrome; itemW > w {
+			w = itemW
+		}
+	}
+	if maxW := screenW - 2; w > maxW {
+		w = maxW
+	}
+	if w < 20 {
+		w = 20
+	}
+
+	menu := vtui.NewVMenu(title)
+	for _, item := range items {
+		if !item.Separator {
+			item.Text = vtui.TruncateString(item.Text, w-codepageMenuChrome, "…")
+		}
+		menu.AddItem(item)
+	}
+
+	h := len(menu.Items) + 2
+	maxH := screenH - 2
+	if maxH < 5 {
+		maxH = 5
+	}
+	if h > maxH {
+		h = maxH
+	}
+	x := (screenW - w) / 2
+	y := (screenH - h) / 2
+	if x < 0 {
+		x = 0
+	}
+	if y < 0 {
+		y = 0
+	}
+	menu.SetPosition(x, y, x+w-1, y+h-1)
+	return menu
+}
+
 func codepageChoiceIndex(ids []int, current int) int {
 	current = vfs.NormalizeCodepageID(current)
 	for i, id := range ids {

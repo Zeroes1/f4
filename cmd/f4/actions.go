@@ -1074,7 +1074,10 @@ func showViewer(pf *PanelsFrame, viewer *ViewerView, path string) {
 				viewer.TopOffset = 0
 			}
 			viewer.WrapMode = state.ViewerWrap
+			// The saved flag is what the user left the file in last time,
+			// so it outranks the binary check the same way an F4 does.
 			viewer.HexMode = state.ViewerHex
+			viewer.hexAuto = false
 		}
 	}
 	viewer.ResizeConsole(pf.lastW, pf.lastH)

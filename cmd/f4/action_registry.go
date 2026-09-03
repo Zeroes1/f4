@@ -2441,6 +2441,9 @@ func init() {
 		MenuPath:    "View",
 		Checked:     viewerState(func(vv *ViewerView) bool { return vv.HexMode || vv.DecodeMode }),
 		Handler: withViewer(func(vv *ViewerView) {
+			// Whichever way this goes, the view mode is now the user's and
+			// a later codepage switch must not second-guess it.
+			vv.hexAuto = false
 			if !vv.HexMode && !vv.DecodeMode {
 				vv.HexMode = true
 				vv.TopOffset &= ^int64(0xF)

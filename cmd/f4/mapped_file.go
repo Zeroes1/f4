@@ -20,6 +20,19 @@ import (
 type MappedFile struct {
 	data   []byte
 	mapped []byte
+	// offset is how many bytes of the file data starts at. It is what a
+	// reader has to add to a position in this buffer to get the position of
+	// the same byte in the file.
+	offset int64
+}
+
+// FileOffset reports where in the file the mapped contents begin: zero, or
+// the length of a UTF-8 byte-order mark that is not part of the text.
+func (m *MappedFile) FileOffset() int64 {
+	if m == nil {
+		return 0
+	}
+	return m.offset
 }
 
 // Bytes returns the mapped contents. The result aliases the mapping and must
@@ -97,7 +110,7 @@ func MapEditorFileWithOffset(v vfs.VFS, f vfs.ReadAtCloser, fileOffset int64) (*
 	if err != nil {
 		return nil, err
 	}
-	return &MappedFile{data: data[fileOffset:], mapped: data}, nil
+	return &MappedFile{data: data[fileOffset:], mapped: data, offset: fileOffset}, nil
 }
 
 // guardMappedFaults makes a fault on mapped memory recoverable for the calling

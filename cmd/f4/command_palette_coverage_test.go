@@ -168,11 +168,8 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	"cmd/f4/editor_find_all.go:(*EditorView).showFindAllMenu#1": {
 		class: paletteAuditModalLocal, rationale: "Find All results are a query-local result selector reached through the registered editor search action",
 	},
-	"cmd/f4/editor_view.go:(*EditorView).showCodepageDialog#1": {
-		class: paletteAuditDynamicAction, rationale: "the registered editor codepage action opens the runtime codepage list",
-	},
-	"cmd/f4/editor_view.go:(*EditorView).showConvertCodepageDialog#1": {
-		class: paletteAuditDynamicAction, rationale: "the registered convert-codepage action opens the runtime codepage list",
+	"cmd/f4/codepage_settings.go:newCodepageMenu#1": {
+		class: paletteAuditDynamicAction, rationale: "the registered viewer, editor and convert-codepage actions all open the runtime codepage list through this builder",
 	},
 	"cmd/f4/editor_base64.go:(*EditorView).showBase64Menu#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered editor Base64 action opens its two fixed transformations",
@@ -197,9 +194,6 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"cmd/f4/viewer_editor_history.go:actionViewerEditorHistory#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered viewer/editor history action opens runtime history entries",
-	},
-	"cmd/f4/viewer_view.go:(*ViewerView).showCodepageDialog#1": {
-		class: paletteAuditDynamicAction, rationale: "the registered viewer codepage action opens the runtime codepage list",
 	},
 	"cmd/f4/quick_view_panel.go:(*QuickViewPanel).showCodepageDialog#1": {
 		class: paletteAuditDynamicAction, rationale: "the focused Quick View codepage action opens the runtime codepage list",

@@ -273,6 +273,13 @@ func DetectEncoding(data []byte, autodetect bool, defaultCP int) int {
 		return cp
 	}
 	if autodetect {
+		// Before the UTF-8 check, not after it: UTF-16 Cyrillic is made of
+		// bytes below 0x80 (U+0447 is 0x47 0x04) and therefore passes
+		// utf8.Valid, which used to leave such a file displayed as UTF-8
+		// control characters or classified as binary outright.
+		if cp, ok := detectUTF16WithoutBOM(data); ok {
+			return cp
+		}
 		if utf8.Valid(data) {
 			return 65001
 		}
@@ -282,6 +289,62 @@ func DetectEncoding(data []byte, autodetect bool, defaultCP int) int {
 		return defaultCP
 	}
 	return defaultCP
+}
+
+// utf16DetectMinBytes is the shortest sample worth guessing from. A couple of
+// characters can be zero-padded by coincidence; a couple of dozen cannot.
+const utf16DetectMinBytes = 16
+
+// detectUTF16WithoutBOM reports UTF-16 and its endianness for text that
+// carries no byte-order mark, which is what Far does and what f4 needs for
+// files written by a tool that omits the marker.
+//
+// Every character below U+0100 leaves one byte of its pair at zero, always on
+// the same side, and the pattern survives text that is mostly Cyrillic or
+// Greek because spaces, digits and punctuation stay ASCII. A single-byte
+// encoding never produces it, and neither does UTF-8, whose only NUL is a NUL
+// character.
+func detectUTF16WithoutBOM(data []byte) (int, bool) {
+	if len(data) < utf16DetectMinBytes {
+		return 0, false
+	}
+
+	pairs := len(data) / 2
+	evenZeros, oddZeros := 0, 0
+	for i := 0; i < pairs*2; i += 2 {
+		if data[i] == 0 && data[i+1] == 0 {
+			// A NUL character. Text does not contain one, and a run of
+			// them is padding in a binary that would otherwise satisfy
+			// the balance test below.
+			return 0, false
+		}
+		if data[i] == 0 {
+			evenZeros++
+		}
+		if data[i+1] == 0 {
+			oddZeros++
+		}
+	}
+
+	// An eighth of the characters being ASCII is a low bar for prose in any
+	// alphabetic script -- spaces alone usually clear it, and this file's
+	// dense Russian still runs at a fifth -- while remaining far above the
+	// zero NUL bytes an ordinary 8-bit or UTF-8 file has. The zeros must also
+	// sit overwhelmingly on one side: a file that scatters them across both
+	// is not a stream of 16-bit characters, whatever else it is.
+	//
+	// Text with no ASCII at all, such as UTF-16 Japanese, stays below the bar
+	// and is left to the caller's configured default. Guessing it would mean
+	// accepting any byte pattern as text.
+	const minZeroShare = 8
+	const sidedness = 8
+	switch {
+	case oddZeros*minZeroShare >= pairs && oddZeros > evenZeros*sidedness:
+		return 1200, true
+	case evenZeros*minZeroShare >= pairs && evenZeros > oddZeros*sidedness:
+		return 1201, true
+	}
+	return 0, false
 }
 
 // detectLegacyCodepage looks at every single-byte codepage f4 can decode. A
@@ -379,28 +442,15 @@ func detectLegacyCodepage(data []byte) (int, bool) {
 
 // legacyLanguageConfidence averages detection over words instead of asking
 // whatlanggo to classify one long fragment. A wrong codepage can accidentally
-// form a convincing sequence across an entire fragment; word-level scores are
-// less sensitive to that effect and still provide a useful tie-breaker for
-// Cyrillic encodings. Punctuation and numeric-only fragments are ignored.
+// form a convincing sequence across an entire fragment: Russian CP1251 text
+// read as Windows-1252 is reported as German with confidence 1.0, the same
+// number the correct decoding earns, so scoring the fragment as a whole made
+// the system ANSI codepage win every Cyrillic tie. Word-level scores separate
+// the two -- the mojibake words score near zero -- and, because every
+// candidate is now measured the same way, the numbers can be compared at all.
+// Punctuation and numeric-only fragments are ignored.
 func legacyLanguageConfidence(text string) float64 {
 	text = legacyLanguageSample(text)
-	latin, cyrillic := 0, 0
-	for _, r := range text {
-		switch {
-		case r >= 0x0041 && r <= 0x024F && stdunicode.IsLetter(r):
-			latin++
-		case r >= 0x0400 && r <= 0x052F && stdunicode.IsLetter(r):
-			cyrillic++
-		}
-	}
-	// For Latin text whatlanggo is more reliable on the complete fragment;
-	// short word-level samples tend to lose the accents that distinguish
-	// Windows-1252/CP850/CP852. Cyrillic candidates are scored word by word,
-	// because a full wrong-codepage fragment can look like another real
-	// Cyrillic language.
-	if latin > cyrillic {
-		return whatlanggo.Detect(text).Confidence
-	}
 
 	var total float64
 	words := 0
@@ -482,9 +532,66 @@ func legacyLanguageSample(text string) string {
 	return text
 }
 
+// A letter's script, as a bit so that one word's letters can be OR-ed
+// together. Only the scripts the supported single-byte codepages can produce
+// are named; everything else shares one bucket, which keeps the mixed-word
+// test below conservative.
+const (
+	scriptLatin = 1 << iota
+	scriptGreek
+	scriptCyrillic
+	scriptOther
+)
+
+func letterScript(r rune) int {
+	if !stdunicode.IsLetter(r) {
+		return 0
+	}
+	switch {
+	case r < 0x0250 || (r >= 0x1E00 && r <= 0x1EFF):
+		return scriptLatin
+	case r >= 0x0370 && r <= 0x03FF:
+		return scriptGreek
+	case r >= 0x0400 && r <= 0x052F:
+		return scriptCyrillic
+	}
+	return scriptOther
+}
+
+// mixedScriptPenalty charges a word whose letters come from more than one
+// script. Reading text with the wrong single-byte codepage is what produces
+// those: CP1252 text read as CP866 turns "Café" into "УCafщ", and no language
+// spells a word half in Latin and half in Cyrillic. Whole-word Cyrillic or
+// whole-word Latin costs nothing, so a correctly decoded file is unaffected
+// however many scripts it mentions.
+func mixedScriptPenalty(scripts int) int {
+	if scripts != 0 && scripts&(scripts-1) != 0 {
+		return -16
+	}
+	return 0
+}
+
 func legacyTextScore(data []byte) int {
 	score := 0
+	wordScripts := 0
+	afterLower := false
 	for _, r := range string(data) {
+		if script := letterScript(r); script != 0 {
+			wordScripts |= script
+		} else {
+			score += mixedScriptPenalty(wordScripts)
+			wordScripts = 0
+		}
+		// A capital in the middle of a lowercase word is the other classic
+		// mojibake signature, and the one that separates candidates no
+		// script test can tell apart: CP1252 "Café" read as CP850 becomes
+		// "CafÚ". Text that legitimately spells a word that way -- camelCase
+		// in source, say -- is ASCII, so every candidate is charged for it
+		// equally and the comparison is unaffected.
+		if stdunicode.IsUpper(r) && afterLower {
+			score -= 8
+		}
+		afterLower = stdunicode.IsLower(r)
 		switch {
 		case r == '\r' || r == '\n' || r == '\t':
 			score++
@@ -515,6 +622,8 @@ func legacyTextScore(data []byte) int {
 			score -= 8
 		}
 	}
+	// The last word ends at EOF, with no separator to close it.
+	score += mixedScriptPenalty(wordScripts)
 	return score
 }
 

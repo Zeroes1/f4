@@ -25,7 +25,11 @@ type ViewerView struct {
 	vfs     vfs.VFS
 	path    string
 
-	HexMode    bool
+	HexMode bool
+	// hexAuto records that hex mode came from the binary check rather than
+	// from the user. Only an automatic verdict may be revisited when the
+	// codepage changes: a hex view the user asked for has to survive an F8.
+	hexAuto    bool
 	DecodeMode bool
 	WrapMode   bool
 	DisasmMode int   // 16, 32, or 64
@@ -60,18 +64,11 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 		return nil, err
 	}
 
-	size := f.Size()
-	detectLen := 16 * 1024
-	if int64(detectLen) > size {
-		detectLen = int(size)
-	}
-	header := make([]byte, detectLen)
-	n, err := f.ReadAt(ctx, header, 0)
-	if err != nil && err != io.EOF {
+	header, err := viewerDetectionHeader(ctx, f)
+	if err != nil {
 		_ = f.Close()
-		return nil, fmt.Errorf("read file header: %w", err)
+		return nil, err
 	}
-	header = header[:n]
 
 	cpID := vfs.DetectEncoding(header, AppConfig.ViewerAutodetectCodePage, AppConfig.ViewerDefaultCodePage)
 	if remembered, ok := rememberedCodepage(v, path); ok {
@@ -99,6 +96,7 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 		vfs:      v,
 		path:     path,
 		HexMode:  binary,
+		hexAuto:  binary,
 		WrapMode: true,
 		Codepage: cpID,
 	}
@@ -181,6 +179,23 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 	vv.SetCanFocus(true)
 	vv.SetFocus(true)
 	return vv, nil
+}
+
+// viewerDetectionHeader reads the prefix every codepage decision is made on.
+// One helper so that opening a file, switching its codepage and going back to
+// auto-detect all look at exactly the same bytes.
+func viewerDetectionHeader(ctx context.Context, f vfs.ReadAtCloser) ([]byte, error) {
+	size := f.Size()
+	detectLen := 16 * 1024
+	if int64(detectLen) > size {
+		detectLen = int(size)
+	}
+	header := make([]byte, detectLen)
+	n, err := f.ReadAt(ctx, header, 0)
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("read file header: %w", err)
+	}
+	return header[:n], nil
 }
 
 func viewerHeaderLooksBinary(header []byte, cpID int) bool {
@@ -821,29 +836,32 @@ func (vv *ViewerView) ReloadWithCodepage(cpID int) {
 		return
 	}
 
+	header, err := viewerDetectionHeader(context.Background(), f)
+	if err != nil {
+		_ = f.Close()
+		return
+	}
+
+	hexMode := vv.HexMode
+	if vv.hexAuto {
+		// The hex view was the binary check's guess, so the codepage the
+		// user just picked gets to overturn it. Without this, a file the
+		// check misread -- UTF-16 with no byte-order mark, say -- had no way
+		// back to text: choosing its codepage relabelled the status bar and
+		// changed nothing else on screen.
+		hexMode = viewerHeaderLooksBinary(header, cpID)
+	}
+
 	backendCP := cpID
-	if vv.HexMode {
+	if hexMode {
 		// Hex mode displays raw bytes; changing the label must not replace
 		// those bytes with a decoded text stream.
 		backendCP = 65001
 	}
 	dataOffset := int64(0)
-	if backendCP == 65001 && !vv.HexMode {
-		size := f.Size()
-		detectLen := 16 * 1024
-		if int64(detectLen) > size {
-			detectLen = int(size)
-		}
-		header := make([]byte, detectLen)
-		n, readErr := f.ReadAt(context.Background(), header, 0)
-		if readErr != nil && readErr != io.EOF {
-			_ = f.Close()
-			return
-		}
-		header = header[:n]
-		if !viewerHeaderLooksBinary(header, backendCP) && vfs.HasUTF8BOM(header) {
-			dataOffset = vfs.UTF8BOMSize
-		}
+	if backendCP == 65001 && !hexMode &&
+		!viewerHeaderLooksBinary(header, backendCP) && vfs.HasUTF8BOM(header) {
+		dataOffset = vfs.UTF8BOMSize
 	}
 	backend, err := newViewerBackend(context.Background(), vv.vfs, vv.path, f, backendCP, dataOffset)
 	if err != nil {
@@ -859,6 +877,7 @@ func (vv *ViewerView) ReloadWithCodepage(cpID int) {
 	}
 	vv.backend = backend
 	vv.Codepage = cpID
+	vv.HexMode = hexMode
 	newSize := vv.backend.Size()
 	if newSize <= 0 {
 		vv.TopOffset = 0
@@ -956,14 +975,10 @@ func (vv *ViewerView) ReloadWithAutoDetect() {
 	}
 	defer f.Close()
 
-	size := f.Size()
-	detectLen := 16 * 1024
-	if int64(detectLen) > size {
-		detectLen = int(size)
+	header, err := viewerDetectionHeader(context.Background(), f)
+	if err != nil {
+		return
 	}
-	header := make([]byte, detectLen)
-	n, _ := f.ReadAt(context.Background(), header, 0)
-	header = header[:n]
 
 	cpID := vfs.DetectEncoding(header, AppConfig.ViewerAutodetectCodePage, AppConfig.ViewerDefaultCodePage)
 	saveCodepageOverride(vv.vfs, vv.path, 0)
@@ -972,30 +987,7 @@ func (vv *ViewerView) ReloadWithAutoDetect() {
 
 func (vv *ViewerView) showCodepageDialog() {
 	items, currIdx := vfs.BuildCodepageMenuItems(vv.Codepage, AppConfig.ViewerAutodetectCodePage)
-	menu := vtui.NewVMenu(Msg("Codepage.Title"))
-	for _, item := range items {
-		menu.AddItem(item)
-	}
-
-	w, h := 45, len(items)+2
-	scrW := vtui.FrameManager.GetScreenSize()
-	scrH := vtui.FrameManager.GetScreenHeight()
-	maxH := scrH - 2
-	if maxH < 5 {
-		maxH = 5
-	}
-	if h > maxH {
-		h = maxH
-	}
-	x := (scrW - w) / 2
-	y := (scrH - h) / 2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	menu.SetPosition(x, y, x+w-1, y+h-1)
+	menu := newCodepageMenu(Msg("Codepage.Title"), items)
 
 	menu.OnAction = func(idx int) {
 		menu.Close()

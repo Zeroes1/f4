@@ -3239,6 +3239,14 @@ func (ev *EditorView) chunkReader() fileChunkReader {
 		return decline
 	}
 	mapping := mapped.Bytes()
+	// What the mapping skipped. A file that opens with a UTF-8 byte-order
+	// mark is mapped from after it, so a position in this buffer is that
+	// many bytes earlier than the same byte's position in the file. Reading
+	// the file at buffer positions indexed the text three bytes out of step
+	// and every line but the first lost its first three bytes, which is what
+	// turned "разработанный" into "?зработанный" on screen. Captured here
+	// with the rest, for the reasons above.
+	base := mapped.FileOffset()
 	orig, ok := pt.GetOriginalBuffer().(piecetable.MemoryBuffer)
 	if !ok || len(mapping) == 0 || len(orig) != len(mapping) || &orig[0] != &mapping[0] {
 		return decline
@@ -3255,10 +3263,10 @@ func (ev *EditorView) chunkReader() fileChunkReader {
 		if !ok {
 			return 0, false
 		}
-		n, err := file.ReadAt(ctx, dst[:length], int64(fileOffset))
+		n, err := file.ReadAt(ctx, dst[:length], int64(fileOffset)+base)
 		if err != nil && err != io.EOF && ctx.Err() == nil {
 			vtui.DebugLog("EDITOR_INDEX: reading %d bytes at %d returned %d and %v",
-				length, fileOffset, n, err)
+				length, int64(fileOffset)+base, n, err)
 		}
 		if n <= 0 {
 			return 0, false
@@ -4461,30 +4469,7 @@ func (ev *EditorView) ReloadWithAutoDetect() {
 
 func (ev *EditorView) showCodepageDialog() {
 	items, currIdx := vfs.BuildCodepageMenuItems(ev.Codepage, AppConfig.EditorAutodetectCodePage)
-	menu := vtui.NewVMenu(Msg("Codepage.Title"))
-	for _, item := range items {
-		menu.AddItem(item)
-	}
-
-	w, h := 45, len(items)+2
-	scrW := vtui.FrameManager.GetScreenSize()
-	scrH := vtui.FrameManager.GetScreenHeight()
-	maxH := scrH - 2
-	if maxH < 5 {
-		maxH = 5
-	}
-	if h > maxH {
-		h = maxH
-	}
-	x := (scrW - w) / 2
-	y := (scrH - h) / 2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	menu.SetPosition(x, y, x+w-1, y+h-1)
+	menu := newCodepageMenu(Msg("Codepage.Title"), items)
 
 	menu.OnAction = func(idx int) {
 		menu.Close()
@@ -4509,36 +4494,14 @@ func (ev *EditorView) showCodepageDialog() {
 }
 func (ev *EditorView) showConvertCodepageDialog() {
 	items, _ := vfs.BuildCodepageMenuItems(ev.Codepage, false)
-	menu := vtui.NewVMenu(Msg("Codepage.ConvertTitle"))
-	realItems := 0
+	converts := make([]vtui.MenuItem, 0, len(items))
 	for _, item := range items {
 		if item.UserData == vfs.CodepageAutoDetect {
 			continue // Skip auto-detect
 		}
-		menu.AddItem(item)
-		realItems++
+		converts = append(converts, item)
 	}
-
-	w, h := 45, realItems+2
-	scrW := vtui.FrameManager.GetScreenSize()
-	scrH := vtui.FrameManager.GetScreenHeight()
-	maxH := scrH - 2
-	if maxH < 5 {
-		maxH = 5
-	}
-	if h > maxH {
-		h = maxH
-	}
-
-	x := (scrW - w) / 2
-	y := (scrH - h) / 2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	menu.SetPosition(x, y, x+w-1, y+h-1)
+	menu := newCodepageMenu(Msg("Codepage.ConvertTitle"), converts)
 
 	menu.OnAction = func(idx int) {
 		menu.Close()
