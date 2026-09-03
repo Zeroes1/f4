@@ -29,14 +29,14 @@ require (
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/unxed/archives v0.0.0-20260826172907-54073a78974d
 	github.com/unxed/colorer4go v0.1.14
-	github.com/unxed/ffibridge v0.1.4
+	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/id3-go v0.1.1
 	github.com/unxed/libwinescape v0.1.5
 	github.com/unxed/localecp v0.1.5
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.6
-	github.com/unxed/vtui v0.1.307
+	github.com/unxed/vtui v0.1.308
 	github.com/unxed/zip v0.1.129
 	github.com/unxed/zipper v0.1.151
 	github.com/vmihailenco/msgpack/v5 v5.4.1
