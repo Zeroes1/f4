@@ -1228,15 +1228,20 @@ jobs:
     permissions:
       contents: write
     steps:
+    # dist/, for the same reason as the nightly job below: artifacts/ is a
+    # tracked directory of audit evidence, so publishing a glob over it ties
+    # the release assets to whatever happens to be checked out. This job does
+    # not check the repository out today, and this keeps that from mattering
+    # if it ever does.
     - name: Download all artifacts
       uses: actions/download-artifact@v8
       with:
-        path: artifacts
+        path: dist
         merge-multiple: true
     - name: Publish Release
       uses: softprops/action-gh-release@v3
       with:
-        files: artifacts/*
+        files: dist/*
         generate_release_notes: true
 
   # Эта джоба обновляет Homebrew tap при пуше тэгов v*.*.*,
@@ -1343,10 +1348,17 @@ jobs:
         # one source instead of comparing the workflow clock with commit time.
         echo "BUILD_TIME=$(date -u -d "@$(git show -s --format='%ct' HEAD)" +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_ENV"
 
+    # Download into dist/, NOT artifacts/. This job checks the repository out,
+    # and artifacts/ is a tracked directory holding the ConPTY audit evidence
+    # (see artifacts/README.md). Downloading on top of it merged that evidence
+    # with the build output, and the publish step below then uploaded the
+    # committed native-openconsole-probe*.json files as nightly release assets.
+    # Collecting that data is a manual job -- conpty-probe.yml, workflow_dispatch
+    # only -- so nothing in the automatic pipeline should be publishing it.
     - name: Download all artifacts
       uses: actions/download-artifact@v8
       with:
-        path: artifacts
+        path: dist
         merge-multiple: true
 
     # Updating an existing release changes its assets and body but keeps its
@@ -1372,4 +1384,4 @@ jobs:
           **Commit:** `${{ env.SHORT_SHA }}`
           **Built on:** `${{ env.BUILD_TIME }}`
         prerelease: true
-        files: artifacts/*
+        files: dist/*
