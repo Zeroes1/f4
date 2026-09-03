@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -148,13 +149,29 @@ func startNewSession() {
 	null, _ := os.Open(os.DevNull)
 	cmd.Stdin = null
 	cmd.Stdout = null
-	cmd.Stderr = null
+
+	// stderr is a file rather than /dev/null, because the interesting failures
+	// happen before the daemon has any logging of its own: a missing shared
+	// object, a libc symbol that did not bind, a panic in InitCore. The daemon
+	// replaces this descriptor with its own crash log in SetupStderrLog moments
+	// later, so what lands here is exactly the pre-startup output that used to
+	// be discarded. It is deleted once the daemon is up.
+	startupLog := sockPath + ".startup"
+	// #nosec G304 -- path is built from the session directory and this pid.
+	if f, err := os.OpenFile(startupLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600); err == nil {
+		cmd.Stderr = f
+		defer f.Close()
+	} else {
+		cmd.Stderr = null
+		startupLog = ""
+	}
 
 	if err := cmd.Start(); err != nil {
 		vtui.DebugLog("SESSION: CRITICAL: Failed to spawn daemon process (path: %s): %v", cmd.Path, err)
 		if null != nil {
 			null.Close()
 		}
+		removeStartupLog(startupLog)
 		fmt.Println("Failed to start daemon:", err)
 		return
 	}
@@ -163,13 +180,22 @@ func startNewSession() {
 		null.Close()
 	}
 
-	// Wait for the server to create the socket
-	for i := 0; i < 50; i++ {
-		if _, err := os.Stat(sockPath); err == nil {
-			break
+	// Wait for the server to create the socket, and refuse to attach to one
+	// that never appeared. Going ahead regardless is how a daemon that died at
+	// startup used to surface: WriteMsgUnix to a socket nobody bound fails with
+	// ENOENT, and "sendmsg: no such file or directory" reads as a bug in f4's
+	// IPC rather than as "the daemon is not running". Waiting on the process
+	// too means the usual case -- a daemon that is already gone -- is answered
+	// at once instead of at the end of the timeout.
+	if !waitForDaemonSocket(cmd, sockPath) {
+		fmt.Fprintf(os.Stderr, "f4: the session daemon did not start: it never created %s\n", sockPath)
+		if out := readStartupLog(startupLog); out != "" {
+			fmt.Fprintf(os.Stderr, "f4: what the daemon said before it died:\n%s\n", out)
 		}
-		time.Sleep(10 * time.Millisecond)
+		removeStartupLog(startupLog)
+		return
 	}
+	removeStartupLog(startupLog)
 
 	// The daemon's pid is known here. Letting runClient look it up instead
 	// would race: it resolves the pid through listSessions(), i.e. through
@@ -178,6 +204,71 @@ func startNewSession() {
 	// silent — serverPID stays 0 and SIGWINCH is simply never forwarded, so
 	// a fresh session never learns that the terminal was resized.
 	runClient(sockPath, cmd.Process.Pid)
+}
+
+// daemonStartTimeout bounds the wait for a daemon that is neither up nor dead:
+// one that hangs in startup, or a machine slow enough that a cold binary takes
+// its time. Generous because nothing is lost by waiting -- a daemon that
+// exits is noticed the moment it does, not when this runs out.
+const daemonStartTimeout = 10 * time.Second
+
+// waitForDaemonSocket reports whether the daemon bound sockPath. It gives up
+// as soon as the process is gone, and reaps it either way: cmd.Wait here is
+// also what keeps a daemon that outlives this client from being left a zombie
+// for the rest of the session.
+func waitForDaemonSocket(cmd *exec.Cmd, sockPath string) bool {
+	exited := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
+
+	deadline := time.Now().Add(daemonStartTimeout)
+	for {
+		if _, err := os.Stat(sockPath); err == nil {
+			return true
+		}
+		select {
+		case <-exited:
+			// One more look: the daemon may have bound the socket and quit
+			// between the Stat above and this check.
+			_, err := os.Stat(sockPath)
+			if err != nil {
+				vtui.DebugLog("SESSION: daemon %d exited without creating %s", cmd.Process.Pid, sockPath)
+			}
+			return err == nil
+		case <-time.After(10 * time.Millisecond):
+		}
+		if time.Now().After(deadline) {
+			vtui.DebugLog("SESSION: daemon %d did not create %s within %s", cmd.Process.Pid, sockPath, daemonStartTimeout)
+			return false
+		}
+	}
+}
+
+// readStartupLog returns what the daemon wrote before it had logging of its
+// own, trimmed to something a terminal can show. Empty when it said nothing,
+// which is itself the answer for a daemon killed by a signal.
+func readStartupLog(path string) string {
+	if path == "" {
+		return ""
+	}
+	// #nosec G304 -- path is the one startNewSession created next to the socket.
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	const maxStartupLog = 4 << 10
+	if len(data) > maxStartupLog {
+		data = data[len(data)-maxStartupLog:]
+	}
+	return strings.TrimRight(string(data), "\n")
+}
+
+func removeStartupLog(path string) {
+	if path != "" {
+		_ = os.Remove(path)
+	}
 }
 
 func runClient(sockPath string, serverPID int) {
