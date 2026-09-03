@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/netproxy"
@@ -67,6 +66,9 @@ func TestSSHHostKeyCallbackRejectsUnknownAndChangedKeys(t *testing.T) {
 	home := t.TempDir()
 	knownKey := testSSHHostKey(t)
 	writeKnownHosts(t, home, "[example.test]:2222", knownKey)
+	// An unknown host is now a question rather than a verdict; this test is
+	// about what happens when the answer is no.
+	stubHostKeyPrompt(t, false)
 
 	callback, err := sshHostKeyCallbackForHome(home)
 	if err != nil {
@@ -81,13 +83,25 @@ func TestSSHHostKeyCallbackRejectsUnknownAndChangedKeys(t *testing.T) {
 	}
 }
 
-func TestSSHHostKeyCallbackRequiresKnownHostsFile(t *testing.T) {
-	_, err := sshHostKeyCallbackForHome(t.TempDir())
-	if err == nil {
-		t.Fatal("missing known_hosts file was accepted")
+func TestSSHHostKeyCallbackReadsBothKnownHostsFiles(t *testing.T) {
+	home := t.TempDir()
+	key := testSSHHostKey(t)
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0o700); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(err.Error(), "known_hosts") {
-		t.Fatalf("missing known_hosts error = %v", err)
+	line := knownhosts.Line([]string{"[legacy.test]:2222"}, key) + "\n"
+	if err := os.WriteFile(filepath.Join(sshDir, "known_hosts2"), []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stubHostKeyPrompt(t, false)
+
+	callback, err := sshHostKeyCallbackForHome(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := callback("legacy.test:2222", testSSHRemoteAddr{}, key); err != nil {
+		t.Fatalf("a key recorded in known_hosts2 was rejected: %v", err)
 	}
 }
 
@@ -114,7 +128,11 @@ func TestDialSSHRejectsChangedServerKey(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("SSH_AUTH_SOCK", "")
 	port, _ := startTestSSHServer(t)
-	writeKnownHosts(t, home, knownhosts.Normalize("127.0.0.1:"+port), testSSHHostKey(t))
+	// The test server carries an RSA key, so an RSA entry that does not match
+	// it is a replaced key rather than an unrecorded algorithm. A user who
+	// would say yes to anything must not get the chance.
+	writeKnownHosts(t, home, knownhosts.Normalize("127.0.0.1:"+port), testSSHRSAHostKey(t))
+	prompt := stubHostKeyPrompt(t, true)
 
 	client, err := DialSSH("127.0.0.1", port, "user", "pass", "", 3, netproxy.Settings{})
 	if err == nil {
@@ -122,6 +140,40 @@ func TestDialSSHRejectsChangedServerKey(t *testing.T) {
 			t.Errorf("close SSH client: %v", closeErr)
 		}
 		t.Fatal("changed server key was accepted")
+	}
+	if asked := prompt.questions(); len(asked) != 0 {
+		t.Fatalf("a changed server key raised %d trust questions, want none", len(asked))
+	}
+}
+
+func TestDialSSHRecordsAServerKeyTheUserTrusts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SSH_AUTH_SOCK", "")
+	port, publicKey := startTestSSHServer(t)
+	prompt := stubHostKeyPrompt(t, true)
+
+	// No known_hosts anywhere: the state a fresh account is in, and the one
+	// that used to fail the connection outright.
+	client, err := DialSSH("127.0.0.1", port, "user", "pass", "", 3, netproxy.Settings{})
+	if err != nil {
+		t.Fatalf("a trusted first connection failed: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Errorf("close SSH client: %v", err)
+	}
+	if asked := prompt.questions(); len(asked) != 1 {
+		t.Fatalf("trust questions asked = %d, want 1", len(asked))
+	}
+
+	// The recorded key is what makes the second connection silent.
+	callback, err := knownhosts.New(filepath.Join(home, ".ssh", "known_hosts"))
+	if err != nil {
+		t.Fatalf("known_hosts was not written: %v", err)
+	}
+	if err := callback("127.0.0.1:"+port, testSSHRemoteAddr{}, publicKey); err != nil {
+		t.Fatalf("the recorded server key does not verify: %v", err)
 	}
 }
 

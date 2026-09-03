@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"github.com/unxed/f4/internal/netproxy"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
-	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // sshAgentReadWriter deliberately exposes only Read and Write. This makes
@@ -144,34 +144,11 @@ func sshHostKeyCallback() (ssh.HostKeyCallback, error) {
 }
 
 func sshHostKeyCallbackForHome(home string) (ssh.HostKeyCallback, error) {
-	if home == "" {
-		return nil, fmt.Errorf("SSH host-key verification: home directory is empty")
-	}
-
-	knownHosts := make([]string, 0, 2)
-	for _, name := range []string{"known_hosts", "known_hosts2"} {
-		path := filepath.Join(home, ".ssh", name)
-		info, err := os.Stat(path)
-		switch {
-		case err == nil && !info.IsDir():
-			knownHosts = append(knownHosts, path)
-		case err == nil:
-			return nil, fmt.Errorf("SSH host-key verification: %s is a directory", path)
-		case os.IsNotExist(err):
-			continue
-		default:
-			return nil, fmt.Errorf("SSH host-key verification: inspect %s: %w", path, err)
-		}
-	}
-	if len(knownHosts) == 0 {
-		return nil, fmt.Errorf("SSH host-key verification: no ~/.ssh/known_hosts file found")
-	}
-
-	callback, err := knownhosts.New(knownHosts...)
+	knownHosts, err := newSSHKnownHosts(home)
 	if err != nil {
-		return nil, fmt.Errorf("SSH host-key verification: read known_hosts: %w", err)
+		return nil, err
 	}
-	return callback, nil
+	return knownHosts.check, nil
 }
 
 // dialSSHVia opens the transport through px and speaks SSH over it.
@@ -188,6 +165,7 @@ func dialSSHVia(px netproxy.Settings, addr string, config *ssh.ClientConfig) (*s
 	}
 	if config.Timeout > 0 {
 		_ = conn.SetDeadline(time.Now().Add(config.Timeout))
+		config = withHostKeyPromptDeadline(conn, config)
 	}
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
@@ -196,4 +174,26 @@ func dialSSHVia(px netproxy.Settings, addr string, config *ssh.ClientConfig) (*s
 	}
 	_ = conn.SetDeadline(time.Time{})
 	return ssh.NewClient(c, chans, reqs), nil
+}
+
+// withHostKeyPromptDeadline copies config so that its host-key callback runs
+// with the dial deadline lifted. The callback is where an unknown host asks
+// the user whether to trust it, and that question waits for a human: the
+// fifteen second deadline the dial arms would otherwise expire under the
+// dialog and turn every answer, including yes, into a handshake failure. The
+// deadline is rearmed on the way out, so the rest of the handshake stays
+// bounded.
+func withHostKeyPromptDeadline(conn net.Conn, config *ssh.ClientConfig) *ssh.ClientConfig {
+	verify := config.HostKeyCallback
+	if verify == nil {
+		return config
+	}
+	timeout := config.Timeout
+	relaxed := *config
+	relaxed.HostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		_ = conn.SetDeadline(time.Time{})
+		defer func() { _ = conn.SetDeadline(time.Now().Add(timeout)) }()
+		return verify(hostname, remote, key)
+	}
+	return &relaxed
 }
