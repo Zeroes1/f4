@@ -12,13 +12,13 @@ func checkAndDetach(attached bool) {
 		return
 	}
 
-	exe, err := os.Executable()
+	exe, err := f4Executable()
 	if err != nil {
 		return
 	}
 
 	cmd := selfCommand(exe, os.Args[1:]...)
-	cmd.Env = append(os.Environ(), "F4_DETACHED=1")
+	cmd.Env = append(cmd.Env, "F4_DETACHED=1")
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}

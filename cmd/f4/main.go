@@ -100,7 +100,7 @@ func main() {
 	var sudoDispatcher string
 
 	// Initialize SudoClient immediately for all process types
-	execPath, err := os.Executable()
+	execPath, err := f4Executable()
 	if err != nil {
 		execPath = os.Args[0]
 	}

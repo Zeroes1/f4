@@ -43,7 +43,11 @@ func selfCommand(self string, args ...string) *exec.Cmd {
 	name, argv := selfExecArgv(self, args)
 	// #nosec G204 -- the program is this executable and the loader it was
 	// started through; args are built by f4, never taken from user input.
-	return exec.Command(name, argv...)
+	cmd := exec.Command(name, argv...)
+	// Callers that want more of their own add to cmd.Env rather than to
+	// os.Environ(), so that what selfExecEnv puts there survives.
+	cmd.Env = selfExecEnv()
+	return cmd
 }
 
 // selfExecArgv picks the program and arguments selfCommand runs. Split out so

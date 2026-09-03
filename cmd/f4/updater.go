@@ -39,7 +39,7 @@ type githubRelease struct {
 
 var (
 	githubAPIURL = "https://api.github.com/repos/unxed/f4/releases"
-	osExecutable = os.Executable
+	osExecutable = f4Executable
 	currentOS    = runtime.GOOS
 	currentArch  = runtime.GOARCH
 	// Empty except in builds that target a specific C library; see
