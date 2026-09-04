@@ -99,6 +99,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"cmd/f4/video_view.go:(*VideoView).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the video player is a modal frame over a window of its own; play, seek and volume are local primitives sent down mpv's socket",
 	},
+	"cmd/f4/player_panel.go:(*PlayerPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the player's transport, volume and playlist keys are navigation inside one panel; the panel toggle itself is the Panel.Player action",
+	},
 	"cmd/f4/info_panel.go:(*InfoPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the focused information-panel command is supplied by the panel-context palette provider",
 	},
