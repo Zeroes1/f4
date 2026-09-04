@@ -1032,7 +1032,6 @@ Player.NewFolderPrompt=Folder name:
 Player.MoveRefused=The playlist keeps references only; use F5 to add tracks. F6 is disabled so nothing is moved on disk by accident.
 Player.LocalOnly=Only files from a local file system can be added to the playlist for now.
 Player.NothingAdded=No MP3 files were found in the selection.
-Menu.Panel.Player=&Player
 Action.Panel.Player.Desc=Toggle the MP3 player panel
 QuickView.NoSelection=<no selection>
 QuickView.ParentDir=Parent directory
