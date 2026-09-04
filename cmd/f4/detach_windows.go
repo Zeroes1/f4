@@ -35,3 +35,7 @@ func checkAndDetach(attached bool) {
 		os.Exit(0)
 	}
 }
+
+// redirectDetachedStdout is a no-op on Windows: the detached copy has no
+// console, and its crash log already takes everything that matters.
+func redirectDetachedStdout() {}

@@ -143,6 +143,7 @@ func main() {
 	installHangDumpHandler()
 
 	vtui.SetupStderrLog()
+	redirectDetachedStdout()
 	vtui.DebugLog("MAIN: Starting with args: %v", os.Args)
 	LoadConfig() // Load config early to apply GUI font settings
 
