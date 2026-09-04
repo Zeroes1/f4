@@ -626,7 +626,7 @@ jobs:
         EOF
         dpkg-deb --build --root-owner-group "$DEB" "$ASSET.deb"
         dpkg-deb --info "$ASSET.deb"
-        dpkg-deb --contents "$ASSET.deb" | head -20
+        dpkg-deb --contents "$ASSET.deb"
 
     - name: Upload Artifact
       if: steps.affected.outputs.build == 'yes'
