@@ -182,10 +182,21 @@ func EventToHotkeyString(e *vtinput.InputEvent) string {
 	return key
 }
 
-// configuredHotkeyAction gives explicit user bindings precedence while
-// preserving built-in Right Ctrl shortcuts. In particular, a user override of
-// CtrlA must be able to replace the built-in RCtrlA AI shortcut without also
-// requiring a duplicate RCtrlA entry.
+// configuredHotkeyAction resolves a hotkey the way Far users expect: Right
+// Ctrl is the same modifier as Ctrl unless something is bound on the RCtrl
+// spelling specifically. For an "RCtrl…" key the precedence is:
+//
+//  1. an explicit user binding on the RCtrl spelling to a real action;
+//  2. an explicit user binding on the plain Ctrl spelling (None included, so
+//     unbinding CtrlA silences both Ctrl+A and Right Ctrl+A);
+//  3. the plain Ctrl binding, when the RCtrl spelling was explicitly unbound;
+//  4. the built-in RCtrl default (e.g. the RCtrlA AI shortcut);
+//  5. the plain Ctrl binding.
+//
+// Step 3 is what makes unbinding a built-in Right Ctrl shortcut useful:
+// "RCtrlA=None" only removes the RCtrl-specific shortcut, after which Right
+// Ctrl+A behaves like Ctrl+A (File.Attributes by default) instead of being
+// swallowed as a dead key (#492).
 func configuredHotkeyAction(hm *HotkeyManager, area, key string) string {
 	if hm == nil {
 		return ""
@@ -196,13 +207,19 @@ func configuredHotkeyAction(hm *HotkeyManager, area, key string) string {
 	}
 
 	plainKey := "Ctrl" + strings.TrimPrefix(key, "RCtrl")
-	if hm.hasExplicitBinding(area, key) {
+	rctrlExplicit := hm.hasExplicitBinding(area, key)
+	if rctrlExplicit && action != "" && !strings.EqualFold(action, "none") {
 		return action
 	}
 	if hm.hasExplicitBinding(area, plainKey) {
 		if plainAction := hm.GetAction(area, plainKey); plainAction != "" {
 			return plainAction
 		}
+	}
+	if rctrlExplicit {
+		// The RCtrl spelling was explicitly unbound (or its condition is not
+		// met): it no longer claims the key, so Right Ctrl acts as plain Ctrl.
+		return hm.GetAction(area, plainKey)
 	}
 	if action != "" {
 		return action

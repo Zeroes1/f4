@@ -1604,9 +1604,13 @@ func TestCtrlBracketsIgnoreDialogsWithoutFocusedEdit(t *testing.T) {
 	}
 }
 
+// TestPanelsFrame_AIHotkeyCanBeUnbound covers #492: once the built-in
+// RCtrlA AI shortcut is unbound, Right Ctrl+A must neither open the AI panel
+// nor die silently — it runs whatever plain Ctrl+A is bound to.
 func TestPanelsFrame_AIHotkeyCanBeUnbound(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	SetDefaultF4Palette()
+	preserveActionRegistry(t)
 
 	oldHotkeys := GlobalHotkeysMgr
 	oldGlobalHotkeys := GlobalHotkeys
@@ -1617,7 +1621,17 @@ func TestPanelsFrame_AIHotkeyCanBeUnbound(t *testing.T) {
 		MacroMgr = oldMacroMgr
 	})
 	GlobalHotkeys = nil
+
+	ctrlARuns := 0
+	RegisterAction(Action{
+		Name:    "Test.CtrlA",
+		Area:    "Shell",
+		Label:   "Ctrl+A stand-in",
+		Handler: func() bool { ctrlARuns++; return true },
+	})
+
 	hm := NewHotkeyManager("")
+	hm.Bind("Shell", "CtrlA", "Test.CtrlA")
 	hm.Bind("Shell", "RCtrlA", "None")
 	GlobalHotkeysMgr = hm
 	MacroMgr = NewMacroManager("")
@@ -1645,6 +1659,9 @@ func TestPanelsFrame_AIHotkeyCanBeUnbound(t *testing.T) {
 	}
 	if _, ok := pf.panels[1].(*FileSystemPanel).vfs.(*aiVFSWrapper); ok {
 		t.Fatal("unbound RCtrl+A toggled the AI panel")
+	}
+	if ctrlARuns != 1 {
+		t.Fatalf("unbound RCtrl+A ran the Ctrl+A binding %d times, want 1", ctrlARuns)
 	}
 }
 

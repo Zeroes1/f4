@@ -335,9 +335,59 @@ func TestConfiguredHotkeyActionRightCtrlFallback(t *testing.T) {
 		t.Fatalf("right Ctrl should fall back to Ctrl binding: got %q, want Panel.SortByName", got)
 	}
 
+	// Unbinding the RCtrl spelling only drops the RCtrl-specific shortcut;
+	// Right Ctrl then behaves like plain Ctrl rather than becoming a dead key.
 	hm.Bind("Shell", "RCtrlF3", "None")
+	if got := configuredHotkeyAction(hm, "Shell", "RCtrlF3"); got != "Panel.SortByName" {
+		t.Fatalf("RCtrl unbind should fall back to the Ctrl binding: got %q, want Panel.SortByName", got)
+	}
+
+	// Silencing the key for both Ctrl spellings is done on the plain one.
+	hm.Bind("Shell", "CtrlF3", "None")
 	if got := configuredHotkeyAction(hm, "Shell", "RCtrlF3"); got != "None" {
-		t.Fatalf("explicit RCtrl unbind should win over fallback: got %q, want None", got)
+		t.Fatalf("explicit CtrlF3 unbind should silence RCtrlF3 too: got %q, want None", got)
+	}
+}
+
+// TestConfiguredHotkeyActionUnboundBuiltInRightCtrlFallsBackToCtrl covers
+// #492: after the user unbinds the built-in RCtrlA AI shortcut, Right Ctrl+A
+// must act as Ctrl+A (File.Attributes) instead of being swallowed.
+func TestConfiguredHotkeyActionUnboundBuiltInRightCtrlFallsBackToCtrl(t *testing.T) {
+	hm := NewHotkeyManager("")
+
+	hm.Bind("Shell", "RCtrlA", "None")
+	if got := configuredHotkeyAction(hm, "Shell", "RCtrlA"); got != "File.Attributes" {
+		t.Fatalf("unbound RCtrlA = %q, want File.Attributes (the CtrlA default)", got)
+	}
+	if got := configuredHotkeyAction(hm, "Shell", "CtrlA"); got != "File.Attributes" {
+		t.Fatalf("CtrlA = %q, want File.Attributes", got)
+	}
+
+	// The same holds for the removal form the settings dialog persists.
+	hm.Unbind("Shell", "RCtrlA")
+	if got := configuredHotkeyAction(hm, "Shell", "RCtrlA"); got != "File.Attributes" {
+		t.Fatalf("removed RCtrlA = %q, want File.Attributes", got)
+	}
+
+	// An explicit RCtrl-specific action still wins over the Ctrl binding.
+	hm.Bind("Shell", "RCtrlA", "Panel.Toggle")
+	if got := configuredHotkeyAction(hm, "Shell", "RCtrlA"); got != "Panel.Toggle" {
+		t.Fatalf("explicit RCtrlA = %q, want Panel.Toggle", got)
+	}
+	if got := configuredHotkeyAction(hm, "Shell", "CtrlA"); got != "File.Attributes" {
+		t.Fatalf("CtrlA must stay File.Attributes next to an explicit RCtrlA: got %q", got)
+	}
+
+	// Ini round trip: RCtrlA=None written by the dialog loads the same way.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hotkeys.ini")
+	if err := os.WriteFile(path, []byte("[Shell]\nRCtrlA=None\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loaded := NewHotkeyManager(path)
+	loaded.Load()
+	if got := configuredHotkeyAction(loaded, "Shell", "RCtrlA"); got != "File.Attributes" {
+		t.Fatalf("RCtrlA=None from ini = %q, want File.Attributes", got)
 	}
 }
 
