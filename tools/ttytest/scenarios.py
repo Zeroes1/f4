@@ -2,7 +2,7 @@
 """Scenarios for tools/ttytest, run as `./scenarios.py [name ...]`.
 
 Two kinds live here. The checks return pass/fail and are worth keeping
-green -- they are the regressions from issue #518. The probes just print
+green -- they are the regressions from issues #518 and #863. The probes just print
 what happened and leave the reading to you; they are for the situations
 where nobody has decided yet what the right answer is.
 """
@@ -10,8 +10,10 @@ where nobody has decided yet what the right answer is.
 import os
 import sys
 
-from ttytest import (Session, default_sandbox, DOWN, ENTER, ESC, F4, F6, F7,
-                     RIGHT, SHIFT_F4, TAB)
+from ttytest import (Session, default_home, default_sandbox, DOWN, ENTER, ESC,
+                     F4, F6, F7, RIGHT, SHIFT_F4, TAB)
+
+CTRL_O = b"\x0f"
 
 
 def _session(**kw):
@@ -121,6 +123,57 @@ def check_caret_survives_long_input():
         return True, "caret survived %d characters" % 120
 
 
+# The native prompt the sandbox shell prints. It is deliberately unlike the
+# one f4 draws, so a native prompt that stays visible is easy to tell apart.
+ISSUE863_PS1 = "[nz@nz-en 000tmp]$ "
+
+
+def check_cat_keeps_last_line():
+    """`cat` on a file without a trailing newline shows the whole file.
+
+    Issue #863, driven through a real bash rather than a mock shell: the
+    unit tests in cmd/f4 feed the parser a canned byte sequence, and the
+    Windows investigation never had a Linux to run on. The last line of
+    the file leaves the shell cursor mid-row, the prompt lands on that same
+    row, and f4's command line -- painted over the bottom row to hide the
+    native prompt -- used to take the last line down with it. Toggling
+    Ctrl+O is part of the recipe because that is when the reporter saw the
+    row shift.
+    """
+    work = default_sandbox()
+    home = default_home()
+    os.makedirs(work, exist_ok=True)
+    os.makedirs(home, exist_ok=True)
+    with open(os.path.join(work, "cat_tst"), "w") as f:
+        f.write('#!/bin/bash\necho "test text"')          # no trailing LF
+    with open(os.path.join(home, ".bashrc"), "w") as f:
+        f.write("PS1=%r\n" % ISSUE863_PS1)
+
+    native = ISSUE863_PS1.rstrip()
+    with Session(workdir=work, home=home, env={"SHELL": "/bin/bash"}) as s:
+        if not s.wait_for(lambda s: s.has_text("Help")):
+            return False, "f4 did not reach the panels"
+        s.send(b"cat cat_tst" + ENTER, 2.5)
+        if not s.wait_for(lambda s: s.has_text("Help")):
+            return False, "the command did not finish"
+
+        for step in range(3):                     # Ctrl+O, and twice more
+            s.send(CTRL_O, 1.0)
+            if step % 2 == 1:
+                continue                          # panels are back; nothing to read
+            rows = [line.rstrip() for line in s.screen.display]
+            if not any(line == '#!/bin/bash' for line in rows):
+                return False, "first line of the file is not on screen"
+            if not any(line == 'echo "test text"' for line in rows):
+                return False, ("last line of the file (no trailing newline) "
+                               "is not on screen after %d Ctrl+O" % (step + 1))
+            stray = [line for line in rows
+                     if line.startswith(native) and not line.startswith(native + " cat ")]
+            if stray:
+                return False, "native prompt left visible: %r" % stray[0]
+        return True, "both lines stay visible, native prompt stays covered"
+
+
 def probe_boundary_focus():
     """Left/Right at the edge of the text hands focus to the next control.
 
@@ -173,6 +226,7 @@ CHECKS = {
     "caret-not-under-dialog": check_caret_not_under_dialog,
     "caret-follows-focus": check_caret_follows_focus,
     "caret-survives-long-input": check_caret_survives_long_input,
+    "cat-keeps-last-line": check_cat_keeps_last_line,
 }
 
 PROBES = {
