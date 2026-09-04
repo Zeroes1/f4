@@ -37,8 +37,8 @@ require (
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.7
 	github.com/unxed/vtui v0.1.313
-	github.com/unxed/zip v0.1.129
-	github.com/unxed/zipper v0.1.151
+	github.com/unxed/zip v0.1.130
+	github.com/unxed/zipper v0.1.152
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
@@ -151,7 +151,7 @@ require (
 	github.com/unxed/winkeys v0.1.1 // indirect
 	github.com/unxed/xkb-go v0.1.8 // indirect
 	github.com/unxed/xz v0.1.41 // indirect
-	github.com/unxed/zipcharset v0.1.4 // indirect
+	github.com/unxed/zipcharset v0.1.5 // indirect
 	github.com/unxed/zlib4go v0.1.16 // indirect
 	github.com/vishvananda/netlink v1.3.1 // indirect
 	github.com/vishvananda/netns v0.0.5 // indirect
