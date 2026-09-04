@@ -694,6 +694,10 @@ func updateAssetSuffixes(goos, goarch, libc string) []string {
 		}
 	}
 
+	// Android is published as the Termux build and named after it.
+	if goos == "android" {
+		goos = "termux"
+	}
 	generic := fmt.Sprintf("-%s-%s.tar.gz", goos, goarch)
 	if goos == "linux" && libc != "" {
 		return []string{
