@@ -39,10 +39,10 @@ type PlayerPanel struct {
 	button int           // focused control when cursor == -1
 	top    int           // first visible playlist row
 
-	current  *playlistItem // the track loaded in the engine, if any
-	marquee  int
-	lastTick time.Time
-	status   string // one-line error/notice shown instead of the title
+	current *playlistItem // the track loaded in the engine, if any
+	marquee int
+	//lastTick time.Time // fix linter error
+	status string // one-line error/notice shown instead of the title
 
 	stop chan struct{}
 }

@@ -112,7 +112,8 @@ func (a *audioEngine) Load(path string) error {
 func (a *audioEngine) unloadLocked() {
 	if a.player != nil {
 		a.player.Pause()
-		_ = a.player.Close()
+		//_ = a.player.Close() // fix linter error
+		// SA1019: (*github.com/ebitengine/oto/v3.Player).Close is deprecated: as of v3.4. you don't have to call Close. (staticcheck)
 		a.player = nil
 	}
 	if a.file != nil {
