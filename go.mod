@@ -184,3 +184,5 @@ replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.8
 
 // replace github.com/unxed/colorer4go => ../../../dev/colorer4go
 // replace github.com/unxed/vtui => ../../../dev/vtui
+
+replace github.com/neurlang/wayland => github.com/unxed/wayland v0.0.0-20260904142929-d13d49067138
