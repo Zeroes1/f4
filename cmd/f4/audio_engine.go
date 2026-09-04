@@ -6,6 +6,8 @@ import (
 	"math"
 	"os"
 	"sync"
+
+	"github.com/unxed/vtui"
 )
 
 // audioTrackInfo is what the panel prints in the "128kbps 44kHz stereo"
@@ -30,11 +32,14 @@ type pcmTap struct {
 	r    io.Reader
 	rate int
 
-	mu   sync.Mutex
-	n    int64
-	done bool
-	ring [pcmTapWindow]float64
-	pos  int
+	mu          sync.Mutex
+	n           int64
+	done        bool
+	dataLogged  bool
+	errorLogged bool
+	eofLogged   bool
+	ring        [pcmTapWindow]float64
+	pos         int
 }
 
 const pcmTapWindow = 512
@@ -56,10 +61,32 @@ func (t *pcmTap) Read(p []byte) (int, error) {
 		t.ring[t.pos] = (float64(l) + float64(r)) / (2 * 32768)
 		t.pos = (t.pos + 1) % pcmTapWindow
 	}
+	logData := n > 0 && !t.dataLogged
+	if logData {
+		t.dataLogged = true
+	}
+	logError := err != nil && err != io.EOF && !t.errorLogged
+	if logError {
+		t.errorLogged = true
+	}
+	logEOF := err == io.EOF && !t.eofLogged
+	if logEOF {
+		t.eofLogged = true
+	}
+	total := t.n
 	if err == io.EOF {
 		t.done = true
 	}
 	t.mu.Unlock()
+	if logData {
+		vtui.DebugLog("AUDIO: PCM data reached output tap: read=%d total=%d sample_rate=%d", n, total, t.rate)
+	}
+	if logError {
+		vtui.DebugLog("AUDIO: PCM source read failed: read=%d total=%d err=%v", n, total, err)
+	}
+	if logEOF {
+		vtui.DebugLog("AUDIO: PCM source reached EOF: total=%d", total)
+	}
 	return n, err
 }
 
@@ -123,6 +150,7 @@ type linearResampler struct {
 	cur     [2]int16
 	have    bool
 	eof     bool
+	err     error
 	scratch [audioBytesPerFrame]byte
 }
 
@@ -133,6 +161,9 @@ func newLinearResampler(src io.Reader, srcRate, dstRate int) *linearResampler {
 func (r *linearResampler) next() bool {
 	if _, err := io.ReadFull(r.src, r.scratch[:]); err != nil {
 		r.eof = true
+		if err != io.EOF {
+			r.err = err
+		}
 		return false
 	}
 	r.prev = r.cur
@@ -142,8 +173,14 @@ func (r *linearResampler) next() bool {
 }
 
 func (r *linearResampler) Read(p []byte) (int, error) {
+	if r.err != nil {
+		return 0, r.err
+	}
 	if !r.have {
 		if !r.next() {
+			if r.err != nil {
+				return 0, r.err
+			}
 			return 0, io.EOF
 		}
 		r.prev = r.cur
@@ -154,7 +191,13 @@ func (r *linearResampler) Read(p []byte) (int, error) {
 		for r.pos >= 1 {
 			if !r.next() {
 				if n == 0 {
+					if r.err != nil {
+						return 0, r.err
+					}
 					return 0, io.EOF
+				}
+				if r.err != nil {
+					return n, r.err
 				}
 				return n, nil
 			}
@@ -178,11 +221,15 @@ func (r *linearResampler) Read(p []byte) (int, error) {
 func mp3FirstFrameIsMono(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
+		vtui.DebugLog("AUDIO: MP3 frame inspection failed to open %q: %v", path, err)
 		return false
 	}
 	defer f.Close()
 	buf := make([]byte, 64*1024)
-	n, _ := io.ReadFull(f, buf)
+	n, readErr := io.ReadFull(f, buf)
+	if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+		vtui.DebugLog("AUDIO: MP3 frame inspection read failed for %q: %v", path, readErr)
+	}
 	buf = buf[:n]
 	off := 0
 	if len(buf) >= 10 && buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3' {
@@ -191,8 +238,11 @@ func mp3FirstFrameIsMono(path string) bool {
 	}
 	for i := off; i+3 < len(buf); i++ {
 		if buf[i] == 0xFF && buf[i+1]&0xE0 == 0xE0 && buf[i+1]&0x18 != 0x08 && buf[i+1]&0x06 != 0 {
-			return buf[i+3]>>6 == 3
+			mono := buf[i+3]>>6 == 3
+			vtui.DebugLog("AUDIO: MP3 first frame inspected path=%q offset=%d mono=%v", path, i, mono)
+			return mono
 		}
 	}
+	vtui.DebugLog("AUDIO: MP3 first frame not found path=%q id3_offset=%d bytes=%d", path, off, len(buf))
 	return false
 }

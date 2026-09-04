@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -155,6 +156,30 @@ func TestLinearResamplerKeepsDCAndLength(t *testing.T) {
 			t.Fatalf("frame %d = %d/%d", i, l, rr)
 		}
 	}
+}
+
+func TestLinearResamplerPropagatesSourceErrors(t *testing.T) {
+	wantErr := errors.New("decoder failure")
+	r := newLinearResampler(&failingPCMReader{err: wantErr}, 48000, 44100)
+	buf := make([]byte, 2*audioBytesPerFrame)
+	n, err := r.Read(buf)
+	if n != audioBytesPerFrame || !errors.Is(err, wantErr) {
+		t.Fatalf("Read() = (%d, %v), want (%d, %v)", n, err, audioBytesPerFrame, wantErr)
+	}
+}
+
+type failingPCMReader struct {
+	err  error
+	done bool
+}
+
+func (r *failingPCMReader) Read(p []byte) (int, error) {
+	if r.done {
+		return 0, r.err
+	}
+	r.done = true
+	copy(p, []byte{0, 0x10, 0, 0x10})
+	return audioBytesPerFrame, nil
 }
 
 func TestPCMTapSpectrumSilenceIsZero(t *testing.T) {
