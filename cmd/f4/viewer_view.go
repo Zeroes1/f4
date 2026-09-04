@@ -980,27 +980,31 @@ func (vv *ViewerView) ReloadWithAutoDetect() {
 		return
 	}
 
-	cpID := vfs.DetectEncoding(header, AppConfig.ViewerAutodetectCodePage, AppConfig.ViewerDefaultCodePage)
+	// The user asked for this file to be detected, so detect it -- the
+	// global switch decides what happens at open, not here (#875).
+	cpID := vfs.DetectEncoding(header, true, AppConfig.ViewerDefaultCodePage)
 	saveCodepageOverride(vv.vfs, vv.path, 0)
 	vv.ReloadWithCodepage(cpID)
 }
 
 func (vv *ViewerView) showCodepageDialog() {
-	items, currIdx := vfs.BuildCodepageMenuItems(vv.Codepage, AppConfig.ViewerAutodetectCodePage)
+	_, overridden := rememberedCodepage(vv.vfs, vv.path)
+	items, currIdx := vfs.BuildCodepageMenuItems(vv.Codepage, !overridden)
 	menu := newCodepageMenu(Msg("Codepage.Title"), items)
 
+	// This menu is about the file on screen, as Shift+F8 is in Far: a
+	// codepage picked here is remembered for this file, and Auto-detect
+	// forgets that and detects it again. Neither touches the global
+	// viewer settings -- flipping AutodetectCodePage off and rewriting the
+	// default codepage from here is what made every later file open in
+	// whatever the previous one was switched to (#875).
 	menu.OnAction = func(idx int) {
 		menu.Close()
 		if idx >= 0 && idx < len(menu.Items) {
 			if cpID, ok := menu.Items[idx].UserData.(int); ok {
 				if cpID == vfs.CodepageAutoDetect {
-					AppConfig.ViewerAutodetectCodePage = !AppConfig.ViewerAutodetectCodePage
-					SaveConfig()
 					vv.ReloadWithAutoDetect()
 				} else {
-					AppConfig.ViewerAutodetectCodePage = false
-					AppConfig.ViewerDefaultCodePage = cpID
-					SaveConfig()
 					saveCodepageOverride(vv.vfs, vv.path, cpID)
 					vv.ReloadWithCodepage(cpID)
 				}

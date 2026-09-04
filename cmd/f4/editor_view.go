@@ -4472,27 +4472,27 @@ func (ev *EditorView) ReloadWithAutoDetect() {
 	n, _ := ev.file.ReadAt(context.Background(), header, 0)
 	header = header[:n]
 
-	cpID := vfs.DetectEncoding(header, AppConfig.EditorAutodetectCodePage, AppConfig.EditorDefaultCodePage)
+	// The user asked for this file to be detected, so detect it -- the
+	// global switch decides what happens at open, not here (#875).
+	cpID := vfs.DetectEncoding(header, true, AppConfig.EditorDefaultCodePage)
 	saveCodepageOverride(ev.vfs, ev.filePath, 0)
 	ev.ReloadWithCodepage(cpID)
 }
 
 func (ev *EditorView) showCodepageDialog() {
-	items, currIdx := vfs.BuildCodepageMenuItems(ev.Codepage, AppConfig.EditorAutodetectCodePage)
+	_, overridden := rememberedCodepage(ev.vfs, ev.filePath)
+	items, currIdx := vfs.BuildCodepageMenuItems(ev.Codepage, !overridden)
 	menu := newCodepageMenu(Msg("Codepage.Title"), items)
 
+	// Per file, as in Far's Shift+F8; the global editor settings are not
+	// touched from here (#875, see the viewer's dialog for why).
 	menu.OnAction = func(idx int) {
 		menu.Close()
 		if idx >= 0 && idx < len(menu.Items) {
 			if cpID, ok := menu.Items[idx].UserData.(int); ok {
 				if cpID == vfs.CodepageAutoDetect {
-					AppConfig.EditorAutodetectCodePage = !AppConfig.EditorAutodetectCodePage
-					SaveConfig()
 					ev.ReloadWithAutoDetect()
 				} else {
-					AppConfig.EditorAutodetectCodePage = false
-					AppConfig.EditorDefaultCodePage = cpID
-					SaveConfig()
 					saveCodepageOverride(ev.vfs, ev.filePath, cpID)
 					ev.ReloadWithCodepage(cpID)
 				}

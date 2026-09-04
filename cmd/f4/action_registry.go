@@ -2308,9 +2308,6 @@ func init() {
 		MenuPath:    "Options",
 		Handler: withEditor(func(ev *EditorView) {
 			next := vfs.GetNextFastSwitchCodepage(ev.Codepage)
-			AppConfig.EditorAutodetectCodePage = false
-			AppConfig.EditorDefaultCodePage = next
-			SaveConfig()
 			saveCodepageOverride(ev.vfs, ev.filePath, next)
 			ev.ReloadWithCodepage(next)
 			showToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)
@@ -2502,9 +2499,6 @@ func init() {
 		MenuPath:    "Options",
 		Handler: withViewer(func(vv *ViewerView) {
 			next := vfs.GetNextFastSwitchCodepage(vv.Codepage)
-			AppConfig.ViewerAutodetectCodePage = false
-			AppConfig.ViewerDefaultCodePage = next
-			SaveConfig()
 			saveCodepageOverride(vv.vfs, vv.path, next)
 			vv.ReloadWithCodepage(next)
 			showToast(fmt.Sprintf("Codepage: %s", vfs.DisplayCodepageName(next)), time.Second)

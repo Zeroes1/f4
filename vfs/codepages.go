@@ -124,11 +124,27 @@ func init() {
 func SystemANSICodepage() int { return systemANSI }
 func SystemOEMCodepage() int  { return systemOEM }
 
+// uniqueCodepages keeps one entry per id. A system alias ("System ANSI",
+// "System OEM") wins over a later entry with the same id -- except when that
+// id is a Unicode codepage. Then the alias is dropped and the Unicode entry
+// stays: on a machine whose system codepage is UTF-8 the alias would only
+// say "System ANSI (65001)" and push the real UTF-8 entry out of the list,
+// which is what #875 saw. Nothing is lost -- on such a machine ANSI *is*
+// UTF-8 -- and DisplayCodepageName keeps calling 65001 "UTF-8".
 func uniqueCodepages(codepages []Codepage) []Codepage {
+	unicode := make(map[int]struct{})
+	for _, cp := range codepages {
+		if cp.group == codepageUnicode {
+			unicode[cp.ID] = struct{}{}
+		}
+	}
 	seen := make(map[int]struct{}, len(codepages))
 	result := make([]Codepage, 0, len(codepages))
 	for _, cp := range codepages {
 		if cp.group == codepageSystem {
+			if _, isUnicode := unicode[cp.ID]; isUnicode {
+				continue
+			}
 			seen[cp.ID] = struct{}{}
 			result = append(result, cp)
 			continue
@@ -144,14 +160,16 @@ func uniqueCodepages(codepages []Codepage) []Codepage {
 
 func DisplayCodepageName(id int) string {
 	id = normalizeCodepageID(id)
+	// Unicode first: on a UTF-8 system 65001 is also the "ANSI" id, and the
+	// user who picked UTF-8 must read "UTF-8" in the status line, not "ANSI".
+	if id == 65001 {
+		return "UTF-8"
+	}
 	if id == systemANSI {
 		return "ANSI"
 	}
 	if id == systemOEM {
 		return "OEM"
-	}
-	if id == 65001 {
-		return "UTF-8"
 	}
 	if cp, ok := FindCodepage(id); ok {
 		return cp.Name
@@ -717,9 +735,15 @@ func BuildCodepageMenuItems(currentCpID int, autoDetect bool) ([]vtui.MenuItem, 
 	addCP := func(cp Codepage) {
 		text := CodepageMenuLabel(cp)
 
-		if cp.ID == currentCpID && !autoDetect {
+		// The file's codepage is always marked, whether it was detected or
+		// chosen: it is a fact about the file on screen. autoDetect only
+		// says whether "Auto-detect" is also ticked and where the cursor
+		// starts.
+		if cp.ID == currentCpID {
 			text = "√ " + text
-			currIdx = len(items)
+			if !autoDetect {
+				currIdx = len(items)
+			}
 		} else {
 			text = "  " + text
 		}
@@ -739,26 +763,25 @@ func BuildCodepageMenuItems(currentCpID int, autoDetect bool) ([]vtui.MenuItem, 
 		UserData: CodepageAutoDetect,
 	})
 
-	addHeader(" System ")
-	for _, cp := range AvailableCodepages {
-		if cp.group == codepageSystem {
+	// A header only above a group that has members: on a UTF-8 system the
+	// System group can be empty (its aliases fold into UTF-8, see
+	// uniqueCodepages), and a bare " System " line above nothing is noise.
+	addGroup := func(title string, in func(Codepage) bool) {
+		first := true
+		for _, cp := range AvailableCodepages {
+			if !in(cp) {
+				continue
+			}
+			if first {
+				addHeader(title)
+				first = false
+			}
 			addCP(cp)
 		}
 	}
-
-	addHeader(" Unicode ")
-	for _, cp := range AvailableCodepages {
-		if cp.group == codepageUnicode {
-			addCP(cp)
-		}
-	}
-
-	addHeader(" Other ")
-	for _, cp := range AvailableCodepages {
-		if cp.group == codepageOther || cp.group == codepageIconv {
-			addCP(cp)
-		}
-	}
+	addGroup(" System ", func(cp Codepage) bool { return cp.group == codepageSystem })
+	addGroup(" Unicode ", func(cp Codepage) bool { return cp.group == codepageUnicode })
+	addGroup(" Other ", func(cp Codepage) bool { return cp.group == codepageOther || cp.group == codepageIconv })
 
 	return items, currIdx
 }

@@ -10,6 +10,7 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
+	"github.com/unxed/localecp"
 	"golang.org/x/sys/windows"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/transform"
@@ -222,9 +223,22 @@ func windowsSystemCodepage(proc *windows.LazyProc) int {
 	return int(cp)
 }
 
+// systemCodepageIDs are the numbers behind the "System ANSI" and "System
+// OEM" entries. They come from localecp, which owns the matching encodings,
+// so the number shown and the decoder used can never disagree -- and on a
+// machine set to a UTF-8 system codepage, where GetACP and GetOEMCP both say
+// 65001, localecp answers with the locale's legacy codepages (1252 / 850 on
+// the #875 reporter's box, as Far shows), not with a "System ANSI" that is
+// UTF-8 under another name. The raw calls remain the fallback for a localecp
+// that has no number.
 func systemCodepageIDs() (int, int) {
-	ansi := windowsSystemCodepage(getACP)
-	oem := windowsSystemCodepage(getOEMCP)
+	ansi, oem := localecp.ANSICodepage, localecp.OEMCodepage
+	if ansi == 0 {
+		ansi = windowsSystemCodepage(getACP)
+	}
+	if oem == 0 {
+		oem = windowsSystemCodepage(getOEMCP)
+	}
 	return ansi, oem
 }
 
