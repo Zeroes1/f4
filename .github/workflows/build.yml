@@ -327,8 +327,11 @@ jobs:
       # The noffi rows are the extra architectures Go can cross-compile
       # Linux for; vtui's graphical/FFI backends are unavailable there,
       # so they use its ANSI-only noffi configuration.
+      # android/arm64 is the Termux build (f4 #882): terminal only, the
+      # GUI backends are compiled out by vtui's !android constraints, and
+      # goffi carries its own Bionic dl path, so no NDK is needed.
       # One long line on purpose: actionlint chews minutes on a folded variant.
-      matrix: ${{ fromJSON('{"include":[{"name":"linux/386, linux/mips, linux/mipsle","cells":[{"goos":"linux","goarch":"386","build_tags":"noffi"},{"goos":"linux","goarch":"mips","build_tags":"noffi"},{"goos":"linux","goarch":"mipsle","build_tags":"noffi"}],"assets":["f4-linux-386","f4-linux-mips","f4-linux-mipsle"]},{"name":"linux/mips64, linux/mips64le, linux/riscv64","cells":[{"goos":"linux","goarch":"mips64","build_tags":"noffi"},{"goos":"linux","goarch":"mips64le","build_tags":"noffi"},{"goos":"linux","goarch":"riscv64","build_tags":"noffi"}],"assets":["f4-linux-mips64","f4-linux-mips64le","f4-linux-riscv64"]},{"name":"linux/loong64, linux/ppc64, linux/ppc64le","cells":[{"goos":"linux","goarch":"loong64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64le","build_tags":"noffi"}],"assets":["f4-linux-loong64","f4-linux-ppc64","f4-linux-ppc64le"]},{"name":"linux/arm, freebsd/amd64, freebsd/arm64","cells":[{"goos":"linux","goarch":"arm"},{"goos":"freebsd","goarch":"amd64"},{"goos":"freebsd","goarch":"arm64"}],"assets":["f4-linux-arm","f4-freebsd-amd64","f4-freebsd-arm64"]},{"name":"dragonfly/amd64, openbsd/amd64, openbsd/arm64","cells":[{"goos":"dragonfly","goarch":"amd64"},{"goos":"openbsd","goarch":"amd64"},{"goos":"openbsd","goarch":"arm64"}],"assets":["f4-dragonfly-amd64","f4-openbsd-amd64","f4-openbsd-arm64"]},{"name":"netbsd/amd64, netbsd/arm64","cells":[{"goos":"netbsd","goarch":"amd64"},{"goos":"netbsd","goarch":"arm64"}],"assets":["f4-netbsd-amd64","f4-netbsd-arm64"]},{"name":"illumos/amd64, solaris/amd64","cells":[{"goos":"illumos","goarch":"amd64"},{"goos":"solaris","goarch":"amd64"}],"assets":["f4-illumos-amd64","f4-solaris-amd64"]}]}') }}
+      matrix: ${{ fromJSON('{"include":[{"name":"linux/386, linux/mips, linux/mipsle","cells":[{"goos":"linux","goarch":"386","build_tags":"noffi"},{"goos":"linux","goarch":"mips","build_tags":"noffi"},{"goos":"linux","goarch":"mipsle","build_tags":"noffi"}],"assets":["f4-linux-386","f4-linux-mips","f4-linux-mipsle"]},{"name":"linux/mips64, linux/mips64le, linux/riscv64","cells":[{"goos":"linux","goarch":"mips64","build_tags":"noffi"},{"goos":"linux","goarch":"mips64le","build_tags":"noffi"},{"goos":"linux","goarch":"riscv64","build_tags":"noffi"}],"assets":["f4-linux-mips64","f4-linux-mips64le","f4-linux-riscv64"]},{"name":"linux/loong64, linux/ppc64, linux/ppc64le","cells":[{"goos":"linux","goarch":"loong64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64","build_tags":"noffi"},{"goos":"linux","goarch":"ppc64le","build_tags":"noffi"}],"assets":["f4-linux-loong64","f4-linux-ppc64","f4-linux-ppc64le"]},{"name":"linux/arm, freebsd/amd64, freebsd/arm64","cells":[{"goos":"linux","goarch":"arm"},{"goos":"freebsd","goarch":"amd64"},{"goos":"freebsd","goarch":"arm64"}],"assets":["f4-linux-arm","f4-freebsd-amd64","f4-freebsd-arm64"]},{"name":"dragonfly/amd64, openbsd/amd64, openbsd/arm64","cells":[{"goos":"dragonfly","goarch":"amd64"},{"goos":"openbsd","goarch":"amd64"},{"goos":"openbsd","goarch":"arm64"}],"assets":["f4-dragonfly-amd64","f4-openbsd-amd64","f4-openbsd-arm64"]},{"name":"netbsd/amd64, netbsd/arm64, android/arm64","cells":[{"goos":"netbsd","goarch":"amd64"},{"goos":"netbsd","goarch":"arm64"},{"goos":"android","goarch":"arm64"}],"assets":["f4-netbsd-amd64","f4-netbsd-arm64","f4-android-arm64"]},{"name":"illumos/amd64, solaris/amd64","cells":[{"goos":"illumos","goarch":"amd64"},{"goos":"solaris","goarch":"amd64"}],"assets":["f4-illumos-amd64","f4-solaris-amd64"]}]}') }}
     env:
       CGO_ENABLED: 0
       CELLS: ${{ toJSON(matrix.cells) }}
@@ -396,7 +399,16 @@ jobs:
             BUILD_TAG_ARGS=(-tags "$BUILD_TAGS")
           fi
 
-          go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS" -o "$BUILD_DIR/f4$EXT" ./cmd/f4 </dev/null
+          # Android refuses to exec non-PIE binaries (Termux included). Go
+          # already defaults to pie on android, but the contract is worth
+          # stating; only the executable takes it, -buildmode ignores
+          # non-main packages such as the dummy plugin below.
+          BUILDMODE_ARGS=()
+          if [ "$GOOS" = "android" ]; then
+            BUILDMODE_ARGS=(-buildmode=pie)
+          fi
+
+          go build "${BUILD_TAG_ARGS[@]}" "${BUILDMODE_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS" -o "$BUILD_DIR/f4$EXT" ./cmd/f4 </dev/null
 
           if [ "$GOOS" = "windows" ]; then
             go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS -H windowsgui" -o "$BUILD_DIR/f4-gui$EXT" ./cmd/f4 </dev/null
