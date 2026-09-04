@@ -2548,9 +2548,12 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	}
 
 	if fp.fastFindMode {
-		if vtui.ManageCursorStyle {
-			os.Stdout.WriteString("\x1b[3 q") // Blinking underline
-		}
+		// Ask the screen for the underline cursor instead of writing
+		// DECSCUSR to stdout behind the renderer's back: the renderer
+		// knows which terminals take the sequence and which must be
+		// driven through the console API (f4 #219, classic conhost draws
+		// DECSCUSR's underline as a one-pixel hairline).
+		scr.SetCursorShape(vtui.CursorShapeUnderline)
 		boxW := 24
 		boxH := 3
 
