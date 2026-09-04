@@ -33,11 +33,6 @@ func newArchivePasswordValidationError(format string, args ...any) error {
 	return archivePasswordValidationError{message: fmt.Sprintf(format, args...)}
 }
 
-func isArchivePasswordValidationError(err error) bool {
-	var validationErr archivePasswordValidationError
-	return errors.As(err, &validationErr)
-}
-
 // isArchivePasswordRetryError extends zipper's password classification with
 // lazy 7z payload errors.  7z archives may leave their headers unencrypted;
 // in that case opening and listing the archive succeeds with an empty or
@@ -204,15 +199,6 @@ func (v *ArchiveVFS) openWithPassword(ctx context.Context, cause error) error {
 		}
 		return v.installPasswordFS(fsys, password)
 	}
-}
-
-func isLazySevenZipReadError(err error) bool {
-	var readErr sevenzip.ReadError
-	if errors.As(err, &readErr) {
-		return true
-	}
-	var readErrPtr *sevenzip.ReadError
-	return errors.As(err, &readErrPtr) && readErrPtr != nil
 }
 
 func (v *ArchiveVFS) installPasswordFS(fsys zipperarchive.FileSystem, password string) error {
