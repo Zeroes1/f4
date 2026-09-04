@@ -2,7 +2,6 @@ package archive
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -30,7 +29,12 @@ type ArchivePlugin struct {
 	registrations []vfs.Registration
 }
 
+// archiveHostAPI lets archive commands trigger built-in panel actions, such
+// as copying the selected members out of an opened archive.
+var archiveHostAPI vfs.HostAPI
+
 func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
+	archiveHostAPI = api
 	if contributions, ok := api.(vfs.ContributionHost); ok {
 		addRegistration, err := contributions.RegisterPluginCommand(vfs.PluginCommand{
 			ID:             archiveAddCommandID,
@@ -80,16 +84,41 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 }
 
 func actionArchiveCommands(app vfs.App) {
-	app.Menu(" Archive Commands ", []string{"&1. Add to archive", "&2. Extract files"}, func(idx int) {
+	app.Menu(" Archive Commands ", []string{"&1. Add to archive", "&2. Extract files", "&3. Test archive"}, func(idx int) {
 		switch idx {
 		case 0:
 			actionAddArchive(app)
 		case 1:
 			actionExtractArchive(app)
+		case 2:
+			actionTestArchive(app)
 		}
 	})
 }
 
+// resolveLocalArchivePath returns the absolute path of the selected archive
+// when the active panel is a local filesystem.
+func resolveLocalArchivePath(app vfs.App) (string, bool) {
+	srcVfs := app.GetActivePanelVFS()
+	if srcVfs == nil {
+		return "", false
+	}
+	name := app.GetSelectedName()
+	if name == "" || name == ".." {
+		return "", false
+	}
+	osvfs, ok := srcVfs.(*vfs.OSVFS)
+	if !ok {
+		return "", false
+	}
+	srcPath, _ := osvfs.Abs(srcVfs.Join(srcVfs.GetPath(), name))
+	return srcPath, true
+}
+
+// actionExtractArchive runs on the UI thread as a global hotkey handler, so
+// every blocking prompt (app.Message waits for the UI loop) must run on a
+// separate goroutine. Calling app.Message synchronously here deadlocked f4
+// on Shift+F2 inside an archive.
 func actionExtractArchive(app vfs.App) {
 	srcVfs := app.GetActivePanelVFS()
 	dstVfs := app.GetPassivePanelVFS()
@@ -97,21 +126,28 @@ func actionExtractArchive(app vfs.App) {
 		return
 	}
 
-	name := app.GetSelectedName()
-	if name == "" || name == ".." {
+	if _, ok := srcVfs.(*ArchiveVFS); ok {
+		// Inside an archive, "Extract files" means copying the selected
+		// members to the passive panel, which is exactly the built-in copy.
+		if archiveHostAPI != nil {
+			go archiveHostAPI.RunAction("File.Copy")
+		}
 		return
 	}
 
-	srcPath := srcVfs.Join(srcVfs.GetPath(), name)
+	srcPath, ok := resolveLocalArchivePath(app)
+	if !ok {
+		if name := app.GetSelectedName(); name != "" && name != ".." {
+			go app.Message(" Error ", "Extraction supported only from local filesystem", []string{"&Ok"})
+		}
+		return
+	}
 	destDir := dstVfs.GetPath()
 
-	if osvfs, ok := srcVfs.(*vfs.OSVFS); ok {
-		srcPath, _ = osvfs.Abs(srcPath)
-	} else {
-		app.Message(" Error ", "Extraction supported only from local filesystem", []string{"&Ok"})
-		return
-	}
+	go extractArchiveAsync(app, srcPath, destDir)
+}
 
+func extractArchiveAsync(app vfs.App, srcPath, destDir string) {
 	isBusy := false
 	if _, active := activeOps.Load(srcPath); active {
 		isBusy = true
@@ -157,14 +193,42 @@ func extractArchiveWithPasswordPrompt(ctx context.Context, srcPath, destDir stri
 			return err
 		}
 
-		password, err = archivePasswordPrompt(ctx, filepath.Base(srcPath))
+		password, err = promptArchivePasswordUntilProvided(ctx, filepath.Base(srcPath))
 		if err != nil {
 			return err
 		}
-		if password == "" {
-			return errors.New("archive password was not provided")
-		}
 	}
+}
+
+// actionTestArchive verifies that every member of the selected archive can
+// be extracted and passes its size/CRC checks, without writing anything to
+// the panels. Password prompts behave like everywhere else in the plugin.
+func actionTestArchive(app vfs.App) {
+	srcPath, ok := resolveLocalArchivePath(app)
+	if !ok {
+		if name := app.GetSelectedName(); name != "" && name != ".." {
+			go app.Message(" Error ", "Testing supported only for local archives", []string{"&Ok"})
+		}
+		return
+	}
+	go func() {
+		tempDir, err := os.MkdirTemp("", "f4arc-test-*")
+		if err != nil {
+			app.Message(" Error ", fmt.Sprintf("Test failed:\n%v", err), []string{"&Ok"})
+			return
+		}
+		app.RunAdvancedProgressTask(" Testing... ", false, func(ctx context.Context, reporter vfs.TaskReporter) error {
+			reporter.UpdateTransfer("Testing", filepath.Base(srcPath), -1, "", -1, "")
+			return extractArchiveWithPasswordPrompt(ctx, srcPath, tempDir, reporter)
+		}, func(err error) {
+			_ = os.RemoveAll(tempDir)
+			if err == nil {
+				go app.Message(" Test archive ", fmt.Sprintf("%s\nNo errors found.", filepath.Base(srcPath)), []string{"&Ok"})
+			} else if err != context.Canceled {
+				go app.Message(" Error ", fmt.Sprintf("Test failed:\n%v", err), []string{"&Ok"})
+			}
+		})
+	}()
 }
 
 func extractArchiveOnce(ctx context.Context, srcPath, destDir, password string, reporter vfs.TaskReporter) error {

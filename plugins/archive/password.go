@@ -113,6 +113,24 @@ func showArchivePasswordDialog(archiveName string, result chan<- archivePassword
 	vtui.FrameManager.Push(dlg)
 }
 
+// promptArchivePasswordUntilProvided asks for a password the way FAR does:
+// an empty answer simply shows the dialog again, and only closing the
+// dialog (Cancel/Esc) gives up.
+func promptArchivePasswordUntilProvided(ctx context.Context, displayName string) (string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		password, err := archivePasswordPrompt(ctx, displayName)
+		if err != nil {
+			return "", err
+		}
+		if password != "" {
+			return password, nil
+		}
+	}
+}
+
 func openArchiveFSWithPasswordPrompt(ctx context.Context, localPath, displayName string, backing io.Closer) (zipperarchive.FileSystem, string, bool, error) {
 	var password string
 	for {
@@ -120,60 +138,72 @@ func openArchiveFSWithPasswordPrompt(ctx context.Context, localPath, displayName
 		if err == nil {
 			return fsys, password, cleanupTransferred, nil
 		}
-		if !zipperarchive.IsPasswordError(err) {
+		if cleanupTransferred || !isArchivePasswordRetryError(err) {
 			return nil, "", cleanupTransferred, err
 		}
 
-		password, err = archivePasswordPrompt(ctx, displayName)
+		password, err = promptArchivePasswordUntilProvided(ctx, displayName)
 		if err != nil {
 			return nil, "", cleanupTransferred, err
-		}
-		if password == "" {
-			return nil, "", cleanupTransferred, errors.New("archive password was not provided")
 		}
 	}
 }
 
+// openWithPassword is called after an archive operation failed because the
+// archive (or a member) needs a password or rejected the current one. Every
+// backend used by f4 opens archives lazily and only reports a wrong password
+// while listing or reading, so the password that is currently installed has
+// already been tried by the failed operation. It is therefore never reused
+// silently: the user is asked for a new one, and the caller retries the
+// operation with it. A retry that fails again simply lands here again, so
+// the prompt keeps coming back until the password is right or the dialog is
+// closed, which is exactly FAR's behaviour. Concurrent failures share one
+// prompt: whoever arrives after a newer password was installed just retries.
 func (v *ArchiveVFS) openWithPassword(ctx context.Context, cause error) error {
 	if !isArchivePasswordRetryError(cause) {
 		return cause
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	v.mu.Lock()
 	localPath := v.activePath()
 	displayName := v.displayName
-	password := v.password
+	failedGen := v.passwordGen
 	v.mu.Unlock()
 
-	// A password may already have been entered while opening the archive. In
-	// that case, retry with it first for eager password errors. A lazy 7z
-	// ReadError is different: the current password has just failed while
-	// reading a payload, and opening the filesystem with it succeeds again
-	// because the headers are not encrypted. Force a new prompt in that case.
-	forcePrompt := (isLazySevenZipReadError(cause) || isArchivePasswordValidationError(cause)) && password != ""
-	if password != "" && !forcePrompt {
-		fsys, _, err := openArchiveFSWithContext(ctx, localPath, displayName, nil, password)
-		if err == nil {
-			return v.installPasswordFS(fsys, password)
-		}
-		if !isArchivePasswordRetryError(err) {
+	v.passwordPromptMu.Lock()
+	defer v.passwordPromptMu.Unlock()
+
+	v.mu.Lock()
+	if v.isClosed {
+		v.mu.Unlock()
+		return errors.New("archive VFS is closed")
+	}
+	if v.passwordGen != failedGen {
+		// Another operation has just installed a newer password. Let the
+		// caller retry with it before bothering the user again.
+		v.mu.Unlock()
+		return nil
+	}
+	v.mu.Unlock()
+
+	for {
+		password, err := promptArchivePasswordUntilProvided(ctx, displayName)
+		if err != nil {
 			return err
 		}
+		fsys, _, err := openArchiveFSWithContext(ctx, localPath, displayName, nil, password)
+		if err != nil {
+			if isArchivePasswordRetryError(err) {
+				// Eager rejection (encrypted headers): ask again right away.
+				continue
+			}
+			return err
+		}
+		return v.installPasswordFS(fsys, password)
 	}
-
-	password, err := archivePasswordPrompt(ctx, displayName)
-	if err != nil {
-		return err
-	}
-	if password == "" {
-		return cause
-	}
-
-	fsys, _, err := openArchiveFSWithContext(ctx, localPath, displayName, nil, password)
-	if err != nil {
-		return err
-	}
-	return v.installPasswordFS(fsys, password)
 }
 
 func isLazySevenZipReadError(err error) bool {
@@ -196,6 +226,7 @@ func (v *ArchiveVFS) installPasswordFS(fsys zipperarchive.FileSystem, password s
 	oldFS := v.fsys
 	v.fsys = fsys
 	v.password = password
+	v.passwordGen++
 	v.mu.Unlock()
 	if oldFS != nil {
 		_ = oldFS.Close()

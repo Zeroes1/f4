@@ -199,7 +199,7 @@ func TestArchivePluginRegistersFar2lFileShortcutsWithoutContributionHost(t *test
 	if app.title != " Archive Commands " {
 		t.Errorf("legacy menu title = %q", app.title)
 	}
-	wantItems := []string{"&1. Add to archive", "&2. Extract files"}
+	wantItems := []string{"&1. Add to archive", "&2. Extract files", "&3. Test archive"}
 	if len(app.items) != len(wantItems) {
 		t.Fatalf("legacy menu items = %#v", app.items)
 	}

@@ -77,6 +77,12 @@ type ArchiveVFS struct {
 	format      string
 	innerPath   string
 	password    string
+	// passwordGen counts installed password changes so a concurrent operation
+	// that failed with an older password can retry without a second prompt.
+	passwordGen int
+	// passwordPromptMu serializes password prompts: only one dialog per
+	// archive at a time, even when several operations fail concurrently.
+	passwordPromptMu sync.Mutex
 
 	fsys   archive.FileSystem
 	closer io.Closer
@@ -807,8 +813,6 @@ func (w *archiveReadWrapper) extractToTempRandom(ctx context.Context) error {
 	if w.hasCRC32 {
 		checksum = crc32.NewIEEE()
 	}
-	passwordRetries := 0
-
 	for {
 		if ctx.Err() != nil {
 			loopErr = ctx.Err()
@@ -832,8 +836,9 @@ func (w *archiveReadWrapper) extractToTempRandom(ctx context.Context) error {
 			if errRead == io.EOF && checksum != nil && checksum.Sum32() != w.crc32 {
 				errRead = newArchivePasswordValidationError("extracted data checksum does not match")
 			}
-			if errRead != io.EOF && isArchivePasswordRetryError(errRead) && passwordRetries < 2 {
-				passwordRetries++
+			// Keep re-prompting like FAR does: the user decides when to stop
+			// by closing the password dialog, which ends the retry loop.
+			if errRead != io.EOF && isArchivePasswordRetryError(errRead) {
 				if srcCloser != nil {
 					_ = srcCloser.Close() // The fallback archive member was read-only.
 					srcCloser = nil
@@ -1149,7 +1154,6 @@ func (w *archiveReadWrapper) Read(ctx context.Context, p []byte) (int, error) {
 		return tmp.Read(p)
 	}
 
-	passwordRetries := 0
 	var n int
 	var err error
 	for {
@@ -1168,7 +1172,7 @@ func (w *archiveReadWrapper) Read(ctx context.Context, p []byte) (int, error) {
 				err = newArchivePasswordValidationError("extracted %d bytes, want %d", readPos, w.size)
 			}
 		}
-		if err == nil || !isArchivePasswordRetryError(err) || passwordRetries >= 2 {
+		if err == nil || !isArchivePasswordRetryError(err) {
 			break
 		}
 		if n > 0 {
@@ -1176,7 +1180,6 @@ func (w *archiveReadWrapper) Read(ctx context.Context, p []byte) (int, error) {
 			w.readPos -= int64(n)
 			w.mu.Unlock()
 		}
-		passwordRetries++
 		if retryErr := w.reopenAfterPassword(ctx, err); retryErr != nil {
 			return 0, retryErr
 		}
