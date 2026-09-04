@@ -30,7 +30,7 @@ require (
 	github.com/unxed/archives v0.0.0-20260826172907-54073a78974d
 	github.com/unxed/colorer4go v0.1.14
 	github.com/unxed/ffibridge v0.1.5
-	github.com/unxed/id3-go v0.1.1
+	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.1.5
 	github.com/unxed/localecp v0.1.6
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
