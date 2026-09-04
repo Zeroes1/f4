@@ -38,7 +38,7 @@ require (
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.7
-	github.com/unxed/vtui v0.1.314
+	github.com/unxed/vtui v0.1.315
 	github.com/unxed/zip v0.1.130
 	github.com/unxed/zipper v0.1.152
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -136,7 +136,7 @@ require (
 	github.com/ncruces/go-sqlite3 v0.35.2
 	github.com/ncruces/go-sqlite3-wasm/v3 v3.2.35303 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
-	github.com/neurlang/wayland v0.4.2 // indirect
+	github.com/neurlang/wayland v0.4.3 // indirect
 	github.com/neurlang/winc v0.1.2 // indirect
 	github.com/nwaples/rardecode/v2 v2.2.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
