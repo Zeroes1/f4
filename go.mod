@@ -36,7 +36,7 @@ require (
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.7
-	github.com/unxed/vtui v0.1.312
+	github.com/unxed/vtui v0.1.313
 	github.com/unxed/zip v0.1.129
 	github.com/unxed/zipper v0.1.151
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -86,7 +86,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.13.0.20260811162617-464c2ddfc34c // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
-	github.com/unxed/goclip v0.1.1 // indirect
+	github.com/unxed/goclip v0.1.2 // indirect
 	github.com/unxed/kiwi-go v0.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
