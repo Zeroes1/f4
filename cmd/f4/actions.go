@@ -2199,6 +2199,35 @@ func actionCopyMove(pf *PanelsFrame, isMove bool) {
 
 	srcVfs, dstVfs := fspSrc.vfs, fspDst.vfs
 	srcBasePath := srcVfs.GetPath()
+	if player, ok := pf.altPanels[1-pf.activeIdx].(*PlayerPanel); ok {
+		// The player panel is a playlist, not a place: F5 adds
+		// references, F6 is refused rather than moving music around.
+		if isMove {
+			vtui.ShowMessage(Msg("Player.Title"), Msg("Player.MoveRefused"), []string{Msg("vtui.Ok")})
+			return
+		}
+		osv, isLocal := srcVfs.(*vfs.OSVFS)
+		if !isLocal {
+			vtui.ShowMessage(Msg("Player.Title"), Msg("Player.LocalOnly"), []string{Msg("vtui.Ok")})
+			return
+		}
+		paths := make([]string, 0, len(names))
+		for _, n := range names {
+			if abs, err := osv.Abs(filepath.Join(srcBasePath, n)); err == nil {
+				paths = append(paths, abs)
+			}
+		}
+		if player.AddPaths(paths) == 0 {
+			vtui.ShowMessage(Msg("Player.Title"), Msg("Player.NothingAdded"), []string{Msg("vtui.Ok")})
+			return
+		}
+		fspSrc.selectedItems = make(map[string]bool)
+		for _, entry := range fspSrc.entries {
+			entry.Selected = false
+		}
+		vtui.FrameManager.Redraw()
+		return
+	}
 	if temp, ok := dstVfs.(*TempPanelVFS); ok {
 		// A temporary panel contains references, not copies. Keep F5/F6
 		// useful for it, but never remove the real source on F6: the

@@ -16,9 +16,11 @@ require (
 	github.com/charlievieth/strcase v0.0.6
 	github.com/coregx/coregex v0.12.19
 	github.com/danielpaulus/go-ios v1.2.2-0.20260805152531-ebec9a0b076c
+	github.com/ebitengine/oto/v3 v3.5.0-alpha.9.0.20260810052149-c311bfa6e535
 	github.com/ebitengine/purego v0.11.0-alpha.8
 	github.com/go-webgpu/goffi v0.6.3
 	github.com/google/uuid v1.6.0
+	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/jezek/xgb v1.3.1
 	github.com/jlaffaye/ftp v0.2.0
@@ -85,6 +87,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
 	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.13.0.20260811162617-464c2ddfc34c // indirect
+	github.com/jfreymuth/pulse v0.1.2 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/unxed/goclip v0.1.2 // indirect
 	github.com/unxed/kiwi-go v0.1.0 // indirect

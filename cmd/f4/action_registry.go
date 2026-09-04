@@ -1576,6 +1576,18 @@ func init() {
 		}),
 	})
 	RegisterAction(Action{
+		Name:        "Panel.Player",
+		Area:        "Shell",
+		Label:       "Player",
+		LabelKey:    "Menu.Panel.Player",
+		Description: "Toggle the MP3 player panel",
+		DescKey:     "Action.Panel.Player.Desc",
+		DefaultKeys: []string{"CtrlShiftM"},
+		Handler: withPF(func(pf *PanelsFrame) {
+			pf.toggleAltPanel("player", func(src *FileSystemPanel) AltPanel { return NewPlayerPanel(src) })
+		}),
+	})
+	RegisterAction(Action{
 		Name:        "Panel.SplitLeft",
 		Area:        "Shell",
 		Label:       "Move Split Left",

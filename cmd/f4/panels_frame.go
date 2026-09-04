@@ -1871,6 +1871,14 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 					return true
 				}
 			}
+			// The player takes WinAmp's letter keys (Z X C V B) and +/-
+			// for volume, so plain characters must not go to the
+			// command line while it has the cursor.
+			if a := pf.altPanels[pf.activeIdx]; a != nil && a.IsFocused() && a.Kind() == "player" {
+				if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
+					return true
+				}
+			}
 		}
 		return false
 	}
