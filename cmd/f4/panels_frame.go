@@ -2959,12 +2959,26 @@ func (pf *PanelsFrame) processMiddleMouseGesture(e *vtinput.InputEvent) (handled
 // terminalWantsMouseEvent applies the DEC mouse-tracking mode selected by
 // the terminal application. SGR (1006) chooses the wire format; it does not
 // itself request mouse events. In normal tracking mode (1000), applications
-// receive button presses and releases only, not hover motion.
+// receive button presses and releases only, not hover motion. Button-event
+// tracking (1002) adds motion while a button is held; only any-event
+// tracking (1003) reports the pointer moving with no button down. Every
+// backend now delivers that hover motion (it is what underlines a URL under
+// the pointer, #459), so a vim or mc that asked for 1002 must not see it.
 func terminalWantsMouseEvent(mode int, e *vtinput.InputEvent) bool {
 	if mode == 0 || e == nil {
 		return false
 	}
-	return mode != 1000 || e.MouseEventFlags&vtinput.MouseMoved == 0
+	if e.MouseEventFlags&vtinput.MouseMoved == 0 {
+		return true
+	}
+	switch mode {
+	case 1000:
+		return false
+	case 1002:
+		return e.ButtonState != 0
+	default:
+		return true
+	}
 }
 
 func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {

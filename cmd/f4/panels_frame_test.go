@@ -4762,6 +4762,45 @@ func TestPanelsFrame_MouseForwarding_ToPTY(t *testing.T) {
 	}
 }
 
+// Button-event tracking (1002) reports motion only while a button is held.
+// A GUI backend delivering hover motion for URL underlining (#459) must not
+// leak it into a TUI that asked for 1002 -- xterm would not send it either.
+func TestPanelsFrame_MouseForwarding_ButtonEventTracking(t *testing.T) {
+	pf := setupMockPanelsFrame(t)
+	pty := pf.pty.(*mockPty)
+	defer pf.Close()
+
+	pf.showPanels = false
+	pf.termView.MouseTrackingMode = 1002
+	pf.termView.MouseSGRMode = true
+
+	hover := &vtinput.InputEvent{
+		Type:            vtinput.MouseEventType,
+		MouseX:          12,
+		MouseY:          11,
+		MouseEventFlags: vtinput.MouseMoved,
+	}
+	before := pty.String()
+	pf.ProcessMouse(hover)
+	if got := pty.String(); got != before {
+		t.Errorf("PTY received hover motion in button-event tracking mode: got %q, want %q", got, before)
+	}
+
+	drag := &vtinput.InputEvent{
+		Type:            vtinput.MouseEventType,
+		MouseX:          12,
+		MouseY:          11,
+		MouseEventFlags: vtinput.MouseMoved,
+		ButtonState:     vtinput.FromLeft1stButtonPressed,
+	}
+	if !pf.ProcessMouse(drag) {
+		t.Fatal("Button-event mouse tracking must capture drag motion")
+	}
+	if dragExpected := "\x1b[<32;13;12M"; !strings.Contains(pty.String(), dragExpected) {
+		t.Errorf("PTY did not receive expected drag sequence. Got: %q, want to contain: %q", pty.String(), dragExpected)
+	}
+}
+
 func TestPanelsFrame_MouseForwarding_AnyEventTracking(t *testing.T) {
 	pf := setupMockPanelsFrame(t)
 	pty := pf.pty.(*mockPty)
