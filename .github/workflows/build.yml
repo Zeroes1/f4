@@ -176,6 +176,7 @@ jobs:
 
         # Copy language and help assets
         cp -r cmd/f4/lang cmd/f4/help build/
+        cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
         cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
@@ -403,6 +404,7 @@ jobs:
           fi
 
           cp -r cmd/f4/lang cmd/f4/help "$BUILD_DIR/"
+          cp f4.example.ini "$BUILD_DIR/"
           mkdir -p "$BUILD_DIR/licenses"
           cp plugins/visren/LICENSE.upstream "$BUILD_DIR/licenses/VisRen-BSD-3-Clause.txt"
           cp plugins/ios/LICENSE.go-ios "$BUILD_DIR/licenses/go-ios-MIT.txt"
@@ -576,6 +578,7 @@ jobs:
         mkdir -p build
         go build -buildmode=pie -trimpath -ldflags="$APP_LDFLAGS" -o build/f4 ./cmd/f4
         cp -r cmd/f4/lang cmd/f4/help build/
+        cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
         cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
@@ -803,6 +806,7 @@ jobs:
         go build -trimpath -ldflags="$APP_LDFLAGS -H windowsgui" -o build/f4-gui.exe ./cmd/f4
 
         cp -r cmd/f4/lang cmd/f4/help build/
+        cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
         cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
