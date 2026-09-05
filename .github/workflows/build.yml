@@ -1376,33 +1376,6 @@ jobs:
         files: dist/*
         generate_release_notes: true
 
-    # The Releases page is ordered by the release's own creation time, and the
-    # stable release just published above is now the newest object there, so
-    # it sits on top of the nightly until the next push to main recreates it.
-    # Keep the nightly on top permanently: rebuild it from its own current
-    # assets and body right after every stable release. Same recipe as the
-    # nightly job -- delete and recreate the release, keep the floating tag.
-    # Everything is fetched before anything is deleted, so a failed download
-    # leaves the existing nightly untouched.
-    - name: Keep Nightly Above Stable Releases
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-        if ! gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-          echo "No nightly release to refresh."
-          exit 0
-        fi
-        mkdir -p nightly-assets
-        gh release download nightly --repo "$GITHUB_REPOSITORY" --dir nightly-assets --clobber
-        gh release view nightly --repo "$GITHUB_REPOSITORY" --json body -q .body > nightly-notes.md
-        TITLE="$(gh release view nightly --repo "$GITHUB_REPOSITORY" --json name -q .name)"
-        gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes
-        gh release create nightly --repo "$GITHUB_REPOSITORY" \
-          --verify-tag --prerelease --latest=false \
-          --title "$TITLE" --notes-file nightly-notes.md \
-          nightly-assets/*
-
   # Эта джоба обновляет Homebrew tap при пуше тэгов v*.*.*,
   # чтобы под macOS можно было поставить f4 одной командой:
   #   brew install <owner>/tap/f4
@@ -1520,12 +1493,25 @@ jobs:
         path: dist
         merge-multiple: true
 
-    # Updating an existing release changes its assets and body but keeps its
-    # original published_at, so a long-lived nightly release stays near the
-    # bottom of the Releases page. Recreate only the release to publish it at
-    # the top again; deliberately keep the floating nightly tag in place.
-    # The release job does the same right after each stable release, so a
-    # freshly tagged version does not push the nightly below it either.
+    # The Releases page is sorted by each release's created_at, and GitHub
+    # sets that to the date of the tagged commit, not to the moment the
+    # release was created or last edited. Recreating the release alone
+    # therefore changes nothing while the nightly tag keeps pointing at the
+    # commit that introduced it: the nightly stays pinned below every stable
+    # release. Move the tag to the commit being built first, so the recreated
+    # release inherits the newest commit date on main and sorts above every
+    # v* tag on older commits. The push trigger only matches v*.*.* tags,
+    # so pushing nightly does not start another run.
+    - name: Move Nightly Tag to HEAD
+      run: |
+        set -euo pipefail
+        git tag -f nightly HEAD
+        git push -f origin refs/tags/nightly
+
+    # created_at is fixed when the release object is created and does not
+    # follow the tag afterwards, so an update in place would keep the old
+    # date. Delete and recreate the release; the tag stays where the step
+    # above put it.
     - name: Refresh Nightly Release Position
       env:
         GH_TOKEN: ${{ github.token }}
