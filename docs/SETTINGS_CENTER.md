@@ -2,7 +2,7 @@
 
 Baseline: `main` at `4cd62a34`. Settings are grouped by the behavior they control. The canonical runtime descriptions live in `sdk/f4settings` descriptors contributed by core and bundled providers. English UI resources use `SettingsCenter.*`; plugins may supply localized text with an English fallback.
 
-The dialog opens centered at approximately half the screen width (minimum 72 columns, bounded by the screen), supports native dragging, resizing and F5 maximize/restore, and uses column separators and bordered setting groups. Boolean settings use directly labeled checkboxes; long labels wrap beside the checkbox. The selected category remains marked with the semantic dialog edit-selection color when navigation loses focus.
+The dialog opens centered at approximately half the screen width (minimum 72 columns, bounded by the screen), supports native dragging, resizing and F5 maximize/restore, and uses column separators and bordered setting groups. Boolean settings use directly labeled checkboxes; long labels wrap beside the checkbox. The selected category remains marked with the neutral gray background derived from the live dialog palette, matching Environment Manager when navigation loses focus.
 
 ## Entry points and editing contract
 

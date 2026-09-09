@@ -148,6 +148,9 @@ func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
 		painter.DrawTitle(v.X1, top, v.X2-2, vtui.TruncateString(box.title, max(1, v.X2-v.X1-5), "…"), title)
 	}
 	for _, r := range v.rows {
+		if r.control != nil {
+			r.control.SetFocus(v.IsFocused() && v.GetFocusedItem() == r.control)
+		}
 		if r.heading {
 			continue
 		}
@@ -352,12 +355,24 @@ func (r settingsCategoryRow) GetCellText(int) string {
 }
 func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
 	if r.center.category == r.category.ID && !r.center.sidebar.IsFocused() {
-		attr = vtui.Palette[vtui.ColDialogEditSelected]
+		attr = settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText])
 	}
 	if r.center.categoryMatches(r.category.ID) == 0 && r.center.query != "" {
 		return vtui.DimColor(attr)
 	}
 	return attr
+}
+
+// Match Environment Manager's neutral, theme-derived inactive cursor.
+func settingsInactiveCategoryAttr(attr uint64) uint64 {
+	if attr&(vtui.IsFgRGB|vtui.IsBgRGB) != vtui.IsFgRGB|vtui.IsBgRGB {
+		return attr ^ vtui.BackgroundIntensity
+	}
+	gray := func(rgb uint32) uint32 {
+		return (((rgb>>16)&0xff)*299 + ((rgb>>8)&0xff)*587 + (rgb&0xff)*114) / 1000
+	}
+	shade := (gray(vtui.GetRGBBack(attr))*3 + gray(vtui.GetRGBFore(attr))) / 4
+	return vtui.SetRGBBack(attr, shade<<16|shade<<8|shade)
 }
 
 var lastSettingsCategory string
@@ -542,6 +557,7 @@ func (c *settingsCenter) layoutWindow() {
 }
 func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	c.refreshAvailability()
+	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
 	attr := vtui.Palette[vtui.ColDialogBox]
 	for y := c.page.Y1; y <= c.help.Y2; y++ {

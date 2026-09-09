@@ -113,6 +113,7 @@ func TestSettingsCenterRenderThemeAndSearch(t *testing.T) {
 		c.query = ""
 		c.updateMatches()
 		c.page.SetFocusedItem(match.control)
+		c.SetFocusedItem(c.page)
 		c.Show(scr)
 		x, y, _, _ = match.control.GetPosition()
 		if got := scr.GetCell(x, y).Attributes; got != vtui.Palette[vtui.ColDialogSelectedButton] {
@@ -177,7 +178,7 @@ func TestSettingsCenterCompactCheckboxesAndResizableLayout(t *testing.T) {
 			}
 		}
 		row := settingsCategoryRow{center: c, category: f4settings.Category{ID: "panels"}}
-		if row.GetCellAttr(0, 0) != vtui.Palette[vtui.ColDialogEditSelected] {
+		if row.GetCellAttr(0, 0) != settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText]) {
 			t.Fatal("inactive category selection missing")
 		}
 		c.SetFocusedItem(c.sidebar)
@@ -200,5 +201,56 @@ func TestSettingsCenterCompactCheckboxesAndResizableLayout(t *testing.T) {
 	c.ProcessMouse(&vtinput.InputEvent{})
 	if c.resizing || c.X2-c.X1+1 != 72 || c.Y2-c.Y1+1 != 22 {
 		t.Fatal("mouse resizing into content was intercepted")
+	}
+}
+
+func TestSettingsCenterExclusivePaneFocus(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer copy(vtui.Palette, palette)
+	for iteration := 0; iteration < 2; iteration++ {
+		vtui.Palette[vtui.ColDialogText] = vtui.SetRGBBoth(0, 0xeeeeee, uint32(0x201040+iteration*0x102030))
+		vtui.Palette[vtui.ColDialogSelectedButton] = vtui.SetRGBBoth(0, 0xffffff, 0x0000ff)
+		c.SetFocusedItem(c.sidebar)
+		c.category = ""
+		c.selectCategory("panels")
+		for i, cat := range c.categories {
+			if cat.ID == "panels" {
+				c.sidebar.SetSelectPos(i)
+			}
+		}
+		c.Show(scr)
+		control := c.page.GetFocusedItem()
+		x, y, _, _ := control.GetPosition()
+		if control.IsFocused() || scr.GetCell(x, y).Attributes != vtui.Palette[vtui.ColDialogText] {
+			t.Fatal("inactive content displays keyboard focus")
+		}
+		c.SetFocusedItem(c.page)
+		c.Show(scr)
+		if !control.IsFocused() || scr.GetCell(x, y).Attributes != vtui.Palette[vtui.ColDialogSelectedButton] {
+			t.Fatal("active content lost keyboard focus")
+		}
+		categoryY := c.sidebar.Y1 + c.sidebar.SelectPos - c.sidebar.TopPos
+		attr := scr.GetCell(c.sidebar.X1, categoryY).Attributes
+		bg := vtui.GetRGBBack(attr)
+		if attr == vtui.Palette[vtui.ColDialogSelectedButton] || (bg>>16)&255 != (bg>>8)&255 || (bg>>8)&255 != bg&255 {
+			t.Fatalf("inactive category isn't neutral gray: %x", attr)
+		}
+		c.rebuildCategory()
+		c.Show(scr)
+		if !c.page.GetFocusedItem().IsFocused() {
+			t.Fatal("rebuilding active content lost focus")
+		}
+		c.SetFocusedItem(c.sidebar)
+		c.Show(scr)
+		if c.page.GetFocusedItem().IsFocused() {
+			t.Fatal("returning to sidebar left content focused")
+		}
 	}
 }
