@@ -449,6 +449,7 @@ type settingsCenter struct {
 	help                              *settingsHelp
 	apply, ok, cancel, previous, next *vtui.Button
 	category, query, status           string
+	choiceHelpRow                     *settingsRow
 	offsets                           map[string]int
 	closed                            bool
 	running                           *vtui.TaskContext
@@ -621,6 +622,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 		c.layoutWindow()
 	}
 	c.refreshAvailability()
+	c.refreshChoiceHelp()
 	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
 	attr := vtui.Palette[vtui.ColDialogBox]
@@ -944,6 +946,8 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		b.OnChange = func(n int) { change(strconv.FormatBool(n == 1)) }
 		control = b
 	case f4settings.ChoiceKind:
+		f = settingsFieldChoiceHelp(f)
+		r.field = f
 		choices := append([]f4settings.Choice(nil), f.Choices...)
 		selected := -1
 		var labels []string
@@ -959,6 +963,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 			labels = append(labels, choices[selected].Label.English)
 		}
 		b := vtui.NewComboBox(0, 0, 20, labels)
+		r.field.Choices = choices
 		b.DropdownOnly = !f.AllowCustom
 		b.Menu.SetSelectPos(selected)
 		b.Edit.SetText(labels[selected])

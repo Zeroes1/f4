@@ -30,7 +30,7 @@ func (*coreAPI) RegisterSettingsProvider(p f4settings.Provider) (vfs.Registratio
 	if p == nil {
 		return nil, settingsError("nil settings provider")
 	}
-	c := p.Catalog()
+	c := settingsCatalogChoiceHelp(p.Catalog())
 	if err := f4settings.ValidateCatalog(c); err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func beginSettingsSessions(ctx context.Context) ([]*settingsSession, error) {
 			}
 			return nil, err
 		}
-		sessions = append(sessions, &settingsSession{p, p.Catalog(), d, i > 6})
+		sessions = append(sessions, &settingsSession{p, settingsCatalogChoiceHelp(p.Catalog()), d, i > 6})
 	}
 	return sessions, nil
 }

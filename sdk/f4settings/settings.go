@@ -95,6 +95,8 @@ type Group struct {
 type Choice struct {
 	Value string
 	Label Text
+	// Description explains the choice; empty uses the field's explanation.
+	Description Text
 }
 type Field struct {
 	ID, Category, Group string
@@ -314,7 +316,7 @@ func Matches(query string, f Field, category string, language string, lookup fun
 	parts := []string{f.Label.Resolve(language, lookup), f.Description.Resolve(language, lookup), f.Label.English, f.Description.English, category, f.Group}
 	parts = append(parts, f.Aliases...)
 	for _, c := range f.Choices {
-		parts = append(parts, c.Label.Resolve(language, lookup), c.Label.English)
+		parts = append(parts, c.Label.Resolve(language, lookup), c.Label.English, c.Description.Resolve(language, lookup), c.Description.English)
 	}
 	haystack := strings.ToLower(strings.Join(parts, " "))
 	for _, token := range strings.Fields(strings.ToLower(query)) {

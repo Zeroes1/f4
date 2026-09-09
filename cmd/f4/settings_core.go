@@ -166,7 +166,7 @@ func (p coreSettingsProvider) Catalog() f4settings.Catalog {
 			"updates":    "Auto update settings",
 		}[f.Category])
 	}
-	return f4settings.Catalog{ID: "core", Categories: settingsCategories, Fields: fields, Background: true}
+	return settingsCatalogChoiceHelp(f4settings.Catalog{ID: "core", Categories: settingsCategories, Fields: fields, Background: true})
 }
 func settingsChoices(s string) []f4settings.Choice {
 	var result []f4settings.Choice

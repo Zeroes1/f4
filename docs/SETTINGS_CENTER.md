@@ -237,6 +237,25 @@ Legacy `CmLanguage`, `CmHelpLanguage`, `CmHotkeyConfig`, `CmPlugins` and `CmPlug
 
 ## Validation
 
+### Dropdown choice help
+
+`f4settings.Choice.Description` supplies localized help for an individual choice.
+While a dropdown is open, the explanation pane follows its highlighted row,
+including keyboard navigation and mouse hover. Browsing does not edit the draft;
+closing the list restores the field explanation. Choice descriptions participate
+in the existing dim-only search. Providers can supply descriptions without any
+renderer changes; missing descriptions use the field explanation alongside the
+choice label, suitable for language, font and other self-explanatory lists.
+
+The built-in behavioral choice inventory is `cmd/f4/settings_choice_help.tsv`.
+It covers startup backends, navigation, operation modes, editor choices, update
+policies and bundled connection/authentication choices. Translations use the
+ordinary English and Russian resources. Contribution enrichment copies descriptor
+slices and preserves provider-supplied descriptions and all stored choice values.
+Backend explanations follow `startup_backend.go`, `main.go`'s startup dispatch,
+`gui_backend_capability.go`, and the pinned vtui backend implementations; they do
+not claim benchmark superiority for a particular graphics stack.
+
 ### Opening performance (Windows, 2026-09-09)
 
 `BenchmarkSettingsOpen` measures provider snapshots, catalogs, dialog construction,
