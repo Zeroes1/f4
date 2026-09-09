@@ -401,6 +401,14 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 	if c.page.GetFocusedItem() != last {
 		t.Fatal("navigation must skip unavailable setting")
 	}
+	key(vtinput.VK_LEFT, false)
+	if c.GetFocusedItem() != c.sidebar {
+		t.Fatal("Left from content must reach categories")
+	}
+	key(vtinput.VK_RIGHT, false)
+	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
+		t.Fatal("Right must return to the remembered content control")
+	}
 	c.SetFocusedItem(c.search)
 	for _, want := range []vtui.UIElement{c.sidebar, c.page, c.previous, c.next, c.apply, c.ok, c.cancel, c.search} {
 		key(vtinput.VK_TAB, false)

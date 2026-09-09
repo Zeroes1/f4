@@ -635,7 +635,12 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		if arrow {
 			switch focused {
 			case c.sidebar:
-				if e.VirtualKeyCode == vtinput.VK_UP && c.sidebar.SelectPos == 0 {
+				if e.VirtualKeyCode == vtinput.VK_RIGHT {
+					if c.page.CanFocus() {
+						c.SetFocusedItem(c.page)
+						c.page.notifyFocus()
+					}
+				} else if e.VirtualKeyCode == vtinput.VK_UP && c.sidebar.SelectPos == 0 {
 					c.SetFocusedItem(c.search)
 				} else {
 					c.sidebar.ProcessKey(e)
@@ -649,6 +654,16 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				}
 				return true
 			case c.page:
+				if e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT {
+					// Text cursors and compound controls retain their editing keys.
+					if item := c.page.GetFocusedItem(); item != nil && item.ProcessKey(e) {
+						return true
+					}
+					if e.VirtualKeyCode == vtinput.VK_LEFT {
+						c.SetFocusedItem(c.sidebar)
+					}
+					return true
+				}
 				c.page.ProcessKey(e)
 				return true
 			case c.help:
