@@ -701,7 +701,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	}
 	c.paintContentBackground(scr)
 	if c.status != "" {
-		scr.Write(c.X1+2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-c.X1-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
+		scr.Write(c.X1+2, c.apply.Y1, vtui.StringToCharInfo(vtui.TruncateString(c.status, max(0, c.apply.X1-c.X1-3), "…"), vtui.Palette[vtui.ColDialogHighlightText]))
 	}
 }
 
@@ -1543,11 +1543,7 @@ func (b *settingsSearchButton) Show(scr *vtui.ScreenBuf) {
 }
 
 func (c *settingsCenter) contentBottom() int {
-	bottom := c.Y2 - 2 // Immediately above the action buttons.
-	if c.status != "" {
-		bottom--
-	} // Reserve a status row only when needed.
-	return bottom
+	return c.Y2 - 2 // Status shares the action row, so content height stays fixed.
 }
 
 // The clear button occupies the trailing three cells of the search surface.

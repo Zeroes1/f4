@@ -13,7 +13,6 @@ var settingsCategories = []f4settings.Category{
 	{ID: "workspaces", Label: f4settings.Text{English: "Workspaces & saving"}},
 	{ID: "panels", Label: f4settings.Text{English: "Panels"}},
 	{ID: "drives", Label: f4settings.Text{English: "Drive chooser"}},
-	{ID: "navigation", Label: f4settings.Text{English: "Navigation & suggestions"}},
 	{ID: "operations", Label: f4settings.Text{English: "File operations"}},
 	{ID: "editor", Label: f4settings.Text{English: "Editor & viewer"}},
 	{ID: "syntax", Label: f4settings.Text{English: "Syntax highlighting"}},
@@ -66,15 +65,15 @@ PanelScrollbarMode|panels|File listing|Panel scrollbar|Hide the scrollbar, show 
 SyncPanelLoad|panels|Directory loading|Wait for complete directory listing|Replace the listing only when all directory results are ready and bypass cached previews. Off permits incremental results. It does not block all UI work.||next directory load
 InfoPanelCPUGPU|panels|Information panels|Show CPU and GPU information|Include locally collected CPU and GPU sections when the information provider does not supply authoritative information.||live
 InfoPanelBytes|panels|Information panels|Show sizes in bytes|Display raw bytes instead of human-readable sizes in information and quick-view panels.||live
-NavigationMode|navigation|Typing and focus|Panel navigation|Classic types into the command line. Vim adds j/k and double dd/cc/mm actions. Search-first separates filename-search and command focus.|0:Classic;1:Vim;2:Search first|live
-SearchCommandStayFocused|navigation|Typing and focus|Keep command input focused|In Search-first mode, keep command entry focused after executing a command rather than returning to the panel.||live
-CommandLineAutoComplete|navigation|Path suggestions|Enable filesystem suggestions|Enable filesystem path suggestions in the command line and path-enabled dialog fields.||live
-DialogAutoComplete|navigation|Path suggestions|Show dialog completion dropdowns|Show completion while typing in fields with history or path suggestions. Does not add sources to arbitrary fields.||live
-PathHintFullPath|navigation|Path suggestions|Show full suggestion paths|Display complete paths rather than only the final filename or folder component.||live
-PathHintSource|navigation|Path suggestions|Suggestion source|Resolve suggestions from the active panel, passive panel, or both. Both searches active first.|0:Active panel;1:Passive panel;2:Both panels|live
-PathHintTimeout|navigation|Path suggestions|Directory read timeout (seconds)|Maximum time allowed for a filesystem directory read behind suggestions. This is not a delay before suggestions appear. Minimum 1 second.||live
-PathHintMaxVisible|navigation|Path suggestions|Maximum visible suggestions|Maximum number of visible suggestion rows. Minimum 1.||live
-PathHintPerCategory|navigation|Path suggestions|Separate suggestion limits|Apply the visible-row limit separately to active-panel, passive-panel and history suggestions.||live
+NavigationMode|panels|Typing and focus|Panel navigation|Classic types into the command line. Vim adds j/k and double dd/cc/mm actions. Search-first separates filename-search and command focus.|0:Classic;1:Vim;2:Search first|live
+SearchCommandStayFocused|panels|Typing and focus|Keep command input focused|In Search-first mode, keep command entry focused after executing a command rather than returning to the panel.||live
+CommandLineAutoComplete|terminal|Path suggestions|Enable filesystem suggestions|Enable filesystem path suggestions in the command line and path-enabled dialog fields.||live
+DialogAutoComplete|terminal|Path suggestions|Show dialog completion dropdowns|Show completion while typing in fields with history or path suggestions. Does not add sources to arbitrary fields.||live
+PathHintFullPath|terminal|Path suggestions|Show full suggestion paths|Display complete paths rather than only the final filename or folder component.||live
+PathHintSource|terminal|Path suggestions|Suggestion source|Resolve suggestions from the active panel, passive panel, or both. Both searches active first.|0:Active panel;1:Passive panel;2:Both panels|live
+PathHintTimeout|terminal|Path suggestions|Directory read timeout (seconds)|Maximum time allowed for a filesystem directory read behind suggestions. This is not a delay before suggestions appear. Minimum 1 second.||live
+PathHintMaxVisible|terminal|Path suggestions|Maximum visible suggestions|Maximum number of visible suggestion rows. Minimum 1.||live
+PathHintPerCategory|terminal|Path suggestions|Separate suggestion limits|Apply the visible-row limit separately to active-panel, passive-panel and history suggestions.||live
 UseTrash|operations|Deletion|Use trash or recycle bin|Send ordinary Delete operations to trash where supported. Explicit permanent-delete commands still delete permanently.||new operations
 DefaultFileOpMode|operations|Execution|Default operation mode|Start operations in Queue, Background or Foreground mode. Individual operation dialogs can override it.|0:Queue;1:Background;2:Foreground|new operations
 FileOpPathDisplay|operations|Execution|Progress path display|Show the current name, full path, or source and destination paths in operation progress.|0:Name;1:Full path;2:Source and destination|live

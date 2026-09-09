@@ -191,3 +191,66 @@ func TestSettingsSearchClearButton(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsStatusSharesActionRow(t *testing.T) {
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer func() { vtui.Palette = palette }()
+	d := f4settings.NewDraft(nil, nil)
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories}, draft: d}})
+	scr := vtui.NewSilentScreenBuf()
+	for iteration, width := range []int{80, 150} {
+		scr.AllocBuf(width, 25)
+		c.SetPosition(0, 0, width-1, 24)
+		c.status = ""
+		c.Show(scr)
+		bottom := c.page.Y2
+		vtui.Palette[vtui.ColDialogHighlightText] = vtui.SetRGBBoth(0, uint32(0xabcdef+iteration), 0x123456)
+		for _, status := range []string{"Settings applied.", strings.Repeat("Long status ", 30), ""} {
+			c.status = status
+			c.Show(scr)
+			if c.page.Y2 != bottom || c.sidebar.Y2 != c.apply.Y1-1 {
+				t.Fatal("status changed content height")
+			}
+			if status != "" {
+				cell := scr.GetCell(c.X1+2, c.apply.Y1)
+				if cell.Char != uint64(status[0]) || cell.Attributes != vtui.Palette[vtui.ColDialogHighlightText] {
+					t.Fatal("status not rendered on action row")
+				}
+			}
+			if scr.GetCell(c.apply.X1, c.apply.Y1).Char != '[' || scr.GetCell(c.cancel.X1, c.cancel.Y1).Char != '[' {
+				t.Fatal("status overlaps buttons")
+			}
+		}
+	}
+}
+
+func TestSettingsNavigationRegrouping(t *testing.T) {
+	catalog := (coreSettingsProvider{}).Catalog()
+	for _, category := range catalog.Categories {
+		if category.ID == "navigation" {
+			t.Fatal("removed category still present")
+		}
+	}
+	counts := map[string]int{}
+	for _, f := range catalog.Fields {
+		if f.Group == "Typing and focus" {
+			if f.Category != "panels" {
+				t.Fatal("panel navigation in wrong category")
+			}
+			counts[f.Group]++
+		}
+		if f.Group == "Path suggestions" {
+			if f.Category != "terminal" {
+				t.Fatal("completion in wrong category")
+			}
+			counts[f.Group]++
+		}
+	}
+	if counts["Typing and focus"] != 2 || counts["Path suggestions"] != 7 {
+		t.Fatal("settings lost while regrouping")
+	}
+	if settingsDeepLinks["settings.pathhints"] != "terminal" {
+		t.Fatal("old shortcut points to removed category")
+	}
+}

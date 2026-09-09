@@ -155,13 +155,16 @@ func (p coreSettingsProvider) Catalog() f4settings.Catalog {
 			f.Description.Key = "SettingsCenter." + f.ID + ".Description"
 		}
 		f.Aliases = append(f.Aliases, "settings", f.ID)
+		if f.Group == "Typing and focus" || f.Group == "Path suggestions" {
+			f.Aliases = append(f.Aliases, "Navigation & suggestions", "Panel settings Additional settings Path hints")
+		}
+
 		// Preserve discoverability for users who remember the former dialog.
 		f.Aliases = append(f.Aliases, map[string]string{
 			"appearance": "Appearance settings Language Help language",
 			"workspaces": "Appearance settings Panel settings Auto save Details",
 			"panels":     "Panel settings Additional settings Details",
 			"drives":     "Drive menu options F9",
-			"navigation": "Panel settings Additional settings Path hints",
 			"operations": "Confirmations Compare folders Panel settings",
 			"editor":     "Editor settings Viewer settings Colorer settings",
 			"syntax":     "Colorer settings Editor settings",
