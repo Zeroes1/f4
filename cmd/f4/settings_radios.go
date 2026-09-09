@@ -57,12 +57,16 @@ func newSettingsRadios(labels []string, selected int, change func(int)) *setting
 
 // Fit the entire choice set on one line; otherwise stack and wrap labels.
 // Recalculate from translated display widths on every resize.
-func (r *settingsRadios) layout(width int) int {
+func (r *settingsRadios) inlineWidth() int {
 	total := -2
 	for _, b := range r.buttons {
 		total += 6 + vtui.StringWidth(b.label)
 	}
-	inline := total <= width
+	return max(0, total)
+}
+
+func (r *settingsRadios) layout(width int) int {
+	inline := r.inlineWidth() <= width
 	x, y := 0, 0
 	for _, b := range r.buttons {
 		b.lines = settingsWrap(b.label, max(1, width-4))

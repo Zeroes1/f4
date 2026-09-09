@@ -323,7 +323,8 @@ Regenerate the core field inventory with `F4_SETTINGS_EXPORT=<docs directory> go
 
 Small fixed choice sets now use visible radio buttons. The renderer places all
 choices on one row when their translated display widths fit; otherwise it stacks
-and wraps them. The field caption appears once above its choices. Up/Down browse
+and wraps them. When the caption and all choices fit together, they share one line; otherwise
+the caption appears once above the choices. Up/Down browse
 choices without changing the draft, Space selects, and Left/Right retain pane
 navigation. Hover and keyboard focus show the existing per-choice explanation.
 

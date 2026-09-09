@@ -126,7 +126,15 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			r.controlX = labelWidth + 1
 			r.gap = 0
 		case *settingsRadios:
-			r.controlHeight = r.control.(*settingsRadios).layout(max(1, x2-x1-5))
+			radios := r.control.(*settingsRadios)
+			width := max(1, x2-x1-5)
+			label := r.field.Label.Resolve(AppConfig.Language, Msg)
+			labelWidth := vtui.StringWidth(label)
+			if labelWidth+1+radios.inlineWidth() <= width {
+				r.label = []string{label}
+				r.controlX = labelWidth + 1
+			}
+			r.controlHeight = radios.layout(width - r.controlX)
 			r.gap = 0
 		case *vtui.Table:
 			if r.field.Label.Resolve(AppConfig.Language, Msg) == box.title {

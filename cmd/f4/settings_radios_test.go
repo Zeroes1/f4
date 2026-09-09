@@ -153,3 +153,50 @@ func TestSettingsRadioUnknownValueAndMouseSelection(t *testing.T) {
 		t.Fatal("radio drag changed selection or mouse click failed")
 	}
 }
+
+func TestSettingsRadioCaptionThreeLayouts(t *testing.T) {
+	oldConfig := AppConfig
+	defer func() { AppConfig = oldConfig }()
+	for _, test := range []struct {
+		language, caption string
+		labels            []string
+	}{
+		{"en", "Operation mode", []string{"Queue", "Background", "Foreground"}},
+		{"ru", "Режим операции", []string{"Очередь", "В фоне", "На переднем плане"}},
+	} {
+		AppConfig.Language = test.language
+		changed := false
+		radios := newSettingsRadios(test.labels, 1, func(int) { changed = true })
+		v := newSettingsViewport()
+		row := &settingsRow{field: f4settings.Field{Group: "test", Label: f4settings.Text{English: test.caption, Literal: true}}, control: radios, match: true}
+		v.rows = []*settingsRow{row}
+		v.AddItem(radios)
+		choicesWidth := radios.inlineWidth()
+		fullWidth := vtui.StringWidth(test.caption) + 1 + choicesWidth
+		for _, width := range []int{fullWidth, fullWidth - 1, choicesWidth, choicesWidth - 1, fullWidth} {
+			v.SetPosition(2, 2, 2+width+5, 30)
+			inline := width >= fullWidth
+			stacked := width < choicesWidth
+			if (row.controlX > 0) != inline || (row.controlY == 0) != inline {
+				t.Fatalf("%s width %d: wrong caption placement", test.language, width)
+			}
+			if (row.controlHeight > 1) != stacked {
+				t.Fatalf("%s width %d: wrong choice layout", test.language, width)
+			}
+			if inline && row.height != 1 {
+				t.Fatal("inline caption added an extra line")
+			}
+			for i, b := range radios.buttons {
+				if b.X1 < radios.X1 || b.X2 > radios.X2 || b.Y2 > radios.Y2 {
+					t.Fatal("choice exceeds available space")
+				}
+				if i > 0 && ((b.Y1 > radios.buttons[0].Y1) != stacked) {
+					t.Fatal("unexpected choice row")
+				}
+			}
+			if changed || !radios.buttons[1].Selected {
+				t.Fatal("resizing changed selection")
+			}
+		}
+	}
+}
