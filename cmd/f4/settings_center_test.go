@@ -33,6 +33,11 @@ func TestSettingsDisabledInputUsesDimmedNormalPalette(t *testing.T) {
 		vtui.Palette[vtui.ColDialogBox] = vtui.SetRGBBoth(0, uint32(0x807060+iteration*0x101010), 0x303030)
 		for _, focused := range []vtui.UIElement{c.sidebar, c.page} {
 			c.SetFocusedItem(focused)
+			for _, row := range c.page.rows {
+				if edit, ok := row.control.(*settingsEdit); ok {
+					edit.ClearSelection()
+				}
+			}
 			for _, query := range []string{"", "does-not-match"} {
 				c.query = query
 				c.updateMatches()
@@ -52,8 +57,8 @@ func TestSettingsDisabledInputUsesDimmedNormalPalette(t *testing.T) {
 					if cell.Char != 'C' || cell.Attributes != want {
 						t.Fatalf("disabled input cell=%+v, want C with %x", cell, want)
 					}
-					if !row.control.IsDisabled() {
-						t.Fatal("rendering enabled an informational input")
+					if !row.control.(*settingsEdit).readOnly || !row.control.CanFocus() {
+						t.Fatal("informational input must be focusable and read-only")
 					}
 					if scr.GetCell(c.page.X1, y).Attributes != border {
 						t.Fatal("group border did not follow the active palette")
@@ -558,7 +563,7 @@ func TestSettingsShortInputsInlineLongInputsFullWidth(t *testing.T) {
 				} else if x != c.page.X1+2 || x2 != c.page.X2-4 || y != c.page.Y1+row.y+len(row.label)-c.page.scroll {
 					t.Fatalf("%s lost full-width editor", item.id)
 				}
-				edit := row.control.(*vtui.Edit)
+				edit := row.control.(*settingsEdit)
 				value := "12345678901234567890"
 				edit.SetText(value)
 				if edit.GetText() != value {
