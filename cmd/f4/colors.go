@@ -205,6 +205,7 @@ var ColorSlots = []ColorSlot{
 	{Canonical: "Scrollbar", Index: vtui.ColScrollBar, Group: "Lists and tables", ConstantName: "ColScrollBar"},
 
 	// Dialog Group
+	{Canonical: "Dialog.Indicator.Background", Index: vtui.ColDialogIndicatorBackground, Group: "Dialog", ConstantName: "ColDialogIndicatorBackground"},
 	{Canonical: "Dialog.Text", Index: vtui.ColDialogText, Group: "Dialog", ConstantName: "ColDialogText"},
 	{Canonical: "Dialog.Text.Highlight", Index: vtui.ColDialogHighlightText, Group: "Dialog", ConstantName: "ColDialogHighlightText", Aliases: []string{"Dialog.Highlight"}},
 	{Canonical: "Dialog.Box", Index: vtui.ColDialogBox, Group: "Dialog", ConstantName: "ColDialogBox"},
@@ -319,7 +320,15 @@ func ApplyColorIni(ini *IniFile) {
 		}
 		expr := ini.GetString("farcolors", slot.Canonical, "")
 		if expr != "" {
-			vtui.Palette[slot.Index] = ParseFarColor(expr, vtui.Palette[slot.Index])
+			if slot.Index == vtui.ColDialogIndicatorBackground {
+				if strings.EqualFold(strings.TrimSpace(expr), "inherit") {
+					vtui.Palette[slot.Index] = 0
+				} else {
+					vtui.Palette[slot.Index] = ParseFarColor(expr, vtui.Palette[vtui.ColDialogText])
+				}
+			} else {
+				vtui.Palette[slot.Index] = ParseFarColor(expr, vtui.Palette[slot.Index])
+			}
 			sourceExpr = expr
 		}
 		if sourceExpr != "" {
@@ -389,6 +398,9 @@ func ExportColors(path string) error {
 		for _, slot := range slots {
 			attr := vtui.Palette[slot.Index]
 			value := FormatFarColor(attr)
+			if slot.Index == vtui.ColDialogIndicatorBackground && attr == 0 {
+				value = "inherit"
+			}
 			if source, ok := colorSourceExpressions[slot.Canonical]; ok && colorSourcePalette[slot.Canonical] == attr {
 				value = source
 			}
@@ -447,7 +459,7 @@ func AdjustContrastLevels() {
 	// once: a second pass would feed an already-corrected foreground back in.
 	done := make(map[int]bool, len(ColorSlots))
 	for _, slot := range ColorSlots {
-		if strings.HasSuffix(slot.Canonical, ".Box") || done[slot.Index] {
+		if strings.HasSuffix(slot.Canonical, ".Box") || slot.Index == vtui.ColDialogIndicatorBackground || done[slot.Index] {
 			continue
 		}
 		done[slot.Index] = true

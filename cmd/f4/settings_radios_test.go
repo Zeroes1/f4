@@ -62,7 +62,7 @@ func TestSettingsRadiosInteractionLayoutAndPalette(t *testing.T) {
 					t.Fatal("radio exceeds its bounds")
 				}
 			}
-			for _, slot := range []int{vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton, vtui.ColDialogBox, vtui.ColDialogBoxTitle} {
+			for _, slot := range []int{vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton, vtui.ColDialogBox, vtui.ColDialogBoxTitle, vtui.ColDialogIndicatorBackground} {
 				vtui.Palette[slot] = vtui.SetRGBBoth(0, uint32(0x807060+slot*100+iteration*0x101010), uint32(0x101010+slot))
 			}
 			for _, disabled := range []bool{false, true} {
@@ -80,6 +80,7 @@ func TestSettingsRadiosInteractionLayoutAndPalette(t *testing.T) {
 						c.Show(scr)
 						for _, b := range radios.buttons {
 							want, _ := b.GetStateAttrs(vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton)
+							want = vtui.DialogIndicatorAttr(want, b.IsFocused())
 							if query != "" {
 								want = vtui.DimColor(want)
 							}

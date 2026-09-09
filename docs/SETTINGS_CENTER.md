@@ -339,3 +339,10 @@ lists and fields accepting custom values use dropdowns. Dynamic catalogs explici
 request dropdowns so their appearance does not change with installed resources.
 Unknown saved values remain selected and preserved until the user changes them.
 Existing choice labels and descriptions supply localization for both presentations.
+
+Checkbox and radio marks share `Dialog.Indicator.Background`. Only the three
+indicator characters use this background; captions, spacing, foreground state
+and focus highlighting retain their existing colors. An omitted value or
+`inherit` preserves the original appearance. Modern explicitly uses `#232323`,
+matching its input background. The slot is resolved at render time and exported
+with other palette settings; theme previews and Cancel include it.
