@@ -4995,26 +4995,28 @@ func TestPanelsFrame_ShiftF9_SaveSettings(t *testing.T) {
 	if !pressKey(pf, ev) {
 		t.Error("Expected PanelsFrame to handle Shift+F9 keypress")
 	}
-	if dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window); ok {
-		for _, item := range dlg.GetChildren() {
-			if btn, ok := item.(*vtui.Button); ok && btn.IsDefault {
-				btn.OnClick()
-				break
-			}
-		}
-	} else {
-		t.Fatalf("Shift+F9 top frame = %T, want save-settings dialog", vtui.FrameManager.GetTopFrame())
+	center, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok || center.category != "workspaces" {
+		t.Fatalf("Shift+F9 top frame = %T, want Settings Center at Workspaces & saving", vtui.FrameManager.GetTopFrame())
 	}
-
-	// ShowToast posts its setup and owns a timer goroutine. Join it before this
-	// test lets another test reuse the manager.
-	pumpUntilToastActive(t)
-	waitForToastExpiry(t, 3*time.Second)
+	defer center.Close()
+	// The legacy shortcut opens the Center; saving is now an explicit command.
+	saved := false
+	for _, row := range center.page.rows {
+		if row.field.ID == "save.preferences" {
+			row.control.(*vtui.Button).OnClick()
+			saved = true
+			break
+		}
+	}
+	if !saved {
+		t.Fatal("missing manual preference saving command")
+	}
 
 	// Проверяем, что файл настроек действительно был записан на диск
 	info, err := os.Stat(tmp.Name())
 	if err != nil || info.Size() == 0 {
-		t.Error("Expected Shift+F9 to write settings to ini file")
+		t.Error("Expected the Center manual-save command to write settings to ini file")
 	}
 }
 
