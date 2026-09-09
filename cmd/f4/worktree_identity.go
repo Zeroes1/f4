@@ -53,5 +53,7 @@ func drawWorktreeIdentity(scr *vtui.ScreenBuf) {
 	}
 	width := fm.GetScreenSize()
 	text := vtui.TruncateString(branch, max(1, width-4), "…")
-	scr.Write(max(0, (width-vtui.StringWidth(text))/2), 0, vtui.StringToCharInfo(text, vtui.Palette[vtui.ColMenuBarItem]))
+	// The workspace strip is painted after OnRender and owns its reserved row.
+	// Use the application's top header, below that strip when it is visible.
+	scr.Write(max(0, (width-vtui.StringWidth(text))/2), fm.WorkspaceTopInset(), vtui.StringToCharInfo(text, vtui.Palette[vtui.ColMenuBarItem]))
 }
