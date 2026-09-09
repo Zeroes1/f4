@@ -160,6 +160,9 @@ func coreSettingsFields() []f4settings.Field {
 		if f.ID == "ProxyPass" {
 			f.Kind = f4settings.Secret
 		}
+		if f.ID == "ProxyPort" {
+			f.InputWidth = 6
+		}
 		if f.ID == "EditorColorerCatalog" {
 			f.Kind = f4settings.Path
 		}

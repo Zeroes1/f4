@@ -21,6 +21,7 @@ type settingsRow struct {
 	match              bool
 	controlHeight      int
 	controlX, controlY int
+	controlWidth       int
 	gap                int
 	read               func() string
 	write              func(string)
@@ -110,6 +111,7 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 		}
 		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-5))
 		r.controlX, r.gap = 0, 1
+		r.controlWidth = 0
 		// Action controls already name themselves; keep their metadata for
 		// search and explanations without repeating it above the control.
 		switch r.control.(type) {
@@ -126,6 +128,20 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 		case *vtui.Table:
 			if r.field.Label.Resolve(AppConfig.Language, Msg) == box.title {
 				r.label = nil
+			}
+		case *vtui.Edit:
+			width := r.field.InputWidth
+			if width == 0 && r.field.Kind == f4settings.Integer {
+				width = 10
+			}
+			if width > 0 {
+				available := max(3, x2-x1-5)
+				r.controlWidth = min(width, max(1, available/2))
+				label := r.field.Label.Resolve(AppConfig.Language, Msg)
+				labelWidth := min(vtui.StringWidth(label), max(1, available-r.controlWidth-1))
+				r.label = settingsWrap(label, labelWidth)
+				r.controlX = labelWidth + 1
+				r.gap = 0
 			}
 		}
 		if b, ok := r.control.(*settingsCheckbox); ok {
@@ -158,7 +174,12 @@ func (v *settingsViewport) positionRows() {
 	for _, r := range v.rows {
 		if r.control != nil {
 			y := v.Y1 + r.y + r.controlY - v.scroll
-			r.control.SetPosition(v.X1+2+r.controlX, y, v.X2-4, y+max(1, r.controlHeight)-1)
+			x := v.X1 + 2 + r.controlX
+			right := v.X2 - 4
+			if r.controlWidth > 0 {
+				right = min(right, x+r.controlWidth-1)
+			}
+			r.control.SetPosition(x, y, right, y+max(1, r.controlHeight)-1)
 		}
 	}
 	v.bar.PgStep = max(1, v.Y2-v.Y1+1)

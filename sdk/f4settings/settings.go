@@ -56,7 +56,10 @@ type Field struct {
 	ID, Category, Group string
 	Label, Description  Text
 	Kind                Kind
-	Choices             []Choice
+	// InputWidth suggests a compact single-line editor for short values.
+	// It is a presentation hint in characters, not a validation or length limit.
+	InputWidth int
+	Choices    []Choice
 	// AllowCustom permits a choice field to accept a value outside its list.
 	AllowCustom bool
 	Aliases     []string

@@ -48,14 +48,18 @@ func (p *settingsProvider) Catalog() f4settings.Catalog {
 	for _, def := range defs {
 		f := f4settings.Scalar("netfox."+def.name, "network", "NetFox connections", def.label, def.description, def.kind)
 		switch def.name {
+		case "Port", "ProxyPort":
+			f.InputWidth = 6
 		case "Type":
 			f.Choices = f4settings.Choices("ftp:FTP", "sftp:SFTP", "fish:FISH")
 		case "ProxyMode":
 			f.Choices = f4settings.Choices("0:Inherit f4", "1:System", "2:Direct", "3:HTTP", "4:SOCKS5")
 		case "Codepage":
 			f.Default = "65001"
+			f.InputWidth = 6
 		case "Timeout":
 			f.Default = "15"
+			f.InputWidth = 10
 		case "Passive":
 			f.Default = "true"
 		}

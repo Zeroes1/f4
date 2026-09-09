@@ -480,3 +480,43 @@ func TestSettingsComboInlineLayout(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsShortInputsInlineLongInputsFullWidth(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	for _, width := range []int{80, 130} {
+		c.ResizeConsole(width, 35)
+		c.SetPosition(0, 0, width-1, 34)
+		for _, item := range []struct {
+			category, id string
+			compact      bool
+		}{{"appearance", "GuiFontSize", true}, {"network", "ProxyPort", true}, {"editor", "EditorAutoCompleteMask", false}} {
+			c.selectCategory(item.category)
+			var found bool
+			for _, row := range c.page.rows {
+				if row.field.ID != item.id {
+					continue
+				}
+				found = true
+				x, y, x2, _ := row.control.GetPosition()
+				if item.compact {
+					if x <= c.page.X1+2 || y != c.page.Y1+row.y-c.page.scroll || row.gap != 0 || x2-x+1 > 10 || x2 < x {
+						t.Fatalf("%s isn't a compact inline input", item.id)
+					}
+				} else if x != c.page.X1+2 || x2 != c.page.X2-4 || y != c.page.Y1+row.y+len(row.label)-c.page.scroll {
+					t.Fatalf("%s lost full-width editor", item.id)
+				}
+				edit := row.control.(*vtui.Edit)
+				value := "12345678901234567890"
+				edit.SetText(value)
+				if edit.GetText() != value {
+					t.Fatal("compact width truncated the value")
+				}
+			}
+			if !found {
+				t.Fatalf("missing %s", item.id)
+			}
+		}
+	}
+}

@@ -6,6 +6,8 @@ The dialog opens centered at approximately half the screen width (minimum 72 col
 
 Up/Down navigation stays within its active pane; content controls wrap at the ends. Right moves from categories to content; Left returns to categories when the control does not consume it for editing. Tab and Shift+Tab move through search, categories, content and the footer buttons. Up from the first category reaches search, and Down from search reaches categories. Category titles display only localized text; English names remain search aliases.
 
+Numeric fields use compact inline inputs. Providers can set the optional InputWidth character-width hint for short text values such as ports; it does not restrict stored value length. Long-text fields, including filename masks, paths and commands, retain full-width editors beneath their captions.
+
 ## Entry points and editing contract
 
 `Settings.Open` is the single menu entry in every application menu context. Legacy settings action IDs are hidden from menus and remain category deep links. `vfs.SettingsNavigationHost` optionally targets a collection and record for contextual editing. File encoding for the current document, connection opening, user-menu execution, history navigation, and operation dialogs remain contextual operations.
