@@ -254,3 +254,57 @@ func TestSettingsNavigationRegrouping(t *testing.T) {
 		t.Fatal("old shortcut points to removed category")
 	}
 }
+
+func TestSettingsSearchCacheInvalidation(t *testing.T) {
+	old := AppConfig
+	defer func() { AppConfig = old; InitLang() }()
+	AppConfig.Language = "en"
+	col := f4settings.Collection{ID: "records", Category: "keyboard", Group: "Records", Label: f4settings.Text{English: "Saved records", Translations: map[string]string{"ru": "Русский список"}}, NameField: "name"}
+	record := f4settings.Record{ID: "one", Values: map[string]string{"name": "original", "secret": "unsearchable-secret"}}
+	d := f4settings.NewDraft(nil, map[string][]f4settings.Record{"records": {record}})
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories, Collections: []f4settings.Collection{col}}, draft: d}})
+	c.selectCategory("keyboard")
+	attr := vtui.SetRGBBoth(0, 0xf0e0d0, 0x123456)
+	row := settingsRecordRow{c, col, d.Records["records"][0]}
+	c.query = "target"
+	c.updateMatches()
+	for i := 0; i < 3; i++ {
+		if c.categoryMatches("keyboard") != 0 || row.GetCellAttr(0, attr) != vtui.DimColor(attr) {
+			t.Fatal("initial no-match result")
+		}
+	}
+	// The same path used after an inline record edit invalidates both counts and row colors.
+	d.Records["records"][0].Values["name"] = "target"
+	c.updateMatches()
+	if c.categoryMatches("keyboard") != 1 || row.GetCellAttr(0, attr) != attr {
+		t.Fatal("renamed record kept stale search result")
+	}
+	c.query = "Русский" // Direct query/language changes are also detected defensively.
+	if c.categoryMatches("keyboard") != 0 {
+		t.Fatal("query change reused old results")
+	}
+	AppConfig.Language = "ru"
+	if c.categoryMatches("keyboard") != 1 || row.GetCellAttr(0, attr) != attr {
+		t.Fatal("language change reused old results")
+	}
+	c.query = "unsearchable-secret"
+	if c.categoryMatches("keyboard") != 0 || row.GetCellAttr(0, attr) != vtui.DimColor(attr) {
+		t.Fatal("record contents leaked into search")
+	}
+	c.query = "target"
+	c.updateMatches()
+	if c.categoryMatches("keyboard") != 1 {
+		t.Fatal("missing record")
+	}
+	d.Records["records"] = nil
+	c.rebuildCategory()
+	if c.categoryMatches("keyboard") != 0 {
+		t.Fatal("deleted record retained in counts")
+	}
+	c.query = ""
+	c.updateMatches()
+	if row.GetCellAttr(0, attr) != attr {
+		t.Fatal("clearing query left row dimmed")
+	}
+}

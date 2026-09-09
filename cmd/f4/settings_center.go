@@ -476,6 +476,10 @@ var lastSettingsCategory string
 var lastSettingsOffsets = map[string]int{}
 
 type settingsCenter struct {
+	searchCacheQuery, searchCacheLanguage string
+	categoryMatchCache                    map[string]int
+	recordMatchCache                      map[settingsRecordMatchKey]bool
+
 	*vtui.Window
 	sessions                []*settingsSession
 	categories              []f4settings.Category
@@ -862,6 +866,9 @@ func settingsText(key, fallback string) string {
 	return (f4settings.Text{English: fallback, Key: "SettingsCenter." + key}).Resolve(AppConfig.Language, Msg)
 }
 func (c *settingsCenter) matches(f f4settings.Field) bool {
+	if strings.TrimSpace(c.query) == "" {
+		return true
+	}
 	for _, cat := range c.categories {
 		if cat.ID == f.Category {
 			f.Aliases = append(append([]string(nil), f.Aliases...), cat.Label.English)
@@ -872,6 +879,10 @@ func (c *settingsCenter) matches(f f4settings.Field) bool {
 	return f4settings.Matches(c.query, f, c.categoryLabel(f.Category), AppConfig.Language, Msg)
 }
 func (c *settingsCenter) categoryMatches(id string) int {
+	c.ensureSearchCache()
+	if count, ok := c.categoryMatchCache[id]; ok {
+		return count
+	}
 	n := 0
 	for _, s := range c.sessions {
 		for _, f := range s.catalog.Fields {
@@ -890,9 +901,13 @@ func (c *settingsCenter) categoryMatches(id string) int {
 			}
 		}
 	}
+	c.categoryMatchCache[id] = n
 	return n
 }
 func (c *settingsCenter) updateMatches() {
+	// Draft edits and category rebuilds may change searchable record names or metadata.
+	c.categoryMatchCache = nil
+	c.recordMatchCache = nil
 	c.layoutSearch()
 	for _, r := range c.page.rows {
 		r.match = c.matches(r.field)
@@ -1556,4 +1571,13 @@ func (b *settingsClearButton) Show(scr *vtui.ScreenBuf) {
 	b.ScreenObject.Show(scr)
 	normal, _ := b.GetStateAttrs(vtui.ColDialogEdit, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton)
 	scr.Write(b.X1, b.Y1, vtui.StringToCharInfo(" × ", normal))
+}
+
+func (c *settingsCenter) ensureSearchCache() {
+	if c.categoryMatchCache != nil && c.searchCacheQuery == c.query && c.searchCacheLanguage == AppConfig.Language {
+		return
+	}
+	c.searchCacheQuery, c.searchCacheLanguage = c.query, AppConfig.Language
+	c.categoryMatchCache = make(map[string]int)
+	c.recordMatchCache = make(map[settingsRecordMatchKey]bool)
 }

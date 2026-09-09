@@ -381,3 +381,13 @@ The former Options → Save Settings entry is now a deep link into Workspaces &
 saving, alongside the existing Manual saving commands. App.SaveSettings and its
 Shift+F9 binding remain compatible; it no longer exposes a separate menu item
 or opens the legacy save-settings dialog.
+Settings search hover profiling (2026-09-09): `BenchmarkSettingsHoverSearch`
+measures a mouse move followed by a silent-screen repaint with real core/provider
+snapshots. The nonempty `editor` query previously repeated catalog matching for
+category labels, row colors and the total count on every paint: 3.27 ms and
+3.18 MB allocated per iteration. Caching category counts and record-row matches
+reduced this run to 0.23 ms and 121 KB per iteration (about 14x faster). These
+figures exclude terminal output. Cache invalidation follows draft edits,
+collection/category rebuilds, query changes and language changes. Record cache
+keys contain display names only; arbitrary record values and secrets are not
+indexed. Mouse hover still updates choice explanations immediately.

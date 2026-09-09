@@ -24,10 +24,23 @@ func (r settingsRecordRow) GetCellText(int) string {
 	}
 	return settingsPhrase("(unnamed)")
 }
+
+type settingsRecordMatchKey struct{ collection, record, name string }
+
 func (r settingsRecordRow) GetCellAttr(_ int, attr uint64) uint64 {
-	f := settingsCollectionField(r.collection)
-	f.Aliases = append(f.Aliases, r.GetCellText(0))
-	if !r.center.matches(f) {
+	if strings.TrimSpace(r.center.query) == "" {
+		return attr
+	}
+	r.center.ensureSearchCache()
+	key := settingsRecordMatchKey{r.collection.ID, r.record.ID, r.GetCellText(0)}
+	matched, known := r.center.recordMatchCache[key]
+	if !known {
+		f := settingsCollectionField(r.collection)
+		f.Aliases = append(f.Aliases, key.name)
+		matched = r.center.matches(f)
+		r.center.recordMatchCache[key] = matched
+	}
+	if !matched {
 		return vtui.DimColor(attr)
 	}
 	return attr
@@ -306,6 +319,9 @@ func settingsCollectionField(col f4settings.Collection) f4settings.Field {
 	return f
 }
 func settingsCollectionMatches(c *settingsCenter, s *settingsSession, col f4settings.Collection) bool {
+	if strings.TrimSpace(c.query) == "" {
+		return true
+	}
 	meta := settingsCollectionField(col)
 	if c.matches(meta) {
 		return true
