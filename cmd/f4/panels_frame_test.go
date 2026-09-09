@@ -681,13 +681,22 @@ func TestPanelsFrame_DriveMenuBookmarkKeys(t *testing.T) {
 	menu.SetSelectPos(row)
 	press(menu, vtinput.VK_F4)
 	settleFrames(t)
-	dlg, ok := vtui.FrameManager.GetTopFrame().(*driveBookmarkEditDialog)
+	dlg, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
 	if !ok {
-		t.Fatalf("F4 did not open drive bookmark editor: %T", vtui.FrameManager.GetTopFrame())
+		t.Fatalf("F4 did not open Settings Center: %T", vtui.FrameManager.GetTopFrame())
 	}
-	if dlg.nameEdit.GetText() != "Favorite folder" || dlg.pathEdit.GetText() != target || dlg.hotkeyEdit.GetText() != "Ф" {
-		t.Fatalf("editor fields = name %q path %q hotkey %q", dlg.nameEdit.GetText(), dlg.pathEdit.GetText(), dlg.hotkeyEdit.GetText())
+	var values map[string]string
+	for _, session := range dlg.sessions {
+		for _, r := range session.draft.Records["drive-links"] {
+			if r.Values["link.Name"] == "Favorite folder" {
+				values = r.Values
+			}
+		}
 	}
+	if values["link.Path"] != target || values["link.Hotkey"] != "Ф" {
+		t.Fatal("selected drive link fields not preserved")
+	}
+
 	dlg.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE})
 	settleFrames(t)
 	menu = findDriveMenu(t)
@@ -725,11 +734,17 @@ func TestPanelsFrame_DriveMenuBookmarkKeys(t *testing.T) {
 	menu.SetSelectPos(0)
 	press(menu, vtinput.VK_INSERT)
 	settleFrames(t)
-	newDlg, ok := vtui.FrameManager.GetTopFrame().(*driveBookmarkEditDialog)
+	newDlg, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
 	if !ok {
 		t.Fatalf("Ins did not open drive bookmark editor: %T", vtui.FrameManager.GetTopFrame())
 	}
-	if newDlg.pathEdit.GetText() == "" {
+	path := ""
+	for _, session := range newDlg.sessions {
+		for _, record := range session.draft.Records["drive-links"] {
+			path = record.Values["link.Path"]
+		}
+	}
+	if path == "" {
 		t.Fatal("Ins did not pre-fill the panel path")
 	}
 	newDlg.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE})

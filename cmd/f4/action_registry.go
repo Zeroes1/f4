@@ -120,6 +120,11 @@ var actionOrder []string
 // RegisterAction adds an action to the global registry.
 func RegisterAction(action Action) {
 	key := strings.ToLower(action.Name)
+	if category, ok := settingsDeepLinks[key]; ok {
+		action.HideFromMenu = true
+		action.Handler = func() bool { return openSettingsCenter(category) }
+		action.Checked = nil
+	}
 	if _, exists := actionRegistry[key]; !exists {
 		actionOrder = append(actionOrder, key)
 	}

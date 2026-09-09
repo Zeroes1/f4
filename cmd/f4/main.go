@@ -1165,7 +1165,11 @@ func saveSessionFile(path string) {
 }
 
 func saveSessionFileWithOptions(path string, savePanelSettings, saveCurrentPanel bool) {
-	os.MkdirAll(filepath.Dir(path), 0755)
+	if err := saveSessionFileError(path, savePanelSettings, saveCurrentPanel); err != nil {
+		vtui.DebugLog("SESSION: %v", err)
+	}
+}
+func saveSessionFileError(path string, savePanelSettings, saveCurrentPanel bool) error {
 
 	if vtui.FrameManager != nil {
 		if states, active := captureWorkspaceSessions(); len(states) > 0 {
@@ -1226,14 +1230,7 @@ func saveSessionFileWithOptions(path string, savePanelSettings, saveCurrentPanel
 	fmt.Fprintf(&sb, "UseSortGroups = %d\n", map[bool]int{true: 1, false: 0}[LastRightSortGroups])
 	writeWorkspaceSessions(&sb, LastWorkspaceSessions, LastActiveWorkspace)
 
-	err := os.WriteFile(path, []byte(sb.String()), 0600)
-	if err != nil {
-		vtui.DebugLog("SESSION: Failed to save state: %v", err)
-		return
-	}
-	_ = os.Chmod(path, 0600)
-
-	vtui.DebugLog("SESSION: Saved state to %s", path)
+	return writeFileAtomically(path, []byte(sb.String()), 0600)
 }
 
 func shouldPersistGUIWindowSize(backend string) bool {

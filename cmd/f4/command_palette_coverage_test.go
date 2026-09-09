@@ -90,6 +90,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"cmd/f4/sheet_frame.go:(*SheetFrame).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "spreadsheet commands are supplied by commandPaletteSheetEntries; cell editing, cursor movement and block marking remain local primitives",
 	},
+	"cmd/f4/settings_center.go:(*settingsCenter).ProcessKey":   {class: paletteAuditModalLocal, rationale: "Settings.Open exposes this modal workflow; Ctrl+F and Escape focus search and cancel the draft"},
+	"cmd/f4/settings_center.go:(*settingsViewport).ProcessKey": {class: paletteAuditModalLocal, rationale: "the settings viewport forwards native input and keeps focused controls within its clip"},
+	"cmd/f4/settings_center.go:(*settingsHelp).ProcessKey":     {class: paletteAuditModalLocal, rationale: "the explanation pane consumes only local scrolling keys"},
 	"cmd/f4/hotkeys_ui.go:(*HotkeyAssignFrame).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the hotkey-capture dialog must consume the next key locally and is not a global command surface",
 	},
@@ -330,8 +333,11 @@ func commandPaletteAuditedActionMenuGroups(area string) []commandPaletteActionMe
 			appendAction(action)
 		}
 	}
+	if action, ok := GetAction("Settings.Open"); ok {
+		appendAction(action)
+	}
 	for _, action := range GetOrderedActions() {
-		if action.MenuPath == "" || action.HideFromMenu || !strings.EqualFold(action.Area, "Common") {
+		if action.Name == "Settings.Open" || action.MenuPath == "" || action.HideFromMenu || !strings.EqualFold(action.Area, "Common") {
 			continue
 		}
 		if _, exists := byPath[action.MenuPath]; exists {

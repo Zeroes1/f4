@@ -144,19 +144,20 @@ func TestBuildMenuBarItems_Shell(t *testing.T) {
 		t.Error("Expected at least one separator in the Options menu")
 	}
 
-	var pluginConfiguration *vtui.MenuItem
-	for i := range items[2].SubItems {
-		item := &items[2].SubItems[i]
-		if item.Text == Msg("Menu.PluginConfiguration") {
-			pluginConfiguration = item
-			break
+	count := 0
+	for _, item := range items[2].SubItems {
+		if item.UserData == menuHistoryItemKey("Settings.Open") {
+			count++
+		}
+		if item.UserData == menuHistoryItemKey("Settings.PluginConfiguration") {
+			t.Fatal("legacy configuration entry remains in menu")
 		}
 	}
-	if pluginConfiguration == nil {
-		t.Fatal("Plugin Configuration is missing from the Options menu")
+	if count != 1 {
+		t.Fatalf("Settings entries = %d", count)
 	}
-	if pluginConfiguration.Shortcut != "Shift+F11" {
-		t.Errorf("Plugin Configuration shortcut = %q, want Shift+F11", pluginConfiguration.Shortcut)
+	if a, ok := GetAction("Settings.PluginConfiguration"); !ok || len(a.DefaultKeys) == 0 {
+		t.Fatal("legacy deep-link shortcut was removed")
 	}
 
 	wantCommandShortcuts := map[string]string{
@@ -187,8 +188,8 @@ func TestBuildMenuBarItems_Terminal(t *testing.T) {
 	defer func() { GlobalHotkeysMgr = old }()
 
 	items := BuildMenuBarItems("Terminal")
-	if len(items) != 1 || items[0].Label != "&File" {
-		t.Fatalf("Expected a single '&File' menu, got %+v", items)
+	if len(items) != 2 || items[0].Label != "&File" {
+		t.Fatalf("Expected File and Settings-containing Options menus, got %+v", items)
 	}
 	file := items[0].SubItems
 	if len(file) == 0 || file[0].Text != "&View terminal log" {

@@ -682,6 +682,9 @@ func (s *userMenuState) goBack(current *vtui.VMenu) {
 }
 
 func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuItem, idx int, isCreate bool, isSubmenu bool) {
+	if openUserMenuSettings(s, current, idx, isCreate, isSubmenu) {
+		return
+	}
 	title := Msg("UserMenu.EditTitle")
 	if isCreate {
 		if isSubmenu {

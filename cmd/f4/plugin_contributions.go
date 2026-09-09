@@ -235,6 +235,11 @@ func executeRegisteredPluginCommand(location vfs.PluginCommandLocation, id strin
 			return false
 		}
 	}
+	if location == vfs.PluginCommandConfig {
+		if category, ok := bundledSettingsCommands[strings.ToLower(id)]; ok {
+			return openSettingsCenter(category)
+		}
+	}
 	registryID := strings.ToLower(strings.TrimSpace(id))
 	pluginCommandRegistry.RLock()
 	registered, ok := pluginCommandRegistry.byID[registryID]

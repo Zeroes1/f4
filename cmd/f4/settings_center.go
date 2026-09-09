@@ -1,0 +1,1038 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/unxed/f4/sdk/f4settings"
+	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
+)
+
+type settingsRow struct {
+	field             f4settings.Field
+	session           *settingsSession
+	control           vtui.UIElement
+	label             []string
+	y, height         int
+	heading           bool
+	match             bool
+	controlHeight     int
+	read              func() string
+	write             func(string)
+	values            func() map[string]string
+	matchFunc         func() bool
+	unavailableReason string
+}
+
+// settingsViewport clips only the page, leaving the window chrome fixed.
+// It remains a Group/FocusContainer so native focus and UI inspection work.
+type settingsViewport struct {
+	*vtui.Group
+	rows          []*settingsRow
+	scroll, total int
+	bar           *vtui.ScrollBar
+	onFocus       func(*settingsRow)
+}
+
+func newSettingsViewport() *settingsViewport {
+	v := &settingsViewport{Group: vtui.NewGroup(0, 0, 1, 1), bar: vtui.NewScrollBar(0, 0, 1)}
+	v.bar.ColorIdx = vtui.ColDialogBox
+	v.bar.OnScroll = func(n int) { v.scroll = n; v.positionRows() }
+	return v
+}
+func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
+	v.Group.SetPosition(x1, y1, x2, y2)
+	v.bar.SetPosition(x2, y1, x2, y2)
+	v.total = 0
+	for _, r := range v.rows {
+		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-1))
+		r.y = v.total
+		r.height = len(r.label) + 1
+		if r.control != nil {
+			r.height += max(1, r.controlHeight)
+		}
+		v.total += r.height
+	}
+	v.scroll = min(v.scroll, max(0, v.total-(y2-y1+1)))
+	v.positionRows()
+}
+func (v *settingsViewport) positionRows() {
+	for _, r := range v.rows {
+		if r.control != nil {
+			y := v.Y1 + r.y + len(r.label) - v.scroll
+			r.control.SetPosition(v.X1, y, v.X2-2, y+max(1, r.controlHeight)-1)
+		}
+	}
+	v.bar.PgStep = max(1, v.Y2-v.Y1+1)
+	v.bar.SetParams(v.scroll, 0, max(0, v.total-v.bar.PgStep))
+}
+func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
+	v.ScreenObject.Show(scr)
+	scr.PushClipRect(v.X1, v.Y1, v.X2, v.Y2)
+	defer scr.PopClipRect()
+	scr.FillRect(v.X1, v.Y1, v.X2, v.Y2, ' ', vtui.Palette[vtui.ColDialogText])
+	for _, r := range v.rows {
+		y := v.Y1 + r.y - v.scroll
+		if y+r.height <= v.Y1 || y > v.Y2 {
+			continue
+		}
+		attr := vtui.Palette[vtui.ColDialogText]
+		if r.heading {
+			attr = vtui.Palette[vtui.ColDialogHighlightText]
+		}
+		if !r.match {
+			attr = vtui.DimColor(attr)
+		}
+		for j, line := range r.label {
+			scr.Write(v.X1, y+j, vtui.StringToCharInfo(line, attr))
+		}
+		if r.control != nil {
+			r.control.Show(scr)
+			if !r.match {
+				settingsDimRect(scr, v.X1, max(v.Y1, y+len(r.label)), v.X2-2, min(v.Y2, y+len(r.label)+max(1, r.controlHeight)-1))
+			}
+		}
+	}
+	if v.total > v.Y2-v.Y1+1 {
+		v.bar.Show(scr)
+	}
+}
+func settingsDimRect(scr *vtui.ScreenBuf, x1, y1, x2, y2 int) {
+	for y := y1; y <= y2; y++ {
+		for x := x1; x <= x2; x++ {
+			c := scr.GetCell(x, y)
+			c.Attributes = vtui.DimColor(c.Attributes)
+			scr.Write(x, y, []vtui.CharInfo{c})
+		}
+	}
+}
+func (v *settingsViewport) notifyFocus() {
+	focused := v.GetFocusedItem()
+	for _, r := range v.rows {
+		if r.control == focused {
+			if r.y < v.scroll {
+				v.scroll = r.y
+			}
+			if r.y+r.height > v.scroll+v.Y2-v.Y1+1 {
+				v.scroll = r.y + r.height - (v.Y2 - v.Y1 + 1)
+			}
+			v.positionRows()
+			if v.onFocus != nil {
+				v.onFocus(r)
+			}
+			break
+		}
+	}
+}
+func (v *settingsViewport) ProcessKey(e *vtinput.InputEvent) bool {
+	handled := v.Group.ProcessKey(e)
+	v.notifyFocus()
+	return handled
+}
+func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
+	if !v.HitTest(int(e.MouseX), int(e.MouseY)) {
+		return false
+	}
+	if e.WheelDirection != 0 {
+		delta := e.WheelDirection
+		step := 3
+		if delta > 0 {
+			step = -step
+		}
+		v.scroll = max(0, min(v.bar.Max, v.scroll+step))
+		v.positionRows()
+		return true
+	}
+	if int(e.MouseX) == v.X2 && v.bar.ProcessMouse(e) {
+		return true
+	}
+	handled := v.Group.ProcessMouse(e)
+	for _, r := range v.rows {
+		if int(e.MouseY) >= v.Y1+r.y-v.scroll && int(e.MouseY) < v.Y1+r.y+r.height-v.scroll && v.onFocus != nil {
+			v.onFocus(r)
+			break
+		}
+	}
+	return handled
+}
+
+type settingsHelp struct {
+	*vtui.Group
+	text string
+	top  int
+	bar  *vtui.ScrollBar
+}
+
+func newSettingsHelp() *settingsHelp {
+	h := &settingsHelp{Group: vtui.NewGroup(0, 0, 1, 1), bar: vtui.NewScrollBar(0, 0, 1)}
+	h.bar.ColorIdx = vtui.ColDialogBox
+	h.bar.OnScroll = func(n int) { h.top = n }
+	return h
+}
+func (h *settingsHelp) CanFocus() bool { return true }
+func (h *settingsHelp) Show(scr *vtui.ScreenBuf) {
+	h.ScreenObject.Show(scr)
+	scr.PushClipRect(h.X1, h.Y1, h.X2, h.Y2)
+	defer scr.PopClipRect()
+	scr.FillRect(h.X1, h.Y1, h.X2, h.Y2, ' ', vtui.Palette[vtui.ColDialogText])
+	lines := settingsWrap(h.text, max(1, h.X2-h.X1))
+	height := h.Y2 - h.Y1 + 1
+	h.top = min(h.top, max(0, len(lines)-height))
+	for i := h.top; i < len(lines) && i-h.top < height; i++ {
+		scr.Write(h.X1, h.Y1+i-h.top, vtui.StringToCharInfo(lines[i], vtui.Palette[vtui.ColDialogText]))
+	}
+	h.bar.SetPosition(h.X2, h.Y1, h.X2, h.Y2)
+	h.bar.PgStep = height
+	h.bar.SetParams(h.top, 0, max(0, len(lines)-height))
+	if len(lines) > height {
+		h.bar.Show(scr)
+	}
+}
+func (h *settingsHelp) ProcessKey(e *vtinput.InputEvent) bool {
+	if !e.KeyDown {
+		return false
+	}
+	switch e.VirtualKeyCode {
+	case vtinput.VK_DOWN:
+		h.top++
+	case vtinput.VK_UP:
+		h.top = max(0, h.top-1)
+	case vtinput.VK_NEXT:
+		h.top += max(1, h.Y2-h.Y1)
+	case vtinput.VK_PRIOR:
+		h.top = max(0, h.top-(h.Y2-h.Y1))
+	default:
+		return false
+	}
+	return true
+}
+func (h *settingsHelp) ProcessMouse(e *vtinput.InputEvent) bool {
+	if !h.HitTest(int(e.MouseX), int(e.MouseY)) {
+		return false
+	}
+	if e.WheelDirection != 0 {
+		if e.WheelDirection > 0 {
+			h.top = max(0, h.top-3)
+		} else {
+			h.top += 3
+		}
+		return true
+	}
+	return h.bar.ProcessMouse(e)
+}
+
+func settingsWrap(text string, width int) []string {
+	var lines []string
+	for _, paragraph := range strings.Split(text, "\n") {
+		line := ""
+		for _, word := range strings.Fields(paragraph) {
+			for vtui.StringWidth(word) > width {
+				if line != "" {
+					lines = append(lines, line)
+					line = ""
+				}
+				part := ""
+				for _, r := range word {
+					if vtui.StringWidth(part+string(r)) > width {
+						break
+					}
+					part += string(r)
+				}
+				if part == "" {
+					part = string([]rune(word)[0])
+				}
+				lines = append(lines, part)
+				word = strings.TrimPrefix(word, part)
+			}
+			if line != "" && vtui.StringWidth(line+" "+word) > width {
+				lines = append(lines, line)
+				line = ""
+			}
+			if line != "" {
+				line += " "
+			}
+			line += word
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+type settingsCategoryRow struct {
+	center   *settingsCenter
+	category f4settings.Category
+}
+
+func (r settingsCategoryRow) GetCellText(int) string {
+	n := r.center.categoryMatches(r.category.ID)
+	label := r.category.Label.Resolve(AppConfig.Language, Msg)
+	if r.center.query != "" {
+		label += fmt.Sprintf(" (%d)", n)
+	}
+	return label
+}
+func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
+	if r.center.categoryMatches(r.category.ID) == 0 && r.center.query != "" {
+		return vtui.DimColor(attr)
+	}
+	return attr
+}
+
+var lastSettingsCategory string
+var lastSettingsOffsets = map[string]int{}
+
+type settingsCenter struct {
+	*vtui.Window
+	sessions                          []*settingsSession
+	categories                        []f4settings.Category
+	sidebar                           *vtui.Table
+	search                            *vtui.Edit
+	page                              *settingsViewport
+	help                              *settingsHelp
+	apply, ok, cancel, previous, next *vtui.Button
+	category, query, status           string
+	offsets                           map[string]int
+	closed                            bool
+	running                           *vtui.TaskContext
+	closePending                      bool
+}
+
+func settingsDialogTable(t *vtui.Table) {
+	t.ColorTextIdx = vtui.ColDialogText
+	t.ColorSelectedTextIdx = vtui.ColDialogSelectedButton
+	t.ColorItemSelectTextIdx = vtui.ColDialogHighlightText
+	t.ColorItemSelectCursorIdx = vtui.ColDialogHighlightSelectedButton
+	t.ColorTitleIdx = vtui.ColDialogHighlightText
+	t.ColorBoxIdx = vtui.ColDialogBox
+	t.ColorHighlightIdx = vtui.ColDialogHighlightText
+	t.ScrollBar.ColorIdx = vtui.ColDialogBox
+	t.ShowScrollBar = true
+	t.QuickSearch = false
+}
+
+func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
+	c := &settingsCenter{Window: vtui.NewDialog(0, 0, 79, 24, settingsText("Title", "Settings")), sessions: sessions, offsets: map[string]int{}}
+	for k, v := range lastSettingsOffsets {
+		c.offsets[k] = v
+	}
+	c.ShowClose = true
+	c.SetId("settings-center")
+	c.SetHelp("SettingsCenter")
+	seen := map[string]bool{}
+	for _, s := range sessions {
+		for _, cat := range s.catalog.Categories {
+			if !seen[cat.ID] {
+				c.categories = append(c.categories, cat)
+				seen[cat.ID] = true
+			}
+		}
+	}
+	c.search = vtui.NewEdit(0, 0, 30, "")
+	c.search.SetId("settings-search")
+	c.search.OnTextChange = func(s string) {
+		c.query = s
+		c.updateMatches()
+		c.status = ""
+		if strings.TrimSpace(s) != "" {
+			n := 0
+			for _, cat := range c.categories {
+				n += c.categoryMatches(cat.ID)
+			}
+			c.status = fmt.Sprintf(settingsText("MatchCount", "%d matching settings, collections and commands"), n)
+		}
+	}
+	c.sidebar = vtui.NewTable(0, 0, 20, 10, []vtui.TableColumn{{Width: 0}})
+	c.sidebar.ShowHeader = false
+	c.sidebar.ShowSeparators = false
+	settingsDialogTable(c.sidebar)
+	c.sidebar.SetId("settings-categories")
+	var rows []vtui.TableRow
+	for _, cat := range c.categories {
+		rows = append(rows, settingsCategoryRow{c, cat})
+	}
+	c.sidebar.SetRows(rows)
+	c.page = newSettingsViewport()
+	c.page.SetId("settings-page")
+	c.page.onFocus = c.describe
+	c.help = newSettingsHelp()
+	c.help.SetId("settings-description")
+	c.apply = vtui.NewButton(0, 0, settingsText("Apply", "&Apply"))
+	c.ok = vtui.NewButton(0, 0, Msg("vtui.Ok"))
+	c.cancel = vtui.NewButton(0, 0, Msg("vtui.Cancel"))
+	c.previous = vtui.NewButton(0, 0, settingsText("Previous", "Previous match"))
+	c.next = vtui.NewButton(0, 0, settingsText("Next", "Next match"))
+	c.apply.OnClick = func() { c.commit(false) }
+	c.ok.OnClick = func() { c.commit(true) }
+	c.cancel.OnClick = func() { c.Close() }
+	c.previous.OnClick = func() { c.nextMatch(-1) }
+	c.next.OnClick = func() { c.nextMatch(1) }
+	for _, el := range []vtui.UIElement{c.search, c.sidebar, c.page, c.help, c.previous, c.next, c.apply, c.ok, c.cancel} {
+		c.AddItem(el)
+	}
+	c.sidebar.OnSelect = func(i int) {
+		if i >= 0 && i < len(c.categories) {
+			c.selectCategory(c.categories[i].ID)
+		}
+	}
+	c.OnResult = func(int) {
+		if !c.closed {
+			c.closed = true
+			lastSettingsCategory = c.category
+			c.offsets[c.category] = c.page.scroll
+			lastSettingsOffsets = map[string]int{}
+			for k, v := range c.offsets {
+				lastSettingsOffsets[k] = v
+			}
+			for _, s := range c.sessions {
+				if s.contributed && !settingsProviderAlive(s.provider) {
+					s.draft.CloseFunc = nil
+				}
+				s.draft.Close()
+			}
+		}
+	}
+	if len(c.categories) > 0 {
+		c.selectCategory(c.categories[0].ID)
+	}
+	c.ResizeConsole(80, 25)
+	c.SetFocusedItem(c.search)
+	return c
+}
+
+func (c *settingsCenter) ResizeConsole(w, h int) {
+	w = max(30, w)
+	h = max(12, h)
+	c.Window.SetPosition(0, 0, w-1, h-1)
+	c.search.SetPosition(10, 2, w-3, 2)
+	side := min(26, max(15, w/5))
+	c.sidebar.SetPosition(2, 4, side, h-5)
+	px := side + 2
+	bottom := h - 5
+	if w >= 110 {
+		helpWidth := max(28, w/4)
+		c.page.SetPosition(px, 4, w-helpWidth-4, bottom)
+		c.help.SetPosition(w-helpWidth-2, 4, w-3, bottom)
+	} else {
+		helpHeight := min(6, max(3, h/5))
+		c.page.SetPosition(px, 4, w-3, bottom-helpHeight-1)
+		c.help.SetPosition(px, bottom-helpHeight+1, w-3, bottom)
+	}
+	x := 2
+	for _, b := range []*vtui.Button{c.previous, c.next, c.apply, c.ok, c.cancel} {
+		bw := vtui.StringWidth(b.GetCaption()) + 4
+		b.SetPosition(x, h-2, x+bw-1, h-2)
+		x += bw + 1
+	}
+	c.layoutPage()
+}
+func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
+	c.refreshAvailability()
+	c.Window.Show(scr)
+	scr.Write(2, 2, vtui.StringToCharInfo(settingsText("Search", "Search:"), vtui.Palette[vtui.ColDialogText]))
+	if c.status != "" {
+		scr.Write(2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
+	}
+}
+func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_ESCAPE {
+		c.Close()
+		return true
+	}
+	if c.running != nil {
+		return true
+	}
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_F && (e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed)) != 0 {
+		c.SetFocusedItem(c.search)
+		return true
+	}
+	return c.Window.ProcessKey(e)
+}
+func (c *settingsCenter) categoryLabel(id string) string {
+	for _, cat := range c.categories {
+		if cat.ID == id {
+			return cat.Label.Resolve(AppConfig.Language, Msg) + " " + cat.Label.English
+		}
+	}
+	return id
+}
+func (c *settingsCenter) groupLabel(id string) string {
+	for _, s := range c.sessions {
+		for _, g := range s.catalog.Groups {
+			if g.ID == id {
+				return g.Label.Resolve(AppConfig.Language, Msg)
+			}
+		}
+	}
+	return settingsText(settingsGroupKey(id), id)
+}
+func settingsText(key, fallback string) string {
+	return (f4settings.Text{English: fallback, Key: "SettingsCenter." + key}).Resolve(AppConfig.Language, Msg)
+}
+func (c *settingsCenter) matches(f f4settings.Field) bool {
+	f.Aliases = append(append([]string(nil), f.Aliases...), c.groupLabel(f.Group))
+	return f4settings.Matches(c.query, f, c.categoryLabel(f.Category), AppConfig.Language, Msg)
+}
+func (c *settingsCenter) categoryMatches(id string) int {
+	n := 0
+	for _, s := range c.sessions {
+		for _, f := range s.catalog.Fields {
+			if f.Category == id && c.matches(f) {
+				n++
+			}
+		}
+		for _, col := range s.catalog.Collections {
+			if col.Category == id && settingsCollectionMatches(c, s, col) {
+				n++
+			}
+		}
+		for _, cmd := range s.catalog.Commands {
+			if cmd.Category == id && c.matches(f4settings.Field{Category: id, Group: cmd.Group, Label: cmd.Label, Description: cmd.Description}) {
+				n++
+			}
+		}
+	}
+	return n
+}
+func (c *settingsCenter) updateMatches() {
+	for _, r := range c.page.rows {
+		r.match = c.matches(r.field)
+		if r.matchFunc != nil {
+			r.match = r.matchFunc()
+		}
+		if r.session != nil {
+			for _, col := range r.session.catalog.Collections {
+				if col.ID == r.field.ID {
+					r.match = settingsCollectionMatches(c, r.session, col)
+				}
+			}
+		}
+	}
+	for _, r := range c.page.rows {
+		if r.heading {
+			r.match = false
+			for _, other := range c.page.rows {
+				if !other.heading && other.field.Group == r.field.Group && other.match {
+					r.match = true
+					break
+				}
+			}
+		}
+	}
+}
+func (c *settingsCenter) describe(r *settingsRow) {
+	text := r.field.Label.Resolve(AppConfig.Language, Msg) + "\n\n" + r.field.Description.Resolve(AppConfig.Language, Msg)
+	if r.field.Timing != "" {
+		text += "\n\nTakes effect: " + r.field.Timing
+	}
+	if r.unavailableReason != "" {
+		text += "\n\nUnavailable: " + r.unavailableReason
+	}
+	if text != c.help.text {
+		c.help.text = text
+		c.help.top = 0
+	}
+}
+func (c *settingsCenter) selectCategory(id string) {
+	if id == c.category {
+		return
+	}
+	if c.category != "" {
+		c.offsets[c.category] = c.page.scroll
+	}
+	c.category = id
+	c.page.Group = vtui.NewGroup(c.page.X1, c.page.Y1, c.page.X2-c.page.X1+1, c.page.Y2-c.page.Y1+1)
+	c.page.SetOwner(c.Window)
+	c.page.rows = nil
+	group := ""
+	for _, s := range c.sessions {
+		for _, f := range s.catalog.Fields {
+			if f.Category != id {
+				continue
+			}
+			if f.Group != group {
+				group = f.Group
+				c.page.rows = append(c.page.rows, &settingsRow{field: f4settings.Field{Category: id, Group: group, Label: f4settings.Text{English: c.groupLabel(group)}}, heading: true, match: true})
+			}
+			r := &settingsRow{field: f, session: s, match: true}
+			r.control = c.makeControl(r)
+			r.control.SetId("setting:" + f.ID)
+			if h, ok := r.control.(interface{ SetHelp(string) }); ok {
+				h.SetHelp("Setting." + f.ID)
+			}
+			c.page.AddItem(r.control)
+			c.page.rows = append(c.page.rows, r)
+		}
+	}
+	c.addCollections(id)
+	c.addCommands(id)
+	c.page.scroll = c.offsets[id]
+	c.layoutPage()
+	c.updateMatches()
+	c.help.text = c.categoryLabel(id) + "\n\n" + settingsText("Select", "Select a setting to read what it does.")
+	c.help.top = 0
+}
+func (c *settingsCenter) layoutPage() { c.page.SetPosition(c.page.X1, c.page.Y1, c.page.X2, c.page.Y2) }
+func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
+	f := r.field
+	d := r.session.draft
+	value := d.Values[f.ID]
+	if r.read != nil {
+		value = r.read()
+	}
+	change := func(v string) {
+		if r.session.contributed && !settingsProviderAlive(r.session.provider) {
+			c.status = "Provider is no longer loaded."
+			return
+		}
+		if r.write != nil {
+			r.write(v)
+		} else {
+			d.Values[f.ID] = v
+		}
+		if f.Timing == "preview" && d.PreviewFunc != nil {
+			if err := d.PreviewFunc(d); err != nil {
+				c.status = err.Error()
+			}
+		}
+		c.describe(r)
+		c.updateMatches()
+	}
+	var control vtui.UIElement
+	switch f.Kind {
+	case f4settings.Chord:
+		control = newSettingsChord(value, change)
+	case f4settings.Multiline:
+		e := vtui.NewMultiLineEdit(0, 0, 20, 4, value)
+		e.OnTextChange = change
+		r.controlHeight = 4
+		control = e
+	case f4settings.Boolean:
+		b := vtui.NewCheckbox(0, 0, settingsText("Enabled", "Enabled"), false)
+		if value == "true" {
+			b.State = 1
+		}
+		b.OnChange = func(n int) { change(strconv.FormatBool(n == 1)) }
+		control = b
+	case f4settings.ChoiceKind:
+		choices := append([]f4settings.Choice(nil), f.Choices...)
+		selected := -1
+		var labels []string
+		for i, ch := range choices {
+			labels = append(labels, ch.Label.Resolve(AppConfig.Language, Msg))
+			if ch.Value == value {
+				selected = i
+			}
+		}
+		if selected < 0 {
+			selected = len(choices)
+			choices = append(choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: value + " (saved value)"}})
+			labels = append(labels, choices[selected].Label.English)
+		}
+		b := vtui.NewComboBox(0, 0, 20, labels)
+		b.DropdownOnly = !f.AllowCustom
+		b.Menu.SetSelectPos(selected)
+		b.Edit.SetText(labels[selected])
+		if f.AllowCustom {
+			b.Edit.OnTextChange = func(text string) {
+				for i, label := range labels {
+					if text == label {
+						change(choices[i].Value)
+						return
+					}
+				}
+				change(text)
+			}
+		}
+		b.Menu.OnAction = func(i int) {
+			if i >= 0 && i < len(choices) {
+				b.Edit.SetText(labels[i])
+				change(choices[i].Value)
+			}
+		}
+		control = b
+	default:
+		var e *vtui.Edit
+		if f.Kind == f4settings.Secret {
+			e = vtui.NewPasswordEdit(0, 0, 20, value)
+		} else {
+			e = vtui.NewEdit(0, 0, 20, value)
+		}
+		e.OnTextChange = change
+		control = e
+	}
+	control.SetDisabled(f.Unavailable != "")
+	return control
+}
+
+func (c *settingsCenter) commit(closeAfter bool) {
+	if c.running != nil {
+		return
+	}
+	for _, s := range c.sessions {
+		if len(s.draft.Changed()) == 0 {
+			continue
+		}
+		if s.contributed && !settingsProviderAlive(s.provider) {
+			c.status = "A settings provider was unloaded; pending edits were not saved."
+			return
+		}
+		for id, err := range s.draft.Validate() {
+			c.status = id + ": " + err.Error()
+			return
+		}
+	}
+	var commitNext func(int)
+	commitNext = func(index int) {
+		if c.closePending {
+			return
+		}
+		if index >= len(c.sessions) {
+			c.status = "Settings applied."
+			c.rebuildCategory()
+			if closeAfter {
+				c.Close()
+			}
+			return
+		}
+		s := c.sessions[index]
+		if s.contributed && !settingsProviderAlive(s.provider) {
+			c.status = "Provider unloaded; pending edits retained."
+			return
+		}
+		if len(s.draft.Changed()) == 0 {
+			commitNext(index + 1)
+			return
+		}
+		finish := func(r f4settings.Result) {
+			s.draft.Accept(r)
+			if c.closePending {
+				return
+			}
+			if len(r.Errors) > 0 {
+				for id, err := range r.Errors {
+					c.status = id + ": " + err.Error()
+					break
+				}
+				c.rebuildCategory()
+				return
+			}
+			commitNext(index + 1)
+		}
+		if s.catalog.Background {
+			var result f4settings.Result
+			c.runBackground(func(ctx context.Context) error { result = s.draft.CommitFunc(ctx, s.draft); return nil }, func(error) { finish(result) })
+		} else {
+			finish(s.draft.CommitFunc(context.Background(), s.draft))
+		}
+	}
+	commitNext(0)
+}
+
+func (c *settingsCenter) runBackground(worker func(context.Context) error, done func(error)) {
+	if c.running != nil {
+		return
+	}
+	c.search.SetDisabled(true)
+	c.sidebar.SetDisabled(true)
+	c.page.SetDisabled(true)
+	c.apply.SetDisabled(true)
+	c.ok.SetDisabled(true)
+	c.running = vtui.RunAsync(func(task *vtui.TaskContext) {
+		err := worker(task)
+		task.RunOnUI(func() {
+			c.running = nil
+			c.search.SetDisabled(false)
+			c.sidebar.SetDisabled(false)
+			c.apply.SetDisabled(false)
+			c.ok.SetDisabled(false)
+			c.rebuildCategory()
+			if err != nil {
+				c.status = err.Error()
+			}
+			if done != nil {
+				done(err)
+			}
+			if c.closePending && c.running == nil {
+				c.Window.Close()
+			}
+		})
+	})
+}
+func (c *settingsCenter) Close() {
+	if c.running != nil {
+		c.closePending = true
+		c.running.Cancel()
+		return
+	}
+	c.Window.Close()
+}
+func (c *settingsCenter) ProcessMouse(e *vtinput.InputEvent) bool {
+	if c.running != nil {
+		if c.cancel.HitTest(int(e.MouseX), int(e.MouseY)) {
+			return c.cancel.ProcessMouse(e)
+		}
+		return true
+	}
+	return c.Window.ProcessMouse(e)
+}
+
+func (c *settingsCenter) nextMatch(direction int) {
+	type target struct {
+		cat, id    string
+		record     int
+		collection string
+	}
+	var targets []target
+	for _, cat := range c.categories {
+		for _, s := range c.sessions {
+			for _, f := range s.catalog.Fields {
+				if f.Category == cat.ID && c.matches(f) {
+					targets = append(targets, target{cat.ID, "setting:" + f.ID, -1, ""})
+				}
+			}
+			for _, col := range s.catalog.Collections {
+				if col.Category != cat.ID {
+					continue
+				}
+				if settingsCollectionMatches(c, s, col) {
+					targets = append(targets, target{cat.ID, "collection:" + col.ID, -1, col.ID})
+				}
+				for i, rec := range s.draft.Records[col.ID] {
+					for _, field := range col.Fields {
+						f := field
+						f.Category = cat.ID
+						f.Group = col.Group
+						f.Aliases = append(append([]string(nil), f.Aliases...), rec.Values[col.NameField])
+						if c.matches(f) {
+							targets = append(targets, target{cat.ID, "record-field:" + col.ID + ":" + f.ID, i, col.ID})
+						}
+					}
+				}
+			}
+			for _, cmd := range s.catalog.Commands {
+				if cmd.Category == cat.ID && c.matches(f4settings.Field{Category: cat.ID, Group: cmd.Group, Label: cmd.Label, Description: cmd.Description}) {
+					targets = append(targets, target{cat.ID, "settings-command:" + cmd.ID, -1, ""})
+				}
+			}
+		}
+	}
+	if len(targets) == 0 {
+		c.status = "No matching settings."
+		return
+	}
+	current := ""
+	if item := c.page.GetFocusedItem(); item != nil {
+		current = item.GetId()
+	}
+	index := -1
+	for i, t := range targets {
+		if t.id == current && (t.record < 0 || c.offsets["record:"+t.collection] == t.record) {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		if direction > 0 {
+			index = 0
+		} else {
+			index = len(targets) - 1
+		}
+	} else {
+		index = (index + direction + len(targets)) % len(targets)
+	}
+	t := targets[index]
+	if t.record >= 0 {
+		c.offsets["record:"+t.collection] = t.record
+	}
+	if c.category == t.cat {
+		c.rebuildCategory()
+	} else {
+		c.selectCategory(t.cat)
+	}
+	for i, cat := range c.categories {
+		if cat.ID == t.cat {
+			c.sidebar.SetSelectPos(i)
+		}
+	}
+	c.SetFocusedItem(c.page)
+	for _, r := range c.page.rows {
+		if r.control != nil && r.control.GetId() == t.id {
+			if !r.control.IsDisabled() {
+				c.page.SetFocusedItem(r.control)
+			}
+			c.page.scroll = r.y
+			c.page.positionRows()
+			c.describe(r)
+			break
+		}
+	}
+	c.status = fmt.Sprintf("Match %d of %d", index+1, len(targets))
+}
+
+func openSettingsCenter(category string) bool { return openSettingsCenterAt(category, "", "", false) }
+func (*PanelsFrame) OpenSettings(category, collection, record string, create bool) bool {
+	return openSettingsCenterAt(category, collection, record, create)
+}
+func (*coreAPI) OpenSettings(category, collection, record string, create bool) bool {
+	return openSettingsCenterAt(category, collection, record, create)
+}
+func openSettingsCenterAt(category, collection, record string, create bool) bool {
+	if vtui.FrameManager == nil {
+		return false
+	}
+	if current, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter); ok {
+		if current.running == nil {
+			current.navigate(category, collection, record, create)
+		}
+		return true
+	}
+	sessions, err := beginSettingsSessions(context.Background())
+	if err != nil {
+		vtui.ShowMessage("Settings", err.Error(), []string{Msg("vtui.Ok")})
+		return true
+	}
+	return showSettingsCenter(sessions, category, collection, record, create)
+}
+func showSettingsCenter(sessions []*settingsSession, category, collection, record string, create bool) bool {
+	c := newSettingsCenter(sessions)
+	c.navigate(category, collection, record, create)
+	c.ResizeConsole(vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight())
+	vtui.FrameManager.Push(c)
+	c.refreshSchemeChoices()
+	return true
+}
+
+// Catalogs can live on an unavailable network share. Enumerate their labels
+// outside the UI thread and ignore results after the editing session closes.
+func (c *settingsCenter) refreshSchemeChoices() {
+	directory := ColorerConfigsDir()
+	vtui.RunAsync(func(task *vtui.TaskContext) {
+		schemes := settingsColorerSchemesAt(directory)
+		task.RunOnUI(func() {
+			if c.closed || directory != ColorerConfigsDir() {
+				return
+			}
+			for _, session := range c.sessions {
+				if session.catalog.ID != "core" {
+					continue
+				}
+				for i := range session.catalog.Fields {
+					field := &session.catalog.Fields[i]
+					if field.ID == "EditorColorerScheme" {
+						field.Choices = settingsChoices(":Built-in default")
+						for _, scheme := range schemes {
+							field.Choices = append(field.Choices, f4settings.Choice{Value: scheme.Name, Label: f4settings.Text{English: colorerSchemeLabel(scheme)}})
+						}
+					}
+				}
+			}
+			if c.running == nil && c.category == "syntax" {
+				c.rebuildCategory()
+			}
+		})
+	})
+}
+func (c *settingsCenter) navigate(category, collection, record string, create bool) {
+	if category == "" {
+		category = lastSettingsCategory
+	}
+	validCategory := false
+	for _, cat := range c.categories {
+		if cat.ID == category {
+			validCategory = true
+			break
+		}
+	}
+	if validCategory {
+		c.selectCategory(category)
+		for i, cat := range c.categories {
+			if cat.ID == category {
+				c.sidebar.SetSelectPos(i)
+			}
+		}
+	}
+	if collection != "" {
+		for _, session := range c.sessions {
+			for _, col := range session.catalog.Collections {
+				if col.ID != collection {
+					continue
+				}
+				for i, r := range session.draft.Records[col.ID] {
+					if r.ID == record || r.Values[col.NameField] == record || r.Values["__id"] == record {
+						c.offsets["record:"+col.ID] = i
+						break
+					}
+				}
+				c.rebuildCategory()
+				if create && !col.Fixed {
+					for _, row := range c.page.rows {
+						if row.control != nil && row.control.GetId() == "collection-actions:"+col.ID {
+							if bar, ok := row.control.(*settingsButtonRow); ok && len(bar.buttons) > 0 {
+								bar.buttons[0].OnClick()
+							}
+							break
+						}
+					}
+				}
+				for _, row := range c.page.rows {
+					if row.control != nil && row.control.GetId() == "collection:"+col.ID {
+						c.page.scroll = row.y
+						c.page.positionRows()
+						c.SetFocusedItem(c.page)
+						c.page.SetFocusedItem(row.control)
+						c.describe(row)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+func settingsGroupKey(id string) string {
+	var b strings.Builder
+	b.WriteString("Group.")
+	for _, r := range strings.ToLower(id) {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func (c *settingsCenter) refreshAvailability() {
+	for _, r := range c.page.rows {
+		if r.control == nil {
+			continue
+		}
+		reason := r.field.Unavailable
+		if r.session != nil {
+			if r.session.contributed && !settingsProviderAlive(r.session.provider) {
+				reason = "Provider is no longer loaded."
+			} else if reason == "" && r.field.Enabled != nil {
+				values := r.session.draft.Values
+				if r.values != nil {
+					values = r.values()
+				}
+				reason = r.field.Enabled(values)
+			}
+		}
+		r.unavailableReason = reason
+		r.control.SetDisabled(c.running != nil || reason != "")
+	}
+}
+func (c *settingsCenter) commandReason(requires []string) string {
+	for _, s := range c.sessions {
+		for _, id := range s.draft.Changed() {
+			for _, require := range requires {
+				if require == "*" || id == require || strings.HasSuffix(require, ".*") && strings.HasPrefix(id, strings.TrimSuffix(require, "*")) {
+					return "Apply changes to " + id + " before running this operation."
+				}
+			}
+		}
+	}
+	return ""
+}

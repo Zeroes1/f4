@@ -276,6 +276,9 @@ func (d *bookmarksDialog) editPath(slot int) {
 	if slot < 0 || slot >= len(d.set) {
 		return
 	}
+	if openSettingsCenterAt("history", "bookmarks", fmt.Sprintf("bookmark:%d", slot), false) {
+		return
+	}
 	current := d.set[slot].Path
 	vtui.InputBox(Msg("Bookmarks.EditTitle"), Msg("Bookmarks.EditPrompt"), current, func(text string) {
 		text = strings.TrimSpace(text)

@@ -2,6 +2,7 @@
 $f4 Help Index (Version: %Ver)
 f4 — efficient and cozy file manager in go
 
+~Settings Center~SettingsCenter@
 ~Viewer / Editor keys~ViewerEditor@
 ~Panel navigation~PanelNav@
 ~Mouse wheel settings~MouseWheel@

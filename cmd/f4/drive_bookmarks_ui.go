@@ -179,6 +179,22 @@ func (pf *PanelsFrame) driveBookmarkDefaultPath(panelIdx int) string {
 }
 
 func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, bookmarks []DriveBookmark, index int, reopen func()) {
+	name := ""
+	if index >= 0 && index < len(bookmarks) {
+		name = bookmarks[index].Name
+	}
+	if openSettingsCenterAt("history", "drive-links", name, index < 0) {
+		if center, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter); ok && index < 0 {
+			for _, session := range center.sessions {
+				records := session.draft.Records["drive-links"]
+				if len(records) > 0 {
+					records[len(records)-1].Values["link.Path"] = pf.driveBookmarkDefaultPath(panelIdx)
+				}
+			}
+			center.rebuildCategory()
+		}
+		return
+	}
 	var initial DriveBookmark
 	if index >= 0 && index < len(bookmarks) {
 		initial = bookmarks[index]

@@ -198,6 +198,7 @@ func InitHelpSystem() {
 	// single source of truth), overriding the static stubs in .hlf
 	// files and reflecting the user's hotkeys.ini overrides.
 	helpActionStrings = loadHelpLangStrings(lang)
+	installSettingsHelp(lang)
 	vtui.GlobalHelpEngine.AddTopic(generateKeysHelpTopic("ViewerEditor",
 		helpMsg("Help.ViewerEditor"), []string{"Editor", "Viewer", "Common"}, "ViewerNav"))
 	vtui.GlobalHelpEngine.AddTopic(generateKeysHelpTopic("PanelNav",

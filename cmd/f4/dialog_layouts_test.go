@@ -162,6 +162,11 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 	// Complex-script widths are handled by vtui's grapheme-cell shaping.
 	for _, act := range GetActions() {
 		name := act.Name
+		// Settings uses an intentionally clipped scrolling viewport. Its layout
+		// and all category deep links are covered by the dedicated Center tests.
+		if _, linked := settingsDeepLinks[strings.ToLower(name)]; linked || name == "Settings.Open" || strings.HasPrefix(name, "Settings.Category.") {
+			continue
+		}
 		if skipActions[strings.ToLower(name)] {
 			continue
 		}

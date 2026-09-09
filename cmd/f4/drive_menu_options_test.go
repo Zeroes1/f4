@@ -105,7 +105,11 @@ func TestPanelsFrame_DriveMenu_F9OpensOptions(t *testing.T) {
 	if !ok {
 		t.Fatalf("drive options frame is not a container: %T", vtui.FrameManager.GetTopFrame())
 	}
-	vtui.AssertLayout(t, dlg)
+	center, ok := dlg.(*settingsCenter)
+	if !ok || center.category != "drives" {
+		t.Fatal("F9 must deep-link to Drive chooser in Settings Center")
+	}
+	center.Show(vtui.NewSilentScreenBuf())
 	vtui.FrameManager.Pop()
 	menu.Close()
 }

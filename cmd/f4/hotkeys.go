@@ -526,9 +526,10 @@ func (hm *HotkeyManager) Load() {
 }
 
 // Save writes only overridden or new bindings to the INI file.
-func (hm *HotkeyManager) Save() {
+func (hm *HotkeyManager) Save() { _ = hm.SaveError() }
+func (hm *HotkeyManager) SaveError() error {
 	if hm.iniPath == "" {
-		return
+		return fmt.Errorf("hotkey settings path is unavailable")
 	}
 
 	var sb strings.Builder
@@ -560,8 +561,10 @@ func (hm *HotkeyManager) Save() {
 		}
 	}
 
-	os.MkdirAll(filepath.Dir(hm.iniPath), 0755)
-	os.WriteFile(hm.iniPath, []byte(sb.String()), 0644)
+	if err := os.MkdirAll(filepath.Dir(hm.iniPath), 0755); err != nil {
+		return err
+	}
+	return writeFileAtomically(hm.iniPath, []byte(sb.String()), 0644)
 }
 
 // delKeyAlias returns the other spelling of a Del key string, or "" when the

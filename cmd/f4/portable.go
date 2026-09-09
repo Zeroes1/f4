@@ -453,7 +453,9 @@ func actionPortableSettings(pf *PanelsFrame) {
 // the profile if asked, and only then rewrites the ini. Ordering matters: if
 // the copy fails the ini is untouched and the next start is unchanged.
 func applyPortableMode(iniPath string, enable, moveProfile bool) error {
-	SaveConfig()
+	if err := saveAppliedConfiguration(); err != nil {
+		return err
+	}
 	src := GetF4ConfigDir()
 	var dst string
 	if enable {
