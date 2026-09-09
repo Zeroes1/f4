@@ -269,7 +269,7 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 	old := append([]uint64(nil), vtui.Palette...)
 	defer copy(vtui.Palette, old)
 	row := c.page.rows[0]
-	if len(row.label) != 0 || row.height != 2 {
+	if len(row.label) != 0 || row.height != 1 {
 		t.Fatal("action has duplicate label or redundant label space")
 	}
 	for iteration := 0; iteration < 2; iteration++ {
@@ -313,6 +313,40 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 		c.updateMatches()
 		if !row.match {
 			t.Fatal("action label no longer searchable")
+		}
+	}
+}
+
+func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	scr := vtui.NewSilentScreenBuf()
+	for _, width := range []int{80, 130} {
+		scr.AllocBuf(width, 35)
+		c.ResizeConsole(width, 35)
+		c.SetPosition(0, 0, width-1, 34)
+		for _, cat := range c.categories {
+			c.category = ""
+			c.selectCategory(cat.ID)
+			for _, box := range c.page.boxes {
+				last := box.rows[len(box.rows)-1]
+				if last.control != nil && box.bottom != last.y+len(last.label)+max(1, last.controlHeight) {
+					t.Fatalf("%s / %s has blank space before its bottom border", cat.ID, box.title)
+				}
+			}
+			if c.help.text != settingsText("Select", "Select a setting to read what it does.") {
+				t.Fatalf("%s has a redundant help heading", cat.ID)
+			}
+		}
+		c.selectCategory("operations")
+		c.Show(scr)
+		var top strings.Builder
+		for x := c.page.X1; x <= c.help.X2; x++ {
+			top.WriteRune(rune(scr.GetCell(x, c.sidebar.Y1).Char))
+		}
+		if strings.Count(top.String(), c.categoryLabel("operations")) != 1 {
+			t.Fatalf("category heading must appear once: %q", top.String())
 		}
 	}
 }

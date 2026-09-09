@@ -70,11 +70,22 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 	v.bar.SetPosition(x2, y1, x2, y2)
 	v.total = 0
 	v.boxes = nil
+	closeBox := func() {
+		box := &v.boxes[len(v.boxes)-1]
+		if len(box.rows) > 0 {
+			last := box.rows[len(box.rows)-1]
+			if _, compact := last.control.(*settingsCheckbox); !compact && !last.heading {
+				last.height--
+				v.total--
+			}
+		}
+		box.bottom = v.total
+	}
 	group := ""
 	for _, r := range v.rows {
 		if len(v.boxes) == 0 || group != r.field.Group {
 			if len(v.boxes) > 0 {
-				v.boxes[len(v.boxes)-1].bottom = v.total
+				closeBox()
 				v.total += 2
 			}
 			group = r.field.Group
@@ -122,7 +133,7 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 		v.total += r.height
 	}
 	if len(v.boxes) > 0 {
-		v.boxes[len(v.boxes)-1].bottom = v.total
+		closeBox()
 		v.total++
 	}
 	v.scroll = min(v.scroll, max(0, v.total-(y2-y1+1)))
@@ -730,7 +741,7 @@ func (c *settingsCenter) selectCategory(id string) {
 	c.page.scroll = c.offsets[id]
 	c.layoutPage()
 	c.updateMatches()
-	c.help.text = c.categoryLabel(id) + "\n\n" + settingsText("Select", "Select a setting to read what it does.")
+	c.help.text = settingsText("Select", "Select a setting to read what it does.")
 	c.help.top = 0
 }
 func (c *settingsCenter) layoutPage() { c.page.SetPosition(c.page.X1, c.page.Y1, c.page.X2, c.page.Y2) }
