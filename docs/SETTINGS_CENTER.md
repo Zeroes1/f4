@@ -376,3 +376,8 @@ Path suggestions belongs to Terminal & environment because it controls completio
 in both the command line and eligible dialog fields. The former Navigation &
 suggestions category is removed; its terminology remains searchable, and the
 legacy path-hints action opens Terminal & environment.
+
+The former Options → Save Settings entry is now a deep link into Workspaces &
+saving, alongside the existing Manual saving commands. App.SaveSettings and its
+Shift+F9 binding remain compatible; it no longer exposes a separate menu item
+or opens the legacy save-settings dialog.
