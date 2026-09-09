@@ -475,6 +475,7 @@ func TestSettingsComboInlineLayout(t *testing.T) {
 		c.query = "no-such-setting-xyz"
 		c.updateMatches()
 		c.Show(scr)
+		x, y, _, _ = first.control.GetPosition()
 		if scr.GetCell(c.page.X1+2, y).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogText]) || scr.GetCell(x, y).Attributes != vtui.DimColor(controlAttr) {
 			t.Fatal("inline label/control did not dim with live palette")
 		}

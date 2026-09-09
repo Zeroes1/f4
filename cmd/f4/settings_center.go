@@ -408,10 +408,9 @@ type settingsCategoryRow struct {
 }
 
 func (r settingsCategoryRow) GetCellText(int) string {
-	n := r.center.categoryMatches(r.category.ID)
 	label := r.category.Label.Resolve(AppConfig.Language, Msg)
 	if r.center.query != "" {
-		label += fmt.Sprintf(" (%d)", n)
+		label += fmt.Sprintf(" (%d)", r.center.categoryMatches(r.category.ID))
 	}
 	return label
 }
@@ -419,7 +418,7 @@ func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
 	if r.center.category == r.category.ID && !r.center.sidebar.IsFocused() {
 		attr = settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText])
 	}
-	if r.center.categoryMatches(r.category.ID) == 0 && r.center.query != "" {
+	if r.center.query != "" && r.center.categoryMatches(r.category.ID) == 0 {
 		return vtui.DimColor(attr)
 	}
 	return attr
@@ -596,7 +595,7 @@ func (c *settingsCenter) layoutWindow() {
 	w, h := c.X2-c.X1+1, c.Y2-c.Y1+1
 	x0, y0 := c.X1, c.Y1
 	c.search.SetPosition(x0+10, y0+2, c.X2-2, y0+2)
-	side := min(26, max(15, w/5))
+	side := c.categorySidebarWidth() + 1
 	c.sidebar.SetPosition(x0+2, y0+4, x0+side, y0+h-5)
 	px := x0 + side + 2
 	bottom := y0 + h - 5
@@ -618,6 +617,9 @@ func (c *settingsCenter) layoutWindow() {
 	c.layoutPage()
 }
 func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
+	if c.sidebar.X2-c.sidebar.X1+1 != c.categorySidebarWidth() {
+		c.layoutWindow()
+	}
 	c.refreshAvailability()
 	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
@@ -644,6 +646,21 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	if c.status != "" {
 		scr.Write(c.X1+2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-c.X1-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
 	}
+}
+
+func (c *settingsCenter) categorySidebarWidth() int {
+	width := 1
+	for _, category := range c.categories {
+		label := (settingsCategoryRow{center: c, category: category}).GetCellText(0)
+		width = max(width, vtui.StringWidth(label))
+	}
+	// Leave room for the sidebar scrollbar and a usable content column.
+	w := c.X2 - c.X1 + 1
+	available := w - 30
+	if w >= 110 {
+		available -= max(28, w/4) + 1
+	}
+	return min(width+1, max(10, available))
 }
 func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_ESCAPE {

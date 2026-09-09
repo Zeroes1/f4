@@ -428,3 +428,22 @@ func TestBuildMenuBarItemsFoldsRareCommandsIntoSubMenus(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsFirstInEveryOptionsMenu(t *testing.T) {
+	for _, area := range []string{"Shell", "Editor", "Viewer", "Terminal"} {
+		found := false
+		for _, menu := range BuildMenuBarItems(area) {
+			for _, item := range menu.SubItems {
+				if item.UserData == menuHistoryItemKey("Settings.Open") {
+					found = true
+					if menu.SubItems[0].UserData != menuHistoryItemKey("Settings.Open") {
+						t.Fatalf("%s: Settings is not first", area)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s: Settings missing", area)
+		}
+	}
+}

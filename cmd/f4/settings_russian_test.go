@@ -65,3 +65,36 @@ func TestSettingsRussianRenderedLabelsAndDescriptions(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsSidebarFitsTranslatedCategoryLabels(t *testing.T) {
+	old := AppConfig
+	defer func() { AppConfig = old; InitLang() }()
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.ResizeConsole(160, 40)
+	c.SetPosition(0, 0, 159, 39)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(160, 40)
+	for _, language := range []string{"en", "ru", "en"} {
+		AppConfig.Language = language
+		InitLang()
+		c.Show(scr)
+		longest := 0
+		for _, cat := range c.categories {
+			longest = max(longest, vtui.StringWidth(cat.Label.Resolve(language, Msg)))
+		}
+		if width := c.sidebar.X2 - c.sidebar.X1 + 1; width != longest+1 {
+			t.Fatalf("%s sidebar width %d, expected %d", language, width, longest+1)
+		}
+		if c.sidebar.GetContentWidth() < longest {
+			t.Fatal("sidebar clips its longest label")
+		}
+	}
+	c.ResizeConsole(80, 25)
+	c.SetPosition(0, 0, 79, 24)
+	c.Show(scr)
+	if c.page.X2-c.page.X1+1 < 20 || c.sidebar.X2 >= c.page.X1 {
+		t.Fatal("narrow layout columns overlap")
+	}
+}

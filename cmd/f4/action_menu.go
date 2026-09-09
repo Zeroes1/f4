@@ -176,6 +176,15 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		items := make([]vtui.MenuItem, 0, len(m.items)+len(m.pinned))
 		items = append(items, m.items...)
 		items = append(items, m.pinned...)
+		// Settings leads its submenu without changing top-level menu order.
+		for i, item := range items {
+			if item.UserData == menuHistoryItemKey("Settings.Open") {
+				rest := append([]vtui.MenuItem(nil), items[:i]...)
+				rest = append(rest, items[i+1:]...)
+				items = append([]vtui.MenuItem{item, {Separator: true}}, rest...)
+				break
+			}
+		}
 		result = append(result, vtui.MenuBarItem{Label: m.title, SubItems: normalizeMenuSeparators(items)})
 	}
 	return result

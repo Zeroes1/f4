@@ -6,7 +6,7 @@ var settingsDeepLinks = map[string]string{
 }
 
 func init() {
-	RegisterAction(Action{Name: "Settings.Open", Area: "Common", Label: "Settings", LabelKey: "SettingsCenter.Title", Description: "Open the searchable Settings Center", MenuPath: "Options", MenuSeparatorBefore: true, Handler: func() bool { return openSettingsCenter("") }})
+	RegisterAction(Action{Name: "Settings.Open", Area: "Common", Label: "Settings", LabelKey: "SettingsCenter.Title", Description: "Open the searchable Settings Center", MenuPath: "Options", Handler: func() bool { return openSettingsCenter("") }})
 	for _, cat := range settingsCategories {
 		id := cat.ID
 		RegisterAction(Action{Name: "Settings.Category." + id, Area: "Common", Label: cat.Label.English, Description: "Open Settings Center at " + cat.Label.English, Handler: func() bool { return openSettingsCenter(id) }})
