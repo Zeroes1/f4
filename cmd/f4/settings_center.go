@@ -449,10 +449,9 @@ func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
 		attr = settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText])
 	}
 	if strings.TrimSpace(r.center.query) != "" && r.center.categoryMatches(r.category.ID) == 0 {
-		if inactiveCursor {
-			// Dimming the normal light text approaches the gray cursor surface.
-			// Derive darker text from that surface instead, leaving its background intact.
-			_, background := GetColorRGBBoth(attr)
+		if r.center.category == r.category.ID {
+			// Keep the same dark text on both active and inactive cursor surfaces.
+			_, background := GetColorRGBBoth(settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText]))
 			dark := ((background>>16&255)/4)<<16 | ((background>>8&255)/4)<<8 | (background&255)/4
 			return vtui.SetRGBFore(attr, dark)
 		}

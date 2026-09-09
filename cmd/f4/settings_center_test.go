@@ -611,8 +611,8 @@ func TestSettingsInactiveZeroMatchCategoryText(t *testing.T) {
 		}
 		c.SetFocusedItem(c.sidebar)
 		c.Show(scr)
-		if scr.GetCell(c.sidebar.X1, y).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogSelectedButton]) {
-			t.Fatal("active focus styling changed")
+		if scr.GetCell(c.sidebar.X1, y).Attributes != vtui.SetRGBFore(vtui.Palette[vtui.ColDialogSelectedButton], fg) {
+			t.Fatal("active cursor must retain its blue background and use the same dark text")
 		}
 		c.search.OnTextChange("")
 		c.SetFocusedItem(c.page)
