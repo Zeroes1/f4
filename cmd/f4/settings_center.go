@@ -430,7 +430,7 @@ type settingsCategoryRow struct {
 
 func (r settingsCategoryRow) GetCellText(int) string {
 	label := r.category.Label.Resolve(AppConfig.Language, Msg)
-	if r.center.query != "" {
+	if strings.TrimSpace(r.center.query) != "" {
 		label += fmt.Sprintf(" (%d)", r.center.categoryMatches(r.category.ID))
 	}
 	return label
@@ -439,7 +439,7 @@ func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
 	if r.center.category == r.category.ID && !r.center.sidebar.IsFocused() {
 		attr = settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText])
 	}
-	if r.center.query != "" && r.center.categoryMatches(r.category.ID) == 0 {
+	if strings.TrimSpace(r.center.query) != "" && r.center.categoryMatches(r.category.ID) == 0 {
 		return vtui.DimColor(attr)
 	}
 	return attr
@@ -462,23 +462,24 @@ var lastSettingsOffsets = map[string]int{}
 
 type settingsCenter struct {
 	*vtui.Window
-	sessions                          []*settingsSession
-	categories                        []f4settings.Category
-	sidebar                           *vtui.Table
-	search                            *vtui.Edit
-	page                              *settingsViewport
-	help                              *settingsHelp
-	apply, ok, cancel, previous, next *vtui.Button
-	category, query, status           string
-	choiceHelpRow                     *settingsRow
-	offsets                           map[string]int
-	closed                            bool
-	running                           *vtui.TaskContext
-	closePending                      bool
-	screenW, screenH                  int
-	positioned                        bool
-	resizing                          bool
-	layoutBounds                      [4]int
+	sessions                []*settingsSession
+	categories              []f4settings.Category
+	sidebar                 *vtui.Table
+	search                  *vtui.Edit
+	page                    *settingsViewport
+	help                    *settingsHelp
+	apply, ok, cancel       *vtui.Button
+	previous, next          *settingsSearchButton
+	category, query, status string
+	choiceHelpRow           *settingsRow
+	offsets                 map[string]int
+	closed                  bool
+	running                 *vtui.TaskContext
+	closePending            bool
+	screenW, screenH        int
+	positioned              bool
+	resizing                bool
+	layoutBounds            [4]int
 }
 
 func settingsDialogTable(t *vtui.Table) {
@@ -518,13 +519,7 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 		c.query = s
 		c.updateMatches()
 		c.status = ""
-		if strings.TrimSpace(s) != "" {
-			n := 0
-			for _, cat := range c.categories {
-				n += c.categoryMatches(cat.ID)
-			}
-			c.status = fmt.Sprintf(settingsText("MatchCount", "%d matching settings, collections and commands"), n)
-		}
+		c.layoutWindow()
 	}
 	c.sidebar = vtui.NewTable(0, 0, 20, 10, []vtui.TableColumn{{Width: 0}})
 	c.sidebar.ShowHeader = false
@@ -545,8 +540,10 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	c.apply = vtui.NewButton(0, 0, settingsText("Apply", "&Apply"))
 	c.ok = vtui.NewButton(0, 0, Msg("vtui.Ok"))
 	c.cancel = vtui.NewButton(0, 0, Msg("vtui.Cancel"))
-	c.previous = vtui.NewButton(0, 0, settingsText("Previous", "Previous match"))
-	c.next = vtui.NewButton(0, 0, settingsText("Next", "Next match"))
+	c.previous = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Previous", "Previous match"))}
+	c.next = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Next", "Next match"))}
+	c.previous.ScreenObject.SetText("[←]")
+	c.next.ScreenObject.SetText("[→]")
 	c.apply.OnClick = func() { c.commit(false) }
 	c.ok.OnClick = func() { c.commit(true) }
 	c.cancel.OnClick = func() { c.Close() }
@@ -616,25 +613,25 @@ func (c *settingsCenter) layoutWindow() {
 	c.layoutBounds = [4]int{c.X1, c.Y1, c.X2, c.Y2}
 	w, h := c.X2-c.X1+1, c.Y2-c.Y1+1
 	x0, y0 := c.X1, c.Y1
-	c.search.SetPosition(x0+10, y0+2, c.X2-2, y0+2)
 	side := c.categorySidebarWidth() + 1
-	c.sidebar.SetPosition(x0+2, y0+4, x0+side, y0+h-5)
+	c.sidebar.SetPosition(x0+2, y0+5, x0+side, y0+h-5)
+	c.layoutSearch()
 	px := x0 + side + 2
 	bottom := y0 + h - 5
 	if w >= 110 {
 		helpWidth := max(28, w/4)
-		c.page.SetPosition(px, y0+6, x0+w-helpWidth-4, bottom)
-		c.help.SetPosition(x0+w-helpWidth-2, y0+4, x0+w-3, bottom)
+		c.page.SetPosition(px, y0+4, x0+w-helpWidth-4, bottom)
+		c.help.SetPosition(x0+w-helpWidth-2, y0+2, x0+w-3, bottom)
 	} else {
 		helpHeight := min(6, max(3, h/5))
-		c.page.SetPosition(px, y0+6, x0+w-3, bottom-helpHeight-1)
+		c.page.SetPosition(px, y0+4, x0+w-3, bottom-helpHeight-1)
 		c.help.SetPosition(px, bottom-helpHeight+1, x0+w-3, bottom)
 	}
-	x := x0 + 2
-	for _, b := range []*vtui.Button{c.previous, c.next, c.apply, c.ok, c.cancel} {
+	x := c.X2 - 1
+	for _, b := range []*vtui.Button{c.cancel, c.ok, c.apply} {
 		bw := vtui.StringWidth(b.GetCaption()) + 4
-		b.SetPosition(x, y0+h-2, x+bw-1, y0+h-2)
-		x += bw + 1
+		b.SetPosition(x-bw, y0+h-2, x-1, y0+h-2)
+		x -= bw + 1
 	}
 	c.layoutPage()
 }
@@ -647,7 +644,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
 	attr := vtui.Palette[vtui.ColDialogBox]
-	for y := c.sidebar.Y1; y <= c.help.Y2; y++ {
+	for y := c.Y1 + 2; y <= c.help.Y2; y++ {
 		scr.Write(c.sidebar.X2+1, y, vtui.StringToCharInfo("│", attr))
 		if c.help.X1 > c.page.X2 {
 			scr.Write(c.help.X1-1, y, vtui.StringToCharInfo("│", attr))
@@ -656,16 +653,28 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	title := vtui.TruncateString(c.categoryLabel(c.category), max(1, c.page.X2-c.page.X1+1), "…")
 	titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
 	titleAttr := vtui.Palette[vtui.ColDialogBoxTitle]
-	if c.query != "" && c.categoryMatches(c.category) == 0 {
+	if strings.TrimSpace(c.query) != "" && c.categoryMatches(c.category) == 0 {
 		titleAttr = vtui.DimColor(titleAttr)
 	}
-	scr.Write(titleX, c.sidebar.Y1, vtui.StringToCharInfo(title, titleAttr))
+	scr.Write(titleX, c.Y1+2, vtui.StringToCharInfo(title, titleAttr))
 	if c.help.X1 == c.page.X1 {
 		for x := c.page.X1; x <= c.help.X2; x++ {
 			scr.Write(x, c.help.Y1-1, vtui.StringToCharInfo("─", attr))
 		}
 	}
-	scr.Write(c.X1+2, c.Y1+2, vtui.StringToCharInfo(settingsText("Search", "Search:"), vtui.Palette[vtui.ColDialogText]))
+	scr.Write(c.sidebar.X1, c.Y1+1, vtui.StringToCharInfo(settingsText("Search", "Search:"), vtui.Palette[vtui.ColDialogText]))
+	separatorY := c.Y1 + 3
+	scr.FillRect(c.sidebar.X1, separatorY, c.sidebar.X2, separatorY, '─', attr)
+	if strings.TrimSpace(c.query) != "" {
+		count := 0
+		for _, cat := range c.categories {
+			count += c.categoryMatches(cat.ID)
+		}
+		label := fmt.Sprintf(" %d ", count)
+		x := c.sidebar.X1 + (c.sidebar.X2-c.sidebar.X1+1-vtui.StringWidth(label))/2
+		scr.Write(x, separatorY, vtui.StringToCharInfo(label, vtui.Palette[vtui.ColDialogBoxTitle]))
+	}
+	c.paintContentBackground(scr)
 	if c.status != "" {
 		scr.Write(c.X1+2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-c.X1-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
 	}
@@ -698,7 +707,10 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0 {
-		panes := []vtui.UIElement{c.search, c.sidebar, c.page, c.previous, c.next, c.apply, c.ok, c.cancel}
+		panes := []vtui.UIElement{c.search, c.sidebar, c.page, c.apply, c.ok, c.cancel}
+		if c.previous.IsVisible() {
+			panes = []vtui.UIElement{c.search, c.previous, c.next, c.sidebar, c.page, c.apply, c.ok, c.cancel}
+		}
 		focused := c.GetFocusedItem()
 		if e.VirtualKeyCode == vtinput.VK_TAB {
 			direction := 1
@@ -751,7 +763,11 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				if e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_LEFT {
 					direction = -1
 				}
-				c.movePaneFocus(panes[3:], focused, direction)
+				if focused == c.previous || focused == c.next {
+					c.movePaneFocus([]vtui.UIElement{c.previous, c.next}, focused, direction)
+				} else {
+					c.movePaneFocus([]vtui.UIElement{c.apply, c.ok, c.cancel}, focused, direction)
+				}
 				return true
 			}
 		}
@@ -847,6 +863,7 @@ func (c *settingsCenter) categoryMatches(id string) int {
 	return n
 }
 func (c *settingsCenter) updateMatches() {
+	c.layoutSearch()
 	for _, r := range c.page.rows {
 		r.match = c.matches(r.field)
 		if r.matchFunc != nil {
@@ -1173,6 +1190,9 @@ func (c *settingsCenter) syncWindowBounds() {
 }
 
 func (c *settingsCenter) nextMatch(direction int) {
+	if strings.TrimSpace(c.query) == "" {
+		return
+	}
 	type target struct {
 		cat, id    string
 		record     int
@@ -1262,7 +1282,7 @@ func (c *settingsCenter) nextMatch(direction int) {
 			break
 		}
 	}
-	c.status = fmt.Sprintf(settingsPhrase("Match %d of %d"), index+1, len(targets))
+	c.status = ""
 }
 
 func openSettingsCenter(category string) bool { return openSettingsCenterAt(category, "", "", false) }
@@ -1428,4 +1448,57 @@ func (c *settingsCenter) commandReason(requires []string) string {
 		}
 	}
 	return ""
+}
+
+func (c *settingsCenter) layoutSearch() {
+	if c.previous == nil || c.sidebar == nil {
+		return
+	}
+	searching := strings.TrimSpace(c.query) != ""
+	c.previous.SetVisible(searching)
+	c.previous.SetDisabled(!searching)
+	c.next.SetDisabled(!searching)
+	c.next.SetVisible(searching)
+	right := c.sidebar.X2
+	if searching {
+		c.next.SetPosition(right-2, c.Y1+2, right, c.Y1+2)
+		c.previous.SetPosition(right-6, c.Y1+2, right-4, c.Y1+2)
+		right -= 8
+	} else if c.GetFocusedItem() == c.previous || c.GetFocusedItem() == c.next {
+		c.SetFocusedItem(c.search)
+	}
+	c.search.SetPosition(c.sidebar.X1, c.Y1+2, max(c.sidebar.X1, right), c.Y1+2)
+}
+
+// Keep controls' semantic foreground and focus colors; replace only the dialog
+// surface behind the content. Inputs retain their separate input surface.
+func (c *settingsCenter) paintContentBackground(scr *vtui.ScreenBuf) {
+	background := vtui.Palette[ColDialogSettingsBackground]
+	if background == 0 {
+		return
+	}
+	_, normalBG := GetColorRGBBoth(vtui.Palette[vtui.ColDialogText])
+	for y := c.Y1 + 2; y <= c.page.Y2; y++ {
+		for x := c.page.X1; x <= c.page.X2; x++ {
+			cell := scr.GetCell(x, y)
+			_, bg := GetColorRGBBoth(cell.Attributes)
+			if bg != normalBG {
+				continue
+			}
+			if background&vtui.IsBgRGB != 0 {
+				cell.Attributes = vtui.SetRGBBack(cell.Attributes, vtui.GetRGBBack(background))
+			} else {
+				cell.Attributes = vtui.SetIndexBack(cell.Attributes, vtui.GetIndexBack(background))
+			}
+			scr.Write(x, y, []vtui.CharInfo{cell})
+		}
+	}
+}
+
+type settingsSearchButton struct{ *vtui.Button }
+
+func (b *settingsSearchButton) Show(scr *vtui.ScreenBuf) {
+	if !b.IsDisabled() {
+		b.Button.Show(scr)
+	}
 }

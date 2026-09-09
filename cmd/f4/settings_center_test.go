@@ -336,7 +336,7 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 		title := c.categoryLabel(c.category)
 		titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
 		for i, ch := range title {
-			cell := scr.GetCell(titleX+i, c.sidebar.Y1)
+			cell := scr.GetCell(titleX+i, c.Y1+2)
 			if rune(cell.Char) != ch || cell.Attributes != vtui.Palette[vtui.ColDialogBoxTitle] {
 				t.Fatal("category title is not centered or does not follow the palette")
 			}
@@ -398,7 +398,7 @@ func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
 		c.Show(scr)
 		var top strings.Builder
 		for x := c.page.X1; x <= c.help.X2; x++ {
-			top.WriteRune(rune(scr.GetCell(x, c.sidebar.Y1).Char))
+			top.WriteRune(rune(scr.GetCell(x, c.Y1+2).Char))
 		}
 		if strings.Count(top.String(), c.categoryLabel("operations")) != 1 {
 			t.Fatalf("category heading must appear once: %q", top.String())
@@ -465,7 +465,7 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 		t.Fatal("Right must return to the remembered content control")
 	}
 	c.SetFocusedItem(c.search)
-	for _, want := range []vtui.UIElement{c.sidebar, c.page, c.previous, c.next, c.apply, c.ok, c.cancel, c.search} {
+	for _, want := range []vtui.UIElement{c.sidebar, c.page, c.apply, c.ok, c.cancel, c.search} {
 		key(vtinput.VK_TAB, false)
 		if c.GetFocusedItem() != want {
 			t.Fatalf("Tab did not follow pane/button order: got %T %s, want %T %s (category %s)", c.GetFocusedItem(), c.GetFocusedItem().GetId(), want, want.GetId(), c.category)
@@ -476,7 +476,7 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 		t.Fatal("Shift+Tab did not reverse focus order")
 	}
 	key(vtinput.VK_DOWN, false)
-	if c.GetFocusedItem() != c.previous {
+	if c.GetFocusedItem() != c.apply {
 		t.Fatal("arrows escaped bottom buttons")
 	}
 	for _, cat := range c.categories {

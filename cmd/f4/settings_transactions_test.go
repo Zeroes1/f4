@@ -317,7 +317,7 @@ func TestSettingsAllCategoryLayouts(t *testing.T) {
 				c.page.positionRows()
 				c.Show(scr)
 			}
-			for _, b := range []*vtui.Button{c.previous, c.next, c.apply, c.ok, c.cancel} {
+			for _, b := range []*vtui.Button{c.previous.Button, c.next.Button, c.apply, c.ok, c.cancel} {
 				if b.X2 >= size[0] {
 					t.Fatalf("button outside %v", size)
 				}

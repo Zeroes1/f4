@@ -346,3 +346,15 @@ and focus highlighting retain their existing colors. An omitted value or
 `inherit` preserves the original appearance. Modern explicitly uses `#232323`,
 matching its input background. The slot is resolved at render time and exported
 with other palette settings; theme previews and Cancel include it.
+
+Search now belongs to the left category pane. During a nonempty search, compact
+`[←]` / `[→]` match-navigation buttons appear to the right of the input and the
+separator below it shows the total match count. Clearing search hides both arrows
+and the count, and removes the arrows from keyboard traversal. Apply, OK and
+Cancel are aligned at the lower right. The category heading and explanations
+start at the top of their respective panes, independently of the search area.
+
+`Dialog.Settings.Background` controls the central content surface. Modern uses
+`#343434`; other bundled themes retain their previous dialog surface. An omitted
+value or `inherit` preserves the normal dialog background. Rendering retains
+semantic foregrounds, input surfaces, focus highlighting and search dimming.

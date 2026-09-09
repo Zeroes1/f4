@@ -52,6 +52,8 @@ const (
 	ColEditorStatus
 	ColEditorScrollbar
 
+	ColDialogSettingsBackground
+
 	LastF4PaletteColor
 )
 
@@ -69,6 +71,7 @@ func SetDefaultF4Palette() {
 		vtui.Palette = newPal
 	}
 
+	vtui.Palette[ColDialogSettingsBackground] = 0
 	black := uint32(0x000000)
 	//white := uint32(0xFFFFFF)
 	cyan := uint32(0x00A0A0)
@@ -206,6 +209,7 @@ var ColorSlots = []ColorSlot{
 
 	// Dialog Group
 	{Canonical: "Dialog.Indicator.Background", Index: vtui.ColDialogIndicatorBackground, Group: "Dialog", ConstantName: "ColDialogIndicatorBackground"},
+	{Canonical: "Dialog.Settings.Background", Index: ColDialogSettingsBackground, Group: "Dialog", ConstantName: "ColDialogSettingsBackground"},
 	{Canonical: "Dialog.Text", Index: vtui.ColDialogText, Group: "Dialog", ConstantName: "ColDialogText"},
 	{Canonical: "Dialog.Text.Highlight", Index: vtui.ColDialogHighlightText, Group: "Dialog", ConstantName: "ColDialogHighlightText", Aliases: []string{"Dialog.Highlight"}},
 	{Canonical: "Dialog.Box", Index: vtui.ColDialogBox, Group: "Dialog", ConstantName: "ColDialogBox"},
@@ -320,7 +324,7 @@ func ApplyColorIni(ini *IniFile) {
 		}
 		expr := ini.GetString("farcolors", slot.Canonical, "")
 		if expr != "" {
-			if slot.Index == vtui.ColDialogIndicatorBackground {
+			if slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground {
 				if strings.EqualFold(strings.TrimSpace(expr), "inherit") {
 					vtui.Palette[slot.Index] = 0
 				} else {
@@ -340,6 +344,9 @@ func ApplyColorIni(ini *IniFile) {
 // FinishColors performs the steps that must happen once, after every layer of
 // the palette is in place.
 func FinishColors() {
+	if _, explicit := colorSourceExpressions["Dialog.Settings.Background"]; !explicit {
+		vtui.Palette[ColDialogSettingsBackground] = 0
+	}
 	// Terminal history uses indexed background color 0 for default and blank cells.
 	// Keep it in sync with the configurable user-screen background.
 	vtui.ThemePalette[0] = vtui.GetRGBBack(vtui.Palette[ColCommandLineUserScreen])
@@ -398,7 +405,7 @@ func ExportColors(path string) error {
 		for _, slot := range slots {
 			attr := vtui.Palette[slot.Index]
 			value := FormatFarColor(attr)
-			if slot.Index == vtui.ColDialogIndicatorBackground && attr == 0 {
+			if (slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground) && attr == 0 {
 				value = "inherit"
 			}
 			if source, ok := colorSourceExpressions[slot.Canonical]; ok && colorSourcePalette[slot.Canonical] == attr {
@@ -459,7 +466,7 @@ func AdjustContrastLevels() {
 	// once: a second pass would feed an already-corrected foreground back in.
 	done := make(map[int]bool, len(ColorSlots))
 	for _, slot := range ColorSlots {
-		if strings.HasSuffix(slot.Canonical, ".Box") || slot.Index == vtui.ColDialogIndicatorBackground || done[slot.Index] {
+		if strings.HasSuffix(slot.Canonical, ".Box") || slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground || done[slot.Index] {
 			continue
 		}
 		done[slot.Index] = true

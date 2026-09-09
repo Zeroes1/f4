@@ -55,6 +55,8 @@ func (c *settingsCenter) rebuildCategory() {
 	c.cancel.SetText(Msg("vtui.Cancel"))
 	c.previous.SetText(settingsText("Previous", "Previous match"))
 	c.next.SetText(settingsText("Next", "Next match"))
+	c.previous.ScreenObject.SetText("[←]")
+	c.next.ScreenObject.SetText("[→]")
 	id := c.category
 	c.offsets[id] = c.page.scroll
 	focused := ""
