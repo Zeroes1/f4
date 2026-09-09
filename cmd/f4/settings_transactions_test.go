@@ -55,7 +55,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 		c.updateMatches()
 		c.Show(scr)
 		fx, fy, _, _ := fieldRow.control.GetPosition()
-		if !fieldRow.control.IsDisabled() || scr.GetCell(fx, fy).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogEditUnchanged]) {
+		if !fieldRow.control.IsDisabled() || scr.GetCell(fx, fy).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogEdit]) {
 			t.Fatalf("theme %d unavailable editor did not follow dialog palette", iteration)
 		}
 		table = c.page.rows[0].control.(*vtui.Table)

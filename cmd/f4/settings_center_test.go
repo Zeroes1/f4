@@ -14,6 +14,56 @@ import (
 	"github.com/unxed/vtui"
 )
 
+func TestSettingsDisabledInputUsesDimmedNormalPalette(t *testing.T) {
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer copy(vtui.Palette, palette)
+	field := f4settings.Scalar("location", "startup", "Locations", "Configuration location", "Current configuration directory.", f4settings.String)
+	field.Unavailable = "Informational location"
+	d := f4settings.NewDraft(map[string]string{"location": `C:\Users\profile`}, nil)
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories, Fields: []f4settings.Field{field}}, draft: d}})
+	c.selectCategory("startup")
+	c.SetPosition(0, 0, 129, 34)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	for iteration := 0; iteration < 2; iteration++ {
+		vtui.Palette[vtui.ColDialogEdit] = vtui.SetRGBBoth(0, uint32(0xd0c0b0+iteration*0x101010), uint32(0x181820+iteration*0x080808))
+		vtui.Palette[vtui.ColDialogEditUnchanged] = vtui.SetRGBBoth(0, 0, 0x303030)
+		vtui.Palette[vtui.ColDialogEditSelected] = vtui.SetRGBBoth(0, 0x000001, 0x0000ff)
+		vtui.Palette[vtui.ColDialogBox] = vtui.SetRGBBoth(0, uint32(0x807060+iteration*0x101010), 0x303030)
+		for _, focused := range []vtui.UIElement{c.sidebar, c.page} {
+			c.SetFocusedItem(focused)
+			for _, query := range []string{"", "does-not-match"} {
+				c.query = query
+				c.updateMatches()
+				c.Show(scr)
+				for _, row := range c.page.rows {
+					if row.control == nil {
+						continue
+					}
+					x, y, _, _ := row.control.GetPosition()
+					want := vtui.DimColor(vtui.Palette[vtui.ColDialogEdit])
+					border := vtui.Palette[vtui.ColDialogBox]
+					if query != "" {
+						want = vtui.DimColor(want)
+						border = vtui.DimColor(border)
+					}
+					cell := scr.GetCell(x, y)
+					if cell.Char != 'C' || cell.Attributes != want {
+						t.Fatalf("disabled input cell=%+v, want C with %x", cell, want)
+					}
+					if !row.control.IsDisabled() {
+						t.Fatal("rendering enabled an informational input")
+					}
+					if scr.GetCell(c.page.X1, y).Attributes != border {
+						t.Fatal("group border did not follow the active palette")
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestSettingsCatalogComplete(t *testing.T) {
 	c := (coreSettingsProvider{}).Catalog()
 	if err := f4settings.ValidateCatalog(c); err != nil {

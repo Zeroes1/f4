@@ -227,6 +227,20 @@ func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
 		}
 		if r.control != nil {
 			r.control.Show(scr)
+			if edit, ok := r.control.(*vtui.Edit); ok && edit.IsDisabled() {
+				// vtui Edit dims disabled glyphs twice and may start from the
+				// selected/unchanged palette. Informational fields should use
+				// the normal input background and a single dim of its text.
+				attr := vtui.DimColor(vtui.Palette[edit.ColorTextIdx])
+				x1, y1, x2, y2 := edit.GetPosition()
+				for y := max(v.Y1, y1); y <= min(v.Y2, y2); y++ {
+					for x := max(v.X1, x1); x <= min(v.X2, x2); x++ {
+						cell := scr.GetCell(x, y)
+						cell.Attributes = attr
+						scr.Write(x, y, []vtui.CharInfo{cell})
+					}
+				}
+			}
 			if !r.match {
 				x1, y1, x2, y2 := r.control.GetPosition()
 				settingsDimRect(scr, x1, max(v.Y1, y1), x2, min(v.Y2, y2))
