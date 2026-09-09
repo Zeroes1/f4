@@ -95,6 +95,16 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			continue
 		}
 		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-5))
+		// Action controls already name themselves; keep their metadata for
+		// search and explanations without repeating it above the control.
+		switch r.control.(type) {
+		case *vtui.Button, *settingsButtonRow:
+			r.label = nil
+		case *vtui.Table:
+			if r.field.Label.Resolve(AppConfig.Language, Msg) == box.title {
+				r.label = nil
+			}
+		}
 		if b, ok := r.control.(*settingsCheckbox); ok {
 			b.lines = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-9))
 			b.SetText(b.lines[0])
@@ -540,11 +550,11 @@ func (c *settingsCenter) layoutWindow() {
 	bottom := y0 + h - 5
 	if w >= 110 {
 		helpWidth := max(28, w/4)
-		c.page.SetPosition(px, y0+4, x0+w-helpWidth-4, bottom)
+		c.page.SetPosition(px, y0+6, x0+w-helpWidth-4, bottom)
 		c.help.SetPosition(x0+w-helpWidth-2, y0+4, x0+w-3, bottom)
 	} else {
 		helpHeight := min(6, max(3, h/5))
-		c.page.SetPosition(px, y0+4, x0+w-3, bottom-helpHeight-1)
+		c.page.SetPosition(px, y0+6, x0+w-3, bottom-helpHeight-1)
 		c.help.SetPosition(px, bottom-helpHeight+1, x0+w-3, bottom)
 	}
 	x := x0 + 2
@@ -560,12 +570,19 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
 	attr := vtui.Palette[vtui.ColDialogBox]
-	for y := c.page.Y1; y <= c.help.Y2; y++ {
+	for y := c.sidebar.Y1; y <= c.help.Y2; y++ {
 		scr.Write(c.sidebar.X2+1, y, vtui.StringToCharInfo("│", attr))
 		if c.help.X1 > c.page.X2 {
 			scr.Write(c.help.X1-1, y, vtui.StringToCharInfo("│", attr))
 		}
 	}
+	title := vtui.TruncateString(c.categoryLabel(c.category), max(1, c.page.X2-c.page.X1+1), "…")
+	titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
+	titleAttr := vtui.Palette[vtui.ColDialogBoxTitle]
+	if c.query != "" && c.categoryMatches(c.category) == 0 {
+		titleAttr = vtui.DimColor(titleAttr)
+	}
+	scr.Write(titleX, c.sidebar.Y1, vtui.StringToCharInfo(title, titleAttr))
 	if c.help.X1 == c.page.X1 {
 		for x := c.page.X1; x <= c.help.X2; x++ {
 			scr.Write(x, c.help.Y1-1, vtui.StringToCharInfo("─", attr))

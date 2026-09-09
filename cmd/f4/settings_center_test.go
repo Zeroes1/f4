@@ -254,3 +254,65 @@ func TestSettingsCenterExclusivePaneFocus(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
+	d := f4settings.NewDraft(nil, nil)
+	defer d.Close()
+	label := "Save applied preferences"
+	cat := f4settings.Catalog{ID: "test", Categories: settingsCategories, Commands: []f4settings.Command{{ID: "test.save", Category: "workspaces", Group: "Manual saving", Label: f4settings.Text{English: label}, Description: f4settings.Text{English: "Save the applied configuration."}}}}
+	c := newSettingsCenter([]*settingsSession{{catalog: cat, draft: d}})
+	c.selectCategory("workspaces")
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	old := append([]uint64(nil), vtui.Palette...)
+	defer copy(vtui.Palette, old)
+	row := c.page.rows[0]
+	if len(row.label) != 0 || row.height != 2 {
+		t.Fatal("action has duplicate label or redundant label space")
+	}
+	for iteration := 0; iteration < 2; iteration++ {
+		vtui.Palette[vtui.ColDialogBoxTitle] = uint64(0x15 + iteration*16)
+		vtui.Palette[vtui.ColDialogButton] = uint64(0x12 + iteration*16)
+		vtui.Palette[vtui.ColDialogSelectedButton] = uint64(0x13 + iteration*16)
+		c.SetFocusedItem(c.sidebar)
+		c.Show(scr)
+		title := c.categoryLabel(c.category)
+		titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
+		for i, ch := range title {
+			cell := scr.GetCell(titleX+i, c.sidebar.Y1)
+			if rune(cell.Char) != ch || cell.Attributes != vtui.Palette[vtui.ColDialogBoxTitle] {
+				t.Fatal("category title is not centered or does not follow the palette")
+			}
+		}
+		x, y, _, _ := row.control.GetPosition()
+		if scr.GetCell(x, y).Attributes != vtui.Palette[vtui.ColDialogButton] {
+			t.Fatal("normal action palette mismatch")
+		}
+		c.SetFocusedItem(c.page)
+		c.Show(scr)
+		if scr.GetCell(x, y).Attributes != vtui.Palette[vtui.ColDialogSelectedButton] {
+			t.Fatal("focused action palette mismatch")
+		}
+		var rendered strings.Builder
+		for line := c.page.Y1; line <= c.page.Y2; line++ {
+			for col := c.page.X1; col <= c.page.X2; col++ {
+				rendered.WriteRune(rune(scr.GetCell(col, line).Char))
+			}
+			rendered.WriteByte('\n')
+		}
+		if strings.Count(rendered.String(), label) != 1 {
+			t.Fatalf("action caption must render once: %q", rendered.String())
+		}
+		c.describe(row)
+		if !strings.Contains(c.help.text, "Save the applied configuration.") {
+			t.Fatal("action explanation lost")
+		}
+		c.query = label
+		c.updateMatches()
+		if !row.match {
+			t.Fatal("action label no longer searchable")
+		}
+	}
+}
