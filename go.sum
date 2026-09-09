@@ -12,6 +12,8 @@ github.com/Zoinen/vtui v0.1.238-0.20260909124547-8499a597a607 h1:kBRTGCRNxWqgeUk
 github.com/Zoinen/vtui v0.1.238-0.20260909124547-8499a597a607/go.mod h1:BYq3sPqEqRxPUB5HRuptvq1qwTybOkjNlej56CECb18=
 github.com/Zoinen/vtui v0.1.238-0.20260909142222-5e765f9f45d2 h1:paDYq9kAcTrqfOzLOpssmNC8wAuWrwmeaueBm3fWoZY=
 github.com/Zoinen/vtui v0.1.238-0.20260909142222-5e765f9f45d2/go.mod h1:BYq3sPqEqRxPUB5HRuptvq1qwTybOkjNlej56CECb18=
+github.com/Zoinen/vtui v0.1.238-0.20260909145014-64e6e8d61f77 h1:vLIbCK+J2McqqBrMNmmMSH8IFjFT7vA2wBTcKnzOr9E=
+github.com/Zoinen/vtui v0.1.238-0.20260909145014-64e6e8d61f77/go.mod h1:BYq3sPqEqRxPUB5HRuptvq1qwTybOkjNlej56CECb18=
 github.com/abadojack/whatlanggo v1.0.1 h1:19N6YogDnf71CTHm3Mp2qhYfkRdyvbgwWdd2EPxJRG4=
 github.com/abadojack/whatlanggo v1.0.1/go.mod h1:66WiQbSbJBIlOZMsvbKe5m6pzQovxCH9B/K8tQB2uoc=
 github.com/akalin/gopar v0.0.0-20210524065929-a776223763d3 h1:riZbpH66GmEJzxox72D09gKw8YQ0DE5+GAYEtnGP1PM=

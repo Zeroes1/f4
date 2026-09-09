@@ -190,6 +190,6 @@ replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.8
 
 // replace github.com/unxed/colorer4go => ../../../dev/colorer4go
 // Pending https://github.com/unxed/vtui/pull/112; pin the published fork commit.
-replace github.com/unxed/vtui => github.com/Zoinen/vtui v0.1.238-0.20260909142222-5e765f9f45d2
+replace github.com/unxed/vtui => github.com/Zoinen/vtui v0.1.238-0.20260909145014-64e6e8d61f77
 
 replace github.com/neurlang/wayland => github.com/unxed/wayland v0.0.0-20260906012106-4096eafdd7f4
