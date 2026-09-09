@@ -65,14 +65,14 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
-			return fmt.Errorf("schema download: HTTP %d", resp.StatusCode)
+			return settingsError("schema download: HTTP %d", resp.StatusCode)
 		}
 		data, err := io.ReadAll(io.LimitReader(resp.Body, maxColorerDownload+1))
 		if err != nil {
 			return err
 		}
 		if len(data) > maxColorerDownload {
-			return fmt.Errorf("schema archive is too large")
+			return settingsError("schema archive is too large")
 		}
 		return installColorerSchemas(data, ColorerConfigsDir(), ctx)
 	})
@@ -90,8 +90,8 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 				verb = "Move"
 			}
 			id := fmt.Sprintf("profile.%t.%t", enable, move)
-			add(id, "startup", "Profile transfer", verb+" to "+name, verb+" the applied profile from "+GetF4ConfigDir()+" to "+target+" and select it for the next launch. Restart is required. This operation is not undone by Cancel.", false, func(context.Context) error {
-				dlg := vtui.ShowMessage("Profile transfer", verb+" profile to:\n"+target+"?\nRestart is required after completion.", []string{verb, "Cancel"})
+			add(id, "startup", "Profile transfer", verb+" to "+name, verb+" the applied profile from %s to %s and select it for the next launch. Restart is required. This operation is not undone by Cancel.", false, func(context.Context) error {
+				dlg := vtui.ShowMessage(settingsPhrase("Profile transfer"), fmt.Sprintf(settingsPhrase(verb+" profile to:\n%s?\nRestart is required after completion."), target), []string{settingsPhrase(verb), Msg("vtui.Cancel")})
 				dlg.OnResult = func(code int) {
 					if code != 0 {
 						return
@@ -99,16 +99,17 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 					vtui.RunAsync(func(task *vtui.TaskContext) {
 						err := applyPortableMode(currentPortableIniPath(), enable, move)
 						task.RunOnUI(func() {
-							message := "Profile transferred. Restart f4 to use it."
+							message := settingsPhrase("Profile transferred. Restart f4 to use it.")
 							if err != nil {
 								message = err.Error()
 							}
-							vtui.ShowMessage("Profile transfer", message, []string{Msg("vtui.Ok")})
+							vtui.ShowMessage(settingsPhrase("Profile transfer"), message, []string{Msg("vtui.Ok")})
 						})
 					})
 				}
 				return nil
 			})
+			cat.Commands[len(cat.Commands)-1].Description.Args = []any{GetF4ConfigDir(), target}
 		}
 	}
 	// Legacy external plugins keep explicit launchers, resolved against the live registry.
@@ -120,13 +121,14 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 		add("legacy."+id, "plugins", "Legacy configuration", "Legacy configuration: "+plainLabel(pluginCommandDisplayLabel(cmd)), "This external plugin has not contributed settings metadata. Opens its own configuration interface using applied preferences.", false, func(context.Context) error {
 			pf := findPanelsFrameAnyScreen()
 			if pf == nil {
-				return fmt.Errorf("this legacy plugin requires an open panels workspace")
+				return settingsError("this legacy plugin requires an open panels workspace")
 			}
 			if !executeRegisteredPluginCommand(vfs.PluginCommandConfig, id, pf) {
-				return fmt.Errorf("plugin is no longer available")
+				return settingsError("plugin is no longer available")
 			}
 			return nil
 		})
+		cat.Commands[len(cat.Commands)-1].Label = f4settings.Text{English: "Legacy configuration: %s", Args: []any{plainLabel(pluginCommandDisplayLabel(cmd))}}
 	}
 	for _, item := range []struct{ id, label, value string }{{"profile.path", "Current configuration directory", GetF4ConfigDir()}, {"profile.ini", "Main settings file", getUserConfigIniPath()}, {"profile.session", "Session file", getSessionIniPath()}, {"profile.portable", "Portable profile directory", portableProfileDir()}, {"profile.system", "User profile directory", systemProfileDir()}} {
 		f := f4settings.Scalar(item.id, "startup", "Configuration locations", item.label, "Resolved configuration location for the running process. Profile transfers take effect on restart.", f4settings.Path)
@@ -190,15 +192,15 @@ func checkSettingsUpdates(ctx context.Context) error {
 	}
 	settingsRunOnUI(ctx, func() {
 		if !candidate.needsUpdate {
-			vtui.ShowMessage("Updates", "You are using the latest version.", []string{Msg("vtui.Ok")})
+			vtui.ShowMessage(settingsPhrase("Updates"), settingsPhrase("You are using the latest version."), []string{Msg("vtui.Ok")})
 			return
 		}
 		pf := findPanelsFrameAnyScreen()
 		if pf == nil {
-			vtui.ShowMessage("Updates", "Update available: "+candidate.displayVersion+". Open a panels workspace to install it.", []string{Msg("vtui.Ok")})
+			vtui.ShowMessage(settingsPhrase("Updates"), fmt.Sprintf(settingsPhrase("Update available: %s. Open a panels workspace to install it."), candidate.displayVersion), []string{Msg("vtui.Ok")})
 			return
 		}
-		dlg := vtui.ShowMessage("Updates", "Download and install "+candidate.displayVersion+"?", []string{"Install", "Cancel"})
+		dlg := vtui.ShowMessage(settingsPhrase("Updates"), fmt.Sprintf(settingsPhrase("Download and install %s?"), candidate.displayVersion), []string{settingsPhrase("Install"), Msg("vtui.Cancel")})
 		dlg.OnResult = func(code int) {
 			if code == 0 {
 				performUpdate(pf, candidate)

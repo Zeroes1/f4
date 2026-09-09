@@ -4,10 +4,30 @@ package f4settings
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"strings"
 )
+
+// Error retains a provider's English diagnostic while allowing the frontend to
+// localize its format without translating record names or other arguments.
+func Error(format string, args ...any) error {
+	return &localizedError{format: format, args: args, original: fmt.Errorf(format, args...)}
+}
+
+type localizedError struct {
+	format   string
+	args     []any
+	original error
+}
+
+func (e *localizedError) Error() string { return e.original.Error() }
+func (e *localizedError) Unwrap() error { return e.original }
+func (e *localizedError) Localized(language string, lookup func(string) string) string {
+	format := (Text{English: e.format}).Resolve(language, lookup)
+	return fmt.Errorf(format, e.args...).Error()
+}
 
 type Kind string
 
@@ -26,18 +46,42 @@ const (
 type Text struct {
 	English, Key string
 	Translations map[string]string
+	Args         []any
+	// Literal marks user data and external identifiers that must not be translated.
+	Literal bool
+}
+
+// ResourceKey gives unkeyed provider text a stable optional host-resource key.
+// Changing the English text invalidates the old translation automatically.
+func ResourceKey(english string) string {
+	return fmt.Sprintf("SettingsCenter.Text.%x", sha256.Sum256([]byte(english)))
 }
 
 func (t Text) Resolve(language string, lookup func(string) string) string {
-	if t.Key != "" && lookup != nil {
-		if s := lookup(t.Key); s != "" && !strings.HasPrefix(s, "{") {
-			return s
-		}
+	if t.Literal {
+		return t.English
 	}
-	if s := t.Translations[language]; s != "" {
+	format := func(s string) string {
+		if len(t.Args) > 0 {
+			return fmt.Sprintf(s, t.Args...)
+		}
 		return s
 	}
-	return t.English
+	if s := t.Translations[language]; s != "" {
+		return format(s)
+	}
+	if t.Key != "" && lookup != nil {
+		if s := lookup(t.Key); s != "" && !strings.HasPrefix(s, "{") {
+			return format(s)
+		}
+	}
+	if t.English != "" && lookup != nil {
+		key := ResourceKey(t.English)
+		if s := lookup(key); s != "" && s != key && !strings.HasPrefix(s, "{") {
+			return format(s)
+		}
+	}
+	return format(t.English)
 }
 
 type Category struct {

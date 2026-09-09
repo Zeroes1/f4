@@ -38,11 +38,11 @@ func (pluginSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 		errs := map[string]error{}
 		if d.Dirty("plugins.registered") {
 			if !reflect.DeepEqual(AppConfig.RegisteredPlugins, extract(d.BaselineRecords["plugins.registered"])) {
-				errs["plugins.registered"] = fmt.Errorf("plugin list changed outside Settings Center")
+				errs["plugins.registered"] = settingsError("plugin list changed outside Settings Center")
 			}
 			for _, r := range d.Records["plugins.registered"] {
 				if strings.TrimSpace(r.Values["plugin.Path"]) == "" || settingsSingleLine(r.Values["plugin.Path"]) != nil {
-					errs[r.ID] = fmt.Errorf("enter a nonempty plugin path on one line")
+					errs[r.ID] = settingsError("enter a nonempty plugin path on one line")
 				}
 			}
 		}
@@ -77,7 +77,7 @@ func (pluginSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 				plugin, permission := r.Values["grant.Plugin"], r.Values["grant.Permission"]
 				decision, exists := PluginPermissions().Decision(plugin, permission)
 				if exists && decision != r.Values["grant.Decision"] {
-					result.Errors[r.ID] = fmt.Errorf("permission answer changed concurrently")
+					result.Errors[r.ID] = settingsError("permission answer changed concurrently")
 					continue
 				}
 				if err := PluginPermissions().Revoke(plugin, permission); err != nil {

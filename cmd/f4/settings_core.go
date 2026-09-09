@@ -104,33 +104,33 @@ func (coreSettingsProvider) Catalog() f4settings.Catalog {
 			f.AllowCustom = true
 			installed := discoverInstalledGuiFonts(AppConfig.Language)
 			for _, value := range guiFontChoicesFromInstalled(AppConfig.GuiFont, installed) {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: guiFontDisplayValueFromInstalled(value, installed)}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: guiFontDisplayValueFromInstalled(value, installed), Literal: true}})
 			}
 		case "ColorStyle":
 			f.Kind = f4settings.ChoiceKind
 			for _, style := range AvailableColorStyles() {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: style.Name, Label: f4settings.Text{English: style.Name}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: style.Name, Label: f4settings.Text{English: style.Name, Literal: true}})
 			}
 		case "Language":
 			f.Kind = f4settings.ChoiceKind
 			for _, l := range listAvailableUILanguages() {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: l.code, Label: f4settings.Text{English: l.name}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: l.code, Label: f4settings.Text{English: l.name, Literal: true}})
 			}
 		case "HelpLanguage":
 			f.Kind = f4settings.ChoiceKind
 			for _, l := range listAvailableHelpLanguages() {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: l.code, Label: f4settings.Text{English: l.name}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: l.code, Label: f4settings.Text{English: l.name, Literal: true}})
 			}
 		case "GuiBackend":
 			f.Kind = f4settings.ChoiceKind
 			f.Choices = settingsChoices(":Automatic")
 			for _, b := range startupGuiBackends {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: b, Label: f4settings.Text{English: b}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: b, Label: f4settings.Text{English: b, Literal: true}})
 			}
 		case "EditorDefaultCodePage", "ViewerDefaultCodePage":
 			f.Kind = f4settings.ChoiceKind
 			for _, cp := range vfs.AvailableCodepages {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: strconv.Itoa(cp.ID), Label: f4settings.Text{English: vfs.CodepageMenuLabel(cp)}})
+				f.Choices = append(f.Choices, f4settings.Choice{Value: strconv.Itoa(cp.ID), Label: f4settings.Text{English: vfs.CodepageMenuLabel(cp), Literal: true}})
 			}
 		case "EditorColorerScheme":
 			f.Kind = f4settings.ChoiceKind
@@ -227,15 +227,15 @@ func (p coreSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 			}
 			value := d.Values[f.ID]
 			if f.Unavailable != "" {
-				errors[f.ID] = fmt.Errorf("%s", f.Unavailable)
+				errors[f.ID] = settingsError("%s", f.Unavailable)
 				continue
 			}
 			if strings.ContainsAny(value, "\r\n") {
-				errors[f.ID] = fmt.Errorf("value must be on one line")
+				errors[f.ID] = settingsError("value must be on one line")
 			}
 			if f.Kind == f4settings.Boolean {
 				if _, err := strconv.ParseBool(value); err != nil {
-					errors[f.ID] = fmt.Errorf("choose enabled or disabled")
+					errors[f.ID] = settingsError("choose enabled or disabled")
 				}
 			}
 			if f.Kind == f4settings.ChoiceKind && !f.AllowCustom && f.ID != "EditorColorerScheme" {
@@ -247,7 +247,7 @@ func (p coreSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 					}
 				}
 				if !known && !(f.ID == "GuiBackend" && (value == "qt" || strings.HasPrefix(value, "ext:"))) {
-					errors[f.ID] = fmt.Errorf("choose an available value")
+					errors[f.ID] = settingsError("choose an available value")
 				}
 			}
 			if f.Kind == f4settings.Integer {
@@ -260,14 +260,14 @@ func (p coreSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 					min = 4
 				}
 				if err != nil || n < min {
-					errors[f.ID] = fmt.Errorf("enter an integer of at least %d", min)
+					errors[f.ID] = settingsError("enter an integer of at least %d", min)
 				}
 				if f.ID == "Compare.MaxDepth" && n > 99 {
-					errors[f.ID] = fmt.Errorf("maximum depth is 99")
+					errors[f.ID] = settingsError("maximum depth is 99")
 				}
 			}
 			if current := coreSettingValue(AppConfig, f.ID); current != d.Baseline[f.ID] && current != value {
-				errors[f.ID] = fmt.Errorf("this setting changed outside Settings Center; reopen to load its current value")
+				errors[f.ID] = settingsError("this setting changed outside Settings Center; reopen to load its current value")
 			}
 		}
 		return errors

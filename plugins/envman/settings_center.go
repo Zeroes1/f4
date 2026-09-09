@@ -31,19 +31,19 @@ func (p *settingsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		next := cloneConfig(current)
 		if d.Dirty("envman.IgnoredVariables") {
 			if !reflect.DeepEqual(current.IgnoredVariables, initial.IgnoredVariables) {
-				return next, fmt.Errorf("ignored variables changed outside Settings Center")
+				return next, f4settings.Error("ignored variables changed outside Settings Center")
 			}
 			next.IgnoredVariables = splitIgnoredVariables(d.Values["envman.IgnoredVariables"], p.plugin.options)
 		}
 		if d.Dirty("envman.AlwaysUseEditor") {
 			if current.AlwaysUseEditor != initial.AlwaysUseEditor {
-				return next, fmt.Errorf("editor preference changed outside Settings Center")
+				return next, f4settings.Error("editor preference changed outside Settings Center")
 			}
 			next.AlwaysUseEditor = d.Values["envman.AlwaysUseEditor"] == "true"
 		}
 		if d.Dirty("envman.profiles") {
 			if !reflect.DeepEqual(current.Entries, initial.Entries) {
-				return next, fmt.Errorf("environment profiles changed outside Settings Center")
+				return next, f4settings.Error("environment profiles changed outside Settings Center")
 			}
 			next.Entries = nil
 			for _, r := range d.Records["envman.profiles"] {
@@ -73,7 +73,7 @@ func (p *settingsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		initial = p.plugin.snapshotConfig()
 		result := f4settings.Result{Applied: d.Changed()}
 		if err := p.plugin.applyStoredConfig(); err != nil {
-			result.Errors = map[string]error{"envman.runtime": fmt.Errorf("profiles saved, but applying the environment failed: %w", err)}
+			result.Errors = map[string]error{"envman.runtime": f4settings.Error("profiles saved, but applying the environment failed: %w", err)}
 		}
 		return result
 	}

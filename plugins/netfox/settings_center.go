@@ -2,7 +2,6 @@ package netfox
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -103,10 +102,10 @@ func (p *settingsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		for _, r := range d.Records["netfox.connections"] {
 			name := strings.TrimSpace(r.Values["netfox.Name"])
 			if name == "" || strings.ContainsAny(name, "/\\\r\n") {
-				return nil, fmt.Errorf("enter a valid connection name")
+				return nil, f4settings.Error("enter a valid connection name")
 			}
 			if _, ok := result[name]; ok {
-				return nil, fmt.Errorf("duplicate connection name %s", name)
+				return nil, f4settings.Error("duplicate connection name %s", name)
 			}
 			oldName := r.ID
 			for _, old := range d.BaselineRecords["netfox.connections"] {
@@ -149,7 +148,7 @@ func (p *settingsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		if err == nil {
 			err = p.store.updateConfigs(func(current map[string]NetFoxConfig) error {
 				if !reflect.DeepEqual(current, initial) {
-					return fmt.Errorf("connections changed outside Settings Center; reopen before saving")
+					return f4settings.Error("connections changed outside Settings Center; reopen before saving")
 				}
 				for k := range current {
 					delete(current, k)

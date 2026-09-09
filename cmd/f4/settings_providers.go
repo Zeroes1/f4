@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/unxed/f4/sdk/f4settings"
@@ -29,7 +28,7 @@ func (p *registeredSettingsProvider) Begin(ctx context.Context) (*f4settings.Dra
 
 func (*coreAPI) RegisterSettingsProvider(p f4settings.Provider) (vfs.Registration, error) {
 	if p == nil {
-		return nil, fmt.Errorf("nil settings provider")
+		return nil, settingsError("nil settings provider")
 	}
 	c := p.Catalog()
 	if err := f4settings.ValidateCatalog(c); err != nil {
@@ -40,7 +39,7 @@ func (*coreAPI) RegisterSettingsProvider(p f4settings.Provider) (vfs.Registratio
 	for _, existing := range settingsProviders.providers {
 		if existing.Catalog().ID == c.ID {
 			settingsProviders.Unlock()
-			return nil, fmt.Errorf("duplicate settings provider %s", c.ID)
+			return nil, settingsError("duplicate settings provider %s", c.ID)
 		}
 	}
 	settingsProviders.providers = append(settingsProviders.providers, p)

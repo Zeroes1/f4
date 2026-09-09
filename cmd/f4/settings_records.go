@@ -88,7 +88,7 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 		return rows, err
 	}, save: func(rows []f4settings.Record) error {
 		if len(rows) != 10 {
-			return fmt.Errorf("folder bookmarks require ten slots")
+			return settingsError("folder bookmarks require ten slots")
 		}
 		var items BookmarkSet
 		for i, r := range rows {
@@ -147,7 +147,8 @@ type settingsMenuSource struct {
 func newUserMenuSettingsStore(src settingsMenuSource) settingsRecordStore {
 	prefix := "menu." + src.id + "."
 	fields := []f4settings.Field{recordField(prefix+"Label", "Label", "Visible command or submenu name.", f4settings.String), recordField(prefix+"HotKey", "Activation key", "Menu activation key. Use -- for a separator.", f4settings.String), recordField(prefix+"Submenu", "Is a submenu", "Group child entries under this item instead of executing commands.", f4settings.Boolean), recordField(prefix+"Parent", "Parent entry ID", "Empty places the item at the root. Otherwise select the ID of a submenu entry.", f4settings.String), recordField(prefix+"Commands", "Commands", "Multiline shell commands using existing user-menu substitutions.", f4settings.Multiline)}
-	col := recordCollection("usermenu."+src.id, "menus", src.label, "Source: "+src.path+". This source is captured when Settings Center opens; changing panels does not redirect saves.", prefix+"Label", fields)
+	col := recordCollection("usermenu."+src.id, "menus", src.label, "Source: %s. This source is captured when Settings Center opens; changing panels does not redirect saves.", prefix+"Label", fields)
+	col.Description.Args = []any{src.path}
 	return settingsRecordStore{collection: col, path: src.path, load: func() ([]f4settings.Record, error) {
 		var items []UserMenuItem
 		var err error
@@ -190,10 +191,10 @@ func settingsMenuTree(rows []f4settings.Record, prefix string) ([]UserMenuItem, 
 		for parent != "" {
 			p, ok := byID[parent]
 			if !ok || p.Values[prefix+"Submenu"] != "true" {
-				return nil, fmt.Errorf("%s: parent must be an existing submenu", r.Values[prefix+"Label"])
+				return nil, settingsError("%s: parent must be an existing submenu", r.Values[prefix+"Label"])
 			}
 			if seen[parent] {
-				return nil, fmt.Errorf("submenu cycle")
+				return nil, settingsError("submenu cycle")
 			}
 			seen[parent] = true
 			parent = p.Values[prefix+"Parent"]
@@ -254,7 +255,7 @@ func (p coreRecordSettingsProvider) Begin(context.Context) (*f4settings.Draft, e
 			if err != nil {
 				failures[id] = err
 			} else if revision != revisions[id] {
-				failures[id] = fmt.Errorf("source changed outside Settings Center: %s", s.path)
+				failures[id] = settingsError("source changed outside Settings Center: %s", s.path)
 			}
 			if s.validate != nil {
 				if err := s.validate(d.Records[id]); err != nil {
@@ -289,7 +290,7 @@ func (p coreRecordSettingsProvider) Begin(context.Context) (*f4settings.Draft, e
 			}
 			if rev, err := settingsFileRevision(s.path); err != nil || rev != revisions[id] {
 				if err == nil {
-					err = fmt.Errorf("source changed before saving: %s", s.path)
+					err = settingsError("source changed before saving: %s", s.path)
 				}
 				result.Errors[id] = err
 				continue

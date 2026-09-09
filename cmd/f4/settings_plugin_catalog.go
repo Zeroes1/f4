@@ -19,9 +19,9 @@ func (p *catalogSettingsProvider) rows(items []PlugRingItem) []f4settings.Record
 	var rows []f4settings.Record
 	for _, item := range items {
 		data, _ := json.Marshal(item)
-		status := "Not installed"
+		status := settingsPhrase("Not installed")
 		if found, ok := installed[item.ID]; ok {
-			status = "Installed: " + found.Version
+			status = fmt.Sprintf(settingsPhrase("Installed: %s"), found.Version)
 		}
 		rows = append(rows, f4settings.Record{ID: "catalog:" + item.ID, Values: map[string]string{"catalog.Name": item.Name, "catalog.Description": item.Description, "catalog.Status": status, "catalog.Version": item.Version, "__item": string(data)}})
 	}
@@ -68,12 +68,12 @@ func (p *catalogSettingsProvider) Catalog() f4settings.Catalog {
 			}
 			task, ok := ctx.(*vtui.TaskContext)
 			if !ok {
-				return nil, fmt.Errorf("interactive operation requires a UI task")
+				return nil, settingsError("interactive operation requires a UI task")
 			}
 			task.RunOnUI(func() {
 				pf := findPanelsFrameAnyScreen()
 				if pf == nil {
-					vtui.ShowMessage("Plugin package", "Open a panels workspace to install or remove packages.", []string{Msg("vtui.Ok")})
+					vtui.ShowMessage(settingsPhrase("Plugin package"), settingsPhrase("Open a panels workspace to install or remove packages."), []string{Msg("vtui.Ok")})
 					return
 				}
 				refresh := func() {
@@ -102,7 +102,7 @@ func (p *catalogSettingsProvider) Catalog() f4settings.Catalog {
 		}
 		task, ok := ctx.(*vtui.TaskContext)
 		if !ok {
-			return fmt.Errorf("catalog refresh requires a UI task")
+			return settingsError("catalog refresh requires a UI task")
 		}
 		task.RunOnUI(func() { p.replace(items) })
 		return nil

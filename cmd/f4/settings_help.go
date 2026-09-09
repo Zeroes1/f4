@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"github.com/unxed/f4/sdk/f4settings"
 	"github.com/unxed/vtui"
 )
 
 func installSettingsHelp(language string) {
+	phrase := func(s string) string { return (f4settings.Text{English: s}).Resolve(language, helpMsg) }
 	catalogs := []f4settings.Catalog{(coreSettingsProvider{}).Catalog(), newCoreRecordSettingsProvider().Catalog(), (aiSettingsProvider{}).Catalog(), (hotkeySettingsProvider{}).Catalog(), (settingsOperationsProvider{}).Catalog(), (pluginSettingsProvider{}).Catalog()}
 	settingsProviders.RLock()
 	providers := append([]f4settings.Provider(nil), settingsProviders.providers...)
@@ -14,7 +16,7 @@ func installSettingsHelp(language string) {
 		catalogs = append(catalogs, p.Catalog())
 	}
 	title := (f4settings.Text{English: "Settings", Key: "SettingsCenter.Title"}).Resolve(language, helpMsg)
-	index := &vtui.HelpTopic{Name: "SettingsCenter", StickyRows: 1, Lines: []string{title, "", "Search dims unrelated options without hiding or disabling them.", "Apply saves changes. OK saves and closes. Cancel discards later edits.", "Select an option to read its explanation. Settings scroll independently.", ""}}
+	index := &vtui.HelpTopic{Name: "SettingsCenter", StickyRows: 1, Lines: []string{title, "", phrase("Search dims unrelated options without hiding or disabling them."), phrase("Apply saves changes. OK saves and closes. Cancel discards later edits."), phrase("Select an option to read its explanation. Settings scroll independently."), ""}}
 	for _, category := range settingsCategories {
 		index.Lines = append(index.Lines, category.Label.Resolve(language, helpMsg))
 		add := func(f f4settings.Field) {
@@ -23,10 +25,10 @@ func installSettingsHelp(language string) {
 			topic := &vtui.HelpTopic{Name: "Setting." + f.ID, StickyRows: 1, Lines: []string{label, ""}}
 			topic.Lines = append(topic.Lines, vtui.WrapText(description, generatedHelpLineWidth)...)
 			if f.Timing != "" {
-				topic.Lines = append(topic.Lines, "", "Takes effect: "+f.Timing)
+				topic.Lines = append(topic.Lines, "", fmt.Sprintf(phrase("Takes effect: %s"), phrase(f.Timing)))
 			}
 			if f.Unavailable != "" {
-				topic.Lines = append(topic.Lines, vtui.WrapText("Unavailable: "+f.Unavailable, generatedHelpLineWidth)...)
+				topic.Lines = append(topic.Lines, vtui.WrapText(fmt.Sprintf(phrase("Unavailable: %s"), phrase(f.Unavailable)), generatedHelpLineWidth)...)
 			}
 			vtui.GlobalHelpEngine.AddTopic(topic)
 			index.Lines = append(index.Lines, "~"+label+"~Setting."+f.ID+"@")

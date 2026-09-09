@@ -407,7 +407,7 @@ func (p *centerSettingsProvider) authorizeRecord(ctx context.Context, provider P
 		}
 		task, ok := ctx.(*vtui.TaskContext)
 		if !ok {
-			return nil, fmt.Errorf("authorization requires interactive task context")
+			return nil, f4settings.Error("authorization requires interactive task context")
 		}
 		var code string
 		if err == nil {

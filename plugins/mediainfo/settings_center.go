@@ -1,7 +1,6 @@
 package mediainfo
 
 import (
-	"fmt"
 	"github.com/unxed/f4/sdk/f4settings"
 )
 
@@ -25,7 +24,7 @@ func (plugin *Plugin) settingsProvider() *f4settings.StructProvider[Settings] {
 		store := plugin.store
 		plugin.mu.Unlock()
 		if store == nil {
-			return Settings{}, fmt.Errorf("MediaInfo is not initialized")
+			return Settings{}, f4settings.Error("MediaInfo is not initialized")
 		}
 		return store.snapshot(), nil
 	}, Validate: func(s Settings) error { return normalizeSettings(s).validate() }, Save: func(before, next Settings) error {
@@ -35,7 +34,7 @@ func (plugin *Plugin) settingsProvider() *f4settings.StructProvider[Settings] {
 		store := plugin.store
 		plugin.mu.Unlock()
 		if prefix == nil || store == nil {
-			return fmt.Errorf("MediaInfo is not initialized")
+			return f4settings.Error("MediaInfo is not initialized")
 		}
 		if err := prefix.SetPrefix(next.Prefix); err != nil {
 			return err

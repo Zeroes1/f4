@@ -758,6 +758,20 @@ func (c *settingsCenter) groupLabel(id string) string {
 	}
 	return settingsText(settingsGroupKey(id), id)
 }
+func settingsError(format string, args ...any) error { return f4settings.Error(format, args...) }
+func settingsErrorText(err error) string {
+	if localized, ok := err.(interface {
+		Localized(string, func(string) string) string
+	}); ok {
+		return localized.Localized(AppConfig.Language, Msg)
+	}
+	return settingsPhrase(err.Error())
+}
+
+func settingsPhrase(english string) string {
+	return (f4settings.Text{English: english}).Resolve(AppConfig.Language, Msg)
+}
+
 func settingsText(key, fallback string) string {
 	return (f4settings.Text{English: fallback, Key: "SettingsCenter." + key}).Resolve(AppConfig.Language, Msg)
 }
@@ -821,10 +835,10 @@ func (c *settingsCenter) updateMatches() {
 func (c *settingsCenter) describe(r *settingsRow) {
 	text := r.field.Label.Resolve(AppConfig.Language, Msg) + "\n\n" + r.field.Description.Resolve(AppConfig.Language, Msg)
 	if r.field.Timing != "" {
-		text += "\n\nTakes effect: " + r.field.Timing
+		text += "\n\n" + fmt.Sprintf(settingsPhrase("Takes effect: %s"), settingsPhrase(r.field.Timing))
 	}
 	if r.unavailableReason != "" {
-		text += "\n\nUnavailable: " + r.unavailableReason
+		text += "\n\n" + fmt.Sprintf(settingsPhrase("Unavailable: %s"), settingsPhrase(r.unavailableReason))
 	}
 	if text != c.help.text {
 		c.help.text = text
@@ -880,7 +894,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 	}
 	change := func(v string) {
 		if r.session.contributed && !settingsProviderAlive(r.session.provider) {
-			c.status = "Provider is no longer loaded."
+			c.status = settingsPhrase("Provider is no longer loaded.")
 			return
 		}
 		if r.write != nil {
@@ -890,7 +904,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		}
 		if f.Timing == "preview" && d.PreviewFunc != nil {
 			if err := d.PreviewFunc(d); err != nil {
-				c.status = err.Error()
+				c.status = settingsErrorText(err)
 			}
 		}
 		c.describe(r)
@@ -924,7 +938,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		}
 		if selected < 0 {
 			selected = len(choices)
-			choices = append(choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: value + " (saved value)"}})
+			choices = append(choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: value + " " + settingsPhrase("(saved value)"), Literal: true}})
 			labels = append(labels, choices[selected].Label.English)
 		}
 		b := vtui.NewComboBox(0, 0, 20, labels)
@@ -972,11 +986,11 @@ func (c *settingsCenter) commit(closeAfter bool) {
 			continue
 		}
 		if s.contributed && !settingsProviderAlive(s.provider) {
-			c.status = "A settings provider was unloaded; pending edits were not saved."
+			c.status = settingsPhrase("A settings provider was unloaded; pending edits were not saved.")
 			return
 		}
 		for id, err := range s.draft.Validate() {
-			c.status = id + ": " + err.Error()
+			c.status = id + ": " + settingsErrorText(err)
 			return
 		}
 	}
@@ -986,7 +1000,7 @@ func (c *settingsCenter) commit(closeAfter bool) {
 			return
 		}
 		if index >= len(c.sessions) {
-			c.status = "Settings applied."
+			c.status = settingsPhrase("Settings applied.")
 			c.rebuildCategory()
 			if closeAfter {
 				c.Close()
@@ -995,7 +1009,7 @@ func (c *settingsCenter) commit(closeAfter bool) {
 		}
 		s := c.sessions[index]
 		if s.contributed && !settingsProviderAlive(s.provider) {
-			c.status = "Provider unloaded; pending edits retained."
+			c.status = settingsPhrase("Provider unloaded; pending edits retained.")
 			return
 		}
 		if len(s.draft.Changed()) == 0 {
@@ -1009,7 +1023,7 @@ func (c *settingsCenter) commit(closeAfter bool) {
 			}
 			if len(r.Errors) > 0 {
 				for id, err := range r.Errors {
-					c.status = id + ": " + err.Error()
+					c.status = id + ": " + settingsErrorText(err)
 					break
 				}
 				c.rebuildCategory()
@@ -1046,7 +1060,7 @@ func (c *settingsCenter) runBackground(worker func(context.Context) error, done 
 			c.ok.SetDisabled(false)
 			c.rebuildCategory()
 			if err != nil {
-				c.status = err.Error()
+				c.status = settingsErrorText(err)
 			}
 			if done != nil {
 				done(err)
@@ -1143,7 +1157,7 @@ func (c *settingsCenter) nextMatch(direction int) {
 		}
 	}
 	if len(targets) == 0 {
-		c.status = "No matching settings."
+		c.status = settingsPhrase("No matching settings.")
 		return
 	}
 	current := ""
@@ -1192,7 +1206,7 @@ func (c *settingsCenter) nextMatch(direction int) {
 			break
 		}
 	}
-	c.status = fmt.Sprintf("Match %d of %d", index+1, len(targets))
+	c.status = fmt.Sprintf(settingsPhrase("Match %d of %d"), index+1, len(targets))
 }
 
 func openSettingsCenter(category string) bool { return openSettingsCenterAt(category, "", "", false) }
@@ -1214,7 +1228,7 @@ func openSettingsCenterAt(category, collection, record string, create bool) bool
 	}
 	sessions, err := beginSettingsSessions(context.Background())
 	if err != nil {
-		vtui.ShowMessage("Settings", err.Error(), []string{Msg("vtui.Ok")})
+		vtui.ShowMessage(settingsPhrase("Settings"), err.Error(), []string{Msg("vtui.Ok")})
 		return true
 	}
 	return showSettingsCenter(sessions, category, collection, record, create)
@@ -1247,7 +1261,7 @@ func (c *settingsCenter) refreshSchemeChoices() {
 					if field.ID == "EditorColorerScheme" {
 						field.Choices = settingsChoices(":Built-in default")
 						for _, scheme := range schemes {
-							field.Choices = append(field.Choices, f4settings.Choice{Value: scheme.Name, Label: f4settings.Text{English: colorerSchemeLabel(scheme)}})
+							field.Choices = append(field.Choices, f4settings.Choice{Value: scheme.Name, Label: f4settings.Text{English: colorerSchemeLabel(scheme), Literal: true}})
 						}
 					}
 				}
@@ -1352,7 +1366,7 @@ func (c *settingsCenter) commandReason(requires []string) string {
 		for _, id := range s.draft.Changed() {
 			for _, require := range requires {
 				if require == "*" || id == require || strings.HasSuffix(require, ".*") && strings.HasPrefix(id, strings.TrimSuffix(require, "*")) {
-					return "Apply changes to " + id + " before running this operation."
+					return fmt.Sprintf(settingsPhrase("Apply changes to %s before running this operation."), id)
 				}
 			}
 		}

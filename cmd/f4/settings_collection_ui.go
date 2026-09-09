@@ -22,7 +22,7 @@ func (r settingsRecordRow) GetCellText(int) string {
 	if name := r.record.Values[r.collection.NameField]; name != "" {
 		return name
 	}
-	return "(unnamed)"
+	return settingsPhrase("(unnamed)")
 }
 func (r settingsRecordRow) GetCellAttr(_ int, attr uint64) uint64 {
 	f := settingsCollectionField(r.collection)
@@ -108,7 +108,7 @@ func (c *settingsCenter) addCollections(category string) {
 			bar := &settingsButtonRow{Group: vtui.NewGroup(0, 0, 20, 1)}
 			bar.SetId("collection-actions:" + col.ID)
 			button := func(label string, run func()) {
-				b := vtui.NewButton(0, 0, label)
+				b := vtui.NewButton(0, 0, settingsPhrase(label))
 				b.OnClick = run
 				bar.buttons = append(bar.buttons, b)
 				bar.AddItem(b)
@@ -173,7 +173,7 @@ func (c *settingsCenter) addCollections(category string) {
 					if action.RequiresApplied {
 						for _, session := range c.sessions {
 							if len(session.draft.Changed()) > 0 {
-								c.status = "Apply pending changes before running this operation."
+								c.status = settingsPhrase("Apply pending changes before running this operation.")
 								return
 							}
 						}
@@ -182,7 +182,7 @@ func (c *settingsCenter) addCollections(category string) {
 						return
 					}
 					if s.contributed && !settingsProviderAlive(s.provider) {
-						c.status = "Provider is no longer loaded."
+						c.status = settingsPhrase("Provider is no longer loaded.")
 						return
 					}
 					original := s.draft.Records[col.ID][selected]
@@ -197,7 +197,7 @@ func (c *settingsCenter) addCollections(category string) {
 							for k, v := range updates {
 								original.Values[k] = v
 							}
-							c.status = "Operation completed. Apply to save staged changes."
+							c.status = settingsPhrase("Operation completed. Apply to save staged changes.")
 							c.rebuildCategory()
 						}
 					})
@@ -214,11 +214,11 @@ func (c *settingsCenter) addCollections(category string) {
 					if strings.HasPrefix(col.ID, "usermenu.") && strings.HasSuffix(f.ID, ".Parent") {
 						prefix := strings.TrimSuffix(f.ID, "Parent")
 						f.Kind = f4settings.ChoiceKind
-						f.Label.English = "Parent submenu"
+						f.Label = f4settings.Text{English: "Parent submenu"}
 						f.Choices = []f4settings.Choice{{Value: "", Label: f4settings.Text{English: "Root"}}}
 						for _, parent := range s.draft.Records[col.ID] {
 							if parent.ID != record.ID && parent.Values[prefix+"Submenu"] == "true" {
-								f.Choices = append(f.Choices, f4settings.Choice{Value: parent.ID, Label: f4settings.Text{English: parent.Values[prefix+"Label"]}})
+								f.Choices = append(f.Choices, f4settings.Choice{Value: parent.ID, Label: f4settings.Text{English: parent.Values[prefix+"Label"], Literal: true}})
 							}
 						}
 					}
@@ -266,7 +266,7 @@ func (c *settingsCenter) addCommands(category string) {
 					return
 				}
 				if s.contributed && !settingsProviderAlive(s.provider) {
-					c.status = "Provider is no longer loaded."
+					c.status = settingsPhrase("Provider is no longer loaded.")
 					return
 				}
 				if cmd.Background {
@@ -317,7 +317,7 @@ func settingsCollectionMatches(c *settingsCenter, s *settingsSession, col f4sett
 
 func settingsSingleLine(value string) error {
 	if strings.ContainsAny(value, "\r\n") {
-		return fmt.Errorf("value must be on one line")
+		return settingsError("value must be on one line")
 	}
 	return nil
 }

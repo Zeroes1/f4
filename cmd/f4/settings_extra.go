@@ -11,15 +11,17 @@ import (
 type aiSettingsProvider struct{}
 
 func (aiSettingsProvider) Catalog() f4settings.Catalog {
-	source := "vtvibe.ini (if a saved key is present)"
-	for _, key := range []string{"GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY"} {
-		if strings.TrimSpace(os.Getenv(key)) != "" {
-			source = key
+	source := "vtvibe.ini"
+	for _, name := range []string{"GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY"} {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			source = name
 			break
 		}
 	}
+	key := f4settings.Scalar("ai.key", "ai", "Credentials", "Saved API key", "Used only when GEMINI_API_KEY, GOOGLE_API_KEY and OPENAI_API_KEY are all empty, in that precedence order. Effective source: %s (if a key is available). The key is stored in the local vtvibe.ini file.", f4settings.Secret)
+	key.Description.Args = []any{source}
 	return f4settings.Catalog{ID: "ai", Categories: settingsCategories, Background: true, Fields: []f4settings.Field{
-		f4settings.Scalar("ai.key", "ai", "Credentials", "Saved API key", "Used only when GEMINI_API_KEY, GOOGLE_API_KEY and OPENAI_API_KEY are all empty, in that precedence order. Effective source: "+source+". The key is stored in the local vtvibe.ini file.", f4settings.Secret),
+		key,
 		f4settings.Scalar("ai.model", "ai", "Model", "Model", "Model identifier sent with subsequent AI requests. The configured API endpoint must support it.", f4settings.String),
 	}}
 }
@@ -55,7 +57,7 @@ func (p aiSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 			}
 			v := current.GetString("general", key, fallback)
 			if v != d.Baseline[id] && v != d.Values[id] {
-				return f4settings.Result{Errors: map[string]error{id: fmt.Errorf("value changed outside Settings Center")}}
+				return f4settings.Result{Errors: map[string]error{id: settingsError("value changed outside Settings Center")}}
 			}
 			patch[key] = d.Values[id]
 		}
@@ -80,7 +82,7 @@ func (hotkeySettingsProvider) Catalog() f4settings.Catalog {
 		recordField("binding.Condition", "Condition", "Optional registered condition checked when dispatching the action. Empty means unconditional.", f4settings.String),
 	}
 	for _, a := range GetActions() {
-		fields[0].Choices = append(fields[0].Choices, f4settings.Choice{Value: a.Name, Label: f4settings.Text{English: plainLabel(a.DisplayLabel()) + " (" + a.Name + ")"}})
+		fields[0].Choices = append(fields[0].Choices, f4settings.Choice{Value: a.Name, Label: f4settings.Text{English: plainLabel(a.DisplayLabel()) + " (" + a.Name + ")", Literal: true}})
 	}
 	fields[2].Choices = f4settings.Choices("Shell:Panels", "Terminal:Terminal", "Editor:Editor", "Viewer:Viewer", "Dialog:Dialog", "Menu:Menu", "Disks:Drive chooser", "Common:Common")
 	col := recordCollection("bindings", "keyboard", "Key bindings", "Bindings are edited inline. Native frame-owned shortcuts remain outside the editable binding table.", "binding.Action", fields)
@@ -100,7 +102,7 @@ func (hotkeySettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 	d := f4settings.NewDraft(nil, map[string][]f4settings.Record{"bindings": rows})
 	build := func(d *f4settings.Draft) (*HotkeyManager, error) {
 		if hm == nil {
-			return nil, fmt.Errorf("keyboard manager is unavailable")
+			return nil, settingsError("keyboard manager is unavailable")
 		}
 		next := hm.CloneForEdit()
 		old := map[string]string{}
@@ -116,11 +118,11 @@ func (hotkeySettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 				action := v["binding.Action"]
 				cond := v["binding.Condition"]
 				if strings.ContainsAny(key+area+action+cond, "\r\n=") {
-					return fmt.Errorf("binding contains an invalid separator")
+					return settingsError("binding contains an invalid separator")
 				}
 				id := area + "\x00" + key
 				if _, ok := dest[id]; ok {
-					return fmt.Errorf("duplicate chord %s in %s", key, area)
+					return settingsError("duplicate chord %s in %s", key, area)
 				}
 				if cond != "" {
 					action += ":" + cond
@@ -149,7 +151,7 @@ func (hotkeySettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 			area, key, _ := strings.Cut(id, "\x00")
 			current := next.Bindings[area][key]
 			if current != old[id] && current != wanted[id] {
-				return nil, fmt.Errorf("binding %s changed outside Settings Center", key)
+				return nil, settingsError("binding %s changed outside Settings Center", key)
 			}
 			if next.Bindings[area] == nil {
 				next.Bindings[area] = map[string]string{}
