@@ -42,6 +42,9 @@ func settingsConfigField(v reflect.Value, path string) reflect.Value {
 	return v
 }
 func coreSettingValue(cfg config.F4Config, id string) string {
+	if id == "StartupMode" {
+		return cfg.StartupMode.String()
+	}
 	if strings.HasPrefix(id, "DriveMenuOptions.") {
 		bit, _ := strconv.Atoi(strings.TrimPrefix(id, "DriveMenuOptions."))
 		return strconv.FormatBool(cfg.DriveMenuOptions&(1<<bit) != 0)
@@ -60,6 +63,10 @@ func coreSettingValue(cfg config.F4Config, id string) string {
 	}
 }
 func setCoreSetting(cfg *config.F4Config, id, value string) error {
+	if id == "StartupMode" {
+		cfg.StartupMode = config.ParseStartupMode(value)
+		return nil
+	}
 	if strings.HasPrefix(id, "DriveMenuOptions.") {
 		bit, _ := strconv.Atoi(strings.TrimPrefix(id, "DriveMenuOptions."))
 		if value == "true" {
