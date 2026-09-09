@@ -43,6 +43,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 	}
 	c.page.scroll = 0
 	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
 	c.page.positionRows()
 	fieldRow := c.page.rows[len(c.page.rows)-1]
 	fieldRow.field.Unavailable = "Retained compatibility setting"

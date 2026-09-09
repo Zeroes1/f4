@@ -27,6 +27,20 @@ type settingsRow struct {
 	unavailableReason string
 }
 
+// Keep the familiar checkbox label on the control, wrapping only when needed.
+type settingsCheckbox struct {
+	*vtui.Checkbox
+	lines []string
+}
+
+func (b *settingsCheckbox) Show(scr *vtui.ScreenBuf) {
+	b.Checkbox.Show(scr)
+	n, _ := b.GetStateAttrs(vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton)
+	for i := 1; i < len(b.lines); i++ {
+		scr.Write(b.X1+4, b.Y1+i, vtui.StringToCharInfo(b.lines[i], n))
+	}
+}
+
 // settingsViewport clips only the page, leaving the window chrome fixed.
 // It remains a Group/FocusContainer so native focus and UI inspection work.
 type settingsViewport struct {
@@ -35,6 +49,14 @@ type settingsViewport struct {
 	scroll, total int
 	bar           *vtui.ScrollBar
 	onFocus       func(*settingsRow)
+	boxes         []settingsGroupBox
+	groupLabel    func(string) string
+}
+
+type settingsGroupBox struct {
+	title       string
+	top, bottom int
+	rows        []*settingsRow
 }
 
 func newSettingsViewport() *settingsViewport {
@@ -47,14 +69,51 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 	v.Group.SetPosition(x1, y1, x2, y2)
 	v.bar.SetPosition(x2, y1, x2, y2)
 	v.total = 0
+	v.boxes = nil
+	group := ""
 	for _, r := range v.rows {
-		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-1))
+		if len(v.boxes) == 0 || group != r.field.Group {
+			if len(v.boxes) > 0 {
+				v.boxes[len(v.boxes)-1].bottom = v.total
+				v.total += 2
+			}
+			group = r.field.Group
+			title := group
+			if v.groupLabel != nil {
+				title = v.groupLabel(group)
+			}
+			if r.heading {
+				title = r.field.Label.Resolve(AppConfig.Language, Msg)
+			}
+			v.boxes = append(v.boxes, settingsGroupBox{title: title, top: v.total})
+			v.total++
+		}
+		box := &v.boxes[len(v.boxes)-1]
+		box.rows = append(box.rows, r)
+		if r.heading {
+			r.y, r.height = box.top, 1
+			continue
+		}
+		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-5))
+		if b, ok := r.control.(*settingsCheckbox); ok {
+			b.lines = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-9))
+			b.SetText(b.lines[0])
+			r.label = nil
+			r.controlHeight = len(b.lines)
+		}
 		r.y = v.total
 		r.height = len(r.label) + 1
 		if r.control != nil {
 			r.height += max(1, r.controlHeight)
 		}
+		if _, ok := r.control.(*settingsCheckbox); ok {
+			r.height = r.controlHeight
+		}
 		v.total += r.height
+	}
+	if len(v.boxes) > 0 {
+		v.boxes[len(v.boxes)-1].bottom = v.total
+		v.total++
 	}
 	v.scroll = min(v.scroll, max(0, v.total-(y2-y1+1)))
 	v.positionRows()
@@ -63,7 +122,7 @@ func (v *settingsViewport) positionRows() {
 	for _, r := range v.rows {
 		if r.control != nil {
 			y := v.Y1 + r.y + len(r.label) - v.scroll
-			r.control.SetPosition(v.X1, y, v.X2-2, y+max(1, r.controlHeight)-1)
+			r.control.SetPosition(v.X1+2, y, v.X2-4, y+max(1, r.controlHeight)-1)
 		}
 	}
 	v.bar.PgStep = max(1, v.Y2-v.Y1+1)
@@ -74,7 +133,24 @@ func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
 	scr.PushClipRect(v.X1, v.Y1, v.X2, v.Y2)
 	defer scr.PopClipRect()
 	scr.FillRect(v.X1, v.Y1, v.X2, v.Y2, ' ', vtui.Palette[vtui.ColDialogText])
+	painter := vtui.NewPainter(scr)
+	for _, box := range v.boxes {
+		matched := false
+		for _, row := range box.rows {
+			matched = matched || row.match
+		}
+		border, title := vtui.Palette[vtui.ColDialogBox], vtui.Palette[vtui.ColDialogBoxTitle]
+		if !matched {
+			border, title = vtui.DimColor(border), vtui.DimColor(title)
+		}
+		top, bottom := v.Y1+box.top-v.scroll, v.Y1+box.bottom-v.scroll
+		painter.DrawBox(v.X1, top, v.X2-2, bottom, border, vtui.SingleBox)
+		painter.DrawTitle(v.X1, top, v.X2-2, vtui.TruncateString(box.title, max(1, v.X2-v.X1-5), "…"), title)
+	}
 	for _, r := range v.rows {
+		if r.heading {
+			continue
+		}
 		y := v.Y1 + r.y - v.scroll
 		if y+r.height <= v.Y1 || y > v.Y2 {
 			continue
@@ -87,12 +163,12 @@ func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
 			attr = vtui.DimColor(attr)
 		}
 		for j, line := range r.label {
-			scr.Write(v.X1, y+j, vtui.StringToCharInfo(line, attr))
+			scr.Write(v.X1+2, y+j, vtui.StringToCharInfo(line, attr))
 		}
 		if r.control != nil {
 			r.control.Show(scr)
 			if !r.match {
-				settingsDimRect(scr, v.X1, max(v.Y1, y+len(r.label)), v.X2-2, min(v.Y2, y+len(r.label)+max(1, r.controlHeight)-1))
+				settingsDimRect(scr, v.X1+2, max(v.Y1, y+len(r.label)), v.X2-4, min(v.Y2, y+len(r.label)+max(1, r.controlHeight)-1))
 			}
 		}
 	}
@@ -275,6 +351,9 @@ func (r settingsCategoryRow) GetCellText(int) string {
 	return label
 }
 func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
+	if r.center.category == r.category.ID && !r.center.sidebar.IsFocused() {
+		attr = vtui.Palette[vtui.ColDialogEditSelected]
+	}
 	if r.center.categoryMatches(r.category.ID) == 0 && r.center.query != "" {
 		return vtui.DimColor(attr)
 	}
@@ -298,6 +377,10 @@ type settingsCenter struct {
 	closed                            bool
 	running                           *vtui.TaskContext
 	closePending                      bool
+	screenW, screenH                  int
+	positioned                        bool
+	resizing                          bool
+	layoutBounds                      [4]int
 }
 
 func settingsDialogTable(t *vtui.Table) {
@@ -319,6 +402,7 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 		c.offsets[k] = v
 	}
 	c.ShowClose = true
+	c.ShowZoom = true
 	c.SetId("settings-center")
 	c.SetHelp("SettingsCenter")
 	seen := map[string]bool{}
@@ -355,6 +439,7 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	}
 	c.sidebar.SetRows(rows)
 	c.page = newSettingsViewport()
+	c.page.groupLabel = c.groupLabel
 	c.page.SetId("settings-page")
 	c.page.onFocus = c.describe
 	c.help = newSettingsHelp()
@@ -397,43 +482,82 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	if len(c.categories) > 0 {
 		c.selectCategory(c.categories[0].ID)
 	}
-	c.ResizeConsole(80, 25)
+	c.layoutWindow()
+	c.MinW, c.MinH = 72, 22
 	c.SetFocusedItem(c.search)
 	return c
 }
 
 func (c *settingsCenter) ResizeConsole(w, h int) {
-	w = max(30, w)
-	h = max(12, h)
-	c.Window.SetPosition(0, 0, w-1, h-1)
-	c.search.SetPosition(10, 2, w-3, 2)
+	c.screenW, c.screenH = max(1, w), max(1, h)
+	if !c.positioned {
+		dw, dh := min(w, max(72, w/2)), min(h, max(22, h*3/4))
+		c.SetPosition((w-dw)/2, (h-dh)/2, (w+dw)/2-1, (h+dh)/2-1)
+		c.positioned = true
+	} else if c.SavedBounds != nil {
+		c.SetPosition(0, 0, w-1, h-1)
+	} else {
+		c.fitBounds()
+	}
+}
+
+func (c *settingsCenter) SetPosition(x1, y1, x2, y2 int) {
+	c.Window.SetPosition(x1, y1, x2, y2)
+	if c.search != nil {
+		c.layoutWindow()
+	}
+}
+
+func (c *settingsCenter) fitBounds() {
+	w, h := min(c.screenW, c.X2-c.X1+1), min(c.screenH, c.Y2-c.Y1+1)
+	x, y := max(0, min(c.X1, c.screenW-w)), max(0, min(c.Y1, c.screenH-h))
+	c.SetPosition(x, y, x+w-1, y+h-1)
+}
+
+func (c *settingsCenter) layoutWindow() {
+	c.layoutBounds = [4]int{c.X1, c.Y1, c.X2, c.Y2}
+	w, h := c.X2-c.X1+1, c.Y2-c.Y1+1
+	x0, y0 := c.X1, c.Y1
+	c.search.SetPosition(x0+10, y0+2, c.X2-2, y0+2)
 	side := min(26, max(15, w/5))
-	c.sidebar.SetPosition(2, 4, side, h-5)
-	px := side + 2
-	bottom := h - 5
+	c.sidebar.SetPosition(x0+2, y0+4, x0+side, y0+h-5)
+	px := x0 + side + 2
+	bottom := y0 + h - 5
 	if w >= 110 {
 		helpWidth := max(28, w/4)
-		c.page.SetPosition(px, 4, w-helpWidth-4, bottom)
-		c.help.SetPosition(w-helpWidth-2, 4, w-3, bottom)
+		c.page.SetPosition(px, y0+4, x0+w-helpWidth-4, bottom)
+		c.help.SetPosition(x0+w-helpWidth-2, y0+4, x0+w-3, bottom)
 	} else {
 		helpHeight := min(6, max(3, h/5))
-		c.page.SetPosition(px, 4, w-3, bottom-helpHeight-1)
-		c.help.SetPosition(px, bottom-helpHeight+1, w-3, bottom)
+		c.page.SetPosition(px, y0+4, x0+w-3, bottom-helpHeight-1)
+		c.help.SetPosition(px, bottom-helpHeight+1, x0+w-3, bottom)
 	}
-	x := 2
+	x := x0 + 2
 	for _, b := range []*vtui.Button{c.previous, c.next, c.apply, c.ok, c.cancel} {
 		bw := vtui.StringWidth(b.GetCaption()) + 4
-		b.SetPosition(x, h-2, x+bw-1, h-2)
+		b.SetPosition(x, y0+h-2, x+bw-1, y0+h-2)
 		x += bw + 1
 	}
 	c.layoutPage()
 }
 func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	c.refreshAvailability()
-	c.Window.Show(scr)
-	scr.Write(2, 2, vtui.StringToCharInfo(settingsText("Search", "Search:"), vtui.Palette[vtui.ColDialogText]))
+	c.Window.BaseWindow.Show(scr)
+	attr := vtui.Palette[vtui.ColDialogBox]
+	for y := c.page.Y1; y <= c.help.Y2; y++ {
+		scr.Write(c.sidebar.X2+1, y, vtui.StringToCharInfo("│", attr))
+		if c.help.X1 > c.page.X2 {
+			scr.Write(c.help.X1-1, y, vtui.StringToCharInfo("│", attr))
+		}
+	}
+	if c.help.X1 == c.page.X1 {
+		for x := c.page.X1; x <= c.help.X2; x++ {
+			scr.Write(x, c.help.Y1-1, vtui.StringToCharInfo("─", attr))
+		}
+	}
+	scr.Write(c.X1+2, c.Y1+2, vtui.StringToCharInfo(settingsText("Search", "Search:"), vtui.Palette[vtui.ColDialogText]))
 	if c.status != "" {
-		scr.Write(2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
+		scr.Write(c.X1+2, c.Y2-2, vtui.StringToCharInfo(vtui.TruncateString(c.status, c.X2-c.X1-3, "…"), vtui.Palette[vtui.ColDialogHighlightText]))
 	}
 }
 func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
@@ -448,7 +572,9 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		c.SetFocusedItem(c.search)
 		return true
 	}
-	return c.Window.ProcessKey(e)
+	handled := c.Window.BaseWindow.ProcessKey(e)
+	c.syncWindowBounds()
+	return handled
 }
 func (c *settingsCenter) categoryLabel(id string) string {
 	for _, cat := range c.categories {
@@ -610,7 +736,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		r.controlHeight = 4
 		control = e
 	case f4settings.Boolean:
-		b := vtui.NewCheckbox(0, 0, settingsText("Enabled", "Enabled"), false)
+		b := &settingsCheckbox{Checkbox: vtui.NewCheckbox(0, 0, f.Label.Resolve(AppConfig.Language, Msg), false)}
 		if value == "true" {
 			b.State = 1
 		}
@@ -776,7 +902,34 @@ func (c *settingsCenter) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 		return true
 	}
-	return c.Window.ProcessMouse(e)
+	if c.resizing {
+		if e.ButtonState == 0 {
+			c.resizing = false
+		} else {
+			c.ChangeSize(int(e.MouseX)-c.X1+1, int(e.MouseY)-c.Y1+1)
+			c.syncWindowBounds()
+		}
+		return true
+	}
+	if int(e.MouseX) == c.X2 && int(e.MouseY) == c.Y2 && e.KeyDown && e.ButtonState == vtinput.FromLeft1stButtonPressed {
+		c.resizing = true
+		c.SavedBounds = nil
+		return true
+	}
+	handled := c.Window.BaseWindow.ProcessMouse(e)
+	c.syncWindowBounds()
+	return handled
+}
+
+func (c *settingsCenter) syncWindowBounds() {
+	if c.layoutBounds == [4]int{c.X1, c.Y1, c.X2, c.Y2} {
+		return
+	}
+	if c.screenW > 0 {
+		c.fitBounds()
+	} else {
+		c.layoutWindow()
+	}
 }
 
 func (c *settingsCenter) nextMatch(direction int) {

@@ -63,7 +63,7 @@ func (c *settingsCenter) rebuildCategory() {
 	}
 	c.category = ""
 	c.selectCategory(id)
-	c.ResizeConsole(c.X2-c.X1+1, c.Y2-c.Y1+1)
+	c.layoutWindow()
 	for _, row := range c.page.rows {
 		if row.control != nil && row.control.GetId() == focused {
 			c.page.SetFocusedItem(row.control)

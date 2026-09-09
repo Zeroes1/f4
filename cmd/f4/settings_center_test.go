@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/sdk/f4settings"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -118,6 +119,7 @@ func TestSettingsCenterRenderThemeAndSearch(t *testing.T) {
 			t.Fatalf("focused theme %d got %x", iteration, got)
 		}
 		c.ResizeConsole(130, 35)
+		c.SetPosition(0, 0, 129, 34)
 		scr.AllocBuf(130, 35)
 		c.Show(scr)
 		if c.help.X1 <= c.page.X2 {
@@ -125,5 +127,78 @@ func TestSettingsCenterRenderThemeAndSearch(t *testing.T) {
 		}
 		c.ResizeConsole(80, 25)
 		scr.AllocBuf(80, 25)
+	}
+}
+
+func TestSettingsCenterCompactCheckboxesAndResizableLayout(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.ResizeConsole(180, 60)
+	if c.X1 != 45 || c.X2 != 134 || c.Y2-c.Y1+1 != 45 || !c.ShowZoom {
+		t.Fatalf("unexpected initial bounds: %d,%d–%d,%d", c.X1, c.Y1, c.X2, c.Y2)
+	}
+	c.selectCategory("panels")
+	for _, row := range c.page.rows {
+		if row.field.Kind != f4settings.Boolean {
+			continue
+		}
+		b, ok := row.control.(*settingsCheckbox)
+		if !ok || len(row.label) != 0 || row.height != len(b.lines) || strings.Join(b.lines, " ") != row.field.Label.Resolve(AppConfig.Language, Msg) {
+			t.Fatalf("checkbox %s has a redundant label or spacing", row.field.ID)
+		}
+		before := d.Values[row.field.ID]
+		b.Toggle()
+		if d.Values[row.field.ID] == before {
+			t.Fatal("checkbox did not edit draft")
+		}
+		break
+	}
+	c.ChangeSize(130, 45)
+	c.syncWindowBounds()
+	if c.help.X1 <= c.page.X2 || c.page.X1 <= c.X1 {
+		t.Fatal("resize did not lay out columns")
+	}
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer copy(vtui.Palette, palette)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(180, 60)
+	for iteration := 0; iteration < 2; iteration++ {
+		for j, id := range []int{vtui.ColDialogBox, vtui.ColDialogBoxTitle, vtui.ColDialogEditSelected, vtui.ColDialogSelectedButton} {
+			vtui.Palette[id] = uint64(0x31 + j + iteration*16)
+		}
+		c.SetFocusedItem(c.page)
+		c.query = ""
+		c.updateMatches()
+		c.Show(scr)
+		for _, x := range []int{c.sidebar.X2 + 1, c.help.X1 - 1, c.page.X1} {
+			if scr.GetCell(x, c.page.Y1).Attributes != vtui.Palette[vtui.ColDialogBox] {
+				t.Fatal("separator/group border did not follow palette")
+			}
+		}
+		row := settingsCategoryRow{center: c, category: f4settings.Category{ID: "panels"}}
+		if row.GetCellAttr(0, 0) != vtui.Palette[vtui.ColDialogEditSelected] {
+			t.Fatal("inactive category selection missing")
+		}
+		c.SetFocusedItem(c.sidebar)
+		if row.GetCellAttr(0, vtui.Palette[vtui.ColDialogSelectedButton]) != vtui.Palette[vtui.ColDialogSelectedButton] {
+			t.Fatal("active category selection lost")
+		}
+		c.query = "no-such-setting-xyz"
+		c.updateMatches()
+		c.Show(scr)
+		if scr.GetCell(c.page.X1, c.page.Y1).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogBox]) {
+			t.Fatal("unmatched group border not dimmed")
+		}
+	}
+	c.ResizeConsole(80, 25)
+	if c.X1 < 0 || c.Y1 < 0 || c.X2 >= 80 || c.Y2 >= 25 {
+		t.Fatal("resize left window outside screen")
+	}
+	c.ProcessMouse(&vtinput.InputEvent{MouseX: int16(c.X2), MouseY: int16(c.Y2), KeyDown: true, ButtonState: vtinput.FromLeft1stButtonPressed})
+	c.ProcessMouse(&vtinput.InputEvent{MouseX: int16(c.X1 + 71), MouseY: int16(c.Y1 + 21), ButtonState: vtinput.FromLeft1stButtonPressed})
+	c.ProcessMouse(&vtinput.InputEvent{})
+	if c.resizing || c.X2-c.X1+1 != 72 || c.Y2-c.Y1+1 != 22 {
+		t.Fatal("mouse resizing into content was intercepted")
 	}
 }
