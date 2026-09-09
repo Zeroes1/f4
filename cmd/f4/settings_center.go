@@ -12,19 +12,21 @@ import (
 )
 
 type settingsRow struct {
-	field             f4settings.Field
-	session           *settingsSession
-	control           vtui.UIElement
-	label             []string
-	y, height         int
-	heading           bool
-	match             bool
-	controlHeight     int
-	read              func() string
-	write             func(string)
-	values            func() map[string]string
-	matchFunc         func() bool
-	unavailableReason string
+	field              f4settings.Field
+	session            *settingsSession
+	control            vtui.UIElement
+	label              []string
+	y, height          int
+	heading            bool
+	match              bool
+	controlHeight      int
+	controlX, controlY int
+	gap                int
+	read               func() string
+	write              func(string)
+	values             func() map[string]string
+	matchFunc          func() bool
+	unavailableReason  string
 }
 
 // Keep the familiar checkbox label on the control, wrapping only when needed.
@@ -74,9 +76,10 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 		box := &v.boxes[len(v.boxes)-1]
 		if len(box.rows) > 0 {
 			last := box.rows[len(box.rows)-1]
-			if _, compact := last.control.(*settingsCheckbox); !compact && !last.heading {
-				last.height--
-				v.total--
+			if !last.heading {
+				last.height -= last.gap
+				v.total -= last.gap
+				last.gap = 0
 			}
 		}
 		box.bottom = v.total
@@ -106,11 +109,20 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			continue
 		}
 		r.label = settingsWrap(r.field.Label.Resolve(AppConfig.Language, Msg), max(1, x2-x1-5))
+		r.controlX, r.gap = 0, 1
 		// Action controls already name themselves; keep their metadata for
 		// search and explanations without repeating it above the control.
 		switch r.control.(type) {
 		case *vtui.Button, *settingsButtonRow:
 			r.label = nil
+			r.gap = 0
+		case *vtui.ComboBox:
+			width := max(1, x2-x1-5)
+			label := r.field.Label.Resolve(AppConfig.Language, Msg)
+			labelWidth := min(vtui.StringWidth(label), max(1, width/2))
+			r.label = settingsWrap(label, labelWidth)
+			r.controlX = labelWidth + 1
+			r.gap = 0
 		case *vtui.Table:
 			if r.field.Label.Resolve(AppConfig.Language, Msg) == box.title {
 				r.label = nil
@@ -121,15 +133,18 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			b.SetText(b.lines[0])
 			r.label = nil
 			r.controlHeight = len(b.lines)
+			r.gap = 0
 		}
 		r.y = v.total
-		r.height = len(r.label) + 1
+		r.controlY = len(r.label)
+		if r.controlX > 0 {
+			r.controlY = 0
+		}
+		r.height = len(r.label)
 		if r.control != nil {
-			r.height += max(1, r.controlHeight)
+			r.height = max(r.height, r.controlY+max(1, r.controlHeight))
 		}
-		if _, ok := r.control.(*settingsCheckbox); ok {
-			r.height = r.controlHeight
-		}
+		r.height += r.gap
 		v.total += r.height
 	}
 	if len(v.boxes) > 0 {
@@ -142,8 +157,8 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 func (v *settingsViewport) positionRows() {
 	for _, r := range v.rows {
 		if r.control != nil {
-			y := v.Y1 + r.y + len(r.label) - v.scroll
-			r.control.SetPosition(v.X1+2, y, v.X2-4, y+max(1, r.controlHeight)-1)
+			y := v.Y1 + r.y + r.controlY - v.scroll
+			r.control.SetPosition(v.X1+2+r.controlX, y, v.X2-4, y+max(1, r.controlHeight)-1)
 		}
 	}
 	v.bar.PgStep = max(1, v.Y2-v.Y1+1)
@@ -192,7 +207,8 @@ func (v *settingsViewport) Show(scr *vtui.ScreenBuf) {
 		if r.control != nil {
 			r.control.Show(scr)
 			if !r.match {
-				settingsDimRect(scr, v.X1+2, max(v.Y1, y+len(r.label)), v.X2-4, min(v.Y2, y+len(r.label)+max(1, r.controlHeight)-1))
+				x1, y1, x2, y2 := r.control.GetPosition()
+				settingsDimRect(scr, x1, max(v.Y1, y1), x2, min(v.Y2, y2))
 			}
 		}
 	}

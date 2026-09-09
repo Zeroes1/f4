@@ -331,7 +331,7 @@ func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
 			c.selectCategory(cat.ID)
 			for _, box := range c.page.boxes {
 				last := box.rows[len(box.rows)-1]
-				if last.control != nil && box.bottom != last.y+len(last.label)+max(1, last.controlHeight) {
+				if last.control != nil && box.bottom != last.y+max(len(last.label), last.controlY+max(1, last.controlHeight)) {
 					t.Fatalf("%s / %s has blank space before its bottom border", cat.ID, box.title)
 				}
 			}
@@ -427,6 +427,56 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 	for _, cat := range c.categories {
 		if got := c.categoryLabel(cat.ID); got != cat.Label.Resolve(AppConfig.Language, Msg) {
 			t.Fatalf("duplicated display title: %q", got)
+		}
+	}
+}
+
+func TestSettingsComboInlineLayout(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.selectCategory("startup")
+	scr := vtui.NewSilentScreenBuf()
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer copy(vtui.Palette, palette)
+	for iteration, width := range []int{130, 80, 130} {
+		scr.AllocBuf(width, 35)
+		c.ResizeConsole(width, 35)
+		c.SetPosition(0, 0, width-1, 34)
+		vtui.Palette[vtui.ColDialogText] = uint64(0x21 + iteration*16)
+		vtui.Palette[vtui.ColDialogEditUnchanged] = uint64(0x22 + iteration*16)
+		vtui.Palette[vtui.ColDialogBox] = uint64(0x23 + iteration*16)
+		var previous *settingsRow
+		for _, row := range c.page.rows {
+			if _, ok := row.control.(*vtui.ComboBox); !ok {
+				continue
+			}
+			x, y, x2, _ := row.control.GetPosition()
+			if y != c.page.Y1+row.y-c.page.scroll || x <= c.page.X1+2 || x > x2 || row.gap != 0 {
+				t.Fatal("combo is not inline and compact")
+			}
+			if previous != nil && previous.field.Group == row.field.Group && row.y != previous.y+previous.height {
+				t.Fatal("blank line between combo rows")
+			}
+			previous = row
+		}
+		if previous == nil {
+			t.Fatal("missing combos")
+		}
+		c.query = ""
+		c.updateMatches()
+		c.Show(scr)
+		first := c.page.rows[1]
+		x, y, _, _ := first.control.GetPosition()
+		controlAttr := scr.GetCell(x, y).Attributes
+		if scr.GetCell(c.page.X1+2, y).Attributes != vtui.Palette[vtui.ColDialogText] {
+			t.Fatal("inline label palette mismatch")
+		}
+		c.query = "no-such-setting-xyz"
+		c.updateMatches()
+		c.Show(scr)
+		if scr.GetCell(c.page.X1+2, y).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogText]) || scr.GetCell(x, y).Attributes != vtui.DimColor(controlAttr) {
+			t.Fatal("inline label/control did not dim with live palette")
 		}
 	}
 }
