@@ -237,13 +237,13 @@ Legacy `CmLanguage`, `CmHelpLanguage`, `CmHotkeyConfig`, `CmPlugins` and `CmPlug
 
 ## Validation
 
-### Local toolkit mouse fixes
+### Toolkit mouse fixes
 
-This branch temporarily replaces `github.com/unxed/vtui` with the sibling
-`../vtui-settings-center` checkout on `zoin_branch/settings-mouse`, based on
-upstream `v0.1.328`. Build from this worktree with `GOWORK=off` and the normal
-Go cache. Keep both worktrees together until the shared fixes are published
-and the replacement can be exchanged for a released module version.
+The vtui fixes are submitted in https://github.com/unxed/vtui/pull/112.
+Until an upstream release includes them, go.mod pins the published Zoinen/vtui
+commit `8499a597a607` using a versioned replacement. No sibling checkout is
+required. Build with `GOWORK=off` and the system Go cache. Replace this temporary
+fork pin with an upstream release after the dependency PR is merged and tagged.
 
 The toolkit distinguishes presses, held-button movement and both console and
 ANSI/SGR releases. Scrollbars and their containing groups retain capture outside

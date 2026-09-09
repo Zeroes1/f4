@@ -189,7 +189,7 @@ replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.8
 
 // replace github.com/unxed/colorer4go => ../../../dev/colorer4go
-// Shared mouse-gesture fixes are developed in the sibling toolkit worktree.
-replace github.com/unxed/vtui => ../vtui-settings-center
+// Pending https://github.com/unxed/vtui/pull/112; pin the published fork commit.
+replace github.com/unxed/vtui => github.com/Zoinen/vtui v0.1.238-0.20260909124547-8499a597a607
 
 replace github.com/neurlang/wayland => github.com/unxed/wayland v0.0.0-20260906012106-4096eafdd7f4
