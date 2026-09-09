@@ -345,7 +345,9 @@ func TestUserMenu_InteractiveEdit(t *testing.T) {
 	var edit *vtui.Edit
 	for _, r := range center.page.rows {
 		if r.field.ID == "menu.local.Label" {
-			edit, _ = r.control.(*vtui.Edit)
+			if input, ok := r.control.(*settingsEdit); ok {
+				edit = input.Edit
+			}
 		}
 	}
 	if edit == nil || edit.GetText() != "old label" {

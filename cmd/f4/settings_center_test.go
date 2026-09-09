@@ -252,7 +252,7 @@ func TestSettingsCenterCompactCheckboxesAndResizableLayout(t *testing.T) {
 		t.Fatal("resize left window outside screen")
 	}
 	c.ProcessMouse(&vtinput.InputEvent{MouseX: int16(c.X2), MouseY: int16(c.Y2), KeyDown: true, ButtonState: vtinput.FromLeft1stButtonPressed})
-	c.ProcessMouse(&vtinput.InputEvent{MouseX: int16(c.X1 + 71), MouseY: int16(c.Y1 + 21), ButtonState: vtinput.FromLeft1stButtonPressed})
+	c.ProcessMouse(&vtinput.InputEvent{MouseX: int16(c.X1 + 71), MouseY: int16(c.Y1 + 21), ButtonState: vtinput.FromLeft1stButtonPressed, MouseEventFlags: vtinput.MouseMoved})
 	c.ProcessMouse(&vtinput.InputEvent{})
 	if c.resizing || c.X2-c.X1+1 != 72 || c.Y2-c.Y1+1 != 22 {
 		t.Fatal("mouse resizing into content was intercepted")

@@ -48,7 +48,7 @@ func TestSettingsReadOnlyInputSelectionCopyAndMutation(t *testing.T) {
 		t.Fatal("read-only edit changed its value or published a draft edit")
 	}
 	e.ProcessMouse(&vtinput.InputEvent{KeyDown: true, MouseX: 0, MouseY: 0, ButtonState: vtinput.FromLeft1stButtonPressed})
-	e.ProcessMouse(&vtinput.InputEvent{MouseX: 7, MouseY: 0, ButtonState: vtinput.FromLeft1stButtonPressed})
+	e.ProcessMouse(&vtinput.InputEvent{MouseX: 7, MouseY: 0, ButtonState: vtinput.FromLeft1stButtonPressed, MouseEventFlags: vtinput.MouseMoved})
 	e.ProcessMouse(&vtinput.InputEvent{})
 	key(vtinput.VK_C, vtinput.LeftCtrlPressed)
 	if vtui.GetClipboard() != "example" {

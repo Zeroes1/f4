@@ -274,6 +274,13 @@ func (v *settingsViewport) ProcessKey(e *vtinput.InputEvent) bool {
 	return handled
 }
 func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
+	if v.bar.IsMouseCaptured() {
+		v.bar.ProcessMouse(e)
+		return true
+	}
+	if v.Group.IsMouseCaptured() {
+		return v.Group.ProcessMouse(e)
+	}
 	if !v.HitTest(int(e.MouseX), int(e.MouseY)) {
 		return false
 	}
@@ -351,6 +358,10 @@ func (h *settingsHelp) ProcessKey(e *vtinput.InputEvent) bool {
 	return true
 }
 func (h *settingsHelp) ProcessMouse(e *vtinput.InputEvent) bool {
+	if h.bar.IsMouseCaptured() {
+		h.bar.ProcessMouse(e)
+		return true
+	}
 	if !h.HitTest(int(e.MouseX), int(e.MouseY)) {
 		return false
 	}
@@ -1109,7 +1120,7 @@ func (c *settingsCenter) ProcessMouse(e *vtinput.InputEvent) bool {
 		return true
 	}
 	if c.resizing {
-		if e.ButtonState == 0 {
+		if vtui.IsMouseRelease(e) {
 			c.resizing = false
 		} else {
 			c.ChangeSize(int(e.MouseX)-c.X1+1, int(e.MouseY)-c.Y1+1)
@@ -1117,7 +1128,7 @@ func (c *settingsCenter) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 		return true
 	}
-	if int(e.MouseX) == c.X2 && int(e.MouseY) == c.Y2 && e.KeyDown && e.ButtonState == vtinput.FromLeft1stButtonPressed {
+	if int(e.MouseX) == c.X2 && int(e.MouseY) == c.Y2 && vtui.IsMousePress(e) && e.ButtonState == vtinput.FromLeft1stButtonPressed {
 		c.resizing = true
 		c.SavedBounds = nil
 		return true

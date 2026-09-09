@@ -93,6 +93,7 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"cmd/f4/settings_center.go:(*settingsCenter).ProcessKey":   {class: paletteAuditModalLocal, rationale: "Settings.Open exposes this modal workflow; Ctrl+F and Escape focus search and cancel the draft"},
 	"cmd/f4/settings_center.go:(*settingsViewport).ProcessKey": {class: paletteAuditModalLocal, rationale: "the settings viewport forwards native input and keeps focused controls within its clip"},
 	"cmd/f4/settings_center.go:(*settingsHelp).ProcessKey":     {class: paletteAuditModalLocal, rationale: "the explanation pane consumes only local scrolling keys"},
+	"cmd/f4/settings_edit.go:(*settingsEdit).ProcessKey":       {class: paletteAuditModalLocal, rationale: "read-only settings fields allow local cursor selection and copying while blocking modifications"},
 	"cmd/f4/hotkeys_ui.go:(*HotkeyAssignFrame).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the hotkey-capture dialog must consume the next key locally and is not a global command surface",
 	},
@@ -346,6 +347,10 @@ func commandPaletteAuditedActionMenuGroups(area string) []commandPaletteActionMe
 	}
 	for i := range groups {
 		groups[i].actions = append(groups[i].actions, groups[i].pinned...)
+		// The canonical Settings entry leads Options in every application context.
+		sort.SliceStable(groups[i].actions, func(a, b int) bool {
+			return groups[i].actions[a].Name == "Settings.Open" && groups[i].actions[b].Name != "Settings.Open"
+		})
 	}
 	return groups
 }

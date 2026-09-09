@@ -237,6 +237,23 @@ Legacy `CmLanguage`, `CmHelpLanguage`, `CmHotkeyConfig`, `CmPlugins` and `CmPlug
 
 ## Validation
 
+### Local toolkit mouse fixes
+
+This branch temporarily replaces `github.com/unxed/vtui` with the sibling
+`../vtui-settings-center` checkout on `zoin_branch/settings-mouse`, based on
+upstream `v0.1.328`. Build from this worktree with `GOWORK=off` and the normal
+Go cache. Keep both worktrees together until the shared fixes are published
+and the replacement can be exchanged for a released module version.
+
+The toolkit distinguishes presses, held-button movement and both console and
+ANSI/SGR releases. Scrollbars and their containing groups retain capture outside
+their bounds. Opening a dropdown transfers the held gesture from its owner;
+hover highlights and release confirms. Menu-bar gestures stay active outside
+menu items until release, and checkboxes toggle once per physical press.
+The Settings Center routes captured scrollbar and child events before clipping
+hit tests, including its explanation pane. Regression tests cover both release
+forms, leaving the window, cross-pane dragging and the next fresh click.
+
 ### Dropdown choice help
 
 `f4settings.Choice.Description` supplies localized help for an individual choice.
