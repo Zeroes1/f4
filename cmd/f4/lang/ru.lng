@@ -3063,3 +3063,4 @@ SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a2
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Выполнять аутентификацию заданным токеном Bearer вместо обмена именем и паролем. Доступ зависит от прав и срока действия токена.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Не отправлять учётные данные аутентификации. Подходит только для ресурсов WebDAV, допускающих анонимный доступ.
 SettingsCenter.Matches=Совпадений: %d
+SettingsCenter.ClearSearch=Очистить поиск

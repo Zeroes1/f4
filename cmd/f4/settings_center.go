@@ -486,6 +486,7 @@ type settingsCenter struct {
 	help                    *settingsHelp
 	apply, ok, cancel       *vtui.Button
 	previous, next          *settingsSearchButton
+	clearSearch             *settingsClearButton
 	category, query, status string
 	choiceHelpRow           *settingsRow
 	offsets                 map[string]int
@@ -560,12 +561,20 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	c.next = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Next", "Next match"))}
 	c.previous.ScreenObject.SetText("[←]")
 	c.next.ScreenObject.SetText("[→]")
+	c.clearSearch = &settingsClearButton{vtui.NewButton(0, 0, settingsText("ClearSearch", "Clear search"))}
+	c.clearSearch.SetId("settings-search-clear")
+	c.clearSearch.OnClick = func() {
+		c.search.SetText("")
+		c.search.OnTextChange("")
+		c.SetFocusedItem(c.search)
+	}
+
 	c.apply.OnClick = func() { c.commit(false) }
 	c.ok.OnClick = func() { c.commit(true) }
 	c.cancel.OnClick = func() { c.Close() }
 	c.previous.OnClick = func() { c.nextMatch(-1) }
 	c.next.OnClick = func() { c.nextMatch(1) }
-	for _, el := range []vtui.UIElement{c.search, c.sidebar, c.page, c.help, c.previous, c.next, c.apply, c.ok, c.cancel} {
+	for _, el := range []vtui.UIElement{c.search, c.sidebar, c.page, c.help, c.clearSearch, c.previous, c.next, c.apply, c.ok, c.cancel} {
 		c.AddItem(el)
 	}
 	c.sidebar.OnSelect = func(i int) {
@@ -725,10 +734,14 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0 {
-		panes := []vtui.UIElement{c.search, c.sidebar, c.page, c.apply, c.ok, c.cancel}
-		if c.previous.IsVisible() {
-			panes = []vtui.UIElement{c.search, c.previous, c.next, c.sidebar, c.page, c.apply, c.ok, c.cancel}
+		panes := []vtui.UIElement{c.search}
+		if !c.clearSearch.IsDisabled() {
+			panes = append(panes, c.clearSearch)
 		}
+		if !c.previous.IsDisabled() {
+			panes = append(panes, c.previous, c.next)
+		}
+		panes = append(panes, c.sidebar, c.page, c.apply, c.ok, c.cancel)
 		focused := c.GetFocusedItem()
 		if e.VirtualKeyCode == vtinput.VK_TAB {
 			direction := 1
@@ -781,8 +794,8 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				if e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_LEFT {
 					direction = -1
 				}
-				if focused == c.previous || focused == c.next {
-					c.movePaneFocus([]vtui.UIElement{c.previous, c.next}, focused, direction)
+				if focused == c.clearSearch || focused == c.previous || focused == c.next {
+					c.movePaneFocus([]vtui.UIElement{c.clearSearch, c.previous, c.next}, focused, direction)
 				} else {
 					c.movePaneFocus([]vtui.UIElement{c.apply, c.ok, c.cancel}, focused, direction)
 				}
@@ -1485,6 +1498,15 @@ func (c *settingsCenter) layoutSearch() {
 	} else if c.GetFocusedItem() == c.previous || c.GetFocusedItem() == c.next {
 		c.SetFocusedItem(c.search)
 	}
+	filled := c.query != ""
+	c.clearSearch.SetVisible(filled)
+	c.clearSearch.SetDisabled(!filled)
+	if filled {
+		c.clearSearch.SetPosition(right-2, c.Y1+2, right, c.Y1+2)
+		right -= 3
+	} else if c.GetFocusedItem() == c.clearSearch {
+		c.SetFocusedItem(c.search)
+	}
 	c.search.SetPosition(c.sidebar.X1, c.Y1+2, max(c.sidebar.X1, right), c.Y1+2)
 }
 
@@ -1527,4 +1549,16 @@ func (c *settingsCenter) contentBottom() int {
 		bottom--
 	} // Reserve a status row only when needed.
 	return bottom
+}
+
+// The clear button occupies the trailing three cells of the search surface.
+type settingsClearButton struct{ *vtui.Button }
+
+func (b *settingsClearButton) Show(scr *vtui.ScreenBuf) {
+	if b.IsDisabled() {
+		return
+	}
+	b.ScreenObject.Show(scr)
+	normal, _ := b.GetStateAttrs(vtui.ColDialogEdit, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton)
+	scr.Write(b.X1, b.Y1, vtui.StringToCharInfo(" × ", normal))
 }

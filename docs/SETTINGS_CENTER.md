@@ -365,3 +365,7 @@ The category column reserves five text columns for ` (99)` before searching
 The search separator is immediately followed by the first category; its active
 count is labeled Matches / Совпадений. All columns start on the search-caption
 row and extend to the action row, reserving a status line only for real messages.
+
+A nonempty search input includes an inline × button on the input surface. It
+clears all text (including whitespace), hides match controls, restores the input
+width and returns keyboard focus to search without changing setting drafts.

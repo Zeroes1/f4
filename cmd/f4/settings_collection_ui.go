@@ -57,6 +57,7 @@ func (c *settingsCenter) rebuildCategory() {
 	c.next.SetText(settingsText("Next", "Next match"))
 	c.previous.ScreenObject.SetText("[←]")
 	c.next.ScreenObject.SetText("[→]")
+	c.clearSearch.SetText(settingsText("ClearSearch", "Clear search"))
 	id := c.category
 	c.offsets[id] = c.page.scroll
 	focused := ""

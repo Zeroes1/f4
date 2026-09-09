@@ -120,7 +120,7 @@ func TestSettingsSidebarSearchAndContentSurface(t *testing.T) {
 			}
 			c.search.OnTextChange("Enabled")
 			c.SetFocusedItem(c.search)
-			for _, want := range []vtui.UIElement{c.previous, c.next, c.sidebar, c.page, c.apply, c.ok, c.cancel, c.search} {
+			for _, want := range []vtui.UIElement{c.clearSearch, c.previous, c.next, c.sidebar, c.page, c.apply, c.ok, c.cancel, c.search} {
 				c.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_TAB})
 				if c.GetFocusedItem() != want {
 					t.Fatalf("search tab order got %T want %T", c.GetFocusedItem(), want)
@@ -131,6 +131,63 @@ func TestSettingsSidebarSearchAndContentSurface(t *testing.T) {
 			if c.GetFocusedItem() != c.search {
 				t.Fatal("focus remained on hidden arrow")
 			}
+		}
+	}
+}
+
+func TestSettingsSearchClearButton(t *testing.T) {
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer func() { vtui.Palette = palette }()
+	d := f4settings.NewDraft(nil, nil)
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories}, draft: d}})
+	scr := vtui.NewSilentScreenBuf()
+	for iteration, width := range []int{80, 150} {
+		scr.AllocBuf(width, 25)
+		c.SetPosition(0, 0, width-1, 24)
+		vtui.Palette[vtui.ColDialogEdit] = vtui.SetRGBBoth(0, uint32(0xeeeeee+iteration), uint32(0x123456+iteration))
+		vtui.Palette[vtui.ColDialogSelectedButton] = vtui.SetRGBBoth(0, 0xffffff, uint32(0x56789a+iteration))
+		sidebarWidth := c.sidebar.X2 - c.sidebar.X1 + 1
+		for _, query := range []string{"example", " "} {
+			c.search.SetText(query)
+			c.search.OnTextChange(query)
+			for _, focused := range []vtui.UIElement{c.search, c.clearSearch} {
+				c.SetFocusedItem(focused)
+				c.Show(scr)
+				b := c.clearSearch
+				want := vtui.Palette[vtui.ColDialogEdit]
+				if focused == b {
+					want = vtui.Palette[vtui.ColDialogSelectedButton]
+				}
+				if !b.IsVisible() || b.X1 != c.search.X2+1 || b.Y1 != c.search.Y1 {
+					t.Fatal("clear button not inside search surface")
+				}
+				if cell := scr.GetCell(b.X1+1, b.Y1); cell.Char != '×' || cell.Attributes != want {
+					t.Fatal("clear button theme/focus rendering")
+				}
+			}
+			b := c.clearSearch
+			for _, press := range []bool{true, false} {
+				buttons := uint32(0)
+				if press {
+					buttons = vtinput.FromLeft1stButtonPressed
+				}
+				c.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: press, ButtonState: buttons, MouseX: int16(b.X1 + 1), MouseY: int16(b.Y1)})
+			}
+			c.Show(scr)
+			if c.query != "" || c.search.GetText() != "" || c.GetFocusedItem() != c.search || c.clearSearch.IsVisible() || c.previous.IsVisible() || c.next.IsVisible() {
+				t.Fatal("clear did not reset search and restore focus")
+			}
+			if c.sidebar.X2-c.sidebar.X1+1 != sidebarWidth || c.search.X2 != c.sidebar.X2 || len(d.Changed()) != 0 {
+				t.Fatal("clearing changed layout or preferences")
+			}
+		}
+		c.search.SetText("keyboard")
+		c.search.OnTextChange("keyboard")
+		c.SetFocusedItem(c.clearSearch)
+		c.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+		if c.query != "" || c.GetFocusedItem() != c.search {
+			t.Fatal("keyboard clear failed")
 		}
 	}
 }
