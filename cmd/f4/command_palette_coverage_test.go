@@ -60,6 +60,7 @@ var commandPaletteAuditClasses = map[string]bool{
 }
 
 var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
+	"cmd/f4/settings_radios.go:(*settingsRadios).ProcessKey": {class: paletteAuditModalLocal, rationale: "radio choices use local navigation and selection inside Settings Center"},
 	"cmd/f4/ai_chat_panel.go:(*AIChatPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "focused AI panel commands are supplied by the panel-context palette provider; text and link navigation remain local",
 	},

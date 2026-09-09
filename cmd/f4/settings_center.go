@@ -125,6 +125,9 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			r.label = settingsWrap(label, labelWidth)
 			r.controlX = labelWidth + 1
 			r.gap = 0
+		case *settingsRadios:
+			r.controlHeight = r.control.(*settingsRadios).layout(max(1, x2-x1-5))
+			r.gap = 0
 		case *vtui.Table:
 			if r.field.Label.Resolve(AppConfig.Language, Msg) == box.title {
 				r.label = nil
@@ -250,11 +253,18 @@ func (v *settingsViewport) notifyFocus() {
 	focused := v.GetFocusedItem()
 	for _, r := range v.rows {
 		if r.control == focused {
-			if r.y < v.scroll {
-				v.scroll = r.y
+			top, bottom := r.y, r.y+r.height
+			if radios, ok := r.control.(*settingsRadios); ok {
+				if button, ok := radios.GetFocusedItem().(*settingsRadioOption); ok {
+					top = r.y + r.controlY + button.dy
+					bottom = top + len(button.lines)
+				}
 			}
-			if r.y+r.height > v.scroll+v.Y2-v.Y1+1 {
-				v.scroll = r.y + r.height - (v.Y2 - v.Y1 + 1)
+			if top < v.scroll {
+				v.scroll = top
+			}
+			if bottom > v.scroll+v.Y2-v.Y1+1 {
+				v.scroll = bottom - (v.Y2 - v.Y1 + 1)
 			}
 			v.positionRows()
 			if v.onFocus != nil {
@@ -864,6 +874,13 @@ func (c *settingsCenter) updateMatches() {
 }
 func (c *settingsCenter) describe(r *settingsRow) {
 	text := r.field.Label.Resolve(AppConfig.Language, Msg) + "\n\n" + r.field.Description.Resolve(AppConfig.Language, Msg)
+	if radios, ok := r.control.(*settingsRadios); ok {
+		i := radios.helpIndex()
+		if i >= 0 && i < len(r.field.Choices) {
+			choice := r.field.Choices[i]
+			text = r.field.Label.Resolve(AppConfig.Language, Msg) + " — " + choice.Label.Resolve(AppConfig.Language, Msg) + "\n\n" + choice.Description.Resolve(AppConfig.Language, Msg)
+		}
+	}
 	if r.field.Timing != "" {
 		text += "\n\n" + fmt.Sprintf(settingsPhrase("Takes effect: %s"), settingsPhrase(r.field.Timing))
 	}
@@ -970,11 +987,17 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		}
 		if selected < 0 {
 			selected = len(choices)
-			choices = append(choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: value + " " + settingsPhrase("(saved value)"), Literal: true}})
+			choices = append(choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: value + " " + settingsPhrase("(saved value)"), Literal: true}, Description: f.Description})
 			labels = append(labels, choices[selected].Label.English)
 		}
-		b := vtui.NewComboBox(0, 0, 20, labels)
 		r.field.Choices = choices
+		if settingsUseRadios(f) {
+			radios := newSettingsRadios(labels, selected, func(i int) { change(choices[i].Value) })
+			radios.onExplain = func() { c.describe(r) }
+			control = radios
+			break
+		}
+		b := vtui.NewComboBox(0, 0, 20, labels)
 		b.DropdownOnly = !f.AllowCustom
 		b.Menu.SetSelectPos(selected)
 		b.Edit.SetText(labels[selected])

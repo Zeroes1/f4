@@ -318,3 +318,24 @@ On Windows, use the pinned ConPTY runtime from the build workflow and the system
 The implementation was verified locally with all packages passing and the timing-sensitive schema-download test run alongside the serialized layout suite. Windows vet uses CI's `-unsafeptr=false` flag for native syscall wrappers; formatting and language-file ordering are checked separately. Colorer scheme enumeration runs asynchronously, including catalogs on unavailable network shares, and late results are ignored after the Center closes.
 
 Regenerate the core field inventory with `F4_SETTINGS_EXPORT=<docs directory> go test ./cmd/f4 -run '^TestSettingsExportDescriptions$'`. This emits the JSON inventory and a temporary language fragment; merge missing language keys into `cmd/f4/lang/en.lng`, remove the fragment, and run `tools/langfmt`. Bundled-provider metadata and descriptions are kept beside each provider's implementation in `plugins/*/settings_center.go`.
+
+### Choice presentation audit
+
+Small fixed choice sets now use visible radio buttons. The renderer places all
+choices on one row when their translated display widths fit; otherwise it stacks
+and wraps them. The field caption appears once above its choices. Up/Down browse
+choices without changing the draft, Space selects, and Left/Right retain pane
+navigation. Hover and keyboard focus show the existing per-choice explanation.
+
+| Presentation | Audited settings |
+| --- | --- |
+| Radios | Startup mode; terminal renderer; workspace tab visibility and numbering; panel scrollbar; navigation mode; suggestion source; default operation mode; progress path display; comparison normalization; tab insertion; crosshair axes; syntax highlighter; Mac keyboard mode; terminal presentation; macro recording format; global proxy; update channel and frequency; all three history timestamp formats |
+| Radios in embedded editors | VisRen editor format; environment entry kind; NetFox protocol and proxy mode; CloudFox secret storage, credential changes, and S3/WebDAV authentication |
+| Dropdowns | Interface/help/report languages; font; theme; graphical renderer (extensible backend list); editor/viewer encodings; Colorer scheme; shortcut action and area (long lists) |
+
+`Field.ChoicePresentation` is an optional frontend-neutral hint (`radio` or
+`dropdown`). With no hint, fixed lists of up to five choices use radios; longer
+lists and fields accepting custom values use dropdowns. Dynamic catalogs explicitly
+request dropdowns so their appearance does not change with installed resources.
+Unknown saved values remain selected and preserved until the user changes them.
+Existing choice labels and descriptions supply localization for both presentations.

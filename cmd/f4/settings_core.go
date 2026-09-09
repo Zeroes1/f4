@@ -105,6 +105,10 @@ func (p coreSettingsProvider) Catalog() f4settings.Catalog {
 	for i := range fields {
 		f := &fields[i]
 		switch f.ID {
+		case "Language", "HelpLanguage", "GuiFont", "ColorStyle", "GuiBackend", "EditorDefaultCodePage", "ViewerDefaultCodePage", "EditorColorerScheme":
+			f.ChoicePresentation = "dropdown"
+		}
+		switch f.ID {
 		case "GuiFont":
 			f.Kind = f4settings.ChoiceKind
 			f.AllowCustom = true

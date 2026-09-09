@@ -18,6 +18,7 @@ func (plugin *Plugin) settingsProvider() *f4settings.StructProvider[Settings] {
 		field("Language", "Report language", "Language of report display labels; canonical template and macro field names are unchanged.", f4settings.ChoiceKind),
 		field("Template", "Inform template", "Optional MediaInfo-style or supported Go report template. Validated before save; maximum 64 KiB.", f4settings.Multiline),
 	}
+	fields[4].ChoicePresentation = "dropdown"
 	fields[4].Choices = f4settings.Choices("auto:Interface language", "en:English", "ru:Russian")
 	return &f4settings.StructProvider[Settings]{Definition: f4settings.Catalog{ID: "mediainfo", Categories: []f4settings.Category{{ID: category, Label: f4settings.Text{English: "Metadata & reports"}}}, Fields: fields}, Read: func() (Settings, error) {
 		plugin.mu.Lock()

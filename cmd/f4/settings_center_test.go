@@ -490,7 +490,7 @@ func TestSettingsComboInlineLayout(t *testing.T) {
 	d, _ := (coreSettingsProvider{}).Begin(context.Background())
 	defer d.Close()
 	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
-	c.selectCategory("startup")
+	c.selectCategory("appearance")
 	scr := vtui.NewSilentScreenBuf()
 	palette := append([]uint64(nil), vtui.Palette...)
 	defer copy(vtui.Palette, palette)
@@ -521,7 +521,7 @@ func TestSettingsComboInlineLayout(t *testing.T) {
 		c.query = ""
 		c.updateMatches()
 		c.Show(scr)
-		first := c.page.rows[1]
+		first := previous
 		x, y, _, _ := first.control.GetPosition()
 		controlAttr := scr.GetCell(x, y).Attributes
 		if scr.GetCell(c.page.X1+2, y).Attributes != vtui.Palette[vtui.ColDialogText] {

@@ -106,6 +106,9 @@ type Field struct {
 	// It is a presentation hint in characters, not a validation or length limit.
 	InputWidth int
 	Choices    []Choice
+	// ChoicePresentation optionally requests "radio" or "dropdown". Empty lets
+	// the frontend expose small fixed lists as radios and longer lists as dropdowns.
+	ChoicePresentation string
 	// AllowCustom permits a choice field to accept a value outside its list.
 	AllowCustom bool
 	Aliases     []string

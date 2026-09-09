@@ -81,6 +81,8 @@ func (hotkeySettingsProvider) Catalog() f4settings.Catalog {
 		recordField("binding.Area", "Area", "Input context in which this binding is considered. Common is the fallback for other areas.", f4settings.ChoiceKind),
 		recordField("binding.Condition", "Condition", "Optional registered condition checked when dispatching the action. Empty means unconditional.", f4settings.String),
 	}
+	fields[0].ChoicePresentation = "dropdown"
+	fields[2].ChoicePresentation = "dropdown"
 	for _, a := range GetActions() {
 		fields[0].Choices = append(fields[0].Choices, f4settings.Choice{Value: a.Name, Label: f4settings.Text{English: plainLabel(a.DisplayLabel()) + " (" + a.Name + ")", Literal: true}})
 	}
