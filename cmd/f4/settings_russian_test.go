@@ -84,8 +84,8 @@ func TestSettingsSidebarFitsTranslatedCategoryLabels(t *testing.T) {
 		for _, cat := range c.categories {
 			longest = max(longest, vtui.StringWidth(cat.Label.Resolve(language, Msg)))
 		}
-		if width := c.sidebar.X2 - c.sidebar.X1 + 1; width != longest+1 {
-			t.Fatalf("%s sidebar width %d, expected %d", language, width, longest+1)
+		if width := c.sidebar.X2 - c.sidebar.X1 + 1; width != longest+6 {
+			t.Fatalf("%s sidebar width %d, expected %d", language, width, longest+6)
 		}
 		if c.sidebar.GetContentWidth() < longest {
 			t.Fatal("sidebar clips its longest label")

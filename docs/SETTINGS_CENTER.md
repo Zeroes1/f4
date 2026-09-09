@@ -359,3 +359,9 @@ start at the top of their respective panes, independently of the search area.
 `#343434`; other bundled themes retain their previous dialog surface. An omitted
 value or `inherit` preserves the normal dialog background. Rendering retains
 semantic foregrounds, input surfaces, focus highlighting and search dimming.
+
+The category column reserves five text columns for ` (99)` before searching
+(with its scrollbar kept separate), so queries and match counts never resize it.
+The search separator is immediately followed by the first category; its active
+count is labeled Matches / Совпадений. All columns start on the search-caption
+row and extend to the action row, reserving a status line only for real messages.

@@ -3132,3 +3132,4 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=Use HTTP Digest challenge-response authentication. The server must support it; unencrypted transport requires the separate permission setting.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Authenticate with the supplied Bearer token instead of a username/password exchange. Access depends on the token's permissions and lifetime.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Do not send authentication credentials. Use only for WebDAV resources that permit anonymous access.
+SettingsCenter.Matches=Matches: %d

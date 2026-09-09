@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/unxed/f4/sdk/f4settings"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -37,12 +38,29 @@ func TestSettingsSidebarSearchAndContentSurface(t *testing.T) {
 			vtui.Palette[vtui.ColDialogEditUnchanged] = vtui.Palette[vtui.ColDialogEdit]
 			vtui.Palette[vtui.ColDialogSelectedButton] = vtui.SetRGBBoth(0, 0xffffff, uint32(0x123456+iteration))
 			vtui.Palette[vtui.ColDialogIndicatorBackground] = 0
+			sideWidth := c.sidebar.X2 - c.sidebar.X1 + 1
 			for _, query := range []string{"", "Enabled", "no-match-xyz", " "} {
 				c.search.SetText(query)
 				c.search.OnTextChange(query)
 				c.SetFocusedItem(c.sidebar)
 				c.Show(scr)
 				searching := strings.TrimSpace(query) != ""
+				if c.sidebar.X2-c.sidebar.X1+1 != sideWidth {
+					t.Fatal("search resized sidebar")
+				}
+				if c.sidebar.Y1 != c.Y1+4 {
+					t.Fatal("blank row after search separator")
+				}
+				if c.sidebar.Y2 != c.apply.Y1-1 || c.help.Y2 != c.apply.Y1-1 {
+					t.Fatal("unused space above buttons")
+				}
+				if c.help.X1 > c.page.X2 && c.help.Y1 != c.Y1+1 {
+					t.Fatal("help starts below search label")
+				}
+				if scr.GetCell(c.sidebar.X2+1, c.Y1+1).Char != '│' || scr.GetCell(c.sidebar.X2+1, c.apply.Y1-1).Char != '│' {
+					t.Fatal("column separator does not span the pane")
+				}
+
 				if c.previous.IsVisible() != searching || c.next.IsVisible() != searching {
 					t.Fatal("search arrows visibility")
 				}
@@ -57,11 +75,11 @@ func TestSettingsSidebarSearchAndContentSurface(t *testing.T) {
 					separator.WriteRune(rune(scr.GetCell(x, c.Y1+3).Char))
 				}
 				if searching {
-					want := " 0 "
+					count := 0
 					if query == "Enabled" {
-						want = " 1 "
+						count = 1
 					}
-					if !strings.Contains(separator.String(), want) {
+					if !strings.Contains(separator.String(), fmt.Sprintf(settingsText("Matches", "Matches: %d"), count)) {
 						t.Fatalf("missing match count: %s", separator.String())
 					}
 				} else if strings.ContainsAny(separator.String(), "0123456789") {
@@ -95,7 +113,7 @@ func TestSettingsSidebarSearchAndContentSurface(t *testing.T) {
 				if scr.GetCell(x, y).Attributes != vtui.Palette[vtui.ColDialogEdit] {
 					t.Fatal("input surface overwritten")
 				}
-				border := scr.GetCell(c.page.X1, c.Y1+4).Attributes
+				border := scr.GetCell(c.page.X1, c.Y1+3).Attributes
 				if border != vtui.SetRGBBack(vtui.Palette[vtui.ColDialogBox], uint32(0x303030+iteration)) {
 					t.Fatal("content border background")
 				}

@@ -336,7 +336,7 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 		title := c.categoryLabel(c.category)
 		titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
 		for i, ch := range title {
-			cell := scr.GetCell(titleX+i, c.Y1+2)
+			cell := scr.GetCell(titleX+i, c.Y1+1)
 			if rune(cell.Char) != ch || cell.Attributes != vtui.Palette[vtui.ColDialogBoxTitle] {
 				t.Fatal("category title is not centered or does not follow the palette")
 			}
@@ -398,7 +398,7 @@ func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
 		c.Show(scr)
 		var top strings.Builder
 		for x := c.page.X1; x <= c.help.X2; x++ {
-			top.WriteRune(rune(scr.GetCell(x, c.Y1+2).Char))
+			top.WriteRune(rune(scr.GetCell(x, c.Y1+1).Char))
 		}
 		if strings.Count(top.String(), c.categoryLabel("operations")) != 1 {
 			t.Fatalf("category heading must appear once: %q", top.String())

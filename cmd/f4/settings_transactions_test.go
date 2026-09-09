@@ -38,7 +38,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 	c.page.SetFocusedItem(table)
 	c.page.scroll = 1
 	table.OnSelect(1)
-	if c.page.scroll != 1 || c.page.GetFocusedItem().GetId() != "collection:"+col.ID {
+	if c.page.scroll != min(1, c.page.bar.Max) || c.page.GetFocusedItem().GetId() != "collection:"+col.ID {
 		t.Fatal("selecting a record lost page position or table focus")
 	}
 	c.page.scroll = 0

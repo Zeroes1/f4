@@ -622,17 +622,17 @@ func (c *settingsCenter) layoutWindow() {
 	w, h := c.X2-c.X1+1, c.Y2-c.Y1+1
 	x0, y0 := c.X1, c.Y1
 	side := c.categorySidebarWidth() + 1
-	c.sidebar.SetPosition(x0+2, y0+5, x0+side, y0+h-5)
+	bottom := c.contentBottom()
+	c.sidebar.SetPosition(x0+2, y0+4, x0+side, bottom)
 	c.layoutSearch()
 	px := x0 + side + 2
-	bottom := y0 + h - 5
 	if w >= 110 {
 		helpWidth := max(28, w/4)
-		c.page.SetPosition(px, y0+4, x0+w-helpWidth-4, bottom)
-		c.help.SetPosition(x0+w-helpWidth-2, y0+2, x0+w-3, bottom)
+		c.page.SetPosition(px, y0+3, x0+w-helpWidth-4, bottom)
+		c.help.SetPosition(x0+w-helpWidth-2, y0+1, x0+w-3, bottom)
 	} else {
 		helpHeight := min(6, max(3, h/5))
-		c.page.SetPosition(px, y0+4, x0+w-3, bottom-helpHeight-1)
+		c.page.SetPosition(px, y0+3, x0+w-3, bottom-helpHeight-1)
 		c.help.SetPosition(px, bottom-helpHeight+1, x0+w-3, bottom)
 	}
 	x := c.X2 - 1
@@ -644,7 +644,7 @@ func (c *settingsCenter) layoutWindow() {
 	c.layoutPage()
 }
 func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
-	if c.sidebar.X2-c.sidebar.X1+1 != c.categorySidebarWidth() {
+	if c.sidebar.X2-c.sidebar.X1+1 != c.categorySidebarWidth() || c.sidebar.Y2 != c.contentBottom() {
 		c.layoutWindow()
 	}
 	c.refreshAvailability()
@@ -652,7 +652,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	c.page.SetFocus(c.GetFocusedItem() == c.page)
 	c.Window.BaseWindow.Show(scr)
 	attr := vtui.Palette[vtui.ColDialogBox]
-	for y := c.Y1 + 2; y <= c.help.Y2; y++ {
+	for y := c.Y1 + 1; y <= c.help.Y2; y++ {
 		scr.Write(c.sidebar.X2+1, y, vtui.StringToCharInfo("│", attr))
 		if c.help.X1 > c.page.X2 {
 			scr.Write(c.help.X1-1, y, vtui.StringToCharInfo("│", attr))
@@ -664,7 +664,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	if strings.TrimSpace(c.query) != "" && c.categoryMatches(c.category) == 0 {
 		titleAttr = vtui.DimColor(titleAttr)
 	}
-	scr.Write(titleX, c.Y1+2, vtui.StringToCharInfo(title, titleAttr))
+	scr.Write(titleX, c.Y1+1, vtui.StringToCharInfo(title, titleAttr))
 	if c.help.X1 == c.page.X1 {
 		for x := c.page.X1; x <= c.help.X2; x++ {
 			scr.Write(x, c.help.Y1-1, vtui.StringToCharInfo("─", attr))
@@ -678,7 +678,8 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 		for _, cat := range c.categories {
 			count += c.categoryMatches(cat.ID)
 		}
-		label := fmt.Sprintf(" %d ", count)
+		label := " " + fmt.Sprintf(settingsText("Matches", "Matches: %d"), count) + " "
+		label = vtui.TruncateString(label, c.sidebar.X2-c.sidebar.X1+1, "…")
 		x := c.sidebar.X1 + (c.sidebar.X2-c.sidebar.X1+1-vtui.StringWidth(label))/2
 		scr.Write(x, separatorY, vtui.StringToCharInfo(label, vtui.Palette[vtui.ColDialogBoxTitle]))
 	}
@@ -691,7 +692,7 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 func (c *settingsCenter) categorySidebarWidth() int {
 	width := 1
 	for _, category := range c.categories {
-		label := (settingsCategoryRow{center: c, category: category}).GetCellText(0)
+		label := category.Label.Resolve(AppConfig.Language, Msg)
 		width = max(width, vtui.StringWidth(label))
 	}
 	// Leave room for the sidebar scrollbar and a usable content column.
@@ -700,7 +701,8 @@ func (c *settingsCenter) categorySidebarWidth() int {
 	if w >= 110 {
 		available -= max(28, w/4) + 1
 	}
-	return min(width+1, max(10, available))
+	// Reserve " (99)" regardless of the query, plus the scrollbar column.
+	return min(width+5+1, max(10, available))
 }
 func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_ESCAPE {
@@ -1486,7 +1488,7 @@ func (c *settingsCenter) paintContentBackground(scr *vtui.ScreenBuf) {
 		return
 	}
 	_, normalBG := GetColorRGBBoth(vtui.Palette[vtui.ColDialogText])
-	for y := c.Y1 + 2; y <= c.page.Y2; y++ {
+	for y := c.Y1 + 1; y <= c.page.Y2; y++ {
 		for x := c.page.X1; x <= c.page.X2; x++ {
 			cell := scr.GetCell(x, y)
 			_, bg := GetColorRGBBoth(cell.Attributes)
@@ -1509,4 +1511,12 @@ func (b *settingsSearchButton) Show(scr *vtui.ScreenBuf) {
 	if !b.IsDisabled() {
 		b.Button.Show(scr)
 	}
+}
+
+func (c *settingsCenter) contentBottom() int {
+	bottom := c.Y2 - 2 // Immediately above the action buttons.
+	if c.status != "" {
+		bottom--
+	} // Reserve a status row only when needed.
+	return bottom
 }
