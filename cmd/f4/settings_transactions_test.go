@@ -64,7 +64,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 				t.Fatalf("theme %d border/scrollbar %v: %x", iteration, point, attr)
 			}
 		}
-		if attr := scr.GetCell(table.X1, table.Y1).Attributes; attr != vtui.DimColor(vtui.Palette[vtui.ColDialogText]) {
+		if attr := scr.GetCell(table.X1, table.Y1).Attributes; attr != vtui.DimColor(vtui.Palette[vtui.ColDialogEdit]) {
 			t.Fatalf("theme %d nonmatching record: %x", iteration, attr)
 		}
 		if attr := scr.GetCell(table.X1, table.Y1+1).Attributes; attr != vtui.Palette[vtui.ColDialogSelectedButton] {

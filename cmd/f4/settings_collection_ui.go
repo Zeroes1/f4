@@ -84,6 +84,8 @@ func (c *settingsCenter) addCollections(category string) {
 			table.ShowHeader = false
 			table.ShowSeparators = false
 			settingsDialogTable(table)
+			// Record lists are editable settings surfaces, like the adjacent inputs.
+			table.ColorTextIdx = vtui.ColDialogEdit
 			table.SetId("collection:" + col.ID)
 			var rows []vtui.TableRow
 			for _, record := range s.draft.Records[col.ID] {
