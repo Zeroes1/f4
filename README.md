@@ -2,7 +2,7 @@
 
 [![codecov](https://codecov.io/gh/unxed/f4/branch/main/graph/badge.svg)](https://codecov.io/gh/unxed/f4)
 
-![](https://raw.githubusercontent.com/unxed/f4/refs/heads/main/screenshot.png)
+![](https://raw.githubusercontent.com/unxed/f4/refs/heads/main/.github/assets/screenshot.png)
 ### ⚡ Quick Download (Nightly Builds)
 
 | Platform | Format | Link |
@@ -251,7 +251,7 @@ CGO_ENABLED=0 go build ./cmd/f4
 ```
 
 The generated platform icons are committed to the repository, so a normal
-build does not need an image converter. If `cmd/f4/assets/icon/f4.svg` is changed,
+build does not need an image converter. If `internal/gui/assets/icon/f4.svg` is changed,
 regenerate PNG, ICO, ICNS, and Windows resources on any supported OS with:
 
 ```bash

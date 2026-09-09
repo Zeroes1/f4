@@ -11,15 +11,18 @@ import (
 )
 
 type id3AppStub struct {
-	messages []string
+	activeVFS    vfs.VFS
+	selected     []string
+	messages     []string
+	refreshCalls int
 }
 
-func (*id3AppStub) GetActivePanelVFS() vfs.VFS  { return nil }
-func (*id3AppStub) GetPassivePanelVFS() vfs.VFS { return nil }
-func (*id3AppStub) GetSelectedNames() []string  { return nil }
-func (*id3AppStub) GetSelectedName() string     { return "" }
-func (*id3AppStub) RefreshAll()                 {}
-func (*id3AppStub) SetPendingSelection(string)  {}
+func (a *id3AppStub) GetActivePanelVFS() vfs.VFS { return a.activeVFS }
+func (*id3AppStub) GetPassivePanelVFS() vfs.VFS  { return nil }
+func (a *id3AppStub) GetSelectedNames() []string { return a.selected }
+func (*id3AppStub) GetSelectedName() string      { return "" }
+func (a *id3AppStub) RefreshAll()                { a.refreshCalls++ }
+func (*id3AppStub) SetPendingSelection(string)   {}
 func (*id3AppStub) RunProgressTask(string, string, bool, func(context.Context, func(string, int)) error, func(error)) {
 }
 func (*id3AppStub) RunAdvancedProgressTask(string, bool, func(context.Context, vfs.TaskReporter) error, func(error)) {

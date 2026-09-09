@@ -437,7 +437,7 @@ func (p *centerSettingsProvider) authorizeRecord(ctx context.Context, provider P
 		if err != nil {
 			return nil, err
 		}
-		defer backend.Close()
+		defer func() { _ = backend.Close() }() // Authentication result is already handled; release the temporary backend.
 		return nil, testCloudBackend(ctx, backend)
 	}
 	if err != nil {

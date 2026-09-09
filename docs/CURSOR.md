@@ -75,7 +75,7 @@ case vtinput.VK_RIGHT:
 
 На границе поле возвращает `false`, событие всплывает в
 `Group`/`BaseWindow.ProcessKey`, и фокус переходит на следующий по порядку
-`AddItem` контрол. В диалоге mkdir (`cmd/f4/actions.go`, `actionMkDir`)
+`AddItem` контрол. В диалоге mkdir (`internal/app/actions.go`, `actionMkDir`)
 порядок такой: `lblPrompt`, `editName`, `comboMode`, `btnOk`, `btnCancel`,
 то есть следующий — комбобокс режима операции (`Queue ↓`, `DropdownOnly`),
 у которого каретки нет по определению.
@@ -237,7 +237,7 @@ func (s *ScreenBuf) SetCursorPos(x, y int) {
 | место | порядок | что победит при выходе за границы |
 |---|---|---|
 | `vtui/edit.go:151` | `SetCursorVisible(true)` → `SetCursorPos()` | гашение |
-| `cmd/f4/editor_view.go:1612` | `SetCursorPos()` → `SetCursorVisible(true)` | показ |
+| `internal/editor/view.go:1612` | `SetCursorPos()` → `SetCursorVisible(true)` | показ |
 | `vtui/multilineedit.go:213` | `SetCursorPos()` → `SetCursorVisible(true)` | показ |
 
 Итог: одно и то же граничное условие в разных виджетах даёт разный

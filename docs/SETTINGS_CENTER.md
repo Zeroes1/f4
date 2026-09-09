@@ -391,3 +391,21 @@ figures exclude terminal output. Cache invalidation follows draft edits,
 collection/category rebuilds, query changes and language changes. Record cache
 keys contain display names only; arbitrary record values and secrets are not
 indexed. Mouse hover still updates choice explanations immediately.
+
+## Upstream package migration
+
+The audit above records original locations at `4cd62a34`. After upstream's
+package split (`15fedb14`), implementation lives in `internal/settings` (catalog,
+drafts, renderer, record editors and option help), `internal/config` (snapshot
+serialization and preference patching), `internal/dialog` (profile transfer and
+chord capture), `internal/panel` (record storage and contextual source snapshots),
+and `internal/app` (entrypoints and cross-subsystem wiring). Localization resources
+are in `internal/i18n/lang`, themes in `internal/theme/styles`, and help assets in
+`internal/dialog/help`. `sdk/f4settings` and provider identifiers remain unchanged.
+
+`settings.Host` is injected by the composition root; it owns session/window saves,
+runtime refresh, update checks and package installation. Panel callbacks carry
+captured menu scope and update its tree only after a successful Apply. The public
+plugin contribution and opening capabilities remain optional. Explicit Copy/Move
+uses the upstream profile transfer helpers, selects the target only after success,
+and a conflicting move preserves both the source and current profile selection.

@@ -14,7 +14,7 @@ import (
 func RussianCatalog(t *testing.T, c f4settings.Catalog) {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "../../cmd/f4/lang/ru.lng"))
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "../i18n/lang/ru.lng"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ require (
 	github.com/unxed/sevenzip v0.0.0-20260826171606-a536eac9d163
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.328
+	github.com/unxed/vtui v0.1.329-0.20260909041023-f1196ba05cc2
 	github.com/unxed/zip v0.1.131
 	github.com/unxed/zipper v0.1.153
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -190,6 +190,6 @@ replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.8
 
 // replace github.com/unxed/colorer4go => ../../../dev/colorer4go
 // Pending https://github.com/unxed/vtui/pull/112; pin the published fork commit.
-replace github.com/unxed/vtui => github.com/Zoinen/vtui v0.1.238-0.20260909124547-8499a597a607
+replace github.com/unxed/vtui => github.com/Zoinen/vtui v0.1.238-0.20260909142222-5e765f9f45d2
 
 replace github.com/neurlang/wayland => github.com/unxed/wayland v0.0.0-20260906012106-4096eafdd7f4
