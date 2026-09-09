@@ -350,3 +350,75 @@ func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsPaneKeyboardPolicy(t *testing.T) {
+	fields := []f4settings.Field{
+		f4settings.Scalar("one", "panels", "Group", "One", "First setting.", f4settings.Boolean),
+		f4settings.Scalar("two", "panels", "Group", "Two", "Second setting.", f4settings.Boolean),
+		f4settings.Scalar("three", "panels", "Group", "Three", "Third setting.", f4settings.Boolean),
+	}
+	fields[1].Unavailable = "Unavailable"
+	d := f4settings.NewDraft(map[string]string{"one": "false", "two": "false", "three": "false"}, nil)
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories, Fields: fields}, draft: d}})
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	key := func(k uint16, shift bool) {
+		event := &vtinput.InputEvent{KeyDown: true, VirtualKeyCode: k}
+		if shift {
+			event.ControlKeyState = vtinput.ShiftPressed
+		}
+		c.ProcessKey(event)
+	}
+	c.SetFocusedItem(c.sidebar)
+	c.sidebar.SetSelectPos(len(c.categories) - 1)
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.sidebar {
+		t.Fatal("Down escaped categories")
+	}
+	c.sidebar.SetSelectPos(0)
+	key(vtinput.VK_UP, false)
+	if c.GetFocusedItem() != c.search {
+		t.Fatal("Up from first category must reach search")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.sidebar {
+		t.Fatal("Down from search must reach categories")
+	}
+	c.selectCategory("panels")
+	c.SetFocusedItem(c.page)
+	first, last := c.page.rows[1].control, c.page.rows[3].control
+	c.page.SetFocusedItem(first)
+	key(vtinput.VK_UP, false)
+	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
+		t.Fatal("Up must wrap inside content")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != first {
+		t.Fatal("Down must wrap inside content")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.page.GetFocusedItem() != last {
+		t.Fatal("navigation must skip unavailable setting")
+	}
+	c.SetFocusedItem(c.search)
+	for _, want := range []vtui.UIElement{c.sidebar, c.page, c.previous, c.next, c.apply, c.ok, c.cancel, c.search} {
+		key(vtinput.VK_TAB, false)
+		if c.GetFocusedItem() != want {
+			t.Fatalf("Tab did not follow pane/button order: got %T %s, want %T %s (category %s)", c.GetFocusedItem(), c.GetFocusedItem().GetId(), want, want.GetId(), c.category)
+		}
+	}
+	key(vtinput.VK_TAB, true)
+	if c.GetFocusedItem() != c.cancel {
+		t.Fatal("Shift+Tab did not reverse focus order")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.previous {
+		t.Fatal("arrows escaped bottom buttons")
+	}
+	for _, cat := range c.categories {
+		if got := c.categoryLabel(cat.ID); got != cat.Label.Resolve(AppConfig.Language, Msg) {
+			t.Fatalf("duplicated display title: %q", got)
+		}
+	}
+}

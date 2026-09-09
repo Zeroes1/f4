@@ -228,8 +228,12 @@ func (v *settingsViewport) notifyFocus() {
 	}
 }
 func (v *settingsViewport) ProcessKey(e *vtinput.InputEvent) bool {
+	v.WrapFocus = true
 	handled := v.Group.ProcessKey(e)
 	v.notifyFocus()
+	if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN || e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT) {
+		return true
+	}
 	return handled
 }
 func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
@@ -616,14 +620,78 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		c.SetFocusedItem(c.search)
 		return true
 	}
+	if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0 {
+		panes := []vtui.UIElement{c.search, c.sidebar, c.page, c.previous, c.next, c.apply, c.ok, c.cancel}
+		focused := c.GetFocusedItem()
+		if e.VirtualKeyCode == vtinput.VK_TAB {
+			direction := 1
+			if e.ControlKeyState&vtinput.ShiftPressed != 0 {
+				direction = -1
+			}
+			c.movePaneFocus(panes, focused, direction)
+			return true
+		}
+		arrow := e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN || e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT
+		if arrow {
+			switch focused {
+			case c.sidebar:
+				if e.VirtualKeyCode == vtinput.VK_UP && c.sidebar.SelectPos == 0 {
+					c.SetFocusedItem(c.search)
+				} else {
+					c.sidebar.ProcessKey(e)
+				}
+				return true
+			case c.search:
+				if e.VirtualKeyCode == vtinput.VK_DOWN {
+					c.SetFocusedItem(c.sidebar)
+				} else {
+					c.search.ProcessKey(e)
+				}
+				return true
+			case c.page:
+				c.page.ProcessKey(e)
+				return true
+			case c.help:
+				c.help.ProcessKey(e)
+				return true
+			default:
+				direction := 1
+				if e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_LEFT {
+					direction = -1
+				}
+				c.movePaneFocus(panes[3:], focused, direction)
+				return true
+			}
+		}
+	}
 	handled := c.Window.BaseWindow.ProcessKey(e)
 	c.syncWindowBounds()
 	return handled
 }
+
+func (c *settingsCenter) movePaneFocus(items []vtui.UIElement, focused vtui.UIElement, direction int) {
+	index := -1
+	for i, item := range items {
+		if item == focused {
+			index = i
+			break
+		}
+	}
+	for step := 1; step <= len(items); step++ {
+		i := (index + direction*step + len(items)*2) % len(items)
+		if items[i].CanFocus() && !items[i].IsDisabled() {
+			c.SetFocusedItem(items[i])
+			if items[i] == c.page {
+				c.page.notifyFocus()
+			}
+			return
+		}
+	}
+}
 func (c *settingsCenter) categoryLabel(id string) string {
 	for _, cat := range c.categories {
 		if cat.ID == id {
-			return cat.Label.Resolve(AppConfig.Language, Msg) + " " + cat.Label.English
+			return cat.Label.Resolve(AppConfig.Language, Msg)
 		}
 	}
 	return id
@@ -642,6 +710,12 @@ func settingsText(key, fallback string) string {
 	return (f4settings.Text{English: fallback, Key: "SettingsCenter." + key}).Resolve(AppConfig.Language, Msg)
 }
 func (c *settingsCenter) matches(f f4settings.Field) bool {
+	for _, cat := range c.categories {
+		if cat.ID == f.Category {
+			f.Aliases = append(append([]string(nil), f.Aliases...), cat.Label.English)
+			break
+		}
+	}
 	f.Aliases = append(append([]string(nil), f.Aliases...), c.groupLabel(f.Group))
 	return f4settings.Matches(c.query, f, c.categoryLabel(f.Category), AppConfig.Language, Msg)
 }

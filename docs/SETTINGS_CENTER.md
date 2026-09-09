@@ -4,6 +4,8 @@ Baseline: `main` at `4cd62a34`. Settings are grouped by the behavior they contro
 
 The dialog opens centered at approximately half the screen width (minimum 72 columns, bounded by the screen), supports native dragging, resizing and F5 maximize/restore, and uses column separators and bordered setting groups. Boolean settings use directly labeled checkboxes; long labels wrap beside the checkbox. The selected category remains marked with the neutral gray background derived from the live dialog palette, matching Environment Manager when navigation loses focus.
 
+Arrow navigation stays within its active pane; content controls wrap at the ends. Tab and Shift+Tab move through search, categories, content and the footer buttons. Up from the first category reaches search, and Down from search reaches categories. Category titles display only localized text; English names remain search aliases.
+
 ## Entry points and editing contract
 
 `Settings.Open` is the single menu entry in every application menu context. Legacy settings action IDs are hidden from menus and remain category deep links. `vfs.SettingsNavigationHost` optionally targets a collection and record for contextual editing. File encoding for the current document, connection opening, user-menu execution, history navigation, and operation dialogs remain contextual operations.
