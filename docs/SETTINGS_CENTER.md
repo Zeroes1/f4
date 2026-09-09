@@ -237,6 +237,44 @@ Legacy `CmLanguage`, `CmHelpLanguage`, `CmHotkeyConfig`, `CmPlugins` and `CmPlug
 
 ## Validation
 
+### Opening performance (Windows, 2026-09-09)
+
+`BenchmarkSettingsOpen` measures provider snapshots, catalogs, dialog construction,
+layout and first paint into a silent 160×50 screen. It does not launch a
+PanelsFrame or measure terminal presentation, asynchronous schema enumeration,
+or providers registered only by a running application. It reads local settings
+but never commits drafts. Measurements on a Ryzen 9 5950X:
+
+| Implementation | Time per opening | Allocated bytes | Allocations |
+|---|---:|---:|---:|
+| Before | 1,158 ms | 138.0 MB | 1,784,230 |
+| Batch Windows font-label lookup | 56 ms | 26.6 MB | 99,098 |
+| Also share core catalog within an opening | 31–35 ms | 13.8 MB | 51,815 |
+
+The initial CPU profile attributed about 90% of samples to font-label resolution:
+each installed font caused another full Windows font-registry enumeration.
+The core catalog was also constructed twice, for the draft and the renderer.
+Font labels now use one registry snapshot per catalog, and each opening shares
+one core catalog. Nothing is cached between openings, preserving newly installed
+fonts, current language and custom font values.
+
+Reproduce with the system Go cache and `GOWORK=off`:
+
+```powershell
+go test ./cmd/f4 -run '^$' -bench '^BenchmarkSettingsOpen$' -benchtime=3s -benchmem -count=3 -timeout 60s
+go test ./cmd/f4 -run '^$' -bench '^BenchmarkSettingsOpen$' -benchtime=3s -cpuprofile "$env:TEMP\f4-settings.cpu" -o "$env:TEMP\f4-settings.test.exe" -timeout 60s
+go tool pprof -top -cum "$env:TEMP\f4-settings.test.exe" "$env:TEMP\f4-settings.cpu"
+```
+
+The remaining profile suggests possible smaller improvements: replace repeated
+pairwise font-path comparisons with a canonical-key index, and avoid repeated
+language-resource parsing within catalog construction. If live sessions with
+large connection/profile stores remain slow, measure each contributed provider's
+`Begin` before considering lazy snapshots or background loading; those changes
+must preserve cancellation, provider removal and record revision semantics.
+
+### Functional coverage
+
 Focused coverage lives in `sdk/f4settings/*_test.go`, `cmd/f4/settings*_test.go`, and bundled-provider settings tests. Theme checks render after replacing semantic dialog palette entries; persistence checks cover cancellation, failed writes, partial acknowledgement, concurrent changes and unknown-value preservation.
 
 On Windows, use the pinned ConPTY runtime from the build workflow and the system Go cache. Run the main suite with `go test ./... -skip '^TestAllDialogs_LayoutValidation$' -timeout 300s`, then run the legacy layout suite separately with `GOMAXPROCS=1`, as CI does. The Center has dedicated clipped-viewport layout tests at 80×25, 110×25 and 160×50; its offscreen controls deliberately extend beyond the visible scrolling page.

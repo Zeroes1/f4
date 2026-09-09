@@ -16,7 +16,10 @@ import (
 	"github.com/unxed/vtui"
 )
 
-type coreSettingsProvider struct{}
+type coreSettingsProvider struct {
+	// Shared by the draft and renderer for one opening; refreshed next time.
+	catalog *f4settings.Catalog
+}
 
 func settingsConfigField(v reflect.Value, path string) reflect.Value {
 	for _, part := range strings.Split(path, ".") {
@@ -77,7 +80,10 @@ func setCoreSetting(cfg *F4Config, id, value string) error {
 	return nil
 }
 
-func (coreSettingsProvider) Catalog() f4settings.Catalog {
+func (p coreSettingsProvider) Catalog() f4settings.Catalog {
+	if p.catalog != nil {
+		return *p.catalog
+	}
 	fields := coreSettingsFields()
 	for _, area := range []string{"Panel", "Editor", "Viewer", "Menu", "Table"} {
 		for _, direction := range []string{"Up", "Down"} {
@@ -103,8 +109,10 @@ func (coreSettingsProvider) Catalog() f4settings.Catalog {
 			f.Kind = f4settings.ChoiceKind
 			f.AllowCustom = true
 			installed := discoverInstalledGuiFonts(AppConfig.Language)
-			for _, value := range guiFontChoicesFromInstalled(AppConfig.GuiFont, installed) {
-				f.Choices = append(f.Choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: guiFontDisplayValueFromInstalled(value, installed), Literal: true}})
+			values := guiFontChoicesFromInstalled(AppConfig.GuiFont, installed)
+			labels := guiFontDisplayValuesFromInstalled(values, installed)
+			for i, value := range values {
+				f.Choices = append(f.Choices, f4settings.Choice{Value: value, Label: f4settings.Text{English: labels[i], Literal: true}})
 			}
 		case "ColorStyle":
 			f.Kind = f4settings.ChoiceKind

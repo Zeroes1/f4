@@ -73,6 +73,29 @@ var platformGuiFontDisplayNameFromInstalled = func(value string, _ []string) str
 	return platformGuiFontDisplayName(value)
 }
 
+// Build a label resolver once per picker, so platforms can snapshot expensive
+// discovery data without caching installed fonts across settings sessions.
+var newGuiFontDisplayNameResolver = func(installed []string) func(string) string {
+	return func(value string) string {
+		return platformGuiFontDisplayNameFromInstalled(value, installed)
+	}
+}
+
+func guiFontDisplayValuesFromInstalled(values, installed []string) []string {
+	resolve := newGuiFontDisplayNameResolver(installed)
+	labels := make([]string, len(values))
+	for i, value := range values {
+		labels[i] = value
+		for _, path := range installed {
+			if sameGuiFontValue(value, path) {
+				labels[i] = resolve(value)
+				break
+			}
+		}
+	}
+	return labels
+}
+
 // guiFontDisplayChoices returns the strings shown in the font picker. On
 // Windows these are font family names (e.g. "Cascadia Mono"); on other
 // platforms they are short names derived from the discovered font files.

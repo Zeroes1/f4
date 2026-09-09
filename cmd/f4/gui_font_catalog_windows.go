@@ -13,6 +13,35 @@ func init() {
 	platformGuiFontDisplayChoices = windowsGuiFontDisplayChoices
 	platformGuiFontDisplayName = windowsGuiFontDisplayName
 	platformGuiFontDisplayNameFromInstalled = windowsGuiFontDisplayNameFromInstalled
+	newGuiFontDisplayNameResolver = windowsGuiFontDisplayNameResolver
+}
+
+func windowsGuiFontDisplayNameResolver(installed []string) func(string) string {
+	paths, names := map[string]string{}, map[string]string{}
+	for _, entry := range windowsFontEntries() {
+		path := strings.ToLower(fontFilePath(entry.file))
+		name := normalizeFontName(entry.base)
+		if _, exists := paths[path]; !exists {
+			paths[path] = entry.base
+		}
+		if _, exists := names[name]; !exists {
+			names[name] = entry.base
+		}
+	}
+	return func(value string) string {
+		if name, ok := paths[strings.ToLower(fontFilePath(value))]; ok {
+			return name
+		}
+		if name, ok := names[normalizeFontName(value)]; ok {
+			return name
+		}
+		for _, path := range installed {
+			if sameGuiFontValue(value, path) {
+				return defaultGuiFontDisplayName(value)
+			}
+		}
+		return value
+	}
 }
 
 func windowsFontEntries() []fontEntry {
