@@ -444,10 +444,18 @@ func (r settingsCategoryRow) GetCellText(int) string {
 	return label
 }
 func (r settingsCategoryRow) GetCellAttr(_ int, attr uint64) uint64 {
-	if r.center.category == r.category.ID && !r.center.sidebar.IsFocused() {
+	inactiveCursor := r.center.category == r.category.ID && !r.center.sidebar.IsFocused()
+	if inactiveCursor {
 		attr = settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText])
 	}
 	if strings.TrimSpace(r.center.query) != "" && r.center.categoryMatches(r.category.ID) == 0 {
+		if inactiveCursor {
+			// Dimming the normal light text approaches the gray cursor surface.
+			// Derive darker text from that surface instead, leaving its background intact.
+			_, background := GetColorRGBBoth(attr)
+			dark := ((background>>16&255)/4)<<16 | ((background>>8&255)/4)<<8 | (background&255)/4
+			return vtui.SetRGBFore(attr, dark)
+		}
 		return vtui.DimColor(attr)
 	}
 	return attr

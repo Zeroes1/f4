@@ -576,3 +576,49 @@ func TestSettingsShortInputsInlineLongInputsFullWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestSettingsInactiveZeroMatchCategoryText(t *testing.T) {
+	palette := append([]uint64(nil), vtui.Palette...)
+	defer func() { vtui.Palette = palette }()
+	d := f4settings.NewDraft(map[string]string{"value": "true"}, nil)
+	defer d.Close()
+	field := f4settings.Scalar("value", "startup", "Defaults", "Example", "Example setting.", f4settings.Boolean)
+	c := newSettingsCenter([]*settingsSession{{catalog: f4settings.Catalog{ID: "test", Categories: settingsCategories, Fields: []f4settings.Field{field}}, draft: d}})
+	c.selectCategory("startup")
+	for i, category := range c.categories {
+		if category.ID == "startup" {
+			c.sidebar.SetSelectPos(i)
+		}
+	}
+	c.SetPosition(0, 0, 149, 39)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(150, 40)
+	for _, pair := range [][2]uint32{{0xd0d0d0, 0x434343}, {0xe0e0e0, 0x666666}} {
+		vtui.Palette[vtui.ColDialogText] = vtui.SetRGBBoth(0, pair[0], pair[1])
+		vtui.Palette[vtui.ColDialogSelectedButton] = vtui.SetRGBBoth(0, 0xfefefe, 0x345678)
+		c.search.OnTextChange("no-matching-settings")
+		c.SetFocusedItem(c.page)
+		c.Show(scr)
+		y := c.sidebar.Y1 + c.sidebar.SelectPos
+		attr := scr.GetCell(c.sidebar.X1, y).Attributes
+		fg, bg := GetColorRGBBoth(attr)
+		if fg >= bg || bg-fg < 0x303030 {
+			t.Fatalf("inactive zero-match text not sufficiently darker: %06x on %06x", fg, bg)
+		}
+		_, wantBG := GetColorRGBBoth(settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText]))
+		if bg != wantBG {
+			t.Fatal("inactive selection background changed")
+		}
+		c.SetFocusedItem(c.sidebar)
+		c.Show(scr)
+		if scr.GetCell(c.sidebar.X1, y).Attributes != vtui.DimColor(vtui.Palette[vtui.ColDialogSelectedButton]) {
+			t.Fatal("active focus styling changed")
+		}
+		c.search.OnTextChange("")
+		c.SetFocusedItem(c.page)
+		c.Show(scr)
+		if scr.GetCell(c.sidebar.X1, y).Attributes != settingsInactiveCategoryAttr(vtui.Palette[vtui.ColDialogText]) {
+			t.Fatal("matching category styling changed")
+		}
+	}
+}
