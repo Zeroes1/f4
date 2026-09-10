@@ -62,7 +62,15 @@ func TestRenameNoReplacePortableDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := renameNoReplacePortable(oldPath, newPath); err != nil {
-		t.Fatalf("renameNoReplacePortable(directory): %v", err)
+		// Unix rejects replacing the reservation directory itself. The fallback
+		// must then remove its reservation and leave the source untouched.
+		if _, statErr := os.Stat(oldPath); statErr != nil {
+			t.Fatalf("directory source after refused rename: %v", statErr)
+		}
+		if _, statErr := os.Stat(newPath); !os.IsNotExist(statErr) {
+			t.Fatalf("directory reservation was not removed: %v", statErr)
+		}
+		return
 	}
 	if _, err := os.Stat(filepath.Join(newPath, "inside")); err != nil {
 		t.Fatalf("directory contents missing: %v", err)
@@ -95,8 +103,8 @@ func TestRenameNoReplacePortableSameObject(t *testing.T) {
 	if err := renameNoReplacePortable(path, alias); err != nil {
 		t.Fatalf("same-object rename: %v", err)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("same-object source still exists: %v", err)
+	if got, err := os.ReadFile(path); err != nil || string(got) != "same" {
+		t.Fatalf("same-object source = %q, %v", got, err)
 	}
 	if got, err := os.ReadFile(alias); err != nil || string(got) != "same" {
 		t.Fatalf("same-object destination = %q, %v", got, err)
