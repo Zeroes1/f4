@@ -15,9 +15,11 @@ import (
 
 func installDarwinTestStubs(t *testing.T, send func(object uintptr, selector string, args ...any) uintptr) {
 	t.Helper()
-	oldErr := foundationErr
+	oldOnce, oldErr := foundationOnce, foundationErr
 	oldGetClass, oldRegister, oldMsgSend := objcGetClass, objcRegister, objcMsgSend
-	foundationOnce = sync.Once{}
+	var initialized sync.Once
+	initialized.Do(func() {})
+	foundationOnce = &initialized
 	foundationErr = nil
 	selectors := make(map[string]uintptr)
 	var nextSelector uintptr = 100
@@ -51,8 +53,7 @@ func installDarwinTestStubs(t *testing.T, send func(object uintptr, selector str
 		return 0
 	}
 	t.Cleanup(func() {
-		foundationOnce = sync.Once{}
-		foundationErr = oldErr
+		foundationOnce, foundationErr = oldOnce, oldErr
 		objcGetClass, objcRegister, objcMsgSend = oldGetClass, oldRegister, oldMsgSend
 	})
 }
@@ -93,12 +94,13 @@ func TestDarwinMoveToTrashFoundationError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "item"), []byte("item"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	oldErr := foundationErr
-	foundationOnce = sync.Once{}
+	oldOnce, oldErr := foundationOnce, foundationErr
+	var initialized sync.Once
+	initialized.Do(func() {})
+	foundationOnce = &initialized
 	foundationErr = errors.New("Foundation unavailable")
 	t.Cleanup(func() {
-		foundationOnce = sync.Once{}
-		foundationErr = oldErr
+		foundationOnce, foundationErr = oldOnce, oldErr
 	})
 	filesystem := NewOSVFS(root)
 	err := filesystem.MoveToTrash(context.Background(), "item")
