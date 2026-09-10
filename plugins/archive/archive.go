@@ -252,12 +252,43 @@ func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter
 	}
 }
 
+type archiveTestingReader struct {
+	io.Reader
+	read int64
+}
+
+func (r *archiveTestingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.read += int64(n)
+	return n, err
+}
+
+func archiveTestingPercent(current, total int64) int {
+	if total <= 0 {
+		return -1
+	}
+	pct := int(float64(current) * 100 / float64(total))
+	if pct < 0 {
+		return 0
+	}
+	if pct > 100 {
+		return 100
+	}
+	return pct
+}
+
 func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs.TaskReporter) error {
 	f, err := os.Open(srcPath)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
+
+	archiveStat, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	archiveSize := archiveStat.Size()
 
 	format, stream, err := archives.Identify(ctx, srcPath, f)
 	if err != nil {
@@ -273,22 +304,58 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 		return fmt.Errorf("format %T does not support testing", format)
 	}
 
+	countedStream := &archiveTestingReader{Reader: stream}
+	startTime := time.Now()
+	reportProgress := func(name string, current, size int64) {
+		archiveBytes := countedStream.read
+		elapsed := time.Since(startTime)
+		speed := int64(0)
+		if elapsed > 0 {
+			speed = int64(float64(archiveBytes) / elapsed.Seconds())
+		}
+		totalText := fmt.Sprintf("Total: %s / %s", formatSize(archiveBytes), formatSize(archiveSize))
+		reporter.UpdateTransfer("Testing", name, archiveTestingPercent(current, size), totalText, archiveTestingPercent(archiveBytes, archiveSize), formatSize(speed)+"/s")
+	}
+	reportProgress(filepath.Base(srcPath), 0, 1)
+
 	var failures []error
-	err = extractor.Extract(ctx, stream, func(ctx context.Context, info archives.FileInfo) error {
+	err = extractor.Extract(ctx, countedStream, func(ctx context.Context, info archives.FileInfo) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		reporter.UpdateTransfer("Testing", info.NameInArchive, -1, "", -1, "")
 		if info.IsDir() || !info.Mode().IsRegular() {
+			reportProgress(info.NameInArchive, -1, 0)
 			return nil
 		}
 
 		member, openErr := info.Open()
 		if openErr != nil {
+			reportProgress(info.NameInArchive, 0, info.Size())
 			failures = append(failures, fmt.Errorf("%s: %w", info.NameInArchive, openErr))
 			return nil
 		}
-		_, readErr := io.Copy(io.Discard, member)
+
+		memberSize := info.Size()
+		var memberBytes int64
+		var readErr error
+		buf := make([]byte, 128*1024)
+		for {
+			if err := ctx.Err(); err != nil {
+				readErr = err
+				break
+			}
+			n, err := member.Read(buf)
+			if n > 0 {
+				memberBytes += int64(n)
+				reportProgress(info.NameInArchive, memberBytes, memberSize)
+			}
+			if err != nil {
+				if err != io.EOF {
+					readErr = err
+				}
+				break
+			}
+		}
 		closeErr := member.Close()
 		if failure := errors.Join(readErr, closeErr); failure != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", info.NameInArchive, failure))
@@ -297,6 +364,10 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 	})
 	if err != nil {
 		failures = append(failures, err)
+	}
+	if len(failures) == 0 {
+		reporter.UpdateTransfer("Testing", filepath.Base(srcPath), 100,
+			fmt.Sprintf("Total: %s / %s", formatSize(archiveSize), formatSize(archiveSize)), 100, "")
 	}
 	return errors.Join(failures...)
 }
