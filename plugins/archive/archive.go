@@ -76,26 +76,12 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 	api.RegisterVFSProvider(&ArchiveProvider{})
 
 	// Keep far2l's Files-menu shortcuts: direct archive operations are
-	// Shift+F1/Shift+F2, while the legacy two-item archive command menu stays
-	// available on Shift+F3.
+	// Shift+F1/Shift+F2, while Shift+F3 tests the selected archive directly.
 	api.RegisterGlobalHotkey(vtinput.VK_F1, vtinput.ShiftPressed, actionAddArchive)
 	api.RegisterGlobalHotkey(vtinput.VK_F2, vtinput.ShiftPressed, actionExtractArchive)
-	api.RegisterGlobalHotkey(vtinput.VK_F3, vtinput.ShiftPressed, actionArchiveCommands)
+	api.RegisterGlobalHotkey(vtinput.VK_F3, vtinput.ShiftPressed, actionTestArchive)
 
 	return nil
-}
-
-func actionArchiveCommands(app vfs.App) {
-	app.Menu(" Archive Commands ", []string{"&1. Add to archive", "&2. Extract files", "&3. Test archive"}, func(idx int) {
-		switch idx {
-		case 0:
-			actionAddArchive(app)
-		case 1:
-			actionExtractArchive(app)
-		case 2:
-			actionTestArchive(app)
-		}
-	})
 }
 
 // resolveLocalArchivePath returns the absolute path of the archive to operate
