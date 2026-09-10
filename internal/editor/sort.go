@@ -173,7 +173,7 @@ func (ev *EditorView) ShowSortDialog() {
 
 	const (
 		dialogWidth  = 52
-		dialogHeight = 11
+		dialogHeight = 12
 	)
 	dlg := vtui.NewCenteredDialog(dialogWidth, dialogHeight, i18n.Msg("Editor.Sort.Title"))
 	dlg.ShowClose = true
