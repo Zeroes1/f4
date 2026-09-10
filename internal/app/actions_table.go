@@ -23,7 +23,6 @@ import (
 	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
-	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 

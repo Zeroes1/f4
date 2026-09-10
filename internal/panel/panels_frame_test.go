@@ -3279,7 +3279,13 @@ func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
 	}
 
 	fp := NewFileSystemPanel(0, 0, 80, 25, vfs.NewOSVFS(root))
-	t.Cleanup(func() { fp.Close() })
+	t.Cleanup(func() {
+		fp.cancelProviderOpen()
+		if fp.CancelLoad != nil {
+			fp.CancelLoad()
+		}
+		fp.StopLoadingAnimation()
+	})
 	waitForLoad(t, fp)
 	fp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "bundle.exe"}}}
 	fp.SetCursorIndex(0)
