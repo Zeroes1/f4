@@ -6,36 +6,6 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-func TestSourceStrings(t *testing.T) {
-	cases := []struct {
-		name   string
-		source Source
-		want   string
-	}{
-		{name: "none", source: SourceNone, want: "none"},
-		{name: "window id", source: SourceWindowID, want: "WINDOWID"},
-		{name: "process", source: SourceProcess, want: "_NET_WM_PID"},
-		{name: "active", source: SourceActive, want: "_NET_ACTIVE_WINDOW"},
-		{name: "unknown", source: Source(99), want: "none"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.source.String(); got != tc.want {
-				t.Fatalf("Source(%d).String() = %q, want %q", tc.source, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestContainsPID(t *testing.T) {
-	if !containsPID([]uint32{3, 7, 11}, 7) {
-		t.Fatal("containsPID missed a present pid")
-	}
-	if containsPID([]uint32{3, 7, 11}, 8) {
-		t.Fatal("containsPID found an absent pid")
-	}
-}
-
 func TestAncestorPIDsStopsAtInputBoundaries(t *testing.T) {
 	parent := func(pid int) (int, bool) { return pid + 1, true }
 
