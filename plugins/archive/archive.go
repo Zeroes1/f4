@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/unxed/archives"
-	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/sevenzip"
 	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 	"github.com/unxed/zipper/archive"
 )
 
@@ -315,7 +315,7 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 func showArchiveTestFailure(app vfs.App, srcPath string, err error) {
 	report := formatArchiveTestFailure(srcPath, err)
 	if app.Message(" Test archive ", report, []string{"&Copy list", "&Close"}) == 0 {
-		terminal.SetClipboardAsync(report)
+		go vtui.SetClipboard(report)
 	}
 }
 
