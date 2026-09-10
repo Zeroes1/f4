@@ -268,7 +268,7 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	format, stream, err := archives.Identify(ctx, srcPath, f)
 	if err != nil {
