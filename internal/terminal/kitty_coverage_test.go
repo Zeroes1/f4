@@ -64,7 +64,7 @@ func TestKittyCoverageCommandAndPayloadEdges(t *testing.T) {
 
 func TestKittyCoverageRejectsBadContinuationAndSurfaceData(t *testing.T) {
 	var answers bytes.Buffer
-	kg := NewKittyGraphics(func(data []byte) { answers.Write(data) })
+	kg := NewKittyGraphics(func(data) { answers.Write(data) })
 
 	kg.Handle("a=t,i=1,f=32,s=1,v=1,m=1;AAAA")
 	kg.Handle("m=0;!")
@@ -79,10 +79,10 @@ func TestKittyCoverageRejectsBadContinuationAndSurfaceData(t *testing.T) {
 	}
 
 	cases := []struct {
-		name string
-		cmd  string
-		data []byte
-		want string
+		name
+		cmd
+		data
+		want
 	}{
 		{"missing dimensions", "f=32,s=0,v=1", nil, "the image dimensions are missing"},
 		{"too many pixels", "f=32,s=65536,v=1", nil, "the image is too large"},
@@ -144,7 +144,7 @@ func TestKittyCoverageFileSafetyAndRanges(t *testing.T) {
 func TestKittyCoverageDisplayStoreAndDelete(t *testing.T) {
 	var answers bytes.Buffer
 	display := &kittyCoverageDisplay{putError: "EIO:display failed", orphaned: []uint32{30}}
-	kg := NewKittyGraphics(func(data []byte) { answers.Write(data) })
+	kg := NewKittyGraphics(func(data) { answers.Write(data) })
 	kg.SetDisplay(display)
 	surface := vtui.NewImageSurfaceFromPix(1, 1, 4, []byte{1, 2, 3, 4})
 
