@@ -3106,6 +3106,22 @@ func shiftSelectDirection(vk uint16) int {
 }
 
 func (fp *FileSystemPanel) ProcessKey(e *vtinput.InputEvent) bool {
+	return fp.processKey(e, false)
+}
+
+// EnterSelectedFromAction enters the selected directory or archive for an
+// explicit panel action such as Ctrl+PgDn. It is intentionally distinct from
+// ordinary Enter so providers can reserve that action for entries that should
+// not open on Enter or a double-click.
+func (fp *FileSystemPanel) EnterSelectedFromAction() bool {
+	return fp.processKey(&vtinput.InputEvent{
+		Type:           vtinput.KeyEventType,
+		KeyDown:        true,
+		VirtualKeyCode: vtinput.VK_RETURN,
+	}, true)
+}
+
+func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelEnter bool) bool {
 	if !e.KeyDown {
 		return false
 	}
@@ -3419,6 +3435,12 @@ func (fp *FileSystemPanel) ProcessKey(e *vtinput.InputEvent) bool {
 				directoryProvider, ok := provider.(vfs.VirtualDirectoryProvider)
 				if !ok || !directoryProvider.OpensVirtualDirectories() {
 					provider = nil
+				}
+			}
+			if provider != nil && !allowProviderPanelEnter {
+				if policy, ok := provider.(vfs.PanelEnterPolicyProvider); ok &&
+					!policy.PanelEnterAllowed(context.Background(), fp.Vfs, fullPath) {
+					return true
 				}
 			}
 			if provider != nil {

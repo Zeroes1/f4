@@ -23,7 +23,6 @@ import (
 	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
-	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -1888,7 +1887,7 @@ func init() {
 				isArchive = vfs.FindProvider(context.Background(), fsp.Vfs, fullPath) != nil
 			}
 			if isDir || isArchive {
-				pf.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+				fsp.EnterSelectedFromAction()
 			}
 		}),
 	})
