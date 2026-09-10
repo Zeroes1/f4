@@ -96,12 +96,15 @@ func actionArchiveCommands(app vfs.App) {
 	})
 }
 
-// resolveLocalArchivePath returns the absolute path of the selected archive
-// when the active panel is a local filesystem.
+// resolveLocalArchivePath returns the absolute path of the archive to operate
+// on when the active panel is a local filesystem or a local ArchiveVFS.
 func resolveLocalArchivePath(app vfs.App) (string, bool) {
 	srcVfs := app.GetActivePanelVFS()
 	if srcVfs == nil {
 		return "", false
+	}
+	if archiveVFS, ok := srcVfs.(*ArchiveVFS); ok {
+		return archiveVFS.LocalArchivePath()
 	}
 	name := app.GetSelectedName()
 	if name == "" || name == ".." {
