@@ -88,6 +88,30 @@ func TestHotkeyAssignFramePreservesRightCtrl(t *testing.T) {
 	}
 }
 
+func TestHotkeyAssignFramePreservesShiftFromModifierEvent(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	f := dialog.NewHotkeyAssignFrame(hm, "File.Attributes", "Shell", nil)
+
+	if !f.ProcessKey(&vtinput.InputEvent{
+		Type:           vtinput.KeyEventType,
+		KeyDown:        true,
+		VirtualKeyCode: vtinput.VK_LSHIFT,
+	}) {
+		t.Fatal("Shift keydown was not consumed by the assignment dialog")
+	}
+	if !f.ProcessKey(&vtinput.InputEvent{
+		Type:           vtinput.KeyEventType,
+		KeyDown:        true,
+		VirtualKeyCode: vtinput.VK_K,
+	}) {
+		t.Fatal("Shift+K was not consumed by the assignment dialog")
+	}
+
+	if got := hm.Bindings["Shell"]["ShiftK"]; got != "File.Attributes" {
+		t.Fatalf("captured Shift+K = %q, want File.Attributes under ShiftK", got)
+	}
+}
+
 func TestHotkeyDialogSizeForScreen(t *testing.T) {
 	if gotW, gotH := hotkeyDialogSizeForScreen(200, 60); gotW != 196 || gotH != 58 {
 		t.Fatalf("large screen size = %dx%d, want 196x58", gotW, gotH)
