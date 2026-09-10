@@ -1008,7 +1008,7 @@ func TestPanelsFrame_AlwaysShowMenuBar(t *testing.T) {
 // a click on the first line of micro (or far2l started from f4) used to hit
 // f4's stale menu-bar geometry and open the f4 menu over the terminal app.
 func TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu(t *testing.T) {
-	t.Cleanup(swapFrameManager())
+	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	theme.SetDefaultF4Palette()
 	oldAlways := config.App.AlwaysShowMenuBar
