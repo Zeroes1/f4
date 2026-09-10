@@ -76,15 +76,20 @@ argument.
 
 ## Code Navigation
 
-- The repository is indexed by CodeGraph (`.mcp.json`, index in `.codegraph/`).
-  For symbol questions use it, not `grep`: `callers`, `callees`, `impact`,
-  `explore`, `node`. The tree is 69 packages and a symbol's package is not
-  always the one its name suggests, so grep over the module is slow and
-  imprecise.
-- The index is git-ignored and the server never builds one on its own, so a fresh
-  clone needs `npx -y @colbymchenry/codegraph@1.6.0 init` once.
-- There is no `codegraph` binary on PATH — always run the full form:
-  `npx -y @colbymchenry/codegraph@1.6.0 <command>`.
+- Navigation runs through the gopls MCP server (`.mcp.json` runs `gopls mcp`)
+  when it is available. Check with `command -v gopls` before relying on it: the
+  server is not part of a clone, and where gopls is missing it never starts and
+  its tools are not offered. Then `grep`, `go doc` and `go list` carry the work,
+  and the answer says navigation ran without gopls.
+- With gopls present, use it for symbol questions instead of `grep`: `go_search`,
+  `go_symbol_references`, `go_package_api`, `go_file_context`, `go_diagnostics`.
+  The tree is 69 packages and a symbol's package is not always the one its name
+  suggests, so grep over the module is slow and imprecise.
+- Answers come from `go/types`, so they match what the compiler sees, including
+  files behind another platform's build tag.
+- Installing it is the developer's choice, not a step an agent takes on its own:
+  `go install golang.org/x/tools/gopls@latest`, with `$(go env GOPATH)/bin` on
+  PATH. Nothing is indexed into the repository and a fresh clone needs no setup.
 - Grep remains correct for non-symbol text: comments, error strings, build tags,
   ini keys.
 

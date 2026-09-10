@@ -352,7 +352,6 @@ Every file tracked in the repository. Regenerate with
     │       ├── golang-performance
     │       ├── golang-security
     │       └── golang-testing
-    ├── .codegraph
     ├── .gitattributes
     ├── .github
     │   ├── actions

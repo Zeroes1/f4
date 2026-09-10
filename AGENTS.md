@@ -115,29 +115,33 @@ artifacts/       # build artifacts
 | `.ai-factory/ARCHITECTURE.md` | Architecture pattern, boundaries and dependency rules |
 | `.ai-factory/rules/base.md` | Detected code conventions: naming, errors, logging, tests |
 | `.ai-factory/config.yaml` | AI Factory configuration: paths, language, git workflow |
-| `.mcp.json` | MCP servers for this project: CodeGraph code-graph index |
+| `.mcp.json` | MCP servers for this project: the gopls Go language server |
 
 ## Agent Rules
 
-### Code graph (CodeGraph MCP)
+### Code navigation (gopls MCP)
 
-- The MCP server is wired in `.mcp.json` and runs through `npx`, so no global
-  install is needed. The index lives in `.codegraph/` and is git-ignored.
-- **A fresh clone has no index.** The server does not build one on its own — if a
-  tool reports `No .codegraph/`, run `npx -y @colbymchenry/codegraph@1.6.0 init`
-  once in the repository root. A new index is picked up live, no restart.
-- There is no `codegraph` binary on PATH. Every invocation takes the form
-  `npx -y @colbymchenry/codegraph@1.6.0 <command>`; the commands below are the
-  `<command>` part.
+- The MCP server is the Go language server itself: `.mcp.json` runs `gopls mcp`.
+  Nothing is indexed into the repository — gopls reuses the same build cache as
+  `go build`.
+- **It is optional, so check before you reach for it:** `command -v gopls`. When
+  it is absent the server never starts and its tools are simply not offered —
+  fall back to `grep`, `go doc` and `go list`, and say that navigation ran
+  without it. Do not install it as a side effect of another task; the one-time
+  setup is `go install golang.org/x/tools/gopls@latest` with
+  `$(go env GOPATH)/bin` on PATH.
+- Answers come from `go/types`, so they are the compiler's view of the code
+  rather than a text match: a symbol resolves inside its own package even where
+  the name repeats, and files behind another platform's build tag still resolve.
 - Use it instead of `grep` for symbol questions. The tree is 69 packages and a
   symbol's package is not always the one its name suggests, so grep over the
   whole module is both slow and imprecise:
-  - `callers <symbol>` — who calls it
-  - `callees <symbol>` — what it calls
-  - `impact <symbol>` — what a change touches
-  - `explore <query>` — relevant symbols with source and call paths
-  - `node <symbol|file>` — one symbol's source plus its caller trail
-- The index auto-syncs on file changes; after a large rebase run `sync`.
+  - `go_search` — find a symbol by name across the workspace
+  - `go_symbol_references` — every reference to one symbol
+  - `go_package_api` — the exported surface of a package
+  - `go_file_context` — what a file declares and what it depends on
+  - `go_diagnostics` — build and vet errors for the files you just changed
+- The server follows edits on its own; there is nothing to rebuild after a rebase.
 - Grep stays the right tool for text that is not a symbol: comments, error
   strings, build tags, config keys.
 
