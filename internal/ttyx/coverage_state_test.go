@@ -1,6 +1,7 @@
 package ttyx
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/jezek/xgb/xproto"
@@ -23,11 +24,11 @@ func TestAncestorPIDsStopsAtInputBoundaries(t *testing.T) {
 		t.Fatalf("a missing parent should end the walk: %v", got)
 	}
 
-	if int64(^uint32(0))+1 <= int64(^uint32(0)) {
-		t.Fatal("test bound is not above uint32")
-	}
-	if got := ancestorPIDs(int(int64(^uint32(0))+1), parent); len(got) != 0 {
-		t.Fatalf("an out-of-range pid produced %v", got)
+	if strconv.IntSize == 64 {
+		tooBig := uint64(^uint32(0)) + 1
+		if got := ancestorPIDs(int(tooBig), parent); len(got) != 0 {
+			t.Fatalf("an out-of-range pid produced %v", got)
+		}
 	}
 }
 
