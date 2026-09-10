@@ -75,7 +75,8 @@ func sortedLinesData(data []byte, ascending, caseSensitive bool) []byte {
 
 // SortLines sorts the selected logical lines, or the complete file when no
 // selection is active. The edit is kept as one undo step and does not change
-// the line endings or the selection's byte range.
+// the line endings or the selection's byte range. The cursor stays on the same
+// logical line and column, like MoveLines does.
 func (ev *EditorView) SortLines(ascending, caseSensitive bool) error {
 	if ev.Pt == nil || ev.Pt.Size() == 0 {
 		return nil
@@ -132,9 +133,12 @@ func (ev *EditorView) SortLines(ascending, caseSensitive bool) error {
 		return nil
 	}
 
-	// Sorting does not change the size of the block, so absolute caret and
-	// selection offsets remain valid after the replacement.
-	cursorOffset := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
+	// Sorting does not change the size of the block, so the selection's byte
+	// range remains valid. Keep the cursor's logical line and column instead of
+	// its absolute byte offset: otherwise different line lengths would make the
+	// caret jump to a different column after a sort.
+	cursorLine := ev.CursorLine
+	cursorPos := ev.CursorPos
 	selectionAnchor := ev.SelAnchorOffset
 	selectionWasActive := ev.SelActive
 	rectSelectionWasActive := ev.RectSelActive
@@ -142,8 +146,11 @@ func (ev *EditorView) SortLines(ascending, caseSensitive bool) error {
 
 	ev.replaceRange(start, end, replacement)
 
-	ev.CursorLine = ev.Li.GetLineAtOffset(min(cursorOffset, ev.Pt.Size()))
-	ev.CursorPos = min(cursorOffset, ev.Pt.Size()) - ev.Li.GetLineOffset(ev.CursorLine)
+	if cursorLine >= ev.Li.LineCount() {
+		cursorLine = ev.Li.LineCount() - 1
+	}
+	ev.CursorLine = cursorLine
+	ev.CursorPos = min(cursorPos, ev.GetLineLength(cursorLine))
 	if selectionWasActive {
 		ev.SelActive = true
 		ev.SelAnchorOffset = selectionAnchor
