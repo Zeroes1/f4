@@ -1449,6 +1449,12 @@ func CreateDefaultHighlightIni(path string) {
 #
 # f4 applies file highlighting rules from both the active Color Style (Theme)
 # and this file. By default, rules in this file have higher priority.
+# The two sources are not merged field by field: f4 puts one complete rule
+# list before the other. Change Appearance.HighlightPriority in settings.ini
+# to 0 (user rules first, the default) or 1 (theme rules first).
+# A matching rule normally stops processing even when it has no colour for
+# the current state. Add ContinueProcessing = 1 when a later rule should be
+# allowed to supply or merge the remaining colour components.
 #
 # You can add your custom highlight groups here (e.g. Mask = *.mp3).
 # Default groups (Hidden, Executables, Directories) are already defined
