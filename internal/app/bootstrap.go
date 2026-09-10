@@ -85,15 +85,22 @@ func startupDirArgs(args []string) []string {
 	return dirs
 }
 
-// rememberStartupDirs records those directories, but only for a start from a
-// terminal. It must run before checkAndDetach and before the daemon is spawned:
-// both hand the next process /dev/null on stdin. Values inherited from the
-// parent win, they are the answer that process already worked out.
+// rememberStartupDirs records the directories the user explicitly named on
+// the command line (or, for a terminal start without arguments, the current
+// working directory). The environment carries the values to the process that
+// draws the panels — the GUI's detached copy, or the session daemon — neither
+// of which can work them out on its own.
+//
+// Without explicit arguments, CWD is only captured when stdin is a terminal.
+// A GUI started from Explorer/Dock arrives with a working directory inside the
+// application bundle, which is not a place anyone asked to see. Explicit
+// directory arguments are always honoured regardless of stdin type so that
+// `f4-gui.exe C:\dir` works the same as `f4 C:\dir` from a terminal.
 func rememberStartupDirs(args []string) {
 	if os.Getenv(startupDirEnv) != "" {
 		return
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if len(args) == 0 && !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
 	}
 	cwd, err := os.Getwd()
