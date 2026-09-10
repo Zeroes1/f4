@@ -2197,7 +2197,7 @@ func init() {
 		Description: "Encode or decode the selected text as Base64",
 		DescKey:     "Action.Editor.Base64Menu.Desc",
 		DefaultKeys: []string{"F11"},
-		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowBase64Menu() }),
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowPluginsMenu() }),
 	})
 	action.RegisterAction(action.Action{
 		Name:        "Editor.Base64Encode",
@@ -2209,7 +2209,7 @@ func init() {
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			if err := ev.TransformBase64Selection(true); err != nil {
-				vtui.ShowMessage(i18n.Msg("Editor.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				vtui.ShowMessage(i18n.Msg("Editor.Plugins.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 			}
 		}),
 	})
@@ -2223,9 +2223,20 @@ func init() {
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			if err := ev.TransformBase64Selection(false); err != nil {
-				vtui.ShowMessage(i18n.Msg("Editor.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				vtui.ShowMessage(i18n.Msg("Editor.Plugins.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 			}
 		}),
+	})
+	action.RegisterAction(action.Action{
+		Name:                "Editor.SortLines",
+		Area:                "Editor",
+		Label:               "Sort lines",
+		LabelKey:            "Action.Editor.SortLines",
+		Description:         "Sort selected lines or all lines",
+		DescKey:             "Action.Editor.SortLines.Desc",
+		MenuPath:            "Edit",
+		MenuSeparatorBefore: true,
+		Handler:             withEditor(func(ev *editor.EditorView) { ev.ShowSortDialog() }),
 	})
 	action.RegisterAction(action.Action{
 		Name:        "Editor.ToggleOvertype",

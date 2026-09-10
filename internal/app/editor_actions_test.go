@@ -39,6 +39,17 @@ func TestEditorBase64ActionsExposeF11AndEditCommands(t *testing.T) {
 	}
 }
 
+func TestEditorSortLinesAction(t *testing.T) {
+	sortAction, ok := GetAction("Editor.SortLines")
+	if !ok {
+		t.Fatal("Editor.SortLines is not registered")
+	}
+	if sortAction.Area != "Editor" || sortAction.MenuPath != "Edit" ||
+		!sortAction.MenuSeparatorBefore || sortAction.Handler == nil {
+		t.Fatalf("sort action = %+v", sortAction)
+	}
+}
+
 func TestEditor_DuplicateLine_Hotkey(t *testing.T) {
 	action, ok := GetAction("Editor.DuplicateLine")
 	if !ok {
