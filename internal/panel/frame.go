@@ -1817,7 +1817,12 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 
 	// Arkanoid easter egg: Ctrl+Alt+A
 	if e.VirtualKeyCode == 'A' && alt && ctrl {
-		return Arkanoid()
+		// The matching plugin gesture owns the event even when its handler
+		// cannot open the game. Letting a failed launch fall through exposes
+		// the same key to the frame dispatcher and can leave a stale overlay
+		// behind (#983).
+		Arkanoid()
+		return true
 	}
 
 	// Check global hotkeys (ignoring Lock and Enhanced keys)

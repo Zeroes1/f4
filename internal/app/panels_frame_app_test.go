@@ -71,6 +71,31 @@ func TestPanelsFrame_ArkanoidHotkey(t *testing.T) {
 	t.Cleanup(arkFrame.Close)
 }
 
+func TestPanelsFrame_FailedArkanoidHotkeyStillConsumesEvent_Issue983(t *testing.T) {
+	previous := panel.Arkanoid
+	t.Cleanup(func() { panel.Arkanoid = previous })
+
+	calls := 0
+	panel.Arkanoid = func() bool {
+		calls++
+		return false
+	}
+
+	pf := &panel.PanelsFrame{ShowPanels: true}
+	e := &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  'A',
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed,
+	}
+	if !pf.InterceptPluginKey(e) {
+		t.Fatal("failed Arkanoid launch passed the matched hotkey to the frame dispatcher")
+	}
+	if calls != 1 {
+		t.Fatalf("Arkanoid handler calls = %d, want 1", calls)
+	}
+}
+
 func TestPanelsFrame_ProcessMouse_DoubleClick(t *testing.T) {
 	oldNavigationMode := config.App.NavigationMode
 	config.App.NavigationMode = config.NavigationClassic
