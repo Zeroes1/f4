@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/unxed/archives"
@@ -259,7 +260,19 @@ type archiveTestingReader struct {
 
 func (r *archiveTestingReader) Read(p []byte) (int, error) {
 	n, err := r.Reader.Read(p)
-	r.read += int64(n)
+	atomic.AddInt64(&r.read, int64(n))
+	return n, err
+}
+
+type archiveTestingReaderAtSeeker struct {
+	*archiveTestingReader
+	io.ReaderAt
+	io.Seeker
+}
+
+func (r *archiveTestingReaderAtSeeker) ReadAt(p []byte, offset int64) (int, error) {
+	n, err := r.ReaderAt.ReadAt(p, offset)
+	atomic.AddInt64(&r.read, int64(n))
 	return n, err
 }
 
@@ -304,10 +317,20 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 		return fmt.Errorf("format %T does not support testing", format)
 	}
 
-	countedStream := &archiveTestingReader{Reader: stream}
+	countedReader := &archiveTestingReader{Reader: stream}
+	var countedStream io.Reader = countedReader
+	if readerAt, ok := stream.(io.ReaderAt); ok {
+		if seeker, ok := stream.(io.Seeker); ok {
+			countedStream = &archiveTestingReaderAtSeeker{
+				archiveTestingReader: countedReader,
+				ReaderAt:             readerAt,
+				Seeker:               seeker,
+			}
+		}
+	}
 	startTime := time.Now()
 	reportProgress := func(name string, current, size int64) {
-		archiveBytes := countedStream.read
+		archiveBytes := atomic.LoadInt64(&countedReader.read)
 		elapsed := time.Since(startTime)
 		speed := int64(0)
 		if elapsed > 0 {
