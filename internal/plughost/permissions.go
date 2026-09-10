@@ -232,18 +232,29 @@ func (s *PermissionStore) Grants() []PermissionGrant {
 // would leave a dead plugin and no obvious way to revive it.
 func (s *PermissionStore) Revoke(plugin, permission string) error {
 	s.mu.Lock()
-	delete(s.granted[plugin], permission)
-	if len(s.granted[plugin]) == 0 {
-		delete(s.granted, plugin)
+	defer s.mu.Unlock()
+	next := make(map[string]map[string]string, len(s.granted))
+	for name, entries := range s.granted {
+		next[name] = make(map[string]string, len(entries))
+		for key, value := range entries {
+			next[name][key] = value
+		}
 	}
-	data, err := json.MarshalIndent(s.granted, "", "  ")
-	path := s.path
-	s.mu.Unlock()
-
-	if err != nil || path == "" {
+	delete(next[plugin], permission)
+	if len(next[plugin]) == 0 {
+		delete(next, plugin)
+	}
+	data, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0o600)
+	if s.path != "" {
+		if err := config.WriteUserFileAtomically(s.path, append(data, '\n'), 0600); err != nil {
+			return err
+		}
+	}
+	s.granted = next
+	return nil
 }
 
 // PermissionGate decides whether one plugin may do one thing.

@@ -1,9 +1,10 @@
 package app
 
 import (
+	"strings"
+
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
-	"strings"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/history"
@@ -145,14 +146,18 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 
 	// The area's own actions first (stable registry order).
 	for _, a := range action.All() {
-		if a.MenuPath != "" && !a.HideFromMenu && a.Area == area {
+		if a.Name != "Settings.Open" && a.MenuPath != "" && !a.HideFromMenu && a.Area == area {
 			appendAction(a)
 		}
 	}
+	if a, ok := GetAction("Settings.Open"); ok {
+		appendAction(a)
+	}
+
 	// Common actions join only menu groups that already exist in the
 	// area, so they cannot create stray top-level menus.
 	for _, a := range action.All() {
-		if a.MenuPath != "" && !a.HideFromMenu && a.Area == "Common" && menus[a.MenuPath] != nil {
+		if a.Name != "Settings.Open" && a.MenuPath != "" && !a.HideFromMenu && a.Area == "Common" && menus[a.MenuPath] != nil {
 			appendAction(a)
 		}
 	}
@@ -178,6 +183,15 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		items := make([]vtui.MenuItem, 0, len(m.items)+len(m.pinned))
 		items = append(items, m.items...)
 		items = append(items, m.pinned...)
+		// Settings leads its submenu without changing top-level menu order.
+		for i, item := range items {
+			if item.UserData == history.MenuHistoryItemKey("Settings.Open") {
+				rest := append([]vtui.MenuItem(nil), items[:i]...)
+				rest = append(rest, items[i+1:]...)
+				items = append([]vtui.MenuItem{item, {Separator: true}}, rest...)
+				break
+			}
+		}
 		result = append(result, vtui.MenuBarItem{Label: m.title, SubItems: normalizeMenuSeparators(items)})
 	}
 	return result

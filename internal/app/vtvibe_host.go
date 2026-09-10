@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/unxed/f4/internal/panel"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/config"
@@ -32,7 +33,7 @@ import (
 const (
 	vtvibeIniName        = "vtvibe.ini"
 	vtvibeDefaultBaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
-	vtvibeDefaultModel   = "gemini-3.6-flash"
+	vtvibeDefaultModel   = vtvibe.DefaultModel
 )
 
 var (
@@ -118,7 +119,7 @@ func init() {
 		}
 	}
 
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.TogglePanel",
 		Area:        "Shell",
 		Label:       "AI Panel",
@@ -130,7 +131,7 @@ func init() {
 		MenuSubPath: "AI",
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiTogglePanel(pf) }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.Ask",
 		Area:        "Common",
 		Label:       "Ask the AI",
@@ -140,7 +141,7 @@ func init() {
 		MenuPath:    "Commands",
 		Handler:     func() bool { return aiAskAction() },
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.NewSession",
 		Area:        "Shell",
 		Label:       "New AI Dialog",
@@ -152,7 +153,7 @@ func init() {
 		Visible:     func() bool { return isAIPanelActive() },
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiNewSession(pf) }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.ApplyPatch",
 		Area:        "Shell",
 		Label:       "Apply AP Patch",
@@ -165,7 +166,7 @@ func init() {
 		Visible:     func() bool { return aiSession().LastPatch() != nil },
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiApplyPatch(pf) }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.Setup",
 		Area:        "Shell",
 		Label:       "AI Setup",
@@ -175,7 +176,7 @@ func init() {
 		MenuPath:    "Options",
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiSetupDialog(pf) }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.Help",
 		Area:        "Shell",
 		Label:       "AI command help",
@@ -186,7 +187,7 @@ func init() {
 		MenuSubPath: "AI",
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiCommand(pf, "help") }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.AttachAPSpec",
 		Area:        "Shell",
 		Label:       "Attach AP specification",
@@ -197,7 +198,7 @@ func init() {
 		MenuSubPath: "AI",
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiAttachAPSpec(pf) }),
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "AI.ListModels",
 		Area:        "Shell",
 		Label:       "List AI models",

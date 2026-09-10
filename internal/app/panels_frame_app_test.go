@@ -2,6 +2,13 @@ package app
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/appcmd"
 	"github.com/unxed/f4/internal/config"
@@ -12,17 +19,12 @@ import (
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/plughost"
+	"github.com/unxed/f4/internal/settings"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestPanelsFrame_ArkanoidHotkey(t *testing.T) {
@@ -69,6 +71,31 @@ func TestPanelsFrame_ArkanoidHotkey(t *testing.T) {
 	// Clean up Arkanoid to prevent background loop leak
 	arkFrame := arkScreen.Frames[0].(*ArkanoidFrame)
 	t.Cleanup(arkFrame.Close)
+}
+
+func TestPanelsFrame_FailedArkanoidHotkeyStillConsumesEvent_Issue983(t *testing.T) {
+	previous := panel.Arkanoid
+	t.Cleanup(func() { panel.Arkanoid = previous })
+
+	calls := 0
+	panel.Arkanoid = func() bool {
+		calls++
+		return false
+	}
+
+	pf := &panel.PanelsFrame{ShowPanels: true}
+	e := &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  'A',
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed,
+	}
+	if !pf.InterceptPluginKey(e) {
+		t.Fatal("failed Arkanoid launch passed the matched hotkey to the frame dispatcher")
+	}
+	if calls != 1 {
+		t.Fatalf("Arkanoid handler calls = %d, want 1", calls)
+	}
 }
 
 func TestPanelsFrame_ProcessMouse_DoubleClick(t *testing.T) {
@@ -1856,21 +1883,28 @@ func TestPanelsFrame_ShiftF9_SaveSettings(t *testing.T) {
 	if !pressKey(pf, ev) {
 		t.Error("Expected PanelsFrame to handle Shift+F9 keypress")
 	}
-	if dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window); ok {
-		for _, item := range dlg.GetChildren() {
-			if btn, ok := item.(*vtui.Button); ok && btn.IsDefault {
-				btn.OnClick()
-				break
+	center, ok := vtui.FrameManager.GetTopFrame().(*settings.Center)
+	if !ok || center.Category() != "workspaces" {
+		t.Fatalf("Shift+F9 top frame=%T", vtui.FrameManager.GetTopFrame())
+	}
+	defer center.Close()
+	var save *vtui.Button
+	var walk func(vtui.UIElement)
+	walk = func(item vtui.UIElement) {
+		if item.GetId() == "settings-command:save.preferences" {
+			save, _ = item.(*vtui.Button)
+		}
+		if c, ok := item.(vtui.Container); ok {
+			for _, child := range c.GetChildren() {
+				walk(child)
 			}
 		}
-	} else {
-		t.Fatalf("Shift+F9 top frame = %T, want save-settings dialog", vtui.FrameManager.GetTopFrame())
 	}
-
-	// ShowToast posts its setup and owns a timer goroutine. Join it before this
-	// test lets another test reuse the manager.
-	testutil.PumpUntilToastActive(t)
-	testutil.WaitForToastExpiry(t, 3*time.Second)
+	walk(center)
+	if save == nil {
+		t.Fatal("manual save command missing")
+	}
+	save.OnClick()
 
 	// Проверяем, что файл настроек действительно был записан на диск
 	info, err := os.Stat(tmp.Name())

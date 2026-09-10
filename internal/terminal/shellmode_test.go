@@ -142,8 +142,8 @@ func TestConsoleViewStyleOf(t *testing.T) {
 		{"case insensitive", ShellModeConfig{ConsoleMode: "FAR"}, ConsoleViewFar},
 	}
 	for _, c := range cases {
-		if got := consoleViewStyleOf(c.cfg); got != c.want {
-			t.Errorf("%s: consoleViewStyleOf() = %q, want %q", c.name, got, c.want)
+		if got := ConsoleViewStyleOf(c.cfg); got != c.want {
+			t.Errorf("%s: ConsoleViewStyleOf() = %q, want %q", c.name, got, c.want)
 		}
 	}
 }

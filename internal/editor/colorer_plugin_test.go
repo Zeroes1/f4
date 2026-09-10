@@ -396,7 +396,7 @@ func TestColorer_StagedInstallRejectsTraversalAndPreservesExistingTree(t *testin
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := installColorerSchemas(buf.Bytes(), dest, context.Background()); err == nil {
+	if err := InstallColorerSchemas(buf.Bytes(), dest, context.Background()); err == nil {
 		t.Fatal("traversal archive unexpectedly installed")
 	}
 	got, err := os.ReadFile(catalog)

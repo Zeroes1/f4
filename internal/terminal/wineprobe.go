@@ -79,7 +79,7 @@ func wineProbeReport() string {
 	line("ProbeGUIBackend", orEmptyMarker(ProbeGUIBackend()))
 	for _, mode := range []string{ConsoleViewOwn, ConsoleViewFar, ConsoleViewMc} {
 		resolved := ResolveShellMode(ShellModeConfig{ConsoleMode: mode})
-		line("ConsoleMode="+mode, fmt.Sprintf("%s (view: %s)", resolved, consoleViewStyleOf(ShellModeConfig{ConsoleMode: mode})))
+		line("ConsoleMode="+mode, fmt.Sprintf("%s (view: %s)", resolved, ConsoleViewStyleOf(ShellModeConfig{ConsoleMode: mode})))
 	}
 	return sb.String()
 }

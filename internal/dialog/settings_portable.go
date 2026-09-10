@@ -36,8 +36,8 @@ var PortableProfileSubdirs = []string{
 	"styles",
 }
 
-// currentPortableIniPath is config.PortableIniPath for the running binary.
-func currentPortableIniPath() string {
+// CurrentPortableIniPath is config.PortableIniPath for the running binary.
+func CurrentPortableIniPath() string {
 	exe, err := config.Executable()
 	if err != nil {
 		exe = os.Args[0]
@@ -66,7 +66,7 @@ func SetPortableMode(iniPath string, enable bool) error {
 	// Trim the blank line config.UpdateIniValues puts before a brand new section so
 	// a freshly created file does not start with an empty line.
 	updated = []byte(strings.TrimLeft(string(updated), "\r\n"))
-	// #nosec G703 -- iniPath is currentPortableIniPath()'s answer, built from
+	// #nosec G703 -- iniPath is CurrentPortableIniPath()'s answer, built from
 	// the executable's own directory; no user input reaches it.
 	return os.WriteFile(iniPath, updated, 0600)
 }
@@ -191,7 +191,7 @@ func rejectTransferConflicts(src, dst string, skipCrashes bool) error {
 			return nil
 		}
 		if !d.Type().IsRegular() {
-			return nil
+			return fmt.Errorf("cannot move profile containing non-regular file %q", rel)
 		}
 		if _, err := os.Lstat(target); err == nil {
 			return fmt.Errorf("cannot move profile: destination already contains %q", rel)
@@ -222,16 +222,16 @@ func copyFileNoClobber(src, dst string) error {
 	return out.Close()
 }
 
-// systemProfileDir is the per-user directory f4 uses when it is not portable.
-func systemProfileDir() string {
+// SystemProfileDir is the per-user directory f4 uses when it is not portable.
+func SystemProfileDir() string {
 	sysDir, _ := config.UserConfigDir()
 	return filepath.Join(sysDir, "f4")
 }
 
-// portableProfileDir is the directory a portable f4 would use with the
+// PortableProfileDir is the directory a portable f4 would use with the
 // current <exe>.ini (honoring Profile= when present).
-func portableProfileDir() string {
-	iniPath := currentPortableIniPath()
+func PortableProfileDir() string {
+	iniPath := CurrentPortableIniPath()
 	return config.PortableProfileDirFor(filepath.Dir(iniPath), ini.Load(iniPath))
 }
 
@@ -323,7 +323,7 @@ func (t *portableSettingsPathText) SetPosition(x1, y1, x2, y2 int) {
 // restart is needed — the only honest answer given how the mode is detected
 // (see the comment at the top of this file).
 func ShowPortableSettings() {
-	iniPath := currentPortableIniPath()
+	iniPath := CurrentPortableIniPath()
 	wasPortable := config.IsPortableProfile()
 
 	width, height := 70, 14
@@ -400,7 +400,7 @@ func ShowPortableSettings() {
 			dlg.Close()
 			return
 		}
-		if err := applyPortableMode(iniPath, enable, comboTransfer.Menu.SelectPos == 1); err != nil {
+		if err := ApplyPortableMode(iniPath, enable, comboTransfer.Menu.SelectPos == 1); err != nil {
 			vtui.ShowMessage(i18n.Msg("Error.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 			return
 		}
@@ -411,20 +411,22 @@ func ShowPortableSettings() {
 	vtui.FrameManager.Push(dlg)
 }
 
-// applyPortableMode flushes what the running instance has in memory, copies
+// ApplyPortableMode flushes what the running instance has in memory, copies
 // the profile if asked, and only then rewrites the ini. Ordering matters: if
 // the copy fails the ini is untouched and the next start is unchanged.
-func applyPortableMode(iniPath string, enable, copyProfile bool) error {
-	config.SaveConfig()
+func ApplyPortableMode(iniPath string, enable, copyProfile bool) error {
+	if err := config.SaveAppliedConfiguration(); err != nil {
+		return err
+	}
 	src := config.GetF4ConfigDir()
 	var dst string
 	if enable {
-		dst = portableProfileDir()
+		dst = PortableProfileDir()
 		if err := EnsureProfileLayout(dst); err != nil {
 			return err
 		}
 	} else {
-		dst = systemProfileDir()
+		dst = SystemProfileDir()
 		if err := os.MkdirAll(dst, 0700); err != nil {
 			return err
 		}
@@ -435,4 +437,33 @@ func applyPortableMode(iniPath string, enable, copyProfile bool) error {
 		}
 	}
 	return SetPortableMode(iniPath, enable)
+}
+
+// TransferProfile selects a copied or moved profile only after transfer succeeds.
+// The caller flushes applied preferences and snapshots these paths on the UI thread.
+func TransferProfile(iniPath, src, dst string, enable, move bool) error {
+	var err error
+	if move {
+		err = MoveProfileDir(src, dst)
+	} else {
+		err = CopyProfileDir(src, dst)
+	}
+	if err != nil {
+		return err
+	}
+	if enable {
+		err = EnsureProfileLayout(dst)
+	} else {
+		err = os.MkdirAll(dst, 0700)
+	}
+	if err != nil {
+		return err
+	}
+	if err = SetPortableMode(iniPath, enable); err != nil {
+		return err
+	}
+	if move && filepath.Clean(src) != filepath.Clean(dst) {
+		return os.RemoveAll(src)
+	}
+	return nil
 }

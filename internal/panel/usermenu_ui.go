@@ -33,7 +33,7 @@ const (
 	MenuModeMain                  // main_menu.ini in user config
 )
 
-const farMenuFileName = "FarMenu.ini"
+const FarMenuFileName = "FarMenu.ini"
 
 // submenuMarker is the right-aligned glyph that flags an item as opening
 // a nested submenu, matching far2l's choice (vmenu.cpp:1980).
@@ -75,11 +75,11 @@ func MainMenuFilePath() string {
 	return filepath.Join(config.GetF4ConfigDir(), "settings", "user_menu.ini")
 }
 
-// findLocalFarMenu walks startDir upward looking for FarMenu.ini.
-func findLocalFarMenu(startDir string) (path string, found bool) {
+// FindLocalFarMenu walks startDir upward looking for FarMenu.ini.
+func FindLocalFarMenu(startDir string) (path string, found bool) {
 	dir := startDir
 	for {
-		candidate := filepath.Join(dir, farMenuFileName)
+		candidate := filepath.Join(dir, FarMenuFileName)
 		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
 			return candidate, true
 		}
@@ -97,15 +97,15 @@ func findFarMenuNearBinary() (path string, found bool) {
 	if err != nil {
 		return "", false
 	}
-	candidate := filepath.Join(filepath.Dir(exe), farMenuFileName)
+	candidate := filepath.Join(filepath.Dir(exe), FarMenuFileName)
 	if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
 		return candidate, true
 	}
 	return "", false
 }
 
-// loadFarMenuFile reads a FarMenu.ini (text format) into a slice.
-func loadFarMenuFile(path string) ([]UserMenuItem, error) {
+// LoadFarMenuFile reads a FarMenu.ini (text format) into a slice.
+func LoadFarMenuFile(path string) ([]UserMenuItem, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func loadRootForMode(mode MenuMode, path string) []UserMenuItem {
 		items, _ := LoadMainMenu(path)
 		return items
 	default:
-		items, err := loadFarMenuFile(path)
+		items, err := LoadFarMenuFile(path)
 		if err != nil {
 			return nil
 		}
@@ -145,10 +145,10 @@ func loadRootForMode(mode MenuMode, path string) []UserMenuItem {
 	}
 }
 
-// saveRootForMode writes items back to the source file using whichever
+// SaveRootForMode writes items back to the source file using whichever
 // on-disk format that source uses (flat INI for the main menu, FarMenu.ini
 // text for the per-directory and near-binary files).
-func saveRootForMode(mode MenuMode, path string, items []UserMenuItem) error {
+func SaveRootForMode(mode MenuMode, path string, items []UserMenuItem) error {
 	switch mode {
 	case MenuModeMain:
 		return SaveMainMenu(path, items)
@@ -164,12 +164,12 @@ func defaultSavePath(pf *PanelsFrame, mode MenuMode) string {
 	switch mode {
 	case MenuModeLocal:
 		if fsp, ok := pf.Panels[pf.ActiveIdx].(*FileSystemPanel); ok && fsp != nil && fsp.Vfs != nil {
-			return filepath.Join(fsp.Vfs.GetPath(), farMenuFileName)
+			return filepath.Join(fsp.Vfs.GetPath(), FarMenuFileName)
 		}
 		return ""
 	case MenuModeFar:
 		if exe, err := os.Executable(); err == nil {
-			return filepath.Join(filepath.Dir(exe), farMenuFileName)
+			return filepath.Join(filepath.Dir(exe), FarMenuFileName)
 		}
 		return ""
 	case MenuModeMain:
@@ -187,11 +187,11 @@ func LoadMenuForMode(pf *PanelsFrame, mode MenuMode) (items []UserMenuItem, titl
 		if fsp == nil {
 			return nil, i18n.Msg("UserMenu.LocalMenuTitle"), "", false
 		}
-		path, found := findLocalFarMenu(fsp.Vfs.GetPath())
+		path, found := FindLocalFarMenu(fsp.Vfs.GetPath())
 		if !found {
 			return nil, i18n.Msg("UserMenu.LocalMenuTitle"), "", false
 		}
-		loaded, err := loadFarMenuFile(path)
+		loaded, err := LoadFarMenuFile(path)
 		if err != nil {
 			return nil, i18n.Msg("UserMenu.LocalMenuTitle"), path, false
 		}
@@ -201,7 +201,7 @@ func LoadMenuForMode(pf *PanelsFrame, mode MenuMode) (items []UserMenuItem, titl
 		if !found {
 			return nil, fmt.Sprintf("%s (%s)", i18n.Msg("UserMenu.MainMenuTitle"), i18n.Msg("UserMenu.MainMenuFAR")), "", false
 		}
-		loaded, err := loadFarMenuFile(path)
+		loaded, err := LoadFarMenuFile(path)
 		if err != nil {
 			return nil, fmt.Sprintf("%s (%s)", i18n.Msg("UserMenu.MainMenuTitle"), i18n.Msg("UserMenu.MainMenuFAR")), path, false
 		}
@@ -318,7 +318,7 @@ func (s *userMenuState) saveRoot() bool {
 	if s.SourcePath == "" {
 		return false
 	}
-	if err := saveRootForMode(s.mode, s.SourcePath, s.rootItems); err != nil {
+	if err := SaveRootForMode(s.mode, s.SourcePath, s.rootItems); err != nil {
 		vtui.ShowMessage(" User menu ",
 			fmt.Sprintf("Failed to save menu:\n%v", err),
 			[]string{"&Ok"})
@@ -687,6 +687,25 @@ func (s *userMenuState) goBack(current *vtui.VMenu) {
 }
 
 func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuItem, idx int, isCreate bool, isSubmenu bool) {
+	if OpenUserMenuSettings != nil && OpenUserMenuSettings(MenuSettingsSource{Mode: s.mode, RootTitle: s.rootTitle, SourcePath: s.SourcePath, Path: s.path, RootItems: s.rootItems, Saved: func(items []UserMenuItem) { s.rootItems = items }, Closed: func(index int) {
+		if s.Pf == nil {
+			return
+		}
+		if current != nil {
+			current.Close()
+		}
+		items := s.rootItems
+		for _, idx := range s.path {
+			if idx < 0 || idx >= len(items) || !items[idx].IsSubmenu() {
+				s.path = nil
+				break
+			}
+			items = items[idx].Submenu
+		}
+		s.openCurrent(max(0, index))
+	}}, current, idx, isCreate, isSubmenu) {
+		return
+	}
 	title := i18n.Msg("UserMenu.EditTitle")
 	if isCreate {
 		if isSubmenu {
@@ -909,7 +928,7 @@ func editCurrentMenuInExternalEditor(pf *PanelsFrame, mode MenuMode, sourcePath 
 			})
 			return
 		}
-		if saveErr := saveRootForMode(mode, sourcePath, parsed); saveErr != nil {
+		if saveErr := SaveRootForMode(mode, sourcePath, parsed); saveErr != nil {
 			vtui.FrameManager.PostTask(func() {
 				vtui.ShowMessage(" User menu ",
 					fmt.Sprintf("Failed to save menu:\n%v", saveErr),

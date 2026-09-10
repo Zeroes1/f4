@@ -1,12 +1,13 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/action"
-	"github.com/unxed/f4/internal/paneltest"
-	"github.com/unxed/vtui"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/unxed/f4/internal/action"
+	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/vtui"
 )
 
 func TestCommandPaletteResolvesEveryActionGeneratedMenuLeafByID(t *testing.T) {
@@ -117,12 +118,15 @@ func commandPaletteAuditedActionMenuGroups(area string) []commandPaletteActionMe
 	}
 
 	for _, action := range action.All() {
-		if action.MenuPath != "" && !action.HideFromMenu && action.Area == area {
+		if action.Name != "Settings.Open" && action.MenuPath != "" && !action.HideFromMenu && action.Area == area {
 			appendAction(action)
 		}
 	}
+	if a, ok := GetAction("Settings.Open"); ok {
+		appendAction(a)
+	}
 	for _, action := range action.All() {
-		if action.MenuPath == "" || action.HideFromMenu || !strings.EqualFold(action.Area, "Common") {
+		if action.Name == "Settings.Open" || action.MenuPath == "" || action.HideFromMenu || !strings.EqualFold(action.Area, "Common") {
 			continue
 		}
 		if _, exists := byPath[action.MenuPath]; exists {
@@ -131,6 +135,14 @@ func commandPaletteAuditedActionMenuGroups(area string) []commandPaletteActionMe
 	}
 	for i := range groups {
 		groups[i].actions = append(groups[i].actions, groups[i].pinned...)
+		for j, a := range groups[i].actions {
+			if a.Name == "Settings.Open" {
+				copy(groups[i].actions[1:j+1], groups[i].actions[:j])
+				groups[i].actions[0] = a
+				break
+			}
+		}
+
 	}
 	return groups
 }

@@ -678,3 +678,18 @@ if err := fs.Copy(ctx, src, dst); err != nil {
 - ❌ **Packages named after technical layers** (`services/`, `handlers/`,
   `models/`). There is no HTTP, no database and no request lifecycle here; the
   subsystems are the domain.
+
+## Unified Settings Center
+
+`internal/settings` is a layer-3 interactive subsystem. It owns the settings
+catalog, draft providers, searchable dialog, inline record editors and generated
+option help. It imports the storage and interactive subsystems whose preferences
+it edits, but never imports `internal/app`. `settings.Host` supplies session and
+geometry saves, runtime refresh, backend discovery and application-owned update
+and plugin installation workflows. The composition root implements that interface
+and wires the optional plugin contribution/opening capabilities. Contextual panel
+editors pass a captured source and callbacks; neither panels nor plugin hosts
+import the settings renderer. `sdk/f4settings` remains the frontend-neutral public
+metadata and provider contract.
+
+`internal/settingstest` is layer-0 test scaffolding for provider localization audits, imported only by tests. It reads the resources owned by `internal/i18n`.

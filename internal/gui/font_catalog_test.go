@@ -8,6 +8,30 @@ import (
 	"github.com/unxed/vtui"
 )
 
+func TestGuiFontBatchLabelsUseOneSnapshotAndPreserveManualValues(t *testing.T) {
+	previous := newGuiFontDisplayNameResolver
+	t.Cleanup(func() { newGuiFontDisplayNameResolver = previous })
+	snapshots := 0
+	newGuiFontDisplayNameResolver = func(installed []string) func(string) string {
+		snapshots++
+		return func(value string) string { return "Family: " + value }
+	}
+	installed := []string{"/fonts/Mono.ttf", "/fonts/Other.ttf"}
+	values := GuiFontChoicesFromInstalled("/custom/manual.ttf", installed)
+	got := GuiFontDisplayValuesFromInstalled(values, installed)
+	want := []string{"/custom/manual.ttf", "Family: /fonts/Mono.ttf", "Family: /fonts/Other.ttf"}
+	if snapshots != 1 || !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshots=%d labels=%q, want one snapshot and %q", snapshots, got, want)
+	}
+	if !reflect.DeepEqual(values, []string{"/custom/manual.ttf", "/fonts/Mono.ttf", "/fonts/Other.ttf"}) {
+		t.Fatal("label resolution changed stored font values")
+	}
+	GuiFontDisplayValuesFromInstalled(values, installed)
+	if snapshots != 2 {
+		t.Fatal("a new picker must refresh its font snapshot")
+	}
+}
+
 func TestParseFontconfigPathsDeduplicatesAndFilters(t *testing.T) {
 	got := parseFontconfigPaths("/fonts/NotoSansCJK.ttc\n/fonts/NotoSansCJK.ttc\nnot-a-font.txt\n /fonts/Mono.ttf \n")
 	want := []string{"/fonts/Mono.ttf", "/fonts/NotoSansCJK.ttc"}

@@ -3,14 +3,6 @@ package panel
 import (
 	"context"
 	"fmt"
-	"github.com/unxed/f4/internal/appcmd"
-	"github.com/unxed/f4/internal/cmdline"
-	"github.com/unxed/f4/internal/editor"
-	"github.com/unxed/f4/internal/fileops"
-	"github.com/unxed/f4/internal/history"
-	"github.com/unxed/f4/internal/sysinfo"
-	"github.com/unxed/f4/internal/toast"
-	"github.com/unxed/f4/vfs"
 	"os"
 	"os/exec"
 	"os/user"
@@ -22,6 +14,15 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/unxed/f4/internal/appcmd"
+	"github.com/unxed/f4/internal/cmdline"
+	"github.com/unxed/f4/internal/editor"
+	"github.com/unxed/f4/internal/fileops"
+	"github.com/unxed/f4/internal/history"
+	"github.com/unxed/f4/internal/sysinfo"
+	"github.com/unxed/f4/internal/toast"
+	"github.com/unxed/f4/vfs"
 
 	"github.com/mattn/go-runewidth"
 
@@ -1817,7 +1818,12 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 
 	// Arkanoid easter egg: Ctrl+Alt+A
 	if e.VirtualKeyCode == 'A' && alt && ctrl {
-		return Arkanoid()
+		// The matching plugin gesture owns the event even when its handler
+		// cannot open the game. Letting a failed launch fall through exposes
+		// the same key to the frame dispatcher and can leave a stale overlay
+		// behind (#983).
+		Arkanoid()
+		return true
 	}
 
 	// Check global hotkeys (ignoring Lock and Enhanced keys)
@@ -3423,43 +3429,11 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 	case appcmd.CmBookmarks:
 		ShowBookmarksDialog(pf)
 		return true
-	case appcmd.CmPanelSettings:
+	case appcmd.CmPanelSettings, appcmd.CmEditorSettings, appcmd.CmColorerSettings,
+		appcmd.CmAppearanceSettings, appcmd.CmConfirmationsSettings, appcmd.CmHotkeyConfig,
+		appcmd.CmLanguage, appcmd.CmHelpLanguage, appcmd.CmUpdateSettings, appcmd.CmProxySettings,
+		appcmd.CmPlugins, appcmd.CmPlugRing:
 		return AppCommand(pf, cmd, args)
-	case appcmd.CmEditorSettings:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmColorerSettings:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmAppearanceSettings:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmConfirmationsSettings:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmHotkeyConfig:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmLanguage:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmHelpLanguage:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmUpdateSettings:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmProxySettings:
-		dialog.ActionProxySettings()
-		return true
-	case appcmd.CmPlugins:
-		return AppCommand(pf, cmd, args)
-
-	case appcmd.CmPlugRing:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmBackground:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmWorkspaceNew:
-		return AppCommand(pf, cmd, args)
-	case appcmd.CmWorkspaceNewTerminal:
-		return ActionWorkspaceNewTerminal()
-	case appcmd.CmWorkspaceClose:
-		return WorkspaceClose()
-	case appcmd.CmLeftDriveMenu:
-		pf.ShowDriveMenu(0)
-		return true
 	case appcmd.CmRightDriveMenu:
 		pf.ShowDriveMenu(1)
 		return true

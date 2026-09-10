@@ -1,8 +1,10 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/keymap"
 	"testing"
+
+	"github.com/unxed/f4/internal/dialog"
+	"github.com/unxed/f4/internal/keymap"
 
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
@@ -56,7 +58,7 @@ func TestHotkeyAssignFramePreservesRightCtrl(t *testing.T) {
 	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
 
 	hm := keymap.NewHotkeyManager("")
-	f := NewHotkeyAssignFrame(hm, "File.Attributes", "Shell", nil)
+	f := dialog.NewHotkeyAssignFrame(hm, "File.Attributes", "Shell", nil)
 	ctrlABefore, ctrlAExists := hm.Bindings["Shell"]["CtrlA"]
 
 	rightCtrlA := &vtinput.InputEvent{
@@ -75,7 +77,7 @@ func TestHotkeyAssignFramePreservesRightCtrl(t *testing.T) {
 		t.Fatalf("Right Ctrl+A changed the normalized CtrlA binding from %q to %q", ctrlABefore, got)
 	}
 
-	left := NewHotkeyAssignFrame(hm, "File.Attributes", "Shell", nil)
+	left := dialog.NewHotkeyAssignFrame(hm, "File.Attributes", "Shell", nil)
 	leftCtrlA := *rightCtrlA
 	leftCtrlA.ControlKeyState = vtinput.LeftCtrlPressed
 	if !left.ProcessKey(&leftCtrlA) {

@@ -1018,194 +1018,197 @@ func SaveConfig() {
 // dimensions currently held in memory; this keeps the Shift+F9 groups
 // independent.
 func SaveWithWindowSize(windowSize bool) {
-	// Settings dialogs write into App and call SaveConfig; publishing
-	// here means a proxy change takes effect without a restart.
 	ApplyProxySettings()
-
-	path := GetUserConfigIniPath()
-	guiCols, guiRows := App.GuiCols, App.GuiRows
+	cfg := App
 	if !windowSize {
-		guiCols, guiRows = persistedGuiWindowSize()
+		cfg.GuiCols, cfg.GuiRows = persistedGuiWindowSize()
 	}
+	if err := WriteUserFileAtomically(GetUserConfigIniPath(), SerializeSettingsConfig(cfg), 0600); err != nil {
+		vtui.DebugLog("CONFIG: Failed to save application settings: %v", err)
+	}
+}
 
+// SerializeSettingsConfig encodes a snapshot without publishing it or applying runtime effects.
+func SerializeSettingsConfig(cfg F4Config) []byte {
+	guiCols, guiRows := cfg.GuiCols, cfg.GuiRows
 	var sb strings.Builder
 	sb.WriteString("[Interface]\n")
-	fmt.Fprintf(&sb, "ColorStyle = %s\n", App.ColorStyle)
-	fmt.Fprintf(&sb, "Language = %s\n", App.Language)
-	fmt.Fprintf(&sb, "FallbackLanguage = %s\n", App.FallbackLanguage)
-	fmt.Fprintf(&sb, "HelpLanguage = %s\n", App.HelpLanguage)
-	fmt.Fprintf(&sb, "UseLocalLanguageFiles = %d\n", map[bool]int{true: 1, false: 0}[App.UseLocalLanguageFiles])
-	fmt.Fprintf(&sb, "ConsoleTitleTemplate = %s\n", App.ConsoleTitleTemplate)
-	fmt.Fprintf(&sb, "DisplayFullPathInTitle = %d\n", map[bool]int{true: 1, false: 0}[App.DisplayFullPathInTitle])
-	fmt.Fprintf(&sb, "AlwaysShowMenuBar = %d\n", map[bool]int{true: 1, false: 0}[App.AlwaysShowMenuBar])
+	fmt.Fprintf(&sb, "ColorStyle = %s\n", cfg.ColorStyle)
+	fmt.Fprintf(&sb, "Language = %s\n", cfg.Language)
+	fmt.Fprintf(&sb, "FallbackLanguage = %s\n", cfg.FallbackLanguage)
+	fmt.Fprintf(&sb, "HelpLanguage = %s\n", cfg.HelpLanguage)
+	fmt.Fprintf(&sb, "UseLocalLanguageFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseLocalLanguageFiles])
+	fmt.Fprintf(&sb, "ConsoleTitleTemplate = %s\n", cfg.ConsoleTitleTemplate)
+	fmt.Fprintf(&sb, "DisplayFullPathInTitle = %d\n", map[bool]int{true: 1, false: 0}[cfg.DisplayFullPathInTitle])
+	fmt.Fprintf(&sb, "AlwaysShowMenuBar = %d\n", map[bool]int{true: 1, false: 0}[cfg.AlwaysShowMenuBar])
 	workspaceTabMode := "multiple"
-	if App.WorkspaceTabMode == int(vtui.WorkspaceTabsAlways) {
+	if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsAlways) {
 		workspaceTabMode = "always"
-	} else if App.WorkspaceTabMode == int(vtui.WorkspaceTabsOnCtrl) {
+	} else if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsOnCtrl) {
 		workspaceTabMode = "ctrl"
-	} else if App.WorkspaceTabMode == int(vtui.WorkspaceTabsNever) {
+	} else if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsNever) {
 		workspaceTabMode = "never"
 	}
 	ctrlTabMode := "direct"
-	if App.CtrlTabShowsMenu {
+	if cfg.CtrlTabShowsMenu {
 		ctrlTabMode = "menu"
 	}
 	fmt.Fprintf(&sb, "WorkspaceTabMode = %s\n", workspaceTabMode)
-	fmt.Fprintf(&sb, "WorkspaceTabsOverlay = %d\n", map[bool]int{true: 1, false: 0}[App.WorkspaceTabsOverlay])
+	fmt.Fprintf(&sb, "WorkspaceTabsOverlay = %d\n", map[bool]int{true: 1, false: 0}[cfg.WorkspaceTabsOverlay])
 	fmt.Fprintf(&sb, "CtrlTabMode = %s\n", ctrlTabMode)
-	fmt.Fprintf(&sb, "AltNumberSwitchesTabs = %d\n", map[bool]int{true: 1, false: 0}[App.AltNumberSwitchesTabs])
-	fmt.Fprintf(&sb, "RestoreWorkspaceTabs = %d\n", map[bool]int{true: 1, false: 0}[App.RestoreWorkspaceTabs])
-	fmt.Fprintf(&sb, "WorkspaceTabNumbering = %s\n", App.WorkspaceTabNumbering.String())
-	fmt.Fprintf(&sb, "MacKeyboard = %s\n\n", ParseMacKeysMode(App.MacKeyboard))
+	fmt.Fprintf(&sb, "AltNumberSwitchesTabs = %d\n", map[bool]int{true: 1, false: 0}[cfg.AltNumberSwitchesTabs])
+	fmt.Fprintf(&sb, "RestoreWorkspaceTabs = %d\n", map[bool]int{true: 1, false: 0}[cfg.RestoreWorkspaceTabs])
+	fmt.Fprintf(&sb, "WorkspaceTabNumbering = %s\n", cfg.WorkspaceTabNumbering.String())
+	fmt.Fprintf(&sb, "MacKeyboard = %s\n\n", ParseMacKeysMode(cfg.MacKeyboard))
 	sb.WriteString("[Panel]\n")
-	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[App.ShowHiddenFiles])
-	fmt.Fprintf(&sb, "ShowDirPrefix = %d\n", map[bool]int{true: 1, false: 0}[App.ShowDirPrefix])
-	fmt.Fprintf(&sb, "ShowHighlightMarks = %d\n", map[bool]int{true: 1, false: 0}[App.ShowHighlightMarks])
-	fmt.Fprintf(&sb, "SeparateFileExtensions = %d\n", map[bool]int{true: 1, false: 0}[App.SeparateFileExtensions])
-	fmt.Fprintf(&sb, "PanelScrollbarMode = %s\n", App.PanelScrollbarMode.String())
-	fmt.Fprintf(&sb, "ShowPanelFileInfo = %d\n", map[bool]int{true: 1, false: 0}[App.ShowPanelFileInfo])
-	fmt.Fprintf(&sb, "SavePanelPaths = %d\n", map[bool]int{true: 1, false: 0}[App.SavePanelPaths])
-	fmt.Fprintf(&sb, "DriveMenuOptions = %d\n", App.DriveMenuOptions)
-	fmt.Fprintf(&sb, "InfoPanelBytes = %d\n", map[bool]int{true: 1, false: 0}[App.InfoPanelBytes])
-	fmt.Fprintf(&sb, "InfoPanelCPUGPU = %d\n", map[bool]int{true: 1, false: 0}[App.InfoPanelCPUGPU])
-	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[App.EscTogglePanels])
-	fmt.Fprintf(&sb, "TerminalCtrlNWorkspace = %d\n", map[bool]int{true: 1, false: 0}[App.TerminalCtrlNWorkspace])
-	fmt.Fprintf(&sb, "KeepTerminalCursor = %d\n", map[bool]int{true: 1, false: 0}[App.KeepTerminalCursor])
-	fmt.Fprintf(&sb, "ConsoleMode = %s\n", App.ConsoleMode)
-	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[App.ConsoleOverlayUI])
-	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[App.CommandLineAutoComplete])
-	fmt.Fprintf(&sb, "NavigationMode = %s\n", App.NavigationMode.String())
-	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[App.SearchCommandStayFocused])
+	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHiddenFiles])
+	fmt.Fprintf(&sb, "ShowDirPrefix = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowDirPrefix])
+	fmt.Fprintf(&sb, "ShowHighlightMarks = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHighlightMarks])
+	fmt.Fprintf(&sb, "SeparateFileExtensions = %d\n", map[bool]int{true: 1, false: 0}[cfg.SeparateFileExtensions])
+	fmt.Fprintf(&sb, "PanelScrollbarMode = %s\n", cfg.PanelScrollbarMode.String())
+	fmt.Fprintf(&sb, "ShowPanelFileInfo = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowPanelFileInfo])
+	fmt.Fprintf(&sb, "SavePanelPaths = %d\n", map[bool]int{true: 1, false: 0}[cfg.SavePanelPaths])
+	fmt.Fprintf(&sb, "DriveMenuOptions = %d\n", cfg.DriveMenuOptions)
+	fmt.Fprintf(&sb, "InfoPanelBytes = %d\n", map[bool]int{true: 1, false: 0}[cfg.InfoPanelBytes])
+	fmt.Fprintf(&sb, "InfoPanelCPUGPU = %d\n", map[bool]int{true: 1, false: 0}[cfg.InfoPanelCPUGPU])
+	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[cfg.EscTogglePanels])
+	fmt.Fprintf(&sb, "TerminalCtrlNWorkspace = %d\n", map[bool]int{true: 1, false: 0}[cfg.TerminalCtrlNWorkspace])
+	fmt.Fprintf(&sb, "KeepTerminalCursor = %d\n", map[bool]int{true: 1, false: 0}[cfg.KeepTerminalCursor])
+	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
+	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
+	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
+	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
+	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchCommandStayFocused])
 	// Keep the legacy key synchronized for older f4 versions and shared configs.
-	fmt.Fprintf(&sb, "VimHotkeys = %d\n", map[bool]int{true: 1, false: 0}[App.NavigationMode == NavigationVim])
-	fmt.Fprintf(&sb, "SyncPanelLoad = %d\n", map[bool]int{true: 1, false: 0}[App.SyncPanelLoad])
-	fmt.Fprintf(&sb, "SearchExactOnHit = %d\n", map[bool]int{true: 1, false: 0}[App.SearchExactOnHit])
-	fmt.Fprintf(&sb, "ApplyCommandParallelism = %d\n", App.ApplyCommandParallelism)
-	fmt.Fprintf(&sb, "DefaultFileOpMode = %d\n", App.DefaultFileOpMode)
-	fmt.Fprintf(&sb, "FileOpPathDisplay = %d\n", App.FileOpPathDisplay)
+	fmt.Fprintf(&sb, "VimHotkeys = %d\n", map[bool]int{true: 1, false: 0}[cfg.NavigationMode == NavigationVim])
+	fmt.Fprintf(&sb, "SyncPanelLoad = %d\n", map[bool]int{true: 1, false: 0}[cfg.SyncPanelLoad])
+	fmt.Fprintf(&sb, "SearchExactOnHit = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchExactOnHit])
+	fmt.Fprintf(&sb, "ApplyCommandParallelism = %d\n", cfg.ApplyCommandParallelism)
+	fmt.Fprintf(&sb, "DefaultFileOpMode = %d\n", cfg.DefaultFileOpMode)
+	fmt.Fprintf(&sb, "FileOpPathDisplay = %d\n", cfg.FileOpPathDisplay)
 
 	sb.WriteString("\n[System]\n")
-	fmt.Fprintf(&sb, "ConfirmCopy = %d\n", map[bool]int{true: 1, false: 0}[App.ConfirmCopy])
-	fmt.Fprintf(&sb, "ConfirmMove = %d\n", map[bool]int{true: 1, false: 0}[App.ConfirmMove])
-	fmt.Fprintf(&sb, "ConfirmDelete = %d\n", map[bool]int{true: 1, false: 0}[App.ConfirmDelete])
-	fmt.Fprintf(&sb, "UseTrash = %d\n", map[bool]int{true: 1, false: 0}[App.UseTrash])
-	fmt.Fprintf(&sb, "ConfirmExit = %d\n", map[bool]int{true: 1, false: 0}[App.ConfirmExit])
-	fmt.Fprintf(&sb, "DeleteCancelFocused = %d\n", map[bool]int{true: 1, false: 0}[App.DeleteCancelFocused])
-	fmt.Fprintf(&sb, "AutoSaveSettings = %d\n", map[bool]int{true: 1, false: 0}[App.AutoSaveSettings])
-	fmt.Fprintf(&sb, "AutoSaveDialogSettings = %d\n", map[bool]int{true: 1, false: 0}[App.AutoSaveDialogSettings])
-	fmt.Fprintf(&sb, "AutoSavePanelSettings = %d\n", map[bool]int{true: 1, false: 0}[App.AutoSavePanelSettings])
-	fmt.Fprintf(&sb, "AutoSaveCurrentPanel = %d\n", map[bool]int{true: 1, false: 0}[App.AutoSaveCurrentPanel])
-	fmt.Fprintf(&sb, "AutoSaveGUIWindow = %d\n", map[bool]int{true: 1, false: 0}[App.AutoSaveGUIWindow])
-	fmt.Fprintf(&sb, "AnnounceKittyTerm = %d\n", map[bool]int{true: 1, false: 0}[App.AnnounceKittyTerm])
-	fmt.Fprintf(&sb, "MacroRecordFormat = %d\n", App.MacroRecordFormat)
-	fmt.Fprintf(&sb, "ANSICodePage = %d\n", App.SystemANSICodePage)
-	fmt.Fprintf(&sb, "OEMCodePage = %d\n", App.SystemOEMCodePage)
+	fmt.Fprintf(&sb, "ConfirmCopy = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmCopy])
+	fmt.Fprintf(&sb, "ConfirmMove = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmMove])
+	fmt.Fprintf(&sb, "ConfirmDelete = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmDelete])
+	fmt.Fprintf(&sb, "UseTrash = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseTrash])
+	fmt.Fprintf(&sb, "ConfirmExit = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmExit])
+	fmt.Fprintf(&sb, "DeleteCancelFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.DeleteCancelFocused])
+	fmt.Fprintf(&sb, "AutoSaveSettings = %d\n", map[bool]int{true: 1, false: 0}[cfg.AutoSaveSettings])
+	fmt.Fprintf(&sb, "AutoSaveDialogSettings = %d\n", map[bool]int{true: 1, false: 0}[cfg.AutoSaveDialogSettings])
+	fmt.Fprintf(&sb, "AutoSavePanelSettings = %d\n", map[bool]int{true: 1, false: 0}[cfg.AutoSavePanelSettings])
+	fmt.Fprintf(&sb, "AutoSaveCurrentPanel = %d\n", map[bool]int{true: 1, false: 0}[cfg.AutoSaveCurrentPanel])
+	fmt.Fprintf(&sb, "AutoSaveGUIWindow = %d\n", map[bool]int{true: 1, false: 0}[cfg.AutoSaveGUIWindow])
+	fmt.Fprintf(&sb, "AnnounceKittyTerm = %d\n", map[bool]int{true: 1, false: 0}[cfg.AnnounceKittyTerm])
+	fmt.Fprintf(&sb, "MacroRecordFormat = %d\n", cfg.MacroRecordFormat)
+	fmt.Fprintf(&sb, "ANSICodePage = %d\n", cfg.SystemANSICodePage)
+	fmt.Fprintf(&sb, "OEMCodePage = %d\n", cfg.SystemOEMCodePage)
 
 	sb.WriteString("\n[Dialogs]\n")
-	fmt.Fprintf(&sb, "EnforceColorCorrection = %d\n", map[bool]int{true: 1, false: 0}[App.EnforceColorCorrection])
+	fmt.Fprintf(&sb, "EnforceColorCorrection = %d\n", map[bool]int{true: 1, false: 0}[cfg.EnforceColorCorrection])
 
 	sb.WriteString("\n[Appearance]\n")
-	fmt.Fprintf(&sb, "GuiFont = %s\n", App.GuiFont)
-	fmt.Fprintf(&sb, "GuiUseSystemMonospace = %d\n", map[bool]int{true: 1, false: 0}[App.GuiUseSystemMonospace])
-	fmt.Fprintf(&sb, "GuiFontSize = %d\n", App.GuiFontSize)
+	fmt.Fprintf(&sb, "GuiFont = %s\n", cfg.GuiFont)
+	fmt.Fprintf(&sb, "GuiUseSystemMonospace = %d\n", map[bool]int{true: 1, false: 0}[cfg.GuiUseSystemMonospace])
+	fmt.Fprintf(&sb, "GuiFontSize = %d\n", cfg.GuiFontSize)
 	fmt.Fprintf(&sb, "GuiCols = %d\n", guiCols)
 	fmt.Fprintf(&sb, "GuiRows = %d\n", guiRows)
-	if App.GuiPositionSaved {
-		fmt.Fprintf(&sb, "GuiPosX = %d\n", App.GuiPosX)
-		fmt.Fprintf(&sb, "GuiPosY = %d\n", App.GuiPosY)
+	if cfg.GuiPositionSaved {
+		fmt.Fprintf(&sb, "GuiPosX = %d\n", cfg.GuiPosX)
+		fmt.Fprintf(&sb, "GuiPosY = %d\n", cfg.GuiPosY)
 	}
-	fmt.Fprintf(&sb, "HighlightPriority = %d\n", App.HighlightPriority)
+	fmt.Fprintf(&sb, "HighlightPriority = %d\n", cfg.HighlightPriority)
 
 	sb.WriteString("\n[Startup]\n")
-	fmt.Fprintf(&sb, "Mode = %s\n", App.StartupMode.String())
-	fmt.Fprintf(&sb, "GuiBackend = %s\n", App.GuiBackend)
-	fmt.Fprintf(&sb, "TTYBackend = %s\n", App.TTYBackend)
+	fmt.Fprintf(&sb, "Mode = %s\n", cfg.StartupMode.String())
+	fmt.Fprintf(&sb, "GuiBackend = %s\n", cfg.GuiBackend)
+	fmt.Fprintf(&sb, "TTYBackend = %s\n", cfg.TTYBackend)
 
 	sb.WriteString("\n[Update]\n")
-	fmt.Fprintf(&sb, "Channel = %d\n", App.UpdateChannel)
-	fmt.Fprintf(&sb, "Interval = %d\n", App.UpdateInterval)
-	fmt.Fprintf(&sb, "LastCheck = %d\n", App.LastUpdateCheck)
-	fmt.Fprintf(&sb, "LastVersion = %s\n", App.LastUpdateVersion)
+	fmt.Fprintf(&sb, "Channel = %d\n", cfg.UpdateChannel)
+	fmt.Fprintf(&sb, "Interval = %d\n", cfg.UpdateInterval)
+	fmt.Fprintf(&sb, "LastCheck = %d\n", cfg.LastUpdateCheck)
+	fmt.Fprintf(&sb, "LastVersion = %s\n", cfg.LastUpdateVersion)
 
 	sb.WriteString("\n[Proxy]\n")
-	fmt.Fprintf(&sb, "Mode = %d\n", App.ProxyMode)
-	fmt.Fprintf(&sb, "Host = %s\n", App.ProxyHost)
-	fmt.Fprintf(&sb, "Port = %s\n", App.ProxyPort)
-	fmt.Fprintf(&sb, "User = %s\n", App.ProxyUser)
-	fmt.Fprintf(&sb, "Password = %s\n", netproxy.EncodeSecret(App.ProxyPass))
+	fmt.Fprintf(&sb, "Mode = %d\n", cfg.ProxyMode)
+	fmt.Fprintf(&sb, "Host = %s\n", cfg.ProxyHost)
+	fmt.Fprintf(&sb, "Port = %s\n", cfg.ProxyPort)
+	fmt.Fprintf(&sb, "User = %s\n", cfg.ProxyUser)
+	fmt.Fprintf(&sb, "Password = %s\n", netproxy.EncodeSecret(cfg.ProxyPass))
 	sb.WriteString("\n[Editor]\n")
-	fmt.Fprintf(&sb, "AutoComplete = %d\n", map[bool]int{true: 1, false: 0}[App.EditorAutoComplete])
-	fmt.Fprintf(&sb, "AutoCompleteMask = %s\n", App.EditorAutoCompleteMask)
+	fmt.Fprintf(&sb, "AutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorAutoComplete])
+	fmt.Fprintf(&sb, "AutoCompleteMask = %s\n", cfg.EditorAutoCompleteMask)
 
-	fmt.Fprintf(&sb, "ExpandTabs = %d\n", App.EditorExpandTabs)
-	fmt.Fprintf(&sb, "AutoIndent = %d\n", map[bool]int{true: 1, false: 0}[App.EditorAutoIndent])
-	fmt.Fprintf(&sb, "CursorBeyondEOL = %d\n", map[bool]int{true: 1, false: 0}[App.EditorCursorBeyondEOL])
-	fmt.Fprintf(&sb, "UseEditorConfig = %d\n", map[bool]int{true: 1, false: 0}[App.EditorUseEditorConfig])
-	fmt.Fprintf(&sb, "Crosshair = %d\n", map[bool]int{true: 1, false: 0}[App.EditorCrosshair])
-	fmt.Fprintf(&sb, "MarkOccurrences = %d\n", map[bool]int{true: 1, false: 0}[App.EditorMarkOccurrences])
-	fmt.Fprintf(&sb, "TabSize = %d\n", App.EditorTabSize)
-	fmt.Fprintf(&sb, "UseExternalEditor = %d\n", map[bool]int{true: 1, false: 0}[App.UseExternalEditor])
-	legacyExternalEditorCommand := App.ExternalEditorConsole
+	fmt.Fprintf(&sb, "ExpandTabs = %d\n", cfg.EditorExpandTabs)
+	fmt.Fprintf(&sb, "AutoIndent = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorAutoIndent])
+	fmt.Fprintf(&sb, "CursorBeyondEOL = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCursorBeyondEOL])
+	fmt.Fprintf(&sb, "UseEditorConfig = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorUseEditorConfig])
+	fmt.Fprintf(&sb, "Crosshair = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCrosshair])
+	fmt.Fprintf(&sb, "MarkOccurrences = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorMarkOccurrences])
+	fmt.Fprintf(&sb, "TabSize = %d\n", cfg.EditorTabSize)
+	fmt.Fprintf(&sb, "UseExternalEditor = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseExternalEditor])
+	legacyExternalEditorCommand := cfg.ExternalEditorConsole
 	if legacyExternalEditorCommand == "" {
-		legacyExternalEditorCommand = App.ExternalEditorCommand
+		legacyExternalEditorCommand = cfg.ExternalEditorCommand
 	}
 	fmt.Fprintf(&sb, "ExternalEditorCommand = %s\n", legacyExternalEditorCommand)
-	fmt.Fprintf(&sb, "ExternalEditorCommandConsole = %s\n", App.ExternalEditorConsole)
-	fmt.Fprintf(&sb, "ExternalEditorCommandGUI = %s\n", App.ExternalEditorGUI)
-	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[App.EditorAutodetectCodePage])
-	fmt.Fprintf(&sb, "MemoryMap = %d\n", map[bool]int{true: 1, false: 0}[App.EditorMemoryMap])
-	fmt.Fprintf(&sb, "Highlighter = %s\n", App.EditorHighlighter)
-	fmt.Fprintf(&sb, "SyntaxAnimation = %d\n", map[bool]int{true: 1, false: 0}[App.EditorSyntaxAnimation])
-	fmt.Fprintf(&sb, "ColorerScheme = %s\n", App.EditorColorerScheme)
-	fmt.Fprintf(&sb, "ColorerBackground = %d\n", map[bool]int{true: 1, false: 0}[App.EditorColorerBackground])
-	fmt.Fprintf(&sb, "ColorerSyntax = %d\n", map[bool]int{true: 1, false: 0}[App.EditorColorerSyntax])
-	fmt.Fprintf(&sb, "ColorerCatalog = %s\n", App.EditorColorerCatalog)
-	fmt.Fprintf(&sb, "CrossMode = %d\n", App.EditorCrossMode)
-	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", App.EditorDefaultCodePage)
+	fmt.Fprintf(&sb, "ExternalEditorCommandConsole = %s\n", cfg.ExternalEditorConsole)
+	fmt.Fprintf(&sb, "ExternalEditorCommandGUI = %s\n", cfg.ExternalEditorGUI)
+	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorAutodetectCodePage])
+	fmt.Fprintf(&sb, "MemoryMap = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorMemoryMap])
+	fmt.Fprintf(&sb, "Highlighter = %s\n", cfg.EditorHighlighter)
+	fmt.Fprintf(&sb, "SyntaxAnimation = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorSyntaxAnimation])
+	fmt.Fprintf(&sb, "ColorerScheme = %s\n", cfg.EditorColorerScheme)
+	fmt.Fprintf(&sb, "ColorerBackground = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerBackground])
+	fmt.Fprintf(&sb, "ColorerSyntax = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerSyntax])
+	fmt.Fprintf(&sb, "ColorerCatalog = %s\n", cfg.EditorColorerCatalog)
+	fmt.Fprintf(&sb, "CrossMode = %d\n", cfg.EditorCrossMode)
+	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.EditorDefaultCodePage)
 
 	sb.WriteString("\n[Viewer]\n")
-	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[App.ViewerAutodetectCodePage])
-	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", App.ViewerDefaultCodePage)
+	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[cfg.ViewerAutodetectCodePage])
+	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.ViewerDefaultCodePage)
 	sb.WriteString("\n[Mouse]\n")
-	fmt.Fprintf(&sb, "PanelUp = %d\n", App.WheelPanelUp)
-	fmt.Fprintf(&sb, "PanelDown = %d\n", App.WheelPanelDown)
-	fmt.Fprintf(&sb, "EditorUp = %d\n", App.WheelEditorUp)
-	fmt.Fprintf(&sb, "EditorDown = %d\n", App.WheelEditorDown)
-	fmt.Fprintf(&sb, "ViewerUp = %d\n", App.WheelViewerUp)
-	fmt.Fprintf(&sb, "ViewerDown = %d\n", App.WheelViewerDown)
-	fmt.Fprintf(&sb, "MenuUp = %d\n", App.WheelMenuUp)
-	fmt.Fprintf(&sb, "MenuDown = %d\n", App.WheelMenuDown)
-	fmt.Fprintf(&sb, "TableUp = %d\n", App.WheelTableUp)
-	fmt.Fprintf(&sb, "TableDown = %d\n", App.WheelTableDown)
+	fmt.Fprintf(&sb, "PanelUp = %d\n", cfg.WheelPanelUp)
+	fmt.Fprintf(&sb, "PanelDown = %d\n", cfg.WheelPanelDown)
+	fmt.Fprintf(&sb, "EditorUp = %d\n", cfg.WheelEditorUp)
+	fmt.Fprintf(&sb, "EditorDown = %d\n", cfg.WheelEditorDown)
+	fmt.Fprintf(&sb, "ViewerUp = %d\n", cfg.WheelViewerUp)
+	fmt.Fprintf(&sb, "ViewerDown = %d\n", cfg.WheelViewerDown)
+	fmt.Fprintf(&sb, "MenuUp = %d\n", cfg.WheelMenuUp)
+	fmt.Fprintf(&sb, "MenuDown = %d\n", cfg.WheelMenuDown)
+	fmt.Fprintf(&sb, "TableUp = %d\n", cfg.WheelTableUp)
+	fmt.Fprintf(&sb, "TableDown = %d\n", cfg.WheelTableDown)
 	sb.WriteString("\n[PathHints]\n")
-	fmt.Fprintf(&sb, "Timeout = %d\n", App.PathHintTimeout)
-	fmt.Fprintf(&sb, "FullPath = %d\n", map[bool]int{true: 1, false: 0}[App.PathHintFullPath])
-	fmt.Fprintf(&sb, "Source = %d\n", App.PathHintSource)
-	fmt.Fprintf(&sb, "MaxVisible = %d\n", App.PathHintMaxVisible)
-	fmt.Fprintf(&sb, "PerCategory = %d\n", map[bool]int{true: 1, false: 0}[App.PathHintPerCategory])
-	fmt.Fprintf(&sb, "DialogAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[App.DialogAutoComplete])
+	fmt.Fprintf(&sb, "Timeout = %d\n", cfg.PathHintTimeout)
+	fmt.Fprintf(&sb, "FullPath = %d\n", map[bool]int{true: 1, false: 0}[cfg.PathHintFullPath])
+	fmt.Fprintf(&sb, "Source = %d\n", cfg.PathHintSource)
+	fmt.Fprintf(&sb, "MaxVisible = %d\n", cfg.PathHintMaxVisible)
+	fmt.Fprintf(&sb, "PerCategory = %d\n", map[bool]int{true: 1, false: 0}[cfg.PathHintPerCategory])
+	fmt.Fprintf(&sb, "DialogAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.DialogAutoComplete])
 
 	sb.WriteString("\n[History]\n")
-	fmt.Fprintf(&sb, "ShowTimes = %d,%d,%d\n", App.HistoryShowTimes[0], App.HistoryShowTimes[1], App.HistoryShowTimes[2])
-	fmt.Fprintf(&sb, "DirsPrefixLen = %d\n", App.HistoryDirsPrefixLen)
+	fmt.Fprintf(&sb, "ShowTimes = %d,%d,%d\n", cfg.HistoryShowTimes[0], cfg.HistoryShowTimes[1], cfg.HistoryShowTimes[2])
+	fmt.Fprintf(&sb, "DirsPrefixLen = %d\n", cfg.HistoryDirsPrefixLen)
 	sb.WriteString("\n[Images]\n")
-	fmt.Fprintf(&sb, "SlideShowDelay = %d\n", App.SlideShowDelay)
-	fmt.Fprintf(&sb, "ExternalTimeout = %d\n", App.ImageExternalTimeout)
-	fmt.Fprintf(&sb, "DecoderPriority = %s\n", App.ImageDecoderPriority)
+	fmt.Fprintf(&sb, "SlideShowDelay = %d\n", cfg.SlideShowDelay)
+	fmt.Fprintf(&sb, "ExternalTimeout = %d\n", cfg.ImageExternalTimeout)
+	fmt.Fprintf(&sb, "DecoderPriority = %s\n", cfg.ImageDecoderPriority)
 	sb.WriteString("\n[Compare]\n")
-	writeCompareOptions(&sb, App.Compare)
+	writeCompareOptions(&sb, cfg.Compare)
 	sb.WriteString("\n[Plugins]\n")
-	fmt.Fprintf(&sb, "List = %s\n", strings.Join(App.RegisteredPlugins, "|"))
+	fmt.Fprintf(&sb, "List = %s\n", strings.Join(cfg.RegisteredPlugins, "|"))
 
 	// [Layout]: emit our three keys plus any unrecognised keys we loaded
 	// (round-trip). Keys are written alphabetically to match far2l's
 	// on-disk order, so a diff against far2l's config.ini stays minimal.
 	layoutKeys := map[string]string{
-		"WidthDecrement":       fmt.Sprintf("%d", App.WidthDecrement),
-		"LeftHeightDecrement":  fmt.Sprintf("%d", App.LeftHeightDecrement),
-		"RightHeightDecrement": fmt.Sprintf("%d", App.RightHeightDecrement),
+		"WidthDecrement":       fmt.Sprintf("%d", cfg.WidthDecrement),
+		"LeftHeightDecrement":  fmt.Sprintf("%d", cfg.LeftHeightDecrement),
+		"RightHeightDecrement": fmt.Sprintf("%d", cfg.RightHeightDecrement),
 	}
-	for k, v := range App.LayoutExtras {
+	for k, v := range cfg.LayoutExtras {
 		if _, taken := layoutKeys[k]; taken {
 			continue
 		}
@@ -1221,13 +1224,7 @@ func SaveWithWindowSize(windowSize bool) {
 		fmt.Fprintf(&sb, "%s=%s\n", k, layoutKeys[k])
 	}
 
-	err := WriteUserFileAtomically(path, []byte(sb.String()), 0600)
-	if err != nil {
-		vtui.DebugLog("CONFIG: Failed to save application settings: %v", err)
-		return
-	}
-
-	vtui.DebugLog("CONFIG: Saved application settings to %s", path)
+	return []byte(sb.String())
 }
 
 func persistedGuiWindowSize() (int, int) {
@@ -1264,7 +1261,7 @@ func SaveGuiWindowSize() {
 				continue
 			}
 			if inherited, readErr := os.ReadFile(source); readErr == nil {
-				updated := UpdateIniValues(inherited, "Appearance", guiWindowValues())
+				updated := UpdateIniValues(inherited, "Appearance", GuiWindowValues())
 				if writeErr := os.WriteFile(path, updated, 0600); writeErr != nil {
 					vtui.DebugLog("CONFIG: Failed to save GUI size: %v", writeErr)
 				} else if chmodErr := os.Chmod(path, 0600); chmodErr != nil {
@@ -1288,7 +1285,7 @@ func SaveGuiWindowSize() {
 		vtui.DebugLog("CONFIG: Failed to read settings before saving GUI size: %v", err)
 		return
 	}
-	updated := UpdateIniValues(data, "Appearance", guiWindowValues())
+	updated := UpdateIniValues(data, "Appearance", GuiWindowValues())
 	if err := os.WriteFile(path, updated, 0600); err != nil {
 		vtui.DebugLog("CONFIG: Failed to save GUI size: %v", err)
 	} else if chmodErr := os.Chmod(path, 0600); chmodErr != nil {
@@ -1296,7 +1293,7 @@ func SaveGuiWindowSize() {
 	}
 }
 
-func guiWindowValues() map[string]string {
+func GuiWindowValues() map[string]string {
 	values := map[string]string{
 		"GuiCols": strconv.Itoa(App.GuiCols),
 		"GuiRows": strconv.Itoa(App.GuiRows),
@@ -1449,6 +1446,12 @@ func CreateDefaultHighlightIni(path string) {
 #
 # f4 applies file highlighting rules from both the active Color Style (Theme)
 # and this file. By default, rules in this file have higher priority.
+# The two sources are not merged field by field: f4 puts one complete rule
+# list before the other. Change Appearance.HighlightPriority in settings.ini
+# to 0 (user rules first, the default) or 1 (theme rules first).
+# A matching rule normally stops processing even when it has no colour for
+# the current state. Add ContinueProcessing = 1 when a later rule should be
+# allowed to supply or merge the remaining colour components.
 #
 # You can add your custom highlight groups here (e.g. Mask = *.mp3).
 # Default groups (Hidden, Executables, Directories) are already defined

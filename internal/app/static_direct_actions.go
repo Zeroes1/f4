@@ -2,8 +2,9 @@ package app
 
 import (
 	"fmt"
-	"github.com/unxed/f4/internal/panel"
 	"strings"
+
+	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/editor"
@@ -223,7 +224,7 @@ func init() {
 		side := side
 		for _, view := range fixedPanelViewActionSpecs {
 			view := view
-			action.RegisterAction(action.Action{
+			registerAction(action.Action{
 				Name:         "Panel." + side.id + "." + view.id,
 				Area:         "Shell",
 				Label:        view.label,
@@ -247,7 +248,7 @@ func init() {
 			if sortMode.mode == panel.SortUnsorted {
 				description = fmt.Sprintf("Disable sorting for the %s panel", strings.ToLower(side.id))
 			}
-			action.RegisterAction(action.Action{
+			registerAction(action.Action{
 				Name:         "Panel." + side.id + "." + sortMode.id,
 				Area:         "Shell",
 				Label:        sortMode.label,
@@ -265,7 +266,7 @@ func init() {
 			})
 		}
 
-		action.RegisterAction(action.Action{
+		registerAction(action.Action{
 			Name:         "Panel." + side.id + ".SortUseGroups",
 			Area:         "Shell",
 			Label:        "Use Sort Groups",
@@ -284,7 +285,7 @@ func init() {
 
 		for _, aiView := range fixedAIViewActionSpecs {
 			aiView := aiView
-			action.RegisterAction(action.Action{
+			registerAction(action.Action{
 				Name:         "AI." + side.id + "." + aiView.id,
 				Area:         "Shell",
 				Label:        aiView.label,
@@ -299,7 +300,7 @@ func init() {
 		}
 	}
 
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "Viewer.GoTo",
 		Area:        "Viewer",
 		Label:       "Go To",
@@ -310,7 +311,7 @@ func init() {
 		MenuPath:    "Search",
 		Handler:     actionViewerGoTo,
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "Editor.GoTo",
 		Area:        "Editor",
 		Label:       "Go To",
@@ -321,7 +322,7 @@ func init() {
 		MenuPath:    "Search",
 		Handler:     actionEditorGoTo,
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:         "App.Background",
 		Area:         "Shell",
 		Label:        "Background",
@@ -332,7 +333,7 @@ func init() {
 		HideFromMenu: true,
 		Handler:      actionBackground,
 	})
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:         "App.Arkanoid",
 		Area:         "Shell",
 		Label:        "Arkanoid",

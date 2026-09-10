@@ -29,7 +29,7 @@ func SchemasExist() bool {
 // release archive and is not configurable at runtime.
 var ColorerDownloadURL = "https://github.com/elfmz/far2l/archive/refs/tags/v_2.8.0.zip"
 
-const maxColorerDownload = 256 << 20
+const MaxColorerDownload = 256 << 20
 
 func DownloadColorerSchemas(app vfs.App, onComplete func(success bool)) {
 	url := ColorerDownloadURL
@@ -53,8 +53,8 @@ func DownloadColorerSchemas(app vfs.App, onComplete func(success bool)) {
 		}
 
 		contentLength := resp.ContentLength
-		if contentLength > maxColorerDownload {
-			return fmt.Errorf("colorer schemas download exceeds %d bytes", maxColorerDownload)
+		if contentLength > MaxColorerDownload {
+			return fmt.Errorf("colorer schemas download exceeds %d bytes", MaxColorerDownload)
 		}
 		var buf bytes.Buffer
 		tmpBuf := make([]byte, 32*1024)
@@ -66,8 +66,8 @@ func DownloadColorerSchemas(app vfs.App, onComplete func(success bool)) {
 			}
 			n, readErr := resp.Body.Read(tmpBuf)
 			if n > 0 {
-				if downloaded+int64(n) > maxColorerDownload {
-					return fmt.Errorf("colorer schemas download exceeds %d bytes", maxColorerDownload)
+				if downloaded+int64(n) > MaxColorerDownload {
+					return fmt.Errorf("colorer schemas download exceeds %d bytes", MaxColorerDownload)
 				}
 				buf.Write(tmpBuf[:n])
 				downloaded += int64(n)
@@ -86,7 +86,7 @@ func DownloadColorerSchemas(app vfs.App, onComplete func(success bool)) {
 		}
 
 		updateProgress("Extracting schemas...", -1)
-		return installColorerSchemas(buf.Bytes(), destDir, ctx)
+		return InstallColorerSchemas(buf.Bytes(), destDir, ctx)
 	}, func(err error) {
 		if err != nil {
 			vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to download Colorer schemas:\n%v\n\nFalling back to Chroma.", err), []string{"&Ok"})
@@ -100,10 +100,10 @@ func DownloadColorerSchemas(app vfs.App, onComplete func(success bool)) {
 	})
 }
 
-// installColorerSchemas validates and extracts a downloaded schema archive in
+// InstallColorerSchemas validates and extracts a downloaded schema archive in
 // a fresh sibling directory, then swaps it into place. The old installation
 // is never removed before the new one is complete.
-func installColorerSchemas(data []byte, destDir string, ctx context.Context) error {
+func InstallColorerSchemas(data []byte, destDir string, ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}

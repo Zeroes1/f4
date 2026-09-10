@@ -60,7 +60,7 @@ func ResolveShellMode(cfg ShellModeConfig) ShellMode {
 		}
 		return ShellModeSimpleCaptured
 	}
-	if consoleViewStyleOf(cfg) == ConsoleViewOwn {
+	if ConsoleViewStyleOf(cfg) == ConsoleViewOwn {
 		return ShellModeOwn
 	}
 	if ProbeGUIBackend() != "" {
@@ -80,10 +80,10 @@ const (
 	ConsoleViewMc  = "mc"
 )
 
-// consoleViewStyleOf resolves the configured console view. It accepts both the
+// ConsoleViewStyleOf resolves the configured console view. It accepts both the
 // current three-way ConsoleMode and the older ConsoleMode+ConsoleOverlayUI pair,
 // so configs written by earlier builds keep working untouched.
-func consoleViewStyleOf(cfg ShellModeConfig) string {
+func ConsoleViewStyleOf(cfg ShellModeConfig) string {
 	switch strings.ToLower(cfg.ConsoleMode) {
 	case ConsoleViewFar:
 		return ConsoleViewFar
@@ -100,7 +100,7 @@ func consoleViewStyleOf(cfg ShellModeConfig) string {
 
 // consoleViewStyle returns the console view configured for this instance.
 func consoleViewStyle() string {
-	return consoleViewStyleOf(ShellModeConfig{
+	return ConsoleViewStyleOf(ShellModeConfig{
 		ConsoleMode:      config.App.ConsoleMode,
 		ConsoleOverlayUI: config.App.ConsoleOverlayUI,
 	})

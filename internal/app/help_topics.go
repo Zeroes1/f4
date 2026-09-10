@@ -1,10 +1,12 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/keymap"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/settings"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/config"
@@ -85,6 +87,7 @@ func InitHelpSystem() {
 	// single source of truth), overriding the static stubs in .hlf
 	// files and reflecting the user's hotkeys.ini overrides.
 	dialog.HelpActionStrings = dialog.LoadHelpLangStrings(lang)
+	settings.InstallHelp(lang)
 	vtui.GlobalHelpEngine.AddTopic(generateKeysHelpTopic("ViewerEditor",
 		dialog.HelpMsg("Help.ViewerEditor"), []string{"Editor", "Viewer", "Common"}, "ViewerNav"))
 	vtui.GlobalHelpEngine.AddTopic(generateKeysHelpTopic("PanelNav",

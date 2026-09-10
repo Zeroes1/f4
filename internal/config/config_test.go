@@ -402,6 +402,9 @@ func TestCreateDefaultHighlightIniDocumentsColorOptions(t *testing.T) {
 	content := string(data)
 	for _, key := range []string{
 		"# [Highlight_100]",
+		"Appearance.HighlightPriority",
+		"user rules first, the default",
+		"ContinueProcessing = 1 when a later rule",
 		"# NormalColor =",
 		"# SelectedColor =",
 		"# CursorColor =",

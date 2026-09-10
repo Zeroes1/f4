@@ -152,6 +152,10 @@ func colorIniDefinesSlot(ini *ini.File, slot ColorSlot) bool {
 
 func isCompleteColorIni(ini *ini.File) bool {
 	for _, slot := range ColorSlots {
+		// Older complete exports predate this optional, inherited background.
+		if slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground {
+			continue
+		}
 		if !colorIniDefinesSlot(ini, slot) {
 			return false
 		}
@@ -205,6 +209,17 @@ func ApplyColorStyle(name string) error {
 			themeStyle = base
 		}
 		ApplyColorIni(style.ini)
+		// A pre-existing custom theme did not opt into indicator surfaces,
+		// even if its fallback base now defines the newly introduced slot.
+		for _, optional := range []ColorSlot{
+			{Canonical: "Dialog.Indicator.Background", Index: vtui.ColDialogIndicatorBackground},
+			{Canonical: "Dialog.Settings.Background", Index: ColDialogSettingsBackground},
+		} {
+			if !colorIniDefinesSlot(style.ini, optional) {
+				vtui.Palette[optional.Index] = 0
+				delete(colorSourceExpressions, optional.Canonical)
+			}
+		}
 	} else {
 		ApplyColorIni(style.ini)
 		if path := UserColorOverridesPath(); fileExists(path) {

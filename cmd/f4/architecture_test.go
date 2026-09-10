@@ -132,7 +132,8 @@ var architectureLayers = map[string]int{
 
 	"internal/textsearch": 0,
 
-	"internal/dialog": 3,
+	"internal/dialog":   3,
+	"internal/settings": 3,
 
 	// The panels frame sits at the top of the interactive layer: it holds the
 	// command line, the terminal view and the file panels at once, and reaches
@@ -149,8 +150,9 @@ var architectureLayers = map[string]int{
 	// Test scaffolding, placed by what it may import: testutil imports no
 	// package of ours, paneltest sits above the three it builds a frame from.
 	// Neither may be imported from production code.
-	"internal/testutil":  0,
-	"internal/paneltest": 4,
+	"internal/testutil":     0,
+	"internal/settingstest": 0,
+	"internal/paneltest":    4,
 }
 
 // architectureGOOS is the set of platforms the graph is collected for. One
