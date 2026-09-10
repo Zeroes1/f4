@@ -60,7 +60,11 @@ func padLabelTo(s string, w int) string {
 // Find File. Excluded masks are deliberately kept client-side: not every VFS
 // FileFinder can express directory pruning, while the generic VFS walk works
 // for both local and remote providers.
-func splitFindMasks(mask string) (includes, excludes []string) {
+func splitFindMasks(mask string) (includes, excludes []string, err error) {
+	if strings.Count(mask, "|") > 1 {
+		return nil, nil, fmt.Errorf("find file mask must contain at most one '|' separator")
+	}
+
 	parts := strings.SplitN(mask, "|", 2)
 	normalize := func(value string) []string {
 		fields := strings.Split(value, ",")
@@ -82,8 +86,11 @@ func splitFindMasks(mask string) (includes, excludes []string) {
 	}
 	if len(parts) == 2 {
 		excludes = normalize(parts[1])
+		if len(excludes) == 0 {
+			return nil, nil, fmt.Errorf("find file exclusion masks must not be empty")
+		}
 	}
-	return includes, excludes
+	return includes, excludes, nil
 }
 
 func findFileMaskMatches(name string, masks []string) bool {
@@ -141,7 +148,14 @@ func ExecuteFindFile(pf *panel.PanelsFrame, v vfs.VFS, startDir, mask, text stri
 	vtui.FrameManager.AddScreenHeadless(dlg)
 
 	taskCtx = vtui.RunAsync(func(ctx *vtui.TaskContext) {
-		masks, excludeMasks := splitFindMasks(mask)
+		masks, excludeMasks, maskErr := splitFindMasks(mask)
+		if maskErr != nil {
+			ctx.RunOnUI(func() {
+				dlg.Close()
+				vtui.ShowMessage(" Find File ", fmt.Sprintf("Invalid file mask:\n%v", maskErr), []string{"&Ok"})
+			})
+			return
+		}
 
 		matcher, matcherErr := newFindTextMatcher(text, options)
 		if matcherErr != nil {

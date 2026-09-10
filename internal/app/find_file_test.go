@@ -30,15 +30,28 @@ func TestSplitFindMasks(t *testing.T) {
 		input        string
 		wantIncludes []string
 		wantExcludes []string
+		wantErr      bool
 	}{
 		{name: "ordinary masks", input: " *.go, *.txt ", wantIncludes: []string{"*.go", "*.txt"}},
 		{name: "included and excluded", input: "*.txt | .git, skip.txt", wantIncludes: []string{"*.txt"}, wantExcludes: []string{".git", "skip.txt"}},
 		{name: "empty include defaults to all", input: " | .git", wantIncludes: []string{"*"}, wantExcludes: []string{".git"}},
 		{name: "far star dot star", input: "*.* | *.tmp", wantIncludes: []string{"*"}, wantExcludes: []string{"*.tmp"}},
+		{name: "multiple separators", input: "*.txt | *.zip | *.zip", wantErr: true},
+		{name: "empty exclusions", input: "*.txt | ", wantErr: true},
+		{name: "separator without masks", input: "|", wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			includes, excludes := splitFindMasks(tc.input)
+			includes, excludes, err := splitFindMasks(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("splitFindMasks(%q) accepted invalid syntax", tc.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("splitFindMasks(%q) error = %v", tc.input, err)
+			}
 			if strings.Join(includes, ",") != strings.Join(tc.wantIncludes, ",") {
 				t.Fatalf("includes = %#v, want %#v", includes, tc.wantIncludes)
 			}
@@ -48,7 +61,6 @@ func TestSplitFindMasks(t *testing.T) {
 		})
 	}
 }
-
 func TestFindFileMaskMatches(t *testing.T) {
 	if !findFileMaskMatches(".git", []string{"*.git", ".git"}) {
 		t.Fatal("an excluded directory mask did not match")

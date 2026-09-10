@@ -1367,7 +1367,12 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	pf.LastW, pf.LastH = w, h
 	pf.SetPosition(0, 0, w-1, h-1) // Update hit-box for FrameManager hit-testing
 	topInset := vtui.FrameManager.WorkspaceTopInset()
-	pf.MenuBar.SetPosition(0, topInset, w-1, topInset)
+	menuY := -2 // Keep a hidden menu outside FrameManager's mouse hit-test area.
+	if config.App.AlwaysShowMenuBar && pf.ShowPanels {
+		menuY = topInset
+	}
+	pf.MenuBar.SetPosition(0, menuY, w-1, menuY)
+	pf.MenuBar.SetVisible(menuY >= 0)
 
 	contentY1 := topInset
 	if config.App.AlwaysShowMenuBar && pf.ShowPanels {
@@ -1755,6 +1760,10 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 	if config.App.AlwaysShowMenuBar && pf.ShowPanels {
 		pf.MenuBar.SetVisible(true)
 		pf.MenuBar.Show(scr)
+	} else {
+		// MenuBar.HitTest is geometry-only in vtui, so visibility alone is not
+		// enough to keep the hidden bar from intercepting terminal row 0.
+		pf.MenuBar.SetVisible(false)
 	}
 
 	// Command line logic depends on terminal state and editor visibility

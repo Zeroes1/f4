@@ -51,3 +51,29 @@ func TestIndicatorBackgroundThemeCompatibility(t *testing.T) {
 		}
 	}
 }
+
+// Single-component palette slots must survive the contrast pass unchanged,
+// while ordinary text pairs still receive correction.
+func TestContrastPreservesSettingsAndCursorSlots(t *testing.T) {
+	saved := append([]uint64(nil), vtui.Palette...)
+	oldConfig := config.App
+	t.Cleanup(func() { vtui.Palette = saved; config.App = oldConfig })
+	vtui.SetDefaultPalette()
+	SetDefaultF4Palette()
+	config.App.EnforceColorCorrection = true
+	attr := vtui.SetRGBBoth(0, 0x808080, 0x808080)
+	slots := []int{ColDialogSettingsBackground, vtui.ColDialogIndicatorBackground, ColTerminalCursor}
+	for _, slot := range slots {
+		vtui.Palette[slot] = attr
+	}
+	vtui.Palette[vtui.ColDialogText] = attr
+	AdjustContrastLevels()
+	for _, slot := range slots {
+		if vtui.Palette[slot] != attr {
+			t.Errorf("special slot %d was contrast-corrected", slot)
+		}
+	}
+	if vtui.Palette[vtui.ColDialogText] == attr {
+		t.Error("ordinary dialog text did not receive contrast correction")
+	}
+}

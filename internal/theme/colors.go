@@ -56,6 +56,10 @@ const (
 
 	ColDialogSettingsBackground
 
+	// Only the foreground half is used: the caret travels across panels,
+	// dialogs and the editor, so it has no background of its own.
+	ColTerminalCursor
+
 	LastF4PaletteColor
 )
 
@@ -133,6 +137,9 @@ func SetDefaultF4Palette() {
 	vtui.Palette[ColEditorCrosshair] = vtui.SetRGBBoth(0, 0xD3D7CF, 0x222222)
 	vtui.Palette[ColEditorStatus] = vtui.Palette[ColViewerStatus]
 	vtui.Palette[ColEditorScrollbar] = vtui.Palette[ColPanelScrollbar]
+
+	// White reads over every background the far palette puts under the caret.
+	vtui.Palette[ColTerminalCursor] = vtui.SetRGBBoth(0, 0xFFFFFF, 0)
 }
 
 type ColorSlot struct {
@@ -155,6 +162,7 @@ var ColorGroups = []string{
 	"Viewer",
 	"Editor",
 	"Help",
+	"Terminal",
 }
 
 var ColorSlots = []ColorSlot{
@@ -278,6 +286,10 @@ var ColorSlots = []ColorSlot{
 	{Canonical: "Help.Box", Index: vtui.ColHelpBox, Group: "Help", ConstantName: "ColHelpBox"},
 	{Canonical: "Help.Box.Title", Index: vtui.ColHelpBoxTitle, Group: "Help", ConstantName: "ColHelpBoxTitle"},
 	{Canonical: "Help.Scrollbar", Index: vtui.ColHelpScrollbar, Group: "Help", ConstantName: "ColHelpScrollbar"},
+
+	// Terminal Group
+	// Not "Cursor": that key already names the item under the panel cursor.
+	{Canonical: "Terminal.Cursor", Index: ColTerminalCursor, Group: "Terminal", ConstantName: "ColTerminalCursor"},
 }
 
 // colorMap links farcolors.ini keys to vtui.Palette indices dynamically.
@@ -359,6 +371,12 @@ func FinishColors() {
 			colorSourcePalette[slot.Canonical] = vtui.Palette[slot.Index]
 		}
 	}
+
+	// The caret is drawn by the terminal, so the colour has to be handed over.
+	// Here, because this is the one point every palette layer has passed.
+	cursorFg, _ := GetColorRGBBoth(vtui.Palette[ColTerminalCursor])
+	vtui.CursorColor = int(cursorFg)
+	vtui.DebugLog("COLORS: cursor color #%06X", cursorFg)
 }
 
 // FormatFarColor serializes a vtui palette color attribute to a farcolors.ini string.
@@ -468,7 +486,12 @@ func AdjustContrastLevels() {
 	// once: a second pass would feed an already-corrected foreground back in.
 	done := make(map[int]bool, len(ColorSlots))
 	for _, slot := range ColorSlots {
-		if strings.HasSuffix(slot.Canonical, ".Box") || slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground || done[slot.Index] {
+		// These slots supply only a foreground or a background, not a pair
+		// whose contrast can be corrected.
+		if slot.Index == ColTerminalCursor || slot.Index == vtui.ColDialogIndicatorBackground || slot.Index == ColDialogSettingsBackground {
+			continue
+		}
+		if strings.HasSuffix(slot.Canonical, ".Box") || done[slot.Index] {
 			continue
 		}
 		done[slot.Index] = true

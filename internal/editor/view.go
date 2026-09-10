@@ -5453,6 +5453,7 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 			}
 			// Reuse the existing LineIndex since the logical content is identical
 			newEngine = textlayout.NewWrapEngine(newPt, ev.Li)
+			newEngine.SetTabSize(ev.TabSize)
 			// A confirmed replacement and a confirmed new backing make it safe to
 			// release the old lazy reader. If reopen failed, retaining it is what
 			// keeps the in-memory edit session usable.

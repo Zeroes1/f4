@@ -974,6 +974,10 @@ func TestPanelsFrame_AlwaysShowMenuBar(t *testing.T) {
 	if fspL.Y1 != 0 {
 		t.Errorf("Expected panels to start at row 0 by default, got %d", fspL.Y1)
 	}
+	_, menuY, _, _ := pf.MenuBar.GetPosition()
+	if menuY >= 0 || pf.MenuBar.IsVisible() {
+		t.Errorf("hidden menu bar occupies row %d (visible=%v), want off-screen and hidden", menuY, pf.MenuBar.IsVisible())
+	}
 
 	// 2. Test when AlwaysShowMenuBar is true (panels shifted down)
 	config.App.AlwaysShowMenuBar = true
@@ -981,6 +985,10 @@ func TestPanelsFrame_AlwaysShowMenuBar(t *testing.T) {
 
 	if fspL.Y1 != 1 {
 		t.Errorf("Expected panels to start at row 1 when AlwaysShowMenuBar is true, got %d", fspL.Y1)
+	}
+	_, menuY, _, _ = pf.MenuBar.GetPosition()
+	if menuY != 0 || !pf.MenuBar.IsVisible() {
+		t.Errorf("visible menu bar position/visibility = (%d, %v), want (0, true)", menuY, pf.MenuBar.IsVisible())
 	}
 
 	// 3. Test that hiding panels collapses the menu bar space for terminal
@@ -990,7 +998,47 @@ func TestPanelsFrame_AlwaysShowMenuBar(t *testing.T) {
 	if pf.TermView.Y1 != 0 {
 		t.Errorf("Expected terminal to start at row 0 when panels are hidden, got %d", pf.TermView.Y1)
 	}
+	_, menuY, _, _ = pf.MenuBar.GetPosition()
+	if menuY >= 0 || pf.MenuBar.IsVisible() {
+		t.Errorf("hidden terminal menu bar occupies row %d (visible=%v), want off-screen and hidden", menuY, pf.MenuBar.IsVisible())
+	}
 }
+
+// TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu covers issue #1093:
+// a click on the first line of micro (or far2l started from f4) used to hit
+// f4's stale menu-bar geometry and open the f4 menu over the terminal app.
+func TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu(t *testing.T) {
+	t.Cleanup(swapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	oldAlways := config.App.AlwaysShowMenuBar
+	config.App.AlwaysShowMenuBar = true
+	t.Cleanup(func() { config.App.AlwaysShowMenuBar = oldAlways })
+
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	waitForLoad(t, pf.Panels[0].(*FileSystemPanel))
+	waitForLoad(t, pf.Panels[1].(*FileSystemPanel))
+	pf.ShowPanels = false
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	vtui.FrameManager.InjectEvents([]*vtinput.InputEvent{{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		MouseX: 5, MouseY: 0,
+		ButtonState: vtinput.FromLeft1stButtonPressed,
+	}})
+	vtui.FrameManager.Step(0)
+
+	if vtui.FrameManager.GetTopFrame() != pf {
+		t.Fatalf("first-row terminal click opened %T, want PanelsFrame terminal view", vtui.FrameManager.GetTopFrame())
+	}
+	if pf.MenuBar.Active {
+		t.Fatal("first-row terminal click activated the hidden f4 menu bar")
+	}
+}
+
 func TestPanelsFrame_Clone_TerminalData(t *testing.T) {
 	pf := NewPanelsFrame()
 	defer pf.Close()
@@ -3211,6 +3259,54 @@ func TestPanelsFrame_NavigateToPath(t *testing.T) {
 
 	if filepath.Clean(lp.Vfs.GetPath()) != filepath.Clean(tmpDir) {
 		t.Errorf("Expected OSVFS path %q, got %q", tmpDir, lp.Vfs.GetPath())
+	}
+}
+
+func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
+	vfs.RegisterProvider(&archive.ArchiveProvider{})
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	root := t.TempDir()
+	zipPath := filepath.Join(root, "payload.zip")
+	createTestZipForNav(t, zipPath)
+	archiveBytes, err := os.ReadFile(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sfxPath := filepath.Join(root, "bundle.exe")
+	if err := os.WriteFile(sfxPath, append([]byte("self-extractor stub\n"), archiveBytes...), 0600); err != nil { // #nosec G703 -- sfxPath is inside the private test temp directory.
+		t.Fatal(err)
+	}
+
+	fp := NewFileSystemPanel(0, 0, 80, 25, vfs.NewOSVFS(root))
+	t.Cleanup(func() {
+		fp.cancelProviderOpen()
+		if fp.CancelLoad != nil {
+			fp.CancelLoad()
+		}
+		fp.StopLoadingAnimation()
+	})
+	waitForLoad(t, fp)
+	fp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "bundle.exe"}}}
+	fp.SetCursorIndex(0)
+
+	enter := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN}
+	if !fp.ProcessKey(enter) {
+		t.Fatal("ordinary Enter on an SFX row was not consumed")
+	}
+	if _, ok := fp.Vfs.(*vfs.OSVFS); !ok {
+		t.Fatalf("ordinary Enter changed VFS to %T", fp.Vfs)
+	}
+	if fp.ProviderOpenTask != nil {
+		t.Fatal("ordinary Enter started an SFX provider open")
+	}
+
+	if !fp.EnterSelectedFromAction() {
+		t.Fatal("Ctrl+PgDn action did not start SFX entry")
+	}
+	waitForLoad(t, fp)
+	if _, ok := fp.Vfs.(*archive.ArchiveVFS); !ok {
+		t.Fatalf("Ctrl+PgDn left VFS as %T, want archive VFS", fp.Vfs)
 	}
 }
 

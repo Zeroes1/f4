@@ -66,6 +66,17 @@ func startupDirsFor(cwd string, args []string) (left, right string) {
 	}
 }
 
+// startupDirsOverride distinguishes an explicit directory argument from a
+// plain launch. With no directory argument the restored session must win over
+// the process cwd.
+func startupDirsOverride(cwd string, args []string) (left, right string, ok bool) {
+	if len(args) == 0 {
+		return "", "", false
+	}
+	left, right = startupDirsFor(cwd, args)
+	return left, right, true
+}
+
 // startupDirArgs picks the panel directories out of a command line: the words
 // before the first switch, plus everything after a "--" separator. --gui and
 // --tty take their backend as a separate word, so a word after a switch could
@@ -101,7 +112,10 @@ func rememberStartupDirs(args []string) {
 	if err != nil {
 		return
 	}
-	left, right := startupDirsFor(cwd, args)
+	left, right, ok := startupDirsOverride(cwd, args)
+	if !ok {
+		return
+	}
 	_ = os.Setenv(startupDirEnv, left)
 	if right != "" {
 		_ = os.Setenv(startupDirRightEnv, right)

@@ -24,7 +24,6 @@ import (
 	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
-	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -1889,7 +1888,7 @@ func init() {
 				isArchive = vfs.FindProvider(context.Background(), fsp.Vfs, fullPath) != nil
 			}
 			if isDir || isArchive {
-				pf.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+				fsp.EnterSelectedFromAction()
 			}
 		}),
 	})
@@ -2198,7 +2197,7 @@ func init() {
 		Description: "Encode or decode the selected text as Base64",
 		DescKey:     "Action.Editor.Base64Menu.Desc",
 		DefaultKeys: []string{"F11"},
-		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowBase64Menu() }),
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowPluginsMenu() }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.Base64Encode",
@@ -2210,7 +2209,7 @@ func init() {
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			if err := ev.TransformBase64Selection(true); err != nil {
-				vtui.ShowMessage(i18n.Msg("Editor.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				vtui.ShowMessage(i18n.Msg("Editor.Plugins.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 			}
 		}),
 	})
@@ -2224,9 +2223,20 @@ func init() {
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			if err := ev.TransformBase64Selection(false); err != nil {
-				vtui.ShowMessage(i18n.Msg("Editor.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				vtui.ShowMessage(i18n.Msg("Editor.Plugins.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 			}
 		}),
+	})
+	registerAction(action.Action{
+		Name:                "Editor.SortLines",
+		Area:                "Editor",
+		Label:               "Sort lines",
+		LabelKey:            "Action.Editor.SortLines",
+		Description:         "Sort selected lines or all lines",
+		DescKey:             "Action.Editor.SortLines.Desc",
+		MenuPath:            "Edit",
+		MenuSeparatorBefore: true,
+		Handler:             withEditor(func(ev *editor.EditorView) { ev.ShowSortDialog() }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.ToggleOvertype",

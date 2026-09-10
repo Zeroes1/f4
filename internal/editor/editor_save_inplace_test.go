@@ -180,3 +180,39 @@ func TestEditorSave_ShrinkingEditStillTruncates(t *testing.T) {
 		t.Errorf("content = %q, want %q", got, "hello world")
 	}
 }
+
+func TestEditorSave_PreservesTabSizeForCursorLayout(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	testutil.DrainPendingTasks()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tabbed.txt")
+	if err := os.WriteFile(path, []byte("\tvalue\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := openLocalEditor(t, dir, path)
+	defer ev.Close()
+
+	ev.TabSize = 4
+	ev.Engine.SetTabSize(ev.TabSize)
+	ev.CursorLine = 0
+	ev.CursorPos = 1
+	_, before := ev.Engine.LogicalToVisual(ev.CursorPos)
+	if before != 4 {
+		t.Fatalf("cursor visual column before save = %d, want 4", before)
+	}
+
+	ev.Modified = true
+	ev.SaveToFile(nil)
+	waitEditorSave(t, ev)
+	testutil.DrainPendingTasks()
+
+	if ev.Modified {
+		t.Fatal("editor still marked modified after save")
+	}
+	_, after := ev.Engine.LogicalToVisual(ev.CursorPos)
+	if after != before {
+		t.Fatalf("cursor visual column after save = %d, want %d", after, before)
+	}
+}

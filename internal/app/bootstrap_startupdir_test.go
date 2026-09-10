@@ -66,6 +66,12 @@ func TestStartupDirsForCommandLine(t *testing.T) {
 	}
 }
 
+func TestStartupDirsOverrideIgnoresPlainLaunch(t *testing.T) {
+	if left, right, ok := startupDirsOverride(t.TempDir(), nil); ok || left != "" || right != "" {
+		t.Fatalf("startupDirsOverride(no args) = (%q, %q, %t), want (empty, empty, false)", left, right, ok)
+	}
+}
+
 func TestStartupDirArgs(t *testing.T) {
 	cases := []struct {
 		name string

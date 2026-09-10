@@ -60,16 +60,19 @@ func (ev *EditorView) TransformBase64Selection(encode bool) error {
 	return nil
 }
 
-func (ev *EditorView) ShowBase64Menu() {
+// ShowPluginsMenu opens the editor's F11 operations menu.
+func (ev *EditorView) ShowPluginsMenu() {
 	if vtui.FrameManager == nil {
 		return
 	}
-	menu := vtui.NewVMenu(i18n.Msg("Editor.Base64.Title"))
+	menu := vtui.NewVMenu(i18n.Msg("Editor.Plugins.Title"))
 	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Action.Editor.Base64Encode")})
 	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Action.Editor.Base64Decode")})
+	menu.AddSeparator()
+	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Action.Editor.SortLines")})
 
 	screenW, screenH := vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight()
-	w := vtui.StringWidth(i18n.Msg("Editor.Base64.Title")) + 8
+	w := vtui.StringWidth(i18n.Msg("Editor.Plugins.Title")) + 8
 	for _, item := range menu.Items {
 		if itemW := vtui.StringWidth(item.Text) + 6; itemW > w {
 			w = itemW
@@ -87,17 +90,22 @@ func (ev *EditorView) ShowBase64Menu() {
 	menu.SetPosition(x, y, x+w-1, y+h-1)
 	menu.OnAction = func(index int) {
 		menu.Close()
-		if index < 0 || index >= len(menu.Items) {
-			return
-		}
-		encode := index == 0
-		if err := ev.TransformBase64Selection(encode); err != nil {
-			message := err.Error()
-			if errors.Is(err, errBase64NoSelection) {
-				message = i18n.Msg("Editor.Base64.NoSelection")
+		switch index {
+		case 0, 1:
+			if err := ev.TransformBase64Selection(index == 0); err != nil {
+				message := err.Error()
+				if errors.Is(err, errBase64NoSelection) {
+					message = i18n.Msg("Editor.Base64.NoSelection")
+				}
+				vtui.ShowMessage(i18n.Msg("Editor.Plugins.Title"), message, []string{i18n.Msg("vtui.Ok")})
 			}
-			vtui.ShowMessage(i18n.Msg("Editor.Base64.Title"), message, []string{i18n.Msg("vtui.Ok")})
+		case 3:
+			ev.ShowSortDialog()
 		}
 	}
 	vtui.FrameManager.Push(menu)
 }
+
+// ShowBase64Menu is kept as a compatibility alias for editor integrations
+// that used the old method name before the F11 menu gained other operations.
+func (ev *EditorView) ShowBase64Menu() { ev.ShowPluginsMenu() }

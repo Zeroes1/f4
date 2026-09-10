@@ -179,7 +179,7 @@ func TestCommandPaletteHelpProviderExecutesLiveStateExactly(t *testing.T) {
 	if !executeCommandPaletteEntry(byID["Help.Zoom"]) {
 		t.Fatal("Help.Zoom failed")
 	}
-	if got := [4]int{help.X1, help.Y1, help.X2, help.Y2}; got != [4]int{0, 0, vtui.FrameManager.GetScreenSize() - 1, vtui.FrameManager.GetScreenHeight() - 2} {
+	if got := [4]int{help.X1, help.Y1, help.X2, help.Y2}; got != [4]int{0, 0, vtui.FrameManager.GetScreenSize() - 1, vtui.FrameManager.GetScreenHeight() - 3} {
 		t.Fatalf("zoomed Help bounds = %v", got)
 	}
 	if !executeCommandPaletteEntry(byID["Help.Zoom"]) {

@@ -1,17 +1,11 @@
 {
   "mcpServers": {
-    "codegraph": {
+    "gopls": {
       "type": "stdio",
-      "command": "npx",
+      "command": "gopls",
       "args": [
-        "-y",
-        "@colbymchenry/codegraph@1.6.0",
-        "serve",
-        "--mcp"
-      ],
-      "env": {
-        "CODEGRAPH_TELEMETRY": "0"
-      }
+        "mcp"
+      ]
     }
   }
 }
