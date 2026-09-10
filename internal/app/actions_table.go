@@ -1888,7 +1888,7 @@ func init() {
 				isArchive = vfs.FindProvider(context.Background(), fsp.Vfs, fullPath) != nil
 			}
 			if isDir || isArchive {
-				pf.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+				fsp.EnterSelectedFromAction()
 			}
 		}),
 	})

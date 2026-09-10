@@ -3262,6 +3262,48 @@ func TestPanelsFrame_NavigateToPath(t *testing.T) {
 	}
 }
 
+func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
+	vfs.RegisterProvider(&archive.ArchiveProvider{})
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	root := t.TempDir()
+	zipPath := filepath.Join(root, "payload.zip")
+	createTestZipForNav(t, zipPath)
+	archiveBytes, err := os.ReadFile(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sfxPath := filepath.Join(root, "bundle.exe")
+	if err := os.WriteFile(sfxPath, append([]byte("self-extractor stub\n"), archiveBytes...), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	fp := NewFileSystemPanel(0, 0, 80, 25, vfs.NewOSVFS(root))
+	t.Cleanup(func() { fp.Close() })
+	waitForLoad(t, fp)
+	fp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "bundle.exe"}}}
+	fp.SetCursorIndex(0)
+
+	enter := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN}
+	if !fp.ProcessKey(enter) {
+		t.Fatal("ordinary Enter on an SFX row was not consumed")
+	}
+	if _, ok := fp.Vfs.(*vfs.OSVFS); !ok {
+		t.Fatalf("ordinary Enter changed VFS to %T", fp.Vfs)
+	}
+	if fp.ProviderOpenTask != nil {
+		t.Fatal("ordinary Enter started an SFX provider open")
+	}
+
+	if !fp.EnterSelectedFromAction() {
+		t.Fatal("Ctrl+PgDn action did not start SFX entry")
+	}
+	waitForLoad(t, fp)
+	if _, ok := fp.Vfs.(*archive.ArchiveVFS); !ok {
+		t.Fatalf("Ctrl+PgDn left VFS as %T, want archive VFS", fp.Vfs)
+	}
+}
+
 func TestArchiveBulkExtract_ProgressTracking(t *testing.T) {
 	// Register the Archive VFS provider manually for this unit test
 	vfs.RegisterProvider(&archive.ArchiveProvider{})
