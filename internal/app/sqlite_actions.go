@@ -34,7 +34,7 @@ func actionSQLiteClient() bool {
 }
 
 func init() {
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "App.SQLite",
 		Area:        "Shell",
 		Label:       "SQLite &client",

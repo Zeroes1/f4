@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/unxed/f4/internal/keymap"
-	"github.com/unxed/f4/internal/panel"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/cmdline"
 	"github.com/unxed/f4/internal/config"
@@ -4893,36 +4894,9 @@ func actionEditSymlink(pf *panel.PanelsFrame) {
 	})
 }
 
-func listAvailableHelpLanguages() []i18n.Language {
-	langs := []i18n.Language{{Code: "en", Name: "English"}}
-
-	exeDir := filepath.Dir(os.Args[0])
-	userDir := filepath.Join(config.GetF4ConfigDir(), "help")
-	dirs := []string{filepath.Join(exeDir, "help"), userDir, "help"}
-	seen := map[string]bool{"en": true}
-
-	for _, d := range dirs {
-		entries, err := os.ReadDir(d)
-		if err != nil {
-			continue
-		}
-		for _, e := range entries {
-			if !e.IsDir() && strings.HasSuffix(e.Name(), ".hlf") {
-				code := strings.TrimSuffix(e.Name(), ".hlf")
-				if !seen[code] {
-					name := i18n.LanguageName(code, userLangDir())
-					langs = append(langs, i18n.Language{Code: code, Name: name})
-					seen[code] = true
-				}
-			}
-		}
-	}
-	return langs
-}
-
 func actionLanguage(pf *panel.PanelsFrame) {
 	uiLangs := i18n.ListAvailable(userLangDir())
-	helpLangs := listAvailableHelpLanguages()
+	helpLangs := dialog.ListAvailableHelpLanguages()
 
 	width, height := 54, 15
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("LanguageSettings.Title"))
@@ -5032,8 +5006,4 @@ func actionLanguage(pf *panel.PanelsFrame) {
 	}
 
 	vtui.FrameManager.Push(dlg)
-}
-
-func actionHelpLanguage(pf *panel.PanelsFrame) {
-	actionLanguage(pf)
 }

@@ -5,6 +5,7 @@ package gui
 import "testing"
 
 func TestMatchWindowsFontFamily(t *testing.T) {
+	t.Setenv("WINDIR", `C:\Windows`)
 	entries := []fontEntry{
 		{base: "Consolas", File: "consola.ttf"},
 		{base: "Consolas Bold", File: "consolab.ttf"},

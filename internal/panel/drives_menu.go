@@ -296,6 +296,9 @@ func driveMenuPlatformItemVisible(drv sysinfo.DriveEntry, options uint32) bool {
 }
 
 func (pf *PanelsFrame) openDriveMenuOptions(panelIdx int, menu *vtui.VMenu) {
+	if RunAction("Settings.Category.drives") {
+		return
+	}
 	width, height := DriveMenuOptionsDialogSize()
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("Drive.OptionsTitle"))
 	dlg.ShowClose = true

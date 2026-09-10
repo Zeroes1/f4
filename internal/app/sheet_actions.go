@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
-	"github.com/unxed/f4/internal/panel"
 	"path/filepath"
 	"strings"
+
+	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/sheet"
@@ -102,7 +103,7 @@ func selectedSpreadsheetPath() string {
 }
 
 func init() {
-	action.RegisterAction(action.Action{
+	registerAction(action.Action{
 		Name:        "App.Spreadsheet",
 		Area:        "Shell",
 		Label:       "Spreadsheet",

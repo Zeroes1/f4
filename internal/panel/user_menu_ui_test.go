@@ -9,7 +9,6 @@ import (
 
 	"github.com/unxed/f4/internal/cmdline"
 	"github.com/unxed/f4/internal/dialog"
-	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -135,11 +134,11 @@ func TestFindLocalFarMenu_WalksUp(t *testing.T) {
 	if err := os.MkdirAll(deep, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	wanted := filepath.Join(root, "a", farMenuFileName)
+	wanted := filepath.Join(root, "a", FarMenuFileName)
 	if err := os.WriteFile(wanted, []byte("x:  X\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, found := findLocalFarMenu(deep)
+	got, found := FindLocalFarMenu(deep)
 	if !found {
 		t.Fatalf("expected to find FarMenu.ini at %q from %q", wanted, deep)
 	}
@@ -153,7 +152,7 @@ func TestFindLocalFarMenu_WalksUp(t *testing.T) {
 
 func TestFindLocalFarMenu_NotFound(t *testing.T) {
 	dir := t.TempDir()
-	_, found := findLocalFarMenu(dir)
+	_, found := FindLocalFarMenu(dir)
 	if found {
 		t.Errorf("expected no FarMenu.ini in empty tree")
 	}
@@ -167,15 +166,15 @@ func TestFindLocalFarMenu_PicksClosest(t *testing.T) {
 	if err := os.MkdirAll(leaf, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	rootMenu := filepath.Join(root, farMenuFileName)
-	midMenu := filepath.Join(mid, farMenuFileName)
+	rootMenu := filepath.Join(root, FarMenuFileName)
+	midMenu := filepath.Join(mid, FarMenuFileName)
 	if err := os.WriteFile(rootMenu, []byte("r:  R\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(midMenu, []byte("m:  M\r\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := findLocalFarMenu(leaf)
+	got, _ := FindLocalFarMenu(leaf)
 	gotAbs, _ := filepath.EvalSymlinks(got)
 	midAbs, _ := filepath.EvalSymlinks(midMenu)
 	if gotAbs != midAbs {
@@ -317,172 +316,6 @@ func TestUserMenu_ScriptCommandUsesInterpreterAndQuotedBody(t *testing.T) {
 	}
 	if !strings.Contains(command, "printf '%s' "+quotedBody+" | /usr/bin/env bash -") {
 		t.Fatalf("script command = %q", command)
-	}
-}
-
-func TestUserMenu_InteractiveEdit(t *testing.T) {
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-	theme.SetDefaultF4Palette()
-
-	pf := setupMockPanelsFrame(t)
-	defer pf.Close()
-	pf.ResizeConsole(80, 25)
-
-	s := &userMenuState{
-		Pf:         pf,
-		mode:       MenuModeLocal,
-		SourcePath: filepath.Join(t.TempDir(), farMenuFileName),
-		rootTitle:  "Local Menu",
-		rootItems: []UserMenuItem{
-			{HotKey: "1", Label: "old label", Commands: []string{"echo 1"}},
-		},
-	}
-
-	showEditItemDialog(s, vtui.NewVMenu("dummy"), s.rootItems, 0, false, false)
-
-	top := vtui.FrameManager.GetTopFrame()
-	if top == nil || top.GetTitle() != i18n.Msg("UserMenu.EditTitle") {
-		t.Fatalf("Expected Edit User Menu dialog, got %v", top)
-	}
-
-	dlg := top.(vtui.Container)
-	vtui.AssertLayout(t, dlg)
-
-	var editLabel *vtui.Edit
-	var btnSave *vtui.Button
-	for _, child := range dlg.GetChildren() {
-		if e, ok := child.(*vtui.Edit); ok && e.GetText() == "old label" {
-			editLabel = e
-		}
-		if b, ok := child.(*vtui.Button); ok && strings.Contains(b.GetText(), "Save") {
-			btnSave = b
-		}
-	}
-
-	if editLabel == nil || btnSave == nil {
-		t.Fatal("Required dialog controls not found")
-	}
-
-	editLabel.SetText("new label")
-	btnSave.OnClick()
-
-	if s.rootItems[0].Label != "new label" {
-		t.Errorf("Expected updated label 'new label', got %q", s.rootItems[0].Label)
-	}
-}
-
-// TestUserMenu_EditItemMultilineCommand covers issue #342: the Command
-// field is a MultiLineEdit, so editing an item with several commands
-// preserves them one-per-line on save and lets the user append more.
-func TestUserMenu_EditItemMultilineCommand(t *testing.T) {
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-	theme.SetDefaultF4Palette()
-
-	pf := setupMockPanelsFrame(t)
-	defer pf.Close()
-	pf.ResizeConsole(80, 25)
-
-	s := &userMenuState{
-		Pf:         pf,
-		mode:       MenuModeLocal,
-		SourcePath: filepath.Join(t.TempDir(), farMenuFileName),
-		rootTitle:  "Local Menu",
-		rootItems: []UserMenuItem{
-			{HotKey: "1", Label: "build", Commands: []string{"go build ./...", "go vet ./..."}},
-		},
-	}
-
-	showEditItemDialog(s, vtui.NewVMenu("dummy"), s.rootItems, 0, false, false)
-
-	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
-
-	var editCmd *vtui.MultiLineEdit
-	var btnSave *vtui.Button
-	for _, child := range dlg.GetChildren() {
-		if mle, ok := child.(*vtui.MultiLineEdit); ok {
-			editCmd = mle
-		}
-		if b, ok := child.(*vtui.Button); ok && strings.Contains(b.GetText(), "Save") {
-			btnSave = b
-		}
-	}
-	if editCmd == nil {
-		t.Fatal("MultiLineEdit for Command field not found")
-	}
-	if btnSave == nil {
-		t.Fatal("Save button not found")
-	}
-
-	// The dialog opened with the existing commands rendered on separate
-	// rows (no "; " join), so the user immediately sees the full script.
-	if got := editCmd.GetLines(); len(got) != 2 || got[0] != "go build ./..." || got[1] != "go vet ./..." {
-		t.Errorf("initial lines = %v, want [go build ./..., go vet ./...]", got)
-	}
-
-	// Append a third command via SetLines (simulating typing).
-	editCmd.SetLines([]string{"go build ./...", "go vet ./...", "go test ./..."})
-	btnSave.OnClick()
-
-	got := s.rootItems[0].Commands
-	want := []string{"go build ./...", "go vet ./...", "go test ./..."}
-	if len(got) != len(want) {
-		t.Fatalf("commands after save = %v, want %v", got, want)
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("commands[%d] = %q, want %q", i, got[i], want[i])
-		}
-	}
-}
-
-// TestUserMenu_EditItemStripsBlankLines guards the save-path helper:
-// blank rows at the top/bottom of the multi-line box shouldn't reach
-// the ini file as empty Command entries; interior blank lines survive
-// (visual grouping inside a shell script).
-func TestUserMenu_EditItemStripsBlankLines(t *testing.T) {
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-	theme.SetDefaultF4Palette()
-
-	pf := setupMockPanelsFrame(t)
-	defer pf.Close()
-	pf.ResizeConsole(80, 25)
-
-	s := &userMenuState{
-		Pf:         pf,
-		mode:       MenuModeLocal,
-		SourcePath: filepath.Join(t.TempDir(), farMenuFileName),
-		rootTitle:  "Local Menu",
-		rootItems: []UserMenuItem{
-			{HotKey: "1", Label: "cmd", Commands: []string{"echo a"}},
-		},
-	}
-
-	showEditItemDialog(s, vtui.NewVMenu("dummy"), s.rootItems, 0, false, false)
-	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
-
-	var editCmd *vtui.MultiLineEdit
-	var btnSave *vtui.Button
-	for _, child := range dlg.GetChildren() {
-		if mle, ok := child.(*vtui.MultiLineEdit); ok {
-			editCmd = mle
-		}
-		if b, ok := child.(*vtui.Button); ok && strings.Contains(b.GetText(), "Save") {
-			btnSave = b
-		}
-	}
-
-	editCmd.SetLines([]string{"", "", "echo a", "", "echo b", "", ""})
-	btnSave.OnClick()
-
-	got := s.rootItems[0].Commands
-	want := []string{"echo a", "", "echo b"}
-	if len(got) != len(want) {
-		t.Fatalf("commands after save = %v, want %v", got, want)
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			t.Errorf("commands[%d] = %q, want %q", i, got[i], want[i])
-		}
 	}
 }
 

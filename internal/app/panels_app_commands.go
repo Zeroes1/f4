@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/unxed/f4/internal/appcmd"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/settings"
 )
 
 // handlePanelsAppCommand answers the frame commands the panels raise and do not
@@ -38,37 +39,39 @@ func handlePanelsAppCommand(pf *panel.PanelsFrame, cmd int, args any) bool {
 		actionFindFile(pf)
 		return true
 	case appcmd.CmPanelSettings:
-		actionPanelSettings(pf)
+		settings.Open("panels")
 		return true
 	case appcmd.CmEditorSettings:
-		actionEditorSettings(pf)
+		settings.Open("editor")
 		return true
 	case appcmd.CmColorerSettings:
-		actionColorerSettings(pf)
+		settings.Open("syntax")
 		return true
 	case appcmd.CmAppearanceSettings:
-		actionAppearanceSettings(pf)
+		settings.Open("appearance")
 		return true
 	case appcmd.CmConfirmationsSettings:
-		actionConfirmationsSettings(pf)
+		settings.Open("operations")
 		return true
 	case appcmd.CmHotkeyConfig:
-		actionHotkeyConfig(pf)
+		settings.Open("keyboard")
 		return true
 	case appcmd.CmLanguage:
-		actionLanguage(pf)
+		settings.Open("appearance")
 		return true
 	case appcmd.CmHelpLanguage:
-		actionHelpLanguage(pf)
+		settings.Open("appearance")
 		return true
 	case appcmd.CmUpdateSettings:
-		actionUpdateSettings(pf)
+		settings.Open("updates")
 		return true
+	case appcmd.CmProxySettings:
+		return settings.Open("network")
 	case appcmd.CmPlugins:
-		actionManagePlugins(pf)
+		settings.Open("plugins")
 		return true
 	case appcmd.CmPlugRing:
-		actionPlugRing(pf)
+		settings.Open("plugins")
 		return true
 	case appcmd.CmBackground:
 		return actionBackground()

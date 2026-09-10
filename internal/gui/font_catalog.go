@@ -15,10 +15,10 @@ var DiscoverInstalledGuiFonts = platformGuiFontFiles
 // guiFontChoices keeps the current value even when it is a manually entered
 // path or family name that the platform catalog cannot discover.
 func guiFontChoices(language, current string) []string {
-	return guiFontChoicesFromInstalled(current, DiscoverInstalledGuiFonts(language))
+	return GuiFontChoicesFromInstalled(current, DiscoverInstalledGuiFonts(language))
 }
 
-func guiFontChoicesFromInstalled(current string, installed []string) []string {
+func GuiFontChoicesFromInstalled(current string, installed []string) []string {
 	choices := make([]string, 0)
 	appendUnique := func(value string) {
 		value = strings.TrimSpace(value)
@@ -48,7 +48,7 @@ var platformGuiFontDisplayChoices = func(language, current string) []string {
 	installed := DiscoverInstalledGuiFonts(language)
 	choices := make([]string, 0)
 	seen := make(map[string]struct{})
-	for _, value := range guiFontChoicesFromInstalled(current, installed) {
+	for _, value := range GuiFontChoicesFromInstalled(current, installed) {
 		display := guiFontDisplayValueFromInstalled(value, installed)
 		if display == "" {
 			continue
@@ -73,7 +73,30 @@ var platformGuiFontDisplayNameFromInstalled = func(value string, _ []string) str
 	return platformGuiFontDisplayName(value)
 }
 
-// GuiFontDisplayChoices returns the strings shown in the font picker. On
+// Build a label resolver once per picker, so platforms can snapshot expensive
+// discovery data without caching installed fonts across settings sessions.
+var newGuiFontDisplayNameResolver = func(installed []string) func(string) string {
+	return func(value string) string {
+		return platformGuiFontDisplayNameFromInstalled(value, installed)
+	}
+}
+
+func GuiFontDisplayValuesFromInstalled(values, installed []string) []string {
+	resolve := newGuiFontDisplayNameResolver(installed)
+	labels := make([]string, len(values))
+	for i, value := range values {
+		labels[i] = value
+		for _, path := range installed {
+			if sameGuiFontValue(value, path) {
+				labels[i] = resolve(value)
+				break
+			}
+		}
+	}
+	return labels
+}
+
+// guiFontDisplayChoices returns the strings shown in the font picker. On
 // Windows these are font family names (e.g. "Cascadia Mono"); on other
 // platforms they are short names derived from the discovered font files.
 func GuiFontDisplayChoices(language, current string) []string {
@@ -114,7 +137,7 @@ func GuiFontValueForDisplay(language, current, display string) string {
 		return ""
 	}
 	installed := DiscoverInstalledGuiFonts(language)
-	for _, value := range guiFontChoicesFromInstalled(current, installed) {
+	for _, value := range GuiFontChoicesFromInstalled(current, installed) {
 		if strings.EqualFold(guiFontDisplayValueFromInstalled(value, installed), display) {
 			return value
 		}

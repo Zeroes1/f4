@@ -236,6 +236,10 @@ func ExecutePluginCommand(location vfs.PluginCommandLocation, id string, app vfs
 	if App != nil && App.IsStale(app) {
 		return false
 	}
+	if location == vfs.PluginCommandConfig && SettingsCommand != nil && SettingsCommand(id) {
+		return true
+	}
+
 	registryID := strings.ToLower(strings.TrimSpace(id))
 	pluginCommandRegistry.RLock()
 	registered, ok := pluginCommandRegistry.byID[registryID]
@@ -274,3 +278,6 @@ func PluginCommandIDs() []string {
 	defer pluginCommandRegistry.RUnlock()
 	return append([]string(nil), pluginCommandRegistry.order...)
 }
+
+// SettingsCommand redirects bundled configuration commands through the settings host.
+var SettingsCommand func(string) bool

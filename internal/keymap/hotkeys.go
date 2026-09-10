@@ -366,9 +366,10 @@ func (hm *HotkeyManager) Load() {
 }
 
 // Save writes only overridden or new bindings to the INI file.
-func (hm *HotkeyManager) Save() {
+func (hm *HotkeyManager) Save() { _ = hm.SaveError() }
+func (hm *HotkeyManager) SaveError() error {
 	if hm.IniPath == "" {
-		return
+		return fmt.Errorf("hotkey settings path is unavailable")
 	}
 
 	var sb strings.Builder
@@ -400,10 +401,10 @@ func (hm *HotkeyManager) Save() {
 		}
 	}
 
-	_ = os.MkdirAll(filepath.Dir(hm.IniPath), 0755)
-	// #nosec G306 -- hotkeys.ini is a user-editable config file, written with
-	// the same permissions as every other .ini f4 keeps beside it.
-	_ = os.WriteFile(hm.IniPath, []byte(sb.String()), 0644)
+	if err := os.MkdirAll(filepath.Dir(hm.IniPath), 0755); err != nil {
+		return err
+	}
+	return config.WriteUserFileAtomically(hm.IniPath, []byte(sb.String()), 0644)
 }
 
 // delKeyAlias returns the other spelling of a Del key string, or "" when the

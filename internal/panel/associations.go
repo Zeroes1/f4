@@ -3,13 +3,14 @@ package panel
 import (
 	"bufio"
 	"fmt"
-	"github.com/unxed/f4/internal/config"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/unxed/f4/internal/config"
 )
 
 // AssocKind numbers the six command slots per far2l's filetype.hpp
@@ -29,8 +30,8 @@ const (
 
 const AssocKindCount = 6
 
-// assocKeyName maps AssocKind to the INI key far2l uses for the slot.
-var assocKeyName = [AssocKindCount]string{
+// AssocKeyName maps AssocKind to the INI key far2l uses for the slot.
+var AssocKeyName = [AssocKindCount]string{
 	"Execute",
 	"AltExec",
 	"View",
@@ -143,7 +144,7 @@ func LoadAssociations(path string) ([]FileAssoc, error) {
 		}
 		state := parseAssocState(sec["State"])
 		for k := 0; k < AssocKindCount; k++ {
-			a.Commands[k] = sec[assocKeyName[k]]
+			a.Commands[k] = sec[AssocKeyName[k]]
 			a.Enabled[k] = state&(1<<uint(k)) != 0
 		}
 		list = append(list, a)
@@ -174,7 +175,7 @@ func SaveAssociations(path string, list []FileAssoc) error {
 		buf.WriteString(a.Description)
 		buf.WriteByte('\n')
 		for k := 0; k < AssocKindCount; k++ {
-			buf.WriteString(assocKeyName[k])
+			buf.WriteString(AssocKeyName[k])
 			buf.WriteByte('=')
 			buf.WriteString(a.Commands[k])
 			buf.WriteByte('\n')

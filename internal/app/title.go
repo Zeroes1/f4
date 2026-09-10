@@ -183,6 +183,7 @@ func UpdateWindowTitle(scr *vtui.ScreenBuf) {
 	}
 
 	vtui.SetWindowTitle(currentWindowTitle())
+	drawWorktreeIdentity(scr)
 
 	// Macro recording indicator — drawn after MenuBar so it's always on top
 	if macro.MacroMgr != nil && macro.MacroMgr.Recording {

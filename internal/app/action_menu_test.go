@@ -1,12 +1,13 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/keymap"
-	"github.com/unxed/f4/internal/panel"
 	"testing"
 
 	"github.com/unxed/f4/internal/action"
+	"github.com/unxed/f4/internal/history"
 	"github.com/unxed/f4/internal/i18n"
+	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -149,19 +150,20 @@ func TestBuildMenuBarItems_Shell(t *testing.T) {
 		t.Error("Expected at least one separator in the Options menu")
 	}
 
-	var pluginConfiguration *vtui.MenuItem
-	for i := range items[2].SubItems {
-		item := &items[2].SubItems[i]
-		if item.Text == i18n.Msg("Menu.PluginConfiguration") {
-			pluginConfiguration = item
-			break
+	count := 0
+	for _, item := range items[2].SubItems {
+		if item.UserData == history.MenuHistoryItemKey("Settings.Open") {
+			count++
+		}
+		if item.UserData == history.MenuHistoryItemKey("Settings.PluginConfiguration") {
+			t.Fatal("legacy configuration entry remains in menu")
 		}
 	}
-	if pluginConfiguration == nil {
-		t.Fatal("Plugin Configuration is missing from the Options menu")
+	if count != 1 {
+		t.Fatalf("Settings entries = %d", count)
 	}
-	if pluginConfiguration.Shortcut != "Shift+F11" {
-		t.Errorf("Plugin Configuration shortcut = %q, want Shift+F11", pluginConfiguration.Shortcut)
+	if a, ok := GetAction("Settings.PluginConfiguration"); !ok || len(a.DefaultKeys) == 0 {
+		t.Fatal("legacy deep-link shortcut was removed")
 	}
 
 	wantCommandShortcuts := map[string]string{
@@ -192,8 +194,8 @@ func TestBuildMenuBarItems_Terminal(t *testing.T) {
 	defer func() { keymap.GlobalHotkeysMgr = old }()
 
 	items := BuildMenuBarItems("Terminal")
-	if len(items) != 1 || items[0].Label != "&File" {
-		t.Fatalf("Expected a single '&File' menu, got %+v", items)
+	if len(items) != 2 || items[0].Label != "&File" {
+		t.Fatalf("Expected File and Settings-containing Options menus, got %+v", items)
 	}
 	File := items[0].SubItems
 	if len(File) == 0 || File[0].Text != "&View terminal log" {
@@ -429,6 +431,25 @@ func TestBuildMenuBarItemsFoldsRareCommandsIntoSubMenus(t *testing.T) {
 		}
 		if find(commands, act.DisplayLabel()) != nil {
 			t.Errorf("%q is listed both at the top level and in the %q submenu", act.DisplayLabel(), action.PlainLabel(sub.title))
+		}
+	}
+}
+
+func TestSettingsFirstInEveryOptionsMenu(t *testing.T) {
+	for _, area := range []string{"Shell", "Editor", "Viewer", "Terminal"} {
+		found := false
+		for _, menu := range BuildMenuBarItems(area) {
+			for _, item := range menu.SubItems {
+				if item.UserData == history.MenuHistoryItemKey("Settings.Open") {
+					found = true
+					if menu.SubItems[0].UserData != history.MenuHistoryItemKey("Settings.Open") {
+						t.Fatalf("%s: Settings is not first", area)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s: Settings missing", area)
 		}
 	}
 }
