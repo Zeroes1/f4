@@ -11,11 +11,11 @@ import (
 )
 
 type kittyCoverageDisplay struct {
-	puts	int
-	deletes	int
-	drops	[]uint32
-	putError	string
-	orphaned	[]uint32
+	puts     int
+	deletes  int
+	drops    []uint32
+	putError string
+	orphaned []uint32
 }
 
 func (d *kittyCoverageDisplay) Put(*kittyImage, kittyCommand) string {
