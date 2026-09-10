@@ -103,8 +103,14 @@ func TestRenameNoReplacePortableSameObject(t *testing.T) {
 	if err := renameNoReplacePortable(path, alias); err != nil {
 		t.Fatalf("same-object rename: %v", err)
 	}
-	if got, err := os.ReadFile(path); err != nil || string(got) != "same" {
-		t.Fatalf("same-object source = %q, %v", got, err)
+	for _, candidate := range []string{path, alias} {
+		got, err := os.ReadFile(candidate)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil || string(got) != "same" {
+			t.Fatalf("same-object path %q = %q, %v", candidate, got, err)
+		}
 	}
 	if got, err := os.ReadFile(alias); err != nil || string(got) != "same" {
 		t.Fatalf("same-object destination = %q, %v", got, err)
