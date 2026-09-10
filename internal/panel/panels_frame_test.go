@@ -3274,7 +3274,7 @@ func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
 		t.Fatal(err)
 	}
 	sfxPath := filepath.Join(root, "bundle.exe")
-	if err := os.WriteFile(sfxPath, append([]byte("self-extractor stub\n"), archiveBytes...), 0600); err != nil {
+	if err := os.WriteFile(sfxPath, append([]byte("self-extractor stub\n"), archiveBytes...), 0600); err != nil { // #nosec G703 -- sfxPath is inside the private test temp directory.
 		t.Fatal(err)
 	}
 
