@@ -79,11 +79,11 @@ func TestKittyCoverageRejectsBadContinuationAndSurfaceData(t *testing.T) {
 	}
 
 	cases := []struct {
-		name
-		cmd
-		data
-		want
-	}{
+        name string
+        cmd string
+        data []byte
+        want string
+    }{
 		{"missing dimensions", "f=32,s=0,v=1", nil, "the image dimensions are missing"},
 		{"too many pixels", "f=32,s=65536,v=1", nil, "the image is too large"},
 		{"truncated pixels", "f=32,s=2,v=1", []byte{1, 2, 3}, "the pixel data is truncated"},
