@@ -3295,7 +3295,7 @@ func TestPanelsFrame_NavigateToPath(t *testing.T) {
 	}
 }
 
-func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
+func TestFileSystemPanel_SFXEnterFallsThroughToExecute(t *testing.T) {
 	vfs.RegisterProvider(&archive.ArchiveProvider{})
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
@@ -3324,14 +3324,27 @@ func TestFileSystemPanel_SFXRequiresCtrlPgDn(t *testing.T) {
 	fp.SetCursorIndex(0)
 
 	enter := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN}
-	if !fp.ProcessKey(enter) {
-		t.Fatal("ordinary Enter on an SFX row was not consumed")
+	if fp.ProcessKey(enter) {
+		t.Fatal("ordinary Enter on an SFX row was consumed instead of falling through to Execute")
 	}
 	if _, ok := fp.Vfs.(*vfs.OSVFS); !ok {
 		t.Fatalf("ordinary Enter changed VFS to %T", fp.Vfs)
 	}
 	if fp.ProviderOpenTask != nil {
 		t.Fatal("ordinary Enter started an SFX provider open")
+	}
+
+	pf := &PanelsFrame{ActiveIdx: 0, ShowPanels: true, CmdLine: cmdline.NewCommandLine(">")}
+	pf.Panels[0] = fp
+	called := 0
+	oldExecute := Execute
+	Execute = func(*PanelsFrame, vfs.VFS, string, string, string) { called++ }
+	t.Cleanup(func() { Execute = oldExecute })
+	if !pf.ProcessKey(enter) {
+		t.Fatal("PanelsFrame did not handle ordinary Enter")
+	}
+	if called != 1 {
+		t.Fatalf("ordinary Enter executed SFX %d times, want once", called)
 	}
 
 	if !fp.EnterSelectedFromAction() {
