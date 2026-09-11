@@ -3440,7 +3440,11 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			if provider != nil && !allowProviderPanelEnter {
 				if policy, ok := provider.(vfs.PanelEnterPolicyProvider); ok &&
 					!policy.PanelEnterAllowed(context.Background(), fp.Vfs, fullPath) {
-					return true
+					// The provider reserves ordinary Enter for another
+					// action (for example, running an SFX executable).
+					// Decline the panel key so PanelsFrame can dispatch
+					// that action instead of swallowing the key.
+					provider = nil
 				}
 			}
 			if provider != nil {
