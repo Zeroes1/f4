@@ -327,8 +327,8 @@ func TestMkDirDialog_DoesNotPreFillOrAutoCompleteFromHistory(t *testing.T) {
 	if got := edit.GetText(); got != "t" {
 		t.Errorf("typing a new folder name gave %q, want %q", got, "t")
 	}
-	if top := vtui.FrameManager.GetTopFrame(); top != dlg {
-		t.Fatalf("typing opened %T above the folder dialog", top)
+	if top, ok := vtui.FrameManager.GetTopFrame().(vtui.Container); !ok || top != dlg {
+		t.Fatalf("typing opened %T above the folder dialog", vtui.FrameManager.GetTopFrame())
 	}
 
 	if len(edit.History) != 1 || edit.History[0] != "build" {
