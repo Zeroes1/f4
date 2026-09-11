@@ -99,7 +99,9 @@ func TestDarwinMoveToTrashFoundationError(t *testing.T) {
 	initialized.Do(func() {})
 	foundationOnce = &initialized
 	foundationErr = errors.New("Foundation unavailable")
-	t.Cleanup(func() { foundationOnce, foundationErr = oldOnce, oldErr })
+	t.Cleanup(func() {
+		foundationOnce, foundationErr = oldOnce, oldErr
+	})
 	filesystem := NewOSVFS(root)
 	err := filesystem.MoveToTrash(context.Background(), "item")
 	if err == nil || !strings.Contains(err.Error(), "load Foundation: Foundation unavailable") {
