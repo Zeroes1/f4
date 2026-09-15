@@ -382,7 +382,10 @@ func actionHotkeyConfig(pf *panel.PanelsFrame) {
 	btnUnbind := vtui.NewButton(0, 0, i18n.Msg("Hotkeys.BtnUnbind"))
 	btnSave := vtui.NewButton(0, 0, i18n.Msg("vtui.Save"))
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
-	btnSave.IsDefault = true
+	// Enter in the table assigns the selected row (table.OnAction), so Assign
+	// is the button the default-button highlight must point at (#320), as
+	// Go to is in the find-file results.
+	btnAssign.IsDefault = true
 
 	if keymap.GlobalHotkeysMgr == nil {
 		return
