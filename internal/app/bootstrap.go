@@ -849,6 +849,13 @@ func SetupUI() {
 		return pf.Clone()
 	}
 	fileops.StartQueueWorker()
+	// A copy that ignores errors ends with a summary whose "View log" opens the
+	// log in f4's own viewer (#722).
+	fileops.OpenLog = func(path string) {
+		if pf := panel.FindPanelsFrame(); pf != nil {
+			actionOpenViewer(pf, vfs.NewOSVFS(filepath.Dir(path)), path)
+		}
+	}
 	// The registry is a leaf and cannot reach the message catalogue; the root
 	// hands it the lookup. Moves to internal/i18n's i18n.Msg when that package exists.
 	action.Localize = i18n.Msg

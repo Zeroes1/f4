@@ -2218,7 +2218,11 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 		return
 	}
 
-	dlg := dialog.NewFileDialog(title, dialog.CopyBoxHeight)
+	boxHeight := dialog.CopyBoxHeight
+	if isMove {
+		boxHeight = dialog.MoveBoxHeight
+	}
+	dlg := dialog.NewFileDialog(title, boxHeight)
 	width, height := dlg.Size()
 
 	promptLbl := vtui.NewLabel(0, 0, fmt.Sprintf(prompt, len(names)), nil)
@@ -2239,20 +2243,39 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	comboMode.Menu.SetSelectPos(defMode)
 	comboMode.Edit.SetText(choiceText(modes, defMode))
 
+	rightsCaption := i18n.Msg("Copy.Rights")
 	rightsChoices := []string{
 		i18n.Msg("Copy.Rights.Default"),
 		i18n.Msg("Copy.Rights.Copy"),
 		i18n.Msg("Copy.Rights.Inherit"),
 	}
-	comboRights := vtui.NewComboBox(0, 0, rightsComboWidth, rightsChoices)
-	comboRights.DropdownOnly = true
-	defRights := config.App.CopyAccessRights
-	if defRights < 0 || defRights >= len(rightsChoices) {
-		defRights = 0
+	comboRights := newChoiceCombo(rightsChoices, config.App.CopyAccessRights)
+	lblRights := vtui.NewLabel(0, 0, rightsCaption, comboRights)
+
+	// "Already existing files" starts from "Ask" every time, as far2l's copy
+	// dialog does: a remembered "Overwrite" would replace files in a copy
+	// that has nothing to do with the one it was chosen for.
+	existingCaption := i18n.Msg("Copy.Existing")
+	existingChoices := []string{
+		i18n.Msg("Copy.Existing.Ask"),
+		i18n.Msg("Copy.Existing.Overwrite"),
+		i18n.Msg("Copy.Existing.Skip"),
 	}
-	comboRights.Menu.SetSelectPos(defRights)
-	comboRights.Edit.SetText(choiceText(rightsChoices, defRights))
-	lblRights := vtui.NewLabel(0, 0, i18n.Msg("Copy.Rights"), comboRights)
+	comboExisting := newChoiceCombo(existingChoices, int(fileops.ExistingFilesAsk))
+	lblExisting := vtui.NewLabel(0, 0, existingCaption, comboExisting)
+
+	// Only a copy asks about links; a move always carries a link as a link.
+	var chkSymlinks *vtui.Checkbox
+	if !isMove {
+		chkSymlinks = vtui.NewCheckbox(0, 0, i18n.Msg("Copy.SymlinkContents"), false)
+		if copyDialogSession.symlinkContents {
+			chkSymlinks.State = 1
+		}
+	}
+
+	advanced := copyDialogSession.advanced
+	btnAdvanced := vtui.NewButton(0, 0, i18n.Msg("Copy.Advanced"))
+	btnAdvanced.OnClick = func() { showCopyAdvancedOptions(&advanced) }
 
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("Copy.Btn"))
 	if isMove {
@@ -2264,6 +2287,8 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 		dest := editDest.GetText()
 		mode := comboMode.Menu.SelectPos
 		rights := comboRights.Menu.SelectPos
+		existing := comboExisting.Menu.SelectPos
+		symlinkContents := chkSymlinks == nil || chkSymlinks.State == 1
 		dlg.Close()
 		if dest != "" {
 			// The choice becomes the default of the next operation, the way
@@ -2274,8 +2299,15 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 					config.SaveConfig()
 				}
 			}
+			copyDialogSession.advanced = advanced
+			if chkSymlinks != nil {
+				copyDialogSession.symlinkContents = symlinkContents
+			}
 			history.CommitHistory(editDest, dest)
-			opts := fileops.FileOpOptions{AccessRights: fileops.AccessRightsModeFromConfig(rights)}
+			opts := advanced
+			opts.AccessRights = fileops.AccessRightsModeFromConfig(rights)
+			opts.ExistingFiles = fileops.ExistingFilesModeFromChoice(existing)
+			opts.SymlinksAsLinks = !symlinkContents
 			go fileops.ExecuteFileOpAtWithOptions(srcVfs, dstVfs, srcBasePath, names, dest, isMove, mode, opts, onCompleteWithClear)
 		}
 	}
@@ -2286,6 +2318,12 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	dlg.AddItem(btnCancel)
 	dlg.AddItem(lblRights)
 	dlg.AddItem(comboRights)
+	dlg.AddItem(lblExisting)
+	dlg.AddItem(comboExisting)
+	if chkSymlinks != nil {
+		dlg.AddItem(chkSymlinks)
+	}
+	dlg.AddItem(btnAdvanced)
 	dlg.AddItem(comboMode)
 
 	// Layout Engine
@@ -2299,35 +2337,47 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	hbox.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
 
-	rowRights := vtui.NewHBoxLayout(0, 0, width-4, 1)
-	rowRights.Add(lblRights, vtui.Margins{Right: 1}, vtui.AlignLeft)
-	rowRights.Add(comboRights, vtui.Margins{}, vtui.AlignFill)
+	// Both captions take the width of the longer one, so the two fields start
+	// in the same column.
+	captionWidth := max(captionCells(rightsCaption), captionCells(existingCaption))
+	rowRights := optionRow(width-4, lblRights, comboRights, rightsCaption, captionWidth)
+	rowExisting := optionRow(width-4, lblExisting, comboExisting, existingCaption, captionWidth)
 
-	// Keep the action row above the two selectors. ComboBox.Open() places its
+	// Keep the action row above the selectors. ComboBox.Open() places its
 	// popup below the field, so no popup can cover these buttons.
 	vbox.Add(hbox, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Add(rowRights, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(rowExisting, vtui.Margins{}, vtui.AlignFill)
+	if chkSymlinks != nil {
+		vbox.Add(chkSymlinks, vtui.Margins{}, vtui.AlignLeft)
+	}
+	vbox.Add(btnAdvanced, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(comboMode, vtui.Margins{Top: 1}, vtui.AlignCenter)
 
 	// The same VBox re-applied to the new dialog rectangle is what stretches
 	// the destination field when the f4 window is resized; the button row
 	// re-centers itself from HBoxLayout.SetPosition.
+	fields := []*vtui.ComboBox{comboRights, comboExisting}
 	dlg.SetLayout(func() {
 		// An HBox keeps each element's own width, and the dialog is half of
-		// the f4 window, so in a narrow window the access-rights field has
-		// to give way to its caption. Its natural width is restored first,
-		// because a window that grew again has room for it.
-		cx1, cy1, _, cy2 := comboRights.GetPosition()
-		comboRights.SetPosition(cx1, cy1, cx1+rightsComboWidth-1, cy2)
+		// the f4 window, so in a narrow window a field has to give way to its
+		// caption. Its natural width is restored first, because a window that
+		// grew again has room for it.
+		for _, field := range fields {
+			x1, y1, _, y2 := field.GetPosition()
+			field.SetPosition(x1, y1, x1+rightsComboWidth-1, y2)
+		}
 
 		vbox.SetPosition(dlg.X1+2, dlg.Y1+2, dlg.X2-2, dlg.Y2-2)
 		vbox.Apply()
 
-		// Laying out the row is what says where the field starts, so the
-		// width that fits is known only afterwards. The field is last in
-		// its row, so nothing else moves when it shrinks.
-		if x1, y1, x2, y2 := comboRights.GetPosition(); x2 > dlg.X2-2 {
-			comboRights.SetPosition(x1, y1, dlg.X2-2, y2)
+		// Laying out a row is what says where its field starts, so the width
+		// that fits is known only afterwards. Each field is last in its row,
+		// so nothing else moves when it shrinks.
+		for _, field := range fields {
+			if x1, y1, x2, y2 := field.GetPosition(); x2 > dlg.X2-2 {
+				field.SetPosition(x1, y1, dlg.X2-2, y2)
+			}
 		}
 	})
 	dlg.SetFocusedItem(editDest)

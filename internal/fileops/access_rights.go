@@ -43,13 +43,6 @@ func AccessRightsModeFromConfig(value int) AccessRightsMode {
 	}
 }
 
-// FileOpOptions carries the choices made in the copy/move dialog into the
-// operation. Its zero value is the behaviour f4 had before the dialog offered
-// any of them.
-type FileOpOptions struct {
-	AccessRights AccessRightsMode
-}
-
 // DefaultFileOpOptions is what an operation started without the dialog runs
 // with: the configured default, so Shift+F5 and a copy with confirmations
 // turned off follow the same setting as F5.
