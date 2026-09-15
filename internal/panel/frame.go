@@ -668,7 +668,16 @@ func (pf *PanelsFrame) BuildMenuItems() []vtui.MenuBarItem {
 // GetMenuBar returns the main menu bar. Items are rebuilt on every
 // call, so shortcuts and checkmarks always follow the active bindings
 // and the current panel state.
+//
+// A frame that was not built by NewPanelsFrame may have no bar, and then
+// it provides none: nil is how vtui's GetActiveMenuBar learns to look
+// further down the stack, and UpdateMenuCheckmarks already treats a nil
+// bar the same way. The key router asks for the active bar on every key
+// since #1144, so this is reached for any such frame that gets a key.
 func (pf *PanelsFrame) GetMenuBar() *vtui.MenuBar {
+	if pf.MenuBar == nil {
+		return nil
+	}
 	pf.MenuBar.Items = pf.BuildMenuItems()
 	pf.UpdateMenuCheckmarks()
 	return pf.MenuBar
