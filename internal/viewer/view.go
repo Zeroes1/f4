@@ -248,25 +248,83 @@ func (vv *ViewerView) stopTailWatch() {
 	vv.tailStop = nil
 }
 
-// refreshFromFile re-measures the file and redraws when it moved. The
-// auto-scroll in DisplayObject does the rest: a viewer sitting at the end of
-// the file follows it, and one parked further up stays exactly where the
-// reader left it and only gets an honest scrollbar and percentage.
+// refreshFromFile re-measures the file and redraws when it moved. A viewer
+// sitting at the end of the file follows it, and one parked further up stays
+// exactly where the reader left it and only gets an honest scrollbar and
+// percentage.
 func (vv *ViewerView) refreshFromFile() {
 	if vv.Backend == nil || vv.Busy {
 		return
 	}
+	before := vv.Backend.Size()
 	if !vv.Backend.Refresh(context.Background()) {
 		return
 	}
-	if size := vv.Backend.Size(); vv.TopOffset > size {
+	size := vv.Backend.Size()
+	if vv.TopOffset > size {
 		// The file was truncated or rotated away under the viewport, and the
 		// offset it was showing no longer exists.
 		vv.TopOffset = 0
 		vv.lastKnownSize = size
 		vv.eofVisible = false
+	} else if vv.eofVisible && size > before {
+		vv.followTail()
+		return
 	}
 	vtui.FrameManager.Redraw()
+}
+
+// followTail moves a viewer that was showing the end of the file to the file's
+// new end, and does it before the viewer is painted again.
+//
+// This runs from the poll, on the UI thread, between two frames. The frame
+// manager asks the top frame IsBusy before it paints anything, and skips the
+// whole frame while it is: so everything the move needs -- laying out the
+// last rows in the background, fetching the tail window the refresh just
+// dropped -- happens with the old tail still on screen, and the next frame
+// painted is the new tail.
+//
+// Following used to be started from DisplayObject instead, in the middle of a
+// frame the frame manager had already begun: the desktop under the viewer was
+// painted, the viewer returned without painting, and every growth of the file
+// put one empty viewer on screen before the new tail (#428). In hex mode the
+// frame after that also showed "Loading..." while the dropped window came
+// back.
+func (vv *ViewerView) followTail() {
+	vv.jumpToEnd()
+	if vv.Busy {
+		// Text layout runs in the background and repaints when it is done.
+		return
+	}
+	// Hex mode places the viewport synchronously, but the bytes under it were
+	// dropped from the cache by the refresh that noticed the growth.
+	vv.holdUntilCached(vv.TopOffset)
+}
+
+// holdUntilCached keeps the viewer busy -- and so unpainted, while it is the
+// top frame -- until the backend has the bytes at off, then repaints. When
+// they are already there it only repaints.
+func (vv *ViewerView) holdUntilCached(off int64) {
+	backend := vv.Backend
+	if _, err := backend.ReadAt(off, 1); err != piecetable.ErrLoading {
+		vtui.FrameManager.Redraw()
+		return
+	}
+	vv.Busy = true
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		defer ctx.RunOnUI(func() {
+			vv.Busy = false
+			vtui.FrameManager.Redraw()
+		})
+		// A closed viewer cancels the backend's context, and its fetches
+		// then never land; stop waiting for them.
+		for ctx.Err() == nil && backend.ctx.Err() == nil {
+			if _, err := backend.ReadAt(off, 1); err != piecetable.ErrLoading {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
 }
 
 // Reload rereads the file on demand. Unlike the poll it drops the window cache
@@ -371,12 +429,15 @@ func (vv *ViewerView) DisplayObject(scr *vtui.ScreenBuf) {
 		return
 	}
 
-	// AUTO-SCROLL LOGIC (tail -f)
+	// A size that moved without going through the poll -- a handle whose
+	// Size changes on its own -- is only noticed here. The frame manager has
+	// already painted what lies under the viewer by now, so the frame is
+	// painted in full first and the jump comes after it: returning without
+	// painting puts an empty viewer on screen. The poll does not come through
+	// here; it follows before the frame starts, see followTail.
 	currentSize := vv.Backend.Size()
 	if vv.eofVisible && currentSize > vv.lastKnownSize && !vv.Busy {
-		vv.lastKnownSize = currentSize
-		vv.jumpToEnd()
-		return
+		defer vv.followTail()
 	}
 	vv.lastKnownSize = currentSize
 
@@ -840,6 +901,9 @@ func (vv *ViewerView) jumpToEnd() {
 	// cannot re-measure themselves.
 	if vv.Backend != nil {
 		vv.Backend.Refresh(context.Background())
+		// The end about to be shown is the end as measured now, so this size
+		// is known and DisplayObject has nothing left to follow.
+		vv.lastKnownSize = vv.Backend.Size()
 	}
 
 	contentHeight := int64(vv.Y2 - vv.Y1)
