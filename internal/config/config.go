@@ -1485,9 +1485,10 @@ func CreateDefaultHighlightIni(path string) {
 #   NormalFileName, SelectedFileName, FileNameUnderCursor,
 #   FileNameSelectedUnderCursor
 # The cursor-specific keys are also accepted as NormalColorUnderCursor and
-# SelectedColorUnderCursor. If a specialized color is omitted, f4 falls back
-# to the corresponding ordinary color. Every one of the four takes a
-# foreground, a background, or both:
+# SelectedColorUnderCursor. A color that is omitted leaves the panel's own
+# color for that state, as in Far: SelectedColor does not apply to a selected
+# item under the cursor. Every one of the four takes a foreground, a
+# background, or both:
 #   foreground:#FF00FF | background:#008080
 # Other useful keys are IncludeAttributes/ExcludeAttributes (Directory,
 # Hidden, Executable, ReadOnly, System, Archive, Symlink), SizeAbove,

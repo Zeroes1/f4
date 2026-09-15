@@ -406,12 +406,16 @@ func (fh *FileHighlighter) GetColor(item *vfs.VFSItem, defaultAttr uint64, isSel
 	for _, rule := range fh.Rules {
 		if rule.Match(item) {
 			colorExpr := ""
+			// Each of the four states answers only to its own key, as in
+			// far2l, where every state starts from its own panel colour
+			// (hilight.cpp, FarColor[]). A selected file under the cursor
+			// that fell back to SelectedColor was painted exactly like the
+			// selection around it once that colour had a background, and
+			// the cursor disappeared (#1150).
 			if isCursor {
 				if isSelected {
 					if rule.SelectedCursorStr != "" {
 						colorExpr = rule.SelectedCursorStr
-					} else if rule.SelectedStr != "" {
-						colorExpr = rule.SelectedStr
 					}
 				} else {
 					if rule.CursorStr != "" {

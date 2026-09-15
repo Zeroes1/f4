@@ -2110,6 +2110,68 @@ func TestFileSystemPanel_CursorColorsColumnSeparators(t *testing.T) {
 	}
 }
 
+// With every file selected (Grey+ or Insert down to the last one), the
+// cursor sits on a selected file. A highlight group that sets only
+// SelectedColor, background included, must not paint that row: it keeps
+// Panel.Cursor.Selected, so the cursor stays distinguishable from the
+// selection around it (#1150).
+func TestFileSystemPanel_CursorVisibleOnSelectedFileWithSelectedColorGroup(t *testing.T) {
+	vtui.SetDefaultPalette()
+	theme.SetDefaultF4Palette()
+
+	oldCfg := config.App
+	defer func() { config.App = oldCfg }()
+	config.App.EnforceColorCorrection = false
+
+	oldRules := theme.GlobalFileHighlighter.Rules
+	oldUserRules := theme.GlobalFileHighlighter.UserRules
+	defer func() {
+		theme.GlobalFileHighlighter.Rules = oldRules
+		theme.GlobalFileHighlighter.UserRules = oldUserRules
+	}()
+	theme.GlobalFileHighlighter.LoadFromIni(ini.Parse(strings.NewReader(`[Highlight_0]
+Name = Directories
+IncludeAttributes = Directory
+SelectedColor = foreground:#FFFFFF | background:#0000A0
+`)))
+
+	fp := newPanelScrollTestFixture(ViewModeDetailed, 3)
+	for _, entry := range fp.Entries {
+		entry.IsDir = true
+		entry.Selected = true
+	}
+	fp.Table.Columns = []vtui.TableColumn{{Width: 20}, {Width: 12}}
+	fp.Table.ColorTextIdx = theme.ColPanelText
+	fp.Table.ColorSelectedTextIdx = theme.ColPanelCursor
+	fp.Table.ColorItemSelectTextIdx = theme.ColPanelSelectedText
+	fp.Table.ColorItemSelectCursorIdx = theme.ColPanelSelectedCursor
+	fp.Table.ColorTitleIdx = theme.ColPanelColumnTitle
+	fp.Table.ColorBoxIdx = theme.ColPanelBox
+	fp.Refresh()
+	fp.Table.SetFocus(true)
+	if fp.GetCursorIndex() != 0 {
+		t.Fatalf("cursor index = %d, want 0", fp.GetCursorIndex())
+	}
+
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(40, 12)
+	fp.Table.Show(scr)
+
+	y := fp.Table.Y1 + fp.Table.MarginTop
+	cursor := scr.GetCell(fp.Table.X1, y).Attributes
+	selected := scr.GetCell(fp.Table.X1, y+1).Attributes
+
+	if fg, bg := vtui.GetRGBFore(selected), vtui.GetRGBBack(selected); fg != 0xFFFFFF || bg != 0x0000A0 {
+		t.Fatalf("selected row off the cursor = #%06x on #%06x, want the group's SelectedColor #FFFFFF on #0000A0", fg, bg)
+	}
+	if cursor == selected {
+		t.Fatalf("cursor row on a selected file is painted like the selection (%#x): the cursor is invisible", cursor)
+	}
+	if want := vtui.Palette[theme.ColPanelSelectedCursor]; cursor != want {
+		t.Fatalf("cursor row on a selected file = %#x, want Panel.Cursor.Selected %#x", cursor, want)
+	}
+}
+
 func TestFileSystemPanel_MouseClick_Edges(t *testing.T) {
 	fp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewOSVFS("."))
 	waitForLoad(t, fp)
