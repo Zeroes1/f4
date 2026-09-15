@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/ttyx"
 	"github.com/unxed/f4/internal/update"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -366,7 +368,9 @@ func RunClient(sockPath string, serverPID int) {
 	vtui.DebugLog("CLIENT: FDs to send: In:0 Out:1 Pipe:%d", notifyPipe[1])
 
 	startLeft, startRight := App.StartupDirs()
-	n, oobn, err := conn.WriteMsgUnix(attachPayload(App.EditFilePath(), startLeft, startRight), oob, raddr)
+	payload := attachPayload(App.EditFilePath(), startLeft, startRight)
+	payload = append(payload, attachClientIdentity(os.Getpid(), os.Getenv)...)
+	n, oobn, err := conn.WriteMsgUnix(payload, oob, raddr)
 	if err != nil {
 		vtui.DebugLog("CLIENT: ATTACH FAILURE: Failed to send FDs to daemon at %s: %v", sockPath, err)
 		fmt.Fprintf(os.Stderr, "f4: failed to attach to session at %s: %v\n", sockPath, err)
@@ -428,6 +432,46 @@ type attachRequest struct {
 	editPath           string
 	startLeft          string
 	startRight         string
+	clientPID          int
+	clientEnv          map[string]string
+}
+
+// attachClientIdentity is who is attaching, for the one part of the daemon
+// that has to know: TTY|Xi, which finds the terminal window by the client's
+// ancestry and environment (issue #980). The lines go after whatever
+// attachPayload wrote, and a daemon that does not know them ignores them.
+//
+// Every variable ttyx identifies the window by is sent, set or not, so that
+// a client with no WINDOWID reads as having none instead of inheriting the
+// daemon's stale one.
+func attachClientIdentity(pid int, getenv func(string) string) []byte {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nPID %d", pid)
+	for _, name := range ttyx.IdentityEnv() {
+		b.WriteString("\nENV " + name + "=" + strings.ReplaceAll(getenv(name), "\n", ""))
+	}
+	return []byte(b.String())
+}
+
+// parseAttachClientIdentity reads back what attachClientIdentity wrote. A
+// pid of zero means an older client that sent none.
+func parseAttachClientIdentity(msg string) (pid int, env map[string]string) {
+	for _, line := range strings.Split(msg, "\n")[1:] {
+		switch {
+		case strings.HasPrefix(line, "PID "):
+			if n, err := strconv.Atoi(line[len("PID "):]); err == nil && n > 0 {
+				pid = n
+			}
+		case strings.HasPrefix(line, "ENV "):
+			if name, value, ok := strings.Cut(line[len("ENV "):], "="); ok {
+				if env == nil {
+					env = make(map[string]string)
+				}
+				env[name] = value
+			}
+		}
+	}
+	return pid, env
 }
 
 // attachPayload builds the ATTACH datagram body. Plain "ATTACH" when no
@@ -538,6 +582,7 @@ func RunServer(sockPath string) {
 			setCloseOnExec(fds)
 
 			editPath, startLeft, startRight := parseAttachPayload(string(buf[:n]))
+			clientPID, clientEnv := parseAttachClientIdentity(string(buf[:n]))
 
 			req := attachRequest{
 				in:                 os.NewFile(uintptr(fds[0]), "/dev/stdin"),
@@ -547,6 +592,8 @@ func RunServer(sockPath string) {
 				editPath:           editPath,
 				startLeft:          startLeft,
 				startRight:         startRight,
+				clientPID:          clientPID,
+				clientEnv:          clientEnv,
 			}
 
 			// Preempt the current attached session (if any) so the new client takes over.
@@ -643,6 +690,15 @@ func RunServer(sockPath string) {
 		}(notifyPipeWriteEnd, fds[0])
 
 		vtui.DebugLog("SERVER: PRE-RUN: Stdin FD: %d, Stdout FD: %d", os.Stdin.Fd(), os.Stdout.Fd())
+		// The X side of the terminal belongs to this client, not to
+		// whichever one attached first: find its window before anything
+		// below asks for the session (issue #980). An older client sends
+		// no identity, and the session found before is kept for it.
+		if req.clientPID > 0 {
+			clientEnv := req.clientEnv
+			AttachTTYXSession(req.clientPID, func(name string) string { return clientEnv[name] })
+		}
+
 		// The terminal is asked how large its text area is before
 		// anything starts reading standard input, because afterwards
 		// the answer is just another escape sequence and the reader
