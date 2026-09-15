@@ -332,17 +332,14 @@ func (pf *PanelsFrame) Right() Panel { return pf.Panels[1] }
 // their on-screen X-position rather than slot index. The Ctrl+U
 // panel swap re-assigns pf.panels[0]/[1] but keeps the two frames
 // where the user sees them, so index-based routing sends Ctrl+[/]
-// to the wrong side after a swap. In single-panel mode the visible
-// panel occupies both visual sides, so both resolvers return it.
+// to the wrong side after a swap. Sizing keeps both panels
+// horizontal-adjacent whether or not one of them is hidden (see
+// ResizeConsole), so a simple min-X pick is enough. A hidden panel
+// still answers for its own side, as in far2l, where Ctrl+[ and
+// Ctrl+] read LeftPanel / RightPanel regardless of visibility.
 func (pf *PanelsFrame) VisualLeftFSP() *FileSystemPanel {
 	a, _ := pf.Panels[0].(*FileSystemPanel)
 	b, _ := pf.Panels[1].(*FileSystemPanel)
-	if pf.ShowPanels && pf.ShowLeftPanel != pf.ShowRightPanel {
-		if pf.ShowLeftPanel {
-			return a
-		}
-		return b
-	}
 	if a == nil {
 		return b
 	}
@@ -360,12 +357,6 @@ func (pf *PanelsFrame) VisualLeftFSP() *FileSystemPanel {
 func (pf *PanelsFrame) VisualRightFSP() *FileSystemPanel {
 	a, _ := pf.Panels[0].(*FileSystemPanel)
 	b, _ := pf.Panels[1].(*FileSystemPanel)
-	if pf.ShowPanels && pf.ShowLeftPanel != pf.ShowRightPanel {
-		if pf.ShowLeftPanel {
-			return a
-		}
-		return b
-	}
 	if a == nil {
 		return b
 	}
@@ -1621,17 +1612,11 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	rightW := w - leftW
 	panelX1 := [2]int{0, leftW}
 	panelX2 := [2]int{leftW - 1, w - 1}
-	// A hidden side is a display mode, not a request to leave a blank half.
-	// Expand the remaining panel to the complete content width while keeping
-	// the hidden slot's split geometry ready for the next toggle.
-	if pf.ShowLeftPanel != pf.ShowRightPanel {
-		visibleIdx := 0
-		if !pf.ShowLeftPanel {
-			visibleIdx = 1
-		}
-		panelX1[visibleIdx] = 0
-		panelX2[visibleIdx] = w - 1
-	}
+	// Panel geometry does not depend on panel visibility. As in far2l
+	// (FilePanels::SetPanelPositions), hiding one side with Ctrl+F1 /
+	// Ctrl+F2 leaves the other panel on its own half and the terminal shows
+	// through the freed one; a single panel over the whole width is the
+	// separate Wide mode handled below (#927).
 
 	if pf.Panels[0] == nil {
 		pf.Panels[0] = NewFileSystemPanel(0, contentY1, leftW, panelH, vfs.NewOSVFS("."))
@@ -1847,8 +1832,9 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 			pf.Panels[idx].Show(scr)
 		}
 	} else if pf.ShowPanels {
-		// Keep the terminal behind a single full-width panel, or let it show
-		// through below a panel that was reduced vertically (Ctrl+Up).
+		// Show the terminal under the panels when one of them is hidden (the
+		// terminal takes the freed half), or when a panel was reduced
+		// vertically (Ctrl+Up) and the terminal shows through below it.
 		if !pf.ShowLeftPanel || !pf.ShowRightPanel || pf.LeftHeightDecrement > 0 || pf.RightHeightDecrement > 0 {
 			pf.TermView.SetVisible(true)
 			pf.TermView.Show(scr)

@@ -1557,7 +1557,11 @@ func TestPanelsFrame_VisualLeftRightFollowSwap(t *testing.T) {
 	}
 }
 
-func TestPanelsFrame_SingleVisiblePanelUsesFullWidth(t *testing.T) {
+// Issue #927: hiding one panel must not stretch the other one over the
+// whole width. far2l (FilePanels::SetPanelPositions) positions both panels
+// from the split alone, whatever is visible; the full-width single panel
+// is Wide mode, not a side effect of Ctrl+F1 / Ctrl+F2.
+func TestPanelsFrame_HiddenPanelKeepsSplitGeometry_Issue927(t *testing.T) {
 	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := setupMockPanelsFrame(t)
@@ -1566,23 +1570,35 @@ func TestPanelsFrame_SingleVisiblePanelUsesFullWidth(t *testing.T) {
 
 	left := pf.Panels[0]
 	right := pf.Panels[1]
+	lx1, _, lx2, _ := left.GetPosition()
+	rx1, _, rx2, _ := right.GetPosition()
+	if lx1 != 0 || lx2 != 39 || rx1 != 40 || rx2 != 79 {
+		t.Fatalf("baseline geometry = left %d..%d, right %d..%d; want 0..39, 40..79", lx1, lx2, rx1, rx2)
+	}
+
 	pf.ShowRightPanel = false
 	pf.ResizeConsole(80, 25)
-	if x1, _, x2, _ := left.GetPosition(); x1 != 0 || x2 != 79 {
-		t.Fatalf("left-only panel geometry = %d..%d, want 0..79", x1, x2)
+	if x1, _, x2, _ := left.GetPosition(); x1 != lx1 || x2 != lx2 {
+		t.Fatalf("left-only panel geometry = %d..%d, want %d..%d", x1, x2, lx1, lx2)
 	}
-	if got := pf.VisualLeftFSP(); got != left || pf.VisualRightFSP() != left {
-		t.Fatal("left-only layout did not resolve the visible panel on both visual sides")
+	if got := pf.VisualLeftFSP(); got != left {
+		t.Error("left-only layout: visual-left resolver did not return the left panel")
+	}
+	if got := pf.VisualRightFSP(); got != right {
+		t.Error("left-only layout: visual-right resolver did not return the hidden right panel")
 	}
 
 	pf.ShowLeftPanel = false
 	pf.ShowRightPanel = true
 	pf.ResizeConsole(80, 25)
-	if x1, _, x2, _ := right.GetPosition(); x1 != 0 || x2 != 79 {
-		t.Fatalf("right-only panel geometry = %d..%d, want 0..79", x1, x2)
+	if x1, _, x2, _ := right.GetPosition(); x1 != rx1 || x2 != rx2 {
+		t.Fatalf("right-only panel geometry = %d..%d, want %d..%d", x1, x2, rx1, rx2)
 	}
-	if got := pf.VisualLeftFSP(); got != right || pf.VisualRightFSP() != right {
-		t.Fatal("right-only layout did not resolve the visible panel on both visual sides")
+	if got := pf.VisualLeftFSP(); got != left {
+		t.Error("right-only layout: visual-left resolver did not return the hidden left panel")
+	}
+	if got := pf.VisualRightFSP(); got != right {
+		t.Error("right-only layout: visual-right resolver did not return the right panel")
 	}
 }
 
