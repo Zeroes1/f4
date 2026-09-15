@@ -1384,7 +1384,8 @@ func (pf *PanelsFrame) SetPanelViewMode(idx int, mode ViewMode) {
 // A bar that must not be painted is collapsed to an empty column span instead.
 // vtui's MenuBar.HitTest is geometry-only, and an empty span matches no column,
 // so the hidden bar still cannot swallow a click on the terminal's first row
-// (issue #1093).
+// (issue #1093). Over the panels that row belongs to the menu again: see
+// openMenuBarFromClick.
 func (pf *PanelsFrame) syncMenuBarGeometry() {
 	if pf.MenuBar == nil {
 		return
@@ -1400,6 +1401,43 @@ func (pf *PanelsFrame) syncMenuBarGeometry() {
 	}
 	pf.MenuBar.SetPosition(0, menuY, x2, menuY)
 	pf.MenuBar.SetVisible(painted)
+}
+
+// openMenuBarFromClick opens the main menu for a left click on the menu bar's
+// row while the panels are shown, whether AlwaysShowMenuBar pins the bar there
+// or not: far2l's Panel::PanelProcessMouse calls ShellOptions(0, MouseEvent)
+// for a click on the top line regardless of Opt.ShowMenuBar (issue #1149).
+//
+// A pinned bar already takes the click in FrameManager's own hit-testing. A
+// hidden one is collapsed out of it (syncMenuBarGeometry), so the click lands
+// here instead and the bar gets its live span back before it is handed the
+// event. The row is the bar's own, below the workspace tabs when those are
+// shown, rather than row 0. With the panels hidden the terminal owns its first
+// row, and ProcessMouse has returned before this is reached (issue #1093).
+//
+// Only the left button opens it, the one vtui's MenuBar acts on; a right click
+// on the panel title keeps opening the drive menu.
+func (pf *PanelsFrame) openMenuBarFromClick(e *vtinput.InputEvent, my int) bool {
+	if pf.MenuBar == nil || !pf.ShowPanels || !vtui.IsMousePress(e) || e.ButtonState != vtinput.FromLeft1stButtonPressed {
+		return false
+	}
+	if my != vtui.FrameManager.WorkspaceTopInset() {
+		return false
+	}
+	pf.GetMenuBar()
+	if len(pf.MenuBar.Items) == 0 {
+		return false
+	}
+	wasActive := pf.MenuBar.Active
+	pf.MenuBar.Active = true
+	pf.syncMenuBarGeometry()
+	if !pf.MenuBar.ProcessMouse(e) {
+		pf.MenuBar.Active = wasActive
+		pf.syncMenuBarGeometry()
+		return false
+	}
+	vtui.FrameManager.Redraw()
+	return true
 }
 
 func (pf *PanelsFrame) ResizeConsole(w, h int) {
@@ -3179,10 +3217,7 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	// Активация меню кликом мыши на нулевую строку (AlwaysShowMenuBar)
-	if config.App.AlwaysShowMenuBar && pf.ShowPanels && my == 0 && e.WheelDirection == 0 && e.ButtonState != 0 {
-		pf.MenuBar.Active = true
-		pf.MenuBar.ProcessMouse(e)
+	if pf.openMenuBarFromClick(e, my) {
 		return true
 	}
 
