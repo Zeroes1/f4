@@ -2,6 +2,7 @@ package app
 
 import (
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -66,9 +67,55 @@ func TestStartupDirsForCommandLine(t *testing.T) {
 	}
 }
 
-func TestStartupDirsOverrideIgnoresPlainLaunch(t *testing.T) {
-	if left, right, ok := startupDirsOverride(t.TempDir(), nil); ok || left != "" || right != "" {
-		t.Fatalf("startupDirsOverride(no args) = (%q, %q, %t), want (empty, empty, false)", left, right, ok)
+// Folders on the command line name themselves everywhere; only a plain start
+// depends on plainOpensCwd.
+func TestStartupDirsOverride(t *testing.T) {
+	cwd := t.TempDir()
+	other := t.TempDir()
+	cases := []struct {
+		name          string
+		args          []string
+		plainOpensCwd bool
+		left, right   string
+		ok            bool
+	}{
+		{name: "plain start opens the current directory", plainOpensCwd: true, left: cwd, ok: true},
+		{name: "plain start keeps the restored session"},
+		{name: "one folder", args: []string{other}, left: other, right: cwd, ok: true},
+		{name: "one folder, plain start opening cwd", args: []string{other}, plainOpensCwd: true, left: other, right: cwd, ok: true},
+		{name: "two folders", args: []string{other, cwd}, left: other, right: cwd, ok: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			left, right, ok := startupDirsOverride(cwd, tc.args, tc.plainOpensCwd)
+			if left != tc.left || right != tc.right || ok != tc.ok {
+				t.Fatalf("startupDirsOverride(%q, %v, %t) = (%q, %q, %t), want (%q, %q, %t)",
+					cwd, tc.args, tc.plainOpensCwd, left, right, ok, tc.left, tc.right, tc.ok)
+			}
+		})
+	}
+}
+
+// `cd dir && f4` shows dir in both panels, like mc (issue #822). The change made
+// for #823 turned that off on every platform and no test failed: the one that
+// covers a plain start checks startupDirsFor, below the change, and the one
+// added with it asserted the new behaviour. On macOS the panels went back to
+// the previous session (issue #1152). This checks the decision
+// rememberStartupDirs actually makes, on each platform CI runs it on.
+func TestPlainTerminalStartOpensCurrentDirectory(t *testing.T) {
+	cwd := t.TempDir()
+	left, right, ok := startupDirsOverride(cwd, nil, plainStartOpensCwd)
+	if runtime.GOOS == "windows" {
+		// A console started from Explorer or a shortcut has a terminal on stdin
+		// too, and a working directory nobody chose: the session wins there.
+		if ok || left != "" || right != "" {
+			t.Fatalf("plain start on Windows = (%q, %q, %t), want (empty, empty, false)", left, right, ok)
+		}
+		return
+	}
+	// An empty right one sends both panels to left.
+	if !ok || left != cwd || right != "" {
+		t.Fatalf("plain start = (%q, %q, %t), want (%q, empty, true)", left, right, ok, cwd)
 	}
 }
 

@@ -66,11 +66,28 @@ func startupDirsFor(cwd string, args []string) (left, right string) {
 	}
 }
 
-// startupDirsOverride distinguishes an explicit directory argument from a
-// plain launch. With no directory argument the restored session must win over
-// the process cwd.
-func startupDirsOverride(cwd string, args []string) (left, right string, ok bool) {
-	if len(args) == 0 {
+// plainStartOpensCwd says what `f4` with no folders, started from a terminal,
+// shows: the current directory in both panels, the way mc does (issue #822),
+// or the panels the session restored.
+//
+// Outside Windows a terminal on stdin is what proves that a shell chose that
+// directory; a Dock or desktop start has no terminal and names nothing. On
+// Windows it proves nothing. A console program started from Explorer or a
+// shortcut is given a console of its own, so stdin is a terminal all the same,
+// while its working directory is the executable's folder or the shortcut's
+// "Start in" -- not a place anyone asked to see. There a plain start keeps the
+// restored panels, as it has since the change made for #823.
+//
+// That change applied to every platform, and `cd dir && f4` on macOS went back
+// to showing the previous session instead of dir (issue #1152).
+const plainStartOpensCwd = runtime.GOOS != "windows"
+
+// startupDirsOverride says what this start names for the panels, and whether it
+// names anything at all. Folders on the command line always do. A plain start
+// names the current directory when plainOpensCwd is set, and otherwise leaves
+// the panels to the restored session.
+func startupDirsOverride(cwd string, args []string, plainOpensCwd bool) (left, right string, ok bool) {
+	if len(args) == 0 && !plainOpensCwd {
 		return "", "", false
 	}
 	left, right = startupDirsFor(cwd, args)
@@ -112,7 +129,7 @@ func rememberStartupDirs(args []string) {
 	if err != nil {
 		return
 	}
-	left, right, ok := startupDirsOverride(cwd, args)
+	left, right, ok := startupDirsOverride(cwd, args, plainStartOpensCwd)
 	if !ok {
 		return
 	}
@@ -471,8 +488,9 @@ func Main() {
 f4 is efficient and cozy two-panel file manager in go
 Usage: f4 [folder1 [folder2]] [switches]
 Folders come before the switches, or after a "--" separator. Without them both
-panels open the current directory; folder1 alone opens in the left panel and
-leaves the right one on the current directory.
+panels open the current directory (on Windows they keep the folders of the last
+session); folder1 alone opens in the left panel and leaves the right one on the
+current directory.
 The following switches may be used in the command line:
  -h, -?, --help         This help and exit
  -v, --version          Displays the current version and exit
