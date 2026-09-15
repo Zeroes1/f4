@@ -69,7 +69,10 @@ Panel.Other=&Inny panel
 Panel.Column.Name=Nazwa
 Panel.Column.Size=Rozmiar
 Panel.Column.Modified=Zmodyfikowany
-Panel.UpDir=W GÓRĘ
+Panel.UpDir=W górę
+Panel.Folder=Folder
+Panel.Symlink=LinkSym
+Panel.Junction=Dowiązania
 Panel.SelectedInfo=Bajtów: %s, plików: %d, folderów: %d
 
 Panels.Prompt=>

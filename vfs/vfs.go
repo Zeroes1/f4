@@ -72,6 +72,13 @@ type VFSItem struct {
 	// semantics should treat any IsSymlink as a leaf regardless of
 	// IsDir. Populated by OSVFS.ReadDir; other VFSes leave it false.
 	IsSymlink bool
+	// ReparseTag is the Windows reparse point tag (IO_REPARSE_TAG_*) of an
+	// entry with FILE_ATTRIBUTE_REPARSE_POINT, read the way the Win32
+	// documentation prescribes: FindFirstFile's dwReserved0. It is what
+	// tells a directory junction from a symbolic link, which IsSymlink alone
+	// cannot. Zero means no tag is known: not a reparse point, not Windows,
+	// or a VFS that does not report one. See LinkKindOf.
+	ReparseTag uint32
 	// Device / Inode identify the underlying filesystem object so a
 	// scanner can dedup hard links (same inode reached through
 	// multiple paths in one walk). Both zero means "not populated" —

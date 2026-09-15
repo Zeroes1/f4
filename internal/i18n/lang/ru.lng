@@ -74,7 +74,10 @@ Panel.Other=&Другая панель
 Panel.Column.Name=Имя
 Panel.Column.Size=Размер
 Panel.Column.Modified=Изменён
-Panel.UpDir=ВВЕРХ
+Panel.UpDir=Вверх
+Panel.Folder=Папка
+Panel.Symlink=Ссылка
+Panel.Junction=Связь
 Panel.SelectedInfo=Байт: %s, файлов: %d, папок: %d
 
 Panels.Prompt=>

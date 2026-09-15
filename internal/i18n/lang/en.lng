@@ -74,7 +74,10 @@ Panel.Other=&Other panel
 Panel.Column.Name=Name
 Panel.Column.Size=Size
 Panel.Column.Modified=Modified
-Panel.UpDir=UP-DIR
+Panel.UpDir=Up
+Panel.Folder=Folder
+Panel.Symlink=Symlink
+Panel.Junction=Junction
 Panel.SelectedInfo=Bytes: %s, files: %d, folders: %d
 
 Panels.Prompt=>

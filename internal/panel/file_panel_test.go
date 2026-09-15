@@ -43,15 +43,15 @@ func TestFileEntry_GetCellText(t *testing.T) {
 		t.Errorf("File size mismatch: %s", File.GetCellText(1))
 	}
 
-	// Regular directories should have an empty size column
-	if dir.GetCellText(1) != "" {
-		t.Errorf("Regular dir should have empty size column, got: %q", dir.GetCellText(1))
+	// Directories name their kind in the size column, as in far2l (#392)
+	if dir.GetCellText(1) != "Folder" {
+		t.Errorf("Regular dir should show Folder in the size column, got: %q", dir.GetCellText(1))
 	}
 
-	// Only ".." directory should have the UP-DIR placeholder
+	// ".." says Up
 	upDir := &FileEntry{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}
-	if upDir.GetCellText(1) != "UP-DIR" {
-		t.Errorf("Parent dir (..) should have UP-DIR placeholder, got: %q", upDir.GetCellText(1))
+	if upDir.GetCellText(1) != "Up" {
+		t.Errorf("Parent dir (..) should show Up, got: %q", upDir.GetCellText(1))
 	}
 
 	// Cached rows are deliberately indistinguishable from fresh rows. The
@@ -4974,12 +4974,12 @@ func TestFileSystemPanel_BottomFrameShowsCursorEntry(t *testing.T) {
 	// Directories say what they are instead of a size.
 	fp.SetCursorIndex(1)
 	fp.Show(scr)
-	if got := bottom(); !strings.Contains(got, "▸ <DIR>") {
+	if got := bottom(); !strings.Contains(got, "▸ Folder") {
 		t.Errorf("bottom frame for a dir: %q", got)
 	}
 	fp.SetCursorIndex(0)
 	fp.Show(scr)
-	if got := bottom(); !strings.Contains(got, "▸ UP-DIR") {
+	if got := bottom(); !strings.Contains(got, "▸ Up") {
 		t.Errorf("bottom frame for the up-dir: %q", got)
 	}
 	// With the far2l status line on, the marker steps aside.

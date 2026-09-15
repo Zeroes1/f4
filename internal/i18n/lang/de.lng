@@ -69,7 +69,10 @@ Panel.Other=&Anderes Panel
 Panel.Column.Name=Name
 Panel.Column.Size=Größe
 Panel.Column.Modified=Geändert
-Panel.UpDir=ÜBER-ORDNER
+Panel.UpDir=Hoch
+Panel.Folder=Ordner
+Panel.Symlink=Symlink
+Panel.Junction=Knoten
 Panel.SelectedInfo=Bytes: %s, Dateien: %d, Ordner: %d
 
 Panels.Prompt=>

@@ -459,16 +459,7 @@ func (f *FileEntry) GetCellText(col int) string {
 	case 0:
 		return f.displayName(f.Name)
 	case 1:
-		if f.IsDir {
-			if f.SizeCalculated {
-				return fileops.FormatIntWithSpaces(f.Size)
-			}
-			if f.Name == ".." {
-				return i18n.Msg("Panel.UpDir")
-			}
-			return ""
-		}
-		return fileops.FormatIntWithSpaces(f.Size)
+		return entrySizeText(f)
 	case 2:
 		if f.MTime.IsZero() {
 			return ""
@@ -2729,22 +2720,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 			e := fp.Entries[idx]
 
 			dateStr := e.MTime.Format("02.01.06 15:04")
-			sizeStr := ""
-			if e.IsDir {
-				if e.SizeCalculated {
-					sizeStr = fileops.FormatIntWithSpaces(e.Size)
-				} else if e.Name == ".." {
-					sizeStr = "UP-DIR"
-				} else if e.IsSymlink {
-					sizeStr = "<LNK-DIR>"
-				} else {
-					sizeStr = "<DIR>"
-				}
-			} else if e.IsSymlink {
-				sizeStr = "<LNK>"
-			} else {
-				sizeStr = fileops.FormatIntWithSpaces(e.Size)
-			}
+			sizeStr := entrySizeText(e)
 
 			nameStr := e.Name
 			if e.IsSymlink && fp.Vfs != nil {
@@ -2847,19 +2823,14 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	// The panel total keeps the centre and its own colour; the entry under
 	// the cursor is pinned to the left corner behind a ▸ marker. Both are in
 	// exact bytes, the way far2l and the Size column spell them, and so is
-	// the selected-files line. Directories say <DIR>/UP-DIR instead. When
-	// the far2l status line is switched on it already states all of this
-	// right above, so the marker steps aside.
+	// the selected-files line. Folders, links and ".." name their kind
+	// instead, the way the Size column does. When the far2l status line is
+	// switched on it already states all of this right above, so the marker
+	// steps aside.
 	if !config.App.ShowPanelFileInfo && fp.gridColumnCount() > 1 {
 		if idx := fp.GetCursorIndex(); idx >= 0 && idx < len(fp.Entries) {
 			e := fp.Entries[idx]
-			curStr := fileops.FormatIntWithSpaces(e.Size)
-			if e.IsDir && !e.SizeCalculated {
-				curStr = "<DIR>"
-				if e.Name == ".." {
-					curStr = "UP-DIR"
-				}
-			}
+			curStr := entrySizeText(e)
 			if e.IsSymlink && fp.Vfs != nil {
 				if target, err := vfs.Readlink(context.Background(), fp.Vfs, fp.Vfs.Join(fp.Vfs.GetPath(), e.Name)); err == nil && target != "" {
 					curStr = "→ " + target

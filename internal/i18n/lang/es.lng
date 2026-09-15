@@ -70,6 +70,9 @@ Panel.Column.Name=Nombre
 Panel.Column.Size=Tamaño
 Panel.Column.Modified=Modificado
 Panel.UpDir=SUBIR
+Panel.Folder=Directorio
+Panel.Symlink=EnlcSimb
+Panel.Junction=Empalme
 Panel.SelectedInfo=Bytes: %s, archivos: %d, carpetas: %d
 
 Panels.Prompt=>

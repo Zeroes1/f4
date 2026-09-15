@@ -68,7 +68,10 @@ Panel.Other=&Másik panel
 Panel.Column.Name=Név
 Panel.Column.Size=Méret
 Panel.Column.Modified=Módosítva
-Panel.UpDir=FEL-KVT
+Panel.UpDir=Fel
+Panel.Folder=Mappa
+Panel.Symlink=SzimLnk
+Panel.Junction=Csomópt
 Panel.SelectedInfo=Bájt: %s, fájl: %d, mappa: %d
 
 Panels.Prompt=>

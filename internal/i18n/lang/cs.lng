@@ -69,7 +69,10 @@ Panel.Other=&Druhý panel
 Panel.Column.Name=Jméno
 Panel.Column.Size=Velikost
 Panel.Column.Modified=Změněno
-Panel.UpDir=NAHORU
+Panel.UpDir=Nahoru
+Panel.Folder=Adresář
+Panel.Symlink=Symlink
+Panel.Junction=Křížení
 Panel.SelectedInfo=Bajtů: %s, souborů: %d, adresářů: %d
 
 Panels.Prompt=>
