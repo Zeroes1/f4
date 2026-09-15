@@ -1423,6 +1423,16 @@ func (pf *PanelsFrame) menuBarPinned() bool {
 	return pf.TermView == nil || !pf.TermView.OnAltScreen()
 }
 
+// menuClickTraced selects the mouse presses logged for issue #1149: any button
+// press on or above the menu bar's row. A report said a click on the panels'
+// top row still opened no menu with the bar hidden, while the regression
+// test for exactly that passed; these lines are there to show which step the
+// real event takes. They change no behaviour.
+func menuClickTraced(e *vtinput.InputEvent) bool {
+	return e != nil && e.Type == vtinput.MouseEventType && vtui.IsMousePress(e) &&
+		vtui.FrameManager != nil && int(e.MouseY) <= vtui.FrameManager.WorkspaceTopInset()
+}
+
 // openMenuBarFromClick opens the main menu for a left click on the menu bar's
 // row while the panels are shown, whether AlwaysShowMenuBar pins the bar there
 // or not: far2l's Panel::PanelProcessMouse calls ShellOptions(0, MouseEvent)
@@ -1438,23 +1448,41 @@ func (pf *PanelsFrame) menuBarPinned() bool {
 // Only the left button opens it, the one vtui's MenuBar acts on; a right click
 // on the panel title keeps opening the drive menu.
 func (pf *PanelsFrame) openMenuBarFromClick(e *vtinput.InputEvent, my int) bool {
+	trace := menuClickTraced(e)
 	if pf.MenuBar == nil || !pf.ShowPanels || !vtui.IsMousePress(e) || e.ButtonState != vtinput.FromLeft1stButtonPressed {
+		if trace {
+			vtui.DebugLog("MENUCLICK: not a left press over the panels (bar=%v showPanels=%v press=%v buttons=%#x)",
+				pf.MenuBar != nil, pf.ShowPanels, vtui.IsMousePress(e), e.ButtonState)
+		}
 		return false
 	}
 	if my != vtui.FrameManager.WorkspaceTopInset() {
+		if trace {
+			vtui.DebugLog("MENUCLICK: row %d is not the menu row %d", my, vtui.FrameManager.WorkspaceTopInset())
+		}
 		return false
 	}
 	pf.GetMenuBar()
 	if len(pf.MenuBar.Items) == 0 {
+		if trace {
+			vtui.DebugLog("MENUCLICK: the menu bar has no items")
+		}
 		return false
 	}
 	wasActive := pf.MenuBar.Active
 	pf.MenuBar.Active = true
 	pf.syncMenuBarGeometry()
 	if !pf.MenuBar.ProcessMouse(e) {
+		if trace {
+			x1, y1, x2, y2 := pf.MenuBar.GetPosition()
+			vtui.DebugLog("MENUCLICK: MenuBar.ProcessMouse declined; bar at (%d,%d)-(%d,%d) disabled=%v", x1, y1, x2, y2, pf.MenuBar.IsDisabled())
+		}
 		pf.MenuBar.Active = wasActive
 		pf.syncMenuBarGeometry()
 		return false
+	}
+	if trace {
+		vtui.DebugLog("MENUCLICK: opened menu %d; top frame is now %T", pf.MenuBar.SelectPos, vtui.FrameManager.GetTopFrame())
 	}
 	vtui.FrameManager.Redraw()
 	return true
@@ -3167,6 +3195,13 @@ func terminalWantsMouseEvent(mode int, e *vtinput.InputEvent) bool {
 }
 
 func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
+	trace := menuClickTraced(e)
+	if trace {
+		vtui.DebugLog("MENUCLICK: frame press at (%d,%d) buttons=%#x flags=%#x mods=%#x showPanels=%v inset=%d always=%v barActive=%v capture=%T middle=%v",
+			e.MouseX, e.MouseY, e.ButtonState, e.MouseEventFlags, e.ControlKeyState, pf.ShowPanels,
+			vtui.FrameManager.WorkspaceTopInset(), config.App.AlwaysShowMenuBar,
+			pf.MenuBar != nil && pf.MenuBar.Active, pf.PanelMouseCapture, pf.middleMouseDown)
+	}
 	// If panels are hidden, route relevant mouse events to term.PTY immediately
 	if !pf.ShowPanels {
 		mx, my := int(e.MouseX), int(e.MouseY)
@@ -3203,12 +3238,18 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 
 	mx, my := int(e.MouseX), int(e.MouseY)
 	if pf.ProcessDragOutGesture(e, mx, my) {
+		if trace {
+			vtui.DebugLog("MENUCLICK: taken by the drag-out gesture")
+		}
 		return true
 	}
 
 	// A middle-button gesture that already emitted Enter owns its remaining
 	// motion/release events and must not fall through to panels or scrollbars.
 	if pf.middleMouseDown && e.WheelDirection == 0 {
+		if trace {
+			vtui.DebugLog("MENUCLICK: taken by a middle-button gesture")
+		}
 		pf.processMiddleMouseGesture(e)
 		return true
 	}
@@ -3218,6 +3259,9 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 	// with ButtonState=0; releases are the non-move event with no held button
 	// (or KeyDown=false on tty/X11 backends).
 	if pf.PanelMouseCapture != nil {
+		if trace {
+			vtui.DebugLog("MENUCLICK: taken by the panel mouse capture %T", pf.PanelMouseCapture)
+		}
 		captured := pf.PanelMouseCapture
 		captured.ProcessMouse(e)
 		isMove := e.MouseEventFlags&vtinput.MouseMoved != 0
@@ -3231,6 +3275,9 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 	if pf.SearchFirstMode() && e.WheelDirection == 0 && e.ButtonState != 0 && e.KeyDown && pf.CmdLine.IsVisible() {
 		x1, y1, x2, y2 := pf.CmdLine.GetPosition()
 		if mx >= x1 && mx <= x2 && my >= y1 && my <= y2 {
+			if trace {
+				vtui.DebugLog("MENUCLICK: taken by the search-first command line")
+			}
 			pf.SetCommandLineFocus(true)
 			pf.CmdLine.ProcessMouse(e)
 			return true
