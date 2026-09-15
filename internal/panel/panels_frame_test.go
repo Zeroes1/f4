@@ -985,14 +985,30 @@ func TestPanelsFrame_AlwaysShowMenuBar(t *testing.T) {
 	}
 	assertMenuBarPainted(t, pf, 0, "panels with AlwaysShowMenuBar")
 
-	// 3. Test that hiding panels collapses the menu bar space for terminal
+	// 3. The terminal keeps the pinned bar above it as well (issue #1153).
+	// The terminal view is only laid out while it has a PTY, and host console
+	// mode, which a terminal running the tests could select, never reserves a
+	// row above its grid.
+	pf.Pty = &mockPty{}
+	pf.ShellMode = terminal.ShellModeOwn
 	pf.ShowPanels = false
 	pf.ResizeConsole(80, 25)
 
-	if pf.TermView.Y1 != 0 {
-		t.Errorf("Expected terminal to start at row 0 when panels are hidden, got %d", pf.TermView.Y1)
+	if pf.TermView.Y1 != 1 {
+		t.Errorf("Expected terminal to start at row 1 below the pinned menu bar, got %d", pf.TermView.Y1)
 	}
-	assertMenuBarHidden(t, pf, "terminal without an active menu")
+	assertMenuBarPainted(t, pf, 0, "terminal with AlwaysShowMenuBar")
+
+	// 4. A full-screen program on the alternate screen gets the bar's row, as
+	// it gets the keybar's (issues #1093 and #1153).
+	pf.TermView.UseAltScreen = true
+	pf.ResizeConsole(80, 25)
+
+	if pf.TermView.Y1 != 0 {
+		t.Errorf("Expected an alternate-screen terminal to start at row 0, got %d", pf.TermView.Y1)
+	}
+	assertMenuBarHidden(t, pf, "alternate-screen terminal without an active menu")
+	pf.TermView.UseAltScreen = false
 }
 
 func TestPanelsFrame_ActiveMenuBarAppearsAfterWorkspaceInset(t *testing.T) {
@@ -1056,6 +1072,8 @@ func assertMenuBarHidden(t *testing.T, pf *PanelsFrame, context string) {
 // TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu covers issue #1093:
 // a click on the first line of micro (or far2l started from f4) used to hit
 // f4's stale menu-bar geometry and open the f4 menu over the terminal app.
+// Such programs run on the alternate screen, where even AlwaysShowMenuBar
+// leaves the first row to them (issue #1153).
 func TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu(t *testing.T) {
 	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
@@ -1070,6 +1088,7 @@ func TestPanelsFrame_HiddenTerminalFirstRowDoesNotOpenMenu(t *testing.T) {
 	waitForLoad(t, pf.Panels[0].(*FileSystemPanel))
 	waitForLoad(t, pf.Panels[1].(*FileSystemPanel))
 	pf.ShowPanels = false
+	pf.TermView.UseAltScreen = true
 	pf.ResizeConsole(80, 25)
 	vtui.FrameManager.Push(pf)
 

@@ -50,6 +50,11 @@ func (settingsHost) ApplyRuntime(before config.F4Config, changed []string) {
 		if before.WorkspaceTabNumbering != config.App.WorkspaceTabNumbering && config.App.WorkspaceTabNumbering == config.WorkspaceTabNumbersOrder {
 			panel.RenumberWorkspaceScreens()
 		}
+		if before.AlwaysShowMenuBar != config.App.AlwaysShowMenuBar {
+			// Editors and viewers place a pinned menu bar in ResizeConsole,
+			// like the panels frames resized below (issue #1153).
+			fm.ResizeAllScreens()
+		}
 		for _, screen := range fm.Screens {
 			for _, frame := range screen.Frames {
 				if pf, ok := frame.(*panel.PanelsFrame); ok && !pf.Closed {

@@ -355,6 +355,9 @@ func (vv *ViewerView) Show(scr *vtui.ScreenBuf) {
 	if vv.TopBar != nil {
 		vv.TopBar.Show(scr)
 	}
+	if vv.menuBarPinned() {
+		vv.GetMenuBar().Show(scr)
+	}
 	vv.DisplayObject(scr)
 }
 
@@ -1195,7 +1198,28 @@ func (vv *ViewerView) updateURLHover(mx, my int) bool {
 	return true
 }
 func (vv *ViewerView) ResizeConsole(w, h int) {
-	vv.SetPosition(0, vtui.FrameManager.WorkspaceTopInset(), w-1, h-2)
+	top := vtui.FrameManager.WorkspaceTopInset()
+	if !config.App.AlwaysShowMenuBar || vv.menuBar == nil {
+		vv.SetPosition(0, top, w-1, h-2)
+		return
+	}
+	// AlwaysShowMenuBar keeps the menu bar on the workspace's top row, the row
+	// it has over the panels and the terminal too, and the viewer starts below
+	// it with its title bar, which the bar would otherwise cover (issue #1153).
+	vv.SetPosition(0, top+1, w-1, h-2)
+	vv.menuBar.SetPosition(0, top, w-1, top)
+}
+
+// menuBarPinned reports whether ResizeConsole has given the menu bar a row of
+// its own above the title bar. SetPosition alone puts the bar on the title
+// row, where F9 raises it over the title while AlwaysShowMenuBar is off.
+func (vv *ViewerView) menuBarPinned() bool {
+	if vv.menuBar == nil {
+		return false
+	}
+	_, menuY, _, _ := vv.menuBar.GetPosition()
+	_, y1, _, _ := vv.GetPosition()
+	return menuY < y1
 }
 
 func (vv *ViewerView) Close() {

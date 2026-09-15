@@ -1482,6 +1482,9 @@ func (ev *EditorView) Show(scr *vtui.ScreenBuf) {
 	if ev.topBar != nil {
 		ev.topBar.Show(scr)
 	}
+	if ev.menuBarPinned() {
+		ev.GetMenuBar().Show(scr)
+	}
 	ev.DisplayObject(scr)
 }
 
@@ -3419,7 +3422,28 @@ func (ev *EditorView) SetPosition(x1, y1, x2, y2 int) {
 
 func (ev *EditorView) ResizeConsole(w, h int) {
 	// Редактор в f4 занимает всё пространство до KeyBar (h-1)
-	ev.SetPosition(0, vtui.FrameManager.WorkspaceTopInset(), w-1, h-2)
+	top := vtui.FrameManager.WorkspaceTopInset()
+	if !config.App.AlwaysShowMenuBar || ev.menuBar == nil {
+		ev.SetPosition(0, top, w-1, h-2)
+		return
+	}
+	// AlwaysShowMenuBar keeps the menu bar on the workspace's top row, the row
+	// it has over the panels and the terminal too, and the editor starts below
+	// it with its title bar, which the bar would otherwise cover (issue #1153).
+	ev.SetPosition(0, top+1, w-1, h-2)
+	ev.menuBar.SetPosition(0, top, w-1, top)
+}
+
+// menuBarPinned reports whether ResizeConsole has given the menu bar a row of
+// its own above the title bar. SetPosition alone puts the bar on the title
+// row, where F9 raises it over the title while AlwaysShowMenuBar is off.
+func (ev *EditorView) menuBarPinned() bool {
+	if ev.menuBar == nil {
+		return false
+	}
+	_, menuY, _, _ := ev.menuBar.GetPosition()
+	_, y1, _, _ := ev.GetPosition()
+	return menuY < y1
 }
 
 // GetMenuBar returns the editor's menu bar. Items are regenerated from

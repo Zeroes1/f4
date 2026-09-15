@@ -3870,6 +3870,7 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 		}
 		config.App.SyncPanelLoad = chkSync.State == 1
 		config.App.ApplyCommandParallelism = applyWorkers
+		alwaysShowMenuBarChanged := config.App.AlwaysShowMenuBar != (chkAlwaysMenu.State == 1)
 		config.App.AlwaysShowMenuBar = chkAlwaysMenu.State == 1
 		config.App.InfoPanelCPUGPU = chkCPUGPU.State == 1
 		config.App.EscTogglePanels = chkEscToggle.State == 1
@@ -3886,6 +3887,11 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 		config.App.MacroRecordFormat = comboMacro.Menu.SelectPos
 		config.SaveConfig()
 		dlg.Close()
+		if alwaysShowMenuBarChanged {
+			// Editors and viewers in other workspaces place a pinned menu
+			// bar in ResizeConsole too (issue #1153).
+			vtui.FrameManager.ResizeAllScreens()
+		}
 		pf.ResizeConsole(pf.LastW, pf.LastH)
 		pf.RefreshAll()
 	}

@@ -1391,16 +1391,36 @@ func (pf *PanelsFrame) syncMenuBarGeometry() {
 		return
 	}
 	menuY := vtui.FrameManager.WorkspaceTopInset()
-	// The AlwaysShowMenuBar setting pins the bar above the panels; F9 and the
-	// menu hotkeys raise it temporarily over whatever the workspace shows,
-	// panels or the terminal.
-	painted := pf.MenuBar.Active || (config.App.AlwaysShowMenuBar && pf.ShowPanels)
+	// A pinned bar (menuBarPinned) has a row of its own above the panels or
+	// the terminal; F9 and the menu hotkeys raise an unpinned one temporarily
+	// over whatever the workspace shows.
+	painted := pf.MenuBar.Active || pf.menuBarPinned()
 	x2 := pf.LastW - 1
 	if !painted {
 		x2 = -1
 	}
 	pf.MenuBar.SetPosition(0, menuY, x2, menuY)
 	pf.MenuBar.SetVisible(painted)
+}
+
+// menuBarPinned reports whether AlwaysShowMenuBar keeps the bar on screen, on
+// a row of its own, in the frame's current state. The panels always keep it,
+// and so does the terminal (issue #1153), except where the terminal takes the
+// whole screen: a full-screen program on the alternate screen gets the bar's
+// row back, as it gets the keybar's, which also keeps that program's first row
+// out of the menu's reach (issue #1093); and host console mode lays its
+// mirrored grid out from row 0 with no row reserved above it.
+func (pf *PanelsFrame) menuBarPinned() bool {
+	if !config.App.AlwaysShowMenuBar {
+		return false
+	}
+	if pf.ShowPanels {
+		return true
+	}
+	if pf.ShellMode == terminal.ShellModeHost {
+		return false
+	}
+	return pf.TermView == nil || !pf.TermView.OnAltScreen()
 }
 
 // openMenuBarFromClick opens the main menu for a left click on the menu bar's
@@ -1447,7 +1467,7 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	pf.syncMenuBarGeometry()
 
 	contentY1 := topInset
-	if config.App.AlwaysShowMenuBar && pf.ShowPanels {
+	if pf.menuBarPinned() {
 		contentY1++
 	}
 
