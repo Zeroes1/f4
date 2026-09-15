@@ -925,12 +925,33 @@ func (vv *ViewerView) jumpToEnd() {
 		return
 	}
 
+	// Everything the layout needs from the viewer is read here, on the UI
+	// goroutine that starts the task, and not inside it. The viewer's fields
+	// belong to the UI goroutine: Close clears ScrollBar, SetPosition moves
+	// X1/X2, the wrap toggle flips WrapMode and a codepage switch replaces
+	// Backend, all while this layout may still be running. The task used to
+	// read them itself, and -race caught it reading ScrollBar after the
+	// viewer had been closed under it.
+	backend := vv.Backend
+	width := vv.X2 - vv.X1 + 1
+	if vv.ScrollBar != nil {
+		width--
+	}
+	wrapMode := vv.WrapMode
+	tabSize := 8
+	if config.App.EditorTabSize > 0 {
+		tabSize = config.App.EditorTabSize
+	}
+
 	vv.Busy = true
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
 		defer ctx.RunOnUI(func() { vv.Busy = false })
-		width := vv.X2 - vv.X1 + 1
-		if vv.ScrollBar != nil {
-			width--
+		// A closed backend -- the viewer closed, or a codepage switch
+		// replaced it -- cancels its context, and its fetches then never
+		// land: ReadAt keeps answering ErrLoading and both loops below would
+		// wait for it forever. Stop instead, as holdUntilCached does.
+		stopped := func() bool {
+			return ctx.Err() != nil || backend.ctx.Err() != nil
 		}
 
 		chunkSize := contentHeight * int64(width) * 4
@@ -948,16 +969,16 @@ func (vv *ViewerView) jumpToEnd() {
 		if chunkSize < tailWindow {
 			chunkSize = tailWindow
 		}
-		startOff := vv.Backend.Size() - chunkSize
+		startOff := backend.Size() - chunkSize
 		if startOff < 0 {
 			startOff = 0
 		}
 
 		for {
-			if ctx.Err() != nil {
+			if stopped() {
 				return
 			}
-			_, err := vv.Backend.ReadAt(startOff, 1024)
+			_, err := backend.ReadAt(startOff, 1024)
 			if err != piecetable.ErrLoading {
 				break
 			}
@@ -966,15 +987,11 @@ func (vv *ViewerView) jumpToEnd() {
 		var offsets []int64
 		currOff := startOff
 
-		tabSize := 8
-		if config.App.EditorTabSize > 0 {
-			tabSize = config.App.EditorTabSize
-		}
-		for currOff < vv.Backend.Size() {
-			if ctx.Err() != nil {
+		for currOff < backend.Size() {
+			if stopped() {
 				return
 			}
-			data, err := vv.Backend.ReadAt(currOff, 64*1024)
+			data, err := backend.ReadAt(currOff, 64*1024)
 			if err == piecetable.ErrLoading {
 				time.Sleep(20 * time.Millisecond)
 				continue
@@ -987,15 +1004,15 @@ func (vv *ViewerView) jumpToEnd() {
 			for scanPos < len(data) {
 				offsets = append(offsets, currOff+int64(scanPos))
 				rowData := data[scanPos:]
-				if vv.WrapMode {
+				if wrapMode {
 					maxRowData := width * 4
 					if maxRowData < len(rowData) {
 						rowData = rowData[:maxRowData]
 					}
 				}
-				row := layoutViewerTextRow(rowData, width, tabSize, vv.WrapMode)
+				row := layoutViewerTextRow(rowData, width, tabSize, wrapMode)
 				scanPos += row.lineLen
-				if !row.foundNewline && !vv.WrapMode {
+				if !row.foundNewline && !wrapMode {
 					break
 				}
 				if row.lineLen == 0 {
