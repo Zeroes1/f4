@@ -920,6 +920,17 @@ func (pf *PanelsFrame) BuildPrompt() []vtui.CharInfo {
 		maxPromptLen = 15
 	}
 
+	// A configured format string replaces the layout below outright: it says
+	// where the user, the host and the path go, and in what company. The
+	// budget is the same one, so a long path is still shortened to fit.
+	if promptFormatEnabled(vfsTitle) {
+		spans := promptFormatSpans(path, home, username, host, maxPromptLen)
+		if pf.SearchFirstMode() && pf.ShowPanels && !pf.CommandLineFocused {
+			return promptSpansInactive(spans)
+		}
+		return promptSpansToCharInfo(spans, vtui.Palette[theme.ColCommandLinePrompt])
+	}
+
 	// The user@host prefix gets at most half the budget: a long hostname
 	// (CI runners, corporate DHCP names) otherwise pushes the prompt past
 	// maxPromptLen no matter how hard the path is truncated.

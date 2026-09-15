@@ -417,6 +417,8 @@ type F4Config struct {
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
 	AnnounceKittyTerm        bool   // introduce the built-in terminal as kitty, so that image tools use the graphics protocol
 	CommandLineAutoComplete  bool
+	UsePromptFormat          bool
+	PromptFormat             string
 	NavigationMode           PanelNavigationMode
 	SearchCommandStayFocused bool
 	SyncPanelLoad            bool
@@ -586,6 +588,8 @@ var App = F4Config{
 	ConsoleOverlayUI:         false,
 	AnnounceKittyTerm:        true,
 	CommandLineAutoComplete:  true,
+	UsePromptFormat:          false,
+	PromptFormat:             "$u@$n:$p$# ",
 	NavigationMode:           NavigationClassic,
 	SearchCommandStayFocused: false,
 	SyncPanelLoad:            false,
@@ -784,6 +788,8 @@ func LoadConfig() {
 	App.ConsoleMode = merged.GetString("Panel", "ConsoleMode", "own")
 	App.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
 	App.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
+	App.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
+	App.PromptFormat = merged.GetString("Panel", "PromptFormat", "$u@$n:$p$# ")
 	if mode := merged.GetString("Panel", "NavigationMode", ""); mode != "" {
 		App.NavigationMode = ParsePanelNavigationMode(mode)
 	} else if merged.GetString("Panel", "VimHotkeys", "0") == "1" {
@@ -1083,6 +1089,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
+	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])
+	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
 	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchCommandStayFocused])
 	// Keep the legacy key synchronized for older f4 versions and shared configs.
