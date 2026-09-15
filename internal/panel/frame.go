@@ -3821,7 +3821,13 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 			i18n.Msg("KeyBar.F5"), i18n.Msg("KeyBar.F6"), f7, i18n.Msg("KeyBar.F8"),
 			i18n.Msg("KeyBar.F9"), i18n.Msg("KeyBar.F10"), i18n.Msg("KeyBar.F11"), i18n.Msg("KeyBar.F12"),
 		},
-		Shift: vtui.KeyBarLabels{"", "", "", "", "", "Rename", "", "", "Save", "", "", ""},
+		// Shift+F1..F3 belong to the built-in archive plugin, which registers
+		// them as global hotkeys rather than HotkeyManager bindings, so nothing
+		// would name them below. far2l labels all three in the Shift row too.
+		Shift: vtui.KeyBarLabels{
+			i18n.Msg("KeyBar.ShiftF1"), i18n.Msg("KeyBar.ShiftF2"), i18n.Msg("KeyBar.ShiftF3"),
+			"", "", "Rename", "", "", "Save", "", "", "",
+		},
 		Alt: vtui.KeyBarLabels{
 			i18n.Msg("KeyBar.AltF1"), i18n.Msg("KeyBar.AltF2"), i18n.Msg("KeyBar.AltF3"), "",
 			"", "", i18n.Msg("KeyBar.AltF7"), i18n.Msg("KeyBar.AltF8"), "", "", "", i18n.Msg("KeyBar.AltF12"),
