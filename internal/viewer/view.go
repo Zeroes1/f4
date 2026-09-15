@@ -336,6 +336,11 @@ func (vv *ViewerView) GetMenuBar() *vtui.MenuBar {
 	if App != nil {
 		vv.menuBar.Items = App.MenuBarItems("Viewer")
 	}
+	if !vv.menuBar.Active {
+		// As in the editor: far2l's ViewerShellOptions opens File on every
+		// F9, and vtui's F9 fallback opens whatever SelectPos holds (#1144).
+		vv.menuBar.SelectPos = 0
+	}
 	return vv.menuBar
 }
 

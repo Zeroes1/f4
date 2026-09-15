@@ -3451,6 +3451,13 @@ func (ev *EditorView) menuBarPinned() bool {
 // always current.
 func (ev *EditorView) GetMenuBar() *vtui.MenuBar {
 	ev.menuBar.Items = MenuBarItems("Editor")
+	if !ev.menuBar.Active {
+		// far2l builds the editor's menu afresh for every F9 with File
+		// selected (EditorShellOptions). F9 reaches vtui's native fallback,
+		// which drops down the item at SelectPos, so a menu left earlier
+		// would come back down instead of File (#1144).
+		ev.menuBar.SelectPos = 0
+	}
 	return ev.menuBar
 }
 
