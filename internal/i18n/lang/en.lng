@@ -3256,6 +3256,7 @@ SettingsCenter.Matches=Matches: %d
 SettingsCenter.ClearSearch=Clear search
 SettingsCenter.Category.hotkeys=Hotkey Configurator
 SettingsCenter.Text.8802174070f1412801a7f0343b685b2031869bce18833d79e48e7a712ab59883=Prefer exact shortcut search matches
+SettingsCenter.Text.d077ac4db77fed335010255316d50f1597c6c39b6481aa17455e4dd418ed0e40=next outliner
 SettingsCenter.Text.c0010901537ebb36a8ae08ecdecf613679d66a4f8dcad5856094bc3752fcbf1d=In the Hotkey Configurator table, narrow the search to exact matches when available. This does not affect the Settings Center sidebar search.
 SettingsCenter.Text.ac559d59a8e0f357fa1fc6da653bff0feb6a2f4aaf219e4ac9adf0b68e1c2128=next open
 SettingsCenter.Text.a3a43e00b84aa7aca574eafb93a4feaf77b4287a615be9a7434ae99552df13e3=The Hotkey Configurator lists configurable, native and plugin shortcuts. Use Assign or Unbind; native shortcuts are read-only. Changes are saved with Apply or OK.
