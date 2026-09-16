@@ -78,6 +78,10 @@ var aboutHideEmpty = true
 // copied into bug reports, and it has to read the same whatever language the
 // interface is in.
 func ShowAbout(facts AboutFacts) {
+	showAbout(facts, 0)
+}
+
+func showAbout(facts AboutFacts, selected int) {
 	if vtui.FrameManager == nil {
 		return
 	}
@@ -89,7 +93,7 @@ func ShowAbout(facts AboutFacts) {
 	// The list is read, not chosen from: a click only moves the selection.
 	menu.IgnoreSingleClick = true
 
-	fill := func() {
+	fill := func(selected int) {
 		lines := aboutLines(rows, aboutHideEmpty)
 		scrW := vtui.FrameManager.GetScreenSize()
 		scrH := vtui.FrameManager.GetScreenHeight()
@@ -129,9 +133,15 @@ func ShowAbout(facts AboutFacts) {
 			y = 0
 		}
 		menu.SetPosition(x, y, x+w-1, y+h-1)
-		menu.SetSelectPos(0)
+		menu.SetSelectPos(min(max(selected, 0), max(len(menu.Items)-1, 0)))
 	}
-	fill()
+	fill(selected)
+
+	// A double click confirms, and a confirmed menu closes. far2l keeps
+	// far:about open, so the list comes straight back on the same row.
+	menu.OnAction = func(pos int) {
+		showAbout(facts, pos)
+	}
 
 	menu.OnKeyDown = func(e *vtinput.InputEvent) bool {
 		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
@@ -150,7 +160,7 @@ func ShowAbout(facts AboutFacts) {
 			return true
 		case plainCtrl && e.VirtualKeyCode == vtinput.VK_H:
 			aboutHideEmpty = !aboutHideEmpty
-			fill()
+			fill(0)
 			vtui.FrameManager.Redraw()
 			return true
 		}

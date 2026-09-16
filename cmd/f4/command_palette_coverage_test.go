@@ -248,7 +248,7 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	"panel.showTempPanelSlots#1": {
 		class: paletteAuditModalLocal, rationale: "the temporary-panel slot picker is a local modal menu; its entries are dynamic panel state, not standalone actions",
 	},
-	"dialog.ShowAbout#1": {
+	"dialog.showAbout#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered App.About action, also reached as f4:about, opens this read-only report list",
 	},
 	"dialog.showConfigEditor#1": {

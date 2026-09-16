@@ -8,6 +8,7 @@ f4 — efficient and cozy file manager in go
 ~Mouse wheel settings~MouseWheel@
 ~Portable mode~PortableSettings@
 ~Visual File Renamer (VisRen)~VisRen@
+~Special commands~SpecCmd@
 ~View README.md~README@
 
 @VisRen
@@ -849,3 +850,21 @@ f4.example.ini.
 
 Restart f4 after saving. The mode file is read before the profile is located,
 so this setting cannot be stored inside the profile itself.
+
+@SpecCmd
+$Special commands
+Like far2l's far: commands, f4 understands a few pseudo commands typed on the
+command line. f4 handles them itself; they never reach the shell.
+
+  #f4:about#   Information about f4 and the system it runs on: version,
+               build, backend, directories, environment and plugins. Also
+               Commands > About f4. Ctrl+C or Ctrl+Ins copy the whole list
+               for a bug report; Ctrl+H shows or hides rows without a value.
+
+  #f4:config#  The configuration editor: every settings.ini key, marked with
+               * when it differs from its default. Also Commands >
+               Configuration editor. Enter or F4 edit a value, Del resets it,
+               Ctrl+H keeps only the changed keys, Ctrl+A aligns the names on
+               the dot.
+
+An unknown f4: command shows the list of the commands that exist.
