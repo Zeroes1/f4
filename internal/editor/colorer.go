@@ -260,6 +260,9 @@ func (src ColorerSource) userOptions() []colorer.Option {
 }
 
 func acquireColorerSession(src ColorerSource) (*colorer.Session, error) {
+	if err := colorerRuntimeCheck(); err != nil {
+		return nil, err
+	}
 	ensureRadiolaSchema(src.ConfigsDir)
 
 	colorerPoolMu.Lock()
@@ -291,6 +294,9 @@ func fileExists(path string) bool {
 // A pooled Session owns the context it was created with. Colorer parsing gets
 // a private context instead, so Esc can interrupt an in-flight ParseLine.
 func acquireCancelableColorerSession(ctx context.Context, src ColorerSource) (*colorer.Session, error) {
+	if err := colorerRuntimeCheck(); err != nil {
+		return nil, err
+	}
 	ensureRadiolaSchema(src.ConfigsDir)
 
 	catalogPath := "/base/catalog.xml"

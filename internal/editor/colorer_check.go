@@ -43,6 +43,10 @@ func (c ColorerCheck) Clean() bool {
 // stops between types and is reported as Err.
 func CheckColorerSource(ctx context.Context, src ColorerSource, scheme string, allTypes bool, progress func(done, total int, label string)) ColorerCheck {
 	var check ColorerCheck
+	if err := colorerRuntimeCheck(); err != nil {
+		check.Err = err
+		return check
+	}
 	logLevel, logging := colorerDiagnosticsLevel()
 	level := colorer.LevelWarn
 	if logging && logLevel > level {
