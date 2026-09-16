@@ -24,7 +24,7 @@ func TestConfigEditorRowsMarkChangedAndUnknownDefaults(t *testing.T) {
 		}
 	}
 
-	lines, index := configEditorLines(rows, configEditorState{})
+	lines, _ := configEditorLines(rows, configEditorState{})
 	if len(lines) != 3 || lines[0] != "* Editor.TabSize     │ 8" {
 		t.Fatalf("lines = %q", lines)
 	}
