@@ -166,8 +166,8 @@ func TestPanelsFrameDeterministicHelpers(t *testing.T) {
 
 	left := &FileSystemPanel{}
 	right := &FileSystemPanel{}
-	left.SetPosition(50, 0, 79, 10)
-	right.SetPosition(0, 0, 29, 10)
+	left.ScreenObject.SetPosition(50, 0, 79, 10)
+	right.ScreenObject.SetPosition(0, 0, 29, 10)
 	pf := &PanelsFrame{Panels: [2]Panel{left, right}}
 	if pf.VisualLeftFSP() != right || pf.VisualRightFSP() != left {
 		t.Fatal("visual panel ordering is incorrect")
