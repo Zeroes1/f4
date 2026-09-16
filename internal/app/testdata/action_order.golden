@@ -163,6 +163,9 @@ Editor.DeleteSpacersForward
 Editor.ColorerMatchPair
 Editor.ColorerSelectPair
 Editor.ColorerSelectBlock
+Editor.ColorerListFunctions
+Editor.ColorerListErrors
+Editor.ColorerLocateFunction
 Viewer.SwitchToEditor
 Viewer.Reload
 Viewer.Quit

@@ -916,6 +916,7 @@ ColorerSettings.CheckReports=Colorer reported:
 ColorerSettings.CheckPassed=%d file types loaded without problems.
 ColorerSettings.Pairs=Highlight &pairs
 ColorerSettings.OldOutline=Ol&d outline
+Colorer.Menu=&Colorer
 Colorer.NothingFound=Nothing found
 Colorer.Outliner=Outliner
 Colorer.Title=Colorer

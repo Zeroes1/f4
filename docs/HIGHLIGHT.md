@@ -336,9 +336,17 @@ from Colorer's `Outliner` over the whole file.
   the cursor's line. FarColorer's word loop drops the first character of a
   word at the start of a line and the last at the end; f4 takes the whole
   word.
-- Not yet: FarColorer's own outliner keys — Ctrl+Up/Down to preview,
-  Ctrl+Left/Right to fold levels, Ctrl+Enter to insert the label, Tab to
-  complete the filter.
+- The list is `colorerOutlineFrame`, FarEditor::showOutliner's keys on a
+  `VMenu` with its own filter: letters, digits, space and `; - : _ ~` narrow
+  it to labels holding the filter (a filter nothing matches loses its last
+  character); Backspace takes one back; Tab takes the completion shown after
+  `?` in the title, which extends the filter with what follows it in the
+  first row while every row still holds it; Ctrl+Up/Down go to the previous
+  or next item with the list open, and Esc then restores the editor;
+  Ctrl+Left/Right show a tree level less or more; Ctrl+Enter inserts the
+  label at the cursor.
+- With Colorer in charge, the editor's F11 menu has a Colorer submenu with
+  these commands in FarColorer's order.
 
 ---
 

@@ -65,7 +65,8 @@ colorer4go's `Session.LineOutline`; f4 collects the whole file's outline
 through the worker, lists it and locates functions, and has the old outline
 view setting. See HIGHLIGHT.md 3.11.
 
-## Step 4b — the outliner's own keys
+## Step 4b — the outliner's own keys (done)
 
-Ctrl+Up/Down preview, Ctrl+Left/Right fold levels, Ctrl+Enter insert, Tab
-filter completion; and FarColorer's commands in the editor's F11 menu.
+FarColorer's filter, Tab completion, Ctrl+Up/Down preview, Ctrl+Left/Right
+levels and Ctrl+Enter insert in the outline list; FarColorer's commands in a
+Colorer submenu of the editor's F11 menu. See HIGHLIGHT.md 3.11.

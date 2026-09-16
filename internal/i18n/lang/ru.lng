@@ -903,6 +903,7 @@ ColorerSettings.CheckReports=Сообщения Colorer:
 ColorerSettings.CheckPassed=Загружено типов файлов без ошибок: %d.
 ColorerSettings.Pairs=Парные ско&бки
 ColorerSettings.OldOutline=Стары&й outline
+Colorer.Menu=&Colorer
 Colorer.NothingFound=Ничего не найдено
 Colorer.Outliner=Структура файла
 Colorer.Title=Colorer

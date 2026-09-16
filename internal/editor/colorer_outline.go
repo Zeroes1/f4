@@ -6,7 +6,6 @@ import (
 	"unicode"
 
 	colorer "github.com/unxed/colorer4go"
-	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtui"
@@ -175,43 +174,18 @@ func (ev *EditorView) showColorerOutline(entries []colorerOutlineEntry) {
 		colorerNothingFound()
 		return
 	}
-	title := i18n.Msg("Colorer.Outliner")
-	menu := vtui.NewVMenu(title)
-	menu.FilterOnType = true
-	var stack []int
-	selected := 0
-	width := vtui.StringWidth(title) + 8
-	for i, entry := range entries {
-		var level int
-		stack, level = manageColorerOutlineTree(stack, entry.item.Level)
-		lineText := ""
-		if config.App.EditorColorerOldOutline {
-			lineText, _ = ev.lineTextForHighlight(entry.line)
-		}
-		row := colorerOutlineRow(entry, level, config.App.EditorColorerOldOutline, lineText)
-		menu.AddItem(vtui.MenuItem{Text: row, UserData: entry})
-		width = max(width, vtui.StringWidth(row)+6)
-		// FarColorer selects the nearest item at or above the cursor.
-		if entry.line <= ev.CursorLine {
-			selected = i
-		}
+	f := newColorerOutlineFrame(ev, entries)
+	// Room for the filter in the title, as far as FarColorer lets it grow.
+	width := vtui.StringWidth(i18n.Msg("Colorer.Outliner")) + outlineFilterLimit + 8
+	for _, item := range f.Items {
+		width = max(width, vtui.StringWidth(item.Text)+6)
 	}
 	screenW, screenH := vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight()
 	width = min(width, screenW-4)
 	height := min(len(entries)+2, screenH-4)
 	x, y := max((screenW-width)/2, 0), max((screenH-height)/2, 0)
-	menu.SetPosition(x, y, x+width-1, y+height-1)
-	menu.SetSelectPos(selected)
-	menu.OnAction = func(index int) {
-		menu.Close()
-		if index < 0 || index >= len(menu.Items) {
-			return
-		}
-		if entry, ok := menu.Items[index].UserData.(colorerOutlineEntry); ok {
-			ev.gotoColorerOutline(entry)
-		}
-	}
-	vtui.FrameManager.Push(menu)
+	f.SetPosition(x, y, x+width-1, y+height-1)
+	vtui.FrameManager.Push(f)
 }
 
 // gotoColorerOutline puts the cursor on an outline entry and the entry's line
