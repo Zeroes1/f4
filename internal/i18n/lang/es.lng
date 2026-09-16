@@ -2063,3 +2063,4 @@ SettingsCenter.Text.0b6773444443873506aec5bd73f0b9f8a3c014200a33ccbf7be6c552d51f
 SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea545c82=Una copia recién creada recibe los permisos de su origen, y un archivo sobrescrito conserva los suyos.
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=La copia siempre recibe los permisos de su origen, incluso si sobrescribió un archivo existente.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=La copia recibe los permisos de la carpeta donde queda; un archivo pierde además los bits de ejecución de esa carpeta.
+SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Según el tipo de archivo (Colorer)

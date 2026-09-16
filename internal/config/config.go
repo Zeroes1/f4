@@ -924,7 +924,7 @@ func LoadConfig() {
 	App.EditorColorerHrcSettings = merged.GetString("Editor", "ColorerHrcSettings", "")
 	App.EditorCrossMode = ColorerCrossBoth
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "CrossMode", "3"), "%d", &App.EditorCrossMode)
-	if App.EditorCrossMode < ColorerCrossOff || App.EditorCrossMode > ColorerCrossBoth {
+	if App.EditorCrossMode < ColorerCrossOff || App.EditorCrossMode > ColorerCrossScheme {
 		App.EditorCrossMode = ColorerCrossBoth
 	}
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "DefaultCodePage", "65001"), "%d", &App.EditorDefaultCodePage)

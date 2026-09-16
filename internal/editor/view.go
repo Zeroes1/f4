@@ -951,7 +951,7 @@ func (ev *EditorView) startHighlighting() {
 			})
 		}()
 
-		bgAttr := ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText])
+		bgAttr := ev.colorerBaseAttr()
 
 		startedAt := time.Now()
 		walked := 0
@@ -1052,7 +1052,7 @@ func (ev *EditorView) updateDesiredVisualCol() {
 	ev.DesiredVisualCol = vCol + ev.CursorVirtualSpaces
 }
 func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
-	bgAttr := ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText])
+	bgAttr := ev.colorerBaseAttr()
 	offAttr := vtui.Palette[theme.ColEditorStatus]
 	currOffset := ev.HexTopOffset
 	absPos := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
@@ -1133,7 +1133,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 	}
 }
 func (ev *EditorView) renderDecode(scr *vtui.ScreenBuf, width, contentHeight int) {
-	bgAttr := ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText])
+	bgAttr := ev.colorerBaseAttr()
 	offAttr := vtui.Palette[theme.ColEditorStatus]
 	currOffset := ev.HexTopOffset
 	absPos := int(ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos)
@@ -1501,7 +1501,7 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 		width--
 	}
 
-	bgAttr := ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText])
+	bgAttr := ev.colorerBaseAttr()
 	selAttr := vtui.Palette[vtui.ColDialogEditSelected]
 
 	if ev.Saving {
@@ -1566,6 +1566,7 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 	crossVRow, crossVCol := -1, -1
 	var horzCrossAttr, vertCrossAttr uint64
 	if showHorz, showVert, hAttr, vAttr := CrossAttrs(); ev.IsFocused() {
+		showHorz, showVert = ev.colorerCrossAxes(showHorz, showVert)
 		if showHorz {
 			crossVRow = curVRow
 			horzCrossAttr = hAttr

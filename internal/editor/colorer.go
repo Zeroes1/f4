@@ -615,6 +615,7 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 
 		selected, sErr := session.SelectType(filename, firstLine)
 		detected, _ := session.FileType()
+		settings := readColorerTypeSettings(session)
 		vtui.DebugLog("COLORER: SelectType(%q, len=%d) -> selected=%v, err=%v", filename, len(firstLine), selected, sErr)
 		if sErr != nil || !selected {
 			session.Close()
@@ -639,6 +640,8 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 			ch.fallback = nil
 			ch.session = session
 			ch.detectedType = detected
+			ch.typeSettings = settings
+			ch.workerTypeSettings = settings
 			ch.starting = false
 			ch.attrCache = nil
 			ch.parsedIdx = 0
@@ -710,6 +713,13 @@ type ColorerHighlighter struct {
 	detectedType     string
 	workerFileType   string
 
+	// The file type's parameters FarEditor::reloadTypeSettings applies:
+	// typeSettings for the UI, workerTypeSettings for the worker, which
+	// reads them whenever it gives its session a type and hands changes to
+	// the UI.
+	typeSettings       colorerTypeSettings
+	workerTypeSettings colorerTypeSettings
+
 	// The session and its worker share this context. The worker is the only
 	// goroutine allowed to call ParseLine/Reset/SelectType on the live session;
 	// the UI only queues immutable line snapshots and consumes results.
@@ -773,7 +783,9 @@ func (ch *ColorerHighlighter) attrsForSyntax(line string, regions []colorer.Regi
 			IsBackSet: reg.IsBackSet,
 		}
 
-		if toEOL {
+		// fullback=no keeps the colour of a region running to the end of
+		// the line on its text, off the rest of the row.
+		if toEOL && !ch.workerTypeSettings.plainEOL {
 			eolBg = applyColorerStyle(eolBg, &rd)
 		}
 		for i := start; i < end; i++ {

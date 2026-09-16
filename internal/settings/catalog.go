@@ -108,7 +108,7 @@ EditorUseEditorConfig|editor|Text input|Read adjacent .editorconfig|Apply matchi
 EditorAutoComplete|editor|Completion|Editor completion|Enable completion in newly opened named files whose basenames match the configured masks.||new editors
 EditorAutoCompleteMask|editor|Completion|Completion filename masks|Semicolon-separated, case-insensitive filename patterns selecting files eligible for editor completion.||new editors
 EditorCrosshair|editor|Visual aids|Show cursor crosshair|Draw cursor guide lines using the selected axis mode.||live
-EditorCrossMode|editor|Visual aids|Crosshair axes|Select no guide, a vertical guide, a horizontal guide, or both. Colorer can supply guide colors but the behavior is editor-wide.|0:None;1:Vertical;2:Horizontal;3:Both|live
+EditorCrossMode|editor|Visual aids|Crosshair axes|Select no guide, a vertical guide, a horizontal guide, or both. Colorer can supply guide colors but the behavior is editor-wide.|0:None;1:Vertical;2:Horizontal;3:Both;4:By file type (Colorer)|live
 EditorMarkOccurrences|editor|Visual aids|Highlight selected-text occurrences|Highlight other exact occurrences of an ordinary single-line selection of 2-256 bytes containing non-whitespace. This does not automatically highlight the cursor word.||live
 EditorAutodetectCodePage|editor|Text encoding|Detect editor encoding|Detect text encoding when opening a file in the editor.||new editors
 EditorDefaultCodePage|editor|Text encoding|Default editor encoding|Fallback encoding when detection is disabled or cannot determine a better result. Per-file overrides remain separate.||new editors

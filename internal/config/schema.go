@@ -66,6 +66,9 @@ const (
 	ColorerCrossVertical
 	ColorerCrossHorizontal
 	ColorerCrossBoth
+	// ColorerCrossScheme leaves the axes to the file type's show-cross
+	// parameter, FarColorer's "if included in the scheme" cross setting.
+	ColorerCrossScheme
 )
 
 // ---- from image_slideshow.go ----

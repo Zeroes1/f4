@@ -3,7 +3,6 @@ package editor
 import (
 	"unicode/utf8"
 
-	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtui"
 )
 
@@ -119,7 +118,7 @@ func (ch *ColorerHighlighter) continuePairSearch() {
 		ch.pairSearch = nil
 		return
 	}
-	ch.queueLine(target, text, ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText]))
+	ch.queueLine(target, text, ev.colorerBaseAttr())
 	if ch.pending {
 		// Esc stops the search, not Colorer: the job it queued is ordinary
 		// highlighting and may finish.

@@ -392,9 +392,28 @@ Issue #277, step 6.
   hrc-settings file loaded after the user's schemes.
 - The Colorer settings dialog now puts each path's label beside its field,
   to make room for this one and the button.
-- Not yet: f4 does not act on these parameters. FarEditor::reloadTypeSettings
-  applies show-cross, cross-zorder, maxlinelength, backparse, fullback,
-  default-fore and default-back; that is the next step.
+- What f4 acts on, as FarEditor::reloadTypeSettings reads it ("default"
+  first, the file's type on top; `readColorerTypeSettings`):
+  - show-cross, through the new cross mode "By file type"
+    (`ColorerCrossScheme`, FarColorer's "if included in the scheme"): the
+    crosshair's axes are the file type's;
+  - maxlinelength: Colorer parses at most that many characters of a line,
+    as FarEditor::getLine cuts it; the rest takes the base colour;
+  - fullback=no: a region running to the end of the line keeps its colour
+    on the text, not on the rest of the row;
+  - default-fore and default-back: the base colour of the file's text,
+    which regions without colours of their own take.
+  The worker reads them when it gives its session a type and hands changes
+  to the UI, which recomputes the colours. An editor already open keeps the
+  values it read until its type changes or it is reopened; FarColorer applies
+  a changed profile to open editors.
+- Not applied: backparse limits how far FarColorer's parser runs on from the
+  top of the file; f4 anchors near the viewport instead (3.2), with its own
+  limits. cross-zorder decides whether a region's own background shows
+  through the cross or the cross covers it; f4's cross replaces the background
+  of every cell it crosses and keeps the text colour, and the cached colours
+  do not record which backgrounds a region set, so the distinction cannot be
+  drawn from them.
 
 ---
 

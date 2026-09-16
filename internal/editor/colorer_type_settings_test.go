@@ -1,0 +1,114 @@
+package editor
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/vtui"
+)
+
+func TestColorerParamIntAndHex(t *testing.T) {
+	for in, want := range map[string]int{"5000": 5000, " 12abc": 12, "-3": -3, "": 7, "x1": 7} {
+		if got := colorerParamInt(in, 7); got != want {
+			t.Errorf("colorerParamInt(%q) = %d, want %d", in, got, want)
+		}
+	}
+	for in, want := range map[string]int{"#102030": 0x102030, "ff": 0xff, "0x10": 0x10, "": -1, "zz": -1} {
+		if got := colorerParamHex(in, -1); got != want {
+			t.Errorf("colorerParamHex(%q) = %#x, want %#x", in, got, want)
+		}
+	}
+}
+
+func TestColorerTypeSettingsHelpers(t *testing.T) {
+	s := colorerTypeSettings{maxLineLength: 3, showCross: "vertical", fore: 0x112233, back: -1}
+	if got := s.truncate("aЖbcd"); got != "aЖb" {
+		t.Errorf("truncate = %q", got)
+	}
+	if got := (colorerTypeSettings{}).truncate("abcdef"); got != "abcdef" {
+		t.Errorf("no limit truncated to %q", got)
+	}
+	if h, v := s.crossAxes(); h || !v {
+		t.Errorf("vertical axes %v %v", h, v)
+	}
+	attr := s.baseAttr(0)
+	if vtui.GetRGBFore(attr) != 0x112233 {
+		t.Errorf("base fore %#x", vtui.GetRGBFore(attr))
+	}
+}
+
+// FarEditor::reloadTypeSettings from a real session: "default" from
+// plug/hrcsettings.xml, the file's type on top from the user's profile.
+func TestReadColorerTypeSettings(t *testing.T) {
+	config.GetF4ConfigDir()
+	old := config.CachedF4ConfigDir
+	config.CachedF4ConfigDir = t.TempDir()
+	t.Cleanup(func() { config.CachedF4ConfigDir = old })
+	ResetColorerSessions()
+	t.Cleanup(ResetColorerSessions)
+
+	configs := checkConfigs(t)
+	files := map[string]string{
+		"base/catalog.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="http://colorer.github.io/schema/v1/catalog">
+  <hrc-sets><location link="hrc/default.hrc"/></hrc-sets>
+  <hrd-sets>
+    <hrd class="rgb" name="default" description="Default"><location link="hrd/default.hrd"/></hrd>
+  </hrd-sets>
+</catalog>
+`,
+		"base/hrc/default.hrc": `<?xml version="1.0" encoding="UTF-8"?>
+<hrc version="take5" xmlns="http://colorer.sf.net/2003/hrc">
+  <prototype name="default" group="other" description="default type">
+    <location link="default.hrc"/>
+  </prototype>
+  <type name="default"><scheme name="default"/></type>
+</hrc>
+`,
+		"plug/hrcsettings.xml": `<hrc-settings><prototype name="default">
+<param name="show-cross" value="none"/>
+<param name="maxlinelength" value="5000"/>
+<param name="fullback" value="yes"/>
+<param name="default-fore" value=""/>
+<param name="default-back" value=""/>
+</prototype></hrc-settings>`,
+	}
+	for rel, content := range files {
+		path := filepath.Join(configs, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	if err := saveColorerProfile(map[string]map[string]string{"pairtest": {"show-cross": "both", "fullback": "no", "default-back": "#202020", "maxlinelength": "80"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	session, err := acquireCancelableColorerSession(context.Background(), ColorerSource{ConfigsDir: configs, UserHRC: user})
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+	defer session.Close()
+	if ok, err := session.SetFileType("pairtest"); err != nil || !ok {
+		t.Fatalf("SetFileType: %v, %v", ok, err)
+	}
+	got := readColorerTypeSettings(session)
+	want := colorerTypeSettings{maxLineLength: 80, plainEOL: true, showCross: "both", fore: -1, back: 0x202020}
+	if got != want {
+		t.Errorf("settings %+v, want %+v", got, want)
+	}
+
+	if ok, _ := session.SetFileType("default"); !ok {
+		t.Fatal("SetFileType(default)")
+	}
+	if got := readColorerTypeSettings(session); got != (colorerTypeSettings{maxLineLength: 5000, showCross: "none", fore: -1, back: -1}) {
+		t.Errorf("default settings %+v", got)
+	}
+}

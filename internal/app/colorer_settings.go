@@ -28,6 +28,7 @@ func colorerCrossModeItems() []string {
 		i18n.Msg("ColorerSettings.CrossVertical"),
 		i18n.Msg("ColorerSettings.CrossHorizontal"),
 		i18n.Msg("ColorerSettings.CrossBoth"),
+		i18n.Msg("ColorerSettings.CrossScheme"),
 	}
 }
 
@@ -43,7 +44,8 @@ func crossModeAxes(mode int) (horz, vert bool) {
 		return false, true
 	case config.ColorerCrossHorizontal:
 		return true, false
-	case config.ColorerCrossBoth:
+	case config.ColorerCrossBoth, config.ColorerCrossScheme:
+		// In the scheme mode the editor narrows the axes to the file type's.
 		return true, true
 	}
 	return false, false

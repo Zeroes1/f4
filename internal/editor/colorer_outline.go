@@ -7,7 +7,6 @@ import (
 
 	colorer "github.com/unxed/colorer4go"
 	"github.com/unxed/f4/internal/i18n"
-	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtui"
 )
 
@@ -93,7 +92,7 @@ func (ch *ColorerHighlighter) continueOutline() {
 		ch.outlineBuild = nil
 		return
 	}
-	ch.queueLine(b.next, text, ColorerEditorBaseAttr(vtui.Palette[theme.ColEditorText]))
+	ch.queueLine(b.next, text, ev.colorerBaseAttr())
 	if ch.pending {
 		ev.colorerCancel = func() { ch.outlineBuild = nil }
 	}

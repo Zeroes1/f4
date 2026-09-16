@@ -60,6 +60,7 @@ func TestColorerCrossModeItems_FollowTheModeOrder(t *testing.T) {
 		i18n.Msg("ColorerSettings.CrossVertical"),
 		i18n.Msg("ColorerSettings.CrossHorizontal"),
 		i18n.Msg("ColorerSettings.CrossBoth"),
+		i18n.Msg("ColorerSettings.CrossScheme"),
 	}
 	if len(got) != len(want) {
 		t.Fatalf("colorerCrossModeItems() has %d items; want %d", len(got), len(want))

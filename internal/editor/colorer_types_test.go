@@ -76,7 +76,10 @@ func TestColorerSetFileType_RehighlightsAsTheType(t *testing.T) {
 
 	ev := NewEditorView(piecetable.New([]byte("{\n}\n")), nil, "a.txt")
 	defer ev.Close()
-	ch := &ColorerHighlighter{owner: ev, postTask: vtui.FrameManager.PostTask, redraw: func() {}, colorerSrc: src, filename: "a.txt"}
+	ch := &ColorerHighlighter{owner: ev, postTask: vtui.FrameManager.PostTask, colorerSrc: src, filename: "a.txt"}
+	// A redraw asks for the line again, as the editor's drawing does: new
+	// type settings drop what was computed with the old ones.
+	ch.redraw = func() { ch.HighlightLine(0, "{", 0) }
 	ch.SetLineSource(ev.lineTextForHighlight)
 	ev.Highlighter = ch
 	ch.session = session
@@ -93,6 +96,9 @@ func TestColorerSetFileType_RehighlightsAsTheType(t *testing.T) {
 	pumpUntil(t, "line 0 parsed as pairtest", func() bool { _, ok := ch.cachedPairs(0); return ok && !ch.pending })
 	if pairs, _ := ch.cachedPairs(0); len(pairs) != 1 || !pairs[0].Opens {
 		t.Fatalf("pairs as pairtest: %+v", pairs)
+	}
+	if ch.typeSettings.fore != -1 || ch.typeSettings.back != -1 {
+		t.Errorf("type settings %+v were not adopted from the worker", ch.typeSettings)
 	}
 
 }

@@ -83,8 +83,8 @@ colorer4go's `FileTypeParams`, `ResetFileTypeParam` and `WithUserHRCSettings`;
 f4's HRC settings dialog and the user HRC settings path. See HIGHLIGHT.md
 3.13.
 
-## Step 6b — make the parameters count
+## Step 6b — make the parameters count (done)
 
-FarEditor::reloadTypeSettings: show-cross (FarColorer's "if the scheme says"
-cross mode), cross-zorder, maxlinelength, backparse, fullback, default-fore
-and default-back.
+show-cross (cross mode "By file type"), maxlinelength, fullback, default-fore
+and default-back. backparse and cross-zorder are not applied, for the
+reasons in HIGHLIGHT.md 3.13.

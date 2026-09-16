@@ -100,7 +100,7 @@ func (ch *ColorerHighlighter) runWorker(ctx context.Context, session *colorer.Se
 				if ctx.Err() != nil {
 					return
 				}
-				if _, err := session.ParseLine(contextLine); err != nil {
+				if _, err := session.ParseLine(ch.workerTypeSettings.truncate(contextLine)); err != nil {
 					vtui.DebugLog("COLORER: ParseLine failed in context at line %d: %v", job.contextStart+i, err)
 					ch.postColorerResult(colorerResult{job: job, err: err})
 					return
@@ -126,6 +126,7 @@ func (ch *ColorerHighlighter) runWorker(ctx context.Context, session *colorer.Se
 				if ctx.Err() != nil {
 					return
 				}
+				lineText = ch.workerTypeSettings.truncate(lineText)
 				regions, pairs, err := session.ParseLinePairs(lineText)
 				var outline []colorer.OutlineItem
 				if err == nil {
@@ -194,7 +195,8 @@ func currentColorerSchemeName() string {
 }
 
 func (ch *ColorerHighlighter) prepareWorkerSession(ctx context.Context, session *colorer.Session, job colorerJob, parsedIdx, forgottenUpTo *int) error {
-	needReset := job.reset || *parsedIdx != job.contextStart || job.fileType != ch.workerFileType
+	typeChanged := job.fileType != ch.workerFileType
+	needReset := job.reset || *parsedIdx != job.contextStart || typeChanged
 	if needReset {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -214,6 +216,15 @@ func (ch *ColorerHighlighter) prepareWorkerSession(ctx context.Context, session 
 			}
 		}
 		ch.workerFileType = job.fileType
+		if typeChanged {
+			// The type's own parameters come with it.
+			if settings := readColorerTypeSettings(session); settings != ch.workerTypeSettings {
+				ch.workerTypeSettings = settings
+				if ch.postTask != nil {
+					ch.postTask(func() { ch.adoptTypeSettings(settings) })
+				}
+			}
+		}
 		*parsedIdx = job.contextStart
 		*forgottenUpTo = job.contextStart
 	}
