@@ -18,19 +18,20 @@ func TestMountListHelpers(t *testing.T) {
 	mountPoint := filepath.Join(string(filepath.Separator)+"tmp", "f4-mount")
 	child := filepath.Join(mountPoint, "child")
 	for _, tc := range []struct {
-		name string
-		path string
-		want bool
+		name  string
+		path  string
+		mount string
+		want  bool
 	}{
-		{name: "empty panel", path: "", want: false},
-		{name: "empty mount", path: child, want: false},
-		{name: "mount itself", path: mountPoint, want: true},
-		{name: "child", path: child, want: true},
-		{name: "prefix sibling", path: mountPoint + "-other", want: false},
+		{name: "empty panel", path: "", mount: mountPoint, want: false},
+		{name: "empty mount", path: child, mount: "", want: false},
+		{name: "mount itself", path: mountPoint, mount: mountPoint, want: true},
+		{name: "child", path: child, mount: mountPoint, want: true},
+		{name: "prefix sibling", path: mountPoint + "-other", mount: mountPoint, want: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := withinMount(tc.path, mountPoint); got != tc.want {
-				t.Fatalf("withinMount(%q, %q) = %v; want %v", tc.path, mountPoint, got, tc.want)
+			if got := withinMount(tc.path, tc.mount); got != tc.want {
+				t.Fatalf("withinMount(%q, %q) = %v; want %v", tc.path, tc.mount, got, tc.want)
 			}
 		})
 	}
