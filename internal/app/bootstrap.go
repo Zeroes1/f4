@@ -675,14 +675,11 @@ func runGuiBackend(backend string, fromConfig bool) error {
 }
 
 func shouldTryGui() bool {
-	if vtui.IsWine() {
-		// Under Wine, default to console mode (wineconsole / terminal).
-		// Win32 GUI mode is available via --gui=win32, --gui, or f4-gui.exe.
-		return false
-	}
 	if runtime.GOOS == "windows" {
-		// On native Windows, we compile separate binaries for console (f4.exe) and GUI (f4-gui.exe).
-		// We do not auto-detect GUI mode; it must be requested via filename or --gui flag.
+		// Windows ships separate binaries for console (f4.exe) and GUI
+		// (f4-gui.exe). GUI mode is not auto-detected; it must be requested
+		// via the filename or the --gui flag. Wine gets exactly the same
+		// rules (issue #474).
 		return false
 	}
 	// A terminal launch must stay in console mode even when the shell has a
@@ -707,12 +704,9 @@ func setupGuiUI() {
 }
 
 func tryRunDefaultGui() error {
-	if vtui.IsWine() {
-		vtui.DebugLog("GUI_AUTO: Under Wine, trying win32 GUI backend...")
-		if err := gui.RunGui("win32", setupGuiUI); err == nil {
-			return nil
-		}
-	}
+	// Wine follows the Windows order below unchanged (issue #474): it used
+	// to try win32 once on its own first and, if that failed, drop the error
+	// and try win32 a second time here.
 	var errs []string
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 

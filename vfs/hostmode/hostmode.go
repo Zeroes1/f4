@@ -6,11 +6,11 @@
 package hostmode
 
 import (
-	"fmt"
 	"os"
 	"sync"
 
 	winescape "github.com/unxed/libwinescape/go"
+	"github.com/unxed/vtui"
 )
 
 var (
@@ -40,22 +40,25 @@ func Posix() bool {
 		switch os.Getenv("F4_WINE_POSIX") {
 		case "1":
 			posix = true
-			fmt.Fprintf(os.Stderr, "[f4-wine] posix mode: forced ON via F4_WINE_POSIX=1\n")
+			vtui.DebugLog("[f4-wine] posix mode: forced ON via F4_WINE_POSIX=1")
 			return
 		case "0":
 			posix = false
-			fmt.Fprintf(os.Stderr, "[f4-wine] posix mode: forced OFF via F4_WINE_POSIX=0\n")
+			vtui.DebugLog("[f4-wine] posix mode: forced OFF via F4_WINE_POSIX=0")
 			return
 		}
 		isWine := winescape.IsWine()
 		available := winescape.Available()
 		hostOS := winescape.HostOS()
 		posix = isWine && available
-		// Deliberately a plain stderr print, not vtui.DebugLog: this needs
-		// to be visible on the very first run, from a plain terminal,
-		// without --debug or knowing where the debug log file lives --
-		// it's the answer to "why didn't posix mode turn on" (WINE.md §13).
-		fmt.Fprintf(os.Stderr, "[f4-wine] posix mode probe: IsWine=%v Available=%v HostOS=%q -> posix=%v\n",
+		// The answer to "why didn't posix mode turn on" (WINE.md §13) goes
+		// to the debug log, not to stderr. In f4's startup, by the time
+		// anything asks, stderr is already the session's crash log
+		// (vtui.SetupStderrLog), so a print here never reached a terminal;
+		// it only made that file non-empty, and a non-empty crash log is
+		// kept on exit -- every start on Windows and under Wine left one
+		// behind (issue #474).
+		vtui.DebugLog("[f4-wine] posix mode probe: IsWine=%v Available=%v HostOS=%q -> posix=%v",
 			isWine, available, hostOS, posix)
 	})
 	return posix
