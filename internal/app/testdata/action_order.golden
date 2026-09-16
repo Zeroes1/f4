@@ -160,6 +160,9 @@ Editor.InsertLeftPanelPath
 Editor.InsertRightPanelPath
 Editor.InsertActivePanelFileName
 Editor.DeleteSpacersForward
+Editor.ColorerMatchPair
+Editor.ColorerSelectPair
+Editor.ColorerSelectBlock
 Viewer.SwitchToEditor
 Viewer.Reload
 Viewer.Quit
