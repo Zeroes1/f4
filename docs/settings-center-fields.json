@@ -901,6 +901,16 @@
   },
   {
     "category": "syntax",
+    "description": "An hrc-settings XML file loaded after the user schemes, whose prototypes override file type parameters, as FarColorer's user HRC settings file. The file name must be ASCII. Empty loads none.",
+    "group": "Colorer",
+    "id": "EditorColorerHrcSettings",
+    "kind": "path",
+    "label": "User Colorer HRC settings",
+    "timing": "Colorer reload",
+    "unavailable": ""
+  },
+  {
+    "category": "syntax",
     "description": "An XML file in the catalog's hrd-sets format, or a folder of .hrd files whose root hrd element names its class, name and description. Links in an hrd-sets file resolve against catalog.xml and must stay inside the configuration directory; file names must be ASCII. Empty loads none.",
     "group": "Colorer",
     "id": "EditorColorerUserHrd",

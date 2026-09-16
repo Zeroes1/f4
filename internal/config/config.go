@@ -451,6 +451,7 @@ type F4Config struct {
 	EditorColorerOldOutline  bool   // list lines, not labels, in the outliner: FarColorer's OldOutlineView
 	EditorColorerUserHrc     string // user schemes, FarColorer's UserHrcPath
 	EditorColorerUserHrd     string // user colour styles, FarColorer's UserHrdPath
+	EditorColorerHrcSettings string // user HRC settings, FarColorer's UserHrcSettingsPath
 	EditorCrossMode          int
 	EditorDefaultCodePage    int
 	// EditorMemoryMap lets the editor map a local file instead of reading it
@@ -630,6 +631,7 @@ var App = F4Config{
 	EditorColorerOldOutline:  true,
 	EditorColorerUserHrc:     "",
 	EditorColorerUserHrd:     "",
+	EditorColorerHrcSettings: "",
 	EditorCrossMode:          ColorerCrossBoth,
 	EditorDefaultCodePage:    65001,
 	EditorMemoryMap:          true,
@@ -919,6 +921,7 @@ func LoadConfig() {
 	App.EditorColorerOldOutline = merged.GetString("Editor", "ColorerOldOutline", "1") == "1"
 	App.EditorColorerUserHrc = merged.GetString("Editor", "ColorerUserHrc", "")
 	App.EditorColorerUserHrd = merged.GetString("Editor", "ColorerUserHrd", "")
+	App.EditorColorerHrcSettings = merged.GetString("Editor", "ColorerHrcSettings", "")
 	App.EditorCrossMode = ColorerCrossBoth
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "CrossMode", "3"), "%d", &App.EditorCrossMode)
 	if App.EditorCrossMode < ColorerCrossOff || App.EditorCrossMode > ColorerCrossBoth {
@@ -1212,6 +1215,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ColorerOldOutline = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerOldOutline])
 	fmt.Fprintf(&sb, "ColorerUserHrc = %s\n", cfg.EditorColorerUserHrc)
 	fmt.Fprintf(&sb, "ColorerUserHrd = %s\n", cfg.EditorColorerUserHrd)
+	fmt.Fprintf(&sb, "ColorerHrcSettings = %s\n", cfg.EditorColorerHrcSettings)
 	fmt.Fprintf(&sb, "CrossMode = %d\n", cfg.EditorCrossMode)
 	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.EditorDefaultCodePage)
 

@@ -76,3 +76,15 @@ Colorer submenu of the editor's F11 menu. See HIGHLIGHT.md 3.11.
 colorer4go's `SetFileType`, `FileType`, `WithHRCSettings`, `FileTypeParam`
 and `SetFileTypeParam`; f4's list of types, its profile in HrcSettings.ini and
 select region. See HIGHLIGHT.md 3.12.
+
+## Step 6a — file type settings dialog, user HRC settings (done)
+
+colorer4go's `FileTypeParams`, `ResetFileTypeParam` and `WithUserHRCSettings`;
+f4's HRC settings dialog and the user HRC settings path. See HIGHLIGHT.md
+3.13.
+
+## Step 6b — make the parameters count
+
+FarEditor::reloadTypeSettings: show-cross (FarColorer's "if the scheme says"
+cross mode), cross-zorder, maxlinelength, backparse, fullback, default-fore
+and default-back.

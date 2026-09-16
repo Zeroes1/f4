@@ -372,6 +372,30 @@ Issue #277, step 5.
   running to the end of the line ending there. The worker keeps each line's
   regions in `regionCache`, beside and evicted with `attrCache`.
 
+### 3.13 File type settings
+
+Issue #277, step 6.
+
+- "File type settings" in the Colorer settings dialog is FarColorer's HRC
+  settings dialog (`actionColorerTypeSettings`): a file type, one of its
+  parameters — the default type's, then the type's own — and its value.
+  show-cross, cross-zorder, fullback and the true/false parameters are
+  picked from a list; maxlinelength, backparse, default-fore, default-back,
+  firstlines, firstlinebytes and hotkey are typed. `<default-...>`, last in
+  the list, takes the user's value back. The value is recorded whenever the
+  dialog moves on from a parameter; OK writes the changes to
+  `colorer/HrcSettings.ini` and drops pooled sessions.
+- The dialog reads every type and parameter up front
+  (`editor.LoadColorerTypeParams`) and holds no session while open.
+- `EditorColorerHrcSettings` (settings.ini `[Editor]
+  ColorerHrcSettings`) is FarColorer's UserHrcSettingsPath: an
+  hrc-settings file loaded after the user's schemes.
+- The Colorer settings dialog now puts each path's label beside its field,
+  to make room for this one and the button.
+- Not yet: f4 does not act on these parameters. FarEditor::reloadTypeSettings
+  applies show-cross, cross-zorder, maxlinelength, backparse, fullback,
+  default-fore and default-back; that is the next step.
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped

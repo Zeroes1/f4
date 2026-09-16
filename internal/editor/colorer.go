@@ -221,14 +221,17 @@ type ColorerSource struct {
 	// of color styles: a file or a folder each, empty for none.
 	UserHRC string
 	UserHRD string
+	// UserHRCSettings is FarColorer's user HRC settings file, empty for none.
+	UserHRCSettings string
 }
 
 // CurrentColorerSource is the source the applied configuration names.
 func CurrentColorerSource() ColorerSource {
 	return ColorerSource{
-		ConfigsDir: ColorerConfigsDir(),
-		UserHRC:    strings.TrimSpace(config.App.EditorColorerUserHrc),
-		UserHRD:    strings.TrimSpace(config.App.EditorColorerUserHrd),
+		ConfigsDir:      ColorerConfigsDir(),
+		UserHRC:         strings.TrimSpace(config.App.EditorColorerUserHrc),
+		UserHRD:         strings.TrimSpace(config.App.EditorColorerUserHrd),
+		UserHRCSettings: strings.TrimSpace(config.App.EditorColorerHrcSettings),
 	}
 }
 
@@ -249,6 +252,9 @@ func (src ColorerSource) userOptions() []colorer.Option {
 	}
 	if src.UserHRC != "" {
 		opts = append(opts, colorer.WithUserHRC(src.UserHRC))
+	}
+	if src.UserHRCSettings != "" {
+		opts = append(opts, colorer.WithUserHRCSettings(src.UserHRCSettings))
 	}
 	return opts
 }

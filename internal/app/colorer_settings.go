@@ -144,7 +144,7 @@ func runColorerCheck(pf *panel.PanelsFrame, src editor.ColorerSource, scheme str
 }
 
 func actionColorerSettings(pf *panel.PanelsFrame) {
-	width, height := 74, 23
+	width, height := 74, 21
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ColorerSettings.Title"))
 	dlg.ShowClose = true
 
@@ -208,17 +208,19 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 		chkBackground.State = 1
 	}
 
-	editCatalog := vtui.NewEdit(0, 0, width-6, config.App.EditorColorerCatalog)
-	editCatalog.ClearSelection()
-	lblCatalog := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.Catalog"), editCatalog)
-
-	// FarColorer's user file of schemes and user file of color styles.
-	editUserHrc := vtui.NewEdit(0, 0, width-6, config.App.EditorColorerUserHrc)
-	editUserHrc.ClearSelection()
-	lblUserHrc := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.UserHrc"), editUserHrc)
-	editUserHrd := vtui.NewEdit(0, 0, width-6, config.App.EditorColorerUserHrd)
-	editUserHrd.ClearSelection()
-	lblUserHrd := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.UserHrd"), editUserHrd)
+	// The paths: FarColorer's catalog, user file of schemes, user file of
+	// color styles and user HRC settings, each label beside its field.
+	pathLabels := padLabels(i18n.Msg("ColorerSettings.Catalog"), i18n.Msg("ColorerSettings.UserHrc"), i18n.Msg("ColorerSettings.UserHrd"), i18n.Msg("ColorerSettings.UserHrcSettings"))
+	pathField := func(value, label string) (*vtui.Edit, *vtui.Text) {
+		edit := vtui.NewEdit(0, 0, width-6, value)
+		edit.ClearSelection()
+		return edit, vtui.NewLabel(0, 0, label, edit)
+	}
+	editCatalog, lblCatalog := pathField(config.App.EditorColorerCatalog, pathLabels[0])
+	editUserHrc, lblUserHrc := pathField(config.App.EditorColorerUserHrc, pathLabels[1])
+	editUserHrd, lblUserHrd := pathField(config.App.EditorColorerUserHrd, pathLabels[2])
+	editUserHrcSettings, lblUserHrcSettings := pathField(config.App.EditorColorerHrcSettings, pathLabels[3])
+	btnTypeSettings := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.TypeSettings"))
 
 	btnReload := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.Reload"))
 	btnCheckAll := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.CheckAll"))
@@ -243,9 +245,12 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	dlg.AddItem(editUserHrc)
 	dlg.AddItem(lblUserHrd)
 	dlg.AddItem(editUserHrd)
+	dlg.AddItem(lblUserHrcSettings)
+	dlg.AddItem(editUserHrcSettings)
 	dlg.AddItem(btnReload)
 	dlg.AddItem(btnCheckAll)
 	dlg.AddItem(btnDownload)
+	dlg.AddItem(btnTypeSettings)
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnCancel)
 
@@ -273,12 +278,19 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	rowChecks.Add(chkBackground, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(rowChecks, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	vbox.Add(lblCatalog, vtui.Margins{Top: 1}, vtui.AlignLeft)
-	vbox.Add(editCatalog, vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(lblUserHrc, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(editUserHrc, vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(lblUserHrd, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(editUserHrd, vtui.Margins{}, vtui.AlignFill)
+	for i, path := range []struct {
+		lbl  *vtui.Text
+		edit *vtui.Edit
+	}{{lblCatalog, editCatalog}, {lblUserHrc, editUserHrc}, {lblUserHrd, editUserHrd}, {lblUserHrcSettings, editUserHrcSettings}} {
+		r := vtui.NewHBoxLayout(0, 0, width-4, 1)
+		r.Add(path.lbl, vtui.Margins{Right: 1}, vtui.AlignLeft)
+		r.Add(path.edit, vtui.Margins{}, vtui.AlignFill)
+		top := 0
+		if i == 0 {
+			top = 1
+		}
+		vbox.Add(r, vtui.Margins{Top: top}, vtui.AlignFill)
+	}
 
 	rowTools := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	rowTools.HorizontalAlign = vtui.AlignCenter
@@ -287,6 +299,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	rowTools.Add(btnCheckAll, vtui.Margins{}, vtui.AlignTop)
 	rowTools.Add(btnDownload, vtui.Margins{}, vtui.AlignTop)
 	vbox.Add(rowTools, vtui.Margins{Top: 1}, vtui.AlignFill)
+	rowTypes := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	rowTypes.HorizontalAlign = vtui.AlignCenter
+	rowTypes.Add(btnTypeSettings, vtui.Margins{}, vtui.AlignTop)
+	vbox.Add(rowTypes, vtui.Margins{}, vtui.AlignFill)
 
 	rowButtons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	rowButtons.HorizontalAlign = vtui.AlignCenter
@@ -316,6 +332,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 		config.App.EditorColorerCatalog = strings.TrimSpace(editCatalog.GetText())
 		config.App.EditorColorerUserHrc = strings.TrimSpace(editUserHrc.GetText())
 		config.App.EditorColorerUserHrd = strings.TrimSpace(editUserHrd.GetText())
+		config.App.EditorColorerHrcSettings = strings.TrimSpace(editUserHrcSettings.GetText())
 		// The catalog may now point somewhere else, so the styles are dropped
 		// instead of being kept under the same name.
 		editor.ResetColorerScheme()
@@ -326,9 +343,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	// What the dialog would apply: the configuration a check has to load.
 	pending := func() (editor.ColorerSource, string) {
 		src := editor.ColorerSource{
-			ConfigsDir: strings.TrimSpace(editCatalog.GetText()),
-			UserHRC:    strings.TrimSpace(editUserHrc.GetText()),
-			UserHRD:    strings.TrimSpace(editUserHrd.GetText()),
+			ConfigsDir:      strings.TrimSpace(editCatalog.GetText()),
+			UserHRC:         strings.TrimSpace(editUserHrc.GetText()),
+			UserHRD:         strings.TrimSpace(editUserHrd.GetText()),
+			UserHRCSettings: strings.TrimSpace(editUserHrcSettings.GetText()),
 		}
 		if src.ConfigsDir == "" {
 			src.ConfigsDir = editor.DefaultColorerConfigsDir()
@@ -341,6 +359,13 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	}
 
 	btnCancel.OnClick = func() { dlg.Close() }
+
+	// FarColorer's "HRC settings": parameters of each file type, from the
+	// configuration the dialog would apply.
+	btnTypeSettings.OnClick = func() {
+		src, _ := pending()
+		actionColorerTypeSettings(src)
+	}
 
 	// As FarColorer's OK does: a changed configuration is loaded first, and one
 	// Colorer cannot load keeps the dialog open. What Colorer merely reports is

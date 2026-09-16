@@ -126,6 +126,7 @@ EditorColorerCatalog|syntax|Colorer|Colorer configuration directory|Directory co
 EditorColorerPairs|syntax|Colorer|Highlight pairs|Draw the paired token under the cursor, such as a bracket, and its match when it is on screen, in the colors the Colorer scheme gives pairs.||live
 EditorColorerOldOutline|syntax|Colorer|Old outline view|List each outlined line's text in the Colorer outliner, as FarColorer's default old outline view does, instead of line numbers, tree indentation and labels.||next outliner
 EditorColorerUserHrc|syntax|Colorer|User Colorer schemes|An .hrc file, or a folder whose .hrc files are all loaded except *.ent.hrc, added to the catalog's schemes. Links inside must stay within that folder, and the file names Colorer opens must be ASCII. Empty loads none.||Colorer reload
+EditorColorerHrcSettings|syntax|Colorer|User Colorer HRC settings|An hrc-settings XML file loaded after the user schemes, whose prototypes override file type parameters, as FarColorer's user HRC settings file. The file name must be ASCII. Empty loads none.||Colorer reload
 EditorColorerUserHrd|syntax|Colorer|User Colorer color styles|An XML file in the catalog's hrd-sets format, or a folder of .hrd files whose root hrd element names its class, name and description. Links in an hrd-sets file resolve against catalog.xml and must stay inside the configuration directory; file names must be ASCII. Empty loads none.||Colorer reload
 MacKeyboard|keyboard|Editing chords|Mac keyboard mode|Use Mac-style editing chords in editors and dialog fields. Auto enables them on macOS; panels retain Far navigation. Command translation requires backend support.|auto:Automatic;on:On;off:Off|live
 MenuLoopScroll|keyboard|Menu navigation|Loop list scrolling|When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.||live
@@ -175,7 +176,7 @@ func coreSettingsFields() []f4settings.Field {
 		if f.ID == "ProxyPort" {
 			f.InputWidth = 6
 		}
-		if f.ID == "EditorColorerCatalog" || f.ID == "EditorColorerUserHrc" || f.ID == "EditorColorerUserHrd" {
+		if f.ID == "EditorColorerCatalog" || f.ID == "EditorColorerUserHrc" || f.ID == "EditorColorerUserHrd" || f.ID == "EditorColorerHrcSettings" {
 			f.Kind = f4settings.Path
 		}
 		if f.Timing == "unavailable" {
