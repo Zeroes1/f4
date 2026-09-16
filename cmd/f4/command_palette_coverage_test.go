@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 49
+const commandPaletteF4Surfaces = 50
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -217,6 +217,9 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"editor.newColorerOutlineFrame#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered Colorer outline actions open a runtime list of functions or syntax errors",
+	},
+	"editor.(*EditorView).ColorerChooseType#1": {
+		class: paletteAuditDynamicAction, rationale: "the registered Colorer syntax action opens a runtime list of file types",
 	},
 	"panel.(*AssocEditorState).openList#1": {
 		class: paletteAuditModalLocal, rationale: "association rows are edited inside the file-association settings workflow",
