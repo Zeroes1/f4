@@ -97,7 +97,7 @@ func TestShareNoticeCoversProviderSpecificGuidance(t *testing.T) {
 
 	google := vfs.ShareLinkInfo{
 		Provider:                     "Google Drive",
-		Notice:                       "The owner does not allow changes",
+		Notice:                       "They do not allow changes",
 		UnmanagedPublicAccess:        true,
 		LinkDiscoverabilityInherited: true,
 		LinkInherited:                true,
@@ -144,6 +144,7 @@ func TestFormattedShareNoticeKeepsDialogHeightBounded(t *testing.T) {
 
 func TestSetShareComboItemsClampsSelectionAndHandlesNoop(t *testing.T) {
 	combo := vtui.NewComboBox(0, 0, 20, []string{"old"})
+	combo.Edit.SetText("old")
 	setShareComboItems(nil, []string{"ignored"}, 0)
 	setShareComboItems(combo, nil, 0)
 	if len(combo.Menu.Items) != 1 || combo.Edit.GetText() != "old" {
