@@ -45,6 +45,36 @@ func TestHistorySearchFiltersAndTogglesPrefixMode(t *testing.T) {
 	}
 }
 
+// #263: vtui menus gained a Ctrl+Alt+F item filter that takes typed keys
+// ahead of OnKeyDown. The history dialogs filter by themselves, so the keys
+// must keep reaching processKey and the vtui filter must never engage.
+func TestHistorySearchKeepsVtuiMenuFilterOff(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	menu := vtui.NewVMenu("History")
+	search := newHistorySearch(menu, []history.HistoryRecord{{Name: "git status"}, {Name: "git commit"}, {Name: "dir"}}, "")
+	defer search.cleanup()
+	menu.OnKeyDown = search.processKey
+
+	if !menu.DisableFilter {
+		t.Fatal("newHistorySearch must turn the vtui item filter off")
+	}
+	menu.ProcessKey(&vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_F,
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed,
+	})
+	for _, r := range "git" {
+		menu.ProcessKey(historyKey(r))
+	}
+	if menu.FilterText() != "" {
+		t.Fatalf("the vtui filter engaged with %q", menu.FilterText())
+	}
+	if string(search.query) != "git" || len(menu.Items) != 2 {
+		t.Fatalf("typed keys did not reach the history search: query %q, %d items", string(search.query), len(menu.Items))
+	}
+}
+
 func TestHistorySearchTimeAndDirectoryModes(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	menu := vtui.NewVMenu("History")

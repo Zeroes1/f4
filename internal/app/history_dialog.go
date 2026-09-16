@@ -57,6 +57,11 @@ type historySearchEntry struct {
 }
 
 func newHistorySearch(menu *vtui.VMenu, items []history.HistoryRecord, hint string) *historySearch {
+	// These dialogs filter as you type by themselves: they rebuild Items
+	// and repaint the rows over the menu. vtui's Ctrl+Alt+F item filter
+	// hides rows of the same menu instead, and would take the typed keys
+	// before OnKeyDown passes them to processKey, so it stays off (#263).
+	menu.DisableFilter = true
 	menu.ColorTextIdx = vtui.ColDialogText
 	menu.ColorSelectedTextIdx = vtui.ColDialogSelectedButton
 	menu.ColorHighlightIdx = vtui.ColDialogHighlightText
