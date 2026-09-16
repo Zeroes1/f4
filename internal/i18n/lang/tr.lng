@@ -1095,7 +1095,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Fallback görüntüleyicisi ve 
 SettingsCenter.ViewerDefaultCodePage.Label=Öntanımlı görüntüleyici kodlaması
 SettingsCenter.ViewerOpenAsSupportedType.Description=Açıkken bir resmi görüntülemek resim görüntüleyicisini, bir videoyu görüntülemek video oynatıcıyı açar; terminal bunları gösterebiliyorsa. Kapalıyken her dosya metin ve onaltılık görüntüleyicide açılır.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Resimleri ve videoları kendi görüntüleyicilerinde aç
-SettingsCenter.ViewerHighlighting.Description=Hızlı görünüm panelinde sözdizimini düzenleyicinin vurgulayıcısıyla, Chroma ya da Colorer, vurgula ya da hiçbir yerde vurgulama. Varsayılan olarak kapalı: görüntüleyici dosyaya hemen bakmak içindir ve vurgulama zaman alır.
+SettingsCenter.ViewerHighlighting.Description=Sözdizimini düzenleyicinin vurgulayıcısıyla, Chroma ya da Colorer, vurgula: hiçbir yerde, yalnızca hızlı görünüm panelinde ya da tüm görüntüleyicilerde. Varsayılan olarak kapalı: görüntüleyici dosyaya hemen bakmak içindir ve vurgulama zaman alır.
 SettingsCenter.ViewerHighlighting.Label=Görüntüleyicilerde sözdizimi vurgulama
 SettingsCenter.WheelEditorDown.Description=Aşağıdaki tekerlek notu başına editör satırlarının sayısı. Sıfır sistem ayarlarını takip ediyor.
 SettingsCenter.WheelEditorDown.Label=Editör tekerleği aşağı
@@ -2066,3 +2066,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopya, içine düştüğü klasörün haklarını alır; dosya ayrıca o klasörün çalıştırma bitlerini kaybeder.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Dosya türüne göre (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Yalnızca hızlı görünüm
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=Tüm görüntüleyicilerde

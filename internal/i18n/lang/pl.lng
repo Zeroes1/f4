@@ -1098,7 +1098,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Widok zwrotny i szyfrowanie szy
 SettingsCenter.ViewerDefaultCodePage.Label=Domyślny kod widokowy
 SettingsCenter.ViewerOpenAsSupportedType.Description=Gdy włączone, podgląd obrazu otwiera przeglądarkę obrazów, a podgląd wideo otwiera odtwarzacz wideo, jeśli terminal potrafi je wyświetlić. Gdy wyłączone, każdy plik otwiera się w przeglądarce tekstowej i szesnastkowej.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Otwieraj obrazy i wideo we własnych przeglądarkach
-SettingsCenter.ViewerHighlighting.Description=Podświetlać składnię w panelu szybkiego podglądu podświetlaniem edytora, Chroma lub Colorer, albo nigdzie. Domyślnie wyłączone: przeglądarka służy do natychmiastowego obejrzenia pliku, a podświetlanie zajmuje czas.
+SettingsCenter.ViewerHighlighting.Description=Podświetlać składnię podświetlaniem edytora, Chroma lub Colorer: nigdzie, tylko w panelu szybkiego podglądu albo we wszystkich przeglądarkach. Domyślnie wyłączone: przeglądarka służy do natychmiastowego obejrzenia pliku, a podświetlanie zajmuje czas.
 SettingsCenter.ViewerHighlighting.Label=Podświetlanie składni w przeglądarkach
 SettingsCenter.WheelEditorDown.Description=Liczba rzędów edytorów na węzeł koła w dół. Zero podąża za ustawieniem systemu.
 SettingsCenter.WheelEditorDown.Label=Koło edytoru w dół
@@ -2069,3 +2069,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopia otrzymuje prawa katalogu, do którego trafia; plik traci dodatkowo bity wykonywania tego katalogu.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Według typu pliku (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Tylko szybki podgląd
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=We wszystkich przeglądarkach

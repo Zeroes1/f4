@@ -1095,7 +1095,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Varuvaatur ja kiirvaate kodeeri
 SettingsCenter.ViewerDefaultCodePage.Label=Vaataja vaikekodeering
 SettingsCenter.ViewerOpenAsSupportedType.Description=Kui see on sees, avab pildi vaatamine pildivaaturi ja video vaatamine videopleieri, kui terminal suudab neid näidata. Kui see on väljas, avaneb iga fail teksti- ja kuueteistkümnendvaaturis.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Ava pildid ja videod nende oma vaaturites
-SettingsCenter.ViewerHighlighting.Description=Tõsta süntaks kiirvaate paneelil esile redaktori esiletõstjaga, Chroma või Colorer, või mitte kuskil. Vaikimisi väljas: vaatur on faili kohe vaatamiseks ja esiletõstmine võtab aega.
+SettingsCenter.ViewerHighlighting.Description=Tõsta süntaks esile redaktori esiletõstjaga, Chroma või Colorer: mitte kuskil, ainult kiirvaate paneelil või kõigis vaaturites. Vaikimisi väljas: vaatur on faili kohe vaatamiseks ja esiletõstmine võtab aega.
 SettingsCenter.ViewerHighlighting.Label=Süntaksi esiletõstmine vaaturites
 SettingsCenter.WheelEditorDown.Description=Redaktori ridade arv allapoole suunatud ratta sälku kohta. Null järgib süsteemi seadistusi.
 SettingsCenter.WheelEditorDown.Label=Redigeerija ratas alla
@@ -2066,3 +2066,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Koopia saab selle kausta õigused, kuhu ta satub; fail kaotab lisaks kausta käivitusbitid.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Failitüübi järgi (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Ainult kiirvaade
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=Kõigis vaaturites

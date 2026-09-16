@@ -1095,7 +1095,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=מציג Fallback וקידוד 
 SettingsCenter.ViewerDefaultCodePage.Label=קידוד ברירת מחדל של מציג
 SettingsCenter.ViewerOpenAsSupportedType.Description=כשהאפשרות פעילה, הצגת תמונה פותחת את מציג התמונות והצגת סרטון פותחת את נגן הווידאו, אם המסוף יכול להציג אותם. כשהיא כבויה, כל קובץ נפתח במציג הטקסט וההקסדצימלי.
 SettingsCenter.ViewerOpenAsSupportedType.Label=פתיחת תמונות וסרטונים במציגים שלהם
-SettingsCenter.ViewerHighlighting.Description=הדגשת תחביר בחלונית התצוגה המהירה במדגיש של העורך, Chroma או Colorer, או בשום מקום. כבוי כברירת מחדל: מציג נועד להצגת קובץ מיד, והדגשה לוקחת זמן.
+SettingsCenter.ViewerHighlighting.Description=הדגשת תחביר במדגיש של העורך, Chroma או Colorer: בשום מקום, רק בחלונית התצוגה המהירה, או בכל המציגים. כבוי כברירת מחדל: מציג נועד להצגת קובץ מיד, והדגשה לוקחת זמן.
 SettingsCenter.ViewerHighlighting.Label=הדגשת תחביר במציגים
 SettingsCenter.WheelEditorDown.Description=מספר שורות עורך לכל חריץ גלגל כלפי מטה. אפס עוקב אחר הגדרת המערכת.
 SettingsCenter.WheelEditorDown.Label=עורך הגלגל למטה
@@ -2066,3 +2066,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=העותק מקבל את ההרשאות של התיקייה שאליה הוא מגיע, וקובץ מאבד בנוסף את סיביות ההרצה של אותה תיקייה.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=לפי סוג הקובץ (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=תצוגה מהירה בלבד
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=בכל המציגים

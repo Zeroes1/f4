@@ -1016,7 +1016,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=当检测被禁用或无结论�
 SettingsCenter.ViewerDefaultCodePage.Label=默认浏览器编码
 SettingsCenter.ViewerOpenAsSupportedType.Description=开启时，查看图片会打开图片查看器，查看视频会打开视频播放器（前提是终端能够显示它们）。关闭时，所有文件都在文本和十六进制查看器中打开。
 SettingsCenter.ViewerOpenAsSupportedType.Label=在专用查看器中打开图片和视频
-SettingsCenter.ViewerHighlighting.Description=在快速查看面板中使用编辑器的语法高亮器（Chroma 或 Colorer）进行高亮，或不进行高亮。默认关闭：查看器用于即时查看文件，而高亮需要时间。
+SettingsCenter.ViewerHighlighting.Description=使用编辑器的语法高亮器（Chroma 或 Colorer）进行高亮：不高亮、仅在快速查看面板中，或在所有查看器中。默认关闭：查看器用于即时查看文件，而高亮需要时间。
 SettingsCenter.ViewerHighlighting.Label=查看器中的语法高亮
 SettingsCenter.WheelEditorDown.Description=每个向下方向轮 ⁇ 的编辑行数. 零遵循系统设置.
 SettingsCenter.WheelEditorDown.Label=编辑轮下
@@ -1987,3 +1987,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=副本获得所在文件夹的权限；文件还会去掉该文件夹的执行位。
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=按文件类型 (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=仅快速查看
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=所有查看器

@@ -1095,7 +1095,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Fallback viewer un Quick-View k
 SettingsCenter.ViewerDefaultCodePage.Label=Vārdinātāja kodēšana
 SettingsCenter.ViewerOpenAsSupportedType.Description=Ja ieslēgts, attēla skatīšana atver attēlu skatītāju, bet video skatīšana atver video atskaņotāju, ja terminālis tos spēj parādīt. Ja izslēgts, katrs fails tiek atvērts teksta un heksadecimālajā skatītājā.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Atvērt attēlus un video to pašu skatītājos
-SettingsCenter.ViewerHighlighting.Description=Izcelt sintaksi ātrā skata panelī ar redaktora izcēlēju, Chroma vai Colorer, vai nekur. Pēc noklusējuma izslēgts: skatītājs ir faila tūlītējai apskatei, un izcelšana prasa laiku.
+SettingsCenter.ViewerHighlighting.Description=Izcelt sintaksi ar redaktora izcēlēju, Chroma vai Colorer: nekur, tikai ātrā skata panelī vai visos skatītājos. Pēc noklusējuma izslēgts: skatītājs ir faila tūlītējai apskatei, un izcelšana prasa laiku.
 SettingsCenter.ViewerHighlighting.Label=Sintakses izcelšana skatītājos
 SettingsCenter.WheelEditorDown.Description=Redaktoru līniju skaits par rīta riteņbraukšanu. Zero sekmē sistēmas iestatījumus.
 SettingsCenter.WheelEditorDown.Label=Redaktoru riteņbraukšana
@@ -2066,3 +2066,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopija saņem tās mapes tiesības, kurā tā nonāk; fails papildus zaudē šīs mapes izpildes bitus.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Pēc faila tipa (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Tikai ātrais skats
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=Visos skatītājos

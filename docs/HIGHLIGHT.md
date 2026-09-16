@@ -415,11 +415,11 @@ Issue #277, step 6.
   do not record which backgrounds a region set, so the distinction cannot be
   drawn from them.
 
-### 3.14 Highlighting in the quick view
+### 3.14 Highlighting in viewers
 
 Issue #277, step 7. `ViewerHighlighting` (settings.ini `[Viewer]
-Highlighting`) is FarColorer's ViewerColoring for f4's viewers: off, or the
-quick view panel. It is off by default, unlike FarColorer: a viewer is for
+Highlighting`) is FarColorer's ViewerColoring for f4's viewers: off, the
+quick view panel, or every viewer. It is off by default, unlike FarColorer: a viewer is for
 looking at a file at once, and highlighting takes time. It is in the viewer
 settings dialog and the Settings Center, beside the editor's highlighter.
 
@@ -438,4 +438,15 @@ settings dialog and the Settings Center, beside the editor's highlighter.
 - It is restarted when the text changes (another file, another code page),
   stopped in hex mode, for binary, image and provider previews, and when the
   panel closes. Colorer's file type parameters apply as in the editor.
-- Not yet: highlighting in the viewer itself, FarColorer's "all viewers".
+- "All viewers" highlights the viewer as well
+  (`viewer.NewWindowColorizer`, `editor.NewWindowColorizer`). The viewer
+  shows an arbitrary part of the file, so it hands over the logical lines on
+  screen, each with the byte offset it starts at, and up to 100 lines above
+  them as context, read from at most 64 KiB back, as FarColorer's FarViewer
+  takes them. A goroutine highlights the window from its context on — a
+  Colorer session reset for each window, or Chroma's state carried from the
+  first context line — and hands the colours back; the viewer paints each
+  row from its logical line's colours, by rune, over wrapped and tab-expanded
+  cells. A window is requested only when the lines on screen change, and a
+  newer request replaces one not started yet. As with the editor's anchor, a
+  construct opened above the context is not seen.

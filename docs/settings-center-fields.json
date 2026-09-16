@@ -901,7 +901,7 @@
   },
   {
     "category": "syntax",
-    "description": "Highlight syntax in the quick view panel with the editor's syntax highlighter, Chroma or Colorer, or nowhere. Off by default: a viewer is for looking at a file at once, and highlighting takes time.",
+    "description": "Highlight syntax with the editor's syntax highlighter, Chroma or Colorer: nowhere, in the quick view panel only, or in every viewer. Off by default: a viewer is for looking at a file at once, and highlighting takes time.",
     "group": "Engine",
     "id": "ViewerHighlighting",
     "kind": "choice",

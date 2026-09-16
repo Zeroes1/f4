@@ -95,7 +95,8 @@ The quick view panel highlights text with the editor's highlighter, Chroma
 or Colorer, behind `ViewerHighlighting` (off by default / quick view). See
 HIGHLIGHT.md 3.14.
 
-## Step 7b — highlighting in the viewer
+## Step 7b — highlighting in the viewer (done)
 
-FarColorer's "all viewers", with Chroma or Colorer: the viewer highlights
-what it shows with the lines before it, as FarViewer does, off the UI thread.
+"All viewers": the viewer highlights the lines on screen with up to 100 lines
+before them as context, off the UI thread, with Chroma or Colorer. See
+HIGHLIGHT.md 3.14.

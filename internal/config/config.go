@@ -953,7 +953,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	}
 	cfg.ViewerHighlighting = ViewerHighlightOff
 	_, _ = fmt.Sscanf(merged.GetString("Viewer", "Highlighting", "0"), "%d", &cfg.ViewerHighlighting)
-	if cfg.ViewerHighlighting < ViewerHighlightOff || cfg.ViewerHighlighting > ViewerHighlightQuickView {
+	if cfg.ViewerHighlighting < ViewerHighlightOff || cfg.ViewerHighlighting > ViewerHighlightAll {
 		cfg.ViewerHighlighting = ViewerHighlightOff
 	}
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "DefaultCodePage", "65001"), "%d", &cfg.EditorDefaultCodePage)

@@ -914,6 +914,7 @@ func SetupUI() {
 	editor.MenuBarItems = BuildMenuBarItems
 	editor.CrossAttrs = EditorCrossAttrs
 	viewer.NewTextColorizer = editor.NewTextColorizer
+	viewer.NewWindowColorizer = editor.NewWindowColorizer
 	editor.KeyBarLabels = keymap.KeyBarLabelsForArea
 	editor.HotkeyAction = func(area, key string) string {
 		if keymap.GlobalHotkeysMgr == nil {

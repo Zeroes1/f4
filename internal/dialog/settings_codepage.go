@@ -106,7 +106,7 @@ func ShowViewerSettings() {
 	comboDefault.Edit.SetText(labels[selected])
 	lblDefault := vtui.NewLabel(0, 0, i18n.Msg("ViewerSettings.DefaultCodePage"), comboDefault)
 
-	highlightItems := []string{i18n.Msg("ViewerSettings.HighlightOff"), i18n.Msg("ViewerSettings.HighlightQuickView")}
+	highlightItems := []string{i18n.Msg("ViewerSettings.HighlightOff"), i18n.Msg("ViewerSettings.HighlightQuickView"), i18n.Msg("ViewerSettings.HighlightAll")}
 	highlightPos := config.App.ViewerHighlighting
 	if highlightPos < 0 || highlightPos >= len(highlightItems) {
 		highlightPos = config.ViewerHighlightOff

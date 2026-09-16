@@ -23,6 +23,12 @@ import (
 
 // ViewerView is a high-performance file viewer component.
 type ViewerView struct {
+	// Syntax highlighting (see highlight.go): the colorizer, created once,
+	// and the window last handed to it.
+	highlight      WindowColorizer
+	highlightTried bool
+	highlightKey   uint64
+
 	vtui.BaseFrame
 	TopBar  *TopBar
 	menuBar *vtui.MenuBar
@@ -607,6 +613,16 @@ func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) 
 
 	attr := vtui.Palette[theme.ColViewerText]
 	currOffset := vv.TopOffset
+	// Highlighting follows logical lines: lineStart is where the line of the
+	// current row begins, and every line on screen is collected for the
+	// colorizer.
+	hl := vv.windowColorizer()
+	var hlLines []WindowLine
+	hlTexts := map[int64]string{}
+	lineStart, hlOK := int64(0), hl != nil
+	if hlOK {
+		lineStart, hlOK = vv.highlightLineStart(currOffset)
+	}
 	vv.lineOffsets = vv.lineOffsets[:0]
 	vv.visibleURLRows = vv.visibleURLRows[:0]
 	//lastRowWasEOF := false
@@ -646,6 +662,18 @@ func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) 
 		// Build []vtui.CharInfo for the line
 		var cellByteOffsets []int
 		vv.rowCells, cellByteOffsets = viewerTextCells(string(data[:row.textLen]), attr, tabSize, width)
+		if hlOK {
+			text, seen := hlTexts[lineStart]
+			if !seen {
+				if text, hlOK = vv.highlightLineAt(lineStart); hlOK {
+					hlTexts[lineStart] = text
+					hlLines = append(hlLines, WindowLine{Offset: lineStart, Text: text})
+				}
+			}
+			if attrs := hl.LineAttrs(lineStart, text); hlOK && attrs != nil {
+				applyViewerHighlight(vv.rowCells, string(data[:row.textLen]), cellByteOffsets, text, int(currOffset-lineStart), attrs)
+			}
+		}
 		if vv.LastSearchFound && vv.LastSearch != "" {
 			matchStart := vv.LastSearchOffset
 			matchLen := vv.LastSearchMatchLen
@@ -698,8 +726,17 @@ func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) 
 			}
 			currOffset = tempOff
 		}
+		if row.foundNewline || !vv.WrapMode {
+			lineStart = currOffset
+		}
 	}
 	vv.eofVisible = (currOffset >= vv.Backend.Size())
+	if hlOK && len(hlLines) > 0 {
+		if key := highlightWindowKey(hlLines); key != vv.highlightKey {
+			vv.highlightKey = key
+			hl.Request(vv.highlightLinesBefore(hlLines[0].Offset, viewerHighlightContextLines), hlLines)
+		}
+	}
 }
 
 func (vv *ViewerView) ProcessKey(e *vtinput.InputEvent) bool {
@@ -1309,6 +1346,10 @@ func (vv *ViewerView) menuBarPinned() bool {
 }
 
 func (vv *ViewerView) Close() {
+	if vv.highlight != nil {
+		vv.highlight.Close()
+		vv.highlight = nil
+	}
 	vv.stopTailWatch()
 	if fileops.GlobalFileState != nil && vv.Path != "" {
 		fileops.GlobalFileState.SaveViewerStateAsync(fileops.FileStateKey(vv.VFS, vv.Path), vv.TopOffset, vv.WrapMode, vv.HexMode)

@@ -8,6 +8,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/vtui"
 )
 
@@ -173,4 +174,53 @@ func (textColorizerTestHighlighter) Highlight(line string, prevState any, baseAt
 		attrs[i] = baseAttr + uint64(n)
 	}
 	return attrs, n + 1
+}
+
+// A viewer window is highlighted from its context lines on, with the editor's
+// highlighter, and its colours are kept by line offset and text.
+func TestNewWindowColorizer(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	saved := config.App
+	t.Cleanup(func() { config.App = saved; ResetColorerSessions() })
+	config.App.EditorColorerSyntax = true
+	config.App.EditorColorerCatalog = checkConfigs(t)
+	config.App.EditorColorerUserHrc = user
+	vtui.RegisterHighlighter(textColorizerTestProvider{})
+
+	config.App.EditorHighlighter = "Chroma"
+	config.App.ViewerHighlighting = config.ViewerHighlightQuickView
+	if w := NewWindowColorizer("a.textcolorizertest", "", 7, nil); w != nil {
+		t.Fatal("a viewer highlighted in the quick view only mode")
+	}
+	config.App.ViewerHighlighting = config.ViewerHighlightAll
+
+	w := NewWindowColorizer("a.textcolorizertest", "", 7, nil)
+	if w == nil {
+		t.Fatal("no colorizer for a viewer")
+	}
+	w.Request([]string{"above 1", "above 2"}, []viewer.WindowLine{{Offset: 16, Text: "abc"}, {Offset: 20, Text: ""}})
+	pumpUntil(t, "the window", func() bool { return w.LineAttrs(16, "abc") != nil })
+	// The stand-in counts lines in its state: two context lines came first.
+	if got := w.LineAttrs(16, "abc"); len(got) != 3 || got[0] != 7+2 {
+		t.Errorf("attrs %v, want three runes coloured after two context lines", got)
+	}
+	if w.LineAttrs(16, "changed") != nil {
+		t.Error("colours returned for a line whose text changed")
+	}
+	w.Close()
+
+	config.App.EditorHighlighter = "Colorer"
+	w = NewWindowColorizer("a.pairtest", "fn alpha", 7, nil)
+	if w == nil {
+		t.Fatal("no Colorer colorizer for a viewer")
+	}
+	defer w.Close()
+	w.Request(nil, []viewer.WindowLine{{Offset: 0, Text: "fn alpha"}})
+	pumpUntil(t, "the Colorer window", func() bool { return w.LineAttrs(0, "fn alpha") != nil })
+	if got := w.LineAttrs(0, "fn alpha"); len(got) != 8 {
+		t.Errorf("Colorer attrs %d, want 8", len(got))
+	}
 }

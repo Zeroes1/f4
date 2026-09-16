@@ -44,6 +44,8 @@ func viewerHighlightAllows(quickView bool) bool {
 	switch config.App.ViewerHighlighting {
 	case config.ViewerHighlightQuickView:
 		return quickView
+	case config.ViewerHighlightAll:
+		return true
 	}
 	return false
 }

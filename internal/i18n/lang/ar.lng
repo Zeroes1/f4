@@ -1052,7 +1052,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=عارض احتياطي وتر�
 SettingsCenter.ViewerDefaultCodePage.Label=ترميز العارض الافتراضي
 SettingsCenter.ViewerOpenAsSupportedType.Description=عند التفعيل، يفتح عرض صورة عارض الصور ويفتح عرض مقطع فيديو مشغل الفيديو، إذا كانت الطرفية قادرة على عرضهما. عند التعطيل، يُفتح كل ملف في العارض النصي والست عشري.
 SettingsCenter.ViewerOpenAsSupportedType.Label=فتح الصور ومقاطع الفيديو في عارضاتها الخاصة
-SettingsCenter.ViewerHighlighting.Description=تلوين الصياغة في لوحة العرض السريع بأداة تلوين المحرر، Chroma أو Colorer، أو في لا مكان. معطّل افتراضيًا: العارض مخصص لرؤية الملف فورًا، والتلوين يستغرق وقتًا.
+SettingsCenter.ViewerHighlighting.Description=تلوين الصياغة بأداة تلوين المحرر، Chroma أو Colorer: في لا مكان، أو في لوحة العرض السريع فقط، أو في كل العارضات. معطّل افتراضيًا: العارض مخصص لرؤية الملف فورًا، والتلوين يستغرق وقتًا.
 SettingsCenter.ViewerHighlighting.Label=تلوين الصياغة في العارضات
 SettingsCenter.WheelEditorDown.Description=عدد صفوف المحرر لكل درجة للعجلة لأسفل. الصفر يتبع إعداد النظام.
 SettingsCenter.WheelEditorDown.Label=عجلة التحرير للأسفل
@@ -2023,3 +2023,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=تحصل النسخة على حقوق المجلد الذي تصل إليه، ويفقد الملف كذلك بتات التنفيذ لذلك المجلد.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=حسب نوع الملف (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=العرض السريع فقط
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=كل العارضات

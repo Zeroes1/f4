@@ -1098,7 +1098,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Рэзервовы сродак
 SettingsCenter.ViewerDefaultCodePage.Label=Стандартная кадзіроўка праграмы прагляду
 SettingsCenter.ViewerOpenAsSupportedType.Description=Калі ўключана, прагляд выявы адкрывае праграму прагляду выяў, а прагляд відэа — відэапрайгравальнік, калі тэрмінал можа іх паказаць. Калі выключана, любы файл адкрываецца ў тэкставай і шаснаццатковай праграме прагляду.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Адкрываць выявы і відэа ва ўласных праграмах прагляду
-SettingsCenter.ViewerHighlighting.Description=Падсвечваць сінтаксіс у панэлі хуткага прагляду падсветкай рэдактара, Chroma або Colorer, або нідзе. Па змаўчанні выключана: праглядальнік патрэбны, каб адразу паглядзець файл, а падсветка патрабуе часу.
+SettingsCenter.ViewerHighlighting.Description=Падсвечваць сінтаксіс падсветкай рэдактара, Chroma або Colorer: нідзе, толькі ў панэлі хуткага прагляду або ва ўсіх праглядальніках. Па змаўчанні выключана: праглядальнік патрэбны, каб адразу паглядзець файл, а падсветка патрабуе часу.
 SettingsCenter.ViewerHighlighting.Label=Падсветка сінтаксісу ў праглядальніках
 SettingsCenter.WheelEditorDown.Description=Колькасць радкоў рэдактара на выемку кола ўніз. Нуль варта за наладай сістэмы.
 SettingsCenter.WheelEditorDown.Label=Кола рэдактара ўніз
@@ -2069,3 +2069,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Копія атрымлівае правы каталога, у які трапляе; у файла дадаткова здымаюцца біты выканання гэтага каталога.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Паводле тыпу файла (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Толькі хуткі прагляд
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=Ва ўсіх праглядальніках

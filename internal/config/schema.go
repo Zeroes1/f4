@@ -73,10 +73,13 @@ const (
 
 // Where viewers highlight syntax, with the editor's highlighter: nowhere (the
 // default: a viewer is for looking at a file at once, and highlighting costs
-// time), or in the quick view panel. FarColorer calls this ViewerColoring.
+// time), in the quick view panel, or in every viewer. FarColorer calls this
+// ViewerColoring.
 const (
 	ViewerHighlightOff = iota
 	ViewerHighlightQuickView
+	// ViewerHighlightAll highlights every viewer and the quick view.
+	ViewerHighlightAll
 )
 
 // ---- from image_slideshow.go ----

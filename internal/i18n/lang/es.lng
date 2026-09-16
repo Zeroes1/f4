@@ -1098,7 +1098,7 @@ SettingsCenter.ViewerDefaultCodePage.Description=Visor alternativo y codificaci�
 SettingsCenter.ViewerDefaultCodePage.Label=Codificación predeterminada del visor
 SettingsCenter.ViewerOpenAsSupportedType.Description=Si está activado, ver una imagen abre el visor de imágenes y ver un vídeo abre el reproductor de vídeo, cuando el terminal puede mostrarlos. Si está desactivado, todos los archivos se abren en el visor de texto y hexadecimal.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Abrir imágenes y vídeos en sus propios visores
-SettingsCenter.ViewerHighlighting.Description=Resaltar la sintaxis en el panel de vista rápida con el resaltador del editor, Chroma o Colorer, o en ningún sitio. Desactivado por defecto: un visor sirve para ver un archivo al instante y el resaltado lleva tiempo.
+SettingsCenter.ViewerHighlighting.Description=Resaltar la sintaxis con el resaltador del editor, Chroma o Colorer: en ningún sitio, solo en el panel de vista rápida o en todos los visores. Desactivado por defecto: un visor sirve para ver un archivo al instante y el resaltado lleva tiempo.
 SettingsCenter.ViewerHighlighting.Label=Resaltado de sintaxis en visores
 SettingsCenter.WheelEditorDown.Description=Número de filas del editor por muesca de rueda descendente. El cero sigue la configuración del sistema.
 SettingsCenter.WheelEditorDown.Label=Rueda del editor hacia abajo
@@ -2069,3 +2069,4 @@ SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059a
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=La copia recibe los permisos de la carpeta donde queda; un archivo pierde además los bits de ejecución de esa carpeta.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Según el tipo de archivo (Colorer)
 SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Solo vista rápida
+SettingsCenter.Text.d55ad82d4c8ee4402af14678871e97d843b89fea59b47b0530f61cf125475b99=En todos los visores
