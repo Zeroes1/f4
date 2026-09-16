@@ -153,6 +153,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	if colorerIsActive() {
 		chkEnabled.State = 1
 	}
+	chkPairs := vtui.NewCheckbox(0, 0, i18n.Msg("ColorerSettings.Pairs"), false)
+	if config.App.EditorColorerPairs {
+		chkPairs.State = 1
+	}
 
 	// The catalog carries a machine name and a human description; the machine
 	// name is what the config stores, so the two lists are kept in step.
@@ -221,6 +225,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 
 	// 2. Add to Dialog in desired focus order
 	dlg.AddItem(chkEnabled)
+	dlg.AddItem(chkPairs)
 	dlg.AddItem(lblScheme)
 	dlg.AddItem(comboScheme)
 	dlg.AddItem(lblCross)
@@ -242,7 +247,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	// 3. Layout Configuration
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-4, height-4)
 
-	vbox.Add(chkEnabled, vtui.Margins{}, vtui.AlignLeft)
+	rowEnabled := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	rowEnabled.Add(chkEnabled, vtui.Margins{Right: 2}, vtui.AlignLeft)
+	rowEnabled.Add(chkPairs, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(rowEnabled, vtui.Margins{}, vtui.AlignFill)
 
 	rowScheme := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	rowScheme.Add(lblScheme, vtui.Margins{Right: 1}, vtui.AlignLeft)
@@ -296,6 +304,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 		}
 		config.App.EditorCrossMode = comboCross.Menu.SelectPos
 		config.App.EditorColorerSyntax = chkSyntax.State == 1
+		config.App.EditorColorerPairs = chkPairs.State == 1
 		config.App.EditorColorerBackground = chkBackground.State == 1
 		config.App.EditorColorerCatalog = strings.TrimSpace(editCatalog.GetText())
 		config.App.EditorColorerUserHrc = strings.TrimSpace(editUserHrc.GetText())

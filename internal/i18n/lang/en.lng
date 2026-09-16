@@ -902,6 +902,7 @@ ColorerSettings.Checking=Loading the Colorer configuration...
 ColorerSettings.CheckFailed=Colorer cannot use this configuration:
 ColorerSettings.CheckReports=Colorer reported:
 ColorerSettings.CheckPassed=%d file types loaded without problems.
+ColorerSettings.Pairs=Highlight &pairs
 
 AppearanceSettings.Title= Appearance settings
 AppearanceSettings.Style=Application &style:
@@ -2071,6 +2072,8 @@ SettingsCenter.EditorColorerBackground.Description=Use foreground and background
 SettingsCenter.EditorColorerBackground.Label=Use Colorer base colors
 SettingsCenter.EditorColorerCatalog.Description=Directory containing Colorer configuration data. Empty uses the profile's colorer/configs directory; this is not a catalog XML filename.
 SettingsCenter.EditorColorerCatalog.Label=Colorer configuration directory
+SettingsCenter.EditorColorerPairs.Description=Draw the paired token under the cursor, such as a bracket, and its match when it is on screen, in the colors the Colorer scheme gives pairs.
+SettingsCenter.EditorColorerPairs.Label=Highlight pairs
 SettingsCenter.EditorColorerScheme.Description=Select the HRD scheme used for syntax, guide and editor base colors. Empty uses the built-in default.
 SettingsCenter.EditorColorerScheme.Label=Colorer scheme
 SettingsCenter.EditorColorerSyntax.Description=Enable Colorer syntax coloring while retaining its other style facilities.

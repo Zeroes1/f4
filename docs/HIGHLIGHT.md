@@ -278,6 +278,25 @@ returns the failure and everything Colorer reported at warning level or worse.
   sandbox, and reports two errors: `markdown:markdown` inherits
   `markdown2:markdown2`, which no type defines.
 
+### 3.10 Pairs
+
+Issue #277, step 3. `EditorColorerPairs` (settings.ini `[Editor] ColorerPairs`,
+on by default as FarColorer's PairsDraw) draws the paired token under the
+cursor and its match.
+
+- Colorer makes pair regions special (`def:PairStart` and `def:PairEnd` are
+  children of `def:Special`), so `ParseLine` never returned them.
+  colorer4go's `ParseLinePairs` does; the worker stores a line's pairs beside
+  its colours (`pairCache`, evicted with `attrCache`).
+- `matchColorerPair` is `BaseEditor::getPairMatch` plus `searchPair` over those
+  pairs: the last token whose `[Start, End]` holds the cursor (End included),
+  then a walk counting starts and ends until the balance is zero.
+- Drawing searches only the visible lines, as `searchLocalPair` does, and
+  only lines already parsed: a line without cached colours stops the search,
+  since unlike Colorer's regions the cache may not have reached the match yet.
+  The token under the cursor is painted even without a match. The overlay is
+  painted on a copy of the cached colours.
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped

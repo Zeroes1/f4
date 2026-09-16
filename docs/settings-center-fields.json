@@ -871,6 +871,16 @@
   },
   {
     "category": "syntax",
+    "description": "Draw the paired token under the cursor, such as a bracket, and its match when it is on screen, in the colors the Colorer scheme gives pairs.",
+    "group": "Colorer",
+    "id": "EditorColorerPairs",
+    "kind": "boolean",
+    "label": "Highlight pairs",
+    "timing": "live",
+    "unavailable": ""
+  },
+  {
+    "category": "syntax",
     "description": "An .hrc file, or a folder whose .hrc files are all loaded except *.ent.hrc, added to the catalog's schemes. Links inside must stay within that folder, and the file names Colorer opens must be ASCII. Empty loads none.",
     "group": "Colorer",
     "id": "EditorColorerUserHrc",

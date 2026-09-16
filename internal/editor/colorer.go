@@ -655,6 +655,7 @@ type ColorerHighlighter struct {
 	fallback   vtui.Highlighter
 	attrCache  map[int][]uint64
 	bgCache    map[int]uint64
+	pairCache  map[int][]colorer.Pair // kept and evicted with attrCache
 	parsedIdx  int
 	filename   string
 	firstLine  string
@@ -826,7 +827,7 @@ func (ch *ColorerHighlighter) GetLineBackground(idx int, defaultAttr uint64) uin
 	return defaultAttr
 }
 
-func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64) {
+func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64, pairs []colorer.Pair) {
 	if ch.attrCache == nil {
 		ch.attrCache = make(map[int][]uint64)
 	}
@@ -839,15 +840,25 @@ func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64) {
 			if key > 2000 && (key < idx-attrCacheKeepWindow || key > idx+attrCacheKeepWindow) {
 				delete(ch.attrCache, key)
 				delete(ch.bgCache, key)
+				delete(ch.pairCache, key)
 			}
 		}
 		if len(ch.attrCache) >= maxCachedAttrLines {
 			ch.attrCache = make(map[int][]uint64)
 			ch.bgCache = make(map[int]uint64)
+			ch.pairCache = nil
 		}
 	}
 	ch.attrCache[idx] = attrs
 	ch.bgCache[idx] = bg
+	if len(pairs) > 0 {
+		if ch.pairCache == nil {
+			ch.pairCache = make(map[int][]colorer.Pair)
+		}
+		ch.pairCache[idx] = pairs
+	} else {
+		delete(ch.pairCache, idx)
+	}
 }
 
 func (ch *ColorerHighlighter) dropCacheFrom(idx int) {
@@ -861,6 +872,11 @@ func (ch *ColorerHighlighter) dropCacheFrom(idx int) {
 			delete(ch.bgCache, key)
 		}
 	}
+	for key := range ch.pairCache {
+		if key >= idx {
+			delete(ch.pairCache, key)
+		}
+	}
 }
 
 func (ch *ColorerHighlighter) Close() error {
@@ -871,6 +887,7 @@ func (ch *ColorerHighlighter) Close() error {
 	}
 	ch.stopWorker()
 	ch.attrCache = nil
+	ch.pairCache = nil
 	ch.parsedIdx = 0
 	if closer, ok := ch.fallback.(io.Closer); ok {
 		closer.Close()

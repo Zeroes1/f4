@@ -28,6 +28,7 @@ type colorerJob struct {
 type colorerLineAttrs struct {
 	attrs      []uint64
 	background uint64
+	pairs      []colorer.Pair
 }
 
 type colorerResult struct {
@@ -120,7 +121,7 @@ func (ch *ColorerHighlighter) runWorker(ctx context.Context, session *colorer.Se
 				if ctx.Err() != nil {
 					return
 				}
-				regions, err := session.ParseLine(lineText)
+				regions, pairs, err := session.ParseLinePairs(lineText)
 				if err != nil {
 					vtui.DebugLog("COLORER: ParseLine failed at line %d: %v", job.target+i, err)
 					if len(lineResults) == 0 {
@@ -138,7 +139,7 @@ func (ch *ColorerHighlighter) runWorker(ctx context.Context, session *colorer.Se
 				}
 				parsedIdx++
 				attrs, background := ch.attrsForSyntax(lineText, regions, job.baseAttr, job.syntax)
-				lineResults = append(lineResults, colorerLineAttrs{attrs: attrs, background: background})
+				lineResults = append(lineResults, colorerLineAttrs{attrs: attrs, background: background, pairs: pairs})
 			}
 			if ctx.Err() != nil {
 				return
@@ -330,7 +331,7 @@ func (ch *ColorerHighlighter) postColorerResult(result colorerResult) {
 		} else {
 			ch.parsedIdx = result.job.target + len(result.lines)
 			for i, lineAttrs := range result.lines {
-				ch.storeAttrs(result.job.target+i, lineAttrs.attrs, lineAttrs.background)
+				ch.storeAttrs(result.job.target+i, lineAttrs.attrs, lineAttrs.background, lineAttrs.pairs)
 			}
 			if result.partial {
 				// The worker lost the session's position on the failed line;

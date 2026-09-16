@@ -1604,6 +1604,17 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 		}
 	}
 	startLogLine, startFragIdx := ev.Engine.GetLogLineAtVisualRow(ev.ScrollTopRow)
+
+	// FarColorer's pairs: the paired token under the cursor, and its match
+	// when it is on screen, drawn in their own colours. Only visible lines
+	// are searched; a logical line takes at least one row, so the last
+	// visible one is at most a screen below the first.
+	var pairOverlay colorerPairOverlay
+	if ch, isColorer := ev.Highlighter.(*ColorerHighlighter); isColorer && !ev.BinaryFile && config.App.EditorColorerPairs && ev.IsFocused() {
+		if text, ok := ev.lineTextForHighlight(ev.CursorLine); ok {
+			pairOverlay = ch.pairOverlay(ev.CursorLine, ev.CursorPos, text, startLogLine, startLogLine+(ev.Y2-ev.Y1))
+		}
+	}
 	rowsRendered := 0
 
 	for logIdx := startLogLine; logIdx < ev.Li.LineCount(); logIdx++ {
@@ -1624,7 +1635,7 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 				// be carried in ev.lineStates, so it keeps its own anchor near
 				// the viewport instead. See HIGHLIGHT.md, phase 5.
 				if text, ok := ev.lineTextForHighlight(logIdx); ok {
-					lineSyntax = ch.HighlightLine(logIdx, text, bgAttr)
+					lineSyntax = pairOverlay.apply(logIdx, ch.HighlightLine(logIdx, text, bgAttr))
 				}
 			} else if ev.Highlighter != nil {
 				// Catch up synchronously only if the uncomputed gap is small (<= 50 lines).

@@ -47,3 +47,15 @@ and show what Colorer could not load or reported; the Settings Center has the
 same as commands. colorer4go gained `Session.FileTypes` and
 `Session.LoadFileType`, which also give step 5 its list of types. See
 HIGHLIGHT.md 3.9.
+
+## Step 3a — the pair under the cursor (done)
+
+colorer4go's `ParseLinePairs` returns pair regions; f4 matches them as
+`BaseEditor::searchPair` does and draws the pair under the cursor, behind the
+new `EditorColorerPairs` setting. See HIGHLIGHT.md 3.10.
+
+## Step 3b — match pair, select pair, select block
+
+FarColorer's three menu actions use `searchGlobalPair`, which may reach any
+line of the file, above or below: this needs a worker job that parses toward
+the match instead of the visible-lines cache.

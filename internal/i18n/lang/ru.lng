@@ -889,6 +889,7 @@ ColorerSettings.Checking=Загрузка конфигурации Colorer...
 ColorerSettings.CheckFailed=Colorer не может работать с этой конфигурацией:
 ColorerSettings.CheckReports=Сообщения Colorer:
 ColorerSettings.CheckPassed=Загружено типов файлов без ошибок: %d.
+ColorerSettings.Pairs=Парные ско&бки
 
 AppearanceSettings.Title= Внешний вид
 AppearanceSettings.Style=Стиль &оформления:
@@ -2002,6 +2003,8 @@ SettingsCenter.EditorColorerBackground.Description=Использует цвет
 SettingsCenter.EditorColorerBackground.Label=Использовать базовые цвета Colorer
 SettingsCenter.EditorColorerCatalog.Description=Каталог конфигурации Colorer. Пустое значение означает colorer/configs в профиле; здесь указывается каталог, а не имя XML-файла каталога схем.
 SettingsCenter.EditorColorerCatalog.Label=Каталог конфигурации Colorer
+SettingsCenter.EditorColorerPairs.Description=Выделять парный элемент под курсором, например скобку, и его пару, если она на экране, цветами, которые схема Colorer задаёт для пар.
+SettingsCenter.EditorColorerPairs.Label=Выделять парные элементы
 SettingsCenter.EditorColorerScheme.Description=Выбирает схему HRD для цветов синтаксиса, направляющих и базовых цветов редактора. Пустое значение использует встроенную схему.
 SettingsCenter.EditorColorerScheme.Label=Схема Colorer
 SettingsCenter.EditorColorerSyntax.Description=Включает подсветку синтаксиса Colorer с сохранением остальных возможностей оформления.
