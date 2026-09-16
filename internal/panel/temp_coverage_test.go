@@ -50,7 +50,7 @@ func TestTempPanelStorePrivateOperations(t *testing.T) {
 	}) {
 		t.Fatal("updateReference did not update an existing item")
 	}
-	if !store.updateReference(1, ref.Id+1, func(*tempPanelReference) {}) {
+	if store.updateReference(1, ref.Id+1, func(*tempPanelReference) {}) {
 		t.Fatal("updateReference reported a missing item as present")
 	}
 	if !store.removeReference(1, ref.Id) || store.removeReference(1, ref.Id) {
