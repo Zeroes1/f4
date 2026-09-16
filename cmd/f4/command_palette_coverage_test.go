@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 51
+const commandPaletteF4Surfaces = 52
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -250,6 +250,9 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"dialog.ShowAbout#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered App.About action, also reached as f4:about, opens this read-only report list",
+	},
+	"dialog.showConfigEditor#1": {
+		class: paletteAuditDynamicAction, rationale: "the registered App.ConfigEditor action, also reached as f4:config, opens this runtime list of settings.ini keys",
 	},
 }
 

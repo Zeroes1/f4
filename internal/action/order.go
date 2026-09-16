@@ -20,6 +20,7 @@ var actionMenuOrder = []string{
 	"App.ScreenGrab",
 	"App.CopyWindowTitle",
 	"Macro.Reload",
+	"App.ConfigEditor",
 	"App.About",
 	"App.CommandPalette",
 	"App.Help",

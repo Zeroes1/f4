@@ -21,7 +21,10 @@ func TestF4CommandActionResolvesOnlyKnownCommands(t *testing.T) {
 			t.Errorf("f4CommandAction(%q) = %q, %v; want App.About", input, name, ok)
 		}
 	}
-	for _, input := range []string{"", "abou", "about more", "config"} {
+	if name, ok := f4CommandAction(" Config"); !ok || name != "App.ConfigEditor" {
+		t.Errorf("f4CommandAction(\" Config\") = %q, %v; want App.ConfigEditor", name, ok)
+	}
+	for _, input := range []string{"", "abou", "about more", "configure"} {
 		if name, ok := f4CommandAction(input); ok {
 			t.Errorf("f4CommandAction(%q) = %q; want no command", input, name)
 		}

@@ -169,6 +169,15 @@ Move.Title= Переименование/Перенос
 Move.Prompt=Переименовать или перенести %d элемент(ов) в:
 Move.Btn=&Перенести
 
+ConfigEditor.Title= Редактор конфигурации - f4:config
+ConfigEditor.Hint=Enter или F4 изменить, Del сбросить, Ctrl+H только изменённые, Ctrl+A выровнять, Ctrl+Alt+F фильтр, Esc закрыть
+ConfigEditor.DefaultPrompt=По умолчанию: %s
+ConfigEditor.NoDefault=(нет значения по умолчанию)
+ConfigEditor.ResetTitle= Сброс к умолчанию
+ConfigEditor.ResetPrompt=Сбросить %s к значению по умолчанию «%s»?
+ConfigEditor.ResetButton=&Сбросить
+ConfigEditor.Kept=%s теперь %s: f4 не принял значение в том виде, как оно введено
+
 About.Title= О программе f4 - f4:about
 About.Copied=Сведения о f4 скопированы в буфер обмена
 About.Hint=Esc или F10 закрыть, Ctrl+C или Ctrl+Ins копировать всё, Ctrl+H скрыть/показать пустые, Ctrl+Alt+F фильтр
@@ -190,6 +199,8 @@ Action.Macro.Reload=Перезагрузить Lua-&макросы
 Action.Macro.Reload.Desc=Перечитать Lua-макросы из каталога скриптов
 Action.App.About=О программе f&4
 Action.App.About.Desc=Показать версию, платформу, каталоги и плагины этой копии f4
+Action.App.ConfigEditor=Редактор &конфигурации
+Action.App.ConfigEditor.Desc=Править любой ключ settings.ini напрямую, как f4:config
 Action.App.CommandPalette=&Палитра команд
 Action.App.CommandPalette.Desc=Найти и выполнить доступную команду
 Action.App.Help=Контекстная &справка

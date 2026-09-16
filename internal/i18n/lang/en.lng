@@ -169,6 +169,15 @@ Move.Title= Move
 Move.Prompt=Rename or move %d item(s) to:
 Move.Btn=&Rename
 
+ConfigEditor.Title= Configuration editor - f4:config
+ConfigEditor.Hint=Enter or F4 edit, Del reset, Ctrl+H changed only, Ctrl+A align, Ctrl+Alt+F filter, Esc close
+ConfigEditor.DefaultPrompt=Default: %s
+ConfigEditor.NoDefault=(no default)
+ConfigEditor.ResetTitle= Reset to default
+ConfigEditor.ResetPrompt=Reset %s to its default value "%s"?
+ConfigEditor.ResetButton=&Reset
+ConfigEditor.Kept=%s is now %s: f4 did not keep the value as typed
+
 About.Title= About f4 - f4:about
 About.Copied=The about list is copied to the clipboard
 About.Hint=Esc or F10 close, Ctrl+C or Ctrl+Ins copy all, Ctrl+H (un)hide empty, Ctrl+Alt+F filter
@@ -190,6 +199,8 @@ Action.Macro.Reload=Reload Lua &macros
 Action.Macro.Reload.Desc=Reload Lua macros from the scripts directory
 Action.App.About=About f&4
 Action.App.About.Desc=Show the version, platform, directories and plugins of this f4
+Action.App.ConfigEditor=Configuration &editor
+Action.App.ConfigEditor.Desc=Edit every settings.ini key directly, as f4:config does
 Action.App.CommandPalette=&Command palette
 Action.App.CommandPalette.Desc=Search and run available commands
 Action.App.Help=Context &help

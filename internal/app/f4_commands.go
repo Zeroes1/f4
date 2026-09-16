@@ -25,6 +25,7 @@ var f4Commands = []struct {
 	action string
 }{
 	{name: "about", action: "App.About"},
+	{name: "config", action: "App.ConfigEditor"},
 }
 
 func init() {
@@ -64,6 +65,13 @@ func runF4Command(_ vfs.App, argument string) {
 // actionAbout is f4:about and Commands > About f4.
 func actionAbout() bool {
 	dialog.ShowAbout(aboutFacts())
+	return true
+}
+
+// actionConfigEditor is f4:config and Commands > Configuration editor. An
+// edit refreshes the application the way Settings Center's Apply does.
+func actionConfigEditor() bool {
+	dialog.ShowConfigEditor(settingsHost{}.ApplyRuntime)
 	return true
 }
 

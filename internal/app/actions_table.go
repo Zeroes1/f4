@@ -202,6 +202,16 @@ func init() {
 		Handler:     actionReloadLuaMacros,
 	})
 	registerAction(action.Action{
+		Name:        "App.ConfigEditor",
+		Area:        "Common",
+		Label:       "Configuration editor",
+		LabelKey:    "Action.App.ConfigEditor",
+		Description: "Edit every settings.ini key directly, as f4:config does",
+		DescKey:     "Action.App.ConfigEditor.Desc",
+		MenuPath:    "Commands",
+		Handler:     actionConfigEditor,
+	})
+	registerAction(action.Action{
 		Name:        "App.About",
 		Area:        "Common",
 		Label:       "About f4",
