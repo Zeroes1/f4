@@ -474,6 +474,7 @@ Every file tracked in the repository. Regenerate with
     │   ├── codecov.yml
     │   └── workflows
     │       ├── build.yml
+    │       ├── colorer-cpu.yml
     │       ├── conpty-probe.yml
     │       ├── go-cache-salt
     │       └── quick.yml
@@ -505,6 +506,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── actions_table.go
     │   │   ├── actions_table_order_test.go
     │   │   ├── actions_test.go
+    │   │   ├── actions_view_by_type_test.go
     │   │   ├── ai_chat_panel.go
     │   │   ├── ai_chat_panel_test.go
     │   │   ├── api.go
@@ -541,6 +543,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bootstrap_settings_test.go
     │   │   ├── bootstrap_startupdir_terminal_test.go
     │   │   ├── bootstrap_startupdir_test.go
+    │   │   ├── bootstrap_startupfile_terminal_test.go
     │   │   ├── bootstrap_sudo_test.go
     │   │   ├── bootstrap_unicode_test.go
     │   │   ├── child_env_test.go
@@ -554,6 +557,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_download_test.go
     │   │   ├── colorer_settings.go
     │   │   ├── colorer_settings_test.go
+    │   │   ├── colorer_type_settings.go
     │   │   ├── command_history_paths_test.go
     │   │   ├── command_palette_direct_frames.go
     │   │   ├── command_palette_direct_frames_test.go
@@ -605,6 +609,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── editor_keys_test.go
     │   │   ├── editor_save_wait_test.go
     │   │   ├── editor_test_helpers_test.go
+    │   │   ├── f4_commands.go
+    │   │   ├── f4_commands_test.go
     │   │   ├── farmenu_file_test.go
     │   │   ├── fast_find_overlay_test.go
     │   │   ├── file_associations_dispatch_test.go
@@ -800,18 +806,28 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── config_test.go
     │   │   ├── cursor_style_test.go
     │   │   ├── fallback_language_test.go
+    │   │   ├── options.go
+    │   │   ├── options_test.go
     │   │   ├── overlay.go
     │   │   ├── overlay_test.go
     │   │   ├── proxy_settings_test.go
     │   │   ├── schema.go
+    │   │   ├── serialize_roundtrip_test.go
     │   │   └── settings.go
     │   ├── dialog
+    │   │   ├── about.go
+    │   │   ├── about_os_other.go
+    │   │   ├── about_os_unix.go
+    │   │   ├── about_os_windows.go
+    │   │   ├── about_test.go
     │   │   ├── attributes.go
     │   │   ├── attributes_mixed_test.go
     │   │   ├── attributes_unix.go
     │   │   ├── attributes_windows.go
     │   │   ├── attributes_windows_test.go
     │   │   ├── caption.go
+    │   │   ├── config_editor.go
+    │   │   ├── config_editor_test.go
     │   │   ├── envman_help_test.go
     │   │   ├── file.go
     │   │   ├── file_resize_test.go
@@ -869,6 +885,11 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_async.go
     │   │   ├── colorer_check.go
     │   │   ├── colorer_check_test.go
+    │   │   ├── colorer_cpu_amd64.go
+    │   │   ├── colorer_cpu_amd64_test.go
+    │   │   ├── colorer_cpu.go
+    │   │   ├── colorer_cpu_other.go
+    │   │   ├── colorer_cpu_test.go
     │   │   ├── colorer_diagnostics_test.go
     │   │   ├── colorer_downloader.go
     │   │   ├── colorer.go
@@ -879,7 +900,15 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_pair_search.go
     │   │   ├── colorer_pairs.go
     │   │   ├── colorer_pairs_test.go
+    │   │   ├── colorer_params.go
+    │   │   ├── colorer_params_test.go
     │   │   ├── colorer_plugin_test.go
+    │   │   ├── colorer_text.go
+    │   │   ├── colorer_type_settings.go
+    │   │   ├── colorer_type_settings_test.go
+    │   │   ├── colorer_types.go
+    │   │   ├── colorer_types_test.go
+    │   │   ├── colorer_window.go
     │   │   ├── editor_base64_test.go
     │   │   ├── editor_codepage_test.go
     │   │   ├── editor_delta_test.go
@@ -1275,6 +1304,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── press_key_test.go
     │   │   ├── process_environment_panel_test.go
     │   │   ├── prompt.go
+    │   │   ├── quickview_colors_test.go
     │   │   ├── quickview.go
     │   │   ├── quick_view_panel_test.go
     │   │   ├── quick_view_provider_test.go
@@ -1299,7 +1329,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── usermenu_subst.go
     │   │   ├── usermenu_ui.go
     │   │   ├── user_menu_ui_test.go
-    │   │   └── workspace.go
+    │   │   ├── workspace.go
+    │   │   └── workspace_startup_test.go
     │   ├── paneltest
     │   │   ├── doc.go
     │   │   ├── frame.go
@@ -1326,6 +1357,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── manager_coverage_test.go
     │   │   ├── manager.go
     │   │   ├── manager_lifecycle_test.go
+    │   │   ├── manager_names_test.go
     │   │   ├── menu_items.go
     │   │   ├── panel_providers.go
     │   │   ├── permissions.go
@@ -1630,8 +1662,11 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── backend.go
     │   │   ├── backend_test.go
     │   │   ├── binary.go
+    │   │   ├── colorizer.go
     │   │   ├── disasm.go
     │   │   ├── disasm_test.go
+    │   │   ├── highlight.go
+    │   │   ├── highlight_test.go
     │   │   ├── links.go
     │   │   ├── links_test.go
     │   │   ├── main_test.go
@@ -2295,4 +2330,4 @@ Every file tracked in the repository. Regenerate with
         ├── utils_test.go
         └── vfs.go
     
-    210 directories, 2081 files
+    210 directories, 2116 files
