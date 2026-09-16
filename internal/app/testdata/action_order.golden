@@ -226,6 +226,9 @@ AI.Setup
 AI.Help
 AI.AttachAPSpec
 AI.ListModels
+Editor.ColorerListFunctions
+Editor.ColorerListErrors
+Editor.ColorerLocateFunction
 Settings.Category.navigation
 Settings.Open
 Settings.Category.appearance

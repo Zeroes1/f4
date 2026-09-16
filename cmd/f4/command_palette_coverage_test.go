@@ -215,6 +215,9 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	"editor.(*EditorView).ShowPluginsMenu#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered editor plugins action opens Base64 transformations and the line-sort operation",
 	},
+	"editor.(*EditorView).showColorerOutline#1": {
+		class: paletteAuditDynamicAction, rationale: "the registered Colorer outline actions open a runtime list of functions or syntax errors",
+	},
 	"panel.(*AssocEditorState).openList#1": {
 		class: paletteAuditModalLocal, rationale: "association rows are edited inside the file-association settings workflow",
 	},

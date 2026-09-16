@@ -245,6 +245,9 @@ var actionMenuOrder = []string{
 	"AI.Help",
 	"AI.AttachAPSpec",
 	"AI.ListModels",
+	"Editor.ColorerListFunctions",
+	"Editor.ColorerListErrors",
+	"Editor.ColorerLocateFunction",
 }
 
 // actionMenuPosition indexes actionMenuOrder by registry key.
