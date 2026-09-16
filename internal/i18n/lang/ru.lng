@@ -1391,6 +1391,14 @@ PlugRing.BtnRefresh=О&бновить
 PlugRing.BtnClose=&Закрыть
 
 Attributes.Title= Атрибуты
+Attributes.ChangeFor=Изменить файловые атрибуты
+Attributes.SelectedObjects=выбранных объектов
+Attributes.SelectedCount=выбрано элементов: %d (%s)
+Attributes.SelectedDirs=каталогов: %d
+Attributes.SelectedFiles=файлов: %d
+Attributes.SelectedSymlinks=симлинков: %d
+Attributes.MultipleValues=(несколько значений)
+Attributes.OctalMixedError=Неверное восьмеричное значение.\nИспользуйте цифры 0-7 или - там, где каждый объект сохраняет свои биты.
 Attributes.BtnSet=Установить
 Attributes.BtnSecurity=&Безопасность
 Attributes.Read=Чтение

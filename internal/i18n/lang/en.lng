@@ -1428,6 +1428,14 @@ PlugRing.ColDescription=Description
 
 Attributes.Title= Attributes
 Attributes.File=File: %s
+Attributes.ChangeFor=Change file attributes for
+Attributes.SelectedObjects=selected objects
+Attributes.SelectedCount=selected %d items (%s)
+Attributes.SelectedDirs=dirs: %d
+Attributes.SelectedFiles=files: %d
+Attributes.SelectedSymlinks=symlinks: %d
+Attributes.MultipleValues=(multiple values)
+Attributes.OctalMixedError=Invalid octal value.\nUse the digits 0-7, or - where each object keeps its own bits.
 Attributes.Target=T&arget:
 Attributes.MTime=M-Time:
 Attributes.LastWrite=Last write:
