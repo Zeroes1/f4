@@ -19,23 +19,18 @@ func (termApplication) OpenStartupFiles() { openStartupFilesIfRequested() }
 
 func (termApplication) ClientAttached(startLeft, startRight, editPath string, viewPaths []string) {
 	top := vtui.FrameManager.GetTopFrame()
-	pf, ok := top.(*panel.PanelsFrame)
-	if !ok || pf == nil {
-		if editPath != "" || len(viewPaths) > 0 {
-			vtui.DebugLog("SERVER: -e %q, view %q: top frame is not a *PanelsFrame (%T)", editPath, viewPaths, top)
+	if pf, ok := top.(*panel.PanelsFrame); ok && pf != nil {
+		// A workspace that had its panels hidden gets its host console back.
+		if pf.ShellMode == terminal.ShellModeHost && !pf.ShowPanels {
+			pf.EnterHostConsole()
 		}
-		return
+		// A client that attached to a running daemon moves its workspace to
+		// its own directory, as a normal start would.
+		if startLeft != "" {
+			panel.ApplyStartupDirs(pf, startLeft, startRight)
+		}
 	}
-	// A workspace that had its panels hidden gets its host console back.
-	if pf.ShellMode == terminal.ShellModeHost && !pf.ShowPanels {
-		pf.EnterHostConsole()
-	}
-	// A client that attached to a running daemon moves its workspace to its
-	// own directory, as a normal start would.
-	if startLeft != "" {
-		panel.ApplyStartupDirs(pf, startLeft, startRight)
-	}
-	openStartupFilesIn(pf, viewPaths, editPath)
+	openStartupFilesOnPanels(viewPaths, editPath)
 }
 
 func (termApplication) ClientDetached() {

@@ -191,3 +191,20 @@ func TestStartupViewFiles(t *testing.T) {
 		})
 	}
 }
+
+// A path from the command line is made absolute where it was typed: the Unix
+// session daemon that opens it may run in another directory.
+func TestResolveStartupPath(t *testing.T) {
+	cwd := t.TempDir()
+	other := t.TempDir()
+	cases := []struct{ path, want string }{
+		{path: "notes.txt", want: filepath.Join(cwd, "notes.txt")},
+		{path: filepath.Join("sub", "..", "notes.txt"), want: filepath.Join(cwd, "notes.txt")},
+		{path: filepath.Join(other, "new.txt"), want: filepath.Join(other, "new.txt")},
+	}
+	for _, tc := range cases {
+		if got := resolveStartupPath(cwd, tc.path); got != tc.want {
+			t.Errorf("resolveStartupPath(%q) = %q, want %q", tc.path, got, tc.want)
+		}
+	}
+}

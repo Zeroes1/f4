@@ -9,6 +9,7 @@ f4 — efficient and cozy file manager in go
 ~Portable mode~PortableSettings@
 ~Visual File Renamer (VisRen)~VisRen@
 ~Special commands~SpecCmd@
+~Command line~CmdLine@
 ~View README.md~README@
 
 @VisRen
@@ -868,3 +869,41 @@ command line. f4 handles them itself; they never reach the shell.
                the dot.
 
 An unknown f4: command shows the list of the commands that exist.
+
+@CmdLine
+$Command line
+f4 [path1 [path2]] [switches]
+
+Paths come before the switches, or after a "--" separator.
+
+  #f4#                  Both panels open the current directory (on Windows
+                      they keep the folders of the last session).
+
+  #f4 path1 [path2]#    path1 opens in the left panel and path2 in the
+                      right one; without path2 the right panel stays on
+                      the current directory.
+
+  #f4 file#             The file opens in the viewer, as F3 would, and its
+                      panel shows the file's folder with the cursor on
+                      it. Whether pictures and video open in their own
+                      viewers or as plain files is set in Options >
+                      Viewer settings.
+
+  #-e, --edit file#     Open the file in the editor.
+
+  #--gui [backend]#     Start in a window of its own.
+
+  #--tty [backend]#     Start in the terminal.
+
+  #--update [channel]#  Download and install the newest build, then exit.
+
+  #--debug#             Write the diagnostic log to logs/debug.log in the
+                      profile.
+
+  #-v, --version#       Print the version and exit.
+
+  #-h, --help#          Print every switch and exit.
+
+When f4 already runs in the background (Unix), the files named on the
+command line open in that session, and relative names mean the directory
+the command was typed in.

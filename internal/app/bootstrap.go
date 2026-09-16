@@ -146,8 +146,9 @@ func startupDirs() (left, right string) {
 	return os.Getenv(startupDirEnv), os.Getenv(startupDirRightEnv)
 }
 
-// editFilePath holds the -e flag's target, if given -- opened in the editor
-// once InitCore() has the panels frame ready. Package-level because the
+// editFilePath holds the -e flag's target, if given, made absolute right after
+// the command line is read -- opened in the editor once InitCore() has the
+// panels frame ready. Package-level because the
 // flag is parsed in main() but the hook point (right after the panels
 // frame is pushed) lives in InitCore(), a separate function.
 var editFilePath string
@@ -165,19 +166,29 @@ var viewFilePaths []string
 func startupViewFiles(cwd string, args []string) []string {
 	var files []string
 	for _, arg := range args {
-		path := filepath.Clean(arg)
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(cwd, path)
-		}
-		if panel.IsStartupFile(path) {
+		if path := resolveStartupPath(cwd, arg); panel.IsStartupFile(path) {
 			files = append(files, path)
 		}
 	}
 	return files
 }
 
+// resolveStartupPath makes a path from the command line absolute against cwd,
+// the directory the command was typed in. It has to happen in the process that
+// parsed the command line: on Unix the files are opened by the session daemon,
+// whose working directory is the one it was first started from, and a client
+// attaching to it from elsewhere used to have `f4 -e notes.txt` open that
+// directory's notes.txt.
+func resolveStartupPath(cwd, path string) string {
+	path = filepath.Clean(path)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(cwd, path)
+	}
+	return path
+}
+
 // openStartupFilesIfRequested opens what the command line named for viewing and
-// for editing on the current top panel.PanelsFrame. Called from every entry
+// for editing (see openStartupFilesOnPanels). Called from every entry
 // point where SetupUI() (or InitCore(), which calls it) already ran in the one
 // process that's actually going to render -- every GUI backend, and the
 // tty path on Windows (session_windows.go). The Unix tty path is the odd
@@ -186,14 +197,26 @@ func startupViewFiles(cwd string, args []string) []string {
 // terminal.RunServer() hands the files to ClientAttached instead, timed to the
 // actual client attach, not to this function.
 func openStartupFilesIfRequested() {
-	if editFilePath == "" && len(viewFilePaths) == 0 {
+	openStartupFilesOnPanels(viewFilePaths, editFilePath)
+}
+
+// openStartupFilesOnPanels opens the files on the panels frame: the top frame,
+// or, when a dialog is open over the panels -- in a running session a client
+// attaches to, the user may have left one open, or an update prompt may have
+// come up -- the panels under it. The viewer and the editor open as screens of
+// their own, so the dialog stays where it is. The panels are not moved to the
+// startup directories in that case, as a dialog may be acting on them.
+func openStartupFilesOnPanels(viewPaths []string, editPath string) {
+	if editPath == "" && len(viewPaths) == 0 {
 		return
 	}
-	if top := vtui.FrameManager.GetTopFrame(); top != nil {
-		if pf, ok := top.(*panel.PanelsFrame); ok && pf != nil {
-			openStartupFilesIn(pf, viewFilePaths, editFilePath)
-		}
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		vtui.DebugLog("MAIN: -e %q, view %q: no panels frame to open them from (top frame %T)",
+			editPath, viewPaths, vtui.FrameManager.GetTopFrame())
+		return
 	}
+	openStartupFilesIn(pf, viewPaths, editPath)
 }
 
 // openStartupFilesIn opens each view path in the viewer and then editPath, if
@@ -528,6 +551,9 @@ func Main() {
 	rememberStartupDirs(startupDirArgs(os.Args[1:]))
 	if cwd, err := os.Getwd(); err == nil {
 		viewFilePaths = startupViewFiles(cwd, startupDirArgs(os.Args[1:]))
+		if editFilePath != "" {
+			editFilePath = resolveStartupPath(cwd, editFilePath)
+		}
 	}
 	configureF4DebugLogPath(config.GetF4ConfigDir())
 
