@@ -91,6 +91,27 @@ Copy.Title= Copiar
 Copy.Prompt=Copiar %d elemento(s) a:
 Copy.Btn=&Copiar
 
+FileOp.AlreadyOpened=El archivo ya está abierto en el editor:\n%s
+FileOp.AlreadyOpenedTitle= Archivo ya abierto
+FileOp.AlreadyViewed=El archivo ya está siendo visto:\n%s
+FileOp.AlreadyViewedTitle= Archivo ya abierto en el visor
+FileOp.BtnCurrent=&Corriente
+FileOp.BtnReload=Recar&gar
+FileOp.BtnNewInstance=&Nueva instancia
+FileOp.CannotEditDir=No se puede editar un directorio.
+FileOp.CannotViewDir=No se puede ver un directorio.
+FileOp.CannotOpenSpecial=No se pueden abrir archivos especiales (Named Pipes, Sockets, Dispositivos).
+FileOp.DeletionErrors= Errores de eliminación
+FileOp.FileAlreadyExists=El archivo ya existe
+FileOp.RememberChoice=Recordar &elección
+FileOp.Overwrite=Sobres&cribir
+FileOp.Skip=&Omitir
+FileOp.Rename=&Renombrar
+FileOp.Append=&Anexar
+FileOp.Resume=Re&anudar
+FileOp.BtnCancel=&Cancelar
+FileOp.BtnBackground=&Segundo plano
+
 Move.Title= Mover
 Move.Prompt=Renombrar o mover %d elemento(s) a:
 Move.Btn=&Renombrar
@@ -545,27 +566,6 @@ Info.Title= Información
 
 ExtEdit.TempError=No se puede crear el archivo temporal: %v
 
-FileOp.AlreadyOpened=El archivo ya está abierto en el editor:\n%s
-FileOp.AlreadyOpenedTitle= Archivo ya abierto
-FileOp.AlreadyViewed=El archivo ya está siendo visto:\n%s
-FileOp.AlreadyViewedTitle= Archivo ya abierto en el visor
-FileOp.BtnCurrent=&Corriente
-FileOp.BtnReload=Recar&gar
-FileOp.BtnNewInstance=&Nueva instancia
-FileOp.CannotEditDir=No se puede editar un directorio.
-FileOp.CannotViewDir=No se puede ver un directorio.
-FileOp.CannotOpenSpecial=No se pueden abrir archivos especiales (Named Pipes, Sockets, Dispositivos).
-FileOp.DeletionErrors= Errores de eliminación
-FileOp.FileAlreadyExists=El archivo ya existe
-FileOp.RememberChoice=Recordar &elección
-FileOp.Overwrite=Sobres&cribir
-FileOp.Skip=&Omitir
-FileOp.Rename=&Renombrar
-FileOp.Append=&Anexar
-FileOp.Resume=Re&anudar
-FileOp.BtnCancel=&Cancelar
-FileOp.BtnBackground=&Segundo plano
-
 Dialog.RenameTitle= Renombrar
 Dialog.RenamePrompt=Renombrar '%s' a:
 
@@ -999,6 +999,8 @@ SettingsCenter.MacKeyboard.Description=Utilice acordes de edición estilo Mac en
 SettingsCenter.MacKeyboard.Label=Modo de teclado Mac
 SettingsCenter.MacroRecordFormat.Description=Guarde las macros clave grabadas en el formato heredado key_macros.ini o como scripts Lua en Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=Grabar macros como
+SettingsCenter.MenuLoopScroll.Description=Cuando está activado, mantener pulsada la flecha arriba o abajo en un menú o una lista desplegable pasa del último elemento al primero. Cuando está desactivado, la flecha mantenida se detiene en el primer o último elemento; una pulsación independiente sigue saltando al otro extremo, como en Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=Desplazamiento circular de listas
 SettingsCenter.NavigationMode.Description=Classic escribe en la línea de comando. Vim agrega acciones j/k y doble dd/cc/mm. Buscar primero separa la búsqueda de nombre de archivo y el foco de comando.
 SettingsCenter.NavigationMode.Label=Panel de navegación
 SettingsCenter.Next=Siguiente coincidencia
@@ -1629,6 +1631,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Muestra un mensaje cuando la comparación no encuentra diferencias.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Metadatos e informes
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=Todas las noches
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Navegación por menús
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=Región AWS utilizada para la firma y la selección de puntos finales. Por defecto us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=Aplique los cambios a %s antes de ejecutar esta operación.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Primer plano

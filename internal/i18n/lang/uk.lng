@@ -91,6 +91,27 @@ Copy.Title= Копіювання
 Copy.Prompt=Копіювати %d елемент(ів) в:
 Copy.Btn=&Копіювати
 
+FileOp.AlreadyOpened=Файл вже відкритий в редакторі:\n%s
+FileOp.AlreadyOpenedTitle= Файл вже відкритий в редакторі
+FileOp.AlreadyViewed=Файл вже відкритий для перегляду:\n%s
+FileOp.AlreadyViewedTitle= Файл вже відкритий в переглядачі
+FileOp.BtnCurrent=&Поточний
+FileOp.BtnReload=&Оновити
+FileOp.BtnNewInstance=&Нова копія
+FileOp.CannotEditDir=Неможливо редагувати папку.
+FileOp.CannotViewDir=Неможливо переглядати папку.
+FileOp.CannotOpenSpecial=Не вдалося відкрити спеціальні файли (іменовані канали, сокети, пристрої).
+FileOp.DeletionErrors= Помилки видалення
+FileOp.FileAlreadyExists=Файл вже існує
+FileOp.RememberChoice=Запа&м'ятати вибір
+FileOp.Overwrite=&Переписати
+FileOp.Skip=&Пропустити
+FileOp.Rename=Пере&йменувати
+FileOp.Append=&Дописати
+FileOp.Resume=Віднов&ити
+FileOp.BtnCancel=&Скасувати
+FileOp.BtnBackground=&У фоновому режимі
+
 Move.Title= Перейменування/Перенесення
 Move.Prompt=Перейменувати або перенести %d елемент(ів) в:
 Move.Btn=&Перенести
@@ -545,27 +566,6 @@ Info.Title= Інформація
 
 ExtEdit.TempError=Не вдалося створити тимчасовий файл: %v
 
-FileOp.AlreadyOpened=Файл вже відкритий в редакторі:\n%s
-FileOp.AlreadyOpenedTitle= Файл вже відкритий в редакторі
-FileOp.AlreadyViewed=Файл вже відкритий для перегляду:\n%s
-FileOp.AlreadyViewedTitle= Файл вже відкритий в переглядачі
-FileOp.BtnCurrent=&Поточний
-FileOp.BtnReload=&Оновити
-FileOp.BtnNewInstance=&Нова копія
-FileOp.CannotEditDir=Неможливо редагувати папку.
-FileOp.CannotViewDir=Неможливо переглядати папку.
-FileOp.CannotOpenSpecial=Не вдалося відкрити спеціальні файли (іменовані канали, сокети, пристрої).
-FileOp.DeletionErrors= Помилки видалення
-FileOp.FileAlreadyExists=Файл вже існує
-FileOp.RememberChoice=Запа&м'ятати вибір
-FileOp.Overwrite=&Переписати
-FileOp.Skip=&Пропустити
-FileOp.Rename=Пере&йменувати
-FileOp.Append=&Дописати
-FileOp.Resume=Віднов&ити
-FileOp.BtnCancel=&Скасувати
-FileOp.BtnBackground=&У фоновому режимі
-
 Dialog.RenameTitle= Перейменування
 Dialog.RenamePrompt=Перейменувати '%s' на:
 
@@ -1000,6 +1000,8 @@ SettingsCenter.MacKeyboard.Description=Використовуйте аккорд
 SettingsCenter.MacKeyboard.Label=Режим клавиатури Mac
 SettingsCenter.MacroRecordFormat.Description=Запам'ятайте записані ключові макро в стародавньому форматі key_macros.ini або як скрипти Lua під Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=Запишіть макро як
+SettingsCenter.MenuLoopScroll.Description=Якщо ввімкнено, утримання стрілки вгору або вниз у меню чи розкривному списку після останнього елемента повертається до першого. Якщо вимкнено, утримувана стрілка зупиняється на першому або останньому елементі; окреме натискання й далі переходить до іншого краю, як у Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=Циклічна прокрутка списку
 SettingsCenter.NavigationMode.Description=Класичні типи в командну лінію. Vim додає j/k і подвійні дії dd/cc/mm. Пошук-перше відділяє файлову назву-пошук і командний фокус.
 SettingsCenter.NavigationMode.Label=Навігація панелі
 SettingsCenter.Next=Наступний збіг
@@ -1630,6 +1632,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Покажіть повідомлення, коли порівняння не виявляє відмінностей.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Метадані та звіти
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=Ночі
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Навігація меню
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=Регіон AWS для підписування запитів і вибору кінцевої точки. Типове значення — us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=До виконання цієї операції застосуйте зміни до %s.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Наперед

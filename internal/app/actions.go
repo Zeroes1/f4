@@ -2351,7 +2351,7 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	if chkSymlinks != nil {
 		vbox.Add(chkSymlinks, vtui.Margins{}, vtui.AlignLeft)
 	}
-	vbox.Add(btnAdvanced, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(btnAdvanced, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(comboMode, vtui.Margins{Top: 1}, vtui.AlignCenter)
 
 	// The same VBox re-applied to the new dialog rectangle is what stretches

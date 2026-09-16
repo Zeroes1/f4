@@ -91,6 +91,27 @@ Copy.Title= Kopiuj
 Copy.Prompt=Kopiuj %d element(ów) do:
 Copy.Btn=&Kopiuj
 
+FileOp.AlreadyOpened=Plik jest już otwarty:\n%s
+FileOp.AlreadyOpenedTitle= Plik jest już otwarty
+FileOp.AlreadyViewed=Plik jest już przeglądany:\n%s
+FileOp.AlreadyViewedTitle= Plik jest już otwarty w podglądzie
+FileOp.BtnCurrent=&Bieżący
+FileOp.BtnReload=Zładuj &ponownie
+FileOp.BtnNewInstance=&Nowa instancja
+FileOp.CannotEditDir=Nie można edytować katalogu.
+FileOp.CannotViewDir=Nie można przeglądać katalogu.
+FileOp.CannotOpenSpecial=Nie udało się otworzyć plików specjalnych (potoki nazwane, gniazda, urządzenia).
+FileOp.DeletionErrors= Błędy usuwania
+FileOp.FileAlreadyExists=Plik już istnieje
+FileOp.RememberChoice=Zapa&miętaj wybór
+FileOp.Overwrite=&Nadpisz
+FileOp.Skip=P&omiń
+FileOp.Rename=Z&mień nazwę
+FileOp.Append=&Dołącz
+FileOp.Resume=Wz&nów
+FileOp.BtnCancel=&Anuluj
+FileOp.BtnBackground=W t&le
+
 Move.Title= Przenieś
 Move.Prompt=Zmień nazwę lub przenieś %d element(ów) do:
 Move.Btn=&Przenieś
@@ -545,27 +566,6 @@ Info.Title= Informacja
 
 ExtEdit.TempError=Nie można utworzyć pliku tymczasowego: %v
 
-FileOp.AlreadyOpened=Plik jest już otwarty:\n%s
-FileOp.AlreadyOpenedTitle= Plik jest już otwarty
-FileOp.AlreadyViewed=Plik jest już przeglądany:\n%s
-FileOp.AlreadyViewedTitle= Plik jest już otwarty w podglądzie
-FileOp.BtnCurrent=&Bieżący
-FileOp.BtnReload=Zładuj &ponownie
-FileOp.BtnNewInstance=&Nowa instancja
-FileOp.CannotEditDir=Nie można edytować katalogu.
-FileOp.CannotViewDir=Nie można przeglądać katalogu.
-FileOp.CannotOpenSpecial=Nie udało się otworzyć plików specjalnych (potoki nazwane, gniazda, urządzenia).
-FileOp.DeletionErrors= Błędy usuwania
-FileOp.FileAlreadyExists=Plik już istnieje
-FileOp.RememberChoice=Zapa&miętaj wybór
-FileOp.Overwrite=&Nadpisz
-FileOp.Skip=P&omiń
-FileOp.Rename=Z&mień nazwę
-FileOp.Append=&Dołącz
-FileOp.Resume=Wz&nów
-FileOp.BtnCancel=&Anuluj
-FileOp.BtnBackground=W t&le
-
 Dialog.RenameTitle= Zmień nazwę
 Dialog.RenamePrompt=Zmień nazwę '%s' na:
 
@@ -999,6 +999,8 @@ SettingsCenter.MacKeyboard.Description=Użyj akordów edycji w stylu Mac w edyto
 SettingsCenter.MacKeyboard.Label=Tryb klawiatury Mac
 SettingsCenter.MacroRecordFormat.Description=Zapisuje nagrane makra klawiaturowe w starszym formacie key_macros.ini albo jako skrypty Lua w katalogu Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=Zapisać makry jako
+SettingsCenter.MenuLoopScroll.Description=Po włączeniu przytrzymanie strzałki w górę lub w dół w menu albo na liście rozwijanej przechodzi za ostatni element i wraca do pierwszego. Po wyłączeniu przytrzymana strzałka zatrzymuje się na pierwszym lub ostatnim elemencie; osobne naciśnięcie nadal przeskakuje na drugi koniec, jak w Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=Zapętlanie przewijania listy
 SettingsCenter.NavigationMode.Description=Klasyczne typy w linii poleceń. Vim dodaje działania j/k i podwójne dd/cc/mm. Search-first oddziela wyszukiwanie nazwy plików i koncentrację polecenia.
 SettingsCenter.NavigationMode.Label=Nawigacja w panelu
 SettingsCenter.Next=Następne dopasowanie
@@ -1629,6 +1631,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Pokaż wiadomość, gdy porównanie nie pokazuje różnic.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Metadane i raporty
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=W nocy
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Nawigacja po menu
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=Obszar AWS używany do podpisania i wyboru punktów końcowych. Default us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=Wykorzystaj zmiany w %s przed uruchomieniem tej operacji.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Przedstawiciele
