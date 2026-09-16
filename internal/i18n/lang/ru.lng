@@ -883,6 +883,12 @@ ColorerSettings.UserHrc=&Пользовательские схемы (файл �
 ColorerSettings.UserHrd=Польз&овательские стили (файл или папка):
 ColorerSettings.Reload=Пере&загрузить
 ColorerSettings.Download=Ска&чать схемы
+ColorerSettings.CheckAll=Проверить &все схемы
+ColorerSettings.CheckTitle=Проверка конфигурации Colorer
+ColorerSettings.Checking=Загрузка конфигурации Colorer...
+ColorerSettings.CheckFailed=Colorer не может работать с этой конфигурацией:
+ColorerSettings.CheckReports=Сообщения Colorer:
+ColorerSettings.CheckPassed=Загружено типов файлов без ошибок: %d.
 
 AppearanceSettings.Title= Внешний вид
 AppearanceSettings.Style=Стиль &оформления:

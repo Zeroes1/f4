@@ -19,7 +19,7 @@ usable on its own.
 | Catalog | `EditorColorerCatalog` (a directory, not catalog.xml) |
 | User file of schemes (UserHrcPath) | `EditorColorerUserHrc` — step 1 |
 | User file of color styles (UserHrdPath) | `EditorColorerUserHrd` — step 1 |
-| Reload / test load with the error shown (`TestLoadBase`) | Reload drops sessions; no test load yet — step 2 |
+| Reload / test load with the error shown (`TestLoadBase`) | step 2 |
 | Pairs: highlight the bracket pair under the cursor | step 3 |
 | Menu: match pair, select pair, select block | step 3 |
 | Menu: list functions, find errors, locate function; old outline view | step 4 |
@@ -39,3 +39,11 @@ impose.
 Found on the way and fixed with it: the Settings Center style list read
 catalog.xml with `encoding/xml`, which stops at the external entities the
 installed catalog uses (`&catalog-rgb;`), so it listed no styles at all.
+
+## Step 2 — load before use, and say what is wrong (done)
+
+OK, Reload and a new "Check all schemes" button load the configuration first
+and show what Colorer could not load or reported; the Settings Center has the
+same as commands. colorer4go gained `Session.FileTypes` and
+`Session.LoadFileType`, which also give step 5 its list of types. See
+HIGHLIGHT.md 3.9.

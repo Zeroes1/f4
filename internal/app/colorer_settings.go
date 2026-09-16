@@ -1,8 +1,11 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/panel"
+	"context"
+	"fmt"
 	"strings"
+
+	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/editor"
@@ -85,6 +88,61 @@ func EditorCrossAttrs() (horz, vert bool, horzAttr, vertAttr uint64) {
 		colorerCrossAttr(colorerVertCrossRegion, base)
 }
 
+// colorerCheckMessage turns a check into the text of a message box. An empty
+// title means there is nothing to say.
+func colorerCheckMessage(check editor.ColorerCheck, allTypes bool) (title, text string, kind vtui.MessageKind) {
+	var b strings.Builder
+	kind = vtui.MessageWarn
+	if check.Err != nil {
+		b.WriteString(i18n.Msg("ColorerSettings.CheckFailed"))
+		b.WriteString("\n")
+		b.WriteString(check.Err.Error())
+	}
+	if len(check.Reports) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(i18n.Msg("ColorerSettings.CheckReports"))
+		for _, report := range check.Reports {
+			b.WriteString("\n")
+			b.WriteString(report)
+		}
+	}
+	if b.Len() == 0 {
+		if !allTypes {
+			return "", "", vtui.MessageInfo
+		}
+		b.WriteString(fmt.Sprintf(i18n.Msg("ColorerSettings.CheckPassed"), check.Types))
+		kind = vtui.MessageInfo
+	}
+	return i18n.Msg("ColorerSettings.CheckTitle"), b.String(), kind
+}
+
+// runColorerCheck loads a Colorer configuration off the UI thread behind a
+// progress dialog, shows what the check found, and hands the result to done on
+// the UI thread. A check the user cancelled shows nothing and is not passed on.
+func runColorerCheck(pf *panel.PanelsFrame, src editor.ColorerSource, scheme string, allTypes bool, done func(editor.ColorerCheck)) {
+	var check editor.ColorerCheck
+	pf.RunProgressTask(i18n.Msg("ColorerSettings.CheckTitle"), i18n.Msg("ColorerSettings.Checking"), false,
+		func(ctx context.Context, update func(msg string, percent int)) error {
+			check = editor.CheckColorerSource(ctx, src, scheme, allTypes, func(n, total int, label string) {
+				update(label, n*100/total)
+			})
+			return nil
+		},
+		func(error) {
+			if editor.IsColorerCheckCancelled(check) {
+				return
+			}
+			if title, text, kind := colorerCheckMessage(check, allTypes); title != "" {
+				vtui.ShowMessageEx(title, text, []string{i18n.Msg("vtui.Ok")}, kind)
+			}
+			if done != nil {
+				done(check)
+			}
+		})
+}
+
 func actionColorerSettings(pf *panel.PanelsFrame) {
 	width, height := 74, 23
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ColorerSettings.Title"))
@@ -155,6 +213,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	lblUserHrd := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.UserHrd"), editUserHrd)
 
 	btnReload := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.Reload"))
+	btnCheckAll := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.CheckAll"))
 	btnDownload := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.Download"))
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	btnOk.IsDefault = true
@@ -175,6 +234,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	dlg.AddItem(lblUserHrd)
 	dlg.AddItem(editUserHrd)
 	dlg.AddItem(btnReload)
+	dlg.AddItem(btnCheckAll)
 	dlg.AddItem(btnDownload)
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnCancel)
@@ -210,6 +270,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	rowTools.HorizontalAlign = vtui.AlignCenter
 	rowTools.Spacing = 2
 	rowTools.Add(btnReload, vtui.Margins{}, vtui.AlignTop)
+	rowTools.Add(btnCheckAll, vtui.Margins{}, vtui.AlignTop)
 	rowTools.Add(btnDownload, vtui.Margins{}, vtui.AlignTop)
 	vbox.Add(rowTools, vtui.Margins{Top: 1}, vtui.AlignFill)
 
@@ -246,18 +307,64 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 		config.SaveConfig()
 	}
 
+	// What the dialog would apply: the configuration a check has to load.
+	pending := func() (editor.ColorerSource, string) {
+		src := editor.ColorerSource{
+			ConfigsDir: strings.TrimSpace(editCatalog.GetText()),
+			UserHRC:    strings.TrimSpace(editUserHrc.GetText()),
+			UserHRD:    strings.TrimSpace(editUserHrd.GetText()),
+		}
+		if src.ConfigsDir == "" {
+			src.ConfigsDir = editor.DefaultColorerConfigsDir()
+		}
+		scheme := ""
+		if pos := comboScheme.Menu.SelectPos; pos > 0 && pos < len(schemeNames) {
+			scheme = schemeNames[pos]
+		}
+		return src, scheme
+	}
+
 	btnCancel.OnClick = func() { dlg.Close() }
 
+	// As FarColorer's OK does: a changed configuration is loaded first, and one
+	// Colorer cannot load keeps the dialog open. What Colorer merely reports is
+	// shown and does not stop the change.
 	btnOk.OnClick = func() {
-		apply()
-		dlg.Close()
+		src, scheme := pending()
+		changed := src != editor.CurrentColorerSource() || !strings.EqualFold(scheme, config.App.EditorColorerScheme) || !colorerIsActive()
+		if chkEnabled.State != 1 || !changed {
+			apply()
+			dlg.Close()
+			return
+		}
+		runColorerCheck(pf, src, scheme, false, func(check editor.ColorerCheck) {
+			if check.Err != nil {
+				return
+			}
+			apply()
+			dlg.Close()
+		})
 	}
 
 	btnReload.OnClick = func() {
-		apply()
-		editor.ResetColorerSessions()
-		editor.ResetColorerRegions()
-		vtui.FrameManager.Redraw()
+		src, scheme := pending()
+		runColorerCheck(pf, src, scheme, false, func(check editor.ColorerCheck) {
+			if check.Err != nil {
+				return
+			}
+			apply()
+			editor.ResetColorerSessions()
+			editor.ResetColorerRegions()
+			vtui.FrameManager.Redraw()
+		})
+	}
+
+	// FarColorer's "Reload all": every file type's scheme is loaded, so a
+	// scheme that breaks only when its type is used is found now. It applies
+	// nothing.
+	btnCheckAll.OnClick = func() {
+		src, scheme := pending()
+		runColorerCheck(pf, src, scheme, true, nil)
 	}
 
 	btnDownload.OnClick = func() {

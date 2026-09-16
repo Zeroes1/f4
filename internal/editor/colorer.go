@@ -234,7 +234,12 @@ func CurrentColorerSource() ColorerSource {
 
 // sessionOptions are the options a session from this source is created with.
 func (src ColorerSource) sessionOptions() []colorer.Option {
-	opts := colorerSessionOptions()
+	return append(colorerSessionOptions(), src.userOptions()...)
+}
+
+// userOptions load the user's own colour styles and schemes.
+func (src ColorerSource) userOptions() []colorer.Option {
+	var opts []colorer.Option
 	if src.UserHRD != "" {
 		opts = append(opts, colorer.WithUserHRD(src.UserHRD))
 	}
@@ -311,6 +316,11 @@ func ColorerConfigsDir() string {
 	if custom := strings.TrimSpace(config.App.EditorColorerCatalog); custom != "" {
 		return custom
 	}
+	return DefaultColorerConfigsDir()
+}
+
+// DefaultColorerConfigsDir is where the configuration lives when none is set.
+func DefaultColorerConfigsDir() string {
 	return filepath.Join(config.GetF4ConfigDir(), "colorer", "configs")
 }
 

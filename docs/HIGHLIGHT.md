@@ -254,6 +254,30 @@ through `colorer.WithUserHRC` / `WithUserHRD`, styles first.
   (`&catalog-rgb;`) the installed catalog lists its styles through, so the
   list was empty on a real installation.
 
+### 3.9 Checking a configuration before it is used
+
+Issue #277, step 2. A scheme or style Colorer cannot load used to show up only
+as an editor that quietly fell back to Chroma, with the reason in debug.log.
+`editor.CheckColorerSource` loads a configuration the way an editor starts
+Colorer — catalog, user styles and schemes, colour style — and, with
+`allTypes`, the scheme of every file type (`Session.LoadFileType`), which is
+where a broken scheme otherwise waits until a file of its type is opened. It
+returns the failure and everything Colorer reported at warning level or worse.
+
+- Colorer settings dialog: OK loads a changed configuration first and stays
+  open if it fails, as FarColorer's OK does; Reload does the same before
+  dropping sessions; "Check all schemes" loads every type behind a progress
+  dialog and applies nothing. Reports that did not stop the load are shown and
+  do not block.
+- Settings Center: "Reload schemas" runs the quick check, and the new "Check
+  all schemes" the full one; either returns the findings as its error.
+- FarColorer's "Reload all" (`TestLoadBase`) calls `getBaseScheme()` on each
+  type, which in this Colorer version returns the pointer without loading;
+  the full check calls `HrcLibrary::loadFileType` instead.
+- Loading every type of the bundled catalog took 89 s on a single-core
+  sandbox, and reports two errors: `markdown:markdown` inherits
+  `markdown2:markdown2`, which no type defines.
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped

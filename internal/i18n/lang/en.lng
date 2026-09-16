@@ -896,6 +896,12 @@ ColorerSettings.UserHrc=&User schemes (file or folder):
 ColorerSettings.UserHrd=User color s&tyles (file or folder):
 ColorerSettings.Reload=Re&load
 ColorerSettings.Download=&Download schemas
+ColorerSettings.CheckAll=Check &all schemes
+ColorerSettings.CheckTitle=Colorer configuration check
+ColorerSettings.Checking=Loading the Colorer configuration...
+ColorerSettings.CheckFailed=Colorer cannot use this configuration:
+ColorerSettings.CheckReports=Colorer reported:
+ColorerSettings.CheckPassed=%d file types loaded without problems.
 
 AppearanceSettings.Title= Appearance settings
 AppearanceSettings.Style=Application &style:
