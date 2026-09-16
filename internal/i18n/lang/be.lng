@@ -91,6 +91,27 @@ Copy.Title= Капіраванне
 Copy.Prompt=Скапіраваць %d элемент(аў) у:
 Copy.Btn=&Скапіраваць
 
+FileOp.AlreadyOpened=Файл ужо адкрыты ў рэдактары:\n%s
+FileOp.AlreadyOpenedTitle= Файл ужо адкрыты ў рэдактары
+FileOp.AlreadyViewed=Файл ужо адкрыты для прагляду:\n%s
+FileOp.AlreadyViewedTitle= Файл ужо адкрыты ў праглядніку
+FileOp.BtnCurrent=&Бягучы
+FileOp.BtnReload=&Абнавіць
+FileOp.BtnNewInstance=&Новая копія
+FileOp.CannotEditDir=Немагчыма рэдагаваць папку.
+FileOp.CannotViewDir=Немагчыма праглядаць папку.
+FileOp.CannotOpenSpecial=Не ўдалося адкрыць спецыяльныя файлы (іменаваныя каналы, сокеты, прылады).
+FileOp.DeletionErrors= Памылкі выдалення
+FileOp.FileAlreadyExists=Файл ужо існуе
+FileOp.RememberChoice=Запа&мніць выбар
+FileOp.Overwrite=&Перапісаць
+FileOp.Skip=&Прапусціць
+FileOp.Rename=Пера&іменаваць
+FileOp.Append=&Дапісаць
+FileOp.Resume=Аднав&іць
+FileOp.BtnCancel=&Адмена
+FileOp.BtnBackground=&У фонавым рэжыме
+
 Move.Title= Перайменаванне/Перанос
 Move.Prompt=Перайменаваць або перанесці %d элемент(аў) у:
 Move.Btn=&Перанесці
@@ -545,27 +566,6 @@ Info.Title= Інфармацыя
 
 ExtEdit.TempError=Не ўдалося стварыць часовы файл: %v
 
-FileOp.AlreadyOpened=Файл ужо адкрыты ў рэдактары:\n%s
-FileOp.AlreadyOpenedTitle= Файл ужо адкрыты ў рэдактары
-FileOp.AlreadyViewed=Файл ужо адкрыты для прагляду:\n%s
-FileOp.AlreadyViewedTitle= Файл ужо адкрыты ў праглядніку
-FileOp.BtnCurrent=&Бягучы
-FileOp.BtnReload=&Абнавіць
-FileOp.BtnNewInstance=&Новая копія
-FileOp.CannotEditDir=Немагчыма рэдагаваць папку.
-FileOp.CannotViewDir=Немагчыма праглядаць папку.
-FileOp.CannotOpenSpecial=Не ўдалося адкрыць спецыяльныя файлы (іменаваныя каналы, сокеты, прылады).
-FileOp.DeletionErrors= Памылкі выдалення
-FileOp.FileAlreadyExists=Файл ужо існуе
-FileOp.RememberChoice=Запа&мніць выбар
-FileOp.Overwrite=&Перапісаць
-FileOp.Skip=&Прапусціць
-FileOp.Rename=Пера&іменаваць
-FileOp.Append=&Дапісаць
-FileOp.Resume=Аднав&іць
-FileOp.BtnCancel=&Адмена
-FileOp.BtnBackground=&У фонавым рэжыме
-
 Dialog.RenameTitle= Перайменаванне
 Dialog.RenamePrompt=Перайменаваць '%s' у:
 
@@ -999,8 +999,8 @@ SettingsCenter.MacKeyboard.Description=Выкарыстоўвайце рэдаг
 SettingsCenter.MacKeyboard.Label=Рэжым клавіятуры Mac
 SettingsCenter.MacroRecordFormat.Description=Захоўвайце запісаныя ключавыя макрасы ў старым фармаце key_macros.ini або ў выглядзе скрыптоў Lua пад Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=Запісаць макрасы як
-SettingsCenter.MenuLoopScroll.Description=When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.
-SettingsCenter.MenuLoopScroll.Label=Loop list scrolling
+SettingsCenter.MenuLoopScroll.Description=Калі ўключана, утрыманне стрэлкі ўверх або ўніз у меню ці выпадальным спісе пераходзіць за апошні элемент да першага. Калі выключана, утрыманая стрэлка спыняецца на першым або апошнім элеменце; асобнае націсканне па-ранейшаму пераходзіць на другі край, як у Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=Цыклічная пракрутка спіса
 SettingsCenter.NavigationMode.Description=Classic уводзіць у камандны радок. Vim дадае дзеянні j/k і падвойныя dd/cc/mm. Пачатак пошуку падзяляе пошук па імені файла і фокус каманды.
 SettingsCenter.NavigationMode.Label=Панэль навігацыі
 SettingsCenter.Next=Наступнае супадзенне
@@ -1631,7 +1631,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Паказаць паведамленне, калі параўнанне не знаходзіць адрозненняў.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Метаданыя і справаздачы
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=Штовечар
-SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Menu navigation
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Навігацыя па меню
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=Рэгіён  AWS, які выкарыстоўваецца для подпісу і выбару канчатковай кропкі. Па змаўчанні us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=Прымяніць змены да %s перад выкананнем гэтай аперацыі.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Пярэдні план

@@ -88,6 +88,27 @@ Copy.Title= העתקה
 Copy.Prompt=העתק %d פריטים אל:
 Copy.Btn=ה&עתק
 
+FileOp.AlreadyOpened=הקובץ כבר פתוח:\n%s
+FileOp.AlreadyOpenedTitle= הקובץ כבר פתוח
+FileOp.AlreadyViewed=הקובץ כבר פתוח לצפייה:\n%s
+FileOp.AlreadyViewedTitle= הקובץ כבר פתוח בצופה
+FileOp.BtnCurrent=נ&וכחי
+FileOp.BtnReload=ט&ען מחדש
+FileOp.BtnNewInstance=מופע ח&דש
+FileOp.CannotEditDir=לא ניתן לערוך תיקייה.
+FileOp.CannotViewDir=לא ניתן לצפות בתיקייה.
+FileOp.CannotOpenSpecial=לא ניתן לפתוח קבצים מיוחדים (Named Pipes, Sockets, Devices).
+FileOp.DeletionErrors= שגיאות מחיקה
+FileOp.FileAlreadyExists=הקובץ כבר קים
+FileOp.RememberChoice=ז&כור בחירה
+FileOp.Overwrite=ה&חלף
+FileOp.Skip=ד&לג
+FileOp.Rename=שנה ש&ם
+FileOp.Append=ה&וסף לסוף
+FileOp.Resume=ה&משך
+FileOp.BtnCancel=&ביטול
+FileOp.BtnBackground=ב&רקע
+
 Move.Title= העברה
 Move.Prompt=שנה שם או העבר %d פריטים אל:
 Move.Btn=שנה ש&ם
@@ -542,27 +563,6 @@ Info.Title= מידע
 
 ExtEdit.TempError=לא ניתן ליצור קובץ זמני: %v
 
-FileOp.AlreadyOpened=הקובץ כבר פתוח:\n%s
-FileOp.AlreadyOpenedTitle= הקובץ כבר פתוח
-FileOp.AlreadyViewed=הקובץ כבר פתוח לצפייה:\n%s
-FileOp.AlreadyViewedTitle= הקובץ כבר פתוח בצופה
-FileOp.BtnCurrent=נ&וכחי
-FileOp.BtnReload=ט&ען מחדש
-FileOp.BtnNewInstance=מופע ח&דש
-FileOp.CannotEditDir=לא ניתן לערוך תיקייה.
-FileOp.CannotViewDir=לא ניתן לצפות בתיקייה.
-FileOp.CannotOpenSpecial=לא ניתן לפתוח קבצים מיוחדים (Named Pipes, Sockets, Devices).
-FileOp.DeletionErrors= שגיאות מחיקה
-FileOp.FileAlreadyExists=הקובץ כבר קים
-FileOp.RememberChoice=ז&כור בחירה
-FileOp.Overwrite=ה&חלף
-FileOp.Skip=ד&לג
-FileOp.Rename=שנה ש&ם
-FileOp.Append=ה&וסף לסוף
-FileOp.Resume=ה&משך
-FileOp.BtnCancel=&ביטול
-FileOp.BtnBackground=ב&רקע
-
 Dialog.RenameTitle= שינוי שם
 Dialog.RenamePrompt=שנה שם '%s' אל:
 
@@ -996,8 +996,8 @@ SettingsCenter.MacKeyboard.Description=השתמש באקורדים לעריכה 
 SettingsCenter.MacKeyboard.Label=מצב מקלדת Mac
 SettingsCenter.MacroRecordFormat.Description=שמור פקודות מאקרו מפתח מוקלטות בפורמט key_macros.ini מדור קודם או כסקריפטים של Lua תחת Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=הקלט פקודות מאקרו כ
-SettingsCenter.MenuLoopScroll.Description=When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.
-SettingsCenter.MenuLoopScroll.Label=Loop list scrolling
+SettingsCenter.MenuLoopScroll.Description=כאשר האפשרות פעילה, החזקת החץ למעלה או למטה בתפריט או ברשימה נפתחת עוברת מעבר לפריט האחרון וחוזרת לראשון. כאשר היא כבויה, חץ שמוחזק נעצר בפריט הראשון או האחרון; לחיצה נפרדת עדיין קופצת לקצה השני, כמו ב-Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=גלילה מחזורית ברשימה
 SettingsCenter.NavigationMode.Description=Classic מקלידים בשורת הפקודה. Vim מוסיף פעולות j/k וכפול dd/cc/mm. Search-first מפריד בין שם קובץ-חיפוש לבין מיקוד פקודה.
 SettingsCenter.NavigationMode.Label=ניווט בלוח
 SettingsCenter.Next=ההתאמה הבאה
@@ -1628,7 +1628,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=הצג הודעה כאשר ההשוואה לא מוצאת הבדלים.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=מטא־נתונים ודוחות
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=לילי
-SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Menu navigation
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=ניווט בתפריט
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=אזור  AWS המשמש לחתימה ובחירת נקודות קצה. ברירת המחדל us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=החל שינויים על %s לפני הפעלת פעולה זו.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=חזית

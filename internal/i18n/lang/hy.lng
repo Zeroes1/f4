@@ -87,6 +87,25 @@ Copy.Title= Պատճենում
 Copy.Prompt=Պատճենել %d տարրերը այստեղ՝
 Copy.Btn=&Պատճենել
 
+FileOp.AlreadyOpened=Ֆայլը արդեն բացված է խմբագրիչում՝\n%s
+FileOp.AlreadyOpenedTitle= Ֆայլը արդեն բացված է խմբագրիչում
+FileOp.AlreadyViewed=Ֆայլը արդեն բացված է դիտելու համար՝\n%s
+FileOp.AlreadyViewedTitle= Ֆայլը արդեն բացված է դիտողում
+FileOp.BtnCurrent=&Ընթացիկ
+FileOp.BtnReload=&Թարմացնել
+FileOp.BtnNewInstance=&Նոր պատճեն
+FileOp.CannotEditDir=Հնարավոր չէ խմբագրել թղթապանակը։
+FileOp.CannotViewDir=Հնարավոր չէ դիտել թղթապանակը։
+FileOp.CannotOpenSpecial=Չհաջողվեց բացել հատուկ ֆայլերը (հոսքեր, սոկետներ, սարքեր)։
+FileOp.DeletionErrors= Ջնջման սխալներ
+FileOp.FileAlreadyExists=Ֆայլն արդեն գոյություն ունի
+FileOp.RememberChoice=Հի&շել ընտրությունը
+FileOp.Overwrite=&Վերագրել
+FileOp.Skip=&Բաց թողնել
+FileOp.Rename=&Անվանափոխել
+FileOp.Append=&Լրացնել
+FileOp.Resume=Վերա&սկսել
+
 Move.Title= Տեղափոխում
 Move.Prompt=Անվանափոխել կամ տեղափոխել %d տարրերը այստեղ՝
 Move.Btn=&Անվանափոխել
@@ -526,25 +545,6 @@ Info.Title= Ինֆորմացիա
 
 ExtEdit.TempError=Չհաջողվեց ստեղծել ժամանակավոր ֆայլը՝ %v
 
-FileOp.AlreadyOpened=Ֆայլը արդեն բացված է խմբագրիչում՝\n%s
-FileOp.AlreadyOpenedTitle= Ֆայլը արդեն բացված է խմբագրիչում
-FileOp.AlreadyViewed=Ֆայլը արդեն բացված է դիտելու համար՝\n%s
-FileOp.AlreadyViewedTitle= Ֆայլը արդեն բացված է դիտողում
-FileOp.BtnCurrent=&Ընթացիկ
-FileOp.BtnReload=&Թարմացնել
-FileOp.BtnNewInstance=&Նոր պատճեն
-FileOp.CannotEditDir=Հնարավոր չէ խմբագրել թղթապանակը։
-FileOp.CannotViewDir=Հնարավոր չէ դիտել թղթապանակը։
-FileOp.CannotOpenSpecial=Չհաջողվեց բացել հատուկ ֆայլերը (հոսքեր, սոկետներ, սարքեր)։
-FileOp.DeletionErrors= Ջնջման սխալներ
-FileOp.FileAlreadyExists=Ֆայլն արդեն գոյություն ունի
-FileOp.RememberChoice=Հի&շել ընտրությունը
-FileOp.Overwrite=&Վերագրել
-FileOp.Skip=&Բաց թողնել
-FileOp.Rename=&Անվանափոխել
-FileOp.Append=&Լրացնել
-FileOp.Resume=Վերա&սկսել
-
 Dialog.RenameTitle= Անվանափոխում
 Dialog.RenamePrompt=Անվանափոխել '%s' այսպես՝
 
@@ -917,8 +917,8 @@ SettingsCenter.MacKeyboard.Description=Օգտագործեք Mac- ի ոճի խմ�
 SettingsCenter.MacKeyboard.Label=Mac ստեղնաշարի ռեժիմը
 SettingsCenter.MacroRecordFormat.Description=Պահպանել ձայնագրված հիմնական մաքրոները legacy key_macros.ini ձեւաչափում կամ որպես Lua գրառումներ Macros/scripts ներքո:
 SettingsCenter.MacroRecordFormat.Label=Մաքրոնները գրեք որպես
-SettingsCenter.MenuLoopScroll.Description=When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.
-SettingsCenter.MenuLoopScroll.Label=Loop list scrolling
+SettingsCenter.MenuLoopScroll.Description=Միացված լինելու դեպքում ընտրացանկում կամ բացվող ցանկում վեր կամ վար սլաքը պահելը վերջին տարրից անցնում է առաջինին։ Անջատված լինելու դեպքում պահված սլաքը կանգ է առնում առաջին կամ վերջին տարրի վրա, իսկ առանձին սեղմումը շարունակում է անցնել մյուս ծայրը, ինչպես Far Manager 3-ում։
+SettingsCenter.MenuLoopScroll.Label=Ցանկի օղակաձև ոլորում
 SettingsCenter.NavigationMode.Description=Կլասիկ տիպերը հրամանատար գծի մեջ: Vim- ը ավելացնում է j/k եւ կրկնակի dd/cc/mm գործողություններ: Փնտրում-առաջը բաժանում է ֆայլերի անվանումը-փնտրում եւ հրամանների կենտրոնացումը:
 SettingsCenter.NavigationMode.Label=Պանետային նավիգացիա
 SettingsCenter.Next=Հաջորդ համընկնումը
@@ -1549,7 +1549,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Ցույց տվեք հաղորդագրություն, երբ համեմատությունը չի ցույց տալիս տարբերություն:
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Մետատվյալներ և հաշվետվություններ
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=Գիշերային
-SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Menu navigation
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Ընտրացանկի նավարկում
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=AWS տարածաշրջանը, որն օգտագործվում է հարցումների ստորագրման և սերվերի ընտրության համար։ Լռելյայն արժեքը՝ us-east-1։
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=Այս գործողությունը կատարելուց առաջ կիրառեք փոփոխությունները %s- ում:
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Նախագիծը

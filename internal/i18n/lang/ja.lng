@@ -88,6 +88,27 @@ Copy.Title= コピー
 Copy.Prompt=%d 個のアイテムをコピー中:
 Copy.Btn=コピー(&C)
 
+FileOp.AlreadyOpened=ファイルは既に開かれています:\n%s
+FileOp.AlreadyOpenedTitle= ファイルは既に開かれています
+FileOp.AlreadyViewed=ファイルは既に表示されています:\n%s
+FileOp.AlreadyViewedTitle= ファイルは既にビューアで開かれています
+FileOp.BtnCurrent=現在(&C)
+FileOp.BtnReload=再読み込み(&R)
+FileOp.BtnNewInstance=新規インスタンス(&N)
+FileOp.CannotEditDir=ディレクトリは編集できません。
+FileOp.CannotViewDir=ディレクトリは表示できません。
+FileOp.CannotOpenSpecial=特殊ファイル (名前付きパイプ、ソケット、デバイス) は開けません。
+FileOp.DeletionErrors= 削除エラー
+FileOp.FileAlreadyExists=ファイルは既に存在します
+FileOp.RememberChoice=選択を記憶する(&M)
+FileOp.Overwrite=上書き(&O)
+FileOp.Skip=スキップ(&S)
+FileOp.Rename=名前変更(&R)
+FileOp.Append=追記(&A)
+FileOp.Resume=再開(&U)
+FileOp.BtnCancel=キャンセル(&C)
+FileOp.BtnBackground=バックグラウンド(&B)
+
 Move.Title= 移動/名前変更
 Move.Prompt=%d 個 of アイテムを名前変更または移動中:
 Move.Btn=リネーム(&R)
@@ -537,27 +558,6 @@ Info.Title= 情報
 
 ExtEdit.TempError=一時ファイルを作成できません: %v
 
-FileOp.AlreadyOpened=ファイルは既に開かれています:\n%s
-FileOp.AlreadyOpenedTitle= ファイルは既に開かれています
-FileOp.AlreadyViewed=ファイルは既に表示されています:\n%s
-FileOp.AlreadyViewedTitle= ファイルは既にビューアで開かれています
-FileOp.BtnCurrent=現在(&C)
-FileOp.BtnReload=再読み込み(&R)
-FileOp.BtnNewInstance=新規インスタンス(&N)
-FileOp.CannotEditDir=ディレクトリは編集できません。
-FileOp.CannotViewDir=ディレクトリは表示できません。
-FileOp.CannotOpenSpecial=特殊ファイル (名前付きパイプ、ソケット、デバイス) は開けません。
-FileOp.DeletionErrors= 削除エラー
-FileOp.FileAlreadyExists=ファイルは既に存在します
-FileOp.RememberChoice=選択を記憶する(&M)
-FileOp.Overwrite=上書き(&O)
-FileOp.Skip=スキップ(&S)
-FileOp.Rename=名前変更(&R)
-FileOp.Append=追記(&A)
-FileOp.Resume=再開(&U)
-FileOp.BtnCancel=キャンセル(&C)
-FileOp.BtnBackground=バックグラウンド(&B)
-
 Dialog.RenameTitle= 名前変更
 Dialog.RenamePrompt='%s' の新しい名前:
 
@@ -991,8 +991,8 @@ SettingsCenter.MacKeyboard.Description=エディターとダイアログ フィ�
 SettingsCenter.MacKeyboard.Label=Mac キーボード モード
 SettingsCenter.MacroRecordFormat.Description=記録されたキー マクロを従来の key_macros.ini 形式で、または Lua スクリプトとして [Macros/scripts] に保存します。
 SettingsCenter.MacroRecordFormat.Label=マクロを次のように記録します
-SettingsCenter.MenuLoopScroll.Description=When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.
-SettingsCenter.MenuLoopScroll.Label=Loop list scrolling
+SettingsCenter.MenuLoopScroll.Description=オンにすると、メニューまたはドロップダウンリストで上矢印または下矢印を押し続けたとき、最後の項目の次に先頭へ戻ります。オフにすると、押し続けた矢印は先頭または末尾で停止します。個別に押した場合は Far Manager 3 と同様に反対側の端へ移動します。
+SettingsCenter.MenuLoopScroll.Label=リストを循環スクロール
 SettingsCenter.NavigationMode.Description=Classic はコマンド ラインに入力します。 Vim は j/k アクションと double dd/cc/mm アクションを追加します。 Search-first は、ファイル名検索とコマンド フォーカスを分離します。
 SettingsCenter.NavigationMode.Label=パネルナビゲーション
 SettingsCenter.Next=次の一致
@@ -1623,7 +1623,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=比較で差異が見つからない場合にメッセージを表示します。
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=メタデータとレポート
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=ナイトリー
-SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Menu navigation
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=メニューのナビゲーション
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=署名とエンドポイントの選択に使用される AWS 領域。デフォルトは us-east-1 です。
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=この操作を実行する前に、%s に変更を適用してください。
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=前景
