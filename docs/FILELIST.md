@@ -393,6 +393,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── ISSUE_262_REMOTE_VFS_PATHS.md
     │   │   ├── ISSUE_264_UPDATE_CHECK_VERSIONS.md
     │   │   ├── ISSUE_266_MULTI_SELECTION_ATTRIBUTES.md
+    │   │   ├── ISSUE_277_COLORER_FEATURES.md
     │   │   ├── ISSUE_278_SORT_ORDER_COLLATION.md
     │   │   ├── ISSUE_309_PLUGRING_ASSET_URLS.md
     │   │   ├── ISSUE_397_WINDOWS_CONSOLE_LAYOUT_CRASH.md
@@ -415,6 +416,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── ISSUE_703_COPY_WINDOW_TITLE_FOLLOWUP.md
     │   │   ├── ISSUE_703_COPY_WINDOW_TITLE.md
     │   │   ├── ISSUE_722_COPY_ACCESS_RIGHTS.md
+    │   │   ├── ISSUE_722_COPY_OPTIONS.md
     │   │   ├── ISSUE_724_SSH_HOST_KEY_VERIFICATION.md
     │   │   ├── ISSUE_725_SSH_AGENT_FORWARDING.md
     │   │   ├── ISSUE_727_S3_UPLOAD_API.md
@@ -495,6 +497,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── action_menu_visibility_test.go
     │   │   ├── action_registry_test.go
     │   │   ├── action_restore_selection_test.go
+    │   │   ├── actions_coverage_helpers_test.go
     │   │   ├── actions_framework.go
     │   │   ├── actions_framework_test.go
     │   │   ├── actions.go
@@ -507,6 +510,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── api.go
     │   │   ├── api_test.go
     │   │   ├── apply_command_test.go
+    │   │   ├── arkanoid_coverage_test.go
     │   │   ├── arkanoid.go
     │   │   ├── arkanoid_test.go
     │   │   ├── attributes_test.go
@@ -518,12 +522,14 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bookmarks_test.go
     │   │   ├── bootstrap_backend.go
     │   │   ├── bootstrap_backend_test.go
+    │   │   ├── bootstrap_coverage_test.go
     │   │   ├── bootstrap_ctrlhandler_other.go
     │   │   ├── bootstrap_ctrlhandler_windows.go
     │   │   ├── bootstrap_ctrlhandler_windows_test.go
     │   │   ├── bootstrap_detach_unix.go
     │   │   ├── bootstrap_detach_unix_test.go
     │   │   ├── bootstrap_detach_windows.go
+    │   │   ├── bootstrap_detach_windows_test.go
     │   │   ├── bootstrap.go
     │   │   ├── bootstrap_gui_test.go
     │   │   ├── bootstrap_nestedinput_other.go
@@ -533,6 +539,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bootstrap_session_test.go
     │   │   ├── bootstrap_settings.go
     │   │   ├── bootstrap_settings_test.go
+    │   │   ├── bootstrap_startupdir_terminal_test.go
     │   │   ├── bootstrap_startupdir_test.go
     │   │   ├── bootstrap_sudo_test.go
     │   │   ├── bootstrap_unicode_test.go
@@ -573,9 +580,12 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── command_palette_ui_test.go
     │   │   ├── command_palette_workspace.go
     │   │   ├── command_prefix_registry_test.go
+    │   │   ├── compare_folders_ui_coverage_test.go
     │   │   ├── compare_folders_ui.go
     │   │   ├── config_test.go
     │   │   ├── console_passthrough_test.go
+    │   │   ├── copy_dialog_options.go
+    │   │   ├── coverage_helpers_test.go
     │   │   ├── debug.go
     │   │   ├── debug_hangdump_unix.go
     │   │   ├── debug_hangdump_windows.go
@@ -646,6 +656,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── macro_plugin_calls.go
     │   │   ├── macro_reload_action_test.go
     │   │   ├── macro_test.go
+    │   │   ├── main_menu_bar_keys_test.go
     │   │   ├── main_menu_dropdown_test.go
     │   │   ├── main_test.go
     │   │   ├── managed_execution_test.go
@@ -688,10 +699,13 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── settings_routes.go
     │   │   ├── settings_save.go
     │   │   ├── settings_save_route_test.go
+    │   │   ├── share_dialog_coverage_test.go
     │   │   ├── share_dialog.go
     │   │   ├── share_dialog_test.go
     │   │   ├── sheet_actions.go
     │   │   ├── sheet_actions_test.go
+    │   │   ├── sheet_compare_coverage_test.go
+    │   │   ├── sheet_dialogs_coverage_test.go
     │   │   ├── sheet_dialogs.go
     │   │   ├── sheet_frame.go
     │   │   ├── sheet_frame_test.go
@@ -730,8 +744,10 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── viewer_app.go
     │   │   ├── viewer_editor_history_test.go
     │   │   ├── viewer_keys_test.go
+    │   │   ├── vtvibe_ap_coverage_test.go
     │   │   ├── vtvibe_ap.go
     │   │   ├── vtvibe_ap_test.go
+    │   │   ├── vtvibe_host_coverage_test.go
     │   │   ├── vtvibe_host.go
     │   │   ├── vtvibe_host_test.go
     │   │   ├── win32_backend_test.go
@@ -782,6 +798,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── atomic_test.go
     │   │   ├── config.go
     │   │   ├── config_test.go
+    │   │   ├── cursor_style_test.go
     │   │   ├── fallback_language_test.go
     │   │   ├── overlay.go
     │   │   ├── overlay_test.go
@@ -850,8 +867,18 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── buffer_mapped_unix.go
     │   │   ├── buffer_mapped_windows.go
     │   │   ├── colorer_async.go
+    │   │   ├── colorer_check.go
+    │   │   ├── colorer_check_test.go
+    │   │   ├── colorer_diagnostics_test.go
     │   │   ├── colorer_downloader.go
     │   │   ├── colorer.go
+    │   │   ├── colorer_outline_frame.go
+    │   │   ├── colorer_outline_frame_test.go
+    │   │   ├── colorer_outline.go
+    │   │   ├── colorer_outline_test.go
+    │   │   ├── colorer_pair_search.go
+    │   │   ├── colorer_pairs.go
+    │   │   ├── colorer_pairs_test.go
     │   │   ├── colorer_plugin_test.go
     │   │   ├── editor_base64_test.go
     │   │   ├── editor_codepage_test.go
@@ -921,6 +948,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── codepage.go
     │   │   ├── compare_folders_test.go
     │   │   ├── compare.go
+    │   │   ├── copy_options.go
+    │   │   ├── copy_options_test.go
     │   │   ├── dialog_reporter_test.go
     │   │   ├── file_mask_far2l_test.go
     │   │   ├── file_mask_test.go
@@ -941,11 +970,18 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── ops_dialog.go
     │   │   ├── ops.go
     │   │   ├── path_identity_test.go
+    │   │   ├── pump.go
     │   │   ├── queue.go
     │   │   ├── queue_manager_test.go
+    │   │   ├── report.go
+    │   │   ├── rights_extra.go
+    │   │   ├── security_other.go
+    │   │   ├── security_windows.go
+    │   │   ├── security_windows_test.go
     │   │   ├── state.go
     │   │   ├── state_key_test.go
     │   │   ├── state_test.go
+    │   │   ├── symlink.go
     │   │   └── tracker.go
     │   ├── fusefs
     │   │   ├── bench-all.sh
@@ -1182,6 +1218,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── cmd_session_test.go
     │   │   ├── console.go
     │   │   ├── context_editors_test.go
+    │   │   ├── coverage_player_helpers_test.go
     │   │   ├── drives_bookmarks.go
     │   │   ├── drives_bookmarks_ui.go
     │   │   ├── drives_menu.go
@@ -1190,6 +1227,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── edit_command_test.go
     │   │   ├── exec.go
     │   │   ├── file_panel_test.go
+    │   │   ├── frame_coverage_test.go
     │   │   ├── frame_dragdrop.go
     │   │   ├── frame_externalui.go
     │   │   ├── frame.go
@@ -1199,7 +1237,10 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── frame_translator.go
     │   │   ├── frame_workspace.go
     │   │   ├── frame_workspace_terminal.go
+    │   │   ├── fuse_list_coverage_extra_test.go
+    │   │   ├── fuse_list_coverage_test.go
     │   │   ├── fuse_list.go
+    │   │   ├── fuse_mount_coverage_test.go
     │   │   ├── fuse_mount.go
     │   │   ├── hints.go
     │   │   ├── host.go
@@ -1212,8 +1253,11 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── info_panel_test.go
     │   │   ├── info_usage.go
     │   │   ├── issue863_terminal_test.go
+    │   │   ├── issue915_keybar_test.go
     │   │   ├── list.go
     │   │   ├── list_reconnect.go
+    │   │   ├── list_size.go
+    │   │   ├── list_size_test.go
     │   │   ├── lookup.go
     │   │   ├── main_test.go
     │   │   ├── menubar_dropdown_test.go
@@ -1243,8 +1287,10 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── sort.go
     │   │   ├── sort_groups_test.go
     │   │   ├── state.go
+    │   │   ├── temp_coverage_test.go
     │   │   ├── temp.go
     │   │   ├── uri_navigation_test.go
+    │   │   ├── usermenu_coverage_test.go
     │   │   ├── usermenu_farfile.go
     │   │   ├── usermenu.go
     │   │   ├── usermenu_ini.go
@@ -1323,6 +1369,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── core.go
     │   │   ├── edit.go
     │   │   ├── edit_test.go
+    │   │   ├── enter_test.go
     │   │   ├── extra.go
     │   │   ├── help.go
     │   │   ├── host.go
@@ -1342,6 +1389,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── scoped_test.go
     │   │   ├── search_layout_test.go
     │   │   ├── startup_test.go
+    │   │   ├── trace.go
+    │   │   ├── trace_test.go
     │   │   ├── transactions_test.go
     │   │   ├── user_menu.go
     │   │   └── user_menu_test.go
@@ -1368,6 +1417,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── fs_linux.go
     │   │   ├── fs_other.go
     │   │   ├── fs_windows.go
+    │   │   ├── fs_windows_test.go
     │   │   ├── gpu_darwin.go
     │   │   ├── gpu.go
     │   │   ├── gpu_linux.go
@@ -1551,12 +1601,14 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── watch_coverage_test.go
     │   │   └── watch.go
     │   ├── unpack
+    │   │   ├── coverage_test.go
     │   │   ├── unpack.go
     │   │   └── unpack_test.go
     │   ├── update
     │   │   ├── assets_test.go
     │   │   ├── cli.go
     │   │   ├── cli_test.go
+    │   │   ├── coverage_test.go
     │   │   ├── elevation_manual_windows_test.go
     │   │   ├── elevation_other.go
     │   │   ├── elevation_windows.go
@@ -1862,6 +1914,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── parse_ebu_stl.go
     │   │   ├── parse_heif.go
     │   │   ├── parse_image.go
+    │   │   ├── parse_iso_coverage_test.go
     │   │   ├── parse_iso.go
     │   │   ├── parse_matroska.go
     │   │   ├── parse_riff.go
@@ -2160,7 +2213,8 @@ Every file tracked in the repository. Regenerate with
         │   ├── hostfs_windows_test.go
         │   └── hostfs_winescape.go
         ├── hostmode
-        │   └── hostmode.go
+        │   ├── hostmode.go
+        │   └── hostmode_test.go
         ├── hostpath
         │   ├── hostpath_posix.go
         │   └── hostpath_windows.go
@@ -2182,6 +2236,9 @@ Every file tracked in the repository. Regenerate with
         ├── os_vfs_platform_windows.go
         ├── os_vfs_posix_atimespec.go
         ├── os_vfs_posix_atim.go
+        ├── os_vfs_reparse_other.go
+        ├── os_vfs_reparse_windows.go
+        ├── os_vfs_reparse_windows_test.go
         ├── os_vfs_search.go
         ├── os_vfs_search_test.go
         ├── os_vfs_symlink_test.go
@@ -2203,6 +2260,8 @@ Every file tracked in the repository. Regenerate with
         ├── rename_noreplace_test.go
         ├── rename_noreplace_unix.go
         ├── rename_noreplace_windows.go
+        ├── reparse.go
+        ├── reparse_test.go
         ├── scanner.go
         ├── scanner_test.go
         ├── session_identity_test.go
@@ -2236,4 +2295,4 @@ Every file tracked in the repository. Regenerate with
         ├── utils_test.go
         └── vfs.go
     
-    210 directories, 2022 files
+    210 directories, 2081 files
