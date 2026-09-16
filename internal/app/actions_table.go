@@ -2344,6 +2344,26 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerLocateFunction() }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ColorerChooseType",
+		Area:        "Editor",
+		Label:       "Choose file type",
+		LabelKey:    "Action.Editor.ColorerChooseType",
+		Description: "Pick the Colorer file type to highlight the file as, or go back to choosing it by file name (Colorer)",
+		DescKey:     "Action.Editor.ColorerChooseType.Desc",
+		MenuPath:    "Options",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerChooseType() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerSelectRegion",
+		Area:        "Editor",
+		Label:       "Select region",
+		LabelKey:    "Action.Editor.ColorerSelectRegion",
+		Description: "Select the syntax region under the cursor (Colorer)",
+		DescKey:     "Action.Editor.ColorerSelectRegion.Desc",
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerSelectRegion() }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Replace",
 		Area:        "Editor",
 		Label:       "Replace",

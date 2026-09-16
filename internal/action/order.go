@@ -185,6 +185,8 @@ var actionMenuOrder = []string{
 	"Editor.ColorerListFunctions",
 	"Editor.ColorerListErrors",
 	"Editor.ColorerLocateFunction",
+	"Editor.ColorerChooseType",
+	"Editor.ColorerSelectRegion",
 	"Viewer.SwitchToEditor",
 	"Viewer.Reload",
 	"Viewer.Quit",

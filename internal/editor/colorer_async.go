@@ -23,6 +23,9 @@ type colorerJob struct {
 	baseAttr     uint64
 	syntax       bool
 	total        int
+	// fileType is the type the user picked for the file, "" to choose by
+	// file name.
+	fileType string
 }
 
 type colorerLineAttrs struct {
@@ -30,6 +33,7 @@ type colorerLineAttrs struct {
 	background uint64
 	pairs      []colorer.Pair
 	outline    []colorerOutlineEntry
+	regions    []colorerRegionSpan
 }
 
 type colorerResult struct {
@@ -144,7 +148,7 @@ func (ch *ColorerHighlighter) runWorker(ctx context.Context, session *colorer.Se
 				}
 				parsedIdx++
 				attrs, background := ch.attrsForSyntax(lineText, regions, job.baseAttr, job.syntax)
-				lineResults = append(lineResults, colorerLineAttrs{attrs: attrs, background: background, pairs: pairs, outline: colorerOutlineEntries(job.target+i, lineText, outline)})
+				lineResults = append(lineResults, colorerLineAttrs{attrs: attrs, background: background, pairs: pairs, outline: colorerOutlineEntries(job.target+i, lineText, outline), regions: colorerRegionSpans(regions)})
 			}
 			if ctx.Err() != nil {
 				return
@@ -190,15 +194,26 @@ func currentColorerSchemeName() string {
 }
 
 func (ch *ColorerHighlighter) prepareWorkerSession(ctx context.Context, session *colorer.Session, job colorerJob, parsedIdx, forgottenUpTo *int) error {
-	needReset := job.reset || *parsedIdx != job.contextStart
+	needReset := job.reset || *parsedIdx != job.contextStart || job.fileType != ch.workerFileType
 	if needReset {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		session.Reset()
-		if _, err := session.SelectType(ch.filename, ch.firstLine); err != nil {
-			return err
+		chosen := false
+		if job.fileType != "" {
+			ok, err := session.SetFileType(job.fileType)
+			if err != nil {
+				return err
+			}
+			chosen = ok
 		}
+		if !chosen {
+			if _, err := session.SelectType(ch.filename, ch.firstLine); err != nil {
+				return err
+			}
+		}
+		ch.workerFileType = job.fileType
 		*parsedIdx = job.contextStart
 		*forgottenUpTo = job.contextStart
 	}
@@ -277,6 +292,7 @@ func (ch *ColorerHighlighter) queueLine(idx int, line string, baseAttr uint64) {
 		baseAttr:     baseAttr,
 		syntax:       config.App.EditorColorerSyntax,
 		total:        len(contextLines) + len(batch),
+		fileType:     ch.fileTypeOverride,
 	}
 	ch.forceReset = false
 	ch.pending = true
@@ -338,6 +354,7 @@ func (ch *ColorerHighlighter) postColorerResult(result colorerResult) {
 			for i, lineAttrs := range result.lines {
 				ch.storeAttrs(result.job.target+i, lineAttrs.attrs, lineAttrs.background, lineAttrs.pairs)
 				ch.storeOutline(result.job.target+i, lineAttrs.outline)
+				ch.storeRegions(result.job.target+i, lineAttrs.regions)
 			}
 			if result.partial {
 				// The worker lost the session's position on the failed line;

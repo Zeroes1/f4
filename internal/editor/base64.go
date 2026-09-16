@@ -78,11 +78,13 @@ func (ev *EditorView) ShowPluginsMenu() {
 		}
 		menu.AddSeparator()
 		menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Colorer.Menu"), SubItems: []vtui.MenuItem{
+			{Text: i18n.Msg("Action.Editor.ColorerChooseType"), OnClick: later(func() { ev.ColorerChooseType() })},
 			{Text: i18n.Msg("Action.Editor.ColorerMatchPair"), OnClick: later(func() { ev.ColorerPair(ColorerMatchPair) })},
 			{Text: i18n.Msg("Action.Editor.ColorerSelectBlock"), OnClick: later(func() { ev.ColorerPair(ColorerSelectBlock) })},
 			{Text: i18n.Msg("Action.Editor.ColorerSelectPair"), OnClick: later(func() { ev.ColorerPair(ColorerSelectPair) })},
 			{Text: i18n.Msg("Action.Editor.ColorerListFunctions"), OnClick: later(func() { ev.ColorerListOutline(false) })},
 			{Text: i18n.Msg("Action.Editor.ColorerListErrors"), OnClick: later(func() { ev.ColorerListOutline(true) })},
+			{Text: i18n.Msg("Action.Editor.ColorerSelectRegion"), OnClick: later(func() { ev.ColorerSelectRegion() })},
 			{Text: i18n.Msg("Action.Editor.ColorerLocateFunction"), OnClick: later(func() { ev.ColorerLocateFunction() })},
 		}})
 	}

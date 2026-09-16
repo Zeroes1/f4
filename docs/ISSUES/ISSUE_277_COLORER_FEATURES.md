@@ -70,3 +70,9 @@ view setting. See HIGHLIGHT.md 3.11.
 FarColorer's filter, Tab completion, Ctrl+Up/Down preview, Ctrl+Left/Right
 levels and Ctrl+Enter insert in the outline list; FarColorer's commands in a
 Colorer submenu of the editor's F11 menu. See HIGHLIGHT.md 3.11.
+
+## Step 5 — list of types, favourites, hotkeys, select region (done)
+
+colorer4go's `SetFileType`, `FileType`, `WithHRCSettings`, `FileTypeParam`
+and `SetFileTypeParam`; f4's list of types, its profile in HrcSettings.ini and
+select region. See HIGHLIGHT.md 3.12.

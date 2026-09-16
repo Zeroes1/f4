@@ -237,9 +237,13 @@ func (src ColorerSource) sessionOptions() []colorer.Option {
 	return append(colorerSessionOptions(), src.userOptions()...)
 }
 
-// userOptions load the user's own colour styles and schemes.
+// userOptions load far2l's HRC settings, when the configuration has them, and
+// the user's own colour styles and schemes.
 func (src ColorerSource) userOptions() []colorer.Option {
 	var opts []colorer.Option
+	if settings := colorerHRCSettingsPath(src.ConfigsDir); fileExists(settings) {
+		opts = append(opts, colorer.WithHRCSettings(settings))
+	}
 	if src.UserHRD != "" {
 		opts = append(opts, colorer.WithUserHRD(src.UserHRD))
 	}
@@ -259,13 +263,23 @@ func acquireColorerSession(src ColorerSource) (*colorer.Session, error) {
 		colorerPoolMu.Unlock()
 		session.Reset()
 		vtui.DebugLog("COLORER: Reusing a pooled session")
+		applyColorerProfile(session)
 		return session, nil
 	}
 	colorerPoolMu.Unlock()
 
 	catalogPath := "/base/catalog.xml"
 	vtui.DebugLog("COLORER: Initializing session with catalog %q, configs %q, user schemes %q, user styles %q", catalogPath, src.ConfigsDir, src.UserHRC, src.UserHRD)
-	return colorer.NewSession(context.Background(), catalogPath, src.ConfigsDir, src.sessionOptions()...)
+	session, err := colorer.NewSession(context.Background(), catalogPath, src.ConfigsDir, src.sessionOptions()...)
+	if err == nil {
+		applyColorerProfile(session)
+	}
+	return session, err
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // A pooled Session owns the context it was created with. Colorer parsing gets
@@ -275,7 +289,11 @@ func acquireCancelableColorerSession(ctx context.Context, src ColorerSource) (*c
 
 	catalogPath := "/base/catalog.xml"
 	vtui.DebugLog("COLORER: Initializing cancellable session with catalog %q, configs %q, user schemes %q, user styles %q", catalogPath, src.ConfigsDir, src.UserHRC, src.UserHRD)
-	return colorer.NewSession(ctx, catalogPath, src.ConfigsDir, src.sessionOptions()...)
+	session, err := colorer.NewSession(ctx, catalogPath, src.ConfigsDir, src.sessionOptions()...)
+	if err == nil {
+		applyColorerProfile(session)
+	}
+	return session, err
 }
 
 func releaseColorerSession(session *colorer.Session, src ColorerSource) {
@@ -590,6 +608,7 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 		}
 
 		selected, sErr := session.SelectType(filename, firstLine)
+		detected, _ := session.FileType()
 		vtui.DebugLog("COLORER: SelectType(%q, len=%d) -> selected=%v, err=%v", filename, len(firstLine), selected, sErr)
 		if sErr != nil || !selected {
 			session.Close()
@@ -613,6 +632,7 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 			}
 			ch.fallback = nil
 			ch.session = session
+			ch.detectedType = detected
 			ch.starting = false
 			ch.attrCache = nil
 			ch.parsedIdx = 0
@@ -672,6 +692,17 @@ type ColorerHighlighter struct {
 	// progress.
 	outlineCache map[int][]colorerOutlineEntry
 	outlineBuild *colorerOutlineBuild
+	// regionCache holds each parsed line's regions, kept and evicted with
+	// attrCache, for select region.
+	regionCache map[int][]colorerRegionSpan
+
+	// The type the user picked from the list of types, "" to choose by file
+	// name; and the type the file name chose. Both UI-owned. workerFileType
+	// is the type the worker last gave its session, and only the worker
+	// touches it.
+	fileTypeOverride string
+	detectedType     string
+	workerFileType   string
 
 	// The session and its worker share this context. The worker is the only
 	// goroutine allowed to call ParseLine/Reset/SelectType on the live session;
@@ -853,6 +884,7 @@ func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64, pai
 				delete(ch.bgCache, key)
 				delete(ch.pairCache, key)
 				delete(ch.outlineCache, key)
+				delete(ch.regionCache, key)
 			}
 		}
 		if len(ch.attrCache) >= maxCachedAttrLines {
@@ -860,11 +892,13 @@ func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64, pai
 			ch.bgCache = make(map[int]uint64)
 			ch.pairCache = nil
 			ch.outlineCache = nil
+			ch.regionCache = nil
 		}
 	}
 	ch.attrCache[idx] = attrs
 	ch.bgCache[idx] = bg
 	delete(ch.outlineCache, idx)
+	delete(ch.regionCache, idx)
 	if len(pairs) > 0 {
 		if ch.pairCache == nil {
 			ch.pairCache = make(map[int][]colorer.Pair)
@@ -896,6 +930,11 @@ func (ch *ColorerHighlighter) dropCacheFrom(idx int) {
 			delete(ch.outlineCache, key)
 		}
 	}
+	for key := range ch.regionCache {
+		if key >= idx {
+			delete(ch.regionCache, key)
+		}
+	}
 }
 
 func (ch *ColorerHighlighter) Close() error {
@@ -910,6 +949,7 @@ func (ch *ColorerHighlighter) Close() error {
 	ch.pairSearch = nil
 	ch.outlineCache = nil
 	ch.outlineBuild = nil
+	ch.regionCache = nil
 	ch.parsedIdx = 0
 	if closer, ok := ch.fallback.(io.Closer); ok {
 		closer.Close()
@@ -934,4 +974,16 @@ func (ch *ColorerHighlighter) storeOutline(idx int, entries []colorerOutlineEntr
 		ch.outlineCache = make(map[int][]colorerOutlineEntry)
 	}
 	ch.outlineCache[idx] = entries
+}
+
+// storeRegions keeps a parsed line's regions; call it after storeAttrs, which
+// evicts them with the line's colours.
+func (ch *ColorerHighlighter) storeRegions(idx int, spans []colorerRegionSpan) {
+	if len(spans) == 0 {
+		return
+	}
+	if ch.regionCache == nil {
+		ch.regionCache = make(map[int][]colorerRegionSpan)
+	}
+	ch.regionCache[idx] = spans
 }

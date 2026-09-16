@@ -348,6 +348,30 @@ from Colorer's `Outliner` over the whole file.
 - With Colorer in charge, the editor's F11 menu has a Colorer submenu with
   these commands in FarColorer's order.
 
+### 3.12 File types and select region
+
+Issue #277, step 5.
+
+- `Editor.ColorerChooseType` is FarEditorSet::chooseType: auto detection,
+  the favourites, then every type under its group, the group names painted
+  on the separators and the total under the list. Enter picks the type for
+  this editor (`ColorerHighlighter.fileTypeOverride`, carried by each job to
+  the worker, which gives its session `SetFileType` when the type changes);
+  auto detection goes back to choosing by file name. Ins and Del add a type to
+  the favourites and take it out; F4 assigns it a one-character hotkey, shown
+  as the row's menu hotkey.
+- Favourites and hotkeys are file type parameters. Their defaults come from
+  far2l's `plug/hrcsettings.xml` in the configuration directory, loaded with
+  `colorer.WithHRCSettings` when it exists; the user's values live in
+  FarColorer's format in `colorer/HrcSettings.ini` in the profile and are set
+  on every session acquired (`applyColorerProfile`). An installation without
+  `plug/hrcsettings.xml` has no such parameters, and setting one is logged
+  and skipped.
+- `Editor.ColorerSelectRegion` selects FarEditor's `cursorRegion`: the last
+  region of the cursor line holding the cursor, its end included, a region
+  running to the end of the line ending there. The worker keeps each line's
+  regions in `regionCache`, beside and evicted with `attrCache`.
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped
