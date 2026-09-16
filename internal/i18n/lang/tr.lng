@@ -436,7 +436,9 @@ Help.Area.Terminal=Terminal
 Help.Area.Editor=Düzenleyici
 Help.Area.Viewer=Görüntüleyici
 Help.Area.Common=Genel
-Help.SearchHint=Arama: yazın  Sonraki: F3/Ctrl+Enter  Önceki: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Arama: yazın
+Help.Hint.Back=Geri: Backspace
+Help.Hint.Results=Sonraki: F3/Ctrl+Enter  Önceki: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Dosya ilişkilendirmeleri
 FileAssoc.EditTitle=İlişkiyi düzenle

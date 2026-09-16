@@ -745,7 +745,9 @@ Help.Area.Terminal=Терминал
 Help.Area.Editor=Редактор
 Help.Area.Viewer=Просмотрщик
 Help.Area.Common=Общие
-Help.SearchHint=Поиск: ввод  Далее: F3/Ctrl+Enter  Назад: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Поиск: ввод
+Help.Hint.Back=Назад: Backspace
+Help.Hint.Results=Следующее: F3/Ctrl+Enter  Предыдущее: Shift+F3/Ctrl+Shift+Enter
 
 Share.Title= Общий доступ
 Share.LoadTitle= Проверка доступа

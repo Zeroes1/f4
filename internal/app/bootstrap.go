@@ -1050,12 +1050,15 @@ func SetupUI() {
 	// last drew stays frozen under nothing but the two freshly-painted
 	// overlay rows.
 	consoleOverlayOwnedScreen := true
+	// Help's hint, query and match highlights belong to the Help window, so
+	// they are painted with it, in stack order (#378).
+	vtui.FrameManager.AfterFrameShow = dialog.RenderHelpFrame
 	vtui.FrameManager.OnRender = func(scr *vtui.ScreenBuf) {
 		if config.App.WorkspaceTabNumbering == config.WorkspaceTabNumbersOrder {
 			panel.RenumberWorkspaceScreens()
 		}
 		UpdateWindowTitle(scr)
-		dialog.RenderHelpSearch(scr)
+		dialog.FinishHelpRender()
 		if panels.ShellMode == terminal.ShellModeSimpleInline && panels.ConsoleViewActive() {
 			onTop := panels.IsTopFrame()
 			if onTop {

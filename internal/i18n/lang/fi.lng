@@ -436,7 +436,9 @@ Help.Area.Terminal=Terminaali
 Help.Area.Editor=Muokkain
 Help.Area.Viewer=Katselu
 Help.Area.Common=Yhteiset
-Help.SearchHint=Hae: kirjoita  Seuraava: F3/Ctrl+Enter  Edellinen: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Hae: kirjoita
+Help.Hint.Back=Takaisin: Backspace
+Help.Hint.Results=Seuraava: F3/Ctrl+Enter  Edellinen: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Tiedostokytkennät
 FileAssoc.EditTitle=Muokkaa kytkentää

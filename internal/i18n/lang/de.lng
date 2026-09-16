@@ -439,7 +439,9 @@ Help.Area.Terminal=Terminal
 Help.Area.Editor=Editor
 Help.Area.Viewer=Viewer
 Help.Area.Common=Allgemein
-Help.SearchHint=Suche: tippen  Nächste: F3/Strg+Eingabe  Vorherige: Umschalt+F3/Strg+Umschalt+Eingabe
+Help.Hint.Search=Suche: tippen
+Help.Hint.Back=Zurück: Rücktaste
+Help.Hint.Results=Nächste: F3/Strg+Eingabe  Vorherige: Umschalt+F3/Strg+Umschalt+Eingabe
 
 FileAssoc.EditorTitle=Dateiverknüpfungen
 FileAssoc.EditTitle=Verknüpfung bearbeiten

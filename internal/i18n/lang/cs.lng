@@ -439,7 +439,9 @@ Help.Area.Terminal=Terminál
 Help.Area.Editor=Editor
 Help.Area.Viewer=Prohlížeč
 Help.Area.Common=Společné
-Help.SearchHint=Hledat: pište  Další: F3/Ctrl+Enter  Předchozí: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Hledat: pište
+Help.Hint.Back=Zpět: Backspace
+Help.Hint.Results=Další: F3/Ctrl+Enter  Předchozí: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Asociace souborů
 FileAssoc.EditTitle=Upravit asociaci

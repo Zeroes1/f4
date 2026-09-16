@@ -436,7 +436,9 @@ Help.Area.Terminal=Terminālis
 Help.Area.Editor=Redaktors
 Help.Area.Viewer=Skatītājs
 Help.Area.Common=Kopīgie
-Help.SearchHint=Meklēt: rakstiet  Nākamais: F3/Ctrl+Enter  Iepriekšējais: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Meklēt: rakstiet
+Help.Hint.Back=Atpakaļ: Backspace
+Help.Hint.Results=Nākamais: F3/Ctrl+Enter  Iepriekšējais: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Failu asociācijas
 FileAssoc.EditTitle=Rediģēt asociāciju

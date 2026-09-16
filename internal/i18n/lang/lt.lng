@@ -436,7 +436,9 @@ Help.Area.Terminal=Terminalas
 Help.Area.Editor=Redaktorius
 Help.Area.Viewer=Peržiūra
 Help.Area.Common=Bendri
-Help.SearchHint=Paieška: rašykite  Sekantis: F3/Ctrl+Enter  Ankstesnis: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Paieška: rašykite
+Help.Hint.Back=Atgal: Backspace
+Help.Hint.Results=Sekantis: F3/Ctrl+Enter  Ankstesnis: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Failų asociacijos
 FileAssoc.EditTitle=Redaguoti asociaciją

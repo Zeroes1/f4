@@ -436,7 +436,9 @@ Help.Area.Terminal=ターミナル
 Help.Area.Editor=エディタ
 Help.Area.Viewer=ビューア
 Help.Area.Common=共通
-Help.SearchHint=検索: 文字を入力  次へ: F3/Ctrl+Enter  前へ: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=検索: 文字を入力
+Help.Hint.Back=戻る: Backspace
+Help.Hint.Results=次へ: F3/Ctrl+Enter  前へ: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=ファイル関連付け
 FileAssoc.EditTitle=関連付けを編集

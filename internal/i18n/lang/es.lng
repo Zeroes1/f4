@@ -439,7 +439,9 @@ Help.Area.Terminal=Terminal
 Help.Area.Editor=Editor
 Help.Area.Viewer=Visor
 Help.Area.Common=Común
-Help.SearchHint=Buscar: escriba  Siguiente: F3/Ctrl+Enter  Anterior: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Buscar: escriba
+Help.Hint.Back=Atrás: Backspace
+Help.Hint.Results=Siguiente: F3/Ctrl+Enter  Anterior: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Asociaciones de archivos
 FileAssoc.EditTitle=Editar asociación

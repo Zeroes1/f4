@@ -436,7 +436,9 @@ Help.Area.Terminal=ტერმინალი
 Help.Area.Editor=რედაქტორი
 Help.Area.Viewer=მაყურებელი
 Help.Area.Common=საერთო
-Help.SearchHint=ძებნა: აკრიფეთ  შემდეგი: F3/Ctrl+Enter  წინა: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=ძებნა: აკრიფეთ
+Help.Hint.Back=უკან: Backspace
+Help.Hint.Results=შემდეგი: F3/Ctrl+Enter  წინა: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=ფაილების ასოციაციები
 FileAssoc.EditTitle=ასოციაციის რედაქტირება

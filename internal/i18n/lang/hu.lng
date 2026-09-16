@@ -428,7 +428,9 @@ Help.Area.Terminal=Terminál
 Help.Area.Editor=Szerkesztő
 Help.Area.Viewer=Néző
 Help.Area.Common=Általános
-Help.SearchHint=Keresés: gépeljen  Következő: F3/Ctrl+Enter  Előző: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Keresés: gépeljen
+Help.Hint.Back=Vissza: Backspace
+Help.Hint.Results=Következő: F3/Ctrl+Enter  Előző: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Fájltársítások
 FileAssoc.EditTitle=Társítás szerkesztése

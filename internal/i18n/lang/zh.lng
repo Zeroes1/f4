@@ -425,7 +425,9 @@ Help.Area.Terminal=终端
 Help.Area.Editor=编辑器
 Help.Area.Viewer=查看器
 Help.Area.Common=通用
-Help.SearchHint=搜索: 输入字符  下一个: F3/Ctrl+Enter  上一个: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=搜索: 输入字符
+Help.Hint.Back=返回: Backspace
+Help.Hint.Results=下一个: F3/Ctrl+Enter  上一个: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=文件关联
 FileAssoc.EditTitle=编辑关联

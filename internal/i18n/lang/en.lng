@@ -757,7 +757,9 @@ Help.Area.Terminal=Terminal
 Help.Area.Editor=Editor
 Help.Area.Viewer=Viewer
 Help.Area.Common=Common
-Help.SearchHint=Search: type  Next: F3/Ctrl+Enter  Previous: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Search: type
+Help.Hint.Back=Back: Backspace
+Help.Hint.Results=Next: F3/Ctrl+Enter  Previous: Shift+F3/Ctrl+Shift+Enter
 
 Share.Title= Share
 Share.LoadTitle= Checking access

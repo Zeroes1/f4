@@ -436,7 +436,9 @@ Help.Area.Terminal=টার্মিনাল
 Help.Area.Editor=এডিটর
 Help.Area.Viewer=ভিউয়ার
 Help.Area.Common=সাধারণ
-Help.SearchHint=খুঁজুন: টাইপ করুন  পরবর্তী: F3/Ctrl+Enter  পূর্ববর্তী: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=খুঁজুন: টাইপ করুন
+Help.Hint.Back=ফিরে যান: Backspace
+Help.Hint.Results=পরবর্তী: F3/Ctrl+Enter  পূর্ববর্তী: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=ফাইল অ্যাসোসিয়েশন
 FileAssoc.EditTitle=অ্যাসোসিয়েশন সম্পাদনা

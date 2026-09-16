@@ -425,7 +425,9 @@ Help.Area.Terminal=Տերմինալ
 Help.Area.Editor=Խմբագրիչ
 Help.Area.Viewer=Դիտող
 Help.Area.Common=Ընդհանուր
-Help.SearchHint=Որոնում՝ մուտքագրում  Հաջորդը՝ F3/Ctrl+Enter  Նախորդը՝ Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Որոնում՝ մուտքագրում
+Help.Hint.Back=Հետ՝ Backspace
+Help.Hint.Results=Հաջորդը՝ F3/Ctrl+Enter  Նախորդը՝ Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Ֆայլերի ասոցիացիաներ
 FileAssoc.EditTitle=Ասոցիացիայի խմբագրում

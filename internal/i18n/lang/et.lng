@@ -436,7 +436,9 @@ Help.Area.Terminal=Terminal
 Help.Area.Editor=Redaktor
 Help.Area.Viewer=Vaataja
 Help.Area.Common=Ühised
-Help.SearchHint=Otsi: trüki  Järgmine: F3/Ctrl+Enter  Eelmine: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Otsi: trüki
+Help.Hint.Back=Tagasi: Backspace
+Help.Hint.Results=Järgmine: F3/Ctrl+Enter  Eelmine: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Failiseosed
 FileAssoc.EditTitle=Redigeeri seost

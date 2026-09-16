@@ -424,7 +424,9 @@ Help.Area.Terminal=الطرفية
 Help.Area.Editor=المحرر
 Help.Area.Viewer=المستعرض
 Help.Area.Common=مشترك
-Help.SearchHint=البحث: اكتب  التالي: F3/Ctrl+Enter  السابق: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=البحث: اكتب
+Help.Hint.Back=رجوع: Backspace
+Help.Hint.Results=التالي: F3/Ctrl+Enter  السابق: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=ارتباطات الملفات
 FileAssoc.EditTitle=تعديل الارتباط

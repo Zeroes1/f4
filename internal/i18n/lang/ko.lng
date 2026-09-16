@@ -436,7 +436,9 @@ Help.Area.Terminal=터미널
 Help.Area.Editor=편집기
 Help.Area.Viewer=뷰어
 Help.Area.Common=일반
-Help.SearchHint=검색: 문자 입력  다음: F3/Ctrl+Enter  이전: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=검색: 문자 입력
+Help.Hint.Back=뒤로: Backspace
+Help.Hint.Results=다음: F3/Ctrl+Enter  이전: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=파일 연결
 FileAssoc.EditTitle=연결 편집

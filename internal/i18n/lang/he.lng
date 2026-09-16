@@ -436,7 +436,9 @@ Help.Area.Terminal=טרמינל
 Help.Area.Editor=עורך
 Help.Area.Viewer=צופה
 Help.Area.Common=כללי
-Help.SearchHint=חיפוש: הקלד  הבא: F3/Ctrl+Enter  הקודם: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=חיפוש: הקלד
+Help.Hint.Back=חזרה: Backspace
+Help.Hint.Results=הבא: F3/Ctrl+Enter  הקודם: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=שיוכי קבצים
 FileAssoc.EditTitle=עריכת שיוך

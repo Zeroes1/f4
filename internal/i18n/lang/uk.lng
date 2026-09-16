@@ -439,7 +439,9 @@ Help.Area.Terminal=Термінал
 Help.Area.Editor=Редактор
 Help.Area.Viewer=Переглядач
 Help.Area.Common=Загальні
-Help.SearchHint=Пошук: введення  Далі: F3/Ctrl+Enter  Назад: Shift+F3/Ctrl+Shift+Enter
+Help.Hint.Search=Пошук: введення
+Help.Hint.Back=Назад: Backspace
+Help.Hint.Results=Далі: F3/Ctrl+Enter  Попереднє: Shift+F3/Ctrl+Shift+Enter
 
 FileAssoc.EditorTitle=Файлові асоціації
 FileAssoc.EditTitle=Редагування асоціації
