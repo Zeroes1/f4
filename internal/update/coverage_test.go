@@ -251,14 +251,19 @@ func TestUpdateTargetDirResolvesExecutable(t *testing.T) {
 	if err := os.Symlink(realExe, linkExe); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
+	resolvedExe, err := filepath.EvalSymlinks(linkExe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantDir := filepath.Dir(resolvedExe)
 
 	oldExecutable := Executable
 	Executable = func() (string, error) { return linkExe, nil }
 	t.Cleanup(func() { Executable = oldExecutable })
 
 	got, err := TargetDir()
-	if err != nil || got != realDir {
-		t.Fatalf("TargetDir() = %q, %v; want %q", got, err, realDir)
+	if err != nil || got != wantDir {
+		t.Fatalf("TargetDir() = %q, %v; want %q", got, err, wantDir)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -54,8 +55,13 @@ func TestUnpackExtractEntryDirectoryDefaultModeAndErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0644 {
-		t.Errorf("default file mode = %o, want 644", got)
+	wantMode := os.FileMode(0644)
+	if runtime.GOOS == "windows" {
+		// Windows does not retain Unix permission bits on regular files.
+		wantMode = 0666
+	}
+	if got := info.Mode().Perm(); got != wantMode {
+		t.Errorf("default file mode = %o, want %o", got, wantMode)
 	}
 
 	openErr := errors.New("open failed")
