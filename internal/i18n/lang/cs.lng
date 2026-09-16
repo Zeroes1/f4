@@ -1098,6 +1098,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Záložní prohlížeč a kódo
 SettingsCenter.ViewerDefaultCodePage.Label=Výchozí kódování prohlížeče
 SettingsCenter.ViewerOpenAsSupportedType.Description=Je-li zapnuto, zobrazení obrázku otevře prohlížeč obrázků a zobrazení videa otevře přehrávač videa, pokud je terminál umí zobrazit. Je-li vypnuto, každý soubor se otevře v textovém a hexadecimálním prohlížeči.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Otevírat obrázky a videa ve vlastních prohlížečích
+SettingsCenter.ViewerHighlighting.Description=Zvýrazňovat syntaxi v panelu rychlého náhledu zvýrazňovačem editoru, Chroma nebo Colorer, nebo nikde. Ve výchozím stavu vypnuto: prohlížeč slouží k okamžitému pohledu na soubor a zvýraznění zabere čas.
+SettingsCenter.ViewerHighlighting.Label=Zvýraznění syntaxe v prohlížečích
 SettingsCenter.WheelEditorDown.Description=Počet řádků editoru na sestupný zářez kola. Nula se řídí nastavením systému.
 SettingsCenter.WheelEditorDown.Label=Kolečko editoru dolů
 SettingsCenter.WheelEditorUp.Description=Počet řádků editoru na vzestupný zářez kola. Nula se řídí nastavením systému.
@@ -2066,3 +2068,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Kopie vždy dostane práva svého zdroje, i když přepsala existující soubor.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopie dostane práva složky, do které se dostane; soubor navíc ztrácí bity spuštění této složky.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Podle typu souboru (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Jen rychlý náhled

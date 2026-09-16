@@ -1095,6 +1095,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Atsisakymo žiūrovas ir greito
 SettingsCenter.ViewerDefaultCodePage.Label=Nustatyta žiūrovo kodifikacija
 SettingsCenter.ViewerOpenAsSupportedType.Description=Kai įjungta, peržiūrint paveikslėlį atveriama paveikslėlių žiūryklė, o peržiūrint vaizdo įrašą – vaizdo grotuvas, jei terminalas gali juos parodyti. Kai išjungta, kiekvienas failas atveriamas tekstinėje ir šešioliktainėje žiūryklėje.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Atverti paveikslėlius ir vaizdo įrašus jų pačių žiūryklėse
+SettingsCenter.ViewerHighlighting.Description=Paryškinti sintaksę sparčiosios peržiūros skydelyje redaktoriaus paryškintuvu, Chroma arba Colorer, arba niekur. Numatytai išjungta: žiūryklė skirta failui iškart peržiūrėti, o paryškinimas užtrunka.
+SettingsCenter.ViewerHighlighting.Label=Sintaksės paryškinimas žiūryklėse
 SettingsCenter.WheelEditorDown.Description=Redaktoriaus eilutės skaičius per atsiskyrimo ratų skėdinį. Zero sekasi sistemos nustatymu.
 SettingsCenter.WheelEditorDown.Label=Redaktoriaus ratas žemyn
 SettingsCenter.WheelEditorUp.Description=Redaktoriaus eilutės skaičius per ratų pakraštą. Zero sekasi sistemos nustatymu.
@@ -2063,3 +2065,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Kopija visada gauna savo šaltinio teises, net jei ji perrašė esamą failą.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopija gauna aplanko, į kurį patenka, teises; failas papildomai netenka to aplanko vykdymo bitų.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Pagal failo tipą (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Tik sparčioji peržiūra

@@ -903,6 +903,9 @@ ViewerSettings.Title= Настройки вьювера
 ViewerSettings.AutodetectCodePage=Автоопределять кодовую &страницу
 ViewerSettings.DefaultCodePage=Кодовая страница по &умолчанию:
 ViewerSettings.OpenAsSupportedType=Открывать изображения и видео в своих &просмотрщиках
+ViewerSettings.Highlighting=Подсве&тка синтаксиса:
+ViewerSettings.HighlightOff=Выключена
+ViewerSettings.HighlightQuickView=Только быстрый просмотр
 
 ColorerSettings.Title= Настройки Colorer
 ColorerSettings.Enabled=Включить подсветку &Colorer
@@ -2258,6 +2261,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Запасная кодиров
 SettingsCenter.ViewerDefaultCodePage.Label=Кодировка просмотра по умолчанию
 SettingsCenter.ViewerOpenAsSupportedType.Description=Если включено, просмотр картинки открывает просмотрщик изображений, а просмотр видео — видеоплеер, если терминал может их показать. Если выключено, любой файл открывается в текстовом и шестнадцатеричном просмотрщике.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Открывать изображения и видео в своих просмотрщиках
+SettingsCenter.ViewerHighlighting.Description=Подсвечивать синтаксис в панели быстрого просмотра подсветкой редактора, Chroma или Colorer, или нигде. По умолчанию выключено: вьювер нужен, чтобы сразу посмотреть файл, а подсветка требует времени.
+SettingsCenter.ViewerHighlighting.Label=Подсветка синтаксиса во вьюверах
 SettingsCenter.WheelEditorDown.Description=Число строк редактора на одно деление колеса вниз. Ноль использует системную настройку.
 SettingsCenter.WheelEditorDown.Label=Колесо вниз в редакторе
 SettingsCenter.WheelEditorUp.Description=Число строк редактора на одно деление колеса вверх. Ноль использует системную настройку.
@@ -3226,3 +3231,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Копия всегда получает права своего источника, даже если она перезаписала существующий файл.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Копия получает права каталога, в который попадает; у файла дополнительно снимаются биты выполнения этого каталога.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=По типу файла (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Только быстрый просмотр

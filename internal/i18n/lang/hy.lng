@@ -1016,6 +1016,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Վերադարձ դիտող ե�
 SettingsCenter.ViewerDefaultCodePage.Label=Սովորական դիտորդի կոդավորում
 SettingsCenter.ViewerOpenAsSupportedType.Description=Միացված լինելու դեպքում պատկերի դիտումը բացում է պատկերների դիտիչը, իսկ տեսանյութի դիտումը՝ տեսանվագարկիչը, եթե տերմինալը կարող է դրանք ցույց տալ։ Անջատված լինելու դեպքում յուրաքանչյուր ֆայլ բացվում է տեքստային և տասնվեցական դիտիչում։
 SettingsCenter.ViewerOpenAsSupportedType.Label=Բացել պատկերներն ու տեսանյութերը իրենց դիտիչներում
+SettingsCenter.ViewerHighlighting.Description=Ընդգծել շարահյուսությունը արագ դիտման վահանակում խմբագրիչի ընդգծիչով՝ Chroma կամ Colorer, կամ ոչ մի տեղ։ Լռելյայն անջատված է. դիտիչը ֆայլը միանգամից դիտելու համար է, իսկ ընդգծումը ժամանակ է պահանջում։
+SettingsCenter.ViewerHighlighting.Label=Շարահյուսության ընդգծում դիտիչներում
 SettingsCenter.WheelEditorDown.Description=Խմբագրում ոլորվող տողերի քանակը մկնիկի անիվը մեկ քայլ ներքև պտտելիս։ Զրոյի դեպքում օգտագործվում է համակարգի կարգավորումը։
 SettingsCenter.WheelEditorDown.Label=Էդիտորի հեծանիվը ներքեւ
 SettingsCenter.WheelEditorUp.Description=Խմբագրում ոլորվող տողերի քանակը մկնիկի անիվը մեկ քայլ վերև պտտելիս։ Զրոյի դեպքում օգտագործվում է համակարգի կարգավորումը։
@@ -1984,3 +1986,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Պատճենը միշտ ստանում է իր աղբյուրի իրավունքները, նույնիսկ երբ վերագրանցել է առկա ֆայլը։
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Պատճենը ստանում է այն պանակի իրավունքները, ուր հայտնվում է, իսկ ֆայլը կորցնում է նաև այդ պանակի կատարման բիթերը։
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Ըստ ֆայլի տիպի (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Միայն արագ դիտում

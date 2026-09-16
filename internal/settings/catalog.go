@@ -120,6 +120,7 @@ ExternalEditorConsole|editor|External editor|Console editor command|Command for 
 ExternalEditorGUI|editor|External editor|Graphical editor command|Command for graphical sessions; the file path is appended as the last argument. Current parsing splits on whitespace and is not a shell-expression parser.||new edit commands
 EditorHighlighter|syntax|Engine|Syntax highlighter|Choose Chroma, Colorer or no highlighting for newly opened editors. Colorer needs installed schemas and may fall back when unavailable.|Chroma:Chroma;Colorer:Colorer;None:None|new editors
 EditorSyntaxAnimation|syntax|Engine|Animate syntax colors|Fade arriving RGB syntax colors over about 400 milliseconds. Indexed colors are unchanged.||live
+ViewerHighlighting|syntax|Engine|Syntax highlighting in viewers|Highlight syntax in the quick view panel with the editor's syntax highlighter, Chroma or Colorer, or nowhere. Off by default: a viewer is for looking at a file at once, and highlighting takes time.|0:Off;1:Quick view only|new viewers
 EditorColorerScheme|syntax|Colorer|Colorer scheme|Select the HRD scheme used for syntax, guide and editor base colors. Empty uses the built-in default.||Colorer reload
 EditorColorerSyntax|syntax|Colorer|Colorer syntax colors|Enable Colorer syntax coloring while retaining its other style facilities.||Colorer reload
 EditorColorerBackground|syntax|Colorer|Use Colorer base colors|Use foreground and background fields supplied by the Colorer scheme instead of only the general editor palette.||Colorer reload

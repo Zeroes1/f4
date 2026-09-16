@@ -1098,6 +1098,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Fallback-Viewer und Schnellansi
 SettingsCenter.ViewerDefaultCodePage.Label=Standard-Viewer-Kodierung
 SettingsCenter.ViewerOpenAsSupportedType.Description=Wenn aktiviert, öffnet die Ansicht eines Bildes den Bildbetrachter und die Ansicht eines Videos den Videoplayer, sofern das Terminal sie darstellen kann. Wenn deaktiviert, öffnet sich jede Datei im Text- und Hex-Viewer.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Bilder und Videos in eigenen Betrachtern öffnen
+SettingsCenter.ViewerHighlighting.Description=Syntax im Schnellansichtsfeld mit der Hervorhebung des Editors, Chroma oder Colorer, hervorheben oder nirgends. Standardmäßig aus: Ein Betrachter dient dazu, eine Datei sofort anzusehen, und Hervorhebung kostet Zeit.
+SettingsCenter.ViewerHighlighting.Label=Syntaxhervorhebung in Betrachtern
 SettingsCenter.WheelEditorDown.Description=Anzahl der Editorzeilen pro nach unten gerichteter Radkerbe. Null folgt der Systemeinstellung.
 SettingsCenter.WheelEditorDown.Label=Editor-Rad nach unten
 SettingsCenter.WheelEditorUp.Description=Anzahl der Editorzeilen pro nach oben gerichteter Radkerbe. Null folgt der Systemeinstellung.
@@ -2066,3 +2068,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Die Kopie erhält immer die Rechte ihrer Quelle, auch wenn sie eine vorhandene Datei überschrieben hat.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Die Kopie erhält die Rechte des Ordners, in dem sie landet; eine Datei verliert zusätzlich dessen Ausführungsbits.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Nach Dateityp (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Nur Schnellansicht

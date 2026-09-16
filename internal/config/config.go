@@ -453,6 +453,7 @@ type F4Config struct {
 	EditorColorerUserHrd     string // user colour styles, FarColorer's UserHrdPath
 	EditorColorerHrcSettings string // user HRC settings, FarColorer's UserHrcSettingsPath
 	EditorCrossMode          int
+	ViewerHighlighting       int // where viewers highlight syntax; see ViewerHighlightOff
 	EditorDefaultCodePage    int
 	// EditorMemoryMap lets the editor map a local file instead of reading it
 	// in chunks. Off means every buffer takes the lazily fetched path, which
@@ -637,6 +638,7 @@ var App = F4Config{
 	EditorColorerUserHrd:     "",
 	EditorColorerHrcSettings: "",
 	EditorCrossMode:          ColorerCrossBoth,
+	ViewerHighlighting:       ViewerHighlightOff,
 	EditorDefaultCodePage:    65001,
 	EditorMemoryMap:          true,
 	ViewerAutodetectCodePage: true,
@@ -949,6 +951,11 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	if cfg.EditorCrossMode < ColorerCrossOff || cfg.EditorCrossMode > ColorerCrossScheme {
 		cfg.EditorCrossMode = ColorerCrossBoth
 	}
+	cfg.ViewerHighlighting = ViewerHighlightOff
+	_, _ = fmt.Sscanf(merged.GetString("Viewer", "Highlighting", "0"), "%d", &cfg.ViewerHighlighting)
+	if cfg.ViewerHighlighting < ViewerHighlightOff || cfg.ViewerHighlighting > ViewerHighlightQuickView {
+		cfg.ViewerHighlighting = ViewerHighlightOff
+	}
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "DefaultCodePage", "65001"), "%d", &cfg.EditorDefaultCodePage)
 	cfg.ViewerAutodetectCodePage = merged.GetString("Viewer", "AutodetectCodePage", "1") == "1"
 	_, _ = fmt.Sscanf(merged.GetString("Viewer", "DefaultCodePage", "65001"), "%d", &cfg.ViewerDefaultCodePage)
@@ -1245,6 +1252,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[cfg.ViewerAutodetectCodePage])
 	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.ViewerDefaultCodePage)
 	fmt.Fprintf(&sb, "OpenAsSupportedType = %d\n", map[bool]int{true: 1, false: 0}[cfg.ViewerOpenAsSupportedType])
+	fmt.Fprintf(&sb, "Highlighting = %d\n", cfg.ViewerHighlighting)
 	sb.WriteString("\n[Mouse]\n")
 	fmt.Fprintf(&sb, "PanelUp = %d\n", cfg.WheelPanelUp)
 	fmt.Fprintf(&sb, "PanelDown = %d\n", cfg.WheelPanelDown)

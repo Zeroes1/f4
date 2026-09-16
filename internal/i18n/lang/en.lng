@@ -916,6 +916,9 @@ ViewerSettings.Title= Viewer settings
 ViewerSettings.AutodetectCodePage=Autodetect code &page
 ViewerSettings.DefaultCodePage=Default code &page:
 ViewerSettings.OpenAsSupportedType=Open images and video in their own &viewers
+ViewerSettings.Highlighting=Syntax &highlighting:
+ViewerSettings.HighlightOff=Off
+ViewerSettings.HighlightQuickView=Quick view only
 
 ColorerSettings.Title= Colorer settings
 ColorerSettings.Enabled=Enable &Colorer highlighting
@@ -2327,6 +2330,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Fallback viewer and quick-view 
 SettingsCenter.ViewerDefaultCodePage.Label=Default viewer encoding
 SettingsCenter.ViewerOpenAsSupportedType.Description=When on, viewing a picture opens the image viewer and viewing a video opens the video player, where the terminal can show them. When off, every file opens in the text and hex viewer.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Open images and video in their own viewers
+SettingsCenter.ViewerHighlighting.Description=Highlight syntax in the quick view panel with the editor's syntax highlighter, Chroma or Colorer, or nowhere. Off by default: a viewer is for looking at a file at once, and highlighting takes time.
+SettingsCenter.ViewerHighlighting.Label=Syntax highlighting in viewers
 SettingsCenter.WheelEditorDown.Description=Number of editor rows per downward wheel notch. Zero follows the system setting.
 SettingsCenter.WheelEditorDown.Label=Editor wheel down
 SettingsCenter.WheelEditorUp.Description=Number of editor rows per upward wheel notch. Zero follows the system setting.
@@ -3295,3 +3300,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=The copy always receives the permissions of its source, even when it overwrote an existing file.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=The copy receives the permissions of the folder it lands in; a file also drops that folder's execute bits.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=By file type (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Quick view only

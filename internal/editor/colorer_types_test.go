@@ -2,6 +2,7 @@ package editor
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
@@ -101,4 +102,75 @@ func TestColorerSetFileType_RehighlightsAsTheType(t *testing.T) {
 		t.Errorf("type settings %+v were not adopted from the worker", ch.typeSettings)
 	}
 
+}
+
+// The quick view's colorizer highlights a text from its first line with the
+// editor's highlighter and hands the colours to the UI thread; it is off
+// unless the viewer highlighting setting asks for it.
+func TestNewTextColorizer_ColoursTheQuickView(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	saved := config.App
+	t.Cleanup(func() { config.App = saved; ResetColorerSessions() })
+	config.App.EditorHighlighter = "Colorer"
+	config.App.EditorColorerSyntax = true
+	config.App.EditorColorerCatalog = checkConfigs(t)
+	config.App.EditorColorerUserHrc = user
+
+	config.App.ViewerHighlighting = config.ViewerHighlightOff
+	if c := NewTextColorizer("a.pairtest", []string{"fn alpha"}, 7, true, nil); c != nil {
+		t.Fatal("highlighted with viewer highlighting off")
+	}
+	config.App.ViewerHighlighting = config.ViewerHighlightQuickView
+	if c := NewTextColorizer("a.pairtest", []string{"fn alpha"}, 7, false, nil); c != nil {
+		t.Fatal("highlighted a viewer in the quick view only mode")
+	}
+
+	// Chroma registers itself from its plugin at run time; a stand-in
+	// registered for its own extension takes its place here.
+	vtui.RegisterHighlighter(textColorizerTestProvider{})
+	for _, engine := range []struct{ highlighter, path string }{{"Colorer", "a.pairtest"}, {"Chroma", "a.textcolorizertest"}} {
+		config.App.EditorHighlighter = engine.highlighter
+		lines := []string{"package main", "", "x Ж"}
+		c := NewTextColorizer(engine.path, lines, 7, true, nil)
+		if c == nil {
+			t.Fatalf("%s: no colorizer for the quick view", engine.highlighter)
+		}
+		pumpUntil(t, engine.highlighter+" colours", func() bool { return c.LineAttrs(2) != nil })
+		if got := c.LineAttrs(0); len(got) != len([]rune(lines[0])) {
+			t.Errorf("%s: line 0 has %d attributes, want one per rune", engine.highlighter, len(got))
+		}
+		c.Close()
+	}
+	config.App.EditorHighlighter = "None"
+	if c := NewTextColorizer("a.textcolorizertest", []string{"package main"}, 7, true, nil); c != nil {
+		t.Error("highlighted with the highlighter set to None")
+	}
+}
+
+// textColorizerTestProvider stands in for the Chroma plugin: one attribute per
+// rune, and the line number carried as the state.
+type textColorizerTestProvider struct{}
+
+func (textColorizerTestProvider) Name() string { return "text colorizer test" }
+
+func (textColorizerTestProvider) Match(filename, content string) bool {
+	return strings.HasSuffix(filename, ".textcolorizertest")
+}
+
+func (textColorizerTestProvider) Create(filename, content string) vtui.Highlighter {
+	return textColorizerTestHighlighter{}
+}
+
+type textColorizerTestHighlighter struct{}
+
+func (textColorizerTestHighlighter) Highlight(line string, prevState any, baseAttr uint64) ([]uint64, any) {
+	n, _ := prevState.(int)
+	attrs := make([]uint64, len([]rune(line)))
+	for i := range attrs {
+		attrs[i] = baseAttr + uint64(n)
+	}
+	return attrs, n + 1
 }

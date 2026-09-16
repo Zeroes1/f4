@@ -71,6 +71,14 @@ const (
 	ColorerCrossScheme
 )
 
+// Where viewers highlight syntax, with the editor's highlighter: nowhere (the
+// default: a viewer is for looking at a file at once, and highlighting costs
+// time), or in the quick view panel. FarColorer calls this ViewerColoring.
+const (
+	ViewerHighlightOff = iota
+	ViewerHighlightQuickView
+)
+
 // ---- from image_slideshow.go ----
 // DefaultSlideShowDelay is how many seconds a picture stays on screen when
 // the configuration has nothing sensible to say about it.

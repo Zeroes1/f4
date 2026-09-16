@@ -1099,6 +1099,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Виглядач відпаду
 SettingsCenter.ViewerDefaultCodePage.Label=Позавтоване кодування проглядача
 SettingsCenter.ViewerOpenAsSupportedType.Description=Якщо увімкнено, перегляд зображення відкриває переглядач зображень, а перегляд відео — відеоплеєр, якщо термінал може їх показати. Якщо вимкнено, будь-який файл відкривається в текстовому та шістнадцятковому переглядачі.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Відкривати зображення та відео у власних переглядачах
+SettingsCenter.ViewerHighlighting.Description=Підсвічувати синтаксис у панелі швидкого перегляду підсвічуванням редактора, Chroma або Colorer, або ніде. Типово вимкнено: переглядач потрібен, щоб одразу подивитися файл, а підсвічування потребує часу.
+SettingsCenter.ViewerHighlighting.Label=Підсвічування синтаксису в переглядачах
 SettingsCenter.WheelEditorDown.Description=Кількість рядів редактора на орізку колеса вниз. Нуль слідує настройкам системи.
 SettingsCenter.WheelEditorDown.Label=Колесо редактора вниз
 SettingsCenter.WheelEditorUp.Description=Кількість рядів редактора на вихідну розкопу колеса. Нуль слідує настройкам системи.
@@ -2067,3 +2069,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Копія завжди отримує права свого джерела, навіть якщо вона перезаписала наявний файл.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Копія отримує права каталогу, до якого потрапляє; у файла додатково знімаються біти виконання цього каталогу.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=За типом файлу (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Лише швидкий перегляд

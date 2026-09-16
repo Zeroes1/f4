@@ -758,6 +758,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=फ़ॉलबैक व्य
 SettingsCenter.ViewerDefaultCodePage.Label=डिफ़ॉल्ट व्यूअर एन्कोडिंग
 SettingsCenter.ViewerOpenAsSupportedType.Description=चालू होने पर, छवि देखने से इमेज व्यूअर और वीडियो देखने से वीडियो प्लेयर खुलता है, यदि टर्मिनल उन्हें दिखा सकता है। बंद होने पर, हर फ़ाइल टेक्स्ट और हेक्स व्यूअर में खुलती है।
 SettingsCenter.ViewerOpenAsSupportedType.Label=छवियों और वीडियो को उनके अपने व्यूअर में खोलें
+SettingsCenter.ViewerHighlighting.Description=त्वरित दृश्य पैनल में संपादक के हाइलाइटर, Chroma या Colorer, से सिंटैक्स हाइलाइट करें, या कहीं नहीं। डिफ़ॉल्ट रूप से बंद: व्यूअर फ़ाइल को तुरंत देखने के लिए है, और हाइलाइटिंग में समय लगता है।
+SettingsCenter.ViewerHighlighting.Label=व्यूअर में सिंटैक्स हाइलाइटिंग
 SettingsCenter.WheelEditorDown.Description=नीचे की ओर व्हील नॉच पर संपादक पंक्तियों की संख्या। जीरो सिस्टम सेटिंग का अनुसरण करता है।
 SettingsCenter.WheelEditorDown.Label=संपादक का पहिया नीचे
 SettingsCenter.WheelEditorUp.Description=प्रति ऊपर की ओर व्हील नॉच में संपादक पंक्तियों की संख्या। जीरो सिस्टम सेटिंग का अनुसरण करता है।
@@ -1726,3 +1728,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=प्रति को हमेशा उसके स्रोत के अधिकार मिलते हैं, तब भी जब उसने मौजूदा फ़ाइल को अधिलिखित किया हो।
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=प्रति को उस फ़ोल्डर के अधिकार मिलते हैं जिसमें वह पहुँचती है; फ़ाइल उस फ़ोल्डर के निष्पादन बिट भी खो देती है।
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=फ़ाइल प्रकार के अनुसार (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=केवल त्वरित दृश्य

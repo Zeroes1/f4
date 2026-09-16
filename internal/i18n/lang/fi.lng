@@ -1095,6 +1095,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=Varakatseluohjelma ja pikakatse
 SettingsCenter.ViewerDefaultCodePage.Label=Katsojan oletuskoodaus
 SettingsCenter.ViewerOpenAsSupportedType.Description=Kun asetus on käytössä, kuvan katselu avaa kuvankatselimen ja videon katselu avaa videosoittimen, jos pääte pystyy näyttämään ne. Kun asetus ei ole käytössä, jokainen tiedosto avautuu teksti- ja heksakatselimeen.
 SettingsCenter.ViewerOpenAsSupportedType.Label=Avaa kuvat ja videot omissa katseluohjelmissaan
+SettingsCenter.ViewerHighlighting.Description=Korosta syntaksi pikanäkymäpaneelissa editorin korostimella, Chroma tai Colorer, tai ei missään. Oletuksena pois: katselin on tiedoston katsomiseen heti, ja korostus vie aikaa.
+SettingsCenter.ViewerHighlighting.Label=Syntaksin korostus katselimissa
 SettingsCenter.WheelEditorDown.Description=Editoririvien lukumäärä alaspäin olevaa pyörän lovea kohti. Nolla seuraa järjestelmäasetusta.
 SettingsCenter.WheelEditorDown.Label=Editorin pyörä alas
 SettingsCenter.WheelEditorUp.Description=Editoririvien lukumäärä ylöspäin suuntautuvaa pyörän lovea kohti. Nolla seuraa järjestelmäasetusta.
@@ -2063,3 +2065,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=Kopio saa aina lähteensä oikeudet, myös silloin kun se korvasi olemassa olevan tiedoston.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=Kopio saa sen kansion oikeudet, johon se päätyy; tiedosto menettää lisäksi kansion suoritusbitit.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=Tiedostotyypin mukaan (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=Vain pikanäkymä

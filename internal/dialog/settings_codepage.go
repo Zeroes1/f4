@@ -94,7 +94,7 @@ func CodepageChoiceIndex(ids []int, current int) int {
 // ShowViewerSettings is Options -> Viewer settings: the code page choices, and
 // whether pictures and video open in their own viewers.
 func ShowViewerSettings() {
-	width, height := 78, 12
+	width, height := 78, 14
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ViewerSettings.Title"))
 	dlg.ShowClose = true
 
@@ -105,6 +105,17 @@ func ShowViewerSettings() {
 	comboDefault.Menu.SetSelectPos(selected)
 	comboDefault.Edit.SetText(labels[selected])
 	lblDefault := vtui.NewLabel(0, 0, i18n.Msg("ViewerSettings.DefaultCodePage"), comboDefault)
+
+	highlightItems := []string{i18n.Msg("ViewerSettings.HighlightOff"), i18n.Msg("ViewerSettings.HighlightQuickView")}
+	highlightPos := config.App.ViewerHighlighting
+	if highlightPos < 0 || highlightPos >= len(highlightItems) {
+		highlightPos = config.ViewerHighlightOff
+	}
+	comboHighlight := vtui.NewComboBox(0, 0, 40, highlightItems)
+	comboHighlight.DropdownOnly = true
+	comboHighlight.Menu.SetSelectPos(highlightPos)
+	comboHighlight.Edit.SetText(highlightItems[highlightPos])
+	lblHighlight := vtui.NewLabel(0, 0, i18n.Msg("ViewerSettings.Highlighting"), comboHighlight)
 
 	chkAutodetect := vtui.NewCheckbox(0, 0, i18n.Msg("ViewerSettings.AutodetectCodePage"), false)
 	if config.App.ViewerAutodetectCodePage {
@@ -122,6 +133,8 @@ func ShowViewerSettings() {
 	dlg.AddItem(lblDefault)
 	dlg.AddItem(comboDefault)
 	dlg.AddItem(chkByType)
+	dlg.AddItem(lblHighlight)
+	dlg.AddItem(comboHighlight)
 	dlg.AddItem(btnOK)
 	dlg.AddItem(btnCancel)
 
@@ -132,6 +145,11 @@ func ShowViewerSettings() {
 	rowDefault.Add(comboDefault, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(rowDefault, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Add(chkByType, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	// With the editor's highlighter, Chroma or Colorer.
+	rowHighlight := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	rowHighlight.Add(lblHighlight, vtui.Margins{Right: 1}, vtui.AlignLeft)
+	rowHighlight.Add(comboHighlight, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(rowHighlight, vtui.Margins{Top: 1}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -144,6 +162,7 @@ func ShowViewerSettings() {
 	btnOK.OnClick = func() {
 		config.App.ViewerAutodetectCodePage = chkAutodetect.State == 1
 		config.App.ViewerOpenAsSupportedType = chkByType.State == 1
+		config.App.ViewerHighlighting = comboHighlight.Menu.SelectPos
 		if pos := comboDefault.Menu.SelectPos; pos >= 0 && pos < len(ids) {
 			config.App.ViewerDefaultCodePage = ids[pos]
 		}

@@ -88,3 +88,14 @@ f4's HRC settings dialog and the user HRC settings path. See HIGHLIGHT.md
 show-cross (cross mode "By file type"), maxlinelength, fullback, default-fore
 and default-back. backparse and cross-zorder are not applied, for the
 reasons in HIGHLIGHT.md 3.13.
+
+## Step 7a — highlighting in the quick view (done)
+
+The quick view panel highlights text with the editor's highlighter, Chroma
+or Colorer, behind `ViewerHighlighting` (off by default / quick view). See
+HIGHLIGHT.md 3.14.
+
+## Step 7b — highlighting in the viewer
+
+FarColorer's "all viewers", with Chroma or Colorer: the viewer highlights
+what it shows with the lines before it, as FarViewer does, off the UI thread.

@@ -901,6 +901,16 @@
   },
   {
     "category": "syntax",
+    "description": "Highlight syntax in the quick view panel with the editor's syntax highlighter, Chroma or Colorer, or nowhere. Off by default: a viewer is for looking at a file at once, and highlighting takes time.",
+    "group": "Engine",
+    "id": "ViewerHighlighting",
+    "kind": "choice",
+    "label": "Syntax highlighting in viewers",
+    "timing": "new viewers",
+    "unavailable": ""
+  },
+  {
+    "category": "syntax",
     "description": "An .hrc file, or a folder whose .hrc files are all loaded except *.ent.hrc, added to the catalog's schemes. Links inside must stay within that folder, and the file names Colorer opens must be ASCII. Empty loads none.",
     "group": "Colorer",
     "id": "EditorColorerUserHrc",

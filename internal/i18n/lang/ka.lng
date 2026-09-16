@@ -1095,6 +1095,8 @@ SettingsCenter.ViewerDefaultCodePage.Description=ჩამობრუნებ�
 SettingsCenter.ViewerDefaultCodePage.Label=დეფალტური მაყურებლის კოდირება
 SettingsCenter.ViewerOpenAsSupportedType.Description=ჩართვის შემთხვევაში სურათის ნახვა ხსნის სურათების მაყურებელს, ვიდეოს ნახვა — ვიდეოფლეერს, თუ ტერმინალს შეუძლია მათი ჩვენება. გამორთვის შემთხვევაში ყოველი ფაილი იხსნება ტექსტურ და თექვსმეტობით მაყურებელში.
 SettingsCenter.ViewerOpenAsSupportedType.Label=სურათებისა და ვიდეოების გახსნა მათ საკუთარ მაყურებლებში
+SettingsCenter.ViewerHighlighting.Description=სინტაქსის გამოჩენა სწრაფი ხედის პანელში რედაქტორის გამომჩენით, Chroma ან Colorer, ან არსად. ნაგულისხმევად გამორთულია: მაყურებელი ფაილის მყისიერ სანახავადაა, გამოჩენა კი დროს ითხოვს.
+SettingsCenter.ViewerHighlighting.Label=სინტაქსის გამოჩენა მაყურებლებში
 SettingsCenter.WheelEditorDown.Description=რედაქტორის რიგების რაოდენობა თითოეული ქვემოთ მოქცეული ბორბლის კოჭის მიხედვით. ნულოვანი აკმაყოფილებს სისტემის პარამეტრებს.
 SettingsCenter.WheelEditorDown.Label=რედაქტორი ბორბალი ქვემოთ
 SettingsCenter.WheelEditorUp.Description=რედაქტორის რიგების რაოდენობა ბორბლის ზევით აღმართული კოშკის მიხედვით. ნულოვანი აკმაყოფილებს სისტემის პარამეტრებს.
@@ -2063,3 +2065,4 @@ SettingsCenter.Text.623f973311966b52caba6ec9bbbc9b468cfebd10bb1b9a26413a88daea54
 SettingsCenter.Text.494a188c16632748b646f96991c866a64a0c20fd62ba0cc4dd280e55059aa897=ასლი ყოველთვის იღებს თავისი წყაროს უფლებებს, მაშინაც კი, როცა არსებული ფაილი გადაწერა.
 SettingsCenter.Text.51aafa6b808c6073718374cbebb2dd08e3e7451e18cb25f1f7e994612729f12d=ასლი იღებს იმ საქაღალდის უფლებებს, სადაც ხვდება; ფაილი დამატებით კარგავს ამ საქაღალდის შესრულების ბიტებს.
 SettingsCenter.Text.13c46abe3e03c526b3a6345862e13b5368cd79ce28b359ce50c9ac54047cf8a6=ფაილის ტიპის მიხედვით (Colorer)
+SettingsCenter.Text.5038545982e83d1bde3dd3abcb2d2c99a90ad1d80e6d3b40c0ed5d36d19e2025=მხოლოდ სწრაფი ხედი

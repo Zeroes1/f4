@@ -762,6 +762,13 @@ func (ch *ColorerHighlighter) Highlight(line string, prevState any, baseAttr uin
 }
 
 func (ch *ColorerHighlighter) attrsForSyntax(line string, regions []colorer.Region, baseAttr uint64, syntax bool) ([]uint64, uint64) {
+	return colorerAttrs(line, regions, baseAttr, syntax, ch.workerTypeSettings.plainEOL)
+}
+
+// colorerAttrs turns a parsed line's regions into the attribute of each rune,
+// over baseAttr, and the colour for the rest of the row. plainEOL is
+// fullback=no: a region running to the end of the line colours only the text.
+func colorerAttrs(line string, regions []colorer.Region, baseAttr uint64, syntax, plainEOL bool) ([]uint64, uint64) {
 	lineRunes := colorerLineRuneCount(line)
 	attrs := make([]uint64, lineRunes)
 	for i := range attrs {
@@ -785,7 +792,7 @@ func (ch *ColorerHighlighter) attrsForSyntax(line string, regions []colorer.Regi
 
 		// fullback=no keeps the colour of a region running to the end of
 		// the line on its text, off the rest of the row.
-		if toEOL && !ch.workerTypeSettings.plainEOL {
+		if toEOL && !plainEOL {
 			eolBg = applyColorerStyle(eolBg, &rd)
 		}
 		for i := start; i < end; i++ {
