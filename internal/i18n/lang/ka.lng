@@ -88,6 +88,27 @@ Copy.Title= კოპირება
 Copy.Prompt=დააკოპირეთ %d ელემენტი აქ:
 Copy.Btn=&კოპირება
 
+FileOp.AlreadyOpened=ფაილი უკვე გახსნილია რედაქტორში:\n%s
+FileOp.AlreadyOpenedTitle= ფაილი უკვე გახსნილია რედაქტორში
+FileOp.AlreadyViewed=ფაილი უკვე გახსნილია საყურებლად:\n%s
+FileOp.AlreadyViewedTitle= ფაილი უკვე გახსნილია მაყურებელში
+FileOp.BtnCurrent=&მიმდინარე
+FileOp.BtnReload=&განახლება
+FileOp.BtnNewInstance=&ახალი ასლი
+FileOp.CannotEditDir=დირექტორიის რედაქტირება შეუძლებელია.
+FileOp.CannotViewDir=დირექტორიის ნახვა შეუძლებელია.
+FileOp.CannotOpenSpecial=სპეციალური ფაილების (მილები, სოკეტები, მოწყობილობები) გახსნა შეუძლებელია.
+FileOp.DeletionErrors= წაშლის შეცდომები
+FileOp.FileAlreadyExists=ფაილი უკვე არსებობს
+FileOp.RememberChoice=არჩევნის &დამახსოვრება
+FileOp.Overwrite=&თავზე გადაწერა
+FileOp.Skip=&გამოტოვება
+FileOp.Rename=&გადარქმევა
+FileOp.Append=&მიწერა
+FileOp.Resume=გაგ&რძელება
+FileOp.BtnCancel=&გაუქმება
+FileOp.BtnBackground=&ფონი
+
 Move.Title= გადაადგილება
 Move.Prompt=გადაარქვით სახელი ან გადაიტანეთ %d ელემენტი აქ:
 Move.Btn=&გადარქმევა
@@ -542,27 +563,6 @@ Info.Title= ინფორმაცია
 
 ExtEdit.TempError=ვერ მოხერხდა დროებითი ფაილის შექმნა: %v
 
-FileOp.AlreadyOpened=ფაილი უკვე გახსნილია რედაქტორში:\n%s
-FileOp.AlreadyOpenedTitle= ფაილი უკვე გახსნილია რედაქტორში
-FileOp.AlreadyViewed=ფაილი უკვე გახსნილია საყურებლად:\n%s
-FileOp.AlreadyViewedTitle= ფაილი უკვე გახსნილია მაყურებელში
-FileOp.BtnCurrent=&მიმდინარე
-FileOp.BtnReload=&განახლება
-FileOp.BtnNewInstance=&ახალი ასლი
-FileOp.CannotEditDir=დირექტორიის რედაქტირება შეუძლებელია.
-FileOp.CannotViewDir=დირექტორიის ნახვა შეუძლებელია.
-FileOp.CannotOpenSpecial=სპეციალური ფაილების (მილები, სოკეტები, მოწყობილობები) გახსნა შეუძლებელია.
-FileOp.DeletionErrors= წაშლის შეცდომები
-FileOp.FileAlreadyExists=ფაილი უკვე არსებობს
-FileOp.RememberChoice=არჩევნის &დამახსოვრება
-FileOp.Overwrite=&თავზე გადაწერა
-FileOp.Skip=&გამოტოვება
-FileOp.Rename=&გადარქმევა
-FileOp.Append=&მიწერა
-FileOp.Resume=გაგ&რძელება
-FileOp.BtnCancel=&გაუქმება
-FileOp.BtnBackground=&ფონი
-
 Dialog.RenameTitle= გადარქმევა
 Dialog.RenamePrompt=გადაარქვით სახელი '%s' ამად:
 
@@ -996,6 +996,8 @@ SettingsCenter.MacKeyboard.Description=გამოიყენეთ Mac-ის
 SettingsCenter.MacKeyboard.Label=Mac კლავიატურის რეჟიმი
 SettingsCenter.MacroRecordFormat.Description=შეინახეთ ჩაწერილი ძირითადი მაკროები მოძველებულ key_macros.ini ფორმატში ან როგორც Lua სკრიპტები Macros/scripts ქვეშ.
 SettingsCenter.MacroRecordFormat.Label=ჩაწერეთ მაკროები როგორც
+SettingsCenter.MenuLoopScroll.Description=ჩართვისას მენიუში ან ჩამოსაშლელ სიაში ზემოთ ან ქვემოთ ისრის დაჭერით ბოლო ელემენტის შემდეგ პირველზე გადადის. გამორთვისას დაჭერილი ისარი პირველ ან ბოლო ელემენტზე ჩერდება; ცალკე დაჭერა კვლავ მეორე ბოლოში გადადის, როგორც Far Manager 3-ში.
+SettingsCenter.MenuLoopScroll.Label=სიის ციკლური გადახვევა
 SettingsCenter.NavigationMode.Description=კლასიკური ტიპები ბრძანების ხაზში. Vim ამატებს j/k და ორმაგ dd/cc/mm მოქმედებებს. Search-first განასხვავებს ფაილის სახელს-ძიებას და ბრძანების ფოკუსს.
 SettingsCenter.NavigationMode.Label=პანელის ნავიგაცია
 SettingsCenter.Next=შემდეგი დამთხვევა
@@ -1626,6 +1628,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=შეტყობინების ჩვენება, როდესაც შედარება არ აღმოაჩენს განსხვავებას.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=მეტამონაცემები და ანგარიშები
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=ღამის საათებში
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=მენიუში ნავიგაცია
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=AWS რეგიონი მოთხოვნების ხელმოწერისა და სერვერის მისამართის არჩევისთვის. ნაგულისხმევი მნიშვნელობაა us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=ამ ოპერაციის განხორციელებამდე შევიტანეთ ცვლილებები %s- ში.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=წინსვლა

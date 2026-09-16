@@ -91,6 +91,27 @@ Copy.Title= Kopieren
 Copy.Prompt=%d Element(e) kopieren nach:
 Copy.Btn=&Kopieren
 
+FileOp.AlreadyOpened=Datei ist bereits geöffnet:\n%s
+FileOp.AlreadyOpenedTitle= Datei bereits geöffnet
+FileOp.AlreadyViewed=Datei wird bereits angezeigt:\n%s
+FileOp.AlreadyViewedTitle= Datei bereits im Viewer geöffnet
+FileOp.BtnCurrent=&Aktuell
+FileOp.BtnReload=Neu &laden
+FileOp.BtnNewInstance=&Neue Instanz
+FileOp.CannotEditDir=Ein Verzeichnis kann nicht bearbeitet werden.
+FileOp.CannotViewDir=Ein Verzeichnis kann nicht angezeigt werden.
+FileOp.CannotOpenSpecial=Spezielle Dateien (Named Pipes, Sockets, Geräte) können nicht geöffnet werden.
+FileOp.DeletionErrors= Löschfehler
+FileOp.FileAlreadyExists=Datei existiert bereits
+FileOp.RememberChoice=Auswahl &merken
+FileOp.Overwrite=Über&schreiben
+FileOp.Skip=Über&springen
+FileOp.Rename=&Umbenennen
+FileOp.Append=A&nhängen
+FileOp.Resume=F&ortsetzen
+FileOp.BtnCancel=&Abbrechen
+FileOp.BtnBackground=&Hintergrund
+
 Move.Title= Verschieben
 Move.Prompt=%d Element(e) umbenennen oder verschieben nach:
 Move.Btn=&Verschieben
@@ -545,27 +566,6 @@ Info.Title= Info
 
 ExtEdit.TempError=Temporäre Datei kann nicht erstellt werden: %v
 
-FileOp.AlreadyOpened=Datei ist bereits geöffnet:\n%s
-FileOp.AlreadyOpenedTitle= Datei bereits geöffnet
-FileOp.AlreadyViewed=Datei wird bereits angezeigt:\n%s
-FileOp.AlreadyViewedTitle= Datei bereits im Viewer geöffnet
-FileOp.BtnCurrent=&Aktuell
-FileOp.BtnReload=Neu &laden
-FileOp.BtnNewInstance=&Neue Instanz
-FileOp.CannotEditDir=Ein Verzeichnis kann nicht bearbeitet werden.
-FileOp.CannotViewDir=Ein Verzeichnis kann nicht angezeigt werden.
-FileOp.CannotOpenSpecial=Spezielle Dateien (Named Pipes, Sockets, Geräte) können nicht geöffnet werden.
-FileOp.DeletionErrors= Löschfehler
-FileOp.FileAlreadyExists=Datei existiert bereits
-FileOp.RememberChoice=Auswahl &merken
-FileOp.Overwrite=Über&schreiben
-FileOp.Skip=Über&springen
-FileOp.Rename=&Umbenennen
-FileOp.Append=A&nhängen
-FileOp.Resume=F&ortsetzen
-FileOp.BtnCancel=&Abbrechen
-FileOp.BtnBackground=&Hintergrund
-
 Dialog.RenameTitle= Umbenennen
 Dialog.RenamePrompt='%s' umbenennen in:
 
@@ -999,6 +999,8 @@ SettingsCenter.MacKeyboard.Description=Verwenden Sie Bearbeitungsakkorde im Mac-
 SettingsCenter.MacKeyboard.Label=Mac-Tastaturmodus
 SettingsCenter.MacroRecordFormat.Description=Speichern Sie aufgezeichnete Tastenmakros im alten key_macros.ini-Format oder als Lua-Skripte unter Macros/scripts.
 SettingsCenter.MacroRecordFormat.Label=Makros aufzeichnen als
+SettingsCenter.MenuLoopScroll.Description=Wenn aktiviert, läuft das Gedrückthalten der Pfeiltaste nach oben oder unten in einem Menü oder einer Auswahlliste über das letzte Element hinaus zum ersten zurück. Wenn deaktiviert, hält eine gedrückte Pfeiltaste am ersten oder letzten Element an; ein einzelner Tastendruck springt weiterhin zum anderen Ende, wie in Far Manager 3.
+SettingsCenter.MenuLoopScroll.Label=Listen zyklisch durchlaufen
 SettingsCenter.NavigationMode.Description=Classic gibt in die Befehlszeile ein. Vim fügt j/k- und double dd/cc/mm-Aktionen hinzu. „Suche zuerst“ trennt Dateinamensuche und Befehlsfokus.
 SettingsCenter.NavigationMode.Label=Panel-Navigation
 SettingsCenter.Next=Nächster Treffer
@@ -1629,6 +1631,7 @@ SettingsCenter.Text.aa9d5097c2dcb54ae2684b73d08844f1e5690c9f7029e8d9cb1d56234e88
 SettingsCenter.Text.ab1fce4d37a08f3daf24468227b94b637ed1bcbf5c7947cb711a16d771f9fca0=Zeigt eine Meldung an, wenn beim Vergleich keine Unterschiede festgestellt werden.
 SettingsCenter.Text.ab3f8511d5f4316bb8988e94dafb96190e0ec6ea6c908700135bcf524f75d99d=Metadaten und Berichte
 SettingsCenter.Text.ab6b5a4d586bafebcff63e5e391bba6c0032cd73c2f7ac2fe0b292f6d33985ac=Nächtlich
+SettingsCenter.Text.ab86806a858d6dc632e6feabacd79a75b693a95422089fa3c47d690a6fd30546=Menünavigation
 SettingsCenter.Text.ac7ff8b2c243c1b4522cee55844a05517f9f03405f5e612cb6b40cd0f0c2758c=AWS Region, die zum Signieren und zur Endpunktauswahl verwendet wird. Standardmäßig us-east-1.
 SettingsCenter.Text.ac8ef337988ab87c908a34f144020a49238bd5056a6f3b80f9b6cbf4f1014227=Wenden Sie die Änderungen auf %s an, bevor Sie diesen Vorgang ausführen.
 SettingsCenter.Text.ad4e241834eccd5c8763f0fbb554a1591ebf7cdd78d37e5e52bb913ed3341f5c=Vordergrund
