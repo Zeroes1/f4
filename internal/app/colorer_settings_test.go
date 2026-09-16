@@ -118,15 +118,12 @@ func TestEditorCrossAttrs_MapsEnabledModesAndFallsBackToPalette(t *testing.T) {
 			if horz != tc.wantHorz || vert != tc.wantVert {
 				t.Fatalf("EditorCrossAttrs() axes = %v, %v; want %v, %v", horz, vert, tc.wantHorz, tc.wantVert)
 			}
-			wantHorzAttr, wantVertAttr := uint64(0), uint64(0)
-			if tc.wantHorz {
-				wantHorzAttr = base
+			wantAttr := uint64(0)
+			if tc.wantHorz || tc.wantVert {
+				wantAttr = base
 			}
-			if tc.wantVert {
-				wantVertAttr = base
-			}
-			if horzAttr != wantHorzAttr || vertAttr != wantVertAttr {
-				t.Fatalf("EditorCrossAttrs() attrs = %#x, %#x; want %#x, %#x", horzAttr, vertAttr, wantHorzAttr, wantVertAttr)
+			if horzAttr != wantAttr || vertAttr != wantAttr {
+				t.Fatalf("EditorCrossAttrs() attrs = %#x, %#x; want %#x, %#x", horzAttr, vertAttr, wantAttr, wantAttr)
 			}
 		})
 	}
