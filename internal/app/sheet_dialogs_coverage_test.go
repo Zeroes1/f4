@@ -53,6 +53,7 @@ func TestSheetPathAndExportDialogs(t *testing.T) {
 	showSheetSaveAsDialog(sf)
 	saveAs := sheetDialogWindow(t)
 	edits, _, _, buttons := sheetDialogControls(saveAs)
+	var radios []*vtui.RadioGroup
 	if len(edits) != 1 {
 		t.Fatalf("Save As edits = %d, want 1", len(edits))
 	}
@@ -101,6 +102,8 @@ func TestSheetGotoWidthAndFormatDialogs(t *testing.T) {
 	showSheetGotoDialog(sf)
 	gotoDlg := sheetDialogWindow(t)
 	edits, _, _, buttons := sheetDialogControls(gotoDlg)
+	var radios []*vtui.RadioGroup
+	var checks []*vtui.Checkbox
 	edits[0].SetText("B2")
 	sheetDialogButton(t, buttons, true).OnClick()
 	vtui.FrameManager.RemoveFrame(gotoDlg)
