@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -83,7 +84,7 @@ func TestUnpackExtractEntryDirectoryDefaultModeAndErrors(t *testing.T) {
 func TestUnpackZipParallelFallbackAndWorkerLimit(t *testing.T) {
 	zipData := makeZipForCoverage(t)
 	for _, workers := range []int{0, 1, 8} {
-		t.Run("workers="+string(rune('0'+workers)), func(t *testing.T) {
+		t.Run("workers="+strconv.Itoa(workers), func(t *testing.T) {
 			destDir := t.TempDir()
 			if err := ZipParallel(zipData, destDir, workers); err != nil {
 				t.Fatalf("ZipParallel(%d) error: %v", workers, err)

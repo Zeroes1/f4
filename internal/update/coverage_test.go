@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -132,24 +133,25 @@ func TestUpdateRateLimitMessage(t *testing.T) {
 	reset := int64(1790000000)
 	withReset := &http.Response{
 		StatusCode: http.StatusForbidden,
-		Header: http.Header{
-			"X-RateLimit-Remaining": {"0"},
-			"X-RateLimit-Reset":     {"1790000000"},
-		},
+		Header:     make(http.Header),
 	}
+	withReset.Header.Set("X-RateLimit-Remaining", "0")
+	withReset.Header.Set("X-RateLimit-Reset", "1790000000")
 	msg := rateLimitMessage(withReset)
 	if !strings.Contains(msg, "used them all up") || !strings.Contains(msg, time.Unix(reset, 0).Local().Format("15:04")) {
 		t.Fatalf("rateLimitMessage() = %q", msg)
 	}
 
-	withoutReset := &http.Response{StatusCode: http.StatusTooManyRequests, Header: http.Header{"X-RateLimit-Remaining": {"0"}}}
+	withoutReset := &http.Response{StatusCode: http.StatusTooManyRequests, Header: make(http.Header)}
+	withoutReset.Header.Set("X-RateLimit-Remaining", "0")
 	if msg := rateLimitMessage(withoutReset); !strings.Contains(msg, "used them all up") || strings.Contains(msg, "Try again") {
 		t.Fatalf("rateLimitMessage() without reset = %q", msg)
 	}
 	for _, resp := range []*http.Response{
-		{StatusCode: http.StatusForbidden, Header: http.Header{"X-RateLimit-Remaining": {"1"}}},
-		{StatusCode: http.StatusOK, Header: http.Header{"X-RateLimit-Remaining": {"0"}}},
+		{StatusCode: http.StatusForbidden, Header: make(http.Header)},
+		{StatusCode: http.StatusOK, Header: make(http.Header)},
 	} {
+		resp.Header.Set("X-RateLimit-Remaining", map[int]string{http.StatusForbidden: "1", http.StatusOK: "0"}[resp.StatusCode])
 		if msg := rateLimitMessage(resp); msg != "" {
 			t.Errorf("rateLimitMessage(%d) = %q, want empty", resp.StatusCode, msg)
 		}
@@ -202,7 +204,7 @@ func TestUpdateCheckAndDownloadUseSelectedRelease(t *testing.T) {
 		case "/latest":
 			_, _ = io.WriteString(w, `{"tag_name":"v2.0.0","published_at":"2026-08-22T00:00:00Z","assets":[{"name":"f4-linux-amd64.tar.gz","browser_download_url":"https://example/stable"}]}`)
 		case "/tags/nightly":
-			_, _ = io.WriteString(w, `{"tag_name":"nightly","body":"**Commit:** `+"`nightly-sha`"+`\n**Built on:** `+"`2026-08-23T06:49:17Z`"+`","assets":[{"name":"f4-linux-amd64.tar.gz","browser_download_url":"`+r.URL.Scheme+`://`+r.Host+`/archive","updated_at":"2026-08-24T00:00:00Z"}]}`)
+			_, _ = io.WriteString(w, `{"tag_name":"nightly","body":"**Commit:** `+"`nightly-sha`"+`\n**Built on:** `+"`2026-08-23T06:49:17Z`"+`","assets":[{"name":"f4-linux-amd64.tar.gz","browser_download_url":"https://example/archive","updated_at":"2026-08-24T00:00:00Z"}]}`)
 		case "/archive":
 			w.Header().Set("Content-Length", "4")
 			_, _ = io.WriteString(w, "data")
