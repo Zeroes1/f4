@@ -2051,6 +2051,7 @@ SettingsCenter.Matches=Coincidencias: %d
 SettingsCenter.ClearSearch=Una búsqueda clara
 SettingsCenter.Category.hotkeys=Configurador de atajos
 SettingsCenter.Text.8802174070f1412801a7f0343b685b2031869bce18833d79e48e7a712ab59883=Prefiere coincidencias exactas de búsqueda de atajos
+SettingsCenter.Text.d077ac4db77fed335010255316d50f1597c6c39b6481aa17455e4dd418ed0e40=siguiente esquema
 SettingsCenter.Text.c0010901537ebb36a8ae08ecdecf613679d66a4f8dcad5856094bc3752fcbf1d=En la tabla Configurador de llaves calientes, restringir la búsqueda a coincidencias exactas cuando esté disponible. Esto no afecta la búsqueda de la barra lateral del Centro de configuración.
 SettingsCenter.Text.ac559d59a8e0f357fa1fc6da653bff0feb6a2f4aaf219e4ac9adf0b68e1c2128=siguiente abierto
 SettingsCenter.Text.a3a43e00b84aa7aca574eafb93a4feaf77b4287a615be9a7434ae99552df13e3=El Hotkey Configurator enumera los atajos configurables, nativos y de plugins. Utilice Asignar o Desvincular; los atajos nativos son sólo para lectura. Los cambios se guardan con Aplicar o OK.

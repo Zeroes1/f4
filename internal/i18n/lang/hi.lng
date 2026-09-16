@@ -1711,6 +1711,7 @@ SettingsCenter.Matches=मिलान: %d
 SettingsCenter.ClearSearch=स्पष्ट खोज
 SettingsCenter.Category.hotkeys=शॉर्टकट विन्यास
 SettingsCenter.Text.8802174070f1412801a7f0343b685b2031869bce18833d79e48e7a712ab59883=सटीक शॉर्टकट खोज मैचों को प्राथमिकता दें
+SettingsCenter.Text.d077ac4db77fed335010255316d50f1597c6c39b6481aa17455e4dd418ed0e40=अगला आउटलाइन
 SettingsCenter.Text.c0010901537ebb36a8ae08ecdecf613679d66a4f8dcad5856094bc3752fcbf1d=हॉटकी कॉन्फ़िगरर तालिका में, उपलब्ध होने पर सटीक मैचों के लिए खोज को संकुचित करें। यह सेटिंग्स सेंटर साइडबार खोज को प्रभावित नहीं करता है.
 SettingsCenter.Text.ac559d59a8e0f357fa1fc6da653bff0feb6a2f4aaf219e4ac9adf0b68e1c2128=अगला खुला
 SettingsCenter.Text.a3a43e00b84aa7aca574eafb93a4feaf77b4287a615be9a7434ae99552df13e3=हॉटकी कॉन्फ़िगरर कॉन्फ़िगरेबल, नेटिव और प्लगइन शॉर्टकट सूचीबद्ध करता है। असाइन या डिबेंड का उपयोग करें; मूल शॉर्टकट केवल पढ़ने के लिए हैं। परिवर्तनों को Apply या OK में सहेजा जाता है।

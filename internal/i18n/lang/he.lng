@@ -2048,6 +2048,7 @@ SettingsCenter.Matches=התאמות: %d
 SettingsCenter.ClearSearch=נקה חיפוש
 SettingsCenter.Category.hotkeys=הגדרת קיצורי מקשים
 SettingsCenter.Text.8802174070f1412801a7f0343b685b2031869bce18833d79e48e7a712ab59883=העדיפו התאמות חיפוש מדויקות של קיצורי דרך
+SettingsCenter.Text.d077ac4db77fed335010255316d50f1597c6c39b6481aa17455e4dd418ed0e40=המתאר הבא
 SettingsCenter.Text.c0010901537ebb36a8ae08ecdecf613679d66a4f8dcad5856094bc3752fcbf1d=בטבלת קביעת המקשים החמים, צמצם את החיפוש להתאמות מדויקות כאשר זמין. זה לא משפיע על החיפוש בסרגל הצד של מרכז ההגדרות.
 SettingsCenter.Text.ac559d59a8e0f357fa1fc6da653bff0feb6a2f4aaf219e4ac9adf0b68e1c2128=הפתיחה הבאה
 SettingsCenter.Text.a3a43e00b84aa7aca574eafb93a4feaf77b4287a615be9a7434ae99552df13e3=קופיגורטור המקשים החמים מפרט קיצורי דרך הניתנים להגדרה, מקוריים וקיצורי פלאגין. השתמש ב-Assign or Unbind; קיצורי דרך מקוריים הם לקריאה בלבד. השינויים נשמרים באמצעות Apply או OK.
