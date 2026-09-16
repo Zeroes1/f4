@@ -6,7 +6,6 @@ import (
 
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
-	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -72,23 +71,19 @@ func TestPanelCanFindDuplicates(t *testing.T) {
 
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	withoutFinder := &panel.FileSystemPanel{Vfs: vfs.NewOSVFS(t.TempDir())}
-	vtui.FrameManager.Push(&panel.PanelsFrame{
+	pf := &panel.PanelsFrame{
 		Panels:     [2]panel.Panel{withoutFinder, nil},
 		ActiveIdx:  0,
 		ShowPanels: true,
-		TermView:   terminal.NewTerminalView(80, 24),
-	})
+	}
+	vtui.FrameManager.Screens = []*vtui.AppScreen{{Number: 1, Frames: []vtui.Frame{pf}}}
+	vtui.FrameManager.ActiveIdx = 0
 	if panelCanFindDuplicates() {
 		t.Fatal("ordinary VFS unexpectedly advertises duplicate search")
 	}
 
 	withFinder := &panel.FileSystemPanel{Vfs: actionsDuplicateFinderVFS{VFS: vfs.NewOSVFS(t.TempDir())}}
-	vtui.FrameManager.Push(&panel.PanelsFrame{
-		Panels:     [2]panel.Panel{withFinder, nil},
-		ActiveIdx:  0,
-		ShowPanels: true,
-		TermView:   terminal.NewTerminalView(80, 24),
-	})
+	pf.Panels[0] = withFinder
 	if !panelCanFindDuplicates() {
 		t.Fatal("duplicate-finder VFS does not advertise duplicate search")
 	}
