@@ -202,6 +202,16 @@ func init() {
 		Handler:     actionReloadLuaMacros,
 	})
 	registerAction(action.Action{
+		Name:        "App.About",
+		Area:        "Common",
+		Label:       "About f4",
+		LabelKey:    "Action.App.About",
+		Description: "Show the version, platform, directories and plugins of this f4",
+		DescKey:     "Action.App.About.Desc",
+		MenuPath:    "Commands",
+		Handler:     actionAbout,
+	})
+	registerAction(action.Action{
 		Name:        commandPaletteActionName,
 		Area:        "Common",
 		Label:       "Command Palette",

@@ -169,6 +169,13 @@ Move.Title= Move
 Move.Prompt=Rename or move %d item(s) to:
 Move.Btn=&Rename
 
+About.Title= About f4 - f4:about
+About.Copied=The about list is copied to the clipboard
+About.Hint=Esc or F10 close, Ctrl+C or Ctrl+Ins copy all, Ctrl+H (un)hide empty, Ctrl+Alt+F filter
+
+F4Command.Title= f4 command
+F4Command.Unknown=Unknown command %s.\nAvailable: %s
+
 Action.File.CreateLink=Create &link
 Action.File.CreateLink.Desc=Create symbolic link, directory junction or hard link
 Action.File.EditSymlink=Edit symbolic &link
@@ -181,6 +188,8 @@ Action.App.CopyWindowTitle=Copy window &identity
 Action.App.CopyWindowTitle.Desc=Copy the active frame help identity to the clipboard
 Action.Macro.Reload=Reload Lua &macros
 Action.Macro.Reload.Desc=Reload Lua macros from the scripts directory
+Action.App.About=About f&4
+Action.App.About.Desc=Show the version, platform, directories and plugins of this f4
 Action.App.CommandPalette=&Command palette
 Action.App.CommandPalette.Desc=Search and run available commands
 Action.App.Help=Context &help

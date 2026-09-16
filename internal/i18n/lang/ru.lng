@@ -169,6 +169,13 @@ Move.Title= Переименование/Перенос
 Move.Prompt=Переименовать или перенести %d элемент(ов) в:
 Move.Btn=&Перенести
 
+About.Title= О программе f4 - f4:about
+About.Copied=Сведения о f4 скопированы в буфер обмена
+About.Hint=Esc или F10 закрыть, Ctrl+C или Ctrl+Ins копировать всё, Ctrl+H скрыть/показать пустые, Ctrl+Alt+F фильтр
+
+F4Command.Title= Команда f4
+F4Command.Unknown=Неизвестная команда %s.\nДоступны: %s
+
 Action.File.CreateLink=Создать &ссылку
 Action.File.CreateLink.Desc=Создать символическую ссылку, соединение каталогов или жесткую ссылку
 Action.File.EditSymlink=Изменить символьную &ссылку
@@ -181,6 +188,8 @@ Action.App.CopyWindowTitle=Копировать идентификатор &ок
 Action.App.CopyWindowTitle.Desc=Скопировать идентификатор активного окна или диалога в буфер обмена
 Action.Macro.Reload=Перезагрузить Lua-&макросы
 Action.Macro.Reload.Desc=Перечитать Lua-макросы из каталога скриптов
+Action.App.About=О программе f&4
+Action.App.About.Desc=Показать версию, платформу, каталоги и плагины этой копии f4
 Action.App.CommandPalette=&Палитра команд
 Action.App.CommandPalette.Desc=Найти и выполнить доступную команду
 Action.App.Help=Контекстная &справка
