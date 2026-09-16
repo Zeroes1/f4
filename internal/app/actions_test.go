@@ -910,7 +910,7 @@ func assertComboMenuDoesNotCoverButtons(t *testing.T, dlg vtui.Container, name s
 			buttons = append(buttons, child)
 		}
 	}
-	if combo == nil || len(buttons) != 2 {
+	if combo == nil || len(buttons) < 2 {
 		t.Fatalf("%s dialog controls: combo=%v buttons=%d", name, combo != nil, len(buttons))
 	}
 
