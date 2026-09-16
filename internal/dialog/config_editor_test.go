@@ -24,12 +24,12 @@ func TestConfigEditorRowsMarkChangedAndUnknownDefaults(t *testing.T) {
 		}
 	}
 
-	lines, index := configEditorLines(rows, configEditorState{})
+	lines, _ := configEditorLines(rows, configEditorState{})
 	if len(lines) != 3 || lines[0] != "* Editor.TabSize     │ 8" {
 		t.Fatalf("lines = %q", lines)
 	}
 
-	lines, index = configEditorLines(rows, configEditorState{hideUnchanged: true})
+	lines, index := configEditorLines(rows, configEditorState{hideUnchanged: true})
 	if len(lines) != 2 || index[0] != 0 || index[1] != 2 {
 		t.Fatalf("with unchanged rows hidden: lines = %q, index = %v", lines, index)
 	}
