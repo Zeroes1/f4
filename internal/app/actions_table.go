@@ -1382,19 +1382,22 @@ func init() {
 		DefaultKeys: []string{"AltF9"},
 		MenuPath:    "Options",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
+			// far2l's Alt+F9: maximize the window, or restore it when it is
+			// maximized. vtui does it for every GUI backend and for a classic
+			// Windows console window, from the window's real state.
+			if vtui.FrameManager != nil && vtui.FrameManager.ToggleWindowMaximized() {
+				return
+			}
+			// A terminal emulator's window is out of reach; the xterm resize
+			// sequence is all there is to ask with.
 			targetCols, targetRows := config.App.GuiCols, config.App.GuiRows
 			if pf.LastW == config.App.GuiCols && pf.LastH == config.App.GuiRows {
 				targetCols, targetRows = config.App.GuiCols+40, config.App.GuiRows+15
 			}
-			// xterm resize sequence for console mode
 			// Terminal writes here are best effort: if stdout is gone there is
 			// nothing left to resize and the next write reports it anyway.
 			_, _ = fmt.Fprintf(os.Stdout, "\x1b[8;%d;%dt", targetRows, targetCols)
 			_ = os.Stdout.Sync()
-			// Forced OS window resize for GUI mode
-			if vtui.FrameManager != nil {
-				vtui.FrameManager.ResizeWindow(targetCols, targetRows)
-			}
 		}),
 	})
 	registerAction(action.Action{
