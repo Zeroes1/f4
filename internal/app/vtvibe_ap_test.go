@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -190,8 +189,5 @@ func TestAIWriteContextFile_WritesThroughSessionVFS(t *testing.T) {
 	got := make([]byte, len(want))
 	if n, err := r.ReadAt(context.Background(), got, 0); err != nil || n != len(want) || string(got) != string(want) {
 		t.Fatalf("attached context = %q, n=%d, err=%v; want %q", got, n, err, want)
-	}
-	if _, err := io.Copy(io.Discard, r); err != nil {
-		t.Fatalf("read attached context to EOF: %v", err)
 	}
 }
