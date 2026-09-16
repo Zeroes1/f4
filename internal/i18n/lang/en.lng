@@ -922,10 +922,12 @@ ColorerSettings.Pairs=Highlight &pairs
 ColorerSettings.OldOutline=Old outl&ine
 ColorerSettings.TypeSettings=File type setti&ngs
 ColorerSettings.UserHrcSettings=User HRC settin&gs (file):
+
 ColorerTypeSettings.Param=&Parameter:
 ColorerTypeSettings.Title=File type settings
 ColorerTypeSettings.Type=&File type:
 ColorerTypeSettings.Value=&Value:
+
 Colorer.Menu=&Colorer
 Colorer.NothingFound=Nothing found
 Colorer.Outliner=Outliner

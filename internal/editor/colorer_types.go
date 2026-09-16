@@ -241,11 +241,13 @@ func (f *colorerTypeFrame) key(e *vtinput.InputEvent) bool {
 // colorerHotkey is the key FarColorer's hotkey dialog accepts: one letter or
 // digit, upper case; anything else clears the hotkey.
 func colorerHotkey(text string) string {
-	for _, r := range strings.TrimSpace(text) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			return string(unicode.ToUpper(r))
-		}
-		break
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) == 0 {
+		return ""
+	}
+	r := runes[0]
+	if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		return string(unicode.ToUpper(r))
 	}
 	return ""
 }
