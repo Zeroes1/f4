@@ -96,6 +96,24 @@ toggles overtype. Run them by name from the command palette (`Ctrl+Shift+P`),
 or give them a key of your own in `Options > Hotkey Configuration` or in
 [`keymap.ini`](KEYMAP.md).
 
+Some menus take `Ins` on its own. In the user menu (`F2`) it adds an item, and
+`Ctrl+N` does the same there. In the Bookmarks dialog (`F9 > Commands`) it
+stores the panel's folder in a slot, and in the folders history it pins a
+folder; neither has a second key. These menu keys are not in the Hotkey
+Configurator, but `keymap.ini` reaches them, since it substitutes the key
+before any window sees it. In the GUI window this rule gives the physical
+Control key an `Insert` everywhere, menus included, and leaves `Command+I`
+as it was:
+
+```ini
+[Common]
+RCtrlI=Ins
+```
+
+Under `[Common]` the rule also applies at a shell prompt, where `Control+I`
+is otherwise a Tab; list the areas you want (`[Shell]`, `[Menu]`, `[Dialog]`,
+`[Editor]`) instead if you use it that way.
+
 In the GUI window a chord of your own can use the `Control` key without taking
 anything from `Command`: Command chords are spelled `Ctrl`, the physical
 Control key is spelled `RCtrl`, and a binding on `RCtrl` answers only to
