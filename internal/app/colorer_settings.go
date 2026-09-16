@@ -112,7 +112,7 @@ func colorerCheckMessage(check editor.ColorerCheck, allTypes bool) (title, text 
 		if !allTypes {
 			return "", "", vtui.MessageInfo
 		}
-		b.WriteString(fmt.Sprintf(i18n.Msg("ColorerSettings.CheckPassed"), check.Types))
+		fmt.Fprintf(&b, i18n.Msg("ColorerSettings.CheckPassed"), check.Types)
 		kind = vtui.MessageInfo
 	}
 	return i18n.Msg("ColorerSettings.CheckTitle"), b.String(), kind
