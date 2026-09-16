@@ -667,6 +667,12 @@ type ColorerHighlighter struct {
 	postTask   func(func())
 	redraw     func()
 
+	// outlineCache holds each parsed line's outline entries, kept and
+	// evicted with attrCache; outlineBuild is a whole-file outline in
+	// progress.
+	outlineCache map[int][]colorerOutlineEntry
+	outlineBuild *colorerOutlineBuild
+
 	// The session and its worker share this context. The worker is the only
 	// goroutine allowed to call ParseLine/Reset/SelectType on the live session;
 	// the UI only queues immutable line snapshots and consumes results.
@@ -804,8 +810,10 @@ func (ch *ColorerHighlighter) DropFrom(idx int) {
 		idx = 0
 	}
 	ch.dropCacheFrom(idx)
-	// An edit moves the text a pair search walks; its tokens are stale.
+	// An edit moves the text a pair search walks; its tokens are stale, and
+	// so is an outline collected so far.
 	ch.pairSearch = nil
+	ch.outlineBuild = nil
 	// The worker may currently be inside ParseLine. Do not touch its session
 	// from the UI; invalidate that result and let the next frame enqueue a
 	// fresh anchored snapshot.
@@ -844,16 +852,19 @@ func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64, pai
 				delete(ch.attrCache, key)
 				delete(ch.bgCache, key)
 				delete(ch.pairCache, key)
+				delete(ch.outlineCache, key)
 			}
 		}
 		if len(ch.attrCache) >= maxCachedAttrLines {
 			ch.attrCache = make(map[int][]uint64)
 			ch.bgCache = make(map[int]uint64)
 			ch.pairCache = nil
+			ch.outlineCache = nil
 		}
 	}
 	ch.attrCache[idx] = attrs
 	ch.bgCache[idx] = bg
+	delete(ch.outlineCache, idx)
 	if len(pairs) > 0 {
 		if ch.pairCache == nil {
 			ch.pairCache = make(map[int][]colorer.Pair)
@@ -880,6 +891,11 @@ func (ch *ColorerHighlighter) dropCacheFrom(idx int) {
 			delete(ch.pairCache, key)
 		}
 	}
+	for key := range ch.outlineCache {
+		if key >= idx {
+			delete(ch.outlineCache, key)
+		}
+	}
 }
 
 func (ch *ColorerHighlighter) Close() error {
@@ -892,6 +908,8 @@ func (ch *ColorerHighlighter) Close() error {
 	ch.attrCache = nil
 	ch.pairCache = nil
 	ch.pairSearch = nil
+	ch.outlineCache = nil
+	ch.outlineBuild = nil
 	ch.parsedIdx = 0
 	if closer, ok := ch.fallback.(io.Closer); ok {
 		closer.Close()
@@ -904,4 +922,16 @@ func (ch *ColorerHighlighter) Close() error {
 	}
 	ch.session = nil
 	return nil
+}
+
+// storeOutline keeps a parsed line's outline entries; call it after storeAttrs,
+// which evicts them with the line's colours.
+func (ch *ColorerHighlighter) storeOutline(idx int, entries []colorerOutlineEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	if ch.outlineCache == nil {
+		ch.outlineCache = make(map[int][]colorerOutlineEntry)
+	}
+	ch.outlineCache[idx] = entries
 }

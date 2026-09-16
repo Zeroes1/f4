@@ -185,10 +185,8 @@ func (ev *EditorView) applyColorerPair(action ColorerPairAction, m colorerPairMa
 		ev.SelAnchorOffset = ev.Li.GetLineOffset(upLine) + upPos
 		ev.SelActive = ev.SelAnchorOffset != ev.Li.GetLineOffset(ev.CursorLine)+ev.CursorPos
 	}
-	ev.EnsureCursorVisible()
-	if vtui.FrameManager != nil {
-		vtui.FrameManager.Redraw()
-	}
+	// FarColorer centres a match that is off screen.
+	ev.centerCursor(true)
 }
 
 // runeIndexAtByte is the rune offset of byte offset b in text, clamped.

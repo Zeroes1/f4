@@ -311,8 +311,34 @@ cursor and its match.
 - Positions are FarColorer's: match pair puts the cursor on the first
   character of a match above and the last character of one below; the
   selections run from the upper position to the lower, where the cursor ends.
-  Unlike Far's ECTL_SETPOSITION, a match off screen is scrolled into view by
-  `EnsureCursorVisible`, not centred.
+  A match off screen is centred, as in FarColorer.
+
+### 3.11 Outline: functions, errors, locate function
+
+Issue #277, step 4. FarColorer's list of functions and list of errors come
+from Colorer's `Outliner` over the whole file.
+
+- colorer4go's `Session.LineOutline` gives each parsed line's items (regions
+  under `def:Outlined` or `def:Error`); the worker cuts their labels from the
+  line and stores them in `outlineCache`, beside and evicted with
+  `attrCache`.
+- `colorerOutlineBuild` collects the whole file the way the pair search
+  walks it: on the UI thread, queueing each line the cache has not reached,
+  resuming in `postColorerResult`. An edit or Esc drops it.
+- `Editor.ColorerListFunctions` and `Editor.ColorerListErrors` open the list
+  (a `VMenu` filtered as you type), rows written as FarEditor::showOutliner
+  writes them: line number, two spaces per level from `Outliner::manageTree`,
+  the region class letter and the label; with `EditorColorerOldOutline`
+  (default on, as FarColorer's OldOutlineView) the line's text instead. The
+  item at or above the cursor is selected; choosing one centres it.
+- `Editor.ColorerLocateFunction` takes the word under the cursor and goes to
+  the last function whose label holds it, ignoring case, preferring one off
+  the cursor's line. FarColorer's word loop drops the first character of a
+  word at the start of a line and the last at the end; f4 takes the whole
+  word.
+- Not yet: FarColorer's own outliner keys — Ctrl+Up/Down to preview,
+  Ctrl+Left/Right to fold levels, Ctrl+Enter to insert the label, Tab to
+  complete the filter.
 
 ---
 

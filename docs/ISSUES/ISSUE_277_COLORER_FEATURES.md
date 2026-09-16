@@ -58,3 +58,14 @@ new `EditorColorerPairs` setting. See HIGHLIGHT.md 3.10.
 
 Three editor actions search the whole file for the match, queueing lines the
 cache has not reached to the worker. See HIGHLIGHT.md 3.10.
+
+## Step 4a — list functions, find errors, locate function (done)
+
+colorer4go's `Session.LineOutline`; f4 collects the whole file's outline
+through the worker, lists it and locates functions, and has the old outline
+view setting. See HIGHLIGHT.md 3.11.
+
+## Step 4b — the outliner's own keys
+
+Ctrl+Up/Down preview, Ctrl+Left/Right fold levels, Ctrl+Enter insert, Tab
+filter completion; and FarColorer's commands in the editor's F11 menu.

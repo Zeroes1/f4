@@ -138,11 +138,16 @@ const pairTestHRC = `<?xml version="1.0" encoding="UTF-8"?>
     <region name="Special"/>
     <region name="PairStart" parent="Special"/>
     <region name="PairEnd" parent="Special"/>
+    <region name="Outlined" parent="Special"/>
+    <region name="Function" parent="Outlined"/>
+    <region name="Error"/>
     <scheme name="def"/>
   </type>
   <type name="pairtest">
     <import type="def"/>
     <scheme name="pairtest">
+      <regexp match="/^fn\s+(\w+)/" region1="def:Function"/>
+      <regexp match="/\?\?\?/" region="def:Error"/>
       <block start="/(\{)/" end="/(\})/" scheme="pairtest" region00="def:PairStart" region10="def:PairEnd"/>
     </scheme>
   </type>
@@ -205,5 +210,67 @@ func TestColorerPair_WholeFileSearch(t *testing.T) {
 	end := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
 	if !ev.SelActive || ev.SelAnchorOffset != 0 || end != len(text)-1 {
 		t.Fatalf("selection %v from %d to %d, want 0 to %d", ev.SelActive, ev.SelAnchorOffset, end, len(text)-1)
+	}
+}
+
+// Issue #277: the outline of a whole file, collected through lines the cache
+// has not parsed, and locate function over it.
+func TestColorerOutline_WholeFileAndLocate(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	src := ColorerSource{ConfigsDir: checkConfigs(t), UserHRC: user}
+
+	session, err := acquireCancelableColorerSession(context.Background(), src)
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+	if err := session.SetHRD("rgb", "default"); err != nil {
+		t.Fatalf("SetHRD: %v", err)
+	}
+	if ok, err := session.SelectType("a.pairtest", ""); err != nil || !ok {
+		t.Fatalf("SelectType: %v, %v", ok, err)
+	}
+
+	lines := make([]string, 3000)
+	for i := range lines {
+		lines[i] = "x"
+	}
+	lines[10] = "fn alpha"
+	lines[20] = "call beta ???"
+	lines[2500] = "fn beta"
+	text := strings.Join(lines, "\n") + "\n"
+	ev := NewEditorView(piecetable.New([]byte(text)), nil, "a.pairtest")
+	defer ev.Close()
+	ch := &ColorerHighlighter{owner: ev, postTask: vtui.FrameManager.PostTask, redraw: func() {}, colorerSrc: src, filename: "a.pairtest"}
+	ch.SetLineSource(ev.lineTextForHighlight)
+	ev.Highlighter = ch
+	ch.session = session
+	ch.startWorker(session)
+
+	var functions, errs []colorerOutlineEntry
+	doneF, doneE := false, false
+	ch.buildOutline(false, func(e []colorerOutlineEntry) { functions, doneF = e, true })
+	pumpUntil(t, "the functions", func() bool { return doneF && !ch.pending })
+	ch.buildOutline(true, func(e []colorerOutlineEntry) { errs, doneE = e, true })
+	pumpUntil(t, "the errors", func() bool { return doneE && !ch.pending })
+
+	var labels []string
+	for _, e := range functions {
+		labels = append(labels, e.label)
+	}
+	if len(functions) != 2 || functions[0].line != 10 || functions[0].label != "alpha" || functions[1].line != 2500 || functions[1].label != "beta" {
+		t.Fatalf("functions %q at %+v, want alpha on 10 and beta on 2500", labels, functions)
+	}
+	if len(errs) != 1 || errs[0].line != 20 || errs[0].label != "???" {
+		t.Fatalf("errors %+v, want ??? on line 20", errs)
+	}
+
+	ev.CursorLine, ev.CursorPos = 20, 6 // inside "beta"
+	ev.ColorerLocateFunction()
+	pumpUntil(t, "locate function", func() bool { return ch.outlineBuild == nil && !ch.pending && ev.CursorLine == 2500 })
+	if ev.CursorPos != 3 {
+		t.Errorf("cursor at %d:%d, want 2500:3", ev.CursorLine, ev.CursorPos)
 	}
 }

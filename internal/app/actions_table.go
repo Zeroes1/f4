@@ -2314,6 +2314,36 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerPair(editor.ColorerSelectBlock) }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ColorerListFunctions",
+		Area:        "Editor",
+		Label:       "List functions",
+		LabelKey:    "Action.Editor.ColorerListFunctions",
+		Description: "List the functions Colorer finds in the whole file and go to one (Colorer)",
+		DescKey:     "Action.Editor.ColorerListFunctions.Desc",
+		MenuPath:    "Search",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerListOutline(false) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerListErrors",
+		Area:        "Editor",
+		Label:       "Find errors",
+		LabelKey:    "Action.Editor.ColorerListErrors",
+		Description: "List the syntax errors Colorer finds in the whole file and go to one (Colorer)",
+		DescKey:     "Action.Editor.ColorerListErrors.Desc",
+		MenuPath:    "Search",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerListOutline(true) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerLocateFunction",
+		Area:        "Editor",
+		Label:       "Locate function",
+		LabelKey:    "Action.Editor.ColorerLocateFunction",
+		Description: "Go to the function named by the word under the cursor (Colorer)",
+		DescKey:     "Action.Editor.ColorerLocateFunction.Desc",
+		MenuPath:    "Search",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerLocateFunction() }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Replace",
 		Area:        "Editor",
 		Label:       "Replace",

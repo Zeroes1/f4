@@ -448,6 +448,7 @@ type F4Config struct {
 	EditorColorerSyntax      bool
 	EditorColorerCatalog     string
 	EditorColorerPairs       bool   // draw the pair under the cursor, FarColorer's PairsDraw
+	EditorColorerOldOutline  bool   // list lines, not labels, in the outliner: FarColorer's OldOutlineView
 	EditorColorerUserHrc     string // user schemes, FarColorer's UserHrcPath
 	EditorColorerUserHrd     string // user colour styles, FarColorer's UserHrdPath
 	EditorCrossMode          int
@@ -626,6 +627,7 @@ var App = F4Config{
 	EditorColorerSyntax:      true,
 	EditorColorerCatalog:     "",
 	EditorColorerPairs:       true,
+	EditorColorerOldOutline:  true,
 	EditorColorerUserHrc:     "",
 	EditorColorerUserHrd:     "",
 	EditorCrossMode:          ColorerCrossBoth,
@@ -914,6 +916,7 @@ func LoadConfig() {
 	App.EditorColorerSyntax = merged.GetString("Editor", "ColorerSyntax", "1") == "1"
 	App.EditorColorerCatalog = merged.GetString("Editor", "ColorerCatalog", "")
 	App.EditorColorerPairs = merged.GetString("Editor", "ColorerPairs", "1") == "1"
+	App.EditorColorerOldOutline = merged.GetString("Editor", "ColorerOldOutline", "1") == "1"
 	App.EditorColorerUserHrc = merged.GetString("Editor", "ColorerUserHrc", "")
 	App.EditorColorerUserHrd = merged.GetString("Editor", "ColorerUserHrd", "")
 	App.EditorCrossMode = ColorerCrossBoth
@@ -1206,6 +1209,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ColorerSyntax = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerSyntax])
 	fmt.Fprintf(&sb, "ColorerCatalog = %s\n", cfg.EditorColorerCatalog)
 	fmt.Fprintf(&sb, "ColorerPairs = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerPairs])
+	fmt.Fprintf(&sb, "ColorerOldOutline = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerOldOutline])
 	fmt.Fprintf(&sb, "ColorerUserHrc = %s\n", cfg.EditorColorerUserHrc)
 	fmt.Fprintf(&sb, "ColorerUserHrd = %s\n", cfg.EditorColorerUserHrd)
 	fmt.Fprintf(&sb, "CrossMode = %d\n", cfg.EditorCrossMode)
