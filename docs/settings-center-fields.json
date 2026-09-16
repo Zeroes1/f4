@@ -781,6 +781,16 @@
   },
   {
     "category": "editor",
+    "description": "When on, viewing a picture opens the image viewer and viewing a video opens the video player, where the terminal can show them. When off, every file opens in the text and hex viewer.",
+    "group": "Viewer",
+    "id": "ViewerOpenAsSupportedType",
+    "kind": "boolean",
+    "label": "Open images and video in their own viewers",
+    "timing": "new viewers",
+    "unavailable": ""
+  },
+  {
+    "category": "editor",
     "description": "Route ordinary Edit commands to an external editor. Remote files are temporarily downloaded and changes can be uploaded afterward.",
     "group": "External editor",
     "id": "UseExternalEditor",

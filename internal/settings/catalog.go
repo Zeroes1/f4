@@ -114,6 +114,7 @@ EditorAutodetectCodePage|editor|Text encoding|Detect editor encoding|Detect text
 EditorDefaultCodePage|editor|Text encoding|Default editor encoding|Fallback encoding when detection is disabled or cannot determine a better result. Per-file overrides remain separate.||new editors
 ViewerAutodetectCodePage|editor|Text encoding|Detect viewer encoding|Detect encoding when opening the viewer or a quick-view preview.||new viewers
 ViewerDefaultCodePage|editor|Text encoding|Default viewer encoding|Fallback viewer and quick-view encoding when detection is disabled or inconclusive.||new viewers
+ViewerOpenAsSupportedType|editor|Viewer|Open images and video in their own viewers|When on, viewing a picture opens the image viewer and viewing a video opens the video player, where the terminal can show them. When off, every file opens in the text and hex viewer.||new viewers
 UseExternalEditor|editor|External editor|Use external editor|Route ordinary Edit commands to an external editor. Remote files are temporarily downloaded and changes can be uploaded afterward.||new edit commands
 ExternalEditorConsole|editor|External editor|Console editor command|Command for terminal sessions; the file path is appended as the last argument. Current parsing splits on whitespace and is not a shell-expression parser.||new edit commands
 ExternalEditorGUI|editor|External editor|Graphical editor command|Command for graphical sessions; the file path is appended as the last argument. Current parsing splits on whitespace and is not a shell-expression parser.||new edit commands

@@ -91,9 +91,10 @@ func CodepageChoiceIndex(ids []int, current int) int {
 	return 0
 }
 
-// ShowViewerSettings is Options -> Viewer/Editor code pages.
+// ShowViewerSettings is Options -> Viewer settings: the code page choices, and
+// whether pictures and video open in their own viewers.
 func ShowViewerSettings() {
-	width, height := 78, 10
+	width, height := 78, 12
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ViewerSettings.Title"))
 	dlg.ShowClose = true
 
@@ -109,6 +110,10 @@ func ShowViewerSettings() {
 	if config.App.ViewerAutodetectCodePage {
 		chkAutodetect.State = 1
 	}
+	chkByType := vtui.NewCheckbox(0, 0, i18n.Msg("ViewerSettings.OpenAsSupportedType"), false)
+	if config.App.ViewerOpenAsSupportedType {
+		chkByType.State = 1
+	}
 	btnOK := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	btnOK.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
@@ -116,6 +121,7 @@ func ShowViewerSettings() {
 	dlg.AddItem(chkAutodetect)
 	dlg.AddItem(lblDefault)
 	dlg.AddItem(comboDefault)
+	dlg.AddItem(chkByType)
 	dlg.AddItem(btnOK)
 	dlg.AddItem(btnCancel)
 
@@ -125,6 +131,7 @@ func ShowViewerSettings() {
 	rowDefault.Add(lblDefault, vtui.Margins{Right: 1}, vtui.AlignLeft)
 	rowDefault.Add(comboDefault, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(rowDefault, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(chkByType, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -136,6 +143,7 @@ func ShowViewerSettings() {
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnOK.OnClick = func() {
 		config.App.ViewerAutodetectCodePage = chkAutodetect.State == 1
+		config.App.ViewerOpenAsSupportedType = chkByType.State == 1
 		if pos := comboDefault.Menu.SelectPos; pos >= 0 && pos < len(ids) {
 			config.App.ViewerDefaultCodePage = ids[pos]
 		}

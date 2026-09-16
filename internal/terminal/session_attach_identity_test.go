@@ -15,10 +15,10 @@ import (
 // older daemon parses exactly as before.
 func TestAttachClientIdentityRoundTrip(t *testing.T) {
 	env := map[string]string{"DISPLAY": ":1", "WINDOWID": "4242"}
-	wire := string(attachPayload("", "/home/u/a", "/home/u/b")) +
+	wire := string(attachPayload("", "/home/u/a", "/home/u/b", nil)) +
 		string(attachClientIdentity(777, func(k string) string { return env[k] }))
 
-	edit, left, right := parseAttachPayload(wire)
+	edit, left, right, _ := parseAttachPayload(wire)
 	if edit != "" || left != "/home/u/a" || right != "/home/u/b" {
 		t.Fatalf("the directories no longer survive the identity lines: (%q, %q, %q)", edit, left, right)
 	}
@@ -41,9 +41,9 @@ func TestAttachClientIdentityRoundTrip(t *testing.T) {
 // With a file to edit the first line is "ATTACH <path>", and the identity
 // must not end up inside the path.
 func TestAttachClientIdentityAfterEditPath(t *testing.T) {
-	wire := string(attachPayload("/tmp/file.txt", "", "")) +
+	wire := string(attachPayload("/tmp/file.txt", "", "", nil)) +
 		string(attachClientIdentity(5, func(string) string { return "" }))
-	if edit, _, _ := parseAttachPayload(wire); edit != "/tmp/file.txt" {
+	if edit, _, _, _ := parseAttachPayload(wire); edit != "/tmp/file.txt" {
 		t.Fatalf("edit path = %q", edit)
 	}
 	if pid, _ := parseAttachClientIdentity(wire); pid != 5 {

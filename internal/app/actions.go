@@ -1543,11 +1543,16 @@ func imageSiblingPaths(pf *panel.PanelsFrame, v vfs.VFS, path string) ([]string,
 }
 
 func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
-	if tryOpenVideoPlayer(pf, v, path) {
-		return
-	}
-	if tryOpenImageViewer(pf, v, path) {
-		return
+	// Viewer settings -> "Open images and video in their own viewers" (issue
+	// #991). Off, a picture or a video opens like any other file: as text or
+	// as hex, whatever the viewer's own binary check decides.
+	if config.App.ViewerOpenAsSupportedType {
+		if tryOpenVideoPlayer(pf, v, path) {
+			return
+		}
+		if tryOpenImageViewer(pf, v, path) {
+			return
+		}
 	}
 	if fileops.IsLocalOSVFS(v) {
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {

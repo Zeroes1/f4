@@ -915,6 +915,7 @@ EditorSettings.ExternalCommandGUI=GUI e&xternal command:
 ViewerSettings.Title= Viewer settings
 ViewerSettings.AutodetectCodePage=Autodetect code &page
 ViewerSettings.DefaultCodePage=Default code &page:
+ViewerSettings.OpenAsSupportedType=Open images and video in their own &viewers
 
 ColorerSettings.Title= Colorer settings
 ColorerSettings.Enabled=Enable &Colorer highlighting
@@ -2324,6 +2325,8 @@ SettingsCenter.ViewerAutodetectCodePage.Description=Detect encoding when opening
 SettingsCenter.ViewerAutodetectCodePage.Label=Detect viewer encoding
 SettingsCenter.ViewerDefaultCodePage.Description=Fallback viewer and quick-view encoding when detection is disabled or inconclusive.
 SettingsCenter.ViewerDefaultCodePage.Label=Default viewer encoding
+SettingsCenter.ViewerOpenAsSupportedType.Description=When on, viewing a picture opens the image viewer and viewing a video opens the video player, where the terminal can show them. When off, every file opens in the text and hex viewer.
+SettingsCenter.ViewerOpenAsSupportedType.Label=Open images and video in their own viewers
 SettingsCenter.WheelEditorDown.Description=Number of editor rows per downward wheel notch. Zero follows the system setting.
 SettingsCenter.WheelEditorDown.Label=Editor wheel down
 SettingsCenter.WheelEditorUp.Description=Number of editor rows per upward wheel notch. Zero follows the system setting.

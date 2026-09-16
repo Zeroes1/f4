@@ -460,6 +460,10 @@ type F4Config struct {
 	EditorMemoryMap          bool
 	ViewerAutodetectCodePage bool
 	ViewerDefaultCodePage    int
+	// ViewerOpenAsSupportedType sends a picture to the image viewer and a
+	// video to the video player when a file is opened for viewing (issue
+	// #991). Off, every file opens in the text and hex viewer.
+	ViewerOpenAsSupportedType bool
 	// SystemANSICodePage and SystemOEMCodePage pin what "ANSI" and "OEM"
 	// mean on a system that cannot be asked. 0 keeps the codepage deduced
 	// from the locale.
@@ -697,6 +701,9 @@ var App = F4Config{
 	LastUpdateCheck:          0,
 	LastUpdateVersion:        "",
 	Compare:                  DefaultCompareOptions(),
+
+	// Pictures and video open in their own viewers (issue #991).
+	ViewerOpenAsSupportedType: true,
 }
 
 var GetUserConfigIniPath = func() string {
@@ -945,6 +952,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "DefaultCodePage", "65001"), "%d", &cfg.EditorDefaultCodePage)
 	cfg.ViewerAutodetectCodePage = merged.GetString("Viewer", "AutodetectCodePage", "1") == "1"
 	_, _ = fmt.Sscanf(merged.GetString("Viewer", "DefaultCodePage", "65001"), "%d", &cfg.ViewerDefaultCodePage)
+	cfg.ViewerOpenAsSupportedType = merged.GetString("Viewer", "OpenAsSupportedType", "1") == "1"
 
 	// [Mouse] — wheel scroll speed (lines per notch), 0 = system default.
 	cfg.WheelPanelUp = LoadWheelLines(merged, "PanelUp")
@@ -1236,6 +1244,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	sb.WriteString("\n[Viewer]\n")
 	fmt.Fprintf(&sb, "AutodetectCodePage = %d\n", map[bool]int{true: 1, false: 0}[cfg.ViewerAutodetectCodePage])
 	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.ViewerDefaultCodePage)
+	fmt.Fprintf(&sb, "OpenAsSupportedType = %d\n", map[bool]int{true: 1, false: 0}[cfg.ViewerOpenAsSupportedType])
 	sb.WriteString("\n[Mouse]\n")
 	fmt.Fprintf(&sb, "PanelUp = %d\n", cfg.WheelPanelUp)
 	fmt.Fprintf(&sb, "PanelDown = %d\n", cfg.WheelPanelDown)

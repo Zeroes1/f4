@@ -15,14 +15,14 @@ type termApplication struct{}
 
 func (termApplication) InitCore() *vtui.ScreenBuf { return InitCore() }
 
-func (termApplication) OpenEditFile() { openDashEFileIfRequested() }
+func (termApplication) OpenStartupFiles() { openStartupFilesIfRequested() }
 
-func (termApplication) ClientAttached(startLeft, startRight, editPath string) {
+func (termApplication) ClientAttached(startLeft, startRight, editPath string, viewPaths []string) {
 	top := vtui.FrameManager.GetTopFrame()
 	pf, ok := top.(*panel.PanelsFrame)
 	if !ok || pf == nil {
-		if editPath != "" {
-			vtui.DebugLog("SERVER: -e %q: top frame is not a *PanelsFrame (%T)", editPath, top)
+		if editPath != "" || len(viewPaths) > 0 {
+			vtui.DebugLog("SERVER: -e %q, view %q: top frame is not a *PanelsFrame (%T)", editPath, viewPaths, top)
 		}
 		return
 	}
@@ -35,9 +35,7 @@ func (termApplication) ClientAttached(startLeft, startRight, editPath string) {
 	if startLeft != "" {
 		panel.ApplyStartupDirs(pf, startLeft, startRight)
 	}
-	if editPath != "" {
-		openEditFileIn(pf, editPath)
-	}
+	openStartupFilesIn(pf, viewPaths, editPath)
 }
 
 func (termApplication) ClientDetached() {
@@ -62,6 +60,8 @@ func (termApplication) DecodeImage(data []byte) (*vtui.ImageSurface, error) {
 func (termApplication) VersionInfo() string { return getFormattedVersionInfo() }
 
 func (termApplication) EditFilePath() string { return editFilePath }
+
+func (termApplication) ViewFilePaths() []string { return viewFilePaths }
 
 func (termApplication) StartupDirs() (string, string) { return startupDirs() }
 

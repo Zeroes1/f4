@@ -133,8 +133,9 @@ func ManageSessions() {
 	if len(sessions) > 0 {
 		// -e skips the interactive picker: `f4 -e file` should just work
 		// non-interactively, reusing whatever session is already running
-		// (matching far2l's -e), not Stop to ask which one first.
-		if App.EditFilePath() != "" {
+		// (matching far2l's -e), not Stop to ask which one first. `f4 file`
+		// asks just as plainly for one file to be shown.
+		if App.EditFilePath() != "" || len(App.ViewFilePaths()) > 0 {
 			RunClient(sessions[0].SockPath, sessions[0].PID)
 			return
 		}
@@ -172,7 +173,7 @@ func runAttachedSession() {
 	ProbeHostTextArea()
 	PreferCompatibleGraphicsProtocol(scr)
 	App.InstallImageOverlay()
-	App.OpenEditFile()
+	App.OpenStartupFiles()
 
 	ttyxKeys := keymap.StartTTYXKeyboard(SharedTTYXSession())
 	if ttyxKeys != nil {
@@ -368,7 +369,7 @@ func RunClient(sockPath string, serverPID int) {
 	vtui.DebugLog("CLIENT: FDs to send: In:0 Out:1 Pipe:%d", notifyPipe[1])
 
 	startLeft, startRight := App.StartupDirs()
-	payload := attachPayload(App.EditFilePath(), startLeft, startRight)
+	payload := attachPayload(App.EditFilePath(), startLeft, startRight, App.ViewFilePaths())
 	payload = append(payload, attachClientIdentity(os.Getpid(), os.Getenv)...)
 	n, oobn, err := conn.WriteMsgUnix(payload, oob, raddr)
 	if err != nil {
@@ -430,6 +431,7 @@ type attachRequest struct {
 	notifyPipeWriteEnd int
 	rawFds             []int
 	editPath           string
+	viewPaths          []string
 	startLeft          string
 	startRight         string
 	clientPID          int
@@ -483,23 +485,32 @@ func parseAttachClientIdentity(msg string) (pid int, env map[string]string) {
 // The panel directories ride on further lines, so an older server still reads
 // exactly "ATTACH" on the first. They are left out next to -e, where that
 // server would take the whole datagram as the file name.
-func attachPayload(editPath, left, right string) []byte {
+//
+// So are the files to view, one VIEW line each (issue #991): an older server
+// skips the lines it does not know, and a path with a line break in it, which
+// would read as further lines, is not sent.
+func attachPayload(editPath, left, right string, viewPaths []string) []byte {
 	if editPath != "" {
 		return []byte("ATTACH " + editPath)
 	}
-	if left == "" {
-		return []byte("ATTACH")
+	msg := "ATTACH"
+	if left != "" {
+		msg += "\nCWD " + left
+		if right != "" && right != left {
+			msg += "\nCWD2 " + right
+		}
 	}
-	msg := "ATTACH\nCWD " + left
-	if right != "" && right != left {
-		msg += "\nCWD2 " + right
+	for _, path := range viewPaths {
+		if path != "" && !strings.ContainsAny(path, "\r\n") {
+			msg += "\nVIEW " + path
+		}
 	}
 	return []byte(msg)
 }
 
 // parseAttachPayload reads back what attachPayload wrote. Unknown lines are
 // ignored rather than refused, so a future client stays attachable.
-func parseAttachPayload(msg string) (editPath, left, right string) {
+func parseAttachPayload(msg string) (editPath, left, right string, viewPaths []string) {
 	lines := strings.Split(msg, "\n")
 	if strings.HasPrefix(lines[0], "ATTACH ") {
 		editPath = lines[0][len("ATTACH "):]
@@ -510,9 +521,11 @@ func parseAttachPayload(msg string) (editPath, left, right string) {
 			right = line[len("CWD2 "):]
 		case strings.HasPrefix(line, "CWD "):
 			left = line[len("CWD "):]
+		case strings.HasPrefix(line, "VIEW "):
+			viewPaths = append(viewPaths, line[len("VIEW "):])
 		}
 	}
-	return editPath, left, right
+	return editPath, left, right, viewPaths
 }
 
 func RunServer(sockPath string) {
@@ -581,7 +594,7 @@ func RunServer(sockPath string) {
 
 			setCloseOnExec(fds)
 
-			editPath, startLeft, startRight := parseAttachPayload(string(buf[:n]))
+			editPath, startLeft, startRight, viewPaths := parseAttachPayload(string(buf[:n]))
 			clientPID, clientEnv := parseAttachClientIdentity(string(buf[:n]))
 
 			req := attachRequest{
@@ -590,6 +603,7 @@ func RunServer(sockPath string) {
 				notifyPipeWriteEnd: fds[2],
 				rawFds:             fds,
 				editPath:           editPath,
+				viewPaths:          viewPaths,
 				startLeft:          startLeft,
 				startRight:         startRight,
 				clientPID:          clientPID,
@@ -712,10 +726,11 @@ func RunServer(sockPath string) {
 		reader := vtinput.NewReader(os.Stdin, false)
 
 		// The application's part of the attach: the host console, the
-		// startup directories and -e. Deferred all the way to here because
-		// -e needs a frame something has actually rendered to; the terminal
-		// is attached, sized and drawing by this point.
-		App.ClientAttached(attachStartLeft, attachStartRight, attachEditPath)
+		// startup directories and the files to view or edit. Deferred all
+		// the way to here because the files need a frame something has
+		// actually rendered to; the terminal is attached, sized and drawing
+		// by this point.
+		App.ClientAttached(attachStartLeft, attachStartRight, attachEditPath, req.viewPaths)
 
 		// The key combinations a TTY cannot carry, taken from the X
 		// server. See docs/TTYX.md.

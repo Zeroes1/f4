@@ -2,6 +2,8 @@ package panel
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/unxed/f4/internal/ini"
@@ -291,10 +293,21 @@ func navigatePanelTo(pf *PanelsFrame, panel *FileSystemPanel, path string) {
 	}
 }
 
+// IsStartupFile says whether a path named on the command line is a file rather
+// than a folder: something that exists and is not a directory. Such a path opens
+// in the viewer (issue #991), and its panel shows the folder it is in.
+func IsStartupFile(path string) bool {
+	st, err := os.Stat(path)
+	return err == nil && !st.IsDir()
+}
+
 // ApplyStartupDirs opens left and right in the two panels, so `cd dir && f4`
 // shows dir and `f4 dir1 dir2` shows both, rather than session.ini's paths. It
 // runs after ApplyWorkspaceSession and therefore wins; an empty left changes
 // nothing, and an empty right sends both panels to left.
+//
+// A path that names a file sends its panel to the file's folder with the cursor
+// on the file, so closing the viewer `f4 file` opened lands on it (issue #991).
 //
 // A right that differs from left only ever comes from the command line, so it
 // also says the focus belongs on the directory named first.
@@ -308,9 +321,14 @@ func ApplyStartupDirs(pf *PanelsFrame, left, right string) {
 	}
 	for idx, dir := range [2]string{left, right} {
 		if fsp, ok := pf.Panels[idx].(*FileSystemPanel); ok && fsp != nil {
+			focus := ""
+			if IsStartupFile(dir) {
+				dir, focus = filepath.Dir(dir), filepath.Base(dir)
+			}
 			navigatePanelTo(pf, fsp, dir)
-			// The pending cursor names a file of the directory just left.
-			fsp.PendingSelection = ""
+			// The pending cursor names a file of the directory just left;
+			// for a file it names that file, placed when the listing arrives.
+			fsp.PendingSelection = focus
 		}
 	}
 	if fromCommandLine {

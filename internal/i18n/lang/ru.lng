@@ -902,6 +902,7 @@ EditorSettings.ExternalCommandGUI=Команда запуска в &GUI:
 ViewerSettings.Title= Настройки вьювера
 ViewerSettings.AutodetectCodePage=Автоопределять кодовую &страницу
 ViewerSettings.DefaultCodePage=Кодовая страница по &умолчанию:
+ViewerSettings.OpenAsSupportedType=Открывать изображения и видео в своих &просмотрщиках
 
 ColorerSettings.Title= Настройки Colorer
 ColorerSettings.Enabled=Включить подсветку &Colorer
@@ -2255,6 +2256,8 @@ SettingsCenter.ViewerAutodetectCodePage.Description=Определяет код�
 SettingsCenter.ViewerAutodetectCodePage.Label=Определять кодировку при просмотре
 SettingsCenter.ViewerDefaultCodePage.Description=Запасная кодировка просмотра и быстрого просмотра, когда определение отключено или не даёт результата.
 SettingsCenter.ViewerDefaultCodePage.Label=Кодировка просмотра по умолчанию
+SettingsCenter.ViewerOpenAsSupportedType.Description=Если включено, просмотр картинки открывает просмотрщик изображений, а просмотр видео — видеоплеер, если терминал может их показать. Если выключено, любой файл открывается в текстовом и шестнадцатеричном просмотрщике.
+SettingsCenter.ViewerOpenAsSupportedType.Label=Открывать изображения и видео в своих просмотрщиках
 SettingsCenter.WheelEditorDown.Description=Число строк редактора на одно деление колеса вниз. Ноль использует системную настройку.
 SettingsCenter.WheelEditorDown.Label=Колесо вниз в редакторе
 SettingsCenter.WheelEditorUp.Description=Число строк редактора на одно деление колеса вверх. Ноль использует системную настройку.

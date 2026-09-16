@@ -151,24 +151,72 @@ func startupDirs() (left, right string) {
 // frame is pushed) lives in InitCore(), a separate function.
 var editFilePath string
 
-// openDashEFileIfRequested opens -e's target file in the editor on the
-// current top panel.PanelsFrame, if -e was given. Called from every entry point
-// where SetupUI() (or InitCore(), which calls it) already ran in the one
+// viewFilePaths are the files among the paths named before the switches
+// (issue #991): `f4 file` opens file in the viewer, as F3 on it would, while
+// the panel goes to its folder (see panel.ApplyStartupDirs). Absolute, and
+// package-level for the same reason editFilePath is.
+var viewFilePaths []string
+
+// startupViewFiles picks the files out of the startup paths: every word that
+// names something other than a folder, resolved against cwd the way
+// startupDirsFor resolves it. A folder, and a word that names nothing, stay
+// panel paths only.
+func startupViewFiles(cwd string, args []string) []string {
+	var files []string
+	for _, arg := range args {
+		path := filepath.Clean(arg)
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(cwd, path)
+		}
+		if panel.IsStartupFile(path) {
+			files = append(files, path)
+		}
+	}
+	return files
+}
+
+// openStartupFilesIfRequested opens what the command line named for viewing and
+// for editing on the current top panel.PanelsFrame. Called from every entry
+// point where SetupUI() (or InitCore(), which calls it) already ran in the one
 // process that's actually going to render -- every GUI backend, and the
 // tty path on Windows (session_windows.go). The Unix tty path is the odd
 // one out: it daemonizes, so SetupUI() there runs inside a not-yet-
 // attached background process with nothing to draw to; session_unix.go's
-// terminal.RunServer() calls openEditFileIn directly instead, timed to the actual
-// client attach, not to this function.
-func openDashEFileIfRequested() {
-	if editFilePath == "" {
+// terminal.RunServer() hands the files to ClientAttached instead, timed to the
+// actual client attach, not to this function.
+func openStartupFilesIfRequested() {
+	if editFilePath == "" && len(viewFilePaths) == 0 {
 		return
 	}
 	if top := vtui.FrameManager.GetTopFrame(); top != nil {
 		if pf, ok := top.(*panel.PanelsFrame); ok && pf != nil {
-			openEditFileIn(pf, editFilePath)
+			openStartupFilesIn(pf, viewFilePaths, editFilePath)
 		}
 	}
+}
+
+// openStartupFilesIn opens each view path in the viewer and then editPath, if
+// any, in the editor.
+func openStartupFilesIn(pf *panel.PanelsFrame, viewPaths []string, editPath string) {
+	for _, path := range viewPaths {
+		openViewFileIn(pf, path)
+	}
+	if editPath != "" {
+		openEditFileIn(pf, editPath)
+	}
+}
+
+// openViewFileIn opens path in pf's viewer through actionOpenViewer, the path
+// F3 takes after its file associations: the same "already viewed?" dialog,
+// history entry, and choice between the image viewer, the video player and the
+// text viewer.
+func openViewFileIn(pf *panel.PanelsFrame, path string) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		vtui.DebugLog("MAIN: view %q: filepath.Abs failed: %v", path, err)
+		return
+	}
+	actionOpenViewer(pf, vfs.NewOSVFS(filepath.Dir(abs)), abs)
 }
 
 // openEditFileIn resolves path to an absolute path and opens it in pf's
@@ -453,7 +501,7 @@ func Main() {
 			if secs, err := strconv.ParseFloat(val, 64); err == nil && secs > 0 {
 				dumpScreenAfter = secs
 			}
-		case "-e":
+		case "-e", "--edit":
 			// far2l-compatible: `-e [filename]` opens filename directly in
 			// the editor. far2l also accepts `-e<line>[:<pos>]`, which this
 			// does not implement yet -- only the filename form. Primarily
@@ -477,6 +525,9 @@ func Main() {
 		}
 	}
 	rememberStartupDirs(startupDirArgs(os.Args[1:]))
+	if cwd, err := os.Getwd(); err == nil {
+		viewFilePaths = startupViewFiles(cwd, startupDirArgs(os.Args[1:]))
+	}
 	configureF4DebugLogPath(config.GetF4ConfigDir())
 
 	if version {
@@ -486,11 +537,12 @@ func Main() {
 	if print_help {
 		fmt.Printf(`f4 version: %s
 f4 is efficient and cozy two-panel file manager in go
-Usage: f4 [folder1 [folder2]] [switches]
-Folders come before the switches, or after a "--" separator. Without them both
+Usage: f4 [path1 [path2]] [switches]
+Paths come before the switches, or after a "--" separator. Without them both
 panels open the current directory (on Windows they keep the folders of the last
-session); folder1 alone opens in the left panel and leaves the right one on the
-current directory.
+session); path1 alone opens in the left panel and leaves the right one on the
+current directory. A path that names a file opens that file in the viewer, as
+F3 would, and its panel shows the file's folder with the cursor on it.
 The following switches may be used in the command line:
  -h, -?, --help         This help and exit
  -v, --version          Displays the current version and exit
@@ -502,7 +554,7 @@ The following switches may be used in the command line:
                          (bypasses hotkeys entirely -- useful under Wine
                          tty mode, where complex combos like CtrlAltP can
                          fail to arrive through native console input)
- -e [filename]          Open filename directly in the editor on startup
+ -e, --edit [filename]  Open filename directly in the editor on startup
                          (far2l-compatible; useful for scripted/headless
                          testing where interactive navigation is unreliable)
  -gui, --gui [Backend]  Force run in GUI-mode
@@ -695,12 +747,12 @@ func shouldTryGui() bool {
 	return os.Getenv("WAYLAND_DISPLAY") != "" || os.Getenv("DISPLAY") != ""
 }
 
-// setupGuiUI builds the interface inside a freshly opened GUI window. The file
-// named by -e is opened here rather than before RunGui, because it needs the
-// frames that SetupUI creates.
+// setupGuiUI builds the interface inside a freshly opened GUI window. The files
+// named on the command line are opened here rather than before RunGui, because
+// they need the frames that SetupUI creates.
 func setupGuiUI() {
 	SetupUI()
-	openDashEFileIfRequested()
+	openStartupFilesIfRequested()
 }
 
 func tryRunDefaultGui() error {

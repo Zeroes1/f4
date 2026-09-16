@@ -87,6 +87,8 @@ UI & input libraries are developed separately ([vtui](https://github.com/unxed/v
 `f4` can run either directly in your terminal or as a standalone graphical window. GUI mode is particularly useful on Windows to bypass console limitations or on Linux/macOS for high-performance hardware-accelerated rendering.
 
 **Command Line Options:**
+*   `f4 [path1 [path2]]`: Open the folders in the left and right panels. A path that names a file opens the file in the viewer, as F3 would, and its panel shows the file's folder with the cursor on it.
+*   `-e <file>`, `--edit <file>`: Open the file in the editor.
 *   `--gui`: Start in GUI mode using the best available backend for your OS.
 *   `--gui=win32`: Use native Win32/GDI graphical windowing (Windows and Wine).
 *   `--gui=gogpu`: Use the hardware-accelerated (GPU) renderer.

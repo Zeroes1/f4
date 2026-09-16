@@ -1,7 +1,9 @@
 package app
 
 import (
+	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 )
@@ -146,6 +148,45 @@ func TestStartupDirArgs(t *testing.T) {
 				if got[i] != tc.want[i] {
 					t.Fatalf("startupDirArgs(%v) = %v, want %v", tc.args, got, tc.want)
 				}
+			}
+		})
+	}
+}
+
+// `f4 file` opens the file in the viewer (issue #991). Of the startup paths,
+// only those naming something other than a folder are files to view; a folder
+// and a word that names nothing stay panel paths.
+func TestStartupViewFiles(t *testing.T) {
+	cwd := t.TempDir()
+	sub := filepath.Join(cwd, "sub")
+	if err := os.Mkdir(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(sub, "notes.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(cwd, "other.txt")
+	if err := os.WriteFile(other, []byte("y"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{name: "nothing"},
+		{name: "a folder", args: []string{"sub"}},
+		{name: "a missing path", args: []string{"nope.txt"}},
+		{name: "relative file", args: []string{filepath.Join("sub", "notes.txt")}, want: []string{file}},
+		{name: "absolute file", args: []string{other}, want: []string{other}},
+		{name: "unclean path", args: []string{filepath.Join(".", "sub", "..", "other.txt")}, want: []string{other}},
+		{name: "folder and files", args: []string{"sub", "other.txt", file}, want: []string{other, file}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := startupViewFiles(cwd, tc.args); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("startupViewFiles(%q) = %q, want %q", tc.args, got, tc.want)
 			}
 		})
 	}

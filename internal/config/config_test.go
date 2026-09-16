@@ -59,6 +59,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.EditorDefaultCodePage = 1251
 	App.ViewerAutodetectCodePage = true
 	App.ViewerDefaultCodePage = 866
+	App.ViewerOpenAsSupportedType = false
 
 	// 2. Save
 	SaveConfig()
@@ -91,6 +92,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.EditorDefaultCodePage = 65001
 	App.ViewerAutodetectCodePage = false
 	App.ViewerDefaultCodePage = 65001
+	App.ViewerOpenAsSupportedType = true
 
 	// 4. Load
 	LoadConfig()
@@ -182,6 +184,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if App.ViewerDefaultCodePage != 866 {
 		t.Errorf("ViewerDefaultCodePage = %d, want 866", App.ViewerDefaultCodePage)
+	}
+	if App.ViewerOpenAsSupportedType {
+		t.Error("LoadConfig failed to restore disabled Viewer OpenAsSupportedType")
 	}
 }
 
