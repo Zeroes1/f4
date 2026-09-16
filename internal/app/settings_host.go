@@ -23,6 +23,7 @@ type settingsHost struct{}
 func (settingsHost) ApplyRuntime(before config.F4Config, changed []string) {
 	config.ApplyProxySettings()
 	config.ApplyWheelSettings()
+	config.ApplyMenuSettings()
 	panel.ApplyPathHintSettings()
 	vtui.ManageCursorStyle = !config.App.KeepTerminalCursor
 	for _, id := range changed {

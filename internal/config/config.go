@@ -524,6 +524,7 @@ type F4Config struct {
 	UpdateChannel          int // 0 = Stable, 1 = Nightly
 	UpdateInterval         int // 0 = Never, 1 = Every start, 2 = Daily, 3 = Weekly
 	EnforceColorCorrection bool
+	MenuLoopScroll         bool   // far2l Opt.VMenu.MenuLoopScroll, [VMenu] MenuStopWrapOnEdge
 	HighlightPriority      int    // 0 = User wins, 1 = Theme wins
 	LastUpdateCheck        int64  // Unix timestamp
 	LastUpdateVersion      string // Version string or PublishedAt timestamp
@@ -675,6 +676,7 @@ var App = F4Config{
 	ProxyMode:                netproxy.ModeSystem,
 	UpdateInterval:           3, // Default to Weekly
 	EnforceColorCorrection:   true,
+	MenuLoopScroll:           true,
 	HighlightPriority:        0,
 	LastUpdateCheck:          0,
 	LastUpdateVersion:        "",
@@ -862,6 +864,7 @@ func LoadConfig() {
 	App.GuiBackend = NormalizeStartupGuiBackend(merged.GetString("Startup", "GuiBackend", ""))
 	App.TTYBackend = NormalizeStartupTTYBackend(merged.GetString("Startup", "TTYBackend", ""))
 	App.EnforceColorCorrection = merged.GetString("Dialogs", "EnforceColorCorrection", "1") == "1"
+	App.MenuLoopScroll = merged.GetString("VMenu", "MenuStopWrapOnEdge", "1") == "1"
 	_, _ = fmt.Sscanf(merged.GetString("Appearance", "HighlightPriority", "0"), "%d", &App.HighlightPriority)
 	_, _ = fmt.Sscanf(merged.GetString("Update", "Channel", "0"), "%d", &App.UpdateChannel)
 	_, _ = fmt.Sscanf(merged.GetString("Update", "Interval", "3"), "%d", &App.UpdateInterval)
@@ -1121,6 +1124,9 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 
 	sb.WriteString("\n[Dialogs]\n")
 	fmt.Fprintf(&sb, "EnforceColorCorrection = %d\n", map[bool]int{true: 1, false: 0}[cfg.EnforceColorCorrection])
+
+	sb.WriteString("\n[VMenu]\n")
+	fmt.Fprintf(&sb, "MenuStopWrapOnEdge = %d\n", map[bool]int{true: 1, false: 0}[cfg.MenuLoopScroll])
 
 	sb.WriteString("\n[Appearance]\n")
 	fmt.Fprintf(&sb, "GuiFont = %s\n", cfg.GuiFont)
@@ -1454,6 +1460,11 @@ func WheelScrollLines(cfg int) int {
 func ApplyWheelSettings() {
 	vtui.SetWheelAreaLines(vtui.WheelAreaMenu, App.WheelMenuUp, App.WheelMenuDown)
 	vtui.SetWheelAreaLines(vtui.WheelAreaList, App.WheelTableUp, App.WheelTableDown)
+}
+
+// ApplyMenuSettings pushes the menu behaviour options into vtui.
+func ApplyMenuSettings() {
+	vtui.SetMenuLoopScroll(App.MenuLoopScroll)
 }
 
 func CreateDefaultHighlightIni(path string) {

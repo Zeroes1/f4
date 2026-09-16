@@ -820,6 +820,7 @@ func SetupUI() {
 	theme.SetDefaultF4Palette()
 	config.LoadConfig()
 	config.ApplyWheelSettings()
+	config.ApplyMenuSettings()
 	vtui.PathHintProvider = panel.PathHintProvider
 	panel.ApplyPathHintSettings()
 	ctrlTabMode := vtui.WorkspaceCtrlTabDirect
