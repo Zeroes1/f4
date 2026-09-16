@@ -420,10 +420,10 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 				chkHidden = c
 			}
 		case *vtui.Button:
-			switch c.GetText() {
-			case i18n.Msg("Attributes.BtnSet"):
+			switch {
+			case strings.Contains(c.GetText(), i18n.Msg("Attributes.BtnSet")):
 				setButton = c
-			case i18n.Msg("Attributes.BtnSecurity"):
+			case strings.Contains(c.GetText(), i18n.Msg("Attributes.BtnSecurity")):
 				securityButton = c
 			}
 		}
