@@ -4522,7 +4522,7 @@ func (ev *EditorView) scheduleIndexResume() {
 	uiFrames := vtui.FrameManager
 	ev.indexResume = time.AfterFunc(indexResumeDelay, func() {
 		uiFrames.PostTask(func() {
-			if ev.IsDone() || ev.Indexing || ev.IndexIsComplete() {
+			if ev.IsDone() || ev.Saving || ev.Indexing || ev.IndexIsComplete() {
 				return
 			}
 			ev.StartIndexing()
@@ -5191,6 +5191,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 
 	// Stop indexing to prevent async reads on closed buffers
 	ev.CancelIndexing()
+	if ev.indexResume != nil {
+		ev.indexResume.Stop()
+		ev.indexResume = nil
+	}
 
 	// Capture visible offset for preloading before we destroy the current engine
 	visStart := ev.Engine.VisualToLogical(ev.ScrollTopRow, 0)
@@ -5198,6 +5202,9 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 	FilePath := ev.FilePath
 
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// CancelIndexing only signals the worker. Join it before the save can
+		// replace or close the mapping it may still be reading.
+		ev.WaitForIndexing()
 		// The writer reads the unchanged pieces straight out of the mapping.
 		defer ev.guardMapping("saving")()
 		// To preserve original file ownership, permissions and xattrs (crucial for root-owned files),
