@@ -30,6 +30,7 @@ type settingsRow struct {
 	gap                int
 	read               func() string
 	write              func(string)
+	traceRecord        string // record ID for diagnostics when the row edits a collection record
 	values             func() map[string]string
 	matchFunc          func() bool
 	unavailableReason  string
@@ -1131,11 +1132,16 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 			c.status = Phrase("Provider is no longer loaded.")
 			return
 		}
+		old := d.Values[f.ID]
+		if r.read != nil {
+			old = r.read()
+		}
 		if r.write != nil {
 			r.write(v)
 		} else {
 			d.Values[f.ID] = v
 		}
+		settingsTraceWrite(r.session, r.traceRecord, f, old, v, r.control)
 		if f.Timing == "preview" && d.PreviewFunc != nil {
 			if err := d.PreviewFunc(d); err != nil {
 				c.status = settingsErrorText(err)
@@ -1232,7 +1238,9 @@ func (c *settingsCenter) commit(closeAfter bool) {
 			c.status = Phrase("A settings provider was unloaded; pending edits were not saved.")
 			return
 		}
+		settingsTraceDirty(s)
 		for id, err := range s.draft.Validate() {
+			vtui.DebugLog("SETTINGS_TRACE: validate %s failed: %s: %v", s.catalog.ID, id, err)
 			c.status = id + ": " + settingsErrorText(err)
 			return
 		}

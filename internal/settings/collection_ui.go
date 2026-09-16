@@ -154,6 +154,7 @@ func (c *settingsCenter) addCollections(category string) {
 					}
 					record := f4settings.Record{ID: fmt.Sprintf("new:%s:%d", col.ID, settingsRecordCounter.Add(1)), Values: values}
 					s.draft.Records[col.ID] = append(s.draft.Records[col.ID], record)
+					settingsTraceRecords(s, col.ID, "add", record.ID)
 					c.offsets[key] = len(s.draft.Records[col.ID]) - 1
 					c.rebuildCategory()
 				})
@@ -178,7 +179,9 @@ func (c *settingsCenter) addCollections(category string) {
 						}
 						records := s.draft.Records[col.ID]
 						if selected < len(records) {
+							removed := records[selected].ID
 							s.draft.Records[col.ID] = append(records[:selected], records[selected+1:]...)
+							settingsTraceRecords(s, col.ID, "delete", removed)
 							c.rebuildCategory()
 						}
 					}
@@ -195,6 +198,7 @@ func (c *settingsCenter) addCollections(category string) {
 						next := selected + direction
 						if selected >= 0 && selected < len(records) && next >= 0 && next < len(records) {
 							records[selected], records[next] = records[next], records[selected]
+							settingsTraceRecords(s, col.ID, "move "+label, records[next].ID)
 							if col.ID == "bookmarks" {
 								for i := range records {
 									records[i].Values["bookmark.Name"] = fmt.Sprintf("%d: %s", i, records[i].Values["bookmark.Path"])
@@ -270,6 +274,7 @@ func (c *settingsCenter) addCollections(category string) {
 						meta.Aliases = append(append([]string(nil), f.Aliases...), record.Values[col.NameField])
 						return c.matches(meta)
 					}
+					r.traceRecord = record.ID
 					r.read = func() string { return record.Values[f.ID] }
 					r.write = func(value string) {
 						record.Values[f.ID] = value
