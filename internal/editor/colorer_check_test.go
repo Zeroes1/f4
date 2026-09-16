@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/unxed/f4/internal/piecetable"
+	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/vtui"
 )
 
 // checkConfigs is a catalog with one colour style, "default", and no file
@@ -116,5 +120,90 @@ func TestCheckColorerSource_UnknownStyleFails(t *testing.T) {
 	check := CheckColorerSource(context.Background(), ColorerSource{ConfigsDir: checkConfigs(t)}, "no-such-style", false, nil)
 	if check.Err == nil || !strings.Contains(check.Err.Error(), "no-such-style") {
 		t.Errorf("Err = %v, want the unknown colour style named", check.Err)
+	}
+}
+
+// pairTestHRC is a user scheme whose braces are pairs, with the few def
+// regions pair matching needs, so a test does not depend on a full catalog.
+const pairTestHRC = `<?xml version="1.0" encoding="UTF-8"?>
+<hrc version="take5" xmlns="http://colorer.sf.net/2003/hrc">
+  <prototype name="def" group="user" description="def">
+    <location link="pairtest.hrc"/>
+  </prototype>
+  <prototype name="pairtest" group="user" description="Pair test">
+    <location link="pairtest.hrc"/>
+    <filename>/\.pairtest$/</filename>
+  </prototype>
+  <type name="def">
+    <region name="Special"/>
+    <region name="PairStart" parent="Special"/>
+    <region name="PairEnd" parent="Special"/>
+    <scheme name="def"/>
+  </type>
+  <type name="pairtest">
+    <import type="def"/>
+    <scheme name="pairtest">
+      <block start="/(\{)/" end="/(\})/" scheme="pairtest" region00="def:PairStart" region10="def:PairEnd"/>
+    </scheme>
+  </type>
+</hrc>
+`
+
+// Issue #277: match pair and select block reach a brace thousands of lines
+// away, below and above, through lines the cache has not parsed yet.
+func TestColorerPair_WholeFileSearch(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	src := ColorerSource{ConfigsDir: checkConfigs(t), UserHRC: user}
+
+	session, err := acquireCancelableColorerSession(context.Background(), src)
+	if err != nil {
+		t.Fatalf("session: %v", err)
+	}
+	if err := session.SetHRD("rgb", "default"); err != nil {
+		t.Fatalf("SetHRD: %v", err)
+	}
+	if ok, err := session.SelectType("a.pairtest", ""); err != nil || !ok {
+		t.Fatalf("SelectType: %v, %v", ok, err)
+	}
+
+	const last = 3001
+	text := "{\n" + strings.Repeat("x\n", last-1) + "}\n"
+	ev := NewEditorView(piecetable.New([]byte(text)), nil, "a.pairtest")
+	defer ev.Close()
+	// A re-anchoring job selects the type again by name, as the editor does.
+	ch := &ColorerHighlighter{owner: ev, postTask: vtui.FrameManager.PostTask, redraw: func() {}, colorerSrc: src, filename: "a.pairtest"}
+	ch.SetLineSource(ev.lineTextForHighlight)
+	ev.Highlighter = ch
+	ch.session = session
+	ch.startWorker(session)
+
+	ch.HighlightLine(0, "{", 0)
+	pumpUntil(t, "line 0 parsed", func() bool { _, ok := ch.cachedPairs(0); return ok && !ch.pending })
+	if pairs, _ := ch.cachedPairs(0); len(pairs) != 1 || !pairs[0].Opens {
+		t.Fatalf("line 0 pairs = %+v, want one pair start", pairs)
+	}
+
+	ev.CursorLine, ev.CursorPos = 0, 0
+	ev.ColorerPair(ColorerMatchPair)
+	pumpUntil(t, "match pair below", func() bool { return ch.pairSearch == nil && !ch.pending })
+	if ev.CursorLine != last || ev.CursorPos != 0 {
+		t.Fatalf("cursor at %d:%d, want %d:0", ev.CursorLine, ev.CursorPos, last)
+	}
+
+	// Forget everything but the cursor line, so the walk up has to queue.
+	for idx := range ch.attrCache {
+		if idx != last {
+			delete(ch.attrCache, idx)
+			delete(ch.pairCache, idx)
+		}
+	}
+	ev.ColorerPair(ColorerSelectBlock)
+	pumpUntil(t, "select block above", func() bool { return ch.pairSearch == nil && !ch.pending })
+	end := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
+	if !ev.SelActive || ev.SelAnchorOffset != 0 || end != len(text)-1 {
+		t.Fatalf("selection %v from %d to %d, want 0 to %d", ev.SelActive, ev.SelAnchorOffset, end, len(text)-1)
 	}
 }

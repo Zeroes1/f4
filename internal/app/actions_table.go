@@ -2284,6 +2284,36 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { vtui.FrameManager.EmitCommand(appcmd.CmSearch, nil) }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ColorerMatchPair",
+		Area:        "Editor",
+		Label:       "Match pair",
+		LabelKey:    "Action.Editor.ColorerMatchPair",
+		Description: "Move the cursor to the match of the bracket or other paired token under it (Colorer)",
+		DescKey:     "Action.Editor.ColorerMatchPair.Desc",
+		MenuPath:    "Search",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerPair(editor.ColorerMatchPair) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerSelectPair",
+		Area:        "Editor",
+		Label:       "Select pair contents",
+		LabelKey:    "Action.Editor.ColorerSelectPair",
+		Description: "Select the text between the paired token under the cursor and its match (Colorer)",
+		DescKey:     "Action.Editor.ColorerSelectPair.Desc",
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerPair(editor.ColorerSelectPair) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerSelectBlock",
+		Area:        "Editor",
+		Label:       "Select pair block",
+		LabelKey:    "Action.Editor.ColorerSelectBlock",
+		Description: "Select the paired token under the cursor, its match and the text between them (Colorer)",
+		DescKey:     "Action.Editor.ColorerSelectBlock.Desc",
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerPair(editor.ColorerSelectBlock) }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Replace",
 		Area:        "Editor",
 		Label:       "Replace",

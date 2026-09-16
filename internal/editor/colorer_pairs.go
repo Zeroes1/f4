@@ -23,24 +23,22 @@ type colorerPairMatch struct {
 	top bool
 }
 
-// matchColorerPair is BaseEditor::getPairMatch followed by
-// BaseEditor::searchPair, walking the pairs of each line (colorer4go's
-// ParseLinePairs) instead of Colorer's line regions; only pair regions move
-// the balance, so the result is the same.
-//
-// pos is a rune offset on line, and a token matches when it lies within
-// [Start, End] — End included, as in getPairMatch, so the cursor just after a
-// bracket still finds it; the last such token of the line wins. The search
-// stays within lines [first, last]. pairsAt reports a line's pairs and false
-// for a line that has not been parsed: Colorer's regions are always complete,
-// an unparsed line here may hold the match, so the search stops without one.
-//
-// It reports false when there is no pair token under the cursor.
-func matchColorerPair(line, pos, first, last int, pairsAt func(int) ([]colorer.Pair, bool)) (colorerPairMatch, bool) {
-	pairs, ok := pairsAt(line)
-	if !ok {
-		return colorerPairMatch{}, false
-	}
+// colorerPairWalk is BaseEditor::searchPair's loop, made resumable: the
+// search can stop at a line that has not been parsed yet and continue from
+// the same place once it has.
+type colorerPairWalk struct {
+	match   colorerPairMatch
+	lno     int            // the line the walk stands on
+	i       int            // the index of the last pair visited in pairs
+	pairs   []colorer.Pair // the pairs of lno
+	balance int
+}
+
+// startColorerPairWalk is BaseEditor::getPairMatch. pos is a rune offset on
+// line, whose pairs are given; a token matches when it lies within [Start,
+// End] — End included, so the cursor just after a bracket still finds it —
+// and the last such token wins. It reports false when there is none.
+func startColorerPairWalk(line, pos int, pairs []colorer.Pair) (colorerPairWalk, bool) {
 	idx := -1
 	for i, p := range pairs {
 		if pos >= p.Start && pos <= p.End {
@@ -48,52 +46,94 @@ func matchColorerPair(line, pos, first, last int, pairsAt func(int) ([]colorer.P
 		}
 	}
 	if idx < 0 {
+		return colorerPairWalk{}, false
+	}
+	w := colorerPairWalk{
+		match: colorerPairMatch{start: colorerPairToken{line, pairs[idx]}, top: pairs[idx].Opens},
+		lno:   line,
+		i:     idx,
+		pairs: pairs,
+	}
+	w.balance = -1
+	if w.match.top {
+		w.balance = 1
+	}
+	return w, true
+}
+
+// colorerWalkStop says why advance returned.
+type colorerWalkStop int
+
+const (
+	colorerWalkFound     colorerWalkStop = iota // w.match.end holds the match
+	colorerWalkExhausted                        // the window ended without one
+	colorerWalkNeedsLine                        // the returned line is not parsed yet
+)
+
+// advance continues BaseEditor::searchPair within lines [first, last]: walk
+// the pairs after the start (before it, for a pair end), +1 per start and -1
+// per end, until the balance is zero. Only pair regions move the balance, so
+// walking pairs gives Colorer's result. pairsAt reports false for a line not
+// parsed yet; advance then returns that line without moving, and calling it
+// again once the line is parsed carries on.
+func (w *colorerPairWalk) advance(first, last int, pairsAt func(int) ([]colorer.Pair, bool)) (colorerWalkStop, int) {
+	for {
+		if w.balance > 0 {
+			for w.i+1 >= len(w.pairs) {
+				next := w.lno + 1
+				if next > last {
+					return colorerWalkExhausted, 0
+				}
+				pairs, ok := pairsAt(next)
+				if !ok {
+					return colorerWalkNeedsLine, next
+				}
+				w.lno, w.pairs, w.i = next, pairs, -1
+			}
+			w.i++
+		} else {
+			for w.i-1 < 0 {
+				next := w.lno - 1
+				if next < first {
+					return colorerWalkExhausted, 0
+				}
+				pairs, ok := pairsAt(next)
+				if !ok {
+					return colorerWalkNeedsLine, next
+				}
+				w.lno, w.pairs, w.i = next, pairs, len(pairs)
+			}
+			w.i--
+		}
+		if w.pairs[w.i].Opens {
+			w.balance++
+		} else {
+			w.balance--
+		}
+		if w.balance == 0 {
+			w.match.end = colorerPairToken{w.lno, w.pairs[w.i]}
+			w.match.found = true
+			return colorerWalkFound, 0
+		}
+	}
+}
+
+// matchColorerPair searches [first, last] for the match of the pair token at
+// pos on line, as BaseEditor::searchLocalPair does, and stops without a match
+// at a line pairsAt reports as not parsed: Colorer's regions are always
+// complete, the cache may not have reached the match yet. It reports false
+// when there is no pair token under the cursor.
+func matchColorerPair(line, pos, first, last int, pairsAt func(int) ([]colorer.Pair, bool)) (colorerPairMatch, bool) {
+	pairs, ok := pairsAt(line)
+	if !ok {
 		return colorerPairMatch{}, false
 	}
-
-	m := colorerPairMatch{start: colorerPairToken{line, pairs[idx]}, top: pairs[idx].Opens}
-	balance := -1
-	if m.top {
-		balance = 1
+	w, ok := startColorerPairWalk(line, pos, pairs)
+	if !ok {
+		return colorerPairMatch{}, false
 	}
-	lno, i := line, idx
-	for {
-		if balance > 0 {
-			i++
-			for i >= len(pairs) {
-				lno++
-				if lno > last {
-					return m, true
-				}
-				if pairs, ok = pairsAt(lno); !ok {
-					return m, true
-				}
-				i = 0
-			}
-		} else {
-			i--
-			for i < 0 {
-				lno--
-				if lno < first {
-					return m, true
-				}
-				if pairs, ok = pairsAt(lno); !ok {
-					return m, true
-				}
-				i = len(pairs) - 1
-			}
-		}
-		if pairs[i].Opens {
-			balance++
-		} else {
-			balance--
-		}
-		if balance == 0 {
-			m.end = colorerPairToken{lno, pairs[i]}
-			m.found = true
-			return m, true
-		}
-	}
+	w.advance(first, last, pairsAt)
+	return w.match, true
 }
 
 // colorerPairOverlay is the pair under the cursor as drawn: the tokens to

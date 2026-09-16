@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	colorer "github.com/unxed/colorer4go"
+	"github.com/unxed/f4/internal/piecetable"
+	"github.com/unxed/vtui"
 )
 
 // pairLines builds a pairsAt over lines written as text: '(' is a pair start
@@ -83,5 +85,87 @@ func TestColorerPairOverlay_PaintsCopies(t *testing.T) {
 	}
 	if got := overlay.apply(1, attrs); &got[0] != &attrs[0] {
 		t.Error("a line without tokens was copied")
+	}
+}
+
+// A walk that meets an unparsed line stops there without moving, and carries
+// on from the same place once the line is there.
+func TestColorerPairWalk_ResumesAtTheMissingLine(t *testing.T) {
+	lines := []*string{str("("), nil, str("())")}
+	at := pairLines(lines...)
+	pairs, _ := at(0)
+	w, ok := startColorerPairWalk(0, 0, pairs)
+	if !ok {
+		t.Fatal("no pair token under the cursor")
+	}
+	if stop, need := w.advance(0, 2, at); stop != colorerWalkNeedsLine || need != 1 {
+		t.Fatalf("advance = %v, %d; want to need line 1", stop, need)
+	}
+	if stop, need := w.advance(0, 2, at); stop != colorerWalkNeedsLine || need != 1 {
+		t.Fatalf("second advance = %v, %d; want to still need line 1", stop, need)
+	}
+	lines[1] = str("")
+	if stop, _ := w.advance(0, 2, pairLines(lines...)); stop != colorerWalkFound {
+		t.Fatalf("advance after parsing = %v, want found", stop)
+	}
+	if w.match.end.line != 2 || w.match.end.pair.Start != 2 {
+		t.Errorf("end = line %d col %d, want line 2 col 2", w.match.end.line, w.match.end.pair.Start)
+	}
+}
+
+func TestRuneByteIndexes(t *testing.T) {
+	text := "aЖ\U0001F600b"
+	for r, b := range []int{0, 1, 3, 7, 8} {
+		if got := byteIndexAtRune(text, r); got != b {
+			t.Errorf("byteIndexAtRune(%d) = %d, want %d", r, got, b)
+		}
+		if got := runeIndexAtByte(text, b); got != r {
+			t.Errorf("runeIndexAtByte(%d) = %d, want %d", b, got, r)
+		}
+	}
+	if byteIndexAtRune(text, 99) != len(text) || runeIndexAtByte(text, 99) != 4 {
+		t.Error("offsets past the end are not clamped")
+	}
+}
+
+// FarColorer's positions, on a two-line text: "f(Ж," and "x)".
+func TestApplyColorerPair_Positions(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	text := "f(\u0416,\nx)"
+	match := colorerPairMatch{
+		start: colorerPairToken{0, colorer.Pair{Start: 1, End: 2, Opens: true}},
+		end:   colorerPairToken{1, colorer.Pair{Start: 1, End: 2}},
+		found: true,
+		top:   true,
+	}
+	offsetOf := func(ev *EditorView) int { return ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos }
+
+	ev := NewEditorView(piecetable.New([]byte(text)), nil, "test.c")
+	defer ev.Close()
+	ev.applyColorerPair(ColorerMatchPair, match)
+	if ev.CursorLine != 1 || ev.CursorPos != 1 || ev.SelActive {
+		t.Errorf("match pair: cursor %d:%d sel %v, want 1:1 without a selection", ev.CursorLine, ev.CursorPos, ev.SelActive)
+	}
+
+	ev.applyColorerPair(ColorerSelectPair, match)
+	// From after "(" (byte 2) to before ")" on line 1 (byte offset 6+1).
+	if !ev.SelActive || ev.SelAnchorOffset != 2 || offsetOf(ev) != 7 {
+		t.Errorf("select pair: anchor %d cursor %d, want 2 and 7", ev.SelAnchorOffset, offsetOf(ev))
+	}
+
+	ev.applyColorerPair(ColorerSelectBlock, match)
+	if !ev.SelActive || ev.SelAnchorOffset != 1 || offsetOf(ev) != 8 {
+		t.Errorf("select block: anchor %d cursor %d, want 1 and 8", ev.SelAnchorOffset, offsetOf(ev))
+	}
+
+	// The same pair seen from its end: the positions do not change.
+	back := colorerPairMatch{start: match.end, end: match.start, found: true}
+	ev.applyColorerPair(ColorerSelectBlock, back)
+	if ev.SelAnchorOffset != 1 || offsetOf(ev) != 8 {
+		t.Errorf("select block from the end: anchor %d cursor %d, want 1 and 8", ev.SelAnchorOffset, offsetOf(ev))
+	}
+	ev.applyColorerPair(ColorerMatchPair, back)
+	if ev.CursorLine != 0 || ev.CursorPos != 1 {
+		t.Errorf("match pair from the end: cursor %d:%d, want 0:1", ev.CursorLine, ev.CursorPos)
 	}
 }

@@ -656,6 +656,7 @@ type ColorerHighlighter struct {
 	attrCache  map[int][]uint64
 	bgCache    map[int]uint64
 	pairCache  map[int][]colorer.Pair // kept and evicted with attrCache
+	pairSearch *colorerPairSearch     // a whole-file pair search in progress
 	parsedIdx  int
 	filename   string
 	firstLine  string
@@ -803,6 +804,8 @@ func (ch *ColorerHighlighter) DropFrom(idx int) {
 		idx = 0
 	}
 	ch.dropCacheFrom(idx)
+	// An edit moves the text a pair search walks; its tokens are stale.
+	ch.pairSearch = nil
 	// The worker may currently be inside ParseLine. Do not touch its session
 	// from the UI; invalidate that result and let the next frame enqueue a
 	// fresh anchored snapshot.
@@ -888,6 +891,7 @@ func (ch *ColorerHighlighter) Close() error {
 	ch.stopWorker()
 	ch.attrCache = nil
 	ch.pairCache = nil
+	ch.pairSearch = nil
 	ch.parsedIdx = 0
 	if closer, ok := ch.fallback.(io.Closer); ok {
 		closer.Close()

@@ -54,8 +54,7 @@ colorer4go's `ParseLinePairs` returns pair regions; f4 matches them as
 `BaseEditor::searchPair` does and draws the pair under the cursor, behind the
 new `EditorColorerPairs` setting. See HIGHLIGHT.md 3.10.
 
-## Step 3b — match pair, select pair, select block
+## Step 3b — match pair, select pair, select block (done)
 
-FarColorer's three menu actions use `searchGlobalPair`, which may reach any
-line of the file, above or below: this needs a worker job that parses toward
-the match instead of the visible-lines cache.
+Three editor actions search the whole file for the match, queueing lines the
+cache has not reached to the worker. See HIGHLIGHT.md 3.10.

@@ -296,6 +296,23 @@ cursor and its match.
   since unlike Colorer's regions the cache may not have reached the match yet.
   The token under the cursor is painted even without a match. The overlay is
   painted on a copy of the cached colours.
+- Match pair, select pair contents and select pair block (actions
+  `Editor.ColorerMatchPair`, `Editor.ColorerSelectPair`,
+  `Editor.ColorerSelectBlock`; no default keys, as in FarColorer) search the
+  whole file, as `searchGlobalPair` does. The search (`colorerPairSearch`) is
+  `searchPair` made resumable: it lives on the UI thread, walks the line cache,
+  and where a line is missing queues it to the worker and resumes when the
+  result lands (`continuePairSearch` in `postColorerResult`). Walking up, the
+  job starts a batch below the missing line so one job covers a batch of lines
+  above. Lines parsed for the search go through the same anchoring as display,
+  so a match agrees with the pair drawn under the cursor. An edit, a moved
+  cursor or Esc drops the search; Esc does not stop Colorer while a search owns
+  the job.
+- Positions are FarColorer's: match pair puts the cursor on the first
+  character of a match above and the last character of one below; the
+  selections run from the upper position to the lower, where the cursor ends.
+  Unlike Far's ECTL_SETPOSITION, a match off screen is scrolled into view by
+  `EnsureCursorVisible`, not centred.
 
 ---
 

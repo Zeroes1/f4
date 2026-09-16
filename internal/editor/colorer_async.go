@@ -341,6 +341,7 @@ func (ch *ColorerHighlighter) postColorerResult(result colorerResult) {
 			}
 		}
 		owner.finishColorerWork(result.job.id)
+		ch.continuePairSearch()
 		if redraw != nil {
 			redraw()
 		}
