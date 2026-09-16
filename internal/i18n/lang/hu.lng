@@ -63,6 +63,8 @@ ID3Editor.FieldVersion=Verzió:
 
 vtui.Ok=&Ok
 vtui.Cancel=Mégse
+vtui.History=Előzmények
+vtui.HistoryClearConfirm=Törli a teljes előzményt?
 
 Panel.Other=&Másik panel
 Panel.Column.Name=Név

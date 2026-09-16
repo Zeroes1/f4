@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Versija:
 vtui.Ok=&Gerai
 vtui.Cancel=Atšaukti
 vtui.Save=&Išsaugoti
+vtui.History=Istorija
+vtui.HistoryClearConfirm=Išvalyti visą istoriją?
 
 Panel.Other=&Kitas skydelis
 Panel.Column.Name=Pavadinimas

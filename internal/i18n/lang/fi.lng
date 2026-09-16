@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Versio:
 vtui.Ok=&Ok
 vtui.Cancel=Peruuta
 vtui.Save=&Tallenna
+vtui.History=Historia
+vtui.HistoryClearConfirm=Tyhjennetäänkö koko historia?
 
 Panel.Other=&Toinen paneeli
 Panel.Column.Name=Nimi

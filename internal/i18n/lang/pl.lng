@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Wersja:
 vtui.Ok=&Ok
 vtui.Cancel=Anuluj
 vtui.Save=&Zapisz
+vtui.History=Historia
+vtui.HistoryClearConfirm=Wyczyścić całą historię?
 
 Panel.Other=&Inny panel
 Panel.Column.Name=Nazwa

@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=버전:
 vtui.Ok=확인(&O)
 vtui.Cancel=취소
 vtui.Save=저장(&S)
+vtui.History=기록
+vtui.HistoryClearConfirm=모든 기록을 삭제하시겠습니까?
 
 Panel.Other=다른 패널(&O)
 Panel.Column.Name=이름

@@ -63,6 +63,8 @@ ID3Editor.FieldVersion=Տարբերակ՝
 
 vtui.Ok=&Լավ
 vtui.Cancel=Չեղարկել
+vtui.History=Պատմություն
+vtui.HistoryClearConfirm=Մաքրե՞լ ամբողջ պատմությունը։
 
 Panel.Other=&Այլ վահանակ
 Panel.Column.Name=Անուն

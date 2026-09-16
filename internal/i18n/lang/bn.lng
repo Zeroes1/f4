@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=সংস্করণ:
 vtui.Ok=ঠিক আছে (&O)
 vtui.Cancel=রদ
 vtui.Save=সংরক্ষণ (&S)
+vtui.History=হিস্ট্রি
+vtui.HistoryClearConfirm=সম্পূর্ণ হিস্ট্রি মুছে ফেলবেন?
 
 Panel.Other=অন্য প্যানেল (&O)
 Panel.Column.Name=নাম

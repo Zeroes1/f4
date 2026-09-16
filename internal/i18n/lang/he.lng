@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=גרסה:
 vtui.Ok=אי&שור
 vtui.Cancel=ביטול
 vtui.Save=ש&מור
+vtui.History=היסטוריה
+vtui.HistoryClearConfirm=האם לנקות את כל ההיסטוריה?
 
 Panel.Other=פאנל א&חר
 Panel.Column.Name=שם

@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=الإصدار:
 vtui.Ok=م&وافق
 vtui.Cancel=إلغاء الأمر
 vtui.Save=ح&فظ
+vtui.History=السجل
+vtui.HistoryClearConfirm=هل تريد مسح السجل بالكامل؟
 
 Panel.Other=اللوحة الأ&خرى
 Panel.Column.Name=الاسم

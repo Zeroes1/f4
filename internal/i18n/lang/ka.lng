@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=ვერსია:
 vtui.Ok=&კარგი
 vtui.Cancel=გაუქმება
 vtui.Save=&შენახვა
+vtui.History=ისტორია
+vtui.HistoryClearConfirm=გსურთ მთელი ისტორიის გასუფთავება?
 
 Panel.Other=&სხვა პანელი
 Panel.Column.Name=სახელი

@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Versioon:
 vtui.Ok=&Olgu
 vtui.Cancel=Tühista
 vtui.Save=&Salvesta
+vtui.History=Ajalugu
+vtui.HistoryClearConfirm=Puhasta kogu ajalugu?
 
 Panel.Other=&Teine paneel
 Panel.Column.Name=Nimi

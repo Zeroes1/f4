@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=バージョン:
 vtui.Ok=OK(&O)
 vtui.Cancel=キャンセル
 vtui.Save=保存(&S)
+vtui.History=履歴
+vtui.HistoryClearConfirm=履歴をすべてクリアしますか？
 
 Panel.Other=反対のパネル(&O)
 Panel.Column.Name=名前

@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Version:
 vtui.Ok=&Ok
 vtui.Cancel=Abbrechen
 vtui.Save=&Speichern
+vtui.History=Verlauf
+vtui.HistoryClearConfirm=Ganzes Protokoll löschen?
 
 Panel.Other=&Anderes Panel
 Panel.Column.Name=Name

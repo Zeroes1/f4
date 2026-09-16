@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Sürüm:
 vtui.Ok=&Tamam
 vtui.Cancel=İptal
 vtui.Save=Kayde&t
+vtui.History=Geçmiş
+vtui.HistoryClearConfirm=Tüm geçmiş silinsin mi?
 
 Panel.Other=&Diğer panel
 Panel.Column.Name=İsim

@@ -63,6 +63,8 @@ ID3Editor.FieldVersion=版本:
 
 vtui.Ok=确定(&O)
 vtui.Cancel=取消
+vtui.History=历史记录
+vtui.HistoryClearConfirm=是否清除所有历史记录？
 
 Panel.Other=另一个面板(&O)
 Panel.Column.Name=名称

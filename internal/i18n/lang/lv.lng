@@ -64,6 +64,8 @@ ID3Editor.FieldVersion=Versija:
 vtui.Ok=&Labi
 vtui.Cancel=Atcelt
 vtui.Save=&Saglabāt
+vtui.History=Vēsture
+vtui.HistoryClearConfirm=Notīrīt visu vēsturi?
 
 Panel.Other=&Cits panelis
 Panel.Column.Name=Nosaukums
