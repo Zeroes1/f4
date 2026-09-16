@@ -294,7 +294,7 @@ func TestISODataTagsAndSampleDescriptions(t *testing.T) {
 	copy(data[12:], "name")
 	p := isoCoverageProbe(t, data, ModeFast)
 	parseISODataTag(p, isoBox{data: 0, payload: 16}, "trkn")
-	if len(p.report.Tags) != 1 || p.report.Tags[0].Name != "Track" || p.report.Tags[0].Value != "7" {
+	if len(p.report.Tags) != 1 || p.report.Tags[0].Name != "trkn" || p.report.Tags[0].Value != "7" {
 		t.Fatalf("track tag = %#v", p.report.Tags)
 	}
 
