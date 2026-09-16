@@ -185,7 +185,7 @@ func TestAIWriteContextFile_WritesThroughSessionVFS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open attached context: %v", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	got := make([]byte, len(want))
 	if n, err := r.ReadAt(context.Background(), got, 0); err != nil || n != len(want) || string(got) != string(want) {
 		t.Fatalf("attached context = %q, n=%d, err=%v; want %q", got, n, err, want)
