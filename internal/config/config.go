@@ -447,6 +447,8 @@ type F4Config struct {
 	EditorColorerBackground  bool
 	EditorColorerSyntax      bool
 	EditorColorerCatalog     string
+	EditorColorerUserHrc     string // user schemes, FarColorer's UserHrcPath
+	EditorColorerUserHrd     string // user colour styles, FarColorer's UserHrdPath
 	EditorCrossMode          int
 	EditorDefaultCodePage    int
 	// EditorMemoryMap lets the editor map a local file instead of reading it
@@ -622,6 +624,8 @@ var App = F4Config{
 	EditorColorerBackground:  true,
 	EditorColorerSyntax:      true,
 	EditorColorerCatalog:     "",
+	EditorColorerUserHrc:     "",
+	EditorColorerUserHrd:     "",
 	EditorCrossMode:          ColorerCrossBoth,
 	EditorDefaultCodePage:    65001,
 	EditorMemoryMap:          true,
@@ -907,6 +911,8 @@ func LoadConfig() {
 	App.EditorColorerBackground = merged.GetString("Editor", "ColorerBackground", "1") == "1"
 	App.EditorColorerSyntax = merged.GetString("Editor", "ColorerSyntax", "1") == "1"
 	App.EditorColorerCatalog = merged.GetString("Editor", "ColorerCatalog", "")
+	App.EditorColorerUserHrc = merged.GetString("Editor", "ColorerUserHrc", "")
+	App.EditorColorerUserHrd = merged.GetString("Editor", "ColorerUserHrd", "")
 	App.EditorCrossMode = ColorerCrossBoth
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "CrossMode", "3"), "%d", &App.EditorCrossMode)
 	if App.EditorCrossMode < ColorerCrossOff || App.EditorCrossMode > ColorerCrossBoth {
@@ -1196,6 +1202,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ColorerBackground = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerBackground])
 	fmt.Fprintf(&sb, "ColorerSyntax = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorColorerSyntax])
 	fmt.Fprintf(&sb, "ColorerCatalog = %s\n", cfg.EditorColorerCatalog)
+	fmt.Fprintf(&sb, "ColorerUserHrc = %s\n", cfg.EditorColorerUserHrc)
+	fmt.Fprintf(&sb, "ColorerUserHrd = %s\n", cfg.EditorColorerUserHrd)
 	fmt.Fprintf(&sb, "CrossMode = %d\n", cfg.EditorCrossMode)
 	fmt.Fprintf(&sb, "DefaultCodePage = %d\n", cfg.EditorDefaultCodePage)
 

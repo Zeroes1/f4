@@ -870,6 +870,26 @@
     "unavailable": ""
   },
   {
+    "category": "syntax",
+    "description": "An .hrc file, or a folder whose .hrc files are all loaded except *.ent.hrc, added to the catalog's schemes. Links inside must stay within that folder, and the file names Colorer opens must be ASCII. Empty loads none.",
+    "group": "Colorer",
+    "id": "EditorColorerUserHrc",
+    "kind": "path",
+    "label": "User Colorer schemes",
+    "timing": "Colorer reload",
+    "unavailable": ""
+  },
+  {
+    "category": "syntax",
+    "description": "An XML file in the catalog's hrd-sets format, or a folder of .hrd files whose root hrd element names its class, name and description. Links in an hrd-sets file resolve against catalog.xml and must stay inside the configuration directory; file names must be ASCII. Empty loads none.",
+    "group": "Colorer",
+    "id": "EditorColorerUserHrd",
+    "kind": "path",
+    "label": "User Colorer color styles",
+    "timing": "Colorer reload",
+    "unavailable": ""
+  },
+  {
     "category": "keyboard",
     "description": "Use Mac-style editing chords in editors and dialog fields. Auto enables them on macOS; panels retain Far navigation. Command translation requires backend support.",
     "group": "Editing chords",

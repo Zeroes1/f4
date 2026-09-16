@@ -9,10 +9,7 @@ import (
 	"github.com/unxed/f4/internal/terminal"
 
 	"context"
-	"encoding/xml"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -338,35 +335,11 @@ func (p coreSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 	return d, nil
 }
 
-// Enumerating names must not instantiate the highlighting WASM engine just to
-// open Settings. HRD metadata is declared in the Colorer catalog itself.
+// settingsColorerSchemes lists the colour styles of the applied Colorer
+// configuration, the user's own included. Colorer reads the catalog itself:
+// catalog.xml pulls its style lists in through external XML entities, which
+// encoding/xml does not follow, so reading it here listed nothing on a real
+// installation. It starts Colorer on a cache miss; call it off the UI thread.
 func settingsColorerSchemes() []editor.ColorerScheme {
-	return settingsColorerSchemesAt(editor.ColorerConfigsDir())
-}
-func settingsColorerSchemesAt(directory string) []editor.ColorerScheme {
-	file, err := os.Open(filepath.Join(directory, "base", "catalog.xml"))
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = file.Close() }() // Read-only metadata; the read result determines success.
-	decoder := xml.NewDecoder(io.LimitReader(file, 4<<20))
-	var schemes []editor.ColorerScheme
-	for {
-		token, err := decoder.Token()
-		if err != nil {
-			break
-		}
-		start, ok := token.(xml.StartElement)
-		if !ok || start.Name.Local != "hrd" {
-			continue
-		}
-		attrs := map[string]string{}
-		for _, a := range start.Attr {
-			attrs[a.Name.Local] = a.Value
-		}
-		if attrs["class"] == "rgb" && attrs["name"] != "" {
-			schemes = append(schemes, editor.ColorerScheme{Name: attrs["name"], Description: attrs["description"]})
-		}
-	}
-	return schemes
+	return editor.ListColorerSchemesFor(editor.CurrentColorerSource())
 }

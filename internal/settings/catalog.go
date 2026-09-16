@@ -123,6 +123,8 @@ EditorColorerScheme|syntax|Colorer|Colorer scheme|Select the HRD scheme used for
 EditorColorerSyntax|syntax|Colorer|Colorer syntax colors|Enable Colorer syntax coloring while retaining its other style facilities.||Colorer reload
 EditorColorerBackground|syntax|Colorer|Use Colorer base colors|Use foreground and background fields supplied by the Colorer scheme instead of only the general editor palette.||Colorer reload
 EditorColorerCatalog|syntax|Colorer|Colorer configuration directory|Directory containing Colorer configuration data. Empty uses the profile's colorer/configs directory; this is not a catalog XML filename.||Colorer reload
+EditorColorerUserHrc|syntax|Colorer|User Colorer schemes|An .hrc file, or a folder whose .hrc files are all loaded except *.ent.hrc, added to the catalog's schemes. Links inside must stay within that folder, and the file names Colorer opens must be ASCII. Empty loads none.||Colorer reload
+EditorColorerUserHrd|syntax|Colorer|User Colorer color styles|An XML file in the catalog's hrd-sets format, or a folder of .hrd files whose root hrd element names its class, name and description. Links in an hrd-sets file resolve against catalog.xml and must stay inside the configuration directory; file names must be ASCII. Empty loads none.||Colorer reload
 MacKeyboard|keyboard|Editing chords|Mac keyboard mode|Use Mac-style editing chords in editors and dialog fields. Auto enables them on macOS; panels retain Far navigation. Command translation requires backend support.|auto:Automatic;on:On;off:Off|live
 MenuLoopScroll|keyboard|Menu navigation|Loop list scrolling|When on, holding Up or Down in a menu or drop-down list runs past the last item back to the first. When off, a held arrow key stops at the first or last item; a separate press still jumps to the other end, as in Far Manager 3.||live
 SearchExactOnHit|keyboard|Editing chords|Prefer exact shortcut search matches|In the Hotkey Configurator table, narrow the search to exact matches when available. This does not affect the Settings Center sidebar search.||next open
@@ -171,7 +173,7 @@ func coreSettingsFields() []f4settings.Field {
 		if f.ID == "ProxyPort" {
 			f.InputWidth = 6
 		}
-		if f.ID == "EditorColorerCatalog" {
+		if f.ID == "EditorColorerCatalog" || f.ID == "EditorColorerUserHrc" || f.ID == "EditorColorerUserHrd" {
 			f.Kind = f4settings.Path
 		}
 		if f.Timing == "unavailable" {

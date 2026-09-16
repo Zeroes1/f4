@@ -1543,11 +1543,11 @@ func showSettingsCenter(sessions []*settingsSession, category, collection, recor
 // Catalogs can live on an unavailable network share. Enumerate their labels
 // outside the UI thread and ignore results after the editing session closes.
 func (c *settingsCenter) refreshSchemeChoices() {
-	directory := editor.ColorerConfigsDir()
+	source := editor.CurrentColorerSource()
 	vtui.RunAsync(func(task *vtui.TaskContext) {
-		schemes := settingsColorerSchemesAt(directory)
+		schemes := editor.ListColorerSchemesFor(source)
 		task.RunOnUI(func() {
-			if c.closed || directory != editor.ColorerConfigsDir() {
+			if c.closed || source != editor.CurrentColorerSource() {
 				return
 			}
 			for _, session := range c.sessions {

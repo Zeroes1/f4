@@ -228,6 +228,32 @@ unreachable`:
     COLORER: [error] colorer/xml/libxml2/LibXmlReader.cpp:299 xml_error_func(): /base/hrc/rare/json.hrc:81: parser error : Couldn't find end of Start Tag regexp line 81
     COLORER: SelectType("x.json", len=1) -> selected=false, err=colorer: colorer_select_type failed: C++ exception thrown at colorer/parsers/HrcLibraryImpl.cpp:230 in parseHRC() (wasm error: unreachable)
 
+### 3.8 User schemes and colour styles
+
+Issue #277. `EditorColorerUserHrc` and `EditorColorerUserHrd` (settings.ini
+`[Editor] ColorerUserHrc`, `ColorerUserHrd`) are FarColorer's UserHrcPath and
+UserHrdPath: a file or a folder each, handed to Colorer after the catalog
+through `colorer.WithUserHRC` / `WithUserHRD`, styles first.
+
+- A session is built from a `ColorerSource` — configuration directory plus
+  both user paths — and the pool, the colour style list and the editor
+  background cache compare the whole source. A session loaded without a user
+  path is never handed out after the path is set.
+- The module sees each user path through a read-only mount of its folder. A
+  `<location link>` in an `<hrd-sets>` file resolves against catalog.xml, as in
+  Colorer, so it has to stay inside the configuration directory; a folder of
+  `.hrd` files (each root `<hrd>` naming class, name and description) has no
+  such limit.
+- File names Colorer opens must be ASCII: its legacy strings read a name as
+  CP1251. colorer4go refuses such a path with a warning instead of letting the
+  call abort. A path that does not exist is a warning too; a file that does
+  not parse fails the session, and debug.log names the host path.
+- The Settings Center lists colour styles through Colorer
+  (`editor.ListColorerSchemesFor`), off the UI thread. It used to read
+  catalog.xml with `encoding/xml`, which stops at the external entities
+  (`&catalog-rgb;`) the installed catalog lists its styles through, so the
+  list was empty on a real installation.
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped

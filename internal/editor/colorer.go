@@ -139,9 +139,9 @@ func colorerRegionRunes(start, end, lineRunes int) (int, int, bool) {
 }
 
 var (
-	colorerPoolMu  sync.Mutex
-	colorerIdle    *colorer.Session
-	colorerIdleDir string
+	colorerPoolMu     sync.Mutex
+	colorerIdle       *colorer.Session
+	colorerIdleSource ColorerSource
 )
 
 func ensureRadiolaSchema(configsDir string) {
@@ -210,11 +210,45 @@ func logColorerDiagnostic(d colorer.Diagnostic) {
 	vtui.DebugLog("COLORER: %s", d)
 }
 
-func acquireColorerSession(configsDir string) (*colorer.Session, error) {
-	ensureRadiolaSchema(configsDir)
+// ColorerSource is everything a Colorer session is built from: the
+// configuration directory and the user's own schemes and colour styles.
+// Sessions built from equal sources are interchangeable, and that is what the
+// pool and the caches compare — a changed user path is never answered by a
+// session loaded without it.
+type ColorerSource struct {
+	ConfigsDir string
+	// UserHRC and UserHRD are FarColorer's user file of schemes and user file
+	// of color styles: a file or a folder each, empty for none.
+	UserHRC string
+	UserHRD string
+}
+
+// CurrentColorerSource is the source the applied configuration names.
+func CurrentColorerSource() ColorerSource {
+	return ColorerSource{
+		ConfigsDir: ColorerConfigsDir(),
+		UserHRC:    strings.TrimSpace(config.App.EditorColorerUserHrc),
+		UserHRD:    strings.TrimSpace(config.App.EditorColorerUserHrd),
+	}
+}
+
+// sessionOptions are the options a session from this source is created with.
+func (src ColorerSource) sessionOptions() []colorer.Option {
+	opts := colorerSessionOptions()
+	if src.UserHRD != "" {
+		opts = append(opts, colorer.WithUserHRD(src.UserHRD))
+	}
+	if src.UserHRC != "" {
+		opts = append(opts, colorer.WithUserHRC(src.UserHRC))
+	}
+	return opts
+}
+
+func acquireColorerSession(src ColorerSource) (*colorer.Session, error) {
+	ensureRadiolaSchema(src.ConfigsDir)
 
 	colorerPoolMu.Lock()
-	if colorerIdle != nil && colorerIdleDir == configsDir {
+	if colorerIdle != nil && colorerIdleSource == src {
 		session := colorerIdle
 		colorerIdle = nil
 		colorerPoolMu.Unlock()
@@ -225,21 +259,21 @@ func acquireColorerSession(configsDir string) (*colorer.Session, error) {
 	colorerPoolMu.Unlock()
 
 	catalogPath := "/base/catalog.xml"
-	vtui.DebugLog("COLORER: Initializing session with catalog %q, configs %q", catalogPath, configsDir)
-	return colorer.NewSession(context.Background(), catalogPath, configsDir, colorerSessionOptions()...)
+	vtui.DebugLog("COLORER: Initializing session with catalog %q, configs %q, user schemes %q, user styles %q", catalogPath, src.ConfigsDir, src.UserHRC, src.UserHRD)
+	return colorer.NewSession(context.Background(), catalogPath, src.ConfigsDir, src.sessionOptions()...)
 }
 
 // A pooled Session owns the context it was created with. Colorer parsing gets
 // a private context instead, so Esc can interrupt an in-flight ParseLine.
-func acquireCancelableColorerSession(ctx context.Context, configsDir string) (*colorer.Session, error) {
-	ensureRadiolaSchema(configsDir)
+func acquireCancelableColorerSession(ctx context.Context, src ColorerSource) (*colorer.Session, error) {
+	ensureRadiolaSchema(src.ConfigsDir)
 
 	catalogPath := "/base/catalog.xml"
-	vtui.DebugLog("COLORER: Initializing cancellable session with catalog %q, configs %q", catalogPath, configsDir)
-	return colorer.NewSession(ctx, catalogPath, configsDir, colorerSessionOptions()...)
+	vtui.DebugLog("COLORER: Initializing cancellable session with catalog %q, configs %q, user schemes %q, user styles %q", catalogPath, src.ConfigsDir, src.UserHRC, src.UserHRD)
+	return colorer.NewSession(ctx, catalogPath, src.ConfigsDir, src.sessionOptions()...)
 }
 
-func releaseColorerSession(session *colorer.Session, configsDir string) {
+func releaseColorerSession(session *colorer.Session, src ColorerSource) {
 	if session == nil {
 		return
 	}
@@ -254,7 +288,7 @@ func releaseColorerSession(session *colorer.Session, configsDir string) {
 	colorerPoolMu.Lock()
 	if colorerIdle == nil {
 		colorerIdle = session
-		colorerIdleDir = configsDir
+		colorerIdleSource = src
 		colorerPoolMu.Unlock()
 		return
 	}
@@ -266,7 +300,7 @@ func ResetColorerSessions() {
 	colorerPoolMu.Lock()
 	session := colorerIdle
 	colorerIdle = nil
-	colorerIdleDir = ""
+	colorerIdleSource = ColorerSource{}
 	colorerPoolMu.Unlock()
 	if session != nil {
 		session.Close()
@@ -290,22 +324,30 @@ type ColorerScheme struct {
 }
 
 func ListColorerSchemes() []ColorerScheme {
+	return ListColorerSchemesFor(CurrentColorerSource())
+}
+
+// ListColorerSchemesFor lists the RGB colour styles a session from src offers,
+// the user's own included. Colorer itself reads the catalog: it pulls its
+// style lists in through XML entities, which only a full XML reader follows.
+// It instantiates Colorer on a cache miss, so a caller on the UI thread should
+// not be the first to ask for a source.
+func ListColorerSchemesFor(src ColorerSource) []ColorerScheme {
 	// Fast path: return cached list if already loaded.
 	schemesCacheMu.RLock()
-	if cachedSchemes != nil {
+	if cachedSchemes != nil && cachedSchemesSource == src {
 		defer schemesCacheMu.RUnlock()
 		return cachedSchemes
 	}
 	schemesCacheMu.RUnlock()
 
 	// Slow path: load schemes from disk.
-	configsDir := ColorerConfigsDir()
-	session, err := acquireColorerSession(configsDir)
+	session, err := acquireColorerSession(src)
 	if err != nil {
 		vtui.DebugLog("COLORER: Cannot list colour styles, session failed: %v", err)
 		return nil
 	}
-	defer releaseColorerSession(session, configsDir)
+	defer releaseColorerSession(session, src)
 
 	instances, err := session.EnumHRDInstances("rgb")
 	if err != nil {
@@ -322,12 +364,11 @@ func ListColorerSchemes() []ColorerScheme {
 
 	// Store in cache.
 	schemesCacheMu.Lock()
-	if cachedSchemes == nil {
-		cachedSchemes = schemes
-	}
+	cachedSchemes = schemes
+	cachedSchemesSource = src
 	schemesCacheMu.Unlock()
 
-	return cachedSchemes
+	return schemes
 }
 
 // ResetColorerSchemesCache clears the cached scheme list.
@@ -350,10 +391,11 @@ var (
 	schemeName       string
 	schemeGeneration uint64
 
-	// cachedSchemes holds the list of Colorer schemes loaded from disk.
-	// It is populated lazily on the first call to ListColorerSchemes().
-	cachedSchemes  []ColorerScheme
-	schemesCacheMu sync.RWMutex
+	// cachedSchemes holds the list of Colorer schemes loaded from disk for
+	// cachedSchemesSource. It is populated lazily by ListColorerSchemesFor.
+	cachedSchemes       []ColorerScheme
+	cachedSchemesSource ColorerSource
+	schemesCacheMu      sync.RWMutex
 )
 
 func SetColorerScheme(name string) {
@@ -390,7 +432,7 @@ const colorerBackgroundRegion = "def:Text"
 var colorerBackgroundCache struct {
 	sync.Mutex
 	generation uint64
-	configsDir string
+	source     ColorerSource
 	ready      bool
 	loading    bool
 	define     *colorer.RegionDefine
@@ -398,20 +440,20 @@ var colorerBackgroundCache struct {
 
 // We need a helper to get region definition globally from the active scheme.
 func ColorerGetRegionDefine(region string) *colorer.RegionDefine {
-	configsDir := ColorerConfigsDir()
+	src := CurrentColorerSource()
 	schemeMu.Lock()
 	activeScheme := schemeName
 	schemeMu.Unlock()
-	return colorerGetRegionDefineFor(region, configsDir, activeScheme)
+	return colorerGetRegionDefineFor(region, src, activeScheme)
 }
 
-func colorerGetRegionDefineFor(region, configsDir, activeScheme string) *colorer.RegionDefine {
-	session, err := acquireColorerSession(configsDir)
+func colorerGetRegionDefineFor(region string, src ColorerSource, activeScheme string) *colorer.RegionDefine {
+	session, err := acquireColorerSession(src)
 	if err != nil {
 		vtui.DebugLog("COLORER: Cannot read region %q, session failed: %v", region, err)
 		return nil
 	}
-	defer releaseColorerSession(session, configsDir)
+	defer releaseColorerSession(session, src)
 
 	if activeScheme == "" {
 		activeScheme = "default"
@@ -439,9 +481,9 @@ func ColorerEditorBaseAttr(base uint64) uint64 {
 	}
 
 	gen := ColorerSchemeGeneration()
-	configsDir := ColorerConfigsDir()
+	src := CurrentColorerSource()
 	colorerBackgroundCache.Lock()
-	if colorerBackgroundCache.ready && colorerBackgroundCache.generation == gen && colorerBackgroundCache.configsDir == configsDir {
+	if colorerBackgroundCache.ready && colorerBackgroundCache.generation == gen && colorerBackgroundCache.source == src {
 		rd := colorerBackgroundCache.define
 		colorerBackgroundCache.Unlock()
 		return applyColorerBackground(base, rd)
@@ -450,16 +492,16 @@ func ColorerEditorBaseAttr(base uint64) uint64 {
 		colorerBackgroundCache.loading = true
 		frames := vtui.FrameManager
 		requestedGeneration := gen
-		requestedConfigsDir := configsDir
+		requestedSource := src
 		schemeMu.Lock()
 		requestedScheme := schemeName
 		schemeMu.Unlock()
 		go func() {
-			rd := colorerGetRegionDefineFor(colorerBackgroundRegion, requestedConfigsDir, requestedScheme)
+			rd := colorerGetRegionDefineFor(colorerBackgroundRegion, requestedSource, requestedScheme)
 			colorerBackgroundCache.Lock()
 			colorerBackgroundCache.define = rd
 			colorerBackgroundCache.generation = requestedGeneration
-			colorerBackgroundCache.configsDir = requestedConfigsDir
+			colorerBackgroundCache.source = requestedSource
 			colorerBackgroundCache.ready = true
 			colorerBackgroundCache.loading = false
 			colorerBackgroundCache.Unlock()
@@ -496,7 +538,7 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 		filename:      filename,
 		firstLine:     firstLine,
 		starting:      true,
-		configsDir:    ColorerConfigsDir(),
+		colorerSrc:    CurrentColorerSource(),
 		owner:         ev,
 		sessionCtx:    sessionCtx,
 		sessionCancel: sessionCancel,
@@ -512,7 +554,7 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 	ch.postTask = frames.PostTask
 	ch.redraw = frames.Redraw
 	go func() {
-		session, err := acquireCancelableColorerSession(sessionCtx, ch.configsDir)
+		session, err := acquireCancelableColorerSession(sessionCtx, ch.colorerSrc)
 		if err != nil {
 			vtui.DebugLog("COLORER: Failed to init session: %v", err)
 			if !ch.closed {
@@ -606,7 +648,7 @@ type ColorerHighlighter struct {
 	parsedIdx  int
 	filename   string
 	firstLine  string
-	configsDir string
+	colorerSrc ColorerSource
 	closed     bool
 	starting   bool
 	owner      *EditorView
@@ -827,7 +869,7 @@ func (ch *ColorerHighlighter) Close() error {
 	// Worker-owned sessions are closed by runWorker. A highlighter created by
 	// tests or a caller without a worker still uses the old pooled lifecycle.
 	if ch.session != nil && ch.workerDone == nil {
-		releaseColorerSession(ch.session, ch.configsDir)
+		releaseColorerSession(ch.session, ch.colorerSrc)
 	}
 	ch.session = nil
 	return nil

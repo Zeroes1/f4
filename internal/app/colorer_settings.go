@@ -86,7 +86,7 @@ func EditorCrossAttrs() (horz, vert bool, horzAttr, vertAttr uint64) {
 }
 
 func actionColorerSettings(pf *panel.PanelsFrame) {
-	width, height := 74, 19
+	width, height := 74, 23
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ColorerSettings.Title"))
 	dlg.ShowClose = true
 
@@ -146,6 +146,14 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	editCatalog.ClearSelection()
 	lblCatalog := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.Catalog"), editCatalog)
 
+	// FarColorer's user file of schemes and user file of color styles.
+	editUserHrc := vtui.NewEdit(0, 0, width-6, config.App.EditorColorerUserHrc)
+	editUserHrc.ClearSelection()
+	lblUserHrc := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.UserHrc"), editUserHrc)
+	editUserHrd := vtui.NewEdit(0, 0, width-6, config.App.EditorColorerUserHrd)
+	editUserHrd.ClearSelection()
+	lblUserHrd := vtui.NewLabel(0, 0, i18n.Msg("ColorerSettings.UserHrd"), editUserHrd)
+
 	btnReload := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.Reload"))
 	btnDownload := vtui.NewButton(0, 0, i18n.Msg("ColorerSettings.Download"))
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
@@ -162,6 +170,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 	dlg.AddItem(chkBackground)
 	dlg.AddItem(lblCatalog)
 	dlg.AddItem(editCatalog)
+	dlg.AddItem(lblUserHrc)
+	dlg.AddItem(editUserHrc)
+	dlg.AddItem(lblUserHrd)
+	dlg.AddItem(editUserHrd)
 	dlg.AddItem(btnReload)
 	dlg.AddItem(btnDownload)
 	dlg.AddItem(btnOk)
@@ -189,6 +201,10 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 
 	vbox.Add(lblCatalog, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editCatalog, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblUserHrc, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(editUserHrc, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblUserHrd, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(editUserHrd, vtui.Margins{}, vtui.AlignFill)
 
 	rowTools := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	rowTools.HorizontalAlign = vtui.AlignCenter
@@ -221,6 +237,8 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 		config.App.EditorColorerSyntax = chkSyntax.State == 1
 		config.App.EditorColorerBackground = chkBackground.State == 1
 		config.App.EditorColorerCatalog = strings.TrimSpace(editCatalog.GetText())
+		config.App.EditorColorerUserHrc = strings.TrimSpace(editUserHrc.GetText())
+		config.App.EditorColorerUserHrd = strings.TrimSpace(editUserHrd.GetText())
 		// The catalog may now point somewhere else, so the styles are dropped
 		// instead of being kept under the same name.
 		editor.ResetColorerScheme()

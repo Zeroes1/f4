@@ -118,7 +118,7 @@ func TestColorer_FailedCatalogIsExplainedInTheDebugLog(t *testing.T) {
 	logs := captureDebugLog(t)
 	configs := t.TempDir() // no base/catalog.xml at all
 
-	session, err := acquireColorerSession(configs)
+	session, err := acquireColorerSession(ColorerSource{ConfigsDir: configs})
 	if err == nil {
 		session.Close()
 		t.Fatal("a session started without a catalog")
@@ -140,7 +140,7 @@ func TestColorer_DiagnosticsCanBeSwitchedOff(t *testing.T) {
 	t.Setenv("COLORER_VERBOSE", "off")
 	logs := captureDebugLog(t)
 
-	if session, err := acquireColorerSession(t.TempDir()); err == nil {
+	if session, err := acquireColorerSession(ColorerSource{ConfigsDir: t.TempDir()}); err == nil {
 		session.Close()
 		t.Fatal("a session started without a catalog")
 	}
@@ -156,23 +156,23 @@ func TestColorer_FailedSessionIsNotPooled(t *testing.T) {
 	t.Cleanup(ResetColorerSessions)
 	configs := minimalColorerConfigs(t)
 
-	healthy, err := acquireColorerSession(configs)
+	healthy, err := acquireColorerSession(ColorerSource{ConfigsDir: configs})
 	if err != nil {
 		t.Fatalf("acquiring a session on the minimal catalog: %v", err)
 	}
-	releaseColorerSession(healthy, configs)
+	releaseColorerSession(healthy, ColorerSource{ConfigsDir: configs})
 	if pooledColorerSession() != healthy {
 		t.Fatal("a healthy session was not pooled; the test cannot tell pooling apart from failure")
 	}
 
-	failing, err := acquireColorerSession(configs)
+	failing, err := acquireColorerSession(ColorerSource{ConfigsDir: configs})
 	if err != nil {
 		t.Fatalf("reacquiring the pooled session: %v", err)
 	}
 	if err := failing.SetHRD("rgb", "no-such-style"); err == nil {
 		t.Fatal("SetHRD accepted a colour style the catalog does not have")
 	}
-	releaseColorerSession(failing, configs)
+	releaseColorerSession(failing, ColorerSource{ConfigsDir: configs})
 
 	if pooledColorerSession() != nil {
 		t.Error("a session whose call failed went back into the pool")
@@ -189,7 +189,7 @@ func TestColorer_RegionDefineReportsAFailedColourStyle(t *testing.T) {
 	t.Cleanup(ResetColorerSessions)
 	configs := minimalColorerConfigs(t)
 
-	if rd := colorerGetRegionDefineFor("def:Text", configs, "no-such-style"); rd != nil {
+	if rd := colorerGetRegionDefineFor("def:Text", ColorerSource{ConfigsDir: configs}, "no-such-style"); rd != nil {
 		t.Errorf("got a region define %+v from a style that does not exist", rd)
 	}
 	if !logs.has(`COLORER: Cannot read region "def:Text", colour style "no-such-style" failed`, "exception thrown at colorer/") {
