@@ -909,10 +909,12 @@ ColorerSettings.Pairs=Парные ско&бки
 ColorerSettings.OldOutline=Стары&й outline
 ColorerSettings.TypeSettings=Настройки &типов файлов
 ColorerSettings.UserHrcSettings=Польз. настройки &HRC (файл):
+
 ColorerTypeSettings.Param=&Параметр:
 ColorerTypeSettings.Title=Настройки типов файлов
 ColorerTypeSettings.Type=&Тип файла:
 ColorerTypeSettings.Value=&Значение:
+
 Colorer.Menu=&Colorer
 Colorer.NothingFound=Ничего не найдено
 Colorer.Outliner=Структура файла
