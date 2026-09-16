@@ -1467,13 +1467,15 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
-		Name:        "Panel.ToggleLeftPanel",
-		Area:        "Shell",
-		Label:       "Toggle Left Panel",
-		Description: "Show or hide the left panel",
-		DescKey:     "Action.Panel.ToggleLeftPanel.Desc",
-		DefaultKeys: []string{"CtrlF1"},
+		Name:         "Panel.ToggleLeftPanel",
+		Area:         "Shell",
+		Label:        "Toggle Left Panel",
+		Description:  "Show or hide the left panel",
+		DescKey:      "Action.Panel.ToggleLeftPanel.Desc",
+		DefaultKeys:  []string{"CtrlF1:NoAltScreenApp"},
+		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
+			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
 			pf.ExitWide()
 			pf.ShowLeftPanel = !pf.ShowLeftPanel
 			if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
@@ -1481,6 +1483,8 @@ func init() {
 			}
 			if !pf.ShowLeftPanel && !pf.ShowRightPanel {
 				pf.ShowPanels = false
+			} else if allPanelsHidden {
+				pf.ShowPanels = true
 			}
 			if pf.LastW > 0 && pf.LastH > 0 {
 				pf.ResizeConsole(pf.LastW, pf.LastH)
@@ -1492,13 +1496,15 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
-		Name:        "Panel.ToggleRightPanel",
-		Area:        "Shell",
-		Label:       "Toggle Right Panel",
-		Description: "Show or hide the right panel",
-		DescKey:     "Action.Panel.ToggleRightPanel.Desc",
-		DefaultKeys: []string{"CtrlF2"},
+		Name:         "Panel.ToggleRightPanel",
+		Area:         "Shell",
+		Label:        "Toggle Right Panel",
+		Description:  "Show or hide the right panel",
+		DescKey:      "Action.Panel.ToggleRightPanel.Desc",
+		DefaultKeys:  []string{"CtrlF2:NoAltScreenApp"},
+		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
+			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
 			pf.ExitWide()
 			pf.ShowRightPanel = !pf.ShowRightPanel
 			if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
@@ -1506,6 +1512,8 @@ func init() {
 			}
 			if !pf.ShowLeftPanel && !pf.ShowRightPanel {
 				pf.ShowPanels = false
+			} else if allPanelsHidden {
+				pf.ShowPanels = true
 			}
 			if pf.LastW > 0 && pf.LastH > 0 {
 				pf.ResizeConsole(pf.LastW, pf.LastH)
