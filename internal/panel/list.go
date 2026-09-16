@@ -2848,12 +2848,12 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	}
 
 	if fp.FastFindMode {
-		// Ask the screen for the underline cursor instead of writing
+		// Ask the screen for the text-entry caret instead of writing
 		// DECSCUSR to stdout behind the renderer's back: the renderer
 		// knows which terminals take the sequence and which must be
 		// driven through the console API (f4 #219, classic conhost draws
 		// DECSCUSR's underline as a one-pixel hairline).
-		scr.SetCursorShape(vtui.CursorShapeUnderline)
+		scr.SetCursorShape(vtui.InsertCursorShape())
 		boxW := 24
 		boxH := 3
 

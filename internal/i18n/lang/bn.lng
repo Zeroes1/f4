@@ -857,6 +857,12 @@ SettingsCenter.ConsoleTitleTemplate.Description=হোস্ট শিরোন�
 SettingsCenter.ConsoleTitleTemplate.Label=উইন্ডো শিরোনাম টেমপ্লেট
 SettingsCenter.CtrlTabShowsMenu.Description=সরাসরি স্যুইচ করার পরিবর্তে Ctrl+Tab দিয়ে ওয়ার্কস্পেস চয়নকারী খুলুন।
 SettingsCenter.CtrlTabShowsMenu.Label=Ctrl+Tab চয়নকারী খোলে
+SettingsCenter.CursorBlink.Description=লেখার কার্সারকে জ্বলা-নেভা করায়। টার্মিনালের নিজস্ব কার্সার শৈলী সংরক্ষিত থাকলে টার্মিনালে, এবং Linux কনসোল ও ক্লাসিক Windows কনসোলে প্রয়োগ হয় না।
+SettingsCenter.CursorBlink.Label=জ্বলা-নেভা কার্সার
+SettingsCenter.CursorInsertShape.Description=সন্নিবেশ মোডে টাইপ করার সময় কার্সারের আকার: ইনপুট ক্ষেত্র, কমান্ড লাইন ও সম্পাদক। টার্মিনালের নিজস্ব কার্সার শৈলী সংরক্ষিত থাকলে টার্মিনালে প্রয়োগ হয় না। Linux কনসোল ও ক্লাসিক Windows কনসোল দণ্ডের বদলে আন্ডারলাইন দেখায়।
+SettingsCenter.CursorInsertShape.Label=সন্নিবেশ মোডের কার্সার
+SettingsCenter.CursorOvertypeShape.Description=ওভারটাইপ মোডে টাইপ করার সময় কার্সারের আকার, যা Insert কী দিয়ে চালু বা বন্ধ হয়। টার্মিনালের নিজস্ব কার্সার শৈলী সংরক্ষিত থাকলে টার্মিনালে প্রয়োগ হয় না। Linux কনসোল ও ক্লাসিক Windows কনসোল দণ্ডের বদলে আন্ডারলাইন দেখায়।
+SettingsCenter.CursorOvertypeShape.Label=ওভারটাইপ মোডের কার্সার
 SettingsCenter.DefaultFileOpMode.Description=সারি, পটভূমি বা ফোরগ্রাউন্ড মোডে অপারেশন শুরু করুন। স্বতন্ত্র অপারেশন ডায়ালগ এটিকে ওভাররাইড করতে পারে।
 SettingsCenter.DefaultFileOpMode.Label=ডিফল্ট অপারেশন মোড
 SettingsCenter.DeleteCancelFocused.Description=মোছা নিশ্চিতকরণে বাতিলের উপর প্রাথমিক কীবোর্ড ফোকাস রাখুন।
@@ -1203,6 +1209,7 @@ SettingsCenter.Text.0245e7ee3d254734a3c98f91855e5e8e9ea229a3587ea7fcbd77a53d1387
 SettingsCenter.Text.024dc204d7ba77a8ff9ba36a886c96335a5b4a0d2f9af2130d04bc5b39a1a764=এলাকা
 SettingsCenter.Text.02a55191102a9bdf2705fe88402d4a592095c224164ab5c9df012472c6bc94be=আসল এবং লক্ষ্য
 SettingsCenter.Text.02c37ba9c438a7acaca46aa768d60463182f9c1d3f5b309c4897c63f95447391=প্যানেল স্ক্রলবার
+SettingsCenter.Text.02f843261112c2d831b19d0410d4c154234c4d7124bc3861b6348ffc4b7f770e=আন্ডারলাইন
 SettingsCenter.Text.02fd3852e743881a67483887fb2899b60cdd6a1b6effe953a18db64c5a6fcc7f=কমান্ড ইতিহাস টাইমস্ট্যাম্প
 SettingsCenter.Text.043474a948de4d17d210c7d716b39f377f6abcb51cf040ad4b74d9da741d4b3e=বিল্ট-ইন ডিফল্ট
 SettingsCenter.Text.04ffae3bf739d93a9b289d93219e4fb8081201b2bed56f4db061c7b9f02a322c=শুধুমাত্র বেসনামের পরিবর্তে সম্পাদক এবং দর্শক শিরোনাম বারে সম্পূর্ণ ফাইল পরিচয় দেখান।
@@ -1269,6 +1276,7 @@ SettingsCenter.Text.1dee8f5c26ec912c61984cf1ec69fce0b5c60885d84a442c6a2cbe5aba24
 SettingsCenter.Text.1e8efd5b5886fcc5718dcebbd221eb4527fe3c55f92edae5e2c12729c662b9b2=নামের কলামে আলাদাভাবে চূড়ান্ত এক্সটেনশনটি সারিবদ্ধ করুন। ফোল্ডার, এক্সটেনশনহীন নাম এবং অগ্রণী বিন্দু একা বাদ দেয়।
 SettingsCenter.Text.1e9678fc0fc36958226ef3190d530bfafa1069245dff02864f761d18be9ada6c=প্লাগইন মেনুতে মিডিয়াইনফো কমান্ডটি দৃশ্যমান করুন; অন্যান্য প্রবেশ পথ উপলব্ধ থাকে।
 SettingsCenter.Text.20f9b9729165b14a33669f19e5c22531bb5f7d15265f3c464a53ddc589262f44=কমান্ড চালান
+SettingsCenter.Text.211d0bb8cf4f5b5202c2a9b7996e483898644aa24714b1e10edd80a54ba4b560=ব্লক
 SettingsCenter.Text.21c2b7ab3f756885d16bafa9d9d74a5ad2b4dda0c89cb597ca2d7c2086f04330=ডিফল্ট ভিউয়ার এনকোডিং
 SettingsCenter.Text.221837cf5b94934ba0e948bf7608a6a773b784999c64b606ccdc8be217dc32fe=অক্ষর যা শিরোনাম/কেস রূপান্তরের জন্য ফাইলের নাম শব্দকে বিভক্ত করে। সর্বোচ্চ ১৮টি অক্ষর।
 SettingsCenter.Text.22296b826b25e56ae3ec7eff0cc954104e644f154dfabcc559028bf31803cff0=ক্যাটালগ সংস্করণ
@@ -1299,6 +1307,7 @@ SettingsCenter.Text.2a16829fb6662d5a499029b3fd628c1b73c22b06a6512d5d5711f9f8a32d
 SettingsCenter.Text.2a43d998da36c3b934885aa1eb93a549d6de0ecf793ec9b4e227834176b0528c=গ্রাফিকাল রেন্ডারার
 SettingsCenter.Text.2ad63ac99ada98d15911262c94ec1ca3b0690ce7d4cf2709db04aa940d5e2b66=বেসিক, ডাইজেস্ট, বেয়ারার টোকেন বা বেনামী প্রমাণীকরণ ব্যবহার করুন।
 SettingsCenter.Text.2b16c0b6f4f220d6f5356477bef0c1d50a82d78ea99b2fd4ea931f891750d2da=সক্রিয়-প্যানেল, প্যাসিভ-প্যানেল এবং ইতিহাসের পরামর্শগুলিতে দৃশ্যমান-সারি সীমা আলাদাভাবে প্রয়োগ করুন।
+SettingsCenter.Text.2c014f8f8986f1b274dbfa182498444da048b8caa48e5335d5cdf778352d7e6b=কার্সার
 SettingsCenter.Text.2c85e1e9943a5f616219caa05a9165bfcf85d66a6fe194dd8fe9f58beb6f7152=প্যানেল ফোল্ডার এবং ফোকাস করা ফাইল সংরক্ষণ করুন। এটি বন্ধ করলে পরবর্তীতে সংরক্ষিত ওয়ার্কস্পেস সেশন থেকে এই মানগুলি বাদ দেওয়া হয়।
 SettingsCenter.Text.2cb6541e45b3d1d38a8777114184a60480febb6c3307c982b284c8e4bc88c862=বাইটে আকার দেখান
 SettingsCenter.Text.2d3de3fb655856202e7604c3325488f6ec1e5658deec04f6f240f1b9076ef473=এডিটর হুইল আপ
@@ -1550,6 +1559,7 @@ SettingsCenter.Text.8a3c62fddcba5fe620641db088eaa11eaca2a50c33e9abb18ad985e7e481
 SettingsCenter.Text.8a86c869464f6642856250e2837d4914812d40561fdee9aac9e14e0aec69bb90=এনভায়রনমেন্ট প্রোফাইল
 SettingsCenter.Text.8b1f57586a73e2eaef0d03169f8c093b26b13c819633d8a9c0a37b4256cdaaed=বেসিক বা ডাইজেস্ট প্রমাণীকরণের জন্য  অ্যাকাউন্টের নাম।
 SettingsCenter.Text.8bb8ad21b74d5801c1699c9424c2cc254ec00e554c3e9f049420d9cc34cdfa53=f4 থেকে বের হওয়ার আগে জিজ্ঞাসা করুন।
+SettingsCenter.Text.8bc6273a7d6dd25799f404fc3f83ad67f2199d20ee8c6b082f048482e1834141=উল্লম্ব দণ্ড
 SettingsCenter.Text.8bcec963087e2e7270d45089c96203a7cb6b98654205faf4b1387a2c491d5216=মাউস চাকা
 SettingsCenter.Text.8c2f9804518069097b7c334e3995bb3b29fe9787b9f7001be5e9573179e03a66=দৃশ্যমান সাজেশন সারিগুলির সর্বাধিক সংখ্যা৷ সর্বনিম্ন 1.
 SettingsCenter.Text.8c9f1071be9c5834fdcb3af345b990d14852fb9f94de4c1d8486a539fced37a4=ড্রাইভ চয়নকারীতে নাম প্রদর্শন করুন।

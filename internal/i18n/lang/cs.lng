@@ -860,6 +860,12 @@ SettingsCenter.ConsoleTitleTemplate.Description=Naformátujte hostitelský titul
 SettingsCenter.ConsoleTitleTemplate.Label=Šablona nadpisu okna
 SettingsCenter.CtrlTabShowsMenu.Description=Otevřete výběr pracovního prostoru pomocí Ctrl+Tab místo přímého přepínání.
 SettingsCenter.CtrlTabShowsMenu.Label=Ctrl+Tab otevře výběr
+SettingsCenter.CursorBlink.Description=Textový kurzor bliká. Nepoužije se v terminálu, dokud se zachovává jeho vlastní styl kurzoru, ani v konzoli Linuxu a klasické konzoli Windows.
+SettingsCenter.CursorBlink.Label=Blikající kurzor
+SettingsCenter.CursorInsertShape.Description=Tvar kurzoru při psaní v režimu vkládání: vstupní pole, příkazový řádek a editor. V terminálu se nepoužije, dokud se zachovává jeho vlastní styl kurzoru. Konzole Linuxu a klasická konzole Windows místo čáry zobrazí podtržení.
+SettingsCenter.CursorInsertShape.Label=Kurzor v režimu vkládání
+SettingsCenter.CursorOvertypeShape.Description=Tvar kurzoru při psaní v režimu přepisování, který přepíná klávesa Insert. V terminálu se nepoužije, dokud se zachovává jeho vlastní styl kurzoru. Konzole Linuxu a klasická konzole Windows místo čáry zobrazí podtržení.
+SettingsCenter.CursorOvertypeShape.Label=Kurzor v režimu přepisování
 SettingsCenter.DefaultFileOpMode.Description=Spusťte operace v režimu fronty, pozadí nebo popředí. Dialogy jednotlivých operací jej mohou přepsat.
 SettingsCenter.DefaultFileOpMode.Label=Výchozí provozní režim
 SettingsCenter.DeleteCancelFocused.Description=Umístěte počáteční zaměření klávesnice na Storno v potvrzení odstranění.
@@ -1206,6 +1212,7 @@ SettingsCenter.Text.0245e7ee3d254734a3c98f91855e5e8e9ea229a3587ea7fcbd77a53d1387
 SettingsCenter.Text.024dc204d7ba77a8ff9ba36a886c96335a5b4a0d2f9af2130d04bc5b39a1a764=Oblast
 SettingsCenter.Text.02a55191102a9bdf2705fe88402d4a592095c224164ab5c9df012472c6bc94be=Originál a cíl
 SettingsCenter.Text.02c37ba9c438a7acaca46aa768d60463182f9c1d3f5b309c4897c63f95447391=Posuvník panelu
+SettingsCenter.Text.02f843261112c2d831b19d0410d4c154234c4d7124bc3861b6348ffc4b7f770e=Podtržení
 SettingsCenter.Text.02fd3852e743881a67483887fb2899b60cdd6a1b6effe953a18db64c5a6fcc7f=Časová razítka historie příkazů
 SettingsCenter.Text.043474a948de4d17d210c7d716b39f377f6abcb51cf040ad4b74d9da741d4b3e=Vestavěné výchozí
 SettingsCenter.Text.04ffae3bf739d93a9b289d93219e4fb8081201b2bed56f4db061c7b9f02a322c=Zobrazit úplnou identitu souboru v záhlaví editoru a prohlížeče namísto pouze základního názvu.
@@ -1272,6 +1279,7 @@ SettingsCenter.Text.1dee8f5c26ec912c61984cf1ec69fce0b5c60885d84a442c6a2cbe5aba24
 SettingsCenter.Text.1e8efd5b5886fcc5718dcebbd221eb4527fe3c55f92edae5e2c12729c662b9b2=Konečné rozšíření zarovnejte samostatně ve sloupci názvu. Nezahrnuje složky, názvy bez přípon a samotné úvodní tečky.
 SettingsCenter.Text.1e9678fc0fc36958226ef3190d530bfafa1069245dff02864f761d18be9ada6c=Zviditelnění příkazu MediaInfo v nabídce pluginu; ostatní přístupové cesty zůstávají k dispozici.
 SettingsCenter.Text.20f9b9729165b14a33669f19e5c22531bb5f7d15265f3c464a53ddc589262f44=Proveďte příkaz
+SettingsCenter.Text.211d0bb8cf4f5b5202c2a9b7996e483898644aa24714b1e10edd80a54ba4b560=Blok
 SettingsCenter.Text.21c2b7ab3f756885d16bafa9d9d74a5ad2b4dda0c89cb597ca2d7c2086f04330=Výchozí kódování prohlížeče
 SettingsCenter.Text.221837cf5b94934ba0e948bf7608a6a773b784999c64b606ccdc8be217dc32fe=Znaky, které rozdělují slova názvu pro transformaci názvu/malá písmena. Maximálně 18 znaků.
 SettingsCenter.Text.22296b826b25e56ae3ec7eff0cc954104e644f154dfabcc559028bf31803cff0=Verze katalogu
@@ -1302,6 +1310,7 @@ SettingsCenter.Text.2a16829fb6662d5a499029b3fd628c1b73c22b06a6512d5d5711f9f8a32d
 SettingsCenter.Text.2a43d998da36c3b934885aa1eb93a549d6de0ecf793ec9b4e227834176b0528c=Grafický renderer
 SettingsCenter.Text.2ad63ac99ada98d15911262c94ec1ca3b0690ce7d4cf2709db04aa940d5e2b66=Použijte základní, Digest, token nosiče nebo anonymní ověřování.
 SettingsCenter.Text.2b16c0b6f4f220d6f5356477bef0c1d50a82d78ea99b2fd4ea931f891750d2da=Použijte limit viditelných řádků samostatně na návrhy aktivního panelu, pasivního panelu a historie.
+SettingsCenter.Text.2c014f8f8986f1b274dbfa182498444da048b8caa48e5335d5cdf778352d7e6b=Kurzor
 SettingsCenter.Text.2c85e1e9943a5f616219caa05a9165bfcf85d66a6fe194dd8fe9f58beb6f7152=Uložte složky panelu a vybrané soubory. Vypnutím se tyto hodnoty vynechají z následně uložených relací pracovního prostoru.
 SettingsCenter.Text.2cb6541e45b3d1d38a8777114184a60480febb6c3307c982b284c8e4bc88c862=Zobrazit velikosti v bajtech
 SettingsCenter.Text.2d3de3fb655856202e7604c3325488f6ec1e5658deec04f6f240f1b9076ef473=Kolečko editoru nahoru
@@ -1553,6 +1562,7 @@ SettingsCenter.Text.8a3c62fddcba5fe620641db088eaa11eaca2a50c33e9abb18ad985e7e481
 SettingsCenter.Text.8a86c869464f6642856250e2837d4914812d40561fdee9aac9e14e0aec69bb90=Profily prostředí
 SettingsCenter.Text.8b1f57586a73e2eaef0d03169f8c093b26b13c819633d8a9c0a37b4256cdaaed=Název účtu pro základní ověřování nebo ověřování Digest.
 SettingsCenter.Text.8bb8ad21b74d5801c1699c9424c2cc254ec00e554c3e9f049420d9cc34cdfa53=Zeptejte se před ukončením f4.
+SettingsCenter.Text.8bc6273a7d6dd25799f404fc3f83ad67f2199d20ee8c6b082f048482e1834141=Svislá čára
 SettingsCenter.Text.8bcec963087e2e7270d45089c96203a7cb6b98654205faf4b1387a2c491d5216=Kolečko myši
 SettingsCenter.Text.8c2f9804518069097b7c334e3995bb3b29fe9787b9f7001be5e9573179e03a66=Maximální počet viditelných řádků návrhů. Minimálně 1.
 SettingsCenter.Text.8c9f1071be9c5834fdcb3af345b990d14852fb9f94de4c1d8486a539fced37a4=Zobrazovaný název ve výběru jednotky.

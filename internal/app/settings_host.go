@@ -25,7 +25,7 @@ func (settingsHost) ApplyRuntime(before config.F4Config, changed []string) {
 	config.ApplyWheelSettings()
 	config.ApplyMenuSettings()
 	panel.ApplyPathHintSettings()
-	vtui.ManageCursorStyle = !config.App.KeepTerminalCursor
+	config.ApplyCursorSettings()
 	for _, id := range changed {
 		if id == "ColorStyle" || id == "EnforceColorCorrection" {
 			_ = theme.ApplyColorStyle(config.App.ColorStyle)

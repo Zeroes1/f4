@@ -781,6 +781,12 @@ SettingsCenter.ConsoleTitleTemplate.Description=Formázza meg a gazdagép címé
 SettingsCenter.ConsoleTitleTemplate.Label=Ablakcímsablon
 SettingsCenter.CtrlTabShowsMenu.Description=Közvetlen váltás helyett nyissa meg a munkaterület-választót a Ctrl+Tab segítségével.
 SettingsCenter.CtrlTabShowsMenu.Label=A Ctrl+Tab megnyitja a választót
+SettingsCenter.CursorBlink.Description=A szövegkurzor villog. Nem érvényes terminálban, amíg a terminál saját kurzorstílusa megmarad, sem a Linux konzolban és a klasszikus Windows konzolban.
+SettingsCenter.CursorBlink.Label=Villogó kurzor
+SettingsCenter.CursorInsertShape.Description=A kurzor alakja beszúró módban gépeléskor: beviteli mezők, parancssor és szerkesztő. Terminálban nem érvényes, amíg a terminál saját kurzorstílusa megmarad. A Linux konzol és a klasszikus Windows konzol vonal helyett aláhúzást mutat.
+SettingsCenter.CursorInsertShape.Label=Beszúró mód kurzora
+SettingsCenter.CursorOvertypeShape.Description=A kurzor alakja felülíró módban gépeléskor, amelyet az Insert billentyű kapcsol. Terminálban nem érvényes, amíg a terminál saját kurzorstílusa megmarad. A Linux konzol és a klasszikus Windows konzol vonal helyett aláhúzást mutat.
+SettingsCenter.CursorOvertypeShape.Label=Felülíró mód kurzora
 SettingsCenter.DefaultFileOpMode.Description=Indítsa el a műveleteket sor, háttér vagy előtér módban. Az egyes műveleti párbeszédpanelek felülírhatják.
 SettingsCenter.DefaultFileOpMode.Label=Alapértelmezett üzemmód
 SettingsCenter.DeleteCancelFocused.Description=Helyezze a kezdeti billentyűzet fókuszt a Mégse elemre a törlési visszaigazolásokban.
@@ -1127,6 +1133,7 @@ SettingsCenter.Text.0245e7ee3d254734a3c98f91855e5e8e9ea229a3587ea7fcbd77a53d1387
 SettingsCenter.Text.024dc204d7ba77a8ff9ba36a886c96335a5b4a0d2f9af2130d04bc5b39a1a764=Terület
 SettingsCenter.Text.02a55191102a9bdf2705fe88402d4a592095c224164ab5c9df012472c6bc94be=Eredeti és cél
 SettingsCenter.Text.02c37ba9c438a7acaca46aa768d60463182f9c1d3f5b309c4897c63f95447391=Panel görgetősáv
+SettingsCenter.Text.02f843261112c2d831b19d0410d4c154234c4d7124bc3861b6348ffc4b7f770e=Aláhúzás
 SettingsCenter.Text.02fd3852e743881a67483887fb2899b60cdd6a1b6effe953a18db64c5a6fcc7f=Parancselőzmények időbélyegei
 SettingsCenter.Text.043474a948de4d17d210c7d716b39f377f6abcb51cf040ad4b74d9da741d4b3e=Beépített alapértelmezés
 SettingsCenter.Text.04ffae3bf739d93a9b289d93219e4fb8081201b2bed56f4db061c7b9f02a322c=A teljes fájlazonosító megjelenítése a szerkesztő és a megjelenítő címsoraiban az alapnév helyett.
@@ -1193,6 +1200,7 @@ SettingsCenter.Text.1dee8f5c26ec912c61984cf1ec69fce0b5c60885d84a442c6a2cbe5aba24
 SettingsCenter.Text.1e8efd5b5886fcc5718dcebbd221eb4527fe3c55f92edae5e2c12729c662b9b2=Igazítsa külön a végső kiterjesztést a név oszlopban. Kizárja a mappákat, a kiterjesztés nélküli neveket és a kezdőpontokat.
 SettingsCenter.Text.1e9678fc0fc36958226ef3190d530bfafa1069245dff02864f761d18be9ada6c=A MediaInfo parancsot láthatóvá tegye a plugin menüben; más hozzáférési útvonalak továbbra is rendelkezésre állnak.
 SettingsCenter.Text.20f9b9729165b14a33669f19e5c22531bb5f7d15265f3c464a53ddc589262f44=Parancs végrehajtása
+SettingsCenter.Text.211d0bb8cf4f5b5202c2a9b7996e483898644aa24714b1e10edd80a54ba4b560=Blokk
 SettingsCenter.Text.21c2b7ab3f756885d16bafa9d9d74a5ad2b4dda0c89cb597ca2d7c2086f04330=A megjelenítő alapértelmezett kódolása
 SettingsCenter.Text.221837cf5b94934ba0e948bf7608a6a773b784999c64b606ccdc8be217dc32fe=Olyan karakterek, amelyek megosztják a fájlnév szavakat a cím/ügy átalakításához. Legfeljebb 18 karakter.
 SettingsCenter.Text.22296b826b25e56ae3ec7eff0cc954104e644f154dfabcc559028bf31803cff0=Katalógus verzió
@@ -1223,6 +1231,7 @@ SettingsCenter.Text.2a16829fb6662d5a499029b3fd628c1b73c22b06a6512d5d5711f9f8a32d
 SettingsCenter.Text.2a43d998da36c3b934885aa1eb93a549d6de0ecf793ec9b4e227834176b0528c=Grafikus renderer
 SettingsCenter.Text.2ad63ac99ada98d15911262c94ec1ca3b0690ce7d4cf2709db04aa940d5e2b66=Használja a Basic, Digest, Bearer jelzőt vagy az anonim hitelesítést.
 SettingsCenter.Text.2b16c0b6f4f220d6f5356477bef0c1d50a82d78ea99b2fd4ea931f891750d2da=A látható sorok korlátját külön alkalmazza az aktív panelre, a passzív panelre és az előzményjavaslatokra.
+SettingsCenter.Text.2c014f8f8986f1b274dbfa182498444da048b8caa48e5335d5cdf778352d7e6b=Kurzor
 SettingsCenter.Text.2c85e1e9943a5f616219caa05a9165bfcf85d66a6fe194dd8fe9f58beb6f7152=Mentse el a panelmappákat és a kiemelt fájlokat. Ennek kikapcsolásával ezek az értékek kimaradnak a később mentett munkaterület-munkamenetekből.
 SettingsCenter.Text.2cb6541e45b3d1d38a8777114184a60480febb6c3307c982b284c8e4bc88c862=Méretek megjelenítése bájtban
 SettingsCenter.Text.2d3de3fb655856202e7604c3325488f6ec1e5658deec04f6f240f1b9076ef473=Szerkesztőkerék felfelé
@@ -1474,6 +1483,7 @@ SettingsCenter.Text.8a3c62fddcba5fe620641db088eaa11eaca2a50c33e9abb18ad985e7e481
 SettingsCenter.Text.8a86c869464f6642856250e2837d4914812d40561fdee9aac9e14e0aec69bb90=Környezetvédelmi profilok
 SettingsCenter.Text.8b1f57586a73e2eaef0d03169f8c093b26b13c819633d8a9c0a37b4256cdaaed=A Basic vagy a Digest hitelesítési fiók neve.
 SettingsCenter.Text.8bb8ad21b74d5801c1699c9424c2cc254ec00e554c3e9f049420d9cc34cdfa53=Kérdezze meg, mielőtt kilép az f4-ből.
+SettingsCenter.Text.8bc6273a7d6dd25799f404fc3f83ad67f2199d20ee8c6b082f048482e1834141=Függőleges vonal
 SettingsCenter.Text.8bcec963087e2e7270d45089c96203a7cb6b98654205faf4b1387a2c491d5216=Egérkerék
 SettingsCenter.Text.8c2f9804518069097b7c334e3995bb3b29fe9787b9f7001be5e9573179e03a66=Egyszerre legfeljebb ennyi javaslatsor jelenhet meg. A legkisebb megadható érték 1.
 SettingsCenter.Text.8c9f1071be9c5834fdcb3af345b990d14852fb9f94de4c1d8486a539fced37a4=Megjelenítési név a meghajtóválasztóban.

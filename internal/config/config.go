@@ -413,6 +413,9 @@ type F4Config struct {
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
 	TerminalCtrlNWorkspace   bool   // reserve Ctrl+N in terminal views for cloning panels to a workspace
 	KeepTerminalCursor       bool
+	CursorInsertShape        string // caret while typing: "underline" | "bar" | "block" (f4 #1154)
+	CursorOvertypeShape      string // caret in overtype mode, same names
+	CursorBlink              bool
 	ConsoleMode              string // "own" | "host" (default "own")
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
 	AnnounceKittyTerm        bool   // introduce the built-in terminal as kitty, so that image tools use the graphics protocol
@@ -585,6 +588,9 @@ var App = F4Config{
 	EscTogglePanels:          true,
 	TerminalCtrlNWorkspace:   true,
 	KeepTerminalCursor:       false,
+	CursorInsertShape:        "underline",
+	CursorOvertypeShape:      "block",
+	CursorBlink:              true,
 	ConsoleMode:              "own",
 	ConsoleOverlayUI:         false,
 	AnnounceKittyTerm:        true,
@@ -787,6 +793,9 @@ func LoadConfig() {
 	App.EscTogglePanels = merged.GetString("Panel", "EscTogglePanels", "1") == "1"
 	App.TerminalCtrlNWorkspace = merged.GetString("Panel", "TerminalCtrlNWorkspace", "1") == "1"
 	App.KeepTerminalCursor = merged.GetString("Panel", "KeepTerminalCursor", "0") == "1"
+	App.CursorInsertShape = NormalizeCursorShape(merged.GetString("Panel", "CursorInsertShape", ""), "underline")
+	App.CursorOvertypeShape = NormalizeCursorShape(merged.GetString("Panel", "CursorOvertypeShape", ""), "block")
+	App.CursorBlink = merged.GetString("Panel", "CursorBlink", "1") != "0"
 	App.ConsoleMode = merged.GetString("Panel", "ConsoleMode", "own")
 	App.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
 	App.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
@@ -1089,6 +1098,9 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[cfg.EscTogglePanels])
 	fmt.Fprintf(&sb, "TerminalCtrlNWorkspace = %d\n", map[bool]int{true: 1, false: 0}[cfg.TerminalCtrlNWorkspace])
 	fmt.Fprintf(&sb, "KeepTerminalCursor = %d\n", map[bool]int{true: 1, false: 0}[cfg.KeepTerminalCursor])
+	fmt.Fprintf(&sb, "CursorInsertShape = %s\n", NormalizeCursorShape(cfg.CursorInsertShape, "underline"))
+	fmt.Fprintf(&sb, "CursorOvertypeShape = %s\n", NormalizeCursorShape(cfg.CursorOvertypeShape, "block"))
+	fmt.Fprintf(&sb, "CursorBlink = %d\n", map[bool]int{true: 1, false: 0}[cfg.CursorBlink])
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
@@ -1465,6 +1477,27 @@ func ApplyWheelSettings() {
 // ApplyMenuSettings pushes the menu behaviour options into vtui.
 func ApplyMenuSettings() {
 	vtui.SetMenuLoopScroll(App.MenuLoopScroll)
+}
+
+// NormalizeCursorShape returns name when it is one of vtui's caret shape
+// names ("underline", "bar", "block", in any letter case) and fallback
+// otherwise, so a hand-edited settings.ini cannot store a shape that the
+// Settings Center would then refuse as an unknown choice.
+func NormalizeCursorShape(name, fallback string) string {
+	if shape, ok := vtui.ParseCursorShape(strings.ToLower(strings.TrimSpace(name))); ok {
+		return shape.String()
+	}
+	return fallback
+}
+
+// ApplyCursorSettings pushes the caret options into vtui: whether f4 manages
+// the terminal cursor style at all (KeepTerminalCursor), the caret shapes for
+// insert and overtype text entry, and blinking (f4 #1154).
+func ApplyCursorSettings() {
+	vtui.ManageCursorStyle = !App.KeepTerminalCursor
+	insert, _ := vtui.ParseCursorShape(NormalizeCursorShape(App.CursorInsertShape, "underline"))
+	overtype, _ := vtui.ParseCursorShape(NormalizeCursorShape(App.CursorOvertypeShape, "block"))
+	vtui.SetCursorStyle(insert, overtype, App.CursorBlink)
 }
 
 func CreateDefaultHighlightIni(path string) {

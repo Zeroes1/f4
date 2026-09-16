@@ -959,7 +959,7 @@ func SetupUI() {
 	}
 
 	LoadSession()
-	vtui.ManageCursorStyle = !config.App.KeepTerminalCursor
+	config.ApplyCursorSettings()
 	vtui.FrameManager.Push(vtui.NewDesktop())
 
 	width := vtui.FrameManager.GetScreenSize()

@@ -4662,7 +4662,7 @@ func actionAppearanceSettings(pf *panel.PanelsFrame) {
 			config.App.GuiFontSize = config.DefaultGuiFontSize(runtime.GOOS)
 		}
 		config.App.KeepTerminalCursor = chkCursor.State == 1
-		vtui.ManageCursorStyle = !config.App.KeepTerminalCursor
+		config.ApplyCursorSettings()
 		config.App.EnforceColorCorrection = chkContrast.State == 1
 		config.App.WorkspaceTabMode = comboWorkspaceTabs.Menu.SelectPos
 		config.App.WorkspaceTabsOverlay = chkWorkspaceTabsOverlay.State == 1

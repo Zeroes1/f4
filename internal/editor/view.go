@@ -1100,7 +1100,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 			if ev.IsFocused() && currOffset+i == absPos {
 				scr.SetCursorPos(cx+ev.HexNibble, ev.Y1+1+y)
 				scr.SetCursorVisible(true)
-				scr.SetCursorShape(vtui.CursorShapeUnderline)
+				scr.SetCursorShape(vtui.InsertCursorShape())
 			}
 		}
 
@@ -1112,7 +1112,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 			}
 			scr.SetCursorPos(cx+ev.HexNibble, ev.Y1+1+y)
 			scr.SetCursorVisible(true)
-			scr.SetCursorShape(vtui.CursorShapeUnderline)
+			scr.SetCursorShape(vtui.InsertCursorShape())
 		}
 
 		// ASCII part
@@ -1193,7 +1193,7 @@ func (ev *EditorView) renderDecode(scr *vtui.ScreenBuf, width, contentHeight int
 			cx := ev.X1 + 12 + byteOffset*3
 			scr.SetCursorPos(cx+ev.HexNibble, ev.Y1+1+y)
 			scr.SetCursorVisible(true)
-			scr.SetCursorShape(vtui.CursorShapeUnderline)
+			scr.SetCursorShape(vtui.InsertCursorShape())
 		}
 
 		currOffset += instLen
@@ -1770,9 +1770,9 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 				scr.SetCursorPos(ev.X1+curVCol+ev.CursorVirtualSpaces-ev.ScrollLeft, currY)
 				scr.SetCursorVisible(true)
 				if ev.Overtype {
-					scr.SetCursorShape(vtui.CursorShapeBlock)
+					scr.SetCursorShape(vtui.OvertypeCursorShape())
 				} else {
-					scr.SetCursorShape(vtui.CursorShapeUnderline)
+					scr.SetCursorShape(vtui.InsertCursorShape())
 				}
 			}
 
