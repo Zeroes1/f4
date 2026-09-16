@@ -73,6 +73,35 @@ the `Cmd` rules are skipped when f4 cannot tell the two apart — `MacKeyboard =
 on` does not force them. The `Opt` rules have no such problem: Option reaches
 f4 as Alt on every backend, so word navigation works in a terminal too.
 
+## No Insert key
+
+MacBooks and most Apple keyboards have no `Insert` key, and Far puts a lot on
+it. Most of it has another way in that f4 already understands on every
+platform, with or without Mac keyboard mode:
+
+| Far key                          | Without Insert                                   |
+| -------------------------------- | ------------------------------------------------ |
+| `Ins` on the panels              | `Shift+↑` / `Shift+↓`, and `Shift+PgUp`, `Shift+PgDn`, `Shift+Home`, `Shift+End` for a range |
+| `Ctrl+Ins` / `Shift+Ins` in the editor | `Cmd+C` / `Cmd+V`                          |
+
+In the GUI window two keys also arrive as `Insert` itself, the way far2l
+treats them: `Help` on older full-size Apple keyboards, and `0` on the numeric
+keypad (macOS reports no NumLock, so the keypad stays in navigation mode;
+`Shift` turns the key back into the keypad digit).
+
+The remaining `Insert` chords have no second key by default: `Ctrl+Ins`,
+`Ctrl+Shift+Ins`, `Alt+Shift+Ins` and `Ctrl+Alt+Ins` on the panels copy names
+and paths, `Alt+Ins` starts the screen grabber, and `Ins` in the editor
+toggles overtype. Run them by name from the command palette (`Ctrl+Shift+P`),
+or give them a key of your own in `Options > Hotkey Configuration` or in
+[`keymap.ini`](KEYMAP.md).
+
+In the GUI window a chord of your own can use the `Control` key without taking
+anything from `Command`: Command chords are spelled `Ctrl`, the physical
+Control key is spelled `RCtrl`, and a binding on `RCtrl` answers only to
+Control. A Control chord with no binding of its own still does what the
+matching `Ctrl` chord does. In a terminal there is no such split — see above.
+
 ## See also
 
 [`keymap.ini`](KEYMAP.md) rewrites any key into any other and is the tool to
