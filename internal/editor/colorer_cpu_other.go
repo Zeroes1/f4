@@ -1,7 +1,7 @@
-//go:build !amd64
+//go:build !amd64 || android || ios || !(linux || darwin || freebsd || netbsd || windows || dragonfly || solaris || illumos)
 
 package editor
 
-func colorerCPUSupportsPOPCNT() bool {
-	return true
+func colorerRuntimeCheck() error {
+	return nil
 }

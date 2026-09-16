@@ -1,0 +1,49 @@
+name: Colorer CPU compatibility
+
+on:
+  push:
+    branches: [main, 'codex/**']
+    paths:
+      - 'internal/editor/colorer*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/colorer-cpu.yml'
+  pull_request:
+    paths:
+      - 'internal/editor/colorer*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/colorer-cpu.yml'
+
+concurrency:
+  group: colorer-cpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: CPU feature fallback (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CGO_ENABLED: 0
+      GOAMD64: v1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Reject unsafe compiler sessions without POPCNT
+        env:
+          GODEBUG: cpu.popcnt=off
+          F4_TEST_COLORER_CPU: blocked
+        run: go test ./internal/editor -run '^TestColorer(RuntimeCheckForCPU|CPUCompatibility)$' -count=1 -v -timeout 2m
+      - name: Keep automatic interpreter fallback without SSE4.1
+        env:
+          GODEBUG: cpu.popcnt=off,cpu.sse41=off
+          F4_TEST_COLORER_CPU: interpreter
+        run: go test ./internal/editor -run '^TestColorer(RuntimeCheckForCPU|CPUCompatibility)$' -count=1 -v -timeout 2m

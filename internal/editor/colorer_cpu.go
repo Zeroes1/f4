@@ -3,17 +3,12 @@ package editor
 import "errors"
 
 // wazero's amd64 compiler emits POPCNT for the scalar popcnt instructions in
-// Colorer WASM. Keep the whole Colorer path out of that compiler on CPUs where
-// the instruction is unavailable; callers already fall back to Chroma when a
-// Colorer session cannot be created.
-var errColorerUnsupportedCPU = errors.New("Colorer requires CPU POPCNT support")
+// Colorer WASM. Callers fall back to Chroma when a session cannot be created.
+// Hosts where wazero automatically uses its interpreter need no such guard.
+var errColorerUnsupportedCPU = errors.New("Colorer's WASM compiler requires CPU POPCNT support")
 
-func colorerRuntimeCheck() error {
-	return colorerRuntimeCheckForCPU(colorerCPUSupportsPOPCNT())
-}
-
-func colorerRuntimeCheckForCPU(hasPOPCNT bool) error {
-	if hasPOPCNT {
+func colorerRuntimeCheckForCPU(compilerSupported, hasPOPCNT bool) error {
+	if !compilerSupported || hasPOPCNT {
 		return nil
 	}
 	return errColorerUnsupportedCPU
