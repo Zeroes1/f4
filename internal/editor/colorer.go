@@ -170,6 +170,46 @@ func ensureRadiolaSchema(configsDir string) {
 	}
 }
 
+// colorerDiagnosticsLevel says how much of what Colorer reports about its
+// configuration goes to debug.log. COLORER_VERBOSE takes the values far2l's
+// FarColorer reads from the same variable (CerrLogger.cpp): off, error,
+// warning or warn, info, debug, trace. Unlike far2l, unset means warning, not
+// off: the stock catalog says nothing at that level, and a broken one says
+// exactly what is broken, which is the one thing debug.log is for.
+func colorerDiagnosticsLevel() (colorer.Level, bool) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("COLORER_VERBOSE"))) {
+	case "off":
+		return 0, false
+	case "error":
+		return colorer.LevelError, true
+	case "info":
+		return colorer.LevelInfo, true
+	case "debug":
+		return colorer.LevelDebug, true
+	case "trace":
+		return colorer.LevelTrace, true
+	default:
+		return colorer.LevelWarn, true
+	}
+}
+
+// colorerSessionOptions are the options every Colorer session is created
+// with: Colorer's own reports — an HRC file that does not parse, with file and
+// line; a regexp that does not compile; a missing file — delivered to
+// debug.log. Without them a broken configuration shows up only as missing
+// colours, or as a session error naming nothing but a throw site.
+func colorerSessionOptions() []colorer.Option {
+	level, enabled := colorerDiagnosticsLevel()
+	if !enabled {
+		return nil
+	}
+	return []colorer.Option{colorer.WithDiagnostics(level, logColorerDiagnostic)}
+}
+
+func logColorerDiagnostic(d colorer.Diagnostic) {
+	vtui.DebugLog("COLORER: %s", d)
+}
+
 func acquireColorerSession(configsDir string) (*colorer.Session, error) {
 	ensureRadiolaSchema(configsDir)
 
@@ -186,7 +226,7 @@ func acquireColorerSession(configsDir string) (*colorer.Session, error) {
 
 	catalogPath := "/base/catalog.xml"
 	vtui.DebugLog("COLORER: Initializing session with catalog %q, configs %q", catalogPath, configsDir)
-	return colorer.NewSession(context.Background(), catalogPath, configsDir)
+	return colorer.NewSession(context.Background(), catalogPath, configsDir, colorerSessionOptions()...)
 }
 
 // A pooled Session owns the context it was created with. Colorer parsing gets
@@ -196,11 +236,19 @@ func acquireCancelableColorerSession(ctx context.Context, configsDir string) (*c
 
 	catalogPath := "/base/catalog.xml"
 	vtui.DebugLog("COLORER: Initializing cancellable session with catalog %q, configs %q", catalogPath, configsDir)
-	return colorer.NewSession(ctx, catalogPath, configsDir)
+	return colorer.NewSession(ctx, catalogPath, configsDir, colorerSessionOptions()...)
 }
 
 func releaseColorerSession(session *colorer.Session, configsDir string) {
 	if session == nil {
+		return
+	}
+	// A call that failed leaves the session refusing every later one; pooling
+	// it would hand that failure to whoever acquires it next, attributed to
+	// whatever they were trying to do.
+	if err := session.Err(); err != nil {
+		vtui.DebugLog("COLORER: Closing a failed session instead of pooling it: %v", err)
+		go session.Close()
 		return
 	}
 	colorerPoolMu.Lock()
@@ -254,12 +302,14 @@ func ListColorerSchemes() []ColorerScheme {
 	configsDir := ColorerConfigsDir()
 	session, err := acquireColorerSession(configsDir)
 	if err != nil {
+		vtui.DebugLog("COLORER: Cannot list colour styles, session failed: %v", err)
 		return nil
 	}
 	defer releaseColorerSession(session, configsDir)
 
 	instances, err := session.EnumHRDInstances("rgb")
 	if err != nil {
+		vtui.DebugLog("COLORER: Cannot list colour styles: %v", err)
 		return nil
 	}
 	var schemes []ColorerScheme
@@ -358,6 +408,7 @@ func ColorerGetRegionDefine(region string) *colorer.RegionDefine {
 func colorerGetRegionDefineFor(region, configsDir, activeScheme string) *colorer.RegionDefine {
 	session, err := acquireColorerSession(configsDir)
 	if err != nil {
+		vtui.DebugLog("COLORER: Cannot read region %q, session failed: %v", region, err)
 		return nil
 	}
 	defer releaseColorerSession(session, configsDir)
@@ -365,9 +416,17 @@ func colorerGetRegionDefineFor(region, configsDir, activeScheme string) *colorer
 	if activeScheme == "" {
 		activeScheme = "default"
 	}
-	_ = session.SetHRD("rgb", activeScheme)
+	if err := session.SetHRD("rgb", activeScheme); err != nil {
+		vtui.DebugLog("COLORER: Cannot read region %q, colour style %q failed: %v", region, activeScheme, err)
+		return nil
+	}
 
-	rd, _ := session.GetRegionDefine(region)
+	// A region the style does not define is an ordinary answer, not a fault;
+	// only a failed session is worth a line in the log.
+	rd, err := session.GetRegionDefine(region)
+	if err != nil && session.Err() != nil {
+		vtui.DebugLog("COLORER: Cannot read region %q: %v", region, err)
+	}
 	return rd
 }
 
@@ -469,7 +528,14 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 		if activeScheme == "" {
 			activeScheme = "default"
 		}
-		session.SetHRD("rgb", activeScheme)
+		if hErr := session.SetHRD("rgb", activeScheme); hErr != nil {
+			vtui.DebugLog("COLORER: Colour style %q failed for %q, using the fallback highlighter: %v", activeScheme, filename, hErr)
+			session.Close()
+			if !ch.closed {
+				ch.useFallback(ev)
+			}
+			return
+		}
 
 		selected, sErr := session.SelectType(filename, firstLine)
 		vtui.DebugLog("COLORER: SelectType(%q, len=%d) -> selected=%v, err=%v", filename, len(firstLine), selected, sErr)

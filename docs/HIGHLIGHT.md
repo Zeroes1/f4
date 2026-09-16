@@ -200,6 +200,34 @@ queues immutable line snapshots and consumes posted results
 line order is its state, so concurrent calls are wrong by construction, and
 one owner gives cancellation a single well-defined home.
 
+### 3.7 What Colorer reports goes to debug.log
+
+Issue #306. Colorer runs compiled without C++ exceptions, so an exception it
+throws — a catalog that does not exist, an HRC file that is not well-formed, a
+colour style it does not know — ends the call in a trap. colorer4go turns that
+into a `*colorer.FatalError` naming the throw site, and the session refuses
+every later call with the same error (`Session.Err`). Everything Colorer
+reports on the way there, and everything it survives — a regexp in a scheme
+that does not compile, a region nobody defines — arrives through its `Logger`
+and is written to debug.log as `COLORER: [level] file:line function(): message`.
+
+- Every session is created with `colorerSessionOptions()`. The level comes
+  from `COLORER_VERBOSE`, the variable far2l's FarColorer reads, with the same
+  values (`off`, `error`, `warning`/`warn`, `info`, `debug`, `trace`). Unset
+  means `warning`, not far2l's `off`: the stock catalog says nothing at that
+  level, and a broken one says what is broken.
+- A session whose call failed is closed, never pooled
+  (`releaseColorerSession`): the next user would get the old failure,
+  attributed to whatever it was trying to do.
+- A colour style that fails in `newColorerHighlighter` hands the editor to the
+  fallback engine, the way a failed session start does (3.5), and says so.
+
+A broken `rare/json.hrc` then reads, instead of a bare `wasm error:
+unreachable`:
+
+    COLORER: [error] colorer/xml/libxml2/LibXmlReader.cpp:299 xml_error_func(): /base/hrc/rare/json.hrc:81: parser error : Couldn't find end of Start Tag regexp line 81
+    COLORER: SelectType("x.json", len=1) -> selected=false, err=colorer: colorer_select_type failed: C++ exception thrown at colorer/parsers/HrcLibraryImpl.cpp:230 in parseHRC() (wasm error: unreachable)
+
 ---
 
 ## 4. Approaches that were tried or considered and dropped
