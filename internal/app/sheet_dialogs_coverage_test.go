@@ -121,6 +121,7 @@ func TestSheetGotoWidthAndFormatDialogs(t *testing.T) {
 	vtui.FrameManager.RemoveFrame(badGoto)
 
 	sf.cur = sheet.Point{Col: 2, Row: 0}
+	sf.Document().SetText(sf.cur.Col, sf.cur.Row, "value")
 	oldWidth := sf.Document().ColumnWidth(sf.cur.Col)
 	showSheetWidthDialog(sf)
 	width := sheetDialogWindow(t)
@@ -164,7 +165,7 @@ func TestSheetFindAndMenuDialogs(t *testing.T) {
 	showSheetFindDialog(sf, false)
 	find := sheetDialogWindow(t)
 	edits, radios, checks, buttons := sheetDialogControls(find)
-	if len(edits) != 2 || len(radios) != 1 || len(checks) != 2 {
+	if len(edits) != 1 || len(radios) != 1 || len(checks) != 2 {
 		t.Fatalf("Find controls = edits %d, radios %d, checks %d", len(edits), len(radios), len(checks))
 	}
 	edits[0].SetText("alpha")
