@@ -1262,6 +1262,22 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "SlideShowDelay = %d\n", cfg.SlideShowDelay)
 	fmt.Fprintf(&sb, "ExternalTimeout = %d\n", cfg.ImageExternalTimeout)
 	fmt.Fprintf(&sb, "DecoderPriority = %s\n", cfg.ImageDecoderPriority)
+	fmt.Fprintf(&sb, "Overlay = %d\n", map[bool]int{true: 1, false: 0}[cfg.ImageOverlay])
+	fmt.Fprintf(&sb, "X11OverlayOffsetX = %d\n", cfg.ImageX11OffsetX)
+	fmt.Fprintf(&sb, "X11OverlayOffsetY = %d\n", cfg.ImageX11OffsetY)
+	// [Video] and [TTYXi] have no dialog, only settings.ini, and SaveConfig
+	// replaces the whole file: a key it does not write is gone after the
+	// first save.
+	sb.WriteString("\n[Video]\n")
+	fmt.Fprintf(&sb, "PauseOnFocusLoss = %d\n", map[bool]int{true: 1, false: 0}[cfg.VideoPauseOnFocusLoss])
+	sb.WriteString("\n[TTYXi]\n")
+	fmt.Fprintf(&sb, "Keys = %d\n", map[bool]int{true: 1, false: 0}[cfg.TTYXKeys])
+	// The default list is left out, so that a profile keeps following it:
+	// it has grown before (Ctrl+Shift+P, #980), and a written copy would
+	// have frozen every existing profile at the old one.
+	if cfg.TTYXKeyList != DefaultTTYXKeyList {
+		fmt.Fprintf(&sb, "KeyList = %s\n", cfg.TTYXKeyList)
+	}
 	sb.WriteString("\n[Compare]\n")
 	writeCompareOptions(&sb, cfg.Compare)
 	sb.WriteString("\n[Plugins]\n")
