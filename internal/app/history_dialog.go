@@ -465,9 +465,28 @@ func (s *historySearch) processKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	if e.Char != 0 && !ctrl && !alt && unicode.IsPrint(e.Char) {
+		// Once nothing is shown there is nothing left to narrow, so the key
+		// is taken and dropped: far2l's VMenu filter does this (vmenu.cpp,
+		// `if (!GetShowItemCount()) return TRUE;`), and so does vtui's menu
+		// filter behind the Ctrl+Down dropdown. Without it every key typed
+		// past the last match piled up in the title over an empty list (#1155).
+		if !s.showsEntry() {
+			return true
+		}
 		s.query = append(s.query, e.Char)
 		s.applyFilter()
 		return true
+	}
+	return false
+}
+
+// showsEntry reports whether the filtered list shows at least one history
+// entry; the divider between the pinned and the chronological rows is not one.
+func (s *historySearch) showsEntry() bool {
+	for _, item := range s.menu.Items {
+		if _, ok := item.UserData.(historySearchEntry); ok && !item.Separator {
+			return true
+		}
 	}
 	return false
 }
