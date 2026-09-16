@@ -830,6 +830,23 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 	if c.running != nil {
 		return true
 	}
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_RETURN {
+		// An Enter the focused control has no use for (a checkbox, a radio
+		// group, a text field) used to reach vtui's BaseWindow fallback,
+		// Group.TriggerDefaultAction. With no default button in this dialog
+		// it presses the first button it meets while descending the page:
+		// Enter on the first checkbox of Terminal & environment clicked
+		// Environment profiles' Add, and the unnamed profile failed the next
+		// Apply; File associations and User menus saved an empty record
+		// outright (f4 #1154). Such an Enter now applies, which is also what
+		// it already did on pages without buttons.
+		if focused := c.GetFocusedItem(); focused != nil && focused.ProcessKey(e) {
+			c.syncWindowBounds()
+			return true
+		}
+		c.commit(false)
+		return true
+	}
 	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_F && (e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed)) != 0 {
 		c.SetFocusedItem(c.search)
 		return true
