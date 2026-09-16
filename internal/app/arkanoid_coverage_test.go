@@ -60,8 +60,8 @@ func TestArkanoidProcessKeyAndMouseControls(t *testing.T) {
 		Type:        vtinput.MouseEventType,
 		KeyDown:     true,
 		ButtonState: vtinput.FromLeft1stButtonPressed,
-		MouseX:      uint16(af.X2),
-		MouseY:      uint16(af.Y2),
+		MouseX:      int16(af.X2),
+		MouseY:      int16(af.Y2),
 	}) {
 		t.Fatal("bottom-right resize click was not consumed")
 	}
