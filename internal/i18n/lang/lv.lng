@@ -2035,6 +2035,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=Izmantojiet HTTP Digest izaicinājuma atbildes autentifikāciju. Servera ir jāpiekrīt; nešifrēta transporta ir nepieciešama atsevišķa atļaujas iestatīšana.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Autentikoties ar piegādāto Bearer token, nevis ar lietotāja vārdu/password apmaiņu. Pieejamība ir atkarīga no token atļaujas un darbības laika.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Neattiec autentifikācijas apliecības. izmanto tikai WebDAV resursiem, kas ļauj anonīmu piekļuvi.
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=Ielādēt lietoto Colorer konfigurāciju, ziņot par Colorer atrastajām problēmām un pēc tam atmest kešotās sesijas, reģionus un shēmu, lai nākamā izcelšana to izmantotu.
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=Pārbaudīt visas shēmas
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=Ielādēt lietotās konfigurācijas katra Colorer failu tipa shēmu un ziņot par pirmo tipu, ko Colorer nevar ielādēt, kā arī tā ziņojumiem. Nekas netiek lietots.
 SettingsCenter.Matches=Atbilstības: %d
 SettingsCenter.ClearSearch=Skaista meklēšana
 SettingsCenter.Category.hotkeys=Īsinājumtaustiņu iestatīšana

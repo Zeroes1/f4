@@ -2035,6 +2035,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=HTTP ডাইজেস্ট চ্যালেঞ্জ-প্রতিক্রিয়া প্রমাণীকরণ ব্যবহার করুন। সার্ভার অবশ্যই এটি সমর্থন করবে; এনক্রিপ্ট করা পরিবহনের জন্য আলাদা অনুমতি সেটিং প্রয়োজন।
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=একটি ব্যবহারকারীর নাম/পাসওয়ার্ড বিনিময়ের পরিবর্তে সরবরাহকৃত বিয়ারার টোকেন দিয়ে প্রমাণীকরণ করুন। অ্যাক্সেস টোকেনের অনুমতি এবং জীবনকালের উপর নির্ভর করে।
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=প্রমাণীকরণ শংসাপত্র পাঠাবেন না। শুধুমাত্র WebDAV সম্পদের জন্য ব্যবহার করুন যা বেনামী অ্যাক্সেসের অনুমতি দেয়।
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=প্রয়োগ করা Colorer কনফিগারেশন লোড করুন, Colorer যে ত্রুটি খুঁজে পায় তা জানান, তারপর ক্যাশ করা সেশন, অঞ্চল এবং স্কিম মুছে দিন যাতে পরের হাইলাইটিং এটি ব্যবহার করে।
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=সব স্কিম পরীক্ষা করুন
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=প্রয়োগ করা কনফিগারেশনে প্রতিটি Colorer ফাইলের ধরনের স্কিম লোড করুন এবং Colorer যে প্রথম ধরনটি লোড করতে পারে না তা ও সেই সময়ের বার্তাগুলি জানান। কিছুই প্রয়োগ করা হয় না।
 SettingsCenter.Matches=মিল: %d
 SettingsCenter.ClearSearch=সার্চ সাফ করুন
 SettingsCenter.Category.hotkeys=শর্টকাট কনফিগারেশন

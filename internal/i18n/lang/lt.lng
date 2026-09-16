@@ -2035,6 +2035,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=Naudokite HTTP Digest iššūkių atsakymo autentifikaciją. Serveriui turi būti palaikoma; nešifruotas transportas reikalauja atskiro leidimo nustatymo.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Authentify su pateiktu "Bearer" žetonu, o ne naudotojo vardo ir slaptažodžio keitimu. Prieiga priklauso nuo žetonų leidimų ir gyvenimo trukmės.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Nesiųskite autentifikavimo pažymėjimų. Naudokite tik WebDAV išteklius, leidžiančius anoniminį prieigą.
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=Įkelkite taikomą Colorer konfigūraciją, praneškite apie Colorer rastas problemas, tada pašalinkite podėlyje esančius seansus, sritis ir schemą, kad vėlesnis paryškinimas ją naudotų.
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=Patikrinti visas schemas
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=Įkelkite kiekvieno Colorer failo tipo schemą taikomoje konfigūracijoje ir praneškite apie pirmą tipą, kurio Colorer negali įkelti, bei jo pranešimus. Nieko netaikoma.
 SettingsCenter.Matches=Atitikmenys: %d
 SettingsCenter.ClearSearch=Atviras paieškos procesas
 SettingsCenter.Category.hotkeys=Sparčiųjų klavišų nustatymas

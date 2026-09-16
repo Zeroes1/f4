@@ -2030,6 +2030,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=HTTP Digest 도전 응답 인증을 사용하십시오. 서버가 지원해야 합니다. 암호화되지 않은 운송은 별도의 권한 설정이 필요합니다.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=사용자 이름/ 비밀번호 교환 대신 제공된 Bearer 토큰으로 인증합니다. 접근은 토큰의 권한과 수명에 달려 있습니다.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=인증 자격증을 보내지 마십시오. 익명 접근을 허용하는 WebDAV 리소스에만 사용한다.
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=적용된 Colorer 구성을 불러오고 Colorer가 찾은 문제를 보고한 다음 캐시된 세션, 영역 및 스킴을 삭제하여 다음 강조 표시에서 사용하도록 합니다.
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=모든 스킴 확인
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=적용된 구성에 있는 모든 Colorer 파일 형식의 스킴을 불러오고 Colorer가 불러올 수 없는 첫 형식과 그 과정에서 보고한 내용을 알립니다. 아무것도 적용하지 않습니다.
 SettingsCenter.Matches=일치 항목: %d
 SettingsCenter.ClearSearch=명확한 검색
 SettingsCenter.Category.hotkeys=단축키 설정

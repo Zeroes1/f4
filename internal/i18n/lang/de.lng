@@ -2038,6 +2038,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=Verwenden Sie die HTTP Digest-Challenge-Response-Authentifizierung. Der Server muss es unterstützen; Für den unverschlüsselten Transport ist eine separate Berechtigungseinstellung erforderlich.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Authentifizieren Sie sich mit dem bereitgestellten Bearer-Token anstelle eines Benutzernamen-/Passwort-Austauschs. Der Zugriff hängt von den Berechtigungen und der Lebensdauer des Tokens ab.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Keine Authentifizierungsdaten senden. Nur für WebDAV-Ressourcen verwenden, die anonymen Zugriff zulassen.
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=Die angewendete Colorer-Konfiguration laden, Colorers Beanstandungen melden und anschließend zwischengespeicherte Sitzungen, Bereiche und das Schema verwerfen, damit die nächste Hervorhebung sie verwendet.
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=Alle Schemata prüfen
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=Das Schema jedes Colorer-Dateityps in der angewendeten Konfiguration laden und den ersten Typ melden, den Colorer nicht laden kann, einschließlich seiner Meldungen. Nichts wird angewendet.
 SettingsCenter.Matches=Treffer: %d
 SettingsCenter.ClearSearch=Suche löschen
 SettingsCenter.Category.hotkeys=Tastenkürzel konfigurieren

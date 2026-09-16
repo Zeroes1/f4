@@ -2039,6 +2039,9 @@ SettingsCenter.Text.692dc5054fc9425a2fcfe9fe5a861b8968ae7d6b9012b235cad5715166b3
 SettingsCenter.Text.577e28f45a5b12ecc2fe4ea0940bb7ee9ad10e9ff0ab2e7d80ae726b50a24d7e=Використовуйте аутентифікацію виклику-відповіді HTTP Digest. Сервер повинен підтримувати його; незашифрований транспорт вимагає окремого налаштування дозволу.
 SettingsCenter.Text.2da370fe1bd734d8be879c0af32adee32a2c4d659b1a8bd536a189cf1a15d966=Автентифікуйте поданим токеном Bearer замість обміну ім'ям користувача / паролем. Доступ залежить від дозволів і термін дії токену.
 SettingsCenter.Text.a2d419499f292a30e04544f5785aaebc51ccf4e777d251f9cb2bfe818a781064=Не відправляйте довіренні дані. Використовуйте тільки для ресурсів WebDAV, які дозволяють анонімний доступ.
+SettingsCenter.Text.3b91a0d58c6cbb5f6e7ace0beabbee55fa7b241bbf0e2f912d986d8901fe5f36=Завантажити застосовану конфігурацію Colorer, повідомити про знайдені Colorer проблеми, а потім скинути кешовані сеанси, області та схему, щоб наступне підсвічування використовувало її.
+SettingsCenter.Text.efd27bee237a8b28e19e78a861e44210c8e7ad86482874ddae75329f88ed7fca=Перевірити всі схеми
+SettingsCenter.Text.dbc5b04582b15d7c7603f9abedb430c3d0720021c4717ef621b60b66339ecd3d=Завантажити схему кожного типу файлів Colorer у застосованій конфігурації та повідомити про перший тип, який Colorer не може завантажити, і його повідомлення. Нічого не застосовувати.
 SettingsCenter.Matches=Збігів: %d
 SettingsCenter.ClearSearch=Чистий пошук
 SettingsCenter.Category.hotkeys=Налаштування сполучень клавіш
