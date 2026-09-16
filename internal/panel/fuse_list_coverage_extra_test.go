@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/unxed/f4/internal/fusefs"
-	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/vtui"
 )
 
@@ -63,7 +63,7 @@ func TestMountRowsReadsRegistryAndHandlesRegistryError(t *testing.T) {
 }
 
 func TestShowMountListAndForeignMountAction(t *testing.T) {
-	t.Cleanup(paneltest.SwapFrameManager(t))
+	t.Cleanup(testutil.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	registryDir := t.TempDir()
 	t.Setenv("F4_FUSE_REGISTRY", registryDir)
