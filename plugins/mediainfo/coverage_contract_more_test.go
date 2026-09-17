@@ -135,7 +135,7 @@ func TestAudioHeaderAndID3Contracts(t *testing.T) {
 		t.Fatalf("empty VBR=(%d,%d)", frames, count)
 	}
 
-	if got := syncSafe([]byte{0x01, 0x02, 0x03, 0x04}); got != 16909060 {
+	if got := syncSafe([]byte{0x01, 0x02, 0x03, 0x04}); got != 2130308 {
 		t.Errorf("syncSafe=%d", got)
 	}
 	if syncSafe(nil) != 0 {
