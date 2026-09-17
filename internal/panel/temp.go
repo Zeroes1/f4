@@ -696,6 +696,14 @@ func (t *TempPanelVFS) HandlePanelAction(app vfs.App, action vfs.PanelAction, pa
 					pf.SwitchToVFS(fsp, opened)
 				}
 				return true
+			} else if isNotListableDirectory(err) {
+				// A folder the host will not list (#814) is refused in
+				// place; running it through Execute would hand a directory
+				// to the shell.
+				if fsp := pf.GetActivePanel(); fsp != nil {
+					fsp.reportNotListableDirectory(err)
+				}
+				return true
 			}
 		}
 	}
@@ -778,6 +786,10 @@ func (t *TempPanelVFS) showSelectedOnPassive(pf *PanelsFrame) bool {
 		selection = ref.source.Base(realPath)
 	}
 	if err := opened.SetPath(target); err != nil {
+		if isNotListableDirectory(err) {
+			passive.reportNotListableDirectory(err)
+			return true
+		}
 		return false
 	}
 	passive.PendingSelection = selection

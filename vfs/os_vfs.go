@@ -99,6 +99,10 @@ verify:
 		vtui.DebugLog("VFS: SetPath(%q) FAILED: not a directory", abs)
 		return os.ErrInvalid
 	}
+	if err := refuseNotListable(abs); err != nil {
+		vtui.DebugLog("VFS: SetPath(%q) FAILED: directory cannot be listed: %v", abs, err)
+		return err
+	}
 	vtui.DebugLog("VFS: Path changed to %q", abs)
 	v.currentPath = abs
 	return nil

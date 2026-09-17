@@ -5403,6 +5403,24 @@ func (pf *PanelsFrame) SyncPassivePanel() bool {
 }
 
 func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) bool {
+	var refused error
+	if pf.navigateToPath(fsp, targetPath, &refused) {
+		return true
+	}
+	if refused == nil {
+		return false
+	}
+	// The target is a directory the host will not list (#814). Nothing moved;
+	// report it the way Enter on that folder does. The change counts as
+	// handled, so a typed "cd" is not passed on to the shell.
+	fsp.reportNotListableDirectory(refused)
+	return true
+}
+
+// navigateToPath is NavigateToPath without reporting. When it returns false
+// and a route failed only because the target directory cannot be listed, that
+// refusal is stored in *refused.
+func (pf *PanelsFrame) navigateToPath(fsp *FileSystemPanel, targetPath string, refused *error) bool {
 	if targetPath == "" {
 		return false
 	}
@@ -5451,6 +5469,8 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 			fsp.PendingSelection = ".."
 			fsp.ReadDirectory()
 			return true
+		} else {
+			noteNotListableDirectory(refused, err)
 		}
 	}
 	if provider := vfs.FindStandaloneProvider(context.Background(), fsp.Vfs, targetPath); provider != nil {
@@ -5481,6 +5501,8 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 				fsp.PendingSelection = ".."
 				pf.SwitchToVFS(fsp, newVfs)
 				return true
+			} else {
+				noteNotListableDirectory(refused, err)
 			}
 		}
 
@@ -5492,6 +5514,8 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 				fsp.PendingSelection = ".."
 				pf.SwitchToVFS(fsp, newVfs)
 				return true
+			} else {
+				noteNotListableDirectory(refused, err)
 			}
 		}
 
@@ -5583,6 +5607,8 @@ func (pf *PanelsFrame) NavigateToPath(fsp *FileSystemPanel, targetPath string) b
 		fsp.PendingSelection = ".."
 		fsp.ReadDirectory()
 		return true
+	} else {
+		noteNotListableDirectory(refused, err)
 	}
 
 	if providerOpenCanceled {
@@ -5682,7 +5708,10 @@ func (pf *PanelsFrame) NavigateAvailableFolderHistory(fsp *FileSystemPanel, hist
 		fsp.FastFindMode = false
 		fsp.FastFindStr = ""
 		fsp.SuppressNextFolderHistory(path)
-		if !pf.NavigateToPath(fsp, path) {
+		// An entry whose directory the host will not list cannot be opened
+		// either (#814): skip it like any other unavailable entry instead of
+		// stopping the walk on an error message.
+		if !pf.navigateToPath(fsp, path, nil) {
 			fsp.clearFolderHistorySuppression()
 			continue
 		}
