@@ -552,10 +552,6 @@ jobs:
         path: batch-output/artifacts/${{ matrix.assets[2] }}/${{ matrix.assets[2] }}.*
         retention-days: 7
 
-  # Эта джоба собирает Windows-бинарник тулчейном thongtech/go-legacy-win7,
-  # чтобы f4 можно было запускать на Windows 7/8/8.1 (см. issue #514).
-  #
-  # Тулчейн go-legacy-win7-1.26.6-1 в остальном полноценен, но в его
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
   # starts from a shell but dies the moment it re-execs itself for the
   # daemon: untrusted_app on current Android refuses to exec such a file,
@@ -675,18 +671,20 @@ jobs:
         path: ${{ env.ASSET }}.*
         retention-days: 7
 
-  # sync/atomic отсутствуют методы Or/And у типизированных атомиков
-  # (добавлены в Go 1.23, см. https://go.dev/issue/61395) — это баг
-  # именно сборки тулчейна, а не самого Go 1.26.6
-  # (см. https://github.com/thongtech/go-legacy-win7/issues/13, ещё не
-  # исправлено апстримом). Без них не собираются github.com/gogpu/gg и
-  # github.com/ncruces/go-sqlite3. Вместо патчинга каждой такой
-  # зависимости по отдельности (как это было проверено вручную в
-  # issue #514) добавляем недостающие методы один раз прямо в GOROOT
-  # скачанного тулчейна — это эквивалентно апстримному фиксу и не требует
-  # правок go.mod. Если thongtech поправят это в своей сборке, наш файл
-  # с большой вероятностью начнёт конфликтовать (duplicate method) —
-  # тогда этот шаг нужно будет просто удалить.
+  # Эта джоба собирает Windows-бинарник тулчейном thongtech/go-legacy-win7,
+  # чтобы f4 можно было запускать на Windows 7/8/8.1 (см. issue #514).
+  #
+  # Нужен релиз не старше go-legacy-win7-1.26.8-1: в более ранних сборках
+  # не хватало части API стандартной библиотеки Go той же версии.
+  # В 1.26.6-1 не было методов Or/And у типизированных
+  # атомиков sync/atomic (thongtech/go-legacy-win7#13; без них не
+  # собираются github.com/gogpu/gg и github.com/ncruces/go-sqlite3), а до
+  # 1.26.7-1 включительно не было os.Root.RemoveAll (Go 1.25), который
+  # использует github.com/unxed/zip начиная с v0.1.133. Раньше Or/And
+  # дописывались прямо в GOROOT отдельным шагом; с 1.26.8-1 оба API на
+  # месте (релиз собран на переработанной серии патчей: API апстрима
+  # сохраняется, фоллбэки для Windows 7 — внутри), а тот шаг давал бы
+  # ошибку "method already declared", поэтому он удалён.
   build-win7:
     name: Build (windows7/amd64)
     runs-on: ubuntu-latest
@@ -717,115 +715,12 @@ jobs:
         set -euo pipefail
         curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
           -o go-legacy-win7.tar.gz \
-          https://github.com/thongtech/go-legacy-win7/releases/download/v1.26.6-1/go-legacy-win7-1.26.6-1.linux_amd64.tar.gz
-        echo "a197a93c1ec009f600155d20f4c8cc388560cbc55748f99c1c0dd5b29ef52c05  go-legacy-win7.tar.gz" | sha256sum -c -
+          https://github.com/thongtech/go-legacy-win7/releases/download/v1.26.8-1/go-legacy-win7-1.26.8-1.linux_amd64.tar.gz
+        echo "0e8f70bc5c2f7a31ace600092453717ced935358e20c4f2cc9305309b0e283ee  go-legacy-win7.tar.gz" | sha256sum -c -
         mkdir -p "$HOME/go-legacy-win7"
         tar -xzf go-legacy-win7.tar.gz -C "$HOME/go-legacy-win7"
         echo "GOROOT=$HOME/go-legacy-win7/go-legacy-win7" >> "$GITHUB_ENV"
         echo "$HOME/go-legacy-win7/go-legacy-win7/bin" >> "$GITHUB_PATH"
-
-    - name: Restore missing sync/atomic Or/And methods (thongtech/go-legacy-win7#13)
-      if: steps.affected.outputs.build == 'yes'
-      run: |
-        cat > "$GOROOT/src/sync/atomic/or_and_win7compat.go" <<'EOF'
-        // This file restores the Or/And methods on typed atomics (added
-        // upstream in Go 1.23, see https://go.dev/issue/61395) that are
-        // missing from the go-legacy-win7-1.26.6-1 toolchain despite it
-        // being based on Go 1.26.6. See
-        // https://github.com/thongtech/go-legacy-win7/issues/13.
-        // Remove this file once that's fixed upstream.
-        package atomic
-
-        func (x *Int32) Or(mask int32) (old int32) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old|mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Int32) And(mask int32) (old int32) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old&mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Int64) Or(mask int64) (old int64) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old|mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Int64) And(mask int64) (old int64) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old&mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uint32) Or(mask uint32) (old uint32) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old|mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uint32) And(mask uint32) (old uint32) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old&mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uint64) Or(mask uint64) (old uint64) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old|mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uint64) And(mask uint64) (old uint64) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old&mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uintptr) Or(mask uintptr) (old uintptr) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old|mask) {
-        			return old
-        		}
-        	}
-        }
-
-        func (x *Uintptr) And(mask uintptr) (old uintptr) {
-        	for {
-        		old = x.Load()
-        		if x.CompareAndSwap(old, old&mask) {
-        			return old
-        		}
-        	}
-        }
-        EOF
 
     - name: Build binaries
       if: steps.affected.outputs.build == 'yes'
