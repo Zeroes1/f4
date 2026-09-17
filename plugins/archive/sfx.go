@@ -2,8 +2,10 @@ package archive
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/unxed/zipper/archive"
 )
 
 const sfxProbeLimit = 64 << 20
@@ -20,14 +24,57 @@ type sfxSignature struct {
 	magic  []byte
 	format string
 	suffix string
+	// accept, when set, confirms that the magic at offset really starts an
+	// archive. A stub can hold the same bytes as data of its own, and taking
+	// such a match makes the archive unreadable.
+	accept func(r io.ReaderAt, offset int64) (bool, error)
 }
 
 var sfxSignatures = []sfxSignature{
 	{magic: []byte("PK\x03\x04"), format: "zip", suffix: ".zip"},
 	{magic: []byte("PK\x05\x06"), format: "zip", suffix: ".zip"},
-	{magic: []byte("7z\xBC\xAF\x27\x1C"), format: "fallback", suffix: ".7z"},
+	{magic: []byte("7z\xBC\xAF\x27\x1C"), format: "fallback", suffix: ".7z", accept: sevenZipStartHeaderValid},
 	{magic: []byte("Rar!\x1A\x07\x00"), format: "fallback", suffix: ".rar"},
 	{magic: []byte("Rar!\x1A\x07\x01\x00"), format: "fallback", suffix: ".rar"},
+}
+
+// sevenZipStartHeaderSize is the fixed 7z start header: the 6-byte signature,
+// 2 version bytes, the start header CRC, and the 20 bytes that CRC covers.
+const sevenZipStartHeaderSize = 32
+
+// sevenZipStartHeaderValid applies the test 7-Zip itself uses to accept a
+// signature it finds while searching a file (TestStartCrc in
+// CPP/7zip/Archive/7z/7zIn.cpp): the CRC32 stored at bytes 8..11 must match
+// bytes 12..31. The official 7-Zip installer carries the signature inside its
+// stub several kilobytes before the real archive; only the real one passes.
+func sevenZipStartHeaderValid(r io.ReaderAt, offset int64) (bool, error) {
+	var header [sevenZipStartHeaderSize]byte
+	if _, err := r.ReadAt(header[:], offset); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return false, nil
+		}
+		return false, err
+	}
+	return crc32.ChecksumIEEE(header[12:]) == binary.LittleEndian.Uint32(header[8:12]), nil
+}
+
+// nextSFXCandidate returns the earliest signature match in block at or after
+// from, or -1 when there is none.
+func nextSFXCandidate(block []byte, from int) (int, sfxSignature) {
+	bestIndex := -1
+	var best sfxSignature
+	for _, signature := range sfxSignatures {
+		index := bytes.Index(block[from:], signature.magic)
+		if index < 0 {
+			continue
+		}
+		index += from
+		if bestIndex < 0 || index < bestIndex {
+			bestIndex = index
+			best = signature
+		}
+	}
+	return bestIndex, best
 }
 
 type embeddedArchive struct {
@@ -66,21 +113,29 @@ func findEmbeddedArchive(filename string) (embeddedArchive, bool, error) {
 			block = append(block, chunk[:n]...)
 			blockStart := scanned - int64(len(carry))
 
-			bestIndex := -1
-			var best sfxSignature
-			for _, signature := range sfxSignatures {
-				index := bytes.Index(block, signature.magic)
-				if index >= 0 && (bestIndex < 0 || index < bestIndex) {
-					bestIndex = index
-					best = signature
+			for from := 0; from < len(block); {
+				index, candidate := nextSFXCandidate(block, from)
+				if index < 0 {
+					break
 				}
-			}
-			if bestIndex >= 0 {
-				return embeddedArchive{
-					format: best.format,
-					suffix: best.suffix,
-					offset: blockStart + int64(bestIndex),
-				}, true, nil
+				offset := blockStart + int64(index)
+				accepted := true
+				if candidate.accept != nil {
+					var acceptErr error
+					if accepted, acceptErr = candidate.accept(file, offset); acceptErr != nil {
+						return embeddedArchive{}, false, acceptErr
+					}
+				}
+				if accepted {
+					return embeddedArchive{
+						format: candidate.format,
+						suffix: candidate.suffix,
+						offset: offset,
+					}, true, nil
+				}
+				// Rejected: keep searching past it rather than giving up on
+				// the file, because the real archive usually follows.
+				from = index + 1
 			}
 
 			keep := maxMagic - 1
@@ -303,6 +358,38 @@ func copySFXFile(dst, source string, offset int64) error {
 	}
 	removeOutput = false
 	return nil
+}
+
+// materializeLocalSFX probes a local file for an archive embedded after an
+// executable stub and, when one is found, copies it to a private backing file
+// the archive readers can open. The returned embeddedArchive has a zero offset
+// when there is nothing to materialize; the path is then localPath itself.
+func materializeLocalSFX(localPath string) (embeddedArchive, string, io.Closer, error) {
+	embedded, found, err := findEmbeddedArchive(localPath)
+	if err != nil {
+		return embeddedArchive{}, "", nil, err
+	}
+	if !found || embedded.offset <= 0 {
+		return embeddedArchive{}, localPath, nil, nil
+	}
+	backingPath, closer, err := materializeEmbeddedArchive(localPath, embedded)
+	if err != nil {
+		return embeddedArchive{}, "", nil, err
+	}
+	return embedded, backingPath, closer, nil
+}
+
+// localArchiveBacking returns the file the archive readers should be given for
+// a local archive path: the path itself, or for a self-extracting archive the
+// same private copy panel entry reads (see NewArchiveVFSContext). Testing and
+// extracting must go through it, or an SFX that opens in the panel fails both
+// with "no formats matched". A non-nil closer removes the copy.
+func localArchiveBacking(srcPath string) (string, io.Closer, error) {
+	if archive.DetectFormat(filepath.Base(srcPath)) != "" {
+		return srcPath, nil, nil
+	}
+	_, backingPath, closer, err := materializeLocalSFX(srcPath)
+	return backingPath, closer, err
 }
 
 func materializeEmbeddedArchive(filename string, embedded embeddedArchive) (string, io.Closer, error) {

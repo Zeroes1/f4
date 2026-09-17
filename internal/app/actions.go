@@ -437,7 +437,7 @@ func showCommandHistoryDetails(pf *panel.PanelsFrame, rec history.HistoryRecord,
 	message := fmt.Sprintf("Command: %s\nDirectory: %s\nDate: %s\nTime: %s", rec.Name, dir, dateText, timeText)
 	buttons := []string{"&Close"}
 	if dir != "" {
-		buttons = append(buttons, "&ChDir", "&Run-up")
+		buttons = append(buttons, "Ch&Dir", "&Run-up")
 	}
 	dlg := vtui.ShowMessage(i18n.Msg("History.CommandsTitle"), message, buttons)
 	dlg.OnResult = func(code int) {

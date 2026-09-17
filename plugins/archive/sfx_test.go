@@ -21,7 +21,7 @@ func TestFindEmbeddedArchive(t *testing.T) {
 		suffix string
 	}{
 		{name: "zip", magic: []byte("PK\x03\x04"), format: "zip", suffix: ".zip"},
-		{name: "7z", magic: []byte("7z\xBC\xAF\x27\x1C"), format: "fallback", suffix: ".7z"},
+		{name: "7z", magic: validSevenZipStartHeader(), format: "fallback", suffix: ".7z"},
 		{name: "rar", magic: []byte("Rar!\x1A\x07\x00"), format: "fallback", suffix: ".rar"},
 	}
 	for _, test := range tests {
@@ -180,7 +180,7 @@ func TestFindEmbeddedArchiveRejectsPlainFile(t *testing.T) {
 func TestFindEmbeddedArchiveAcrossProbeChunks(t *testing.T) {
 	stub := bytes.Repeat([]byte{'x'}, 64<<10-2)
 	filename := filepath.Join(t.TempDir(), "split.exe")
-	if err := os.WriteFile(filename, append(stub, []byte("7z\xBC\xAF\x27\x1C")...), 0600); err != nil {
+	if err := os.WriteFile(filename, append(stub, validSevenZipStartHeader()...), 0600); err != nil {
 		t.Fatal(err)
 	}
 

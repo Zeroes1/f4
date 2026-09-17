@@ -178,6 +178,16 @@ func extractArchiveAsync(app vfs.App, srcPath, destDir string) {
 }
 
 func extractArchiveWithPasswordPrompt(ctx context.Context, srcPath, destDir string, reporter vfs.TaskReporter) error {
+	// A self-extracting archive is read from the same private copy panel
+	// entry uses, prepared once rather than again for every password attempt.
+	backingPath, backing, err := localArchiveBacking(srcPath)
+	if err != nil {
+		return err
+	}
+	if backing != nil {
+		defer func() { _ = backing.Close() }()
+	}
+
 	var password string
 	var release func()
 	defer func() {
@@ -186,7 +196,7 @@ func extractArchiveWithPasswordPrompt(ctx context.Context, srcPath, destDir stri
 		}
 	}()
 	for {
-		err := extractArchiveOnce(ctx, srcPath, destDir, password, reporter)
+		err := extractArchiveOnce(ctx, backingPath, destDir, password, reporter)
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}
@@ -229,6 +239,16 @@ func actionTestArchive(app vfs.App) {
 }
 
 func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter vfs.TaskReporter) error {
+	// See extractArchiveWithPasswordPrompt: an SFX is tested from the copy
+	// panel entry reads, so "enters fine" and "tests fine" cannot disagree.
+	backingPath, backing, err := localArchiveBacking(srcPath)
+	if err != nil {
+		return err
+	}
+	if backing != nil {
+		defer func() { _ = backing.Close() }()
+	}
+
 	var password string
 	var release func()
 	defer func() {
@@ -238,7 +258,7 @@ func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter
 	}()
 
 	for {
-		err := testArchiveOnce(ctx, srcPath, password, reporter)
+		err := testArchiveOnce(ctx, srcPath, backingPath, password, reporter)
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}
@@ -412,13 +432,16 @@ func collectArchiveTestTotals(ctx context.Context, srcPath, password string) (ar
 	return totals, nil
 }
 
-func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs.TaskReporter) error {
-	totals, err := collectArchiveTestTotals(ctx, srcPath, password)
+// testArchiveOnce tests the archive stored at backingPath. srcPath is the
+// archive as the user sees it and only names it in progress updates; the two
+// differ for a self-extracting archive (see localArchiveBacking).
+func testArchiveOnce(ctx context.Context, srcPath, backingPath, password string, reporter vfs.TaskReporter) error {
+	totals, err := collectArchiveTestTotals(ctx, backingPath, password)
 	if err != nil {
 		return err
 	}
 
-	f, format, stream, err := openArchiveTestStream(ctx, srcPath, password)
+	f, format, stream, err := openArchiveTestStream(ctx, backingPath, password)
 	if err != nil {
 		return err
 	}
@@ -560,9 +583,14 @@ func testArchiveOnce(ctx context.Context, srcPath, password string, reporter vfs
 	return errors.Join(failures...)
 }
 
+// archiveTestFailureButtons are the choices of the test failure report. Each
+// needs a hotkey of its own: with "&Copy list" and "&Close" both on C, the key
+// could only ever copy and never close (issue #1179).
+var archiveTestFailureButtons = []string{"Copy &list", "&Close"}
+
 func showArchiveTestFailure(app vfs.App, srcPath string, err error) {
 	report := formatArchiveTestFailure(srcPath, err)
-	if app.Message(" Test archive ", report, []string{"&Copy list", "&Close"}) == 0 {
+	if app.Message(" Test archive ", report, archiveTestFailureButtons) == 0 {
 		go vtui.SetClipboard(report)
 	}
 }

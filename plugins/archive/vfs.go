@@ -173,16 +173,16 @@ func NewArchiveVFSContext(ctx context.Context, parent vfs.VFS, archivePath strin
 		// and normalize a discovered archive to a private backing file; the
 		// original executable remains untouched.
 		if format == "" {
-			if embedded, found, probeErr := findEmbeddedArchive(finalPath); probeErr != nil {
+			embedded, backingPath, sfxCloser, probeErr := materializeLocalSFX(finalPath)
+			if probeErr != nil {
 				return nil, probeErr
-			} else if found && embedded.offset > 0 {
+			}
+			if embedded.offset > 0 {
 				format = embedded.format
 				sfxOffset = embedded.offset
 				sfxSuffix = embedded.suffix
-				finalPath, closer, err = materializeEmbeddedArchive(finalPath, embedded)
-				if err != nil {
-					return nil, err
-				}
+				finalPath = backingPath
+				closer = sfxCloser
 			}
 		}
 	} else {
