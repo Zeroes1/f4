@@ -67,7 +67,7 @@ func TestMergeHistoryNamesPreservesMetadata(t *testing.T) {
 func TestLimitRichHistoryKeepsLockedEntries(t *testing.T) {
 	history := []HistoryRecord{{Name: "a"}, {Name: "locked", Lock: true}, {Name: "b"}, {Name: "c"}}
 	got := LimitRichHistory(history, 2)
-	want := []HistoryRecord{{Name: "locked", Lock: true}, {Name: "a"}}
+	want := []HistoryRecord{{Name: "a"}, {Name: "locked", Lock: true}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("LimitRichHistory() = %#v, want %#v", got, want)
 	}
@@ -145,7 +145,7 @@ func TestImportFar2lHistoryDecodesEscapesAndTimes(t *testing.T) {
 	if len(got) != 2 || got[0].Name != "one" || got[1].Name != "二" {
 		t.Fatalf("decoded records = %#v", got)
 	}
-	if !got[0].Lock || got[1].Lock || got[0].Directory() != "/tmp" {
+	if got[0].Lock || !got[1].Lock || got[0].Directory() != "/tmp" {
 		t.Errorf("decoded metadata = %#v", got)
 	}
 	if got[0].Timestamp.IsZero() || got[1].Timestamp.IsZero() {
