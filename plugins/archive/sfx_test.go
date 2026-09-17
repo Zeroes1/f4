@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
-	zipvolume "github.com/unxed/zip"
 )
 
 func TestFindEmbeddedArchive(t *testing.T) {
@@ -113,12 +113,8 @@ func TestArchiveProviderOpensZipSFX(t *testing.T) {
 
 func TestArchiveProviderOpensZipSFXMultiVolume(t *testing.T) {
 	root := t.TempDir()
-	mainPath := filepath.Join(root, "bundle.zip")
-	multiWriter, err := zipvolume.NewMultiVolumeWriter(mainPath, 64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	zipWriter := zip.NewWriter(multiWriter)
+	var archive bytes.Buffer
+	zipWriter := zip.NewWriter(&archive)
 	entry, err := zipWriter.Create("inside.txt")
 	if err != nil {
 		t.Fatal(err)
@@ -129,13 +125,20 @@ func TestArchiveProviderOpensZipSFXMultiVolume(t *testing.T) {
 	if err := zipWriter.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := multiWriter.Close(); err != nil {
-		t.Fatal(err)
-	}
 
-	archiveBytes, err := os.ReadFile(mainPath)
-	if err != nil {
-		t.Fatal(err)
+	// The split set sfxVolumePlanFor looks for: bundle.z01, bundle.z02 and
+	// so on, 64 bytes each, with the tail as the archive the self-extractor
+	// carries. unxed/zip's MultiVolumeWriter wrote this layout until v0.1.138,
+	// which names volumes bundle.zip.001, .002, ... instead; its reader still
+	// opens this one, so the set is cut here by hand.
+	const volumeSize = 64
+	archiveBytes := archive.Bytes()
+	for volume := 1; len(archiveBytes) > volumeSize; volume++ {
+		volumePath := filepath.Join(root, fmt.Sprintf("bundle.z%02d", volume))
+		if err := os.WriteFile(volumePath, archiveBytes[:volumeSize], 0600); err != nil { // #nosec G703 -- volumePath is inside the per-test directory created by testing.T.TempDir.
+			t.Fatal(err)
+		}
+		archiveBytes = archiveBytes[volumeSize:]
 	}
 	sfxPath := filepath.Join(root, "bundle.exe")
 	if err := os.WriteFile(sfxPath, append([]byte("stub bytes before the archive\n"), archiveBytes...), 0600); err != nil { // #nosec G703 -- sfxPath is inside the per-test directory created by testing.T.TempDir.
