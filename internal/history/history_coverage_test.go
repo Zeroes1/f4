@@ -14,9 +14,9 @@ import (
 func TestHistoryRecordDisplayText(t *testing.T) {
 	when := time.Date(2024, time.January, 2, 3, 4, 5, 0, time.UTC)
 	tests := []struct {
-		name string
+		name   string
 		record HistoryRecord
-		want string
+		want   string
 	}{
 		{name: "name only", record: HistoryRecord{Name: "report.txt"}, want: "report.txt"},
 		{name: "directory", record: HistoryRecord{Name: "report.txt", Dir: "/tmp/work"}, want: "/tmp/work/ report.txt"},
