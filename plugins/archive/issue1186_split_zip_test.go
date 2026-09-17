@@ -10,6 +10,7 @@ import (
 
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/zip"
+	"github.com/unxed/zipper/archive"
 )
 
 // issue1186BuildSplitZip writes a ZIP split archive the way WinZip, WinRAR and
@@ -119,8 +120,8 @@ func TestIssue1186SplitZipTestsFromEveryVolume(t *testing.T) {
 
 	for _, name := range []string{"archive.zip", "archive.z01"} {
 		path := filepath.Join(root, name)
-		if !isSplitZipArchive(path) {
-			t.Fatalf("%s is not taken for a volume of a split archive", name)
+		if got := archive.DetectFormat(path); got != "zip" {
+			t.Fatalf("DetectFormat(%s) = %q, want zip", name, got)
 		}
 		if err := testArchiveOnce(ctx, path, path, "", &issue915ProgressRecorder{}); err != nil {
 			t.Fatalf("test %s: %v", name, err)

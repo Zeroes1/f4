@@ -436,43 +436,12 @@ func collectArchiveTestTotals(ctx context.Context, srcPath, password string) (ar
 	return totals, nil
 }
 
-// isSplitZipArchive reports whether the archive at path is a volume of a ZIP
-// split archive -- archive.z01, archive.z02, ..., archive.zip. Only the last
-// volume carries the central directory, and the data of a member can sit in
-// any of them, so such an archive is read through unxed/zip, which opens the
-// volumes as a set; the generic identification works on one file at a time
-// and gets "not a valid zip file" out of the rest (issue #1186).
-func isSplitZipArchive(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	if len(ext) >= 4 && strings.HasPrefix(ext, ".z") {
-		digits := true
-		for _, c := range ext[2:] {
-			if c < '0' || c > '9' {
-				digits = false
-				break
-			}
-		}
-		if digits {
-			return true
-		}
-	}
-	if ext != ".zip" {
-		return false
-	}
-	stem := strings.TrimSuffix(path, filepath.Ext(path))
-	for _, first := range []string{".z01", ".Z01"} {
-		if _, err := os.Stat(stem + first); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// testSplitZipOnce tests every member of a ZIP split archive. The members are
-// read through unxed/zip, whose reader checks each member against the checksum
-// the archive stores for it and joins the volumes by the name of any one of
-// them.
-func testSplitZipOnce(ctx context.Context, srcPath, backingPath, password string, reporter vfs.TaskReporter) error {
+// testZipOnce tests every member of a zip archive through unxed/zip, the
+// reader the panel uses for zip everywhere else. Its reader checks each member
+// against the checksum the archive stores for it, joins the volumes of a split
+// archive by the name of any one of them, and reads an archive that sits
+// behind an executable stub where it lies.
+func testZipOnce(ctx context.Context, srcPath, backingPath, password string, reporter vfs.TaskReporter) error {
 	reader, err := zip.OpenReaderWithPassword(backingPath, password)
 	if err != nil {
 		return err
@@ -559,8 +528,8 @@ func testSplitZipOnce(ctx context.Context, srcPath, backingPath, password string
 // archive as the user sees it and only names it in progress updates; the two
 // differ for a self-extracting archive (see localArchiveBacking).
 func testArchiveOnce(ctx context.Context, srcPath, backingPath, password string, reporter vfs.TaskReporter) error {
-	if isSplitZipArchive(backingPath) {
-		return testSplitZipOnce(ctx, srcPath, backingPath, password, reporter)
+	if archive.DetectFormat(backingPath) == "zip" {
+		return testZipOnce(ctx, srcPath, backingPath, password, reporter)
 	}
 
 	totals, err := collectArchiveTestTotals(ctx, backingPath, password)

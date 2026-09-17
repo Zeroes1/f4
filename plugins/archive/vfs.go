@@ -177,12 +177,14 @@ func NewArchiveVFSContext(ctx context.Context, parent vfs.VFS, archivePath strin
 			if probeErr != nil {
 				return nil, probeErr
 			}
-			if embedded.offset > 0 {
+			if embedded.format != "" {
 				format = embedded.format
 				sfxOffset = embedded.offset
 				sfxSuffix = embedded.suffix
-				finalPath = backingPath
-				closer = sfxCloser
+				if embedded.offset > 0 {
+					finalPath = backingPath
+					closer = sfxCloser
+				}
 			}
 		}
 	} else {

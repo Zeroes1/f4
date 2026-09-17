@@ -365,6 +365,20 @@ func copySFXFile(dst, source string, offset int64) error {
 // the archive readers can open. The returned embeddedArchive has a zero offset
 // when there is nothing to materialize; the path is then localPath itself.
 func materializeLocalSFX(localPath string) (embeddedArchive, string, io.Closer, error) {
+	// A zip keeps the offsets of its entries in the central directory at the
+	// end of the file, and a tool that appends one to an executable stub may
+	// count the stub in those offsets or not. The zip reader works out which
+	// it is and reads the archive where it lies, so such a file is handed
+	// over whole; copying the archive out from under the stub invalidates
+	// every offset that counted the stub in, and the entries are then read
+	// by guesswork, without the parameters their headers carry -- for a
+	// WinRAR self-extracting archive with AES that means "zip: AES info
+	// missing" for every member, once the password has been given
+	// (issue #1186).
+	if archive.DetectFormat(localPath) == "zip" {
+		return embeddedArchive{format: "zip"}, localPath, nil, nil
+	}
+
 	embedded, found, err := findEmbeddedArchive(localPath)
 	if err != nil {
 		return embeddedArchive{}, "", nil, err
