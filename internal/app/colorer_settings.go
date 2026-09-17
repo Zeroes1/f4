@@ -127,9 +127,13 @@ func runColorerCheck(pf *panel.PanelsFrame, src editor.ColorerSource, scheme str
 	var check editor.ColorerCheck
 	pf.RunProgressTask(i18n.Msg("ColorerSettings.CheckTitle"), i18n.Msg("ColorerSettings.Checking"), false,
 		func(ctx context.Context, update func(msg string, percent int)) error {
+			// DIAG (temporary): which dialog-layout subtest starts a Colorer
+			// check, and whether two overlap; read against the === RUN lines.
+			println("DIAG runColorerCheck: start")
 			check = editor.CheckColorerSource(ctx, src, scheme, allTypes, func(n, total int, label string) {
 				update(label, n*100/total)
 			})
+			println("DIAG runColorerCheck: done")
 			return nil
 		},
 		func(error) {
