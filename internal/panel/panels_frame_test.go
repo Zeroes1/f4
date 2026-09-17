@@ -1362,10 +1362,21 @@ func TestPanelsFrame_AutoRefresh(t *testing.T) {
 			t.Fatal("AutoRefresh stat check did not finish")
 		}
 	}
-	if !fsp.IsLoading {
+	// The load the changed side starts can also finish in this loop, while it
+	// still waits for the other side's check: IsLoading is then false again,
+	// and asserting it failed a refresh that had already happened. What the
+	// refresh leaves behind is the new file in the listing, which only a
+	// reload of tmp can put there.
+	waitForLoad(t, fsp)
+	listed := false
+	for _, entry := range fsp.Entries {
+		if entry.Name == "test.txt" {
+			listed = true
+		}
+	}
+	if !listed {
 		t.Fatal("AutoRefresh failed to trigger ReadDirectory after MTime change")
 	}
-	waitForLoad(t, fsp)
 }
 func TestPanelsFrame_ResizingIntegration(t *testing.T) {
 	oldWidthDecrement := config.App.WidthDecrement
