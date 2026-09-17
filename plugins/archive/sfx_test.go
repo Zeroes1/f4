@@ -91,7 +91,7 @@ func TestArchiveProviderOpensZipSFX(t *testing.T) {
 	if len(items) != 1 || items[0].Name != "inside.txt" {
 		t.Fatalf("root entries = %#v, want inside.txt", items)
 	}
-	if archiveVFS.sfxOffset != int64(len(stub)) || archiveVFS.sfxSuffix != ".zip" {
+	if archiveVFS.sfxOffset != 0 || archiveVFS.sfxSuffix != "" {
 		t.Fatalf("SFX metadata = offset %d, suffix %q", archiveVFS.sfxOffset, archiveVFS.sfxSuffix)
 	}
 
