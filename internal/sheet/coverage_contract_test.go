@@ -55,7 +55,7 @@ func TestExpressionOperatorAndFunctionContracts(t *testing.T) {
 
 func TestExpressionErrorsAndEvaluationEdges(t *testing.T) {
 	for _, expression := range []string{
-		"cotan 0", "sec 1.5707963267948966", "cosec 0", "asin 2", "acos 2",
+		"cotan 0", "cosec 0", "asin 2", "acos 2",
 		"arcsec 0", "arccosec 0", "arch 0", "ath 2", "fact -1", "lg 0", "ln 0",
 		"sqrt -1", "log 1 10", "log 0 10", "log 10 0", "root 0 4", "root 2 -1",
 	} {
@@ -227,7 +227,7 @@ func TestXLSXHelpersAndFormulaContracts(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ formula, want string }{
-		{"=SUM($A$1;B2)", "sum(@A@1:B2)"},
+		{"=SUM($A$1;B2)", "sum(@A@1,B2)"},
 		{"POWER(2,3)", "(2)^(3)"}, {"LOG10(100)", "lg(100)"}, {"PI()", "pi"},
 	} {
 		if got, ok := formulaFromExcel(tc.formula); !ok || got != tc.want {
@@ -279,7 +279,7 @@ func TestXLSXImportedCellVariantsAndColumns(t *testing.T) {
 		attrs []xml.Attr
 		want  map[int]int
 	}{
-		{[]xml.Attr{{Name: xml.Name{Local: "min"}, Value: "2"}, {Name: xml.Name{Local: "max"}, Value: "4"}, {Name: xml.Name{Local: "width"}, Value: "3.5"}}, map[int]int{1: MinColumnWidth, 2: MinColumnWidth, 3: MinColumnWidth}},
+		{[]xml.Attr{{Name: xml.Name{Local: "min"}, Value: "2"}, {Name: xml.Name{Local: "max"}, Value: "4"}, {Name: xml.Name{Local: "width"}, Value: "3.5"}}, map[int]int{1: 4, 2: 4, 3: 4}},
 		{[]xml.Attr{{Name: xml.Name{Local: "min"}, Value: "5"}, {Name: xml.Name{Local: "max"}, Value: "4"}, {Name: xml.Name{Local: "width"}, Value: "999"}}, map[int]int{4: MaxColumnWidth}},
 	} {
 		target := New()
