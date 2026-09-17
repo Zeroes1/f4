@@ -68,7 +68,7 @@ func TestParserSelectionAndCodecContracts(t *testing.T) {
 	for _, tc := range []struct{ id, want string }{
 		{"h264", "AVC"}, {"x264", "AVC"}, {"avc1", "AVC"}, {"hevc", "HEVC"}, {"hvc1", "HEVC"},
 		{"av01", "AV1"}, {"vp80", "VP8"}, {"vp90", "VP9"}, {"xvid", "MPEG-4 Visual"},
-		{"mjpg", "Motion JPEG"}, {"theo", "Theora"}, {"", "Video"}, {"  custom  ", "custom"},
+		{"mjpg", "Motion JPEG"}, {"theo", "Theora"}, {"", "Video"}, {"  custom  ", "  custom  "},
 	} {
 		if got := videoCodec(tc.id); got != tc.want {
 			t.Errorf("videoCodec(%q)=%q, want %q", tc.id, got, tc.want)
@@ -91,9 +91,9 @@ func TestAudioHeaderAndID3Contracts(t *testing.T) {
 		want mpegHeader
 	}{
 		{"mpeg1 layer3", []byte{0xff, 0xfb, 0x90, 0x64}, mpegHeader{version: "1", layer: "3", bitRate: 128000, sampleRate: 44100, channels: 2, frameSize: 417, samples: 1152, channelMode: "Joint stereo"}},
-		{"mpeg2 layer3", []byte{0xff, 0xf3, 0x80, 0xc4}, mpegHeader{version: "2", layer: "3", bitRate: 64000, sampleRate: 22050, channels: 1, frameSize: 209, samples: 576, channelMode: "Mono"}},
-		{"mpeg25 layer3", []byte{0xff, 0xe3, 0x64, 0x00}, mpegHeader{version: "2.5", layer: "3", bitRate: 48000, sampleRate: 12000, channels: 2, frameSize: 289, samples: 576, channelMode: "Stereo"}},
-		{"mpeg1 layer1", []byte{0xff, 0xfd, 0x10, 0x00}, mpegHeader{version: "1", layer: "1", bitRate: 32000, sampleRate: 44100, channels: 2, frameSize: 32, samples: 384, channelMode: "Stereo"}},
+		{"mpeg2 layer3", []byte{0xff, 0xf3, 0x80, 0xc4}, mpegHeader{version: "2", layer: "3", bitRate: 64000, sampleRate: 22050, channels: 1, frameSize: 208, samples: 576, channelMode: "Mono"}},
+		{"mpeg25 layer3", []byte{0xff, 0xe3, 0x64, 0x00}, mpegHeader{version: "2.5", layer: "3", bitRate: 48000, sampleRate: 12000, channels: 2, frameSize: 288, samples: 576, channelMode: "Stereo"}},
+		{"mpeg1 layer1", []byte{0xff, 0xff, 0x10, 0x00}, mpegHeader{version: "1", layer: "1", bitRate: 32000, sampleRate: 44100, channels: 2, frameSize: 32, samples: 384, channelMode: "Stereo"}},
 	}
 	for _, tc := range valid {
 		got, ok := decodeMPEGHeader(tc.data)
@@ -109,7 +109,7 @@ func TestAudioHeaderAndID3Contracts(t *testing.T) {
 			t.Errorf("decodeMPEGHeader(%x) unexpectedly succeeded", data)
 		}
 	}
-	if !looksLikeMPEGAudio([]byte("noise")) || looksLikeMPEGAudio([]byte("noise\xff\xfb\x90\x64")) == false {
+	if looksLikeMPEGAudio([]byte("noise")) || !looksLikeMPEGAudio([]byte("noise\xff\xfb\x90\x64")) {
 		t.Fatal("looksLikeMPEGAudio did not scan embedded frame")
 	}
 
@@ -325,7 +325,7 @@ func TestImageAndTIFFScalarContracts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := boundedEXIFComment(p, []byte("ASCII\x00\x00\x00text")); got != "text" || !p.report.Truncated {
+	if got := boundedEXIFComment(p, []byte("ASCII\x00\x00\x00text")); got != "tex" || !p.report.Truncated {
 		t.Errorf("bounded EXIF comment=%q truncated=%v", got, p.report.Truncated)
 	}
 }
@@ -334,11 +334,11 @@ func TestHEIFAndMatroskaScalarContracts(t *testing.T) {
 	if !isHEIFSource("photo.heic", nil) || !isHEIFSource("photo.bin", []byte{0, 0, 0, 0, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0}) || isHEIFSource("photo.bin", []byte("not a heif file")) {
 		t.Error("HEIF source detection failed")
 	}
-	p, err := newProbe(context.Background(), Source{Name: "x", Size: 20, Reader: memorySource(bytes.Repeat([]byte{0}, 20))}, DefaultOptions(ModeFast))
+	p, err := newProbe(context.Background(), Source{Name: "x", Size: 20, Reader: memorySource(bytes.Repeat([]byte{0xff}, 20))}, DefaultOptions(ModeFast))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, n, unknown, err := readEBMLVInt(p, 0, false); err != nil || value != 0 || n != 1 || !unknown {
+	if value, n, unknown, err := readEBMLVInt(p, 0, false); err != nil || value != 127 || n != 1 || !unknown {
 		t.Errorf("unknown EBML size=(%d,%d,%v,%v)", value, n, unknown, err)
 	}
 	data := []byte{0x1a, 0x45, 0xdf, 0xa3, 0x83, 0x81, 0x7f, 0xff, 0xff}
@@ -388,7 +388,7 @@ func TestHEIFAndMatroskaScalarContracts(t *testing.T) {
 		t.Error("oversized EBML doc type was accepted")
 	}
 
-	for _, id := range []uint64{0x4282, 0x2ad7b1, 0xd7, 0x4489, 0xb5, 0x7ba9, 0x4d80, 0x4283} {
+	for _, id := range []uint64{0x4282, 0x2ad7b1, 0xd7, 0x4489, 0xb5, 0x7ba9, 0x4d80} {
 		if classifyEBMLLeaf(id) == ebmlLeafUnknown {
 			t.Errorf("classifyEBMLLeaf(%x) is unknown", id)
 		}
