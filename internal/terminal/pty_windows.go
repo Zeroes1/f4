@@ -295,6 +295,46 @@ func (api *conPTYAPI) closePseudoConsole(console windows.Handle) {
 	_, _, _ = api.close.Call(uintptr(console))
 }
 
+// conPTYWorks caches the answer to "can this system actually allocate a
+// pseudo console", which is a different question from "does kernel32 export
+// the name". The probe runs at most once per process.
+var conPTYWorks struct {
+	once sync.Once
+	ok   bool
+}
+
+// probeSystemConPTY allocates a pseudo console and closes it again. A
+// resolvable entry point is not a working one: on Windows releases older than
+// 10 the three ConPTY names can be present and still refuse the call — that is
+// what happens on ReactOS 0.4.16 (NT 5.2), where CreatePseudoConsole answers
+// E_NOTIMPL and the shell f4 then starts has nothing behind it. Measured
+// there: without this probe ResolveShellMode picked ShellModeOwn and the
+// Terminal tab stayed empty, because the mode that needs a PTY had been
+// chosen on the strength of a symbol lookup.
+func probeSystemConPTY(api *conPTYAPI) bool {
+	var inRead, inWrite, outRead, outWrite windows.Handle
+	if err := windows.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
+		vtui.DebugLog("PTY_WIN: ConPTY probe could not make a pipe: %v", err)
+		return false
+	}
+	defer windows.CloseHandle(inRead)
+	defer windows.CloseHandle(inWrite)
+	if err := windows.CreatePipe(&outRead, &outWrite, nil, 0); err != nil {
+		vtui.DebugLog("PTY_WIN: ConPTY probe could not make a pipe: %v", err)
+		return false
+	}
+	defer windows.CloseHandle(outRead)
+	defer windows.CloseHandle(outWrite)
+
+	var console windows.Handle
+	if err := api.createPseudoConsole(windows.Coord{X: 80, Y: 25}, inRead, outWrite, 0, &console); err != nil {
+		vtui.DebugLog("PTY_WIN: ConPTY entry points resolve but do not work: %v", err)
+		return false
+	}
+	api.closePseudoConsole(console)
+	return true
+}
+
 // ConPTYAvailable checks whether a ConPTY API is reachable at all. The in-box
 // API is the test: the package needs the same Windows build, and checking for
 // it must not start a download. Older Windows versions remain usable through
@@ -303,11 +343,15 @@ func ConPTYAvailable() bool {
 	if vtui.IsWine() {
 		return false
 	}
-	if _, err := systemConPTY(); err != nil {
-		vtui.DebugLog("PTY_WIN: kernel32.dll ConPTY unavailable: %v", err)
-		return false
-	}
-	return true
+	conPTYWorks.once.Do(func() {
+		api, err := systemConPTY()
+		if err != nil {
+			vtui.DebugLog("PTY_WIN: kernel32.dll ConPTY unavailable: %v", err)
+			return
+		}
+		conPTYWorks.ok = probeSystemConPTY(api)
+	})
+	return conPTYWorks.ok
 }
 func isPlatformPTYUsable() bool {
 	return ConPTYAvailable()
