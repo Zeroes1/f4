@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"io"
