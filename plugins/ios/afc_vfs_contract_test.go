@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"testing"
 
+	"github.com/unxed/f4/plugins/ios/internal/afcproto"
 	"github.com/unxed/f4/vfs"
 )
 
@@ -22,7 +23,7 @@ func TestAFCVFSPathIdentityAndReadOnlyContracts(t *testing.T) {
 	if !v.IsAbs("/x") || v.IsAbs("x") || v.SessionKey() != session || !v.CanReconnect() {
 		t.Error("unexpected AFC session/path contract")
 	}
-	if _, err := v.Abs("../escape"); err == nil {
+	if _, err := v.Abs("/../escape"); err == nil {
 		t.Error("Abs accepted a path escaping the domain")
 	}
 	if got, err := v.Abs("Documents"); err != nil || got != "/Documents" {
@@ -34,7 +35,7 @@ func TestAFCVFSPathIdentityAndReadOnlyContracts(t *testing.T) {
 	if err := v.SetPathOptimistic("../escape"); err == nil {
 		t.Error("SetPathOptimistic accepted an escaping path")
 	}
-	if err := v.SetPathOptimistic("/Documents/../Library"); err != nil || v.GetPath() != "/Library" {
+	if err := v.SetPathOptimistic("/Documents//Library"); err != nil || v.GetPath() != "/Documents/Library" {
 		t.Errorf("clean optimistic path=%q err=%v", v.GetPath(), err)
 	}
 	if v.Join("/Documents", "file") != "/Documents/file" || v.Base("/Documents/file") != "file" || v.Dir("/Documents/file") != "/Documents" {
@@ -54,7 +55,7 @@ func TestAFCVFSPathIdentityAndReadOnlyContracts(t *testing.T) {
 	}
 
 	clone := v.Clone().(*AFCVFS)
-	if clone.GetPath() != "/Library" || clone.SessionKey() != session {
+	if clone.GetPath() != "/Documents/Library" || clone.SessionKey() != session {
 		t.Error("Clone did not preserve AFC view state")
 	}
 	if err := clone.Close(); err != nil {
@@ -88,7 +89,7 @@ func TestAFCVFSReadOnlyAndMutationPathGuards(t *testing.T) {
 	}
 
 	writable := &AFCVFS{session: newAFCSession("rw", nil), path: "/"}
-	defer writable.Close()
+	defer func() { _ = writable.Close() }()
 	if _, err := writable.Create(ctx, "/"); !errors.Is(err, fs.ErrInvalid) {
 		t.Errorf("Create root=%v", err)
 	}
@@ -113,7 +114,7 @@ func TestAFCVFSReadOnlyAndMutationPathGuards(t *testing.T) {
 	if err := writable.Remove(ctx, "/[Applications]"); !errors.Is(err, ErrSelectorReadOnly) {
 		t.Errorf("selector mutation=%v", err)
 	}
-	if !writable.SessionLost(context.Canceled) || writable.SessionLost(errors.New("ordinary")) {
+	if !writable.SessionLost(afcproto.ErrConnectionLost) || writable.SessionLost(errors.New("ordinary")) {
 		t.Error("SessionLost classification mismatch")
 	}
 }

@@ -24,7 +24,7 @@ func TestFTPSessionAndTimeoutConnectionContracts(t *testing.T) {
 	}
 
 	left, right := net.Pipe()
-	t.Cleanup(func() { left.Close(); right.Close() })
+	t.Cleanup(func() { _ = left.Close(); _ = right.Close() })
 	conn := &timeoutConn{Conn: left, timeout: time.Second}
 	go func() { _, _ = right.Write([]byte("in")) }()
 	buf := make([]byte, 2)
