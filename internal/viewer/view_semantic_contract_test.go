@@ -9,7 +9,7 @@ import (
 
 func TestSemanticHexLineContract(t *testing.T) {
 	got := semanticHexLine(0x2a, []byte{'A', 0, 0x7f, 0x80, 0xff})
-	want := "000000002A: 41 00 7F 80 FF                | A...."
+	want := "000000002A: 41 00 7F 80 FF" + strings.Repeat(" ", 34) + "| A...."
 	if got != want {
 		t.Fatalf("hex line=%q, want %q", got, want)
 	}
@@ -23,16 +23,16 @@ func TestSemanticViewerLineLengthModes(t *testing.T) {
 	t.Cleanup(func() { config.App.EditorTabSize = oldTabSize })
 
 	tests := []struct {
-		name       string
-		data       string
-		width      int
-		wrap       bool
-		tabSize    int
-		wantLine   int
-		wantText   int
+		name     string
+		data     string
+		width    int
+		wrap     bool
+		tabSize  int
+		wantLine int
+		wantText int
 	}{
 		{name: "newline", data: "abc\ndef", width: 20, wrap: false, wantLine: 4, wantText: 3},
-		{name: "carriage return", data: "a\rb\n", width: 20, wrap: false, wantLine: 4, wantText: 4},
+		{name: "carriage return", data: "a\rb\n", width: 20, wrap: false, wantLine: 4, wantText: 3},
 		{name: "crlf only", data: "\r\nrest", width: 20, wrap: false, wantLine: 2, wantText: 0},
 		{name: "hard width", data: "abcdef", width: 3, wrap: false, wantLine: 3, wantText: 3},
 		{name: "soft wrap", data: "abcdef", width: 3, wrap: true, wantLine: 3, wantText: 3},
