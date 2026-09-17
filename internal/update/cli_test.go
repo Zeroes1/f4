@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/unxed/f4/internal/netproxy"
 )
 
 func TestParseUpdateChannelArg(t *testing.T) {
