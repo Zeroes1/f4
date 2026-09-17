@@ -210,7 +210,7 @@ func TestSyncVFSCommandAndEntryEdges(t *testing.T) {
 	if ch, err := fs.Search(context.Background(), "/", "x"); err != nil || ch != nil {
 		t.Fatalf("Search = %v, %v", ch, err)
 	}
-	if err := fs.RunCommand(context.Background(), "/", ""); err == nil {
+	if _, err := fs.RunCommand(context.Background(), "/", "", nil); err == nil {
 		t.Fatal("empty command was accepted")
 	}
 	if _, err := fs.RunCommand(context.Background(), "/", "echo hi", nil); err == nil {
