@@ -9,7 +9,7 @@ import (
 
 func TestSemanticHexLineContract(t *testing.T) {
 	got := semanticHexLine(0x2a, []byte{'A', 0, 0x7f, 0x80, 0xff})
-	want := "000000002A: 41 00 7F 80 FF" + strings.Repeat(" ", 34) + "| A...."
+	want := "000000002A: 41 00 7F 80 FF" + strings.Repeat(" ", 36) + "| A...."
 	if got != want {
 		t.Fatalf("hex line=%q, want %q", got, want)
 	}
