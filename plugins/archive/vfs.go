@@ -2572,7 +2572,7 @@ func archiveProgressPercent(copied, total int64) int {
 	return int(float64(copied) * 100 / float64(total))
 }
 
-func (v *ArchiveVFS) openBulkExtractor(ctx context.Context, f vfs.ReadAtCloser, password string) (*os.File, archives.Extractor, error) {
+func (v *ArchiveVFS) openBulkExtractor(ctx context.Context, f vfs.ReadAtCloser, password string) (*archive.Input, archives.Extractor, error) {
 	var localPath string
 	if temp, ok := f.(*vfs.TempFileWrapper); ok && temp.TempPath != "" {
 		localPath = temp.TempPath
@@ -2580,7 +2580,10 @@ func (v *ArchiveVFS) openBulkExtractor(ctx context.Context, f vfs.ReadAtCloser, 
 		localPath = v.activePath()
 	}
 
-	localF, err := os.Open(localPath)
+	// Split archives (name.7z.001, name.7z.002, ...) are read as one stream;
+	// copying out of one read only its first volume and failed at the header
+	// (issue #1179).
+	localF, err := archive.OpenInput(localPath)
 	if err != nil {
 		return nil, nil, err
 	}

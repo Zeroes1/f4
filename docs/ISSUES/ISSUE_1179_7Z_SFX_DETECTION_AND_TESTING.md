@@ -1,7 +1,6 @@
-# Issue #1179 (part 1, 7z) solution review — SFX detection, SFX testing, dialog hotkeys
+# Issue #1179 (part 1, 7z) solution review — SFX detection, SFX testing, dialog hotkeys, split volumes
 
-Scope: points 1, 2 and 2a of the issue. Point 3 (multi-volume `.7z.001`) is
-not addressed here; see the last section.
+Scope: points 1, 2, 2a and 3 of the issue.
 
 ## Point 1: the 7-Zip installer fails with `sevenzip: checksum error`
 
@@ -53,10 +52,30 @@ After the change, on Linux: `7z2603-x64.exe` enters, tests and extracts (108
 entries); 7z SFX archives built with the installer's own `7z.sfx` and
 `7zCon.sfx` enter, test and extract; a plain `.7z` behaves as before.
 
-## Not addressed: point 3, `test.7z.001`
+## Point 3: `test.7z.001` fails with `error reading header id: EOF`
 
-f4 and zipper fail identically (`error reading header id: EOF`).
-`archives.SevenZip.Extract` hands `sevenzip.NewReaderWithPassword` a stream of
-the first volume only; `sevenzip.OpenReader`, which joins `.002`, `.003`… for a
-`.001` name, is not used on this path. That the missing volumes are the cause
-has not yet been confirmed by experiment.
+7-Zip volumes (`-v`) are a plain byte split: the volumes of the reproduction,
+concatenated, are byte-identical to the unsplit archive. Handed only the first
+volume, `archives.SevenZip.Extract` fails exactly as reported; handed the
+joined volumes, the same call lists every member. f4 and zipper both passed a
+stream of the first file only.
+
+zipper now provides `archive.OpenInput`, which reads `.001`, `.002`, ... up to
+the first missing number as one stream (the rule `sevenzip.OpenReader`
+documents for a `.001` name); zipper's own FS and extractor use it, so panel
+entry and Shift-F2 work. f4 opened the archive file itself in three more
+places, all now through `OpenInput`:
+
+| operation | before | after |
+| --- | --- | --- |
+| F5 out of the archive (`openBulkExtractor`) | `error reading header id: EOF` | copies |
+| Shift-F3 (`openArchiveTestStream`) | `error reading header id: EOF` | no errors |
+| check after Shift-F2 (`validateExtracted7z`) | skipped: gated on a `.7z` extension | runs for `name.7z.001` |
+
+Measured on `vol.7z.001` built with `7zz a -v1m`; entering, F3 on a member and
+scanning worked already once zipper joined the volumes.
+
+7-Zip's `-sfx` together with `-v` writes a separate stub `name.exe` plus plain
+volumes `name.exe.001`, ... . Those enter, copy, test and extract like any
+split archive; the post-extraction check stays gated on a `.7z` name, as for
+any other 7z archive not named `.7z`.

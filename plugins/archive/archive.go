@@ -353,8 +353,11 @@ func archiveFormatListsWithoutDecoding(format archives.Format) bool {
 // and RAR volume configuration the rest of the plugin applies, so that the
 // listing pass and the testing pass see the same archive. The caller owns the
 // returned file.
-func openArchiveTestStream(ctx context.Context, srcPath, password string) (*os.File, archives.Format, io.Reader, error) {
-	f, err := os.Open(srcPath)
+func openArchiveTestStream(ctx context.Context, srcPath, password string) (*archive.Input, archives.Format, io.Reader, error) {
+	// archive.OpenInput reads the volumes of a split archive (name.7z.001,
+	// name.7z.002, ...) as one stream; the first volume alone ends before the
+	// 7z header does (issue #1179).
+	f, err := archive.OpenInput(srcPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -447,11 +450,7 @@ func testArchiveOnce(ctx context.Context, srcPath, backingPath, password string,
 	}
 	defer func() { _ = f.Close() }()
 
-	archiveStat, err := f.Stat()
-	if err != nil {
-		return err
-	}
-	archiveSize := archiveStat.Size()
+	archiveSize := f.Size()
 
 	extractor, ok := format.(archives.Extractor)
 	if !ok {
@@ -672,11 +671,16 @@ func extractArchiveOnce(ctx context.Context, srcPath, destDir, password string, 
 // extractor has no error to trigger a retry in that case, while the header
 // checksum gives us a reliable postcondition for the password attempt.
 func validateExtracted7z(ctx context.Context, srcPath, destDir, password string) error {
-	if !strings.EqualFold(filepath.Ext(srcPath), ".7z") {
+	// The first volume of a split archive, name.7z.001, is a 7z archive too.
+	name := srcPath
+	if filepath.Ext(name) == ".001" {
+		name = strings.TrimSuffix(name, ".001")
+	}
+	if !strings.EqualFold(filepath.Ext(name), ".7z") {
 		return nil
 	}
 
-	f, err := os.Open(srcPath)
+	f, err := archive.OpenInput(srcPath)
 	if err != nil {
 		return err
 	}
