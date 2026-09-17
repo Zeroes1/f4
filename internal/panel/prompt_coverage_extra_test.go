@@ -55,7 +55,7 @@ func TestPromptSpanRendering(t *testing.T) {
 	}
 
 	inactive := promptSpansInactive(spans)
-	if gotText := string([]rune{inactive[0].Char}); gotText != "u" {
+	if gotText := string(rune(inactive[0].Char)); gotText != "u" {
 		t.Fatalf("inactive first rune = %q", gotText)
 	}
 	if len(inactive) != len(got) {
