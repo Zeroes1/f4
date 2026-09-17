@@ -211,7 +211,7 @@ func TestSubtitleFormatContracts(t *testing.T) {
 		name string
 		data string
 		want string
-		cues int
+		cues int64
 	}{
 		{"captions.srt", "1\n00:00:01,000 --> 00:00:02,500\nhello\n", "SubRip", 1},
 		{"captions.vtt", "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nhello\n", "WebVTT", 1},
