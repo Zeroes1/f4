@@ -761,6 +761,17 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { ShowCompareFoldersDialog(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.SyncDirs",
+		Area:        "Shell",
+		Label:       "Synchronize Dirs",
+		LabelKey:    "Menu.Commands.SyncDirs",
+		Description: "Compare the two panels and copy or delete what differs",
+		DescKey:     "Action.Panel.SyncDirs.Desc",
+		MenuPath:    "Commands",
+		Visible:     panelCanSyncDirs,
+		Handler:     withPF(func(pf *panel.PanelsFrame) { ShowSyncDirsDialog(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "File.RunRemoteCommand",
 		Area:        "Shell",
 		Label:       "Run Command Remotely",

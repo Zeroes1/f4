@@ -375,6 +375,71 @@ func (o CompareOptions) HasCriteria() bool {
 	return o.ByTime || o.BySize || o.ByContent
 }
 
+// SyncDefaultMask is what the mask field of the synchronize dialog starts
+// out with: everything, the way Total Commander's own field does.
+const SyncDefaultMask = "*"
+
+// SyncOptions mirrors the option row of Total Commander's "Synchronize
+// dirs" window, which is the reference this feature follows.
+type SyncOptions struct {
+	// Asymmetric makes the right folder a mirror of the left one:
+	// anything missing or older on the right is copied over it, and
+	// anything the left folder does not have is deleted from the right.
+	// Without it the two folders are peers and each side's newer file
+	// wins.
+	Asymmetric bool
+	// Subdirs compares the whole tree instead of the two folders' own
+	// files.
+	Subdirs bool
+	// ByContent reads the files whose size and time already match, to
+	// find the ones that only look equal.
+	ByContent bool
+	// IgnoreDate takes name and size as the whole truth. Total
+	// Commander documents the consequence: such a comparison can only
+	// answer "equal" or "not equal", so the copying direction is left
+	// to the user.
+	IgnoreDate bool
+	// Mask is the far2l-style file mask the comparison is limited to,
+	// including the "|" exclude section.
+	Mask string
+}
+
+// DefaultSyncOptions is Total Commander's own starting position: the whole
+// tree, everything in it, times and sizes decide.
+func DefaultSyncOptions() SyncOptions {
+	return SyncOptions{
+		Subdirs: true,
+		Mask:    SyncDefaultMask,
+	}
+}
+
+// Normalize repairs values a hand-edited config may hold.
+func (o SyncOptions) Normalize() SyncOptions {
+	if strings.TrimSpace(o.Mask) == "" {
+		o.Mask = SyncDefaultMask
+	}
+	return o
+}
+
+// CompareOptions is the comparison these sync options ask for, so that the
+// synchronize window and the Advanced Compare dialog answer the same
+// question the same way instead of growing two comparison engines.
+//
+// The two-second slack is always on: Total Commander treats a FAT
+// timestamp that is one second away from its source as the same time, and
+// without it every file copied to a memory card comes back as differing.
+func (o SyncOptions) CompareOptions() CompareOptions {
+	return CompareOptions{
+		Recursive:  o.Subdirs,
+		MaxDepth:   CompareMaxDepthLimit,
+		ByTime:     !o.IgnoreDate,
+		TimeSlack:  true,
+		BySize:     true,
+		ByContent:  o.ByContent,
+		IgnoreMode: CompareIgnoreEOL,
+	}
+}
+
 func ParsePanelScrollbarMode(value string) PanelScrollbarMode {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "minimal":
@@ -569,6 +634,10 @@ type F4Config struct {
 	// Compare keeps what the folder comparison dialog was last set to,
 	// the way Far3's Advanced Compare remembers its own options.
 	Compare CompareOptions
+
+	// Sync keeps what the synchronize dialog was last set to, the way
+	// Total Commander saves its own sync options.
+	Sync SyncOptions
 }
 
 var App = F4Config{
@@ -703,6 +772,7 @@ var App = F4Config{
 	LastUpdateCheck:          0,
 	LastUpdateVersion:        "",
 	Compare:                  DefaultCompareOptions(),
+	Sync:                     DefaultSyncOptions(),
 
 	// Pictures and video open in their own viewers (issue #991).
 	ViewerOpenAsSupportedType: true,
@@ -1018,6 +1088,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.TTYXKeys = merged.GetString("TTYXi", "Keys", "1") == "1"
 	cfg.TTYXKeyList = merged.GetString("TTYXi", "KeyList", DefaultTTYXKeyList)
 	cfg.Compare = LoadCompareOptions(merged)
+	cfg.Sync = LoadSyncOptions(merged)
 	cfg.ImageDecoderPriority = merged.GetString("Images", "DecoderPriority", "")
 	cfg.UseExternalEditor = merged.GetString("Editor", "UseExternalEditor", "0") == "1"
 	cfg.ExternalEditorCommand = merged.GetString("Editor", "ExternalEditorCommand", "")
@@ -1297,6 +1368,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	}
 	sb.WriteString("\n[Compare]\n")
 	writeCompareOptions(&sb, cfg.Compare)
+	sb.WriteString("\n[Sync]\n")
+	writeSyncOptions(&sb, cfg.Sync)
 	sb.WriteString("\n[Plugins]\n")
 	fmt.Fprintf(&sb, "List = %s\n", strings.Join(cfg.RegisteredPlugins, "|"))
 

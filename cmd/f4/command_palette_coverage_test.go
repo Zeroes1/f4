@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 52
+const commandPaletteF4Surfaces = 53
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -100,6 +100,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"app.(*SearchResultsWindow).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "find results are a modal result picker whose F3/F4/F5 buttons route to existing view/edit/temporary-panel operations",
+	},
+	"app.(*SyncResultsWindow).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the synchronize window is modal and its keys only set the copy direction of the row under the cursor; Panel.SyncDirs is its registered entry point",
 	},
 	"panel.(*FileSystemPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "panel actions and audited transient panel keys are exposed by the action registry and panel-context provider",

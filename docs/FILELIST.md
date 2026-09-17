@@ -449,6 +449,7 @@ Every file tracked in the repository. Regenerate with
     │   ├── settings-center-fields.json
     │   ├── SETTINGS_CENTER.md
     │   ├── SPREADSHEET.md
+    │   ├── SYNC_DIRS.md
     │   ├── TERMINAL.md
     │   ├── TEST_OPTIMIZATION_PLAN.md
     │   ├── TTYX.md
@@ -724,6 +725,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── sqlite_actions_test.go
     │   │   ├── static_direct_actions.go
     │   │   ├── static_direct_actions_test.go
+    │   │   ├── sync_dirs_ui.go
     │   │   ├── temp_panel_test.go
     │   │   ├── term_app.go
     │   │   ├── term_app_other.go
@@ -1011,6 +1013,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── state_key_test.go
     │   │   ├── state_test.go
     │   │   ├── symlink.go
+    │   │   ├── sync.go
+    │   │   ├── sync_test.go
     │   │   └── tracker.go
     │   ├── fusefs
     │   │   ├── bench-all.sh
