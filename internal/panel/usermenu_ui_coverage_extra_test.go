@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
@@ -145,33 +146,27 @@ func TestUserMenuPushLevelAndKeyboardNavigation(t *testing.T) {
 	if !menu.OnKeyDown(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RIGHT}) {
 		t.Fatal("Right did not enter submenu")
 	}
-	for {
-		select {
-		case task := <-vtui.FrameManager.TaskChan:
-			task()
-		default:
-			goto drained
-		}
-	}
-drained:
-	child, ok := vtui.FrameManager.GetTopFrame().(*UserMenuFrame)
-	if !ok || child.GetTitle() != " Root -> Sub " {
-		t.Fatalf("child menu = %T title %q", vtui.FrameManager.GetTopFrame(), func() string {
-			if child == nil {
-				return ""
-			}
-			return child.GetTitle()
-		}())
-	}
+	child := waitForUserMenuTitle(t, " Root -> Sub ")
 	if !child.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE}) {
 		t.Fatal("Escape did not return from submenu")
 	}
+	waitForUserMenuTitle(t, " Root ")
+}
+
+func waitForUserMenuTitle(t *testing.T, want string) *UserMenuFrame {
+	t.Helper()
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
 	for {
+		if frame, ok := vtui.FrameManager.GetTopFrame().(*UserMenuFrame); ok && frame.GetTitle() == want {
+			return frame
+		}
 		select {
 		case task := <-vtui.FrameManager.TaskChan:
 			task()
-		default:
-			return
+		case <-deadline.C:
+			t.Fatalf("timed out waiting for user-menu title %q; top frame is %T", want, vtui.FrameManager.GetTopFrame())
+			return nil
 		}
 	}
 }

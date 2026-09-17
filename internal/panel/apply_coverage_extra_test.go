@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/unxed/f4/internal/cmdline"
@@ -77,7 +78,11 @@ func TestApplyCoverageCapturesPanelSnapshotAndPathStyle(t *testing.T) {
 	}
 	fsp.SetCursorIndex(2)
 	capture := captureApplyCommandPanel(fsp, []string{"one.txt", "..", "two.txt"})
-	if capture.Panel != fsp || capture.Dir != dir || capture.Snapshot.PathStyle != cmdline.ApplyCommandPathStylePOSIX {
+	wantPanelStyle := cmdline.ApplyCommandPathStylePOSIX
+	if runtime.GOOS == "windows" {
+		wantPanelStyle = cmdline.ApplyCommandPathStyleWindows
+	}
+	if capture.Panel != fsp || capture.Dir != dir || capture.Snapshot.PathStyle != wantPanelStyle {
 		t.Fatalf("capture identity/path = (%p, %q, %d)", capture.Panel, capture.Dir, capture.Snapshot.PathStyle)
 	}
 	if capture.Snapshot.Current.Name != "two.txt" || capture.Snapshot.Current.ShortName != "two.txt" {
