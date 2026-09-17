@@ -31,7 +31,9 @@ func TestWAVPCMScalarConversions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.pcm.sample(tt.data); got != tt.want {
-				t.Fatalf("sample=%d (%#x), want %d (%#x)", got, uint16(got), tt.want, uint16(tt.want))
+				gotBits := uint16(got)      // #nosec G115 -- the conversion is only for displaying the PCM bit pattern.
+				wantBits := uint16(tt.want) // #nosec G115 -- the conversion is only for displaying the PCM bit pattern.
+				t.Fatalf("sample=%d (%#x), want %d (%#x)", got, gotBits, tt.want, wantBits)
 			}
 		})
 	}
@@ -88,7 +90,7 @@ func TestDecodeWAVRejectsMalformedHeaders(t *testing.T) {
 	chunk := func(id string, body []byte) []byte {
 		var b bytes.Buffer
 		b.WriteString(id)
-		_ = binary.Write(&b, binary.LittleEndian, uint32(len(body)))
+		_ = binary.Write(&b, binary.LittleEndian, uint32(len(body))) // #nosec G115 -- synthetic chunks are tiny test fixtures.
 		b.Write(body)
 		return b.Bytes()
 	}
@@ -128,10 +130,10 @@ func TestDecodeWAVRejectsMalformedHeaders(t *testing.T) {
 
 func wavFmtBody(format, channels, rate, bits int) []byte {
 	b := make([]byte, 16)
-	binary.LittleEndian.PutUint16(b[0:], uint16(format))
-	binary.LittleEndian.PutUint16(b[2:], uint16(channels))
-	binary.LittleEndian.PutUint32(b[4:], uint32(rate))
-	binary.LittleEndian.PutUint16(b[14:], uint16(bits))
+	binary.LittleEndian.PutUint16(b[0:], uint16(format))   // #nosec G115 -- synthetic WAV fields use bounded fixture values.
+	binary.LittleEndian.PutUint16(b[2:], uint16(channels)) // #nosec G115 -- synthetic WAV fields use bounded fixture values.
+	binary.LittleEndian.PutUint32(b[4:], uint32(rate))     // #nosec G115 -- synthetic WAV fields use bounded fixture values.
+	binary.LittleEndian.PutUint16(b[14:], uint16(bits))    // #nosec G115 -- synthetic WAV fields use bounded fixture values.
 	return b
 }
 
