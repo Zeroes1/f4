@@ -20,7 +20,7 @@ func TestDiskFileWrapperReadsAndHonorsCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	wrapper := &diskFileWrapper{File: f, size: 6}
 	if wrapper.Size() != 6 {
 		t.Fatalf("Size=%d", wrapper.Size())
