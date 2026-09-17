@@ -384,6 +384,7 @@ Every file tracked in the repository. Regenerate with
     │   ├── IMAGES_PLAN.md
     │   ├── issue-561-solutions.md
     │   ├── ISSUES
+    │   │   ├── ISSUE_1179_7Z_SFX_DETECTION_AND_TESTING.md
     │   │   ├── ISSUE_165_CONPTY_SYNC_MARKER.md
     │   │   ├── ISSUE_215_WINDOWS_UPDATE_ELEVATION.md
     │   │   ├── ISSUE_247_QUEUE_PROGRESS_THROTTLE.md
@@ -474,8 +475,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── codecov.yml
     │   └── workflows
     │       ├── build.yml
-    │       ├── colorer-cpu.yml
-    │       ├── conpty-probe.yml
     │       ├── go-cache-salt
     │       └── quick.yml
     ├── .gitignore
@@ -903,6 +902,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_params.go
     │   │   ├── colorer_params_test.go
     │   │   ├── colorer_plugin_test.go
+    │   │   ├── colorer_reload.go
     │   │   ├── colorer_text.go
     │   │   ├── colorer_type_settings.go
     │   │   ├── colorer_type_settings_test.go
@@ -1748,6 +1748,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── clone_test.go
     │   │   ├── compressed_regular_test.go
     │   │   ├── extraction_security_test.go
+    │   │   ├── issue1179_sfx_test.go
+    │   │   ├── issue1179_volumes_test.go
     │   │   ├── issue815_f3_test.go
     │   │   ├── issue816_multivolume_test.go
     │   │   ├── issue816_password_retry_test.go
@@ -2330,4 +2332,4 @@ Every file tracked in the repository. Regenerate with
         ├── utils_test.go
         └── vfs.go
     
-    210 directories, 2116 files
+    210 directories, 2118 files
