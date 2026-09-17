@@ -74,7 +74,6 @@ jobs:
       # so a tests-only pull request still needs this check.
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
-        gofmt -d internal/history/history_coverage_test.go
         if [ -n "$(gofmt -s -l .)" ]; then
           echo "The following files are not properly formatted:"
           gofmt -s -l .
