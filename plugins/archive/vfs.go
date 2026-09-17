@@ -2263,10 +2263,41 @@ func ensureArchiveExtractionDir(ctx context.Context, dstVfs vfs.VFS, dir string)
 	return nil
 }
 
-func (v *ArchiveVFS) copyBulkZip(ctx context.Context, f vfs.ReadAtCloser, selected map[string]bool, innerPath, password string, dstVfs vfs.VFS, dstDir string, reporter vfs.TaskReporter) error {
+// openZipReader opens the archive's entries for reading. A ZIP split archive
+// (archive.z01, archive.z02, ..., archive.zip) keeps its central directory in
+// the last volume and its data across all of them, and zip.OpenReaderWithPassword
+// joins the volumes; a stream of the one file the panel sits on holds only a
+// part of the archive, and copying out of it failed with "zip: not a valid zip
+// file" (issue #1186). Opening by name needs a local file, so an archive on
+// another backend, or inside another archive, is still read from the stream.
+func (v *ArchiveVFS) openZipReader(ctx context.Context, f vfs.ReadAtCloser, password string) (*zip.Reader, func(), error) {
+	localPath := ""
+	if temp, ok := f.(*vfs.TempFileWrapper); ok && temp.TempPath != "" {
+		localPath = temp.TempPath
+	} else if _, ok := v.parent.(*vfs.OSVFS); ok || v.backingPath != "" {
+		localPath = v.activePath()
+	}
+	if localPath != "" {
+		// A file that cannot be opened by name is read from the stream,
+		// which is where every archive was read from before.
+		if rc, err := zip.OpenReaderWithPassword(localPath, password); err == nil {
+			return &rc.Reader, func() { _ = rc.Close() }, nil
+		}
+	}
 	zr, err := zip.NewReaderWithPassword(readerAtAdapter{r: f, ctx: ctx}, f.Size(), password)
 	if err != nil {
+		return nil, nil, err
+	}
+	return zr, nil, nil
+}
+
+func (v *ArchiveVFS) copyBulkZip(ctx context.Context, f vfs.ReadAtCloser, selected map[string]bool, innerPath, password string, dstVfs vfs.VFS, dstDir string, reporter vfs.TaskReporter) error {
+	zr, closeZip, err := v.openZipReader(ctx, f, password)
+	if err != nil {
 		return err
+	}
+	if closeZip != nil {
+		defer closeZip()
 	}
 
 	var mu sync.Mutex
