@@ -3,6 +3,7 @@ package androidfs
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"math"
@@ -85,9 +86,12 @@ func TestSyncWireValidationAndTimeHelpers(t *testing.T) {
 			t.Errorf("syncTimestamp(%v) succeeded", when)
 		}
 	}
-	for _, seconds := range []uint64{0, 42, math.MaxInt64} {
-		if got, err := syncUnixTime(seconds); err != nil || got.Unix() != int64(seconds) {
-			t.Errorf("syncUnixTime(%d) = %v, %v", seconds, got, err)
+	for _, tc := range []struct {
+		seconds uint64
+		want    int64
+	}{{0, 0}, {42, 42}, {math.MaxInt64, math.MaxInt64}} {
+		if got, err := syncUnixTime(tc.seconds); err != nil || got.Unix() != tc.want {
+			t.Errorf("syncUnixTime(%d) = %v, %v", tc.seconds, got, err)
 		}
 	}
 	if _, err := syncUnixTime(math.MaxInt64 + 1); err == nil {
@@ -134,11 +138,12 @@ func TestSyncMetadataReadersAndFailures(t *testing.T) {
 
 	for _, tc := range []struct {
 		data []byte
+		size uint32
 		want string
 	}{
-		{[]byte("name"), "name"}, {nil, ""}, {[]byte{0, 'x'}, ""}, {[]byte("a/b"), ""},
+		{[]byte("name"), 4, "name"}, {nil, 0, ""}, {[]byte{0, 'x'}, 2, ""}, {[]byte("a/b"), 3, ""},
 	} {
-		name, err := readSyncName(bytes.NewReader(tc.data), uint32(len(tc.data)))
+		name, err := readSyncName(bytes.NewReader(tc.data), tc.size)
 		if tc.want != "" {
 			if err != nil || name != tc.want {
 				t.Errorf("readSyncName = %q, %v", name, err)
@@ -182,10 +187,7 @@ func TestSyncMetadataReadersAndFailures(t *testing.T) {
 // Keep the protocol test independent of encoding/binary details that are not
 // part of the assertion above while still constructing the legacy body.
 func binaryLittleEndianPut(dst []byte, value uint32) {
-	dst[0] = byte(value)
-	dst[1] = byte(value >> 8)
-	dst[2] = byte(value >> 16)
-	dst[3] = byte(value >> 24)
+	binary.LittleEndian.PutUint32(dst, value)
 }
 
 func TestSyncVFSCommandAndEntryEdges(t *testing.T) {

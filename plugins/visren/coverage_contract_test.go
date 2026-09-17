@@ -82,6 +82,7 @@ func TestVisrenJPEGExifAndTIFFBounds(t *testing.T) {
 	copy(tiff[50:], "Camera\x00")
 	copy(tiff[56:], "2025:06:07 08:09:10\x00")
 	section := append([]byte("Exif\x00\x00"), tiff...)
+	// #nosec G115 -- the synthetic EXIF section is far below the JPEG segment limit.
 	jpeg := []byte{0xff, 0xd8, 0xff, 0xe1, byte((len(section) + 2) >> 8), byte(len(section) + 2)}
 	jpeg = append(jpeg, section...)
 	jpeg = append(jpeg, 0xff, 0xd9)

@@ -349,7 +349,7 @@ func TestXLSXImportVariantsAndFallbacks(t *testing.T) {
 			`<c r="A3" t="b"><v>1</v></c><c r="A4"><v>12.5</v></c>` +
 			`<c r="B1"><f>SUM(A3;A4)</f><v>0</v></c></row></sheetData></worksheet>`,
 	}
-	reader, data := makeCoverageZip(t, entries)
+	_, data := makeCoverageZip(t, entries)
 	got, err := ReadXLSX(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		t.Fatalf("ReadXLSX: %v", err)
