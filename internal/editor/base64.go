@@ -86,6 +86,10 @@ func (ev *EditorView) ShowPluginsMenu() {
 			{Text: i18n.Msg("Action.Editor.ColorerListErrors"), OnClick: later(func() { ev.ColorerListOutline(true) })},
 			{Text: i18n.Msg("Action.Editor.ColorerSelectRegion"), OnClick: later(func() { ev.ColorerSelectRegion() })},
 			{Text: i18n.Msg("Action.Editor.ColorerLocateFunction"), OnClick: later(func() { ev.ColorerLocateFunction() })},
+			{Separator: true},
+			{Text: i18n.Msg("Action.Editor.ColorerUpdateHighlighting"), OnClick: later(func() { ev.ColorerUpdateHighlighting() })},
+			{Text: i18n.Msg("Action.Editor.ColorerReloadBase"), OnClick: later(func() { RunAction("Editor.ColorerReloadBase") })},
+			{Text: i18n.Msg("Colorer.Configure"), OnClick: later(func() { RunAction("Settings.Colorer") })},
 		}})
 	}
 

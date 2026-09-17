@@ -346,7 +346,22 @@ from Colorer's `Outliner` over the whole file.
   Ctrl+Left/Right show a tree level less or more; Ctrl+Enter inserts the
   label at the cursor.
 - With Colorer in charge, the editor's F11 menu has a Colorer submenu with
-  these commands in FarColorer's order.
+  these commands in FarColorer's order, then, as in FarColorer:
+  - "Update highlighting" (`Editor.ColorerUpdateHighlighting`,
+    FarEditor::updateHighlighting): the colours computed are dropped and
+    computed again;
+  - "Reload Colorer base" (`Editor.ColorerReloadBase`, FarEditorSet::
+    ReloadBase): the configuration in use is loaded and checked, errors
+    shown, as the settings dialog's Reload does; when it loads, the pool is
+    dropped and every open editor highlighted by Colorer, or handed to
+    Chroma because Colorer could not start, starts Colorer afresh the next
+    time it is drawn (`ReloadColorerEditors`). A type picked from the list
+    is forgotten, as FarColorer's reload drops its editors. The settings
+    dialog's Reload and a download of schemas now do the same to open
+    editors;
+  - "Configure": the Colorer settings dialog.
+  FarColorer's menu while it is off holds only "Configure"; f4 shows no
+  Colorer submenu then, the settings being in the Options menu.
 
 ### 3.12 File types and select region
 

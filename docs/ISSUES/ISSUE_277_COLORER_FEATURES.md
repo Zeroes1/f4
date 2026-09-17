@@ -100,3 +100,7 @@ HIGHLIGHT.md 3.14.
 "All viewers": the viewer highlights the lines on screen with up to 100 lines
 before them as context, off the UI thread, with Chroma or Colorer. See
 HIGHLIGHT.md 3.14.
+
+## F11 menu: update highlighting, reload base, configure (done)
+
+The last three items of FarColorer's menu. See HIGHLIGHT.md 3.11.

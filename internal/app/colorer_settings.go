@@ -145,6 +145,21 @@ func runColorerCheck(pf *panel.PanelsFrame, src editor.ColorerSource, scheme str
 		})
 }
 
+// actionColorerReloadBase is FarColorer's "Reload base" in the editor's
+// Colorer menu: the configuration in use is loaded and checked, as the
+// settings dialog's Reload does, and, when it loads, Colorer starts afresh in
+// the open editors.
+func actionColorerReloadBase(pf *panel.PanelsFrame) {
+	runColorerCheck(pf, editor.CurrentColorerSource(), config.App.EditorColorerScheme, false, func(check editor.ColorerCheck) {
+		if check.Err != nil {
+			return
+		}
+		editor.ResetColorerSessions()
+		editor.ResetColorerRegions()
+		editor.ReloadColorerEditors()
+	})
+}
+
 func actionColorerSettings(pf *panel.PanelsFrame) {
 	width, height := 74, 21
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ColorerSettings.Title"))
@@ -398,7 +413,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 			apply()
 			editor.ResetColorerSessions()
 			editor.ResetColorerRegions()
-			vtui.FrameManager.Redraw()
+			editor.ReloadColorerEditors()
 		})
 	}
 
@@ -421,6 +436,7 @@ func actionColorerSettings(pf *panel.PanelsFrame) {
 			editor.ResetColorerRegions()
 			editor.ResetColorerScheme()
 			editor.SetColorerScheme(config.App.EditorColorerScheme)
+			editor.ReloadColorerEditors()
 		})
 	}
 

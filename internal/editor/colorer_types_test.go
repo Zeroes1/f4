@@ -224,3 +224,57 @@ func TestNewWindowColorizer(t *testing.T) {
 		t.Errorf("Colorer attrs %d, want 8", len(got))
 	}
 }
+
+// Reloading the Colorer base restarts Colorer in an open editor the next time
+// it is drawn, forgetting the type picked for it; updating the highlighting
+// drops the colours computed.
+func TestColorerReloadAndUpdate(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	user := t.TempDir()
+	writeUserHRC(t, user, "pairtest.hrc", pairTestHRC)
+	saved := config.App
+	t.Cleanup(func() { config.App = saved; ResetColorerSessions() })
+	config.App.EditorHighlighter = "Colorer"
+	config.App.EditorColorerSyntax = true
+	config.App.EditorColorerCatalog = checkConfigs(t)
+	config.App.EditorColorerUserHrc = user
+
+	ev := NewEditorView(piecetable.New([]byte("{\n}\n")), nil, "a.pairtest")
+	defer ev.Close()
+	first, ok := ev.Highlighter.(*ColorerHighlighter)
+	if !ok {
+		t.Fatalf("highlighter %T, want Colorer", ev.Highlighter)
+	}
+	first.fileTypeOverride = "c"
+	first.attrCache = map[int][]uint64{0: {1}}
+	ev.ColorerUpdateHighlighting()
+	if len(first.attrCache) != 0 {
+		t.Errorf("update left %d cached lines", len(first.attrCache))
+	}
+
+	ev.restartColorerAfterReload()
+	if ev.Highlighter != vtui.Highlighter(first) {
+		t.Fatal("restarted without a reload")
+	}
+	ReloadColorerEditors()
+	ev.restartColorerAfterReload()
+	second, ok := ev.Highlighter.(*ColorerHighlighter)
+	if !ok || second == first {
+		t.Fatalf("highlighter %T after a reload, want a new Colorer", ev.Highlighter)
+	}
+	if !first.closed {
+		t.Error("the old highlighter was not closed")
+	}
+	if second.fileTypeOverride != "" || second.filename != "a.pairtest" {
+		t.Errorf("new highlighter: type %q, file %q", second.fileTypeOverride, second.filename)
+	}
+
+	// Colorer switched off meanwhile: the editor goes to the other engine.
+	config.App.EditorHighlighter = "Chroma"
+	ReloadColorerEditors()
+	ev.restartColorerAfterReload()
+	if _, still := ev.Highlighter.(*ColorerHighlighter); still {
+		t.Error("Colorer restarted though it is no longer the highlighter")
+	}
+}

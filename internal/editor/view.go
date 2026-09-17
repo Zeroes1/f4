@@ -232,6 +232,14 @@ type EditorView struct {
 	colorerTotal    int
 	colorerCancel   func()
 	colorerWorkID   uint64
+	// What Colorer was started with, for ReloadColorerEditors: the file
+	// name and first line, the reload it was started after, and whether it
+	// handed the editor over to Chroma.
+	colorerPath      string
+	colorerFile      string
+	colorerFirstLine string
+	colorerGen       int
+	colorerFellBack  bool
 
 	// OnClose, if set, fires once after the editor has been torn down.
 	// Used by callers (e.g. the user menu's Ctrl+F4 handler) that want
@@ -511,7 +519,7 @@ func NewEditorViewWith(Pt *piecetable.PieceTable, v vfs.VFS, path string, useEdi
 				firstLine = firstLine[:idx]
 			}
 		}
-		ev.Highlighter = newColorerHighlighter(ev, filepath.Base(path), firstLine, vtui.GetHighlighter(path, ""))
+		ev.startColorer(path, filepath.Base(path), firstLine)
 	default:
 		ev.Highlighter = vtui.GetHighlighter(path, "")
 	}
@@ -1478,6 +1486,7 @@ func (ev *EditorView) gotoLinePosition(line, position int) {
 }
 
 func (ev *EditorView) Show(scr *vtui.ScreenBuf) {
+	ev.restartColorerAfterReload()
 	ev.ScreenObject.Show(scr)
 	if ev.topBar != nil {
 		ev.topBar.Show(scr)

@@ -2384,6 +2384,24 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerSelectRegion() }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ColorerUpdateHighlighting",
+		Area:        "Editor",
+		Label:       "Update highlighting",
+		LabelKey:    "Action.Editor.ColorerUpdateHighlighting",
+		Description: "Drop the colours computed for the file and compute them again (Colorer)",
+		DescKey:     "Action.Editor.ColorerUpdateHighlighting.Desc",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ColorerUpdateHighlighting() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ColorerReloadBase",
+		Area:        "Editor",
+		Label:       "Reload Colorer base",
+		LabelKey:    "Action.Editor.ColorerReloadBase",
+		Description: "Load the Colorer configuration afresh, say what is wrong with it, and restart Colorer in the open editors",
+		DescKey:     "Action.Editor.ColorerReloadBase.Desc",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionColorerReloadBase(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Replace",
 		Area:        "Editor",
 		Label:       "Replace",

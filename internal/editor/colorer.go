@@ -677,6 +677,7 @@ func (ch *ColorerHighlighter) useFallback(ev *EditorView) {
 			if fb := ch.fallback; fb != nil && ev.Highlighter == vtui.Highlighter(ch) {
 				ch.fallback = nil
 				ev.Highlighter = fb
+				ev.colorerFellBack = true
 			}
 			ev.finishColorerWork(ch.startupWorkID)
 			ev.invalidateStates(0)
