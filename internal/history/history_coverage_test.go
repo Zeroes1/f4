@@ -183,7 +183,7 @@ func TestCommandHistoryPathsRoundTrip(t *testing.T) {
 
 type stubHistoryProvider map[string][]string
 
-func (s stubHistoryProvider) LoadHistory(id string) []string { return s[id] }
+func (s stubHistoryProvider) LoadHistory(id string) []string         { return s[id] }
 func (s stubHistoryProvider) SaveHistory(id string, values []string) { s[id] = values }
 
 type stubINI map[string]string
