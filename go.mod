@@ -41,8 +41,8 @@ require (
 	github.com/unxed/tar v0.1.128
 	github.com/unxed/vtinput v0.1.8
 	github.com/unxed/vtui v0.1.348
-	github.com/unxed/zip v0.1.131
-	github.com/unxed/zipper v0.1.153
+	github.com/unxed/zip v0.1.134
+	github.com/unxed/zipper v0.1.155
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
@@ -116,7 +116,6 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/coregx/ahocorasick v0.2.1 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
-	github.com/dovydenkovas/ppmd v0.1.1 // indirect
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/emmansun/base64 v0.9.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
