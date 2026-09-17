@@ -275,9 +275,13 @@ type PanelsFrame struct {
 	RightHeightDecrement int
 
 	// Integrated Terminal
-	Pty            terminal.PtyBackend
-	RemotePtys     map[vfs.VFS]terminal.PtyBackend
-	PtyMutex       sync.Mutex
+	Pty        terminal.PtyBackend
+	RemotePtys map[vfs.VFS]terminal.PtyBackend
+	PtyMutex   sync.Mutex
+	// localReflow records that the local shell's output may be reflowed on
+	// a width change: its backend delivers long lines whole and the view is
+	// f4's own terminal. Guarded by PtyMutex.
+	localReflow    bool
 	TermView       *terminal.TerminalView
 	Parser         *terminal.AnsiParser
 	terminalRedraw *terminal.TerminalRedrawScheduler
@@ -1177,6 +1181,8 @@ func (pf *PanelsFrame) InitPTY() {
 				return
 			}
 			pf.Pty = p
+			pf.localReflow = pf.ShellMode == terminal.ShellModeOwn && terminal.PreservesLogicalLines(p)
+			vtui.DebugLog("PTY: local shell started; reflow %v", pf.localReflow)
 			serializedPTY := &processEnvironmentSerializedPTY{owner: pf, Backend: p}
 			if pf.ShellMode == terminal.ShellModeHost {
 				muted := MutedPTY{Backend: serializedPTY}
@@ -1222,8 +1228,14 @@ func (pf *PanelsFrame) consumeLocalOutput(p terminal.PtyBackend, data []byte) {
 
 	pf.PtyMutex.Lock()
 	shouldProcess := (pf.getActivePTYUnsafe() == p)
+	reflow := pf.localReflow
 	pf.PtyMutex.Unlock()
 
+	if shouldProcess && pf.TermView != nil {
+		// One view serves the local shell and every remote one; the wrap
+		// flags mean what reflow needs only for the session that wrote them.
+		pf.TermView.SetReflow(reflow)
+	}
 	pf.displayLocalOutput(shouldProcess, data)
 }
 
@@ -4400,6 +4412,12 @@ func (pf *PanelsFrame) getActivePTYUnsafe() terminal.PtyBackend {
 					pf.PtyMutex.Unlock()
 
 					if shouldProcess {
+						// A remote shell's line boundaries are not known
+						// to survive the trip (a Windows peer runs its own
+						// ConPTY), so its output is never reflowed.
+						if pf.TermView != nil {
+							pf.TermView.SetReflow(false)
+						}
 						start := time.Now()
 						pf.Parser.Process(buf[:n])
 						elapsed := time.Since(start)

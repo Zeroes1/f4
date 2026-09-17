@@ -185,25 +185,6 @@ jobs:
         if [ "$GOOS" = "windows" ]; then
           go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$APP_LDFLAGS -H windowsgui" -o build/f4-gui$EXT ./cmd/f4
 
-          # f4 owns the ConPTY implementation it runs. The DLL and
-          # OpenConsole.exe are extracted from the same Microsoft package and
-          # kept beside both Windows binaries; loading only one of the pair
-          # would reintroduce the version skew this bundle is meant to avoid.
-          CONPTY_URL="https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
-          CONPTY_SHA256="05fe9b571ea4fb198f5012405cb39a132cf23eee50feaa496524c149b2502692"
-          CONPTY_PACKAGE="/tmp/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg"
-          case "$GOARCH" in
-            amd64) CONPTY_RUNTIME="x64" ;;
-            arm64) CONPTY_RUNTIME="arm64" ;;
-            *) echo "unsupported Windows architecture for bundled ConPTY: $GOARCH" >&2; exit 1 ;;
-          esac
-          curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
-            -o "$CONPTY_PACKAGE" "$CONPTY_URL"
-          echo "$CONPTY_SHA256  $CONPTY_PACKAGE" | sha256sum -c -
-          unzip -p "$CONPTY_PACKAGE" "runtimes/win-$CONPTY_RUNTIME/native/conpty.dll" > build/conpty.dll
-          unzip -p "$CONPTY_PACKAGE" "build/native/runtimes/$CONPTY_RUNTIME/OpenConsole.exe" > build/OpenConsole.exe
-          test -s build/conpty.dll
-          test -s build/OpenConsole.exe
         fi
 
         # Copy language and help assets
@@ -1035,31 +1016,6 @@ jobs:
       with:
         submodules: recursive
 
-    - name: Install the bundled ConPTY for native Windows tests
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $runtime = if ($env:RUNNER_ARCH -eq 'ARM64') { 'arm64' } else { 'x64' }
-        $url = 'https://github.com/microsoft/terminal/releases/download/v1.25.1912.0/Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg'
-        $expected = '05fe9b571ea4fb198f5012405cb39a132cf23eee50feaa496524c149b2502692'
-        $package = Join-Path $env:RUNNER_TEMP 'Microsoft.Windows.Console.ConPTY.1.25.260710002-preview.nupkg'
-        $zip = "$package.zip"
-        & curl.exe -fL --retry 5 --retry-delay 10 --retry-all-errors -o $package $url
-        if ((Get-FileHash -Algorithm SHA256 $package).Hash -ne $expected.ToUpperInvariant()) {
-          throw "ConPTY package SHA-256 mismatch"
-        }
-        Copy-Item $package $zip -Force
-        $extract = Join-Path $env:RUNNER_TEMP 'conpty-package'
-        Expand-Archive -Path $zip -DestinationPath $extract -Force
-        # cmd/f4 is where the built binary looks for its bundle;
-        # internal/terminal is where the test that checks the bundle now runs,
-        # and go test makes a package's own directory the working directory.
-        foreach ($dest in 'cmd/f4', 'internal/terminal') {
-          Copy-Item (Join-Path $extract "runtimes/win-$runtime/native/conpty.dll") "$dest/conpty.dll" -Force
-          Copy-Item (Join-Path $extract "build/native/runtimes/$runtime/OpenConsole.exe") "$dest/OpenConsole.exe" -Force
-        }
-        Get-Item cmd/f4/conpty.dll, cmd/f4/OpenConsole.exe, internal/terminal/conpty.dll, internal/terminal/OpenConsole.exe | Format-Table Name,Length
-
     - name: Move Go caches to the fast disk (Windows)
       # C: is the OS disk and glacial at unpacking the ~650 MB Go cache --
       # three of this job's five and a half minutes on windows-latest went
@@ -1096,6 +1052,10 @@ jobs:
       env:
         AFFECTED: ${{ steps.affected.outputs.packages }}
         RUN_FILTER: ${{ matrix.run || '' }}
+        # TestConPTYPackageKeepsLongLinesWhole downloads the ConPTY package
+        # f4 fetches on first use and runs real programs in it (#885). It is
+        # Windows-only; elsewhere the variable is unused.
+        F4_NATIVE_CONPTY_PACKAGE: '1'
         # Coverage is collected on one Linux cell and both shards of each
         # split desktop cell. Reusing an OS flag lets Codecov combine the two
         # shard profiles without spending another full test matrix.
