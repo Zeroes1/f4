@@ -3376,6 +3376,9 @@ func TestFileSystemPanel_SFXEnterFallsThroughToExecute(t *testing.T) {
 	fp := NewFileSystemPanel(0, 0, 80, 25, vfs.NewOSVFS(root))
 	t.Cleanup(func() {
 		fp.cancelProviderOpen()
+        if fp.Vfs != nil
+            _ = fp.Vfs.Close()
+        }
 		if fp.CancelLoad != nil {
 			fp.CancelLoad()
 		}
