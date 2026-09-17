@@ -218,7 +218,7 @@ func TestRunCLIFailsOnDownload(t *testing.T) {
 	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "f4")
-	if err := os.WriteFile(exe, []byte("binary"), 0o700); err != nil {
+	if err := os.WriteFile(exe, []byte("binary"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	Executable = func() (string, error) { return exe, nil }
@@ -252,7 +252,7 @@ func TestRunCLIFailsOnInstall(t *testing.T) {
 	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
 	dir := t.TempDir()
 	exe := filepath.Join(dir, "f4")
-	if err := os.WriteFile(exe, []byte("binary"), 0o700); err != nil {
+	if err := os.WriteFile(exe, []byte("binary"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	Executable = func() (string, error) { return exe, nil }
