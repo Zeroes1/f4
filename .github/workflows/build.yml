@@ -1459,14 +1459,17 @@ jobs:
         fi
 
     - name: Update Nightly Release
-      uses: softprops/action-gh-release@v3
-      with:
-        tag_name: nightly
-        name: "Continuous Build (Nightly)"
-        body: |
-          Automated pre-release build of the latest `main` branch.
-
-          **Commit:** `${{ env.SHORT_SHA }}`
-          **Built on:** `${{ env.BUILD_TIME }}`
-        prerelease: true
-        files: dist/*
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # The release action uploads all assets concurrently. With the full
+        # matrix that occasionally races while creating its temporary asset
+        # directories and fails the otherwise successful main CI run. The
+        # GitHub CLI uploads the same files sequentially, which is reliable
+        # for the nightly's ~30 architecture assets.
+        gh release create nightly dist/* \
+          --repo "$GITHUB_REPOSITORY" \
+          --title "Continuous Build (Nightly)" \
+          --notes "Automated pre-release build of the latest main branch. Commit: $SHORT_SHA. Built on: $BUILD_TIME" \
+          --prerelease
