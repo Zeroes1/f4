@@ -108,3 +108,45 @@ func TestIssue1186SplitZipListsAndCopiesFromEveryVolume(t *testing.T) {
 		}
 	}
 }
+
+// Testing a split archive (Shift-F3) used to go through the generic
+// identification, which reads one file at a time: "zip: not a valid zip file"
+// for the volume with the directory, "no formats matched" for the others.
+func TestIssue1186SplitZipTestsFromEveryVolume(t *testing.T) {
+	root := t.TempDir()
+	issue1186BuildSplitZip(t, root)
+	ctx := context.Background()
+
+	for _, name := range []string{"archive.zip", "archive.z01"} {
+		path := filepath.Join(root, name)
+		if !isSplitZipArchive(path) {
+			t.Fatalf("%s is not taken for a volume of a split archive", name)
+		}
+		if err := testArchiveOnce(ctx, path, path, "", &issue915ProgressRecorder{}); err != nil {
+			t.Fatalf("test %s: %v", name, err)
+		}
+	}
+}
+
+// The test has to read the members, not just list them: a damaged member is
+// what it exists to find.
+func TestIssue1186SplitZipTestReportsDamage(t *testing.T) {
+	root := t.TempDir()
+	issue1186BuildSplitZip(t, root)
+
+	first := filepath.Join(root, "archive.z01")
+	data, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data[len(data)/2] ^= 0xFF
+	if err := os.WriteFile(first, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err = testArchiveOnce(context.Background(), filepath.Join(root, "archive.zip"),
+		filepath.Join(root, "archive.zip"), "", &issue915ProgressRecorder{})
+	if err == nil {
+		t.Fatal("testing an archive with a damaged member reported no failure")
+	}
+}
