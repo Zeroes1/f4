@@ -3456,8 +3456,7 @@ func (pf *PanelsFrame) CancelFastFind() bool {
 		if !ok || !fsp.FastFindMode {
 			continue
 		}
-		fsp.FastFindMode = false
-		fsp.FastFindStr = ""
+		fsp.ExitFastFind()
 		cancelled = true
 	}
 	return cancelled
@@ -5705,8 +5704,7 @@ func (pf *PanelsFrame) NavigateAvailableFolderHistory(fsp *FileSystemPanel, hist
 		if fsp == nil || path == "" {
 			continue
 		}
-		fsp.FastFindMode = false
-		fsp.FastFindStr = ""
+		fsp.ExitFastFind()
 		fsp.SuppressNextFolderHistory(path)
 		// An entry whose directory the host will not list cannot be opened
 		// either (#814): skip it like any other unavailable entry instead of

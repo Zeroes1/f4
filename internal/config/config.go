@@ -488,6 +488,7 @@ type F4Config struct {
 	UsePromptFormat          bool
 	PromptFormat             string
 	NavigationMode           PanelNavigationMode
+	PanelAutoFilter          bool // panel quick search hides non-matching rows instead of moving the cursor
 	SearchCommandStayFocused bool
 	SyncPanelLoad            bool
 	SearchExactOnHit         bool // QuickSearch keeps only exact matches when at least one exists
@@ -677,6 +678,7 @@ var App = F4Config{
 	UsePromptFormat:          false,
 	PromptFormat:             "$u@$n:$p$# ",
 	NavigationMode:           NavigationClassic,
+	PanelAutoFilter:          false,
 	SearchCommandStayFocused: false,
 	SyncPanelLoad:            false,
 	SearchExactOnHit:         false,
@@ -915,6 +917,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	} else {
 		cfg.NavigationMode = NavigationClassic
 	}
+	cfg.PanelAutoFilter = merged.GetString("Panel", "PanelAutoFilter", "0") == "1"
 	cfg.SearchCommandStayFocused = merged.GetString("Panel", "SearchCommandStayFocused", "0") == "1"
 	cfg.SyncPanelLoad = merged.GetString("Panel", "SyncPanelLoad", "0") == "1"
 	cfg.SearchExactOnHit = merged.GetString("Panel", "SearchExactOnHit", "0") == "1"
@@ -1222,6 +1225,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])
 	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
+	fmt.Fprintf(&sb, "PanelAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelAutoFilter])
 	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchCommandStayFocused])
 	// Keep the legacy key synchronized for older f4 versions and shared configs.
 	fmt.Fprintf(&sb, "VimHotkeys = %d\n", map[bool]int{true: 1, false: 0}[cfg.NavigationMode == NavigationVim])

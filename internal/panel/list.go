@@ -550,7 +550,12 @@ type FileSystemPanel struct {
 	FastFindStr                string
 	fastFindMatcherKey         string
 	fastFindMatchers           []*vtui.FuzzyMatcher
-	showInactiveCursor         bool
+	// autoFilterOn is set while the quick search is narrowing the panel
+	// rather than moving the cursor. unfilteredEntries then holds the
+	// complete row list and Entries the matching subset; see autofilter.go.
+	autoFilterOn       bool
+	unfilteredEntries  []*FileEntry
+	showInactiveCursor bool
 	// nameLeftPos is how many display cells the name columns are scrolled to
 	// the right (far2l's FileList::LeftPos, Alt+Left/Alt+Right). Names that
 	// fit their column never move; a longer name is shifted by at most its
@@ -736,16 +741,17 @@ func (fp *FileSystemPanel) showCachedStandalonePath(target string) bool {
 		return false
 	}
 
-	fp.Entries = nil
+	var entries []*FileEntry
 	if cached.showUpEntry {
-		fp.Entries = append(fp.Entries, &FileEntry{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}, IsCached: true})
+		entries = append(entries, &FileEntry{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}, IsCached: true})
 	}
 	for _, item := range cached.Items {
 		if !config.App.ShowHiddenFiles && item.Name != ".." && item.IsHidden {
 			continue
 		}
-		fp.Entries = append(fp.Entries, &FileEntry{VFSItem: item, IsCached: true})
+		entries = append(entries, &FileEntry{VFSItem: item, IsCached: true})
 	}
+	fp.setEntries(entries)
 	fp.SortEntries()
 	fp.SetCursorIndex(0)
 	return true
@@ -811,8 +817,7 @@ func (fp *FileSystemPanel) ToggleSelection(idx int) {
 func (fp *FileSystemPanel) SetFocus(f bool) {
 	fp.ScreenObject.SetFocus(f)
 	if !f && fp.FastFindMode {
-		fp.FastFindMode = false
-		fp.FastFindStr = ""
+		fp.ExitFastFind()
 	}
 }
 func (fp *FileSystemPanel) SetSortMode(mode SortMode) {
@@ -853,9 +858,14 @@ func (fp *FileSystemPanel) sortGroupsActive() bool {
 	return fp != nil && fp.UseSortGroups && GlobalSortGroups.Configured()
 }
 
+// SortEntries orders the panel's complete row list -- the rows an active
+// autofilter is hiding included, so a query cannot outlive the sort it was
+// typed under -- and then re-derives the visible one.
 func (fp *FileSystemPanel) SortEntries() {
+	entries := fp.AllEntries()
 	grouped := fp.sortGroupsActive()
-	if (fp.SortMode == SortUnsorted && !grouped) || len(fp.Entries) <= 1 {
+	if (fp.SortMode == SortUnsorted && !grouped) || len(entries) <= 1 {
+		fp.refilterEntries()
 		return
 	}
 
@@ -872,14 +882,14 @@ func (fp *FileSystemPanel) SortEntries() {
 	// would re-run every mask of every rule O(n log n) times.
 	var groups map[*FileEntry]int
 	if grouped {
-		groups = make(map[*FileEntry]int, len(fp.Entries))
-		for _, entry := range fp.Entries {
+		groups = make(map[*FileEntry]int, len(entries))
+		for _, entry := range entries {
 			groups[entry] = GlobalSortGroups.GroupOf(&entry.VFSItem)
 		}
 	}
 
 	less := func(i, j int) bool {
-		ei, ej := fp.Entries[i], fp.Entries[j]
+		ei, ej := entries[i], entries[j]
 
 		// ".." всегда сверху
 		if ei.Name == ".." {
@@ -949,10 +959,12 @@ func (fp *FileSystemPanel) SortEntries() {
 	if fp.SortMode == SortUnsorted {
 		// Only reachable with grouping on, where equal rows must not be
 		// shuffled: sort.Slice is not stable, SliceStable is.
-		sort.SliceStable(fp.Entries, less)
+		sort.SliceStable(entries, less)
+		fp.refilterEntries()
 		return
 	}
-	sort.Slice(fp.Entries, less)
+	sort.Slice(entries, less)
+	fp.refilterEntries()
 }
 
 func (fp *FileSystemPanel) SetViewMode(mode ViewMode) {
@@ -2052,10 +2064,11 @@ func (fp *FileSystemPanel) openVFSAsync(
 // SyncPanelLoad deliberately bypasses it), only a real parent row is safe to
 // keep interactive while the new listing is in flight.
 func (fp *FileSystemPanel) showCurrentVFSLoadingRows() {
-	fp.Entries = nil
+	var entries []*FileEntry
 	if fp.Vfs != nil && (!fp.Vfs.IsAtRoot() || fp.Vfs.ParentVFS() != nil) {
-		fp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
+		entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
 	}
+	fp.setEntries(entries)
 	fp.SetCursorIndex(0)
 	fp.Refresh()
 	vtui.FrameManager.Redraw()
@@ -2196,6 +2209,10 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 	directoryChanged := fp.lastLoadedPath != "" && !SameFolderHistoryPath(fp.lastLoadedPath, path)
 	suppressFolderHistory := hasFolderHistorySuppression && fp.ConsumeFolderHistorySuppression(path, suppressionToken)
 	if directoryChanged {
+		// A quick search belongs to the directory it was typed in. Leaving the
+		// directory closes it, so a filter cannot carry a stale query into rows
+		// the user has never seen; re-reading the same directory keeps it.
+		fp.ExitFastFind()
 		for k := range fp.SelectedItems {
 			delete(fp.SelectedItems, k)
 		}
@@ -2227,10 +2244,10 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 		if cached, ok := fp.DirCache[cacheKey]; ok && !config.App.SyncPanelLoad {
 			hasCache = true
 			vtui.DebugLog("PANEL: Using cached entries for %s", path)
-			fp.Entries = nil
+			var entries []*FileEntry
 
 			if showUpEntry {
-				fp.Entries = append(fp.Entries, &FileEntry{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}, IsCached: true})
+				entries = append(entries, &FileEntry{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}, IsCached: true})
 			}
 
 			for _, item := range cached.Items {
@@ -2239,9 +2256,10 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				}
 				entry := &FileEntry{VFSItem: item, IsCached: true}
 				fp.applyPersistentSelection(entry, loadVFS, path)
-				fp.Entries = append(fp.Entries, entry)
+				entries = append(entries, entry)
 			}
 
+			fp.setEntries(entries)
 			fp.SortEntries()
 
 			target := fp.PendingSelection
@@ -2263,10 +2281,11 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 
 	isFirstChunk := true
 	if !keepEntries && !hasCache {
-		fp.Entries = nil
+		var entries []*FileEntry
 		if showUpEntry {
-			fp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
+			entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
 		}
+		fp.setEntries(entries)
 		fp.SetCursorIndex(0)
 		fp.Refresh()
 		vtui.FrameManager.Redraw()
@@ -2335,11 +2354,12 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				}
 
 				if isFirstChunk {
-					fp.Entries = nil
+					var entries []*FileEntry
 					if showUpEntry {
 						upItem := vfs.VFSItem{Name: "..", IsDir: true}
-						fp.Entries = []*FileEntry{{VFSItem: upItem}}
+						entries = []*FileEntry{{VFSItem: upItem}}
 					}
+					fp.setEntries(entries)
 					isFirstChunk = false
 				}
 
@@ -2348,7 +2368,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 					fp.applyPersistentSelection(e, loadVFS, path)
 				}
 
-				fp.Entries = append(fp.Entries, newEntries...)
+				fp.addEntries(newEntries...)
 				fp.SortEntries()
 
 				// Фокусировка на нужном файле
@@ -2435,7 +2455,9 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				if fp.SelectedItems == nil {
 					fp.SelectedItems = make(map[string]bool)
 				}
-				for _, entry := range fp.Entries {
+				// The marks of rows the autofilter is hiding are just as real
+				// as the visible ones, so the snapshot covers the whole list.
+				for _, entry := range fp.AllEntries() {
 					if entry.Name == ".." {
 						continue
 					}
@@ -2446,7 +2468,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 					}
 				}
 
-				fp.Entries = nil
+				var entries []*FileEntry
 				if showUpEntry {
 					upItem := vfs.VFSItem{Name: "..", IsDir: true}
 					if hasUpItemStat {
@@ -2457,7 +2479,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 						upItem.Uid = upItemStat.Uid
 						upItem.Gid = upItemStat.Gid
 					}
-					fp.Entries = []*FileEntry{{VFSItem: upItem}}
+					entries = []*FileEntry{{VFSItem: upItem}}
 				}
 
 				for _, item := range accumulated {
@@ -2466,8 +2488,9 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 					}
 					entry := &FileEntry{VFSItem: item}
 					fp.applyPersistentSelection(entry, loadVFS, path)
-					fp.Entries = append(fp.Entries, entry)
+					entries = append(entries, entry)
 				}
+				fp.setEntries(entries)
 				fp.SortEntries()
 
 				// An unresolved navigation target still wins if the user did not
@@ -2503,7 +2526,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				fp.PendingSelection = ""
 				isFirstChunk = false
 			} else if loadSyncPanel && err == nil {
-				fp.Entries = nil
+				var entries []*FileEntry
 				if showUpEntry {
 					upItem := vfs.VFSItem{Name: "..", IsDir: true}
 					if hasUpItemStat {
@@ -2514,19 +2537,18 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 						upItem.Uid = upItemStat.Uid
 						upItem.Gid = upItemStat.Gid
 					}
-					fp.Entries = []*FileEntry{{VFSItem: upItem}}
+					entries = []*FileEntry{{VFSItem: upItem}}
 				}
 
-				newEntries := make([]*FileEntry, 0, len(accumulated))
 				for _, item := range accumulated {
 					if !loadShowHidden && item.Name != ".." && item.IsHidden {
 						continue
 					}
 					entry := &FileEntry{VFSItem: item}
 					fp.applyPersistentSelection(entry, loadVFS, path)
-					newEntries = append(newEntries, entry)
+					entries = append(entries, entry)
 				}
-				fp.Entries = append(fp.Entries, newEntries...)
+				fp.setEntries(entries)
 				fp.SortEntries()
 
 				if fp.PendingSelection != "" {
@@ -2542,8 +2564,9 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				// Clean up persistent selection only after the fresh list has been
 				// built. With a cache, doing this earlier would compare the marks
 				// against stale rows rather than the completed ReadDir result.
-				validNames := make(map[string]bool, len(fp.Entries))
-				for _, e := range fp.Entries {
+				all := fp.AllEntries()
+				validNames := make(map[string]bool, len(all))
+				for _, e := range all {
 					validNames[e.Name] = true
 				}
 				for name := range fp.SelectedItems {
@@ -2602,7 +2625,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 			}
 
 			if isFirstChunk {
-				fp.Entries = nil
+				var entries []*FileEntry
 				if showUpEntry {
 					upItem := vfs.VFSItem{Name: "..", IsDir: true}
 					if hasUpItemStat {
@@ -2613,8 +2636,9 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 						upItem.Uid = upItemStat.Uid
 						upItem.Gid = upItemStat.Gid
 					}
-					fp.Entries = []*FileEntry{{VFSItem: upItem}}
+					entries = []*FileEntry{{VFSItem: upItem}}
 				}
+				fp.setEntries(entries)
 				fp.SetCursorIndex(0)
 			}
 
@@ -3145,9 +3169,13 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 	}
 
 	if fp.FastFindMode {
-		if e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN {
-			fp.FastFindMode = false
-			fp.FastFindStr = ""
+		// While the panel is narrowed every visible row is already a match, so
+		// navigation keys walk the result and the filter stays up -- that walk
+		// is the point of filtering. The cursor-moving search has nothing to
+		// walk and still closes on them.
+		filtering := fp.autoFilterOn
+		if !filtering && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) {
+			fp.ExitFastFind()
 			vtui.FrameManager.Redraw()
 			// Reprocess the key as ordinary panel navigation now that Fast Find
 			// no longer owns it.
@@ -3155,13 +3183,13 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 		}
 		switch e.VirtualKeyCode {
 		case vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_PRIOR, vtinput.VK_NEXT, vtinput.VK_HOME, vtinput.VK_END:
-			fp.FastFindMode = false
-			fp.FastFindStr = ""
-			vtui.FrameManager.Redraw()
+			if !filtering {
+				fp.ExitFastFind()
+				vtui.FrameManager.Redraw()
+			}
 			// Проваливаемся дальше, чтобы обработать саму навигацию
 		case vtinput.VK_ESCAPE:
-			fp.FastFindMode = false
-			fp.FastFindStr = ""
+			fp.ExitFastFind()
 			vtui.FrameManager.Redraw()
 			return true
 		case vtinput.VK_DELETE:
@@ -3176,10 +3204,10 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			} else {
 				fp.FastFindStr = "*" + fp.FastFindStr
 			}
-			if fp.FastFindStr == "" {
-				fp.FastFindMode = false
+			if autoFilterQuery(fp.FastFindStr) == "" {
+				fp.ExitFastFind()
 			} else {
-				fp.doFastFind(0)
+				fp.applyFastFind()
 			}
 			vtui.FrameManager.Redraw()
 			return true
@@ -3188,25 +3216,21 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			if len(fp.FastFindStr) > 0 {
 				runes := []rune(fp.FastFindStr)
 				fp.FastFindStr = string(runes[:len(runes)-1])
-				if len(fp.FastFindStr) == 0 {
-					fp.FastFindMode = false
+				// A bare "*" is no query at all: erasing the last character of
+				// a filter ends the search instead of matching everything.
+				if autoFilterQuery(fp.FastFindStr) == "" {
+					fp.ExitFastFind()
 				} else {
-					fp.doFastFind(0)
+					fp.applyFastFind()
 				}
 			}
 			vtui.FrameManager.Redraw()
 			return true
 		}
-		if e.VirtualKeyCode == vtinput.VK_UP {
-			fp.doFastFind(-1)
-			vtui.FrameManager.Redraw()
-			return true
-		}
-		if e.VirtualKeyCode == vtinput.VK_DOWN {
-			fp.doFastFind(1)
-			vtui.FrameManager.Redraw()
-			return true
-		}
+		// Up and Down never reach this point: the cursor-moving search gave
+		// them back to ordinary navigation above, and under the filter they
+		// have to walk the narrowed list, which the navigation switch below
+		// does properly (grid columns, Shift-selection, scrolling).
 		if e.VirtualKeyCode == vtinput.VK_RETURN && ctrl && !alt {
 			dir := 1
 			if shift {
@@ -3217,13 +3241,12 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			return true
 		}
 		if e.VirtualKeyCode == vtinput.VK_RETURN {
-			fp.FastFindMode = false
-			fp.FastFindStr = ""
+			fp.ExitFastFind()
 			vtui.FrameManager.Redraw()
 			// Проваливаемся ниже, чтобы обработать Enter как вход в файл/директорию
 		} else if e.Char != 0 && !ctrl {
 			fp.FastFindStr += string(unicode.ToLower(e.Char))
-			fp.doFastFind(0)
+			fp.applyFastFind()
 			vtui.FrameManager.Redraw()
 			return true
 		}
@@ -3232,7 +3255,14 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 		if e.Char != 0 && (alt || searchFirstInput) && !ctrl && unicode.IsPrint(e.Char) {
 			fp.FastFindMode = true
 			fp.FastFindStr = string(unicode.ToLower(e.Char))
-			fp.doFastFind(0)
+			if config.App.PanelAutoFilter {
+				// A filter answers "which files have this in the name", so it
+				// starts unanchored. Seeding the '*' rather than special-casing
+				// the matcher keeps one meaning for the prefix: F2 still takes
+				// it off and narrows the filter to names starting with it.
+				fp.FastFindStr = "*" + fp.FastFindStr
+			}
+			fp.applyFastFind()
 			vtui.FrameManager.Redraw()
 			return true
 		}
@@ -3513,7 +3543,11 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	if fp.FastFindMode && e.ButtonState != 0 {
+	if fp.FastFindMode && e.ButtonState != 0 && !fp.autoFilterOn {
+		// A narrowed panel keeps its filter here on purpose: the rows under
+		// the pointer are the filtered ones, and giving the hidden rows back
+		// before this click is resolved would land it on a different file.
+		// The filter closes on Esc, on Enter, and on leaving the directory.
 		fp.FastFindMode = false
 		fp.FastFindStr = ""
 		vtui.FrameManager.Redraw()
