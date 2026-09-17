@@ -37,11 +37,12 @@ func TestParserSelectionAndCodecContracts(t *testing.T) {
 	}
 	for _, tc := range tests {
 		name := tc.name
-		if name == "ebu stl" {
+		switch name {
+		case "ebu stl":
 			name = "captions.stl"
-		} else if name == "subtitle" {
+		case "subtitle":
 			name = "captions.vtt"
-		} else {
+		default:
 			name = "sample.bin"
 		}
 		if got := chooseParser(name, tc.head) != nil; got != tc.want {
@@ -407,7 +408,9 @@ func TestHEIFAndMatroskaScalarContracts(t *testing.T) {
 		}
 	}
 	stream := Stream{}
-	if ensureVideo(&stream) != ensureVideo(&stream) || ensureAudio(&stream) != ensureAudio(&stream) || stream.Video == nil || stream.Audio == nil {
+	video := ensureVideo(&stream)
+	audio := ensureAudio(&stream)
+	if ensureVideo(&stream) != video || ensureAudio(&stream) != audio || stream.Video == nil || stream.Audio == nil {
 		t.Error("stream component initialization failed")
 	}
 	for _, tc := range []struct{ id, want string }{
