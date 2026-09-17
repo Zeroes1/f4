@@ -17,6 +17,9 @@ import (
 func checkConfigs(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	// Registered after TempDir, so it runs before the directory is removed:
+	// Colorer sessions still being set up write into it.
+	t.Cleanup(colorerSetups.wait)
 	write := func(rel, content string) {
 		path := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

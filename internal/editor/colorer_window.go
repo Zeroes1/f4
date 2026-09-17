@@ -89,6 +89,7 @@ func NewWindowColorizer(path, firstLine string, base uint64, redraw func()) view
 			}
 		})
 	}
+	colorerSetups.start()
 	go func() {
 		var session *colorer.Session
 		var settings colorerTypeSettings
@@ -98,6 +99,9 @@ func NewWindowColorizer(path, firstLine string, base uint64, redraw func()) view
 				defer session.Close()
 			}
 		}
+		// The rest of this goroutine serves the window until it is
+		// closed; only the session setup is counted.
+		colorerSetups.done()
 		var h vtui.Highlighter
 		if session == nil {
 			if h = vtui.GetHighlighter(path, ""); h == nil {

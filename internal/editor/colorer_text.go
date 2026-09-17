@@ -72,7 +72,9 @@ func NewTextColorizer(path string, lines []string, base uint64, quickView bool, 
 	src := CurrentColorerSource()
 	scheme := config.App.EditorColorerScheme
 	colorerBase := ColorerEditorBaseAttr(base)
+	colorerSetups.start()
 	go func() {
+		defer colorerSetups.done()
 		out := &textColorizerBatches{ctx: ctx, frames: frames, c: c, redraw: redraw}
 		if useColorer && colourTextWithColorer(ctx, src, scheme, path, snapshot, colorerBase, out) {
 			return

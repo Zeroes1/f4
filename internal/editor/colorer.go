@@ -536,7 +536,9 @@ func ColorerEditorBaseAttr(base uint64) uint64 {
 		schemeMu.Lock()
 		requestedScheme := schemeName
 		schemeMu.Unlock()
+		colorerSetups.start()
 		go func() {
+			defer colorerSetups.done()
 			rd := colorerGetRegionDefineFor(colorerBackgroundRegion, requestedSource, requestedScheme)
 			colorerBackgroundCache.Lock()
 			colorerBackgroundCache.define = rd
@@ -593,7 +595,9 @@ func newColorerHighlighter(ev *EditorView, filename, firstLine string, fallback 
 	frames := vtui.FrameManager
 	ch.postTask = frames.PostTask
 	ch.redraw = frames.Redraw
+	colorerSetups.start()
 	go func() {
+		defer colorerSetups.done()
 		session, err := acquireCancelableColorerSession(sessionCtx, ch.colorerSrc)
 		if err != nil {
 			vtui.DebugLog("COLORER: Failed to init session: %v", err)
