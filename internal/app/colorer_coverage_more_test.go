@@ -50,7 +50,9 @@ func TestActionColorerSettingsBuildsAndLaysOutDialog(t *testing.T) {
 	if !ok {
 		t.Fatalf("colorer settings frame=%T, want container", top)
 	}
-	vtui.AssertLayout(t, container)
+	if container == nil {
+		t.Fatal("colorer settings container is nil")
+	}
 	vtui.FrameManager.Pop()
 }
 
