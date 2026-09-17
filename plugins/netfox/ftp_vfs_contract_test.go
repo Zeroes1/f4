@@ -2,7 +2,6 @@ package netfox
 
 import (
 	"context"
-	"errors"
 	"net"
 	"testing"
 	"time"
