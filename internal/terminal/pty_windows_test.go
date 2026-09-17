@@ -52,7 +52,20 @@ func TestConPTYPackageKeepsLongLinesWhole(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	dir, err := installConPTYPackage(ctx, http.DefaultClient, t.TempDir(), pkg)
+	// Not t.TempDir(): conpty.dll stays loaded in this process until it
+	// exits, and Windows does not delete an image file that is mapped, so
+	// the automatic cleanup fails the test after the test itself has passed.
+	// Whatever can be removed is; the rest is left in the temp directory.
+	root, err := os.MkdirTemp("", "f4-conpty-package-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(root); err != nil {
+			t.Logf("left behind, still loaded: %v", err)
+		}
+	})
+	dir, err := installConPTYPackage(ctx, http.DefaultClient, root, pkg)
 	if err != nil {
 		t.Fatalf("install ConPTY package: %v", err)
 	}

@@ -58,10 +58,10 @@ func (tv *TerminalView) ReflowEnabled() bool {
 	return tv.reflow
 }
 
-// reflowLine is one logical line taken off the grid.
+// reflowLine is what is known about the logical line being collected; its
+// cells accumulate in a local slice next to it.
 type reflowLine struct {
-	cells  []vtui.CharInfo
-	cursor int // offset of the cursor in cells, or -1
+	cursor int // offset of the cursor in the line's cells, or -1
 	// rowStarts maps viewport rows of the old grid that began inside this
 	// line to the offset of their first cell, so pictures can follow them.
 	rowStarts map[int]int
