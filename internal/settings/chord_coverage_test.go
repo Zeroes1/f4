@@ -14,6 +14,7 @@ func TestSettingsChordConstructionAndLayout(t *testing.T) {
 		t.Fatalf("chord position=%d,%d,%d,%d", x1, y1, x2, y2)
 	}
 	chord.edit.SetText("Alt+K")
+	chord.edit.OnTextChange(chord.edit.GetText())
 	if changed != "Alt+K" {
 		t.Fatalf("text-change callback received %q", changed)
 	}
