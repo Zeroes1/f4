@@ -42,7 +42,7 @@ require (
 	github.com/unxed/vtinput v0.1.8
 	github.com/unxed/vtui v0.1.356
 	github.com/unxed/zip v0.1.139
-	github.com/unxed/zipper v0.1.165
+	github.com/unxed/zipper v0.1.166
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
