@@ -3815,6 +3815,20 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 		chkExactSearch.State = 1
 	}
 
+	// Windows only: libwinescape is what lets a Windows build call real POSIX
+	// syscalls when it runs under Wine, and it is hard-wired off everywhere
+	// else, so the switch would be a lie on any other GOOS. It stays on by
+	// default; turning it off makes f4 use plain Win32 for the file layer even
+	// under Wine, which is also what it does on Windows itself and on systems
+	// that only look like Wine from a distance, ReactOS among them.
+	var chkWinescape *vtui.Checkbox
+	if runtime.GOOS == "windows" {
+		chkWinescape = vtui.NewCheckbox(0, 0, i18n.Msg("PanelSettings.UseWinescape"), false)
+		if config.App.UseWinescape {
+			chkWinescape.State = 1
+		}
+	}
+
 	lblConsoleMode := vtui.NewText(0, 0, i18n.Msg("PanelSettings.ConsoleMode"), 0)
 	radioConsoleMode := vtui.NewRadioGroup(0, 0, 1, []string{
 		i18n.Msg("PanelSettings.ConsoleModeOwn"),
@@ -3876,6 +3890,9 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 	if lblConsoleUnavailable != nil {
 		dlg.AddItem(lblConsoleUnavailable)
 	}
+	if chkWinescape != nil {
+		dlg.AddItem(chkWinescape)
+	}
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, 56, 20)
 	vbox.Add(chkSync, vtui.Margins{}, vtui.AlignLeft)
@@ -3895,6 +3912,9 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 		vbox.Add(lblConsoleUnavailable, vtui.Margins{Left: 2}, vtui.AlignLeft)
 	}
 	vbox.Add(lblConsoleNote, vtui.Margins{Left: 2}, vtui.AlignLeft)
+	if chkWinescape != nil {
+		vbox.Add(chkWinescape, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	}
 
 	rowMode := vtui.NewHBoxLayout(0, 0, 56, 1)
 	rowMode.Add(lblMode, vtui.Margins{Right: 1}, vtui.AlignLeft)
@@ -3937,6 +3957,11 @@ func actionPanelAdditionalSettings(pf *panel.PanelsFrame) {
 			config.App.ConsoleMode = "own"
 		}
 		config.App.ConsoleOverlayUI = chkOverlay.State == 1
+		if chkWinescape != nil {
+			// Read from the next start, like the console mode above it:
+			// vfs/hostmode decides the personality once per process.
+			config.App.UseWinescape = chkWinescape.State == 1
+		}
 		config.App.DefaultFileOpMode = comboMode.Menu.SelectPos
 		config.App.FileOpPathDisplay = comboPath.Menu.SelectPos
 		config.App.MacroRecordFormat = comboMacro.Menu.SelectPos

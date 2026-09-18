@@ -762,6 +762,7 @@ PanelSettings.ConsoleModeOwn=Свой &терминал
 PanelSettings.ConsoleModeHost=Консоль &хоста
 PanelSettings.ConsoleOverlayUI=Показывать командную строку поверх &консоли
 PanelSettings.ConsoleModeNote=(применится к новым сессиям)
+PanelSettings.UseWinescape=Использовать lib&winescape под Wine (применится к новым сессиям)
 PanelSettings.ConsoleModeUnavailable=(недоступно в текущем окружении)
 PanelSettings.Additional=Дополнительные &настройки
 PanelSettings.AdvancedTitle= Дополнительные настройки панелей

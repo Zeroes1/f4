@@ -30,6 +30,7 @@ import (
 	"github.com/unxed/f4/internal/update"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/f4/vfs/hostmode"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 	"golang.org/x/term"
@@ -352,9 +353,16 @@ func Main() {
 	installHangDumpHandler()
 
 	vtui.SetupStderrLog()
+	// The configuration is read before the detached copy's stderr fix, not
+	// after, because that fix is one of the two places f4 uses libwinescape
+	// and UseWinescape decides whether it may. Reading settings.ini is a
+	// handful of os.Stat/os.ReadFile calls that do not touch the host file
+	// layer, so nothing here can freeze the personality before the setting
+	// is applied.
+	config.LoadConfig() // Load config early to apply GUI font settings
+	hostmode.SetAllowed(config.App.UseWinescape)
 	redirectDetachedStdout()
 	vtui.DebugLog("MAIN: Starting with args: %v", os.Args)
-	config.LoadConfig() // Load config early to apply GUI font settings
 
 	defer func() {
 		SaveSession() // Гарантирует сохранение размеров и путей при любом выходе

@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	winescape "github.com/unxed/libwinescape/go"
+
+	"github.com/unxed/f4/vfs/hostmode"
 )
 
 func checkAndDetach(attached bool) {
@@ -57,7 +59,11 @@ func checkAndDetach(attached bool) {
 // gives Wine the NUL the copy was asked to have.
 func redirectDetachedStdout() {
 	detached := os.Getenv("F4_DETACHED") == "1"
-	if !detached || !winescape.Available() {
+	// hostmode.Allowed() is the UseWinescape setting: with it off, f4 uses
+	// libwinescape nowhere, this fix included. A copy started under Wine by a
+	// user who turned it off keeps Wine's descriptor 2, which is the pre-#474
+	// behaviour and their choice to make.
+	if !detached || !hostmode.Allowed() || !winescape.Available() {
 		return
 	}
 	var tio winescape.Termios

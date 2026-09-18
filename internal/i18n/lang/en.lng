@@ -774,6 +774,7 @@ PanelSettings.ConsoleModeOwn=Own &terminal
 PanelSettings.ConsoleModeHost=Host &console
 PanelSettings.ConsoleOverlayUI=Show command line &over host console
 PanelSettings.ConsoleModeNote=(applies to new sessions)
+PanelSettings.UseWinescape=Use lib&winescape under Wine (applies to new sessions)
 PanelSettings.ConsoleModeUnavailable=(unavailable in current environment)
 PanelSettings.Additional=Additional &settings
 PanelSettings.AdvancedTitle= Additional panel settings
