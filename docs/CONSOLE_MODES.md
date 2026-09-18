@@ -14,7 +14,7 @@ f4 — Go-приложение (`package main` в корне), UI и ввод в
   идут в `AnsiParser.Process()` → сетка `TerminalView` → `vtui.ScreenBuf`. То есть
   **f4 сам является эмулятором терминала**, хостовый терминал видит только готовый кадр.
 * `Ctrl+O` = action `Panel.Toggle` (`action_registry.go`,
-  `DefaultKeys: ["CtrlO:NoTerminalApp", ...]`), переключает `pf.showPanels`, то есть
+  `DefaultKeys: ["CtrlO:NoAltScreenApp", ...]`), переключает `pf.showPanels`, то есть
   показывает **внутреннюю** сетку, а не исходную консоль.
 * Команда из командной строки (`panels_frame.go`, обработка `VK_RETURN`) заворачивается в
   OSC 133 (`\033]133;C\007 … \033]133;D\007`), выставляет `pf.executing = true`,

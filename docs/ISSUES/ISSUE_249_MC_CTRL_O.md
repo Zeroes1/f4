@@ -41,12 +41,12 @@ a burst can no longer be left unseen. Rejected alternatives: dropping the
 coalescer (reintroduces #248), and shortening the interval (narrows the race
 without closing it).
 
-## 2. Ctrl+O was arbitrated by the alternate screen
+## 2. Ctrl+O is arbitrated by the alternate screen -- and stays that way
 
-`Panel.Toggle` was bound as `CtrlO:NoAltScreenApp`, so f4 claimed the key
-whenever the program in the terminal was not on the alternate screen. mc's own
+`Panel.Toggle` is bound as `CtrlO:NoAltScreenApp`, so f4 claims the key
+whenever the program in the terminal is not on the alternate screen. mc's own
 `Ctrl+O` leaves the alternate screen to show its subshell -- so the first press
-reached mc, and the second was taken by f4, which showed the panels over a
+reaches mc, and the second is taken by f4, which shows the panels over a
 still-running mc. The trace:
 
 ```
@@ -61,18 +61,14 @@ no console to show and only flips the screen buffer, so the presses appear to
 do nothing until the flip happens to leave the alternate screen and f4 takes
 the key again.
 
-Far, far2l and mc agree on the rule the binding should express: the panel
-toggle is a prompt-level key, and a program running in the terminal keeps every
-key it is sent. That is `NoTerminalApp`, the stricter sibling that also stands
-down for a busy child -- the same gate `Esc` already used, and the handover
-`docs/KEYMAP.md` already describes.
-
-**Fix:** `CtrlO:NoTerminalApp`. With the panels up the toggle is unconditional;
-at an idle prompt with the panels hidden it shows the panels; while any program
-runs, the key goes to the program. Rejected alternatives: a double `Ctrl+O`
-chord (invented UX, and mc's own toggle would swallow the first press), and
-keeping the alt-screen test with a special case for mc (a per-program rule for
-behaviour any program can have).
+The obvious repair -- gate the key with `NoTerminalApp`, the way Far, far2l and
+mc all treat the panel toggle as a prompt-level key -- was tried and rejected:
+issue #50 requires the opposite. A blocked CLI tool or a GUI program that holds
+the PTY never gives the key back, and f4 would have no way out of the terminal
+at all; `TestPanelsFrame_KeyHandling` pins that requirement. Being locked out of
+the panels is the worse failure, so the binding stays as it is and this part of
+the report is accepted behaviour, not a defect. Returning to mc after the
+panels come back is `Ctrl+O` again -- mc keeps running the whole time.
 
 ## 3. The blue stripe under the output
 
