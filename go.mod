@@ -34,6 +34,7 @@ require (
 	github.com/unxed/archives v0.0.0-20260917192539-4ad5487d1940
 	github.com/unxed/colorer4go v0.1.23
 	github.com/unxed/ffibridge v0.1.5
+	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.1.5
 	github.com/unxed/localecp v0.1.6

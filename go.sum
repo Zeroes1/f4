@@ -271,6 +271,8 @@ github.com/unxed/colorer4go v0.1.23 h1:3ISsUgUj3idVnw65tp4ofkeMbW/hN4NO8jrXakuGL
 github.com/unxed/colorer4go v0.1.23/go.mod h1:3H2jIU3HsmlT7ChlpX+rnYrF2JM22ekgy/eyIBa7Cdo=
 github.com/unxed/ffibridge v0.1.5 h1:EqieQJ26W8/gwW+jk8A7VQp5d8Oa9WRgJP3eIhl0Ldw=
 github.com/unxed/ffibridge v0.1.5/go.mod h1:rD+JJLLIWcXGzzc+CgAtqMiUEMGA0CQrQyV1jGBx6rg=
+github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369 h1:cpsKXIHJVOroztdbIV7WzaGepL3KxciNVrS70a7c+9o=
+github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369/go.mod h1:6dS93Q8qeYH19qONyVGuBQis+1ng6cfqutqhks8fW68=
 github.com/unxed/goclip v0.1.2 h1:1O9K+iCxa8P43yxpjrk4HyakcFqcbHSi4qJD9IzLuZU=
 github.com/unxed/goclip v0.1.2/go.mod h1:YXy03ByNfbeu4lRrUL09VyJX9U4WD6h/0JiqMuu8vUE=
 github.com/unxed/goffi v0.1.8 h1:7gOqj8p88uanqtIWfAl72Mf/JF4i6n5Ke0M4RgiHJLA=
