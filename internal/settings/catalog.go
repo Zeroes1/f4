@@ -79,6 +79,7 @@ PathHintSource|terminal|Path suggestions|Suggestion source|Resolve suggestions f
 PathHintTimeout|terminal|Path suggestions|Directory read timeout (seconds)|Maximum time allowed for a filesystem directory read behind suggestions. This is not a delay before suggestions appear. Minimum 1 second.||live
 PathHintMaxVisible|terminal|Path suggestions|Maximum visible suggestions|Maximum number of visible suggestion rows. Minimum 1.||live
 PathHintPerCategory|terminal|Path suggestions|Separate suggestion limits|Apply the visible-row limit separately to active-panel, passive-panel and history suggestions.||live
+UseWinescape|operations|Compatibility|Use libwinescape under Wine|Windows builds under Wine only: file operations use POSIX system calls through libwinescape instead of Win32. Off keeps the Win32 path everywhere.||restart
 UseTrash|operations|Deletion|Use trash or recycle bin|Send ordinary Delete operations to trash where supported. Explicit permanent-delete commands still delete permanently.||new operations
 DefaultFileOpMode|operations|Execution|Default operation mode|Start operations in Queue, Background or Foreground mode. Individual operation dialogs can override it.|0:Queue;1:Background;2:Foreground|new operations
 FileOpPathDisplay|operations|Execution|Progress path display|Show the current name, full path, or source and destination paths in operation progress.|0:Name;1:Full path;2:Source and destination|live
