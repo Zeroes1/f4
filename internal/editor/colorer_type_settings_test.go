@@ -24,7 +24,7 @@ func TestColorerParamIntAndHex(t *testing.T) {
 }
 
 func TestColorerTypeSettingsHelpers(t *testing.T) {
-	s := colorerTypeSettings{maxLineLength: 3, showCross: "vertical", fore: 0x112233, back: -1}
+	s := colorerTypeSettings{maxLineLength: 3, showCross: "vertical", fore: 0x112233, foreSet: true}
 	if got := s.truncate("aЖbcd"); got != "aЖb" {
 		t.Errorf("truncate = %q", got)
 	}
@@ -37,6 +37,14 @@ func TestColorerTypeSettingsHelpers(t *testing.T) {
 	attr := s.baseAttr(0)
 	if vtui.GetRGBFore(attr) != 0x112233 {
 		t.Errorf("base fore %#x", vtui.GetRGBFore(attr))
+	}
+
+	// The zero value is what a highlighter holds until its session has been
+	// read, and it must leave the editor's own colours alone rather than
+	// force RGB 000000 on both halves of the attribute.
+	marker := vtui.SetRGBBack(vtui.SetRGBFore(0, 0xC0FFEE), 0x123456)
+	if got := (colorerTypeSettings{}).baseAttr(marker); got != marker {
+		t.Errorf("zero settings changed the base attribute: %#x -> %#x", marker, got)
 	}
 }
 
@@ -100,7 +108,7 @@ func TestReadColorerTypeSettings(t *testing.T) {
 		t.Fatalf("SetFileType: %v, %v", ok, err)
 	}
 	got := readColorerTypeSettings(session)
-	want := colorerTypeSettings{maxLineLength: 80, plainEOL: true, showCross: "both", fore: -1, back: 0x202020}
+	want := colorerTypeSettings{maxLineLength: 80, plainEOL: true, showCross: "both", back: 0x202020, backSet: true}
 	if got != want {
 		t.Errorf("settings %+v, want %+v", got, want)
 	}
@@ -108,7 +116,44 @@ func TestReadColorerTypeSettings(t *testing.T) {
 	if ok, _ := session.SetFileType("default"); !ok {
 		t.Fatal("SetFileType(default)")
 	}
-	if got := readColorerTypeSettings(session); got != (colorerTypeSettings{maxLineLength: 5000, showCross: "none", fore: -1, back: -1}) {
+	if got := readColorerTypeSettings(session); got != (colorerTypeSettings{maxLineLength: 5000, showCross: "none"}) {
 		t.Errorf("default settings %+v", got)
+	}
+}
+
+// default-back alone must reach the attribute without dragging a foreground
+// colour along, and a value that does not parse must leave the colour unset
+// rather than turn it into a real black.
+func TestColorerTypeSettings_BackWithoutFore(t *testing.T) {
+	marker := vtui.SetRGBFore(0, 0xC0FFEE)
+	s := colorerTypeSettings{back: 0x202020, backSet: true}
+	attr := s.baseAttr(marker)
+	if got := vtui.GetRGBBack(attr); got != 0x202020 {
+		t.Errorf("base back %#x, want 0x202020", got)
+	}
+	if got := vtui.GetRGBFore(attr); got != 0xC0FFEE {
+		t.Errorf("an unset foreground was changed to %#x", got)
+	}
+}
+
+func TestColorerParamHexValue(t *testing.T) {
+	for _, tc := range []struct {
+		in    string
+		want  int
+		valid bool
+	}{
+		{in: "#102030", want: 0x102030, valid: true},
+		{in: "0xFF", want: 0xff, valid: true},
+		{in: "ff", want: 0xff, valid: true},
+		{in: ""},
+		{in: "zz"},
+		// Longer than a uint32 takes: ParseUint refuses it, and a colour that
+		// cannot be read stays unset.
+		{in: "1122334455"},
+	} {
+		got, valid := colorerParamHexValue(tc.in)
+		if valid != tc.valid || (valid && got != tc.want) {
+			t.Errorf("colorerParamHexValue(%q) = %#x, %v; want %#x, %v", tc.in, got, valid, tc.want, tc.valid)
+		}
 	}
 }

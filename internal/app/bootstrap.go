@@ -392,6 +392,8 @@ func Main() {
 	vtui.ConfigDiskLogging(false)
 	var serverPath, clientPath string
 	var cpuprofile string
+	var traceFile string
+	var stallLimit time.Duration
 	var guiMode bool
 	var guiBackend string
 	var guiBackendGiven bool
@@ -487,6 +489,34 @@ func Main() {
 			} else if i+1 < len(os.Args) {
 				cpuprofile = os.Args[i+1]
 				i++
+			}
+		case "--trace":
+			if flagVal != "" {
+				traceFile = flagVal
+			} else if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+				traceFile = os.Args[i+1]
+				i++
+			}
+		case "--stall-watchdog":
+			// The duration is optional, so the next word is taken only when it
+			// is one: "f4 --stall-watchdog notes.txt" opens notes.txt with the
+			// watchdog on its default, rather than failing on a filename that is
+			// not a duration.
+			stallLimit = 250 * time.Millisecond
+			if flagVal != "" {
+				d, err := time.ParseDuration(flagVal)
+				if err != nil {
+					// stdout, like --version and --help: f4 has already taken
+					// stderr over for its own log by the time a switch is read.
+					fmt.Printf("--stall-watchdog: %v\n", err)
+					os.Exit(2)
+				}
+				stallLimit = d
+			} else if i+1 < len(os.Args) {
+				if d, err := time.ParseDuration(os.Args[i+1]); err == nil {
+					stallLimit = d
+					i++
+				}
 			}
 		case "--new-plugin":
 			pluginName := flagVal
@@ -584,6 +614,13 @@ The following switches may be used in the command line:
  --attached             Force run in Attached-mode
  --client [clientPath]
  --cpuprofile [cpuprofile]
+ --trace [file]         Write a runtime execution trace, which records GC
+                         pauses, blocking syscalls and scheduling as well as
+                         CPU; read it with "go tool trace"
+ --stall-watchdog [d]   Write every goroutine's stack into the profile's
+                         crashes folder whenever one UI frame takes longer
+                         than d (default 250ms). Answers what a freeze was
+                         waiting on, which a CPU profile cannot.
  --debug                Log to profile logs/debug.log (equivalent to --log=1)
  --dump-screen-after N  Auto-run Debug.ScreenDump N seconds after startup
                          (bypasses hotkeys entirely -- useful under Wine
@@ -667,6 +704,17 @@ see in vtinput project: https://github.com/unxed/vtinput
 		}
 		_ = pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
+	}
+	if traceFile != "" || stallLimit > 0 {
+		stopDiagnostics, notice, err := armDiagnostics(traceFile, stallLimit, filepath.Join(config.GetF4ConfigDir(), "crashes"))
+		if err != nil {
+			panic(err)
+		}
+		defer stopDiagnostics()
+		if notice != "" {
+			// Said on the way past, before the UI takes the screen.
+			fmt.Println(notice)
+		}
 	}
 
 	// Settings.ini supplies whatever this run did not (issue #601). The
