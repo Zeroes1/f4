@@ -738,6 +738,109 @@ jobs:
         path: f4-windows7-amd64.zip
         retention-days: 7
 
+  # Windows before 10 cannot load a binary built by any Go since 1.21: the
+  # runtime imports six kernel32 entry points that are not there, starting with
+  # WerSetFlags, and the loader refuses the process before main runs. This job
+  # builds the one artifact that does run there -- windows/386, stock toolchain,
+  # with the go2xp shim linked in and the import table repointed at its
+  # polyfills afterwards (github.com/unxed/go2xp).
+  #
+  # The profile is ReactOS 0.4.16, whose absent-export set was read out of the
+  # released image rather than out of documentation, and where the result is
+  # tested: f4 draws its panels, copies, views, edits and runs commands there.
+  # XP is close but not identical -- it lacks four functions ReactOS has -- so
+  # an XP artifact needs profiles/xp.json and an XP machine to sign it off.
+  #
+  # go2xp is pinned by commit: it decides which imports get redirected, and a
+  # silent change there would change the artifact without changing this tree.
+  # -ldflags keeps symbols (-w, no -s) because "go2xp audit" reads the proc*
+  # symbol names to report what the target lacks; the audit is the gate that
+  # fails this job if an absent export is neither polyfilled nor accepted by
+  # the profile.
+  build-reactos:
+    name: Build (legacy windows/386)
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 0
+      GOOS: windows
+      GOARCH: 386
+      GO2XP_REF: 00a22a52036948ed8eddd1e14f5101e7dba5d3de
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: go.sum
+
+    - name: Compute build impact
+      id: affected
+      uses: ./.github/actions/affected-packages
+
+    - name: Check out go2xp
+      if: steps.affected.outputs.build == 'yes'
+      uses: actions/checkout@v7
+      with:
+        repository: unxed/go2xp
+        ref: ${{ env.GO2XP_REF }}
+        path: go2xp-src
+
+    - name: Build binaries
+      if: steps.affected.outputs.build == 'yes'
+      run: |
+        set -euo pipefail
+        # A throwaway modfile keeps f4's own go.mod free of the dependency:
+        # every other build target has no use for it.
+        cp go.mod /tmp/f4-go2xp.mod
+        cp go.sum /tmp/f4-go2xp.sum
+        go mod edit -modfile=/tmp/f4-go2xp.mod \
+          -require=github.com/unxed/go2xp@v0.0.0 \
+          -replace=github.com/unxed/go2xp="$PWD/go2xp-src"
+
+        mkdir -p build
+        LDFLAGS="-w"
+        APP_LDFLAGS="$LDFLAGS"
+        if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+        fi
+        go build -trimpath -ldflags="$APP_LDFLAGS" -tags=go2xp \
+          -modfile=/tmp/f4-go2xp.mod -o build/f4.exe ./cmd/f4
+
+        cp -r internal/i18n/lang internal/dialog/help build/
+        cp f4.example.ini build/
+
+    - name: Patch the import table and audit it
+      if: steps.affected.outputs.build == 'yes'
+      run: |
+        set -euo pipefail
+        # The patcher runs on the runner, not on the target.
+        (cd go2xp-src && GOOS= GOARCH= go build -o /tmp/go2xp ./cmd/go2xp)
+        profile=go2xp-src/profiles/reactos.json
+        /tmp/go2xp patch -profile "$profile" build/f4.exe build/f4-legacy.exe \
+          | tee build/go2xp-patch.txt
+        /tmp/go2xp verify -profile "$profile" build/f4-legacy.exe
+        /tmp/go2xp audit -profile "$profile" build/f4-legacy.exe \
+          | tee build/go2xp-audit.txt
+        (cd go2xp-src && git rev-parse HEAD) > build/go2xp-commit.txt
+        rm build/f4.exe
+
+    - name: Package
+      if: steps.affected.outputs.build == 'yes'
+      run: (cd build && zip -r ../f4-legacy-windows-386.zip .)
+
+    - name: Upload Artifact
+      if: steps.affected.outputs.build == 'yes'
+      uses: actions/upload-artifact@v7
+      with:
+        name: f4-legacy-windows-386
+        path: f4-legacy-windows-386.zip
+        retention-days: 7
+
   # go vet in the quality job below only ever sees the linux build of the tree,
   # which leaves the 44 windows-only and 8 darwin-only files here unexamined by
   # any of its analyzers — printf, copylocks, lostcancel, loopclosure and two
