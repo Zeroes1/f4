@@ -819,7 +819,7 @@ jobs:
       run: |
         set -euo pipefail
         # The patcher runs on the runner, not on the target.
-        (cd go2xp-src && GOOS= GOARCH= go build -o /tmp/go2xp ./cmd/go2xp)
+        (cd go2xp-src && env -u GOOS -u GOARCH go build -o /tmp/go2xp ./cmd/go2xp)
         profile=go2xp-src/profiles/reactos.json
         /tmp/go2xp patch -profile "$profile" build/f4.exe build/f4-legacy.exe \
           | tee build/go2xp-patch.txt
