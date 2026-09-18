@@ -1953,50 +1953,103 @@ func TestTerminalRedrawSchedulerCoalescesBurst(t *testing.T) {
 		redraws++
 		mu.Unlock()
 	})
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return redraws
+	}
 
 	for i := 0; i < 100; i++ {
 		scheduler.Request()
 	}
 
-	time.Sleep(2 * time.Millisecond)
-	mu.Lock()
-	got := redraws
-	mu.Unlock()
-	if got != 1 {
-		t.Fatalf("burst triggered %d redraws, want 1", got)
+	// Checked with no sleep at all: the leading frame is drawn inside the
+	// first Request, so the count is exact here however loaded the machine
+	// is. A sleep would race the trailing frame the burst also earns.
+	if got := count(); got != 1 {
+		t.Fatalf("burst triggered %d leading redraws, want 1", got)
 	}
 
-	// The interval is cleared by a timer of its own, and a sleep of interval
-	// plus a fixed margin is not a guarantee that the timer has run: on a
-	// loaded machine, and under the race detector, it regularly has not. Ask
-	// again until it does. A request made while the burst is still suppressed
-	// is exactly what the first half of this test asserts costs nothing, so
-	// asking repeatedly cannot inflate the count.
+	// The 99 suppressed requests are worth exactly one more frame, drawn
+	// once the interval expires. The timer runs on a goroutine of its own
+	// and a fixed sleep is not a guarantee that it has fired -- on a loaded
+	// machine, and under the race detector, it regularly has not -- so poll
+	// for it instead.
 	deadline := time.Now().Add(5 * time.Second)
-	for {
-		scheduler.Request()
-		mu.Lock()
-		got = redraws
-		mu.Unlock()
-		if got == 2 || time.Now().After(deadline) {
-			break
-		}
+	for count() < 2 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
-	if got != 2 {
-		t.Fatalf("redraw after interval counted %d times, want 2", got)
+	if got := count(); got != 2 {
+		t.Fatalf("burst produced %d redraws, want leading + trailing = 2", got)
+	}
+
+	// An idle scheduler must then stay quiet: the trailing frame closes the
+	// burst, it does not start a timer that keeps redrawing forever.
+	time.Sleep(200 * time.Millisecond)
+	if got := count(); got != 2 {
+		t.Fatalf("idle scheduler drifted to %d redraws, want 2", got)
 	}
 
 	scheduler.Stop()
 	scheduler.Request()
-	time.Sleep(2 * time.Millisecond)
-	mu.Lock()
-	got = redraws
-	mu.Unlock()
-	if got != 2 {
+	time.Sleep(200 * time.Millisecond)
+	if got := count(); got != 2 {
 		t.Fatalf("stopped scheduler triggered %d redraws, want 2", got)
 	}
 }
+
+// TestTerminalRedrawSchedulerFlushesLastChunk_Issue249 is the regression test
+// for the invisible mc: a program writes its screen in several PTY reads a
+// millisecond apart and then falls silent. Only the first read fired a frame,
+// the rest were dropped with the interval, and nothing ever woke the renderer
+// again -- mc's panels never reached the screen until a key was pressed.
+func TestTerminalRedrawSchedulerFlushesLastChunk_Issue249(t *testing.T) {
+	var mu sync.Mutex
+	var frames []int
+	content := 0
+	scheduler := terminal.NewTerminalRedrawScheduler(func() {
+		mu.Lock()
+		frames = append(frames, content)
+		mu.Unlock()
+	})
+	defer scheduler.Stop()
+
+	// Chunk 1: the screen-switch sequence, nothing drawn yet.
+	mu.Lock()
+	content = 1
+	mu.Unlock()
+	scheduler.Request()
+
+	// Chunks 2..7: the actual paint, all inside the interval.
+	for i := 2; i <= 7; i++ {
+		mu.Lock()
+		content = i
+		mu.Unlock()
+		scheduler.Request()
+	}
+
+	lastFrame := func() (int, int) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(frames) == 0 {
+			return 0, 0
+		}
+		return frames[len(frames)-1], len(frames)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		last, n := lastFrame()
+		if last == 7 || time.Now().After(deadline) {
+			if last != 7 {
+				t.Fatalf("last rendered state %d after %d frames, want the final chunk 7", last, n)
+			}
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestPanelsFrame_Clone_Comprehensive(t *testing.T) {
 	vtui.SetDefaultPalette()
 	theme.SetDefaultF4Palette()

@@ -1882,6 +1882,17 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 	} else {
 		pf.TermView.SetVisible(true)
 		pf.TermView.Show(scr)
+		// The layout keeps the keybar row out of the PTY even while a
+		// foreign program owns the terminal, but neither the keybar nor
+		// the command line is drawn in that state, so vtui's desktop
+		// background showed through the reserved row as a blue stripe
+		// under the program's output (#249).
+		if y1, y2 := unpaintedTerminalRows(pf.TermView.OnAltScreen(), isBusy, pf.TermView.Y2, pf.LastH); y1 <= y2 {
+			prevOverlay := scr.OverlayMode
+			scr.SetOverlayMode(false)
+			scr.FillRect(0, y1, pf.LastW-1, y2, ' ', terminal.DefaultTermAttr)
+			scr.SetOverlayMode(prevOverlay)
+		}
 	}
 
 	pf.syncMenuBarGeometry()

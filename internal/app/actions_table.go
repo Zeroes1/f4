@@ -1489,12 +1489,19 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { vtui.FrameManager.EmitCommand(appcmd.CmSwapPanels, nil) }),
 	})
 	registerAction(action.Action{
-		Name:         "Panel.Toggle",
-		Area:         "Shell",
-		Label:        "Toggle Panels",
-		Description:  "Show or hide panels",
-		DescKey:      "Action.Panel.Toggle.Desc",
-		DefaultKeys:  []string{"CtrlO:NoAltScreenApp", "Esc:EscToggle", "Del:EscToggle", "NumDel:EscToggle"},
+		Name:        "Panel.Toggle",
+		Area:        "Shell",
+		Label:       "Toggle Panels",
+		Description: "Show or hide panels",
+		DescKey:     "Action.Panel.Toggle.Desc",
+		// NoTerminalApp, not NoAltScreenApp: in Far, far2l and mc alike the
+		// panel toggle belongs to the shell prompt, and a program running in
+		// the terminal keeps every key it is sent. mc is the case that makes
+		// the difference visible -- its own Ctrl+O leaves the alternate
+		// screen, so the alt-screen test handed f4 the next press and left mc
+		// running behind the panels (#249). Esc keeps its EscToggle gate,
+		// which already stood down for a busy child.
+		DefaultKeys:  []string{"CtrlO:NoTerminalApp", "Esc:EscToggle", "Del:EscToggle", "NumDel:EscToggle"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.TogglePanelsVisibility()

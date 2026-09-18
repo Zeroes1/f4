@@ -13,6 +13,7 @@ const terminalRedrawInterval = 16 * time.Millisecond
 type TerminalRedrawScheduler struct {
 	mu      sync.Mutex
 	pending bool
+	missed  bool
 	stopped bool
 	redraw  func()
 }
@@ -27,7 +28,19 @@ func (s *TerminalRedrawScheduler) Request() {
 	}
 
 	s.mu.Lock()
-	if s.stopped || s.pending {
+	if s.stopped {
+		s.mu.Unlock()
+		return
+	}
+	if s.pending {
+		// Remember that newer output arrived while the window is open; the
+		// timer below turns it into exactly one trailing frame. Dropping
+		// these outright is what made a program that paints once and then
+		// falls silent invisible: mc writes its whole screen in a handful
+		// of reads a millisecond apart, so every chunk after the first
+		// landed inside the window and nothing ever woke the renderer
+		// again (#249).
+		s.missed = true
 		s.mu.Unlock()
 		return
 	}
@@ -41,10 +54,36 @@ func (s *TerminalRedrawScheduler) Request() {
 	if redraw != nil {
 		redraw()
 	}
+	s.arm()
+}
+
+// arm closes the coalescing window after terminalRedrawInterval. If
+// requests arrived while it was open, one trailing frame is drawn and a new
+// window is opened for whatever arrives during that frame, so a sustained
+// stream still costs at most one frame per interval while the last chunk of
+// a burst is never left unseen.
+func (s *TerminalRedrawScheduler) arm() {
 	time.AfterFunc(terminalRedrawInterval, func() {
 		s.mu.Lock()
-		s.pending = false
+		if s.stopped {
+			s.pending = false
+			s.missed = false
+			s.mu.Unlock()
+			return
+		}
+		if !s.missed {
+			s.pending = false
+			s.mu.Unlock()
+			return
+		}
+		s.missed = false
+		redraw := s.redraw
 		s.mu.Unlock()
+
+		if redraw != nil {
+			redraw()
+		}
+		s.arm()
 	})
 }
 
@@ -55,5 +94,6 @@ func (s *TerminalRedrawScheduler) Stop() {
 	s.mu.Lock()
 	s.stopped = true
 	s.pending = false
+	s.missed = false
 	s.mu.Unlock()
 }
