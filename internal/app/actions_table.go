@@ -2092,6 +2092,7 @@ func init() {
 		Name:         "App.Quit",
 		Area:         "Shell",
 		Label:        "Quit",
+		LabelKey:     "KeyBar.F10",
 		Description:  "Quit f4",
 		DescKey:      "Action.App.Quit.Desc",
 		DefaultKeys:  []string{"F10:NoAltScreenApp"},
