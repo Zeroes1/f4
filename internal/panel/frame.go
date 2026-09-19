@@ -379,7 +379,13 @@ func (pf *PanelsFrame) Passive() Panel { return pf.Panels[1-pf.ActiveIdx] }
 
 func NewPanelsFrame() *PanelsFrame {
 	pf := &PanelsFrame{ActiveIdx: 1, WidePanel: -1, FolderHistoryPos: [2]int{-1, -1}}
-	pf.terminalRedraw = terminal.NewTerminalRedrawScheduler(func() { vtui.FrameManager.Redraw() })
+	// The scheduler fires from a timer goroutine long after this returns, so it
+	// must not read the vtui.FrameManager global then: a test that swaps the
+	// manager back in its cleanup raced with it (TestIssue863OwnTerminal*, four
+	// Race (shard 1) failures in a day, one on main). It redraws the manager
+	// this frame was made for, which in the application is the only one.
+	frames := vtui.FrameManager
+	pf.terminalRedraw = terminal.NewTerminalRedrawScheduler(func() { frames.Redraw() })
 	pf.SetHelp("Panels")
 	pf.ShowKeyBar = true
 	pf.ShowPanels = true
