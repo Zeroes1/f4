@@ -3762,9 +3762,6 @@ func TestPanelsFrame_CaptureCommands(t *testing.T) {
 	vtui.SetClipboard("")
 
 	cmdStr := "clip:<< echo f4_capture_test"
-	if runtime.GOOS == "windows" {
-		cmdStr = "clip:<< cmd.exe /c echo f4_capture_test"
-	}
 
 	pf.CmdLine.Edit.SetText(cmdStr)
 	pressKey(pf, &vtinput.InputEvent{

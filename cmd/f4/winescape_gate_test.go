@@ -34,6 +34,7 @@ const winescapeImportPath = "github.com/unxed/libwinescape/go"
 
 var winescapeImporters = map[string]string{
 	"internal/app/bootstrap_detach_windows.go":      "asks hostmode.Allowed() before redirecting Wine's fd 2",
+	"internal/terminal/native_command_windows.go":   "native simple/captured commands; every use is gated by hostmode.Posix()",
 	"internal/terminal/pty_wine_windows.go":         "the native terminal; every use is gated by hostmode.Posix() (winePTYUsable)",
 	"internal/terminal/wineprobe_escape_windows.go": "diagnostics only; reports hostmode.Posix() and Allowed()",
 	"vfs/hostfs/errno_windows.go":                   "error translation for hostfs; reached only through it",

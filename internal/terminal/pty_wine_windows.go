@@ -49,12 +49,15 @@ func winePTYUsable() bool {
 	return winePTYProbe.ok
 }
 
-func nativeShellActive() bool { return winePTYUsable() }
+// nativeShellActive reports the POSIX shell personality, not PTY availability.
+// Simple modes use the same answer when they have to run without a PTY.
+func nativeShellActive() bool { return hostmode.Posix() }
 
-// nativeSystemShell is GetSystemShell's answer when the native terminal is in
-// use: the host's $SHELL rather than cmd.exe.
+// nativeSystemShell is GetSystemShell's answer in the POSIX Wine personality:
+// the host's $SHELL rather than cmd.exe. PTY availability is a transport
+// choice; it must not change the shell language used by simple modes.
 func nativeSystemShell() (string, bool) {
-	if !winePTYUsable() {
+	if !hostmode.Posix() {
 		return "", false
 	}
 	return nativeShellName(winescape.HostGetenv("SHELL")), true

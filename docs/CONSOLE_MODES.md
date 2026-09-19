@@ -278,9 +278,11 @@ keybar/menubar). Зеркало `termView.Resize()` — тем же размер
 
 ### 5.1. `ShellModeSimpleInline` (есть хостовый tty, PTY нет)
 
-Резидентного шелла нет. Каждая команда: `vtui.Suspend()` →
-`exec.Command(shell, "-c"/"/c", cmd)` с `Stdin/Stdout/Stderr = os.Stdin/os.Stdout/os.Stderr`
-и `cmd.Dir = <путь активной панели>` → `Wait()` → «Press any key» → `vtui.Resume()`.
+Резидентного шелла нет. Каждая команда: `vtui.Suspend()` → запуск с наследованием
+`stdio` и `cmd.Dir = <путь активной панели>` → `Wait()` → «Press any key» →
+`vtui.Resume()`. В Windows-персоне это `cmd.exe /c`; в POSIX-персоне Wine это
+`$SHELL -c` через `libwinescape.Spawn`. Деградация PTY не должна менять язык
+командной строки.
 Прототип уже есть — `runExternalEditor()` в `actions.go`. `cd` и смена диска перехватываются
 самим f4 до отправки в шелл, так что отсутствие резидентного шелла почти не заметно.
 
@@ -293,8 +295,10 @@ keybar/menubar). Зеркало `termView.Resize()` — тем же размер
 Код почти весь готов: `showRemoteCommandOutput(pf, NewLocalCommandRunner(), dir, cmd)`
 (`remote_command.go` + `command_runner.go`) — окно со стриминговым выводом, скроллом и
 отменой по закрытию. Плюс существующие `view:<<` / `edit:<<` / `clip:<<`
-(`executeCapturedCommand`). Интерактивные программы не поддерживаются — тост
-«terminal is not available in this environment».
+(`executeCapturedCommand`). В Windows-персоне используется `cmd.exe`; в POSIX-персоне
+Wine оба пути используют host shell и host pipes через `libwinescape.Spawn`.
+Интерактивные программы не поддерживаются — тост «terminal is not available in this
+environment».
 
 ## 6. Новое API в vtui
 

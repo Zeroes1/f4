@@ -1851,7 +1851,7 @@ func actionExecute(pf *panel.PanelsFrame, v vfs.VFS, dir, name, path string) {
 				}
 				_, isOS := v.(*vfs.OSVFS)
 				_, isPty := v.(vfs.PtyProvider)
-				isWindowsShell := runtime.GOOS == "windows" && isOS
+				isWindowsShell := terminal.WindowsShellSyntax() && isOS
 
 				if !isWindowsShell {
 					historyCmd = "./" + historyCmd

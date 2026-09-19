@@ -5171,7 +5171,7 @@ wineconsole определяется по бэкенду, а не по ней.
 | Reparse points, junction | **Сделано.** `isReparsePoint` уже был закрыт; теперь и `resolveReparseCandidates`, `wellKnownJunction` и три места вызова (`os_vfs.go`, `os_vfs_listing.go`) стоят за `vfs.WindowsPersonality()`. Раньше отказ в доступе к `/root` запускал догадки про `All Users` и `CreateFile` с POSIX-путём. |
 | `$HOME`, `$XDG_CONFIG_HOME` | **Не сделано.** Нужно решение автора: где жить конфигу в posix-режиме (в префиксе Wine, как сейчас, или в `~/.config/f4`; перенос меняет место, где существующие пользователи ищут настройки). Места вызова `os.UserHomeDir`/`os.UserConfigDir`: `panel/frame.go` (2431, 5901), `panel/drives_menu.go:74`, `app/actions.go:4360`, `app/command_palette_panels.go:424`, `app/vtvibe_host.go:275`, `app/actions_framework.go:343`, `terminal/child_env.go:205`. У libwinescape есть `HostGetenv`, читающий `/proc/self/environ` мимо таблицы окружения Wine. |
 | Регистр в сравнениях | Частично. **Исправлена** проверка «источник равен приёмнику» в `fileops/ops.go`: копирование `/a/Foo` в `/a/foo` под posix-режимом отвергалось как копирование файла на себя. Не сделано: `panel/associations.go:228`, `panel/frame.go:5714`, `fusefs/fusefs.go:407`. |
-| Шелл | **Сделано в коде, вживую не проверено**, см. §18.3: под posix-режимом оболочка — `$SHELL` хоста на нативном pty, а текст для неё собирается по правилам POSIX-оболочки (`terminal.WindowsShellSyntax()` вместо `GOOS == "windows"` в `panel/frame.go`). Запуск внешних команд через `exec.Command("cmd.exe", "/c", …)` (`panel/frame.go` 4755, 4780) и простые режимы (`panel/exec.go`) остались на `cmd.exe`. |
+| Шелл | **Сделано в коде, вживую не проверено**, см. §18.3: под posix-режимом оболочка — `$SHELL` хоста на нативном pty, а текст для неё собирается по правилам POSIX-оболочки (`terminal.WindowsShellSyntax()` вместо `GOOS == "windows"` в `panel/frame.go`). Это правило распространяется и на деградации без pty: `simple-inline`, `simple-captured` и `clip:/view:/edit:` запускают host shell через `libwinescape.Spawn`, а не молча переключаются на `cmd.exe`. |
 | Диалог атрибутов, `rename_noreplace` | Сделано раньше (§14.2). |
 
 Дополнительно исправлено в этом заходе (не входило в список §14.2):
@@ -5183,9 +5183,7 @@ wineconsole определяется по бэкенду, а не по ней.
 Что ещё выдаёт Windows в posix-режиме, по убыванию заметности (найдено, не
 исправлено): `cd /tmp` (`filepath.IsAbs("/tmp")` на GOOS windows ложно, `panel/frame.go` ~5559);
 `Ctrl+\` идёт в `\`, а не в `/` (`app/actions_table.go` ~1009); приглашение
-командной строки принудительно в виде `path>` (`panel/frame.go` ~912);
-команда смены диска `C:` и `cd /d` (~5842); запуск через `cmd.exe /c` и
-кавычки в стиле cmd (`panel/frame.go` 129, 516, 4755–4780); `cmdline/apply_resources.go:403`
+командной строки принудительно в виде `path>` (`panel/frame.go` ~912); `cmdline/apply_resources.go:403`
 не делает `chmod 0600` для приватных файлов; `editor/view.go:6941`
 принимает POSIX-имя с `:` за поток NTFS; `fileops/rights_extra.go:43` не
 наследует права при перемещении дерева.
@@ -5233,6 +5231,14 @@ Wine, проверена только библиотека. Чистые час�
 по `PATH`, окружение) покрыты тестами на любой платформе. Что стоит посмотреть первым при
 живом прогоне: `SHELL: mode=own` в отладочном логе и строку `PTY_WINE: native host pty is
 available`, затем ввод команды, `Ctrl+C`, изменение размера окна и выход из оболочки.
+
+Важно: `UseWinescape` задаёт именно локальную shell-персону, а не только способ
+доступа к файлам. Если host pty недоступен, `simple-inline` наследует host stdio,
+а `simple-captured` и команды `clip:/view:/edit:` используют host pipes; во всех
+трёх случаях команда запускается как `$SHELL -c`. Поэтому отказ PTY меняет только
+представление/транспорт вывода, но не язык командной строки, quoting, `cd` или
+окружение. При невозможности `Spawn` показывается ошибка запуска host shell, и
+команда не повторяется через `cmd.exe`.
 
 ### 18.4. Сообщения Wine в консоли f4 («read access error»)
 
