@@ -3848,7 +3848,15 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 }
 
 func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
-	area := CurrentArea()
+	// The panels frame can remain the key-bar provider while a modal frame
+	// (notably Help) is on top of it.  CurrentArea() describes that top frame,
+	// so using it here made the same F2/F10 bindings fall back to the generic
+	// KeyBar.F2/KeyBar.F10 captions as soon as Help opened (#1218).  Resolve
+	// the area from the frame that owns these labels instead.
+	area := "Shell"
+	if !pf.ShowPanels {
+		area = "Terminal"
+	}
 
 	f2 := i18n.Msg("KeyBar.F2")
 	f7 := i18n.Msg("KeyBar.F7")
