@@ -766,6 +766,11 @@ jobs:
   # symbol names to report what the target lacks; the audit is the gate that
   # fails this job if an absent export is neither polyfilled nor accepted by
   # the profile.
+  #
+  # release and nightly must list this job in needs. They download every
+  # artifact of the run with no filter, so a job missing from needs got into
+  # the release only when it happened to finish before they started -- and the
+  # README links f4-legacy-windows-386.zip as the ReactOS download.
   build-reactos:
     name: Build (legacy windows/386)
     runs-on: ubuntu-latest
@@ -1419,7 +1424,7 @@ jobs:
   release:
     name: Release
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-win7, build-termux, test, race]
+    needs: [build, build-batch, build-win7, build-reactos, build-termux, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -1528,7 +1533,7 @@ jobs:
   nightly:
     name: Nightly
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-win7, build-termux, test, race]
+    needs: [build, build-batch, build-win7, build-reactos, build-termux, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
