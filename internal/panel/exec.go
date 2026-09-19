@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,6 +11,16 @@ import (
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/vtui"
 )
+
+// shellCommandFlag is the flag that makes the platform's shell run a single
+// command string: the same one exec.Command is given a few lines above, kept
+// in one place so the two spawn paths cannot drift apart.
+func shellCommandFlag() string {
+	if runtime.GOOS == "windows" {
+		return "/c"
+	}
+	return "-c"
+}
 
 // waitForAnyKey reads a single keystroke immediately using _getch on Windows/Wine or stdin read on Unix.
 var WaitForAnyKey = func() {
@@ -24,6 +35,12 @@ var WaitForAnyKey = func() {
 	var buf [1]byte
 	_, _ = os.Stdin.Read(buf[:])
 }
+
+// FitConsoleWindow brings the host console's window down to the cursor after
+// output has been written to it (terminal.ScrollHostConsoleToCursor). It is a
+// variable, like WaitForAnyKey, so a test can see when it is called relative
+// to what has been printed.
+var FitConsoleWindow = terminal.ScrollHostConsoleToCursor
 
 func modMsvcrtProc() interface {
 	Call(...uintptr) (uintptr, uintptr, error)
@@ -68,7 +85,29 @@ func (pf *PanelsFrame) RunSimpleInlineCommand(dir, command string) {
 		pf.consoleStyle() == terminal.ConsoleViewFar
 
 	vtui.Suspend()
-	_ = cmd.Run()
+
+	// Start the child the way cmd.exe starts a program -- inheriting the
+	// console itself, with no explicit standard handles -- rather than the
+	// way os/exec does. On ReactOS the explicit handles arrive in the child
+	// invalid and every byte it writes is refused, which is issue #513's
+	// invisible output (and its unresponsive "pause"); see
+	// terminal/console_spawn_windows.go and WINE.md §17.3e. Everywhere else
+	// this path declines and the os/exec call below runs exactly as before.
+	runErr := terminal.RunOnHostConsole(dir, shell, shellCommandFlag(), command)
+	if errors.Is(runErr, terminal.ErrConsoleSpawnUnavailable) {
+		runErr = cmd.Run()
+	}
+	vtui.DebugLog("EXEC: shell=%q command=%q err=%v", shell, command, runErr)
+
+	// The child may have printed past the bottom row of the console window.
+	// Windows scrolls the window to follow the cursor as that happens;
+	// ReactOS 0.4.16 does not, so the output ends up in buffer rows below
+	// the visible window and the screen keeps showing what was there before
+	// -- measured on the live system, see WINE.md and issue #513. Do it for
+	// the console before anything reads it: captureHostConsoleBuffer below
+	// snapshots the rectangle at srWindow.Top, so a stale window means a
+	// stale snapshot on the next Ctrl+O round-trip too.
+	FitConsoleWindow()
 
 	if inConsoleView {
 		// The child just wrote its own output starting wherever the cursor
@@ -116,6 +155,12 @@ func (pf *PanelsFrame) RunSimpleInlineCommand(dir, command string) {
 	}
 
 	fmt.Print("\r\nPress any key to return to f4...")
+	// The prompt itself moved the cursor two rows further, past a window
+	// that the FitConsoleWindow call above fitted to the child's last line
+	// -- and ReactOS does not follow it there. Fit the window again, so the
+	// user waiting on this prompt sees the prompt and the end of the output
+	// above it, not a window stuck somewhere in the middle (WINE.md §17.6).
+	FitConsoleWindow()
 	WaitForAnyKey()
 
 	captureHostConsoleBuffer(pf.LastW, pf.LastH)
