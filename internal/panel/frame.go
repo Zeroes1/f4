@@ -414,6 +414,20 @@ func NewPanelsFrame() *PanelsFrame {
 	pf.KeyBar.SetOwner(pf)
 
 	pf.TermView = terminal.NewTerminalView(80, 24)
+	// OSC titles are normally consumed by f4's terminal emulator.  KiTTY
+	// extends the title protocol with local commands (for example,
+	// "__cm:calc").  Preserve those private titles on the real terminal so a
+	// shell function can continue to address the terminal emulator outside f4.
+	// ShellModeHost already forwards the complete PTY stream before parsing it,
+	// so forwarding here as well would duplicate the sequence.
+	pf.TermView.OnTitleChange = func(title string) {
+		if pf.ShellMode == terminal.ShellModeHost {
+			return
+		}
+		if seq := kittyLocalCommandTitleSequence(title); len(seq) > 0 {
+			vtui.WritePassthrough(seq)
+		}
+	}
 	pf.TermView.OnBusyChange = func(busy bool) {
 		localShell := pf.localShellIsActive()
 		if localShell {
