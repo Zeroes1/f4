@@ -151,10 +151,9 @@ has no `GW_OWNER`. The owner-based route used by Far and by the normal
 When f4 is running in a terminal and Alt+F9 arrives, the fallback checks the
 foreground window's class. Only `CASCADIA_HOSTING_WINDOW_CLASS` is accepted;
 the pseudo helper, classic conhost, GUI backends and unrelated terminal
-windows are rejected. For that exact host window f4 posts `SC_MAXIMIZE` or
-`SC_RESTORE`, just as the owner-based path does. Posting is asynchronous
-because the window belongs to Windows Terminal, and the resulting ConPTY
-resize comes back through the ordinary terminal resize path.
+windows are rejected. For that exact host window f4 sends `SC_MAXIMIZE` or
+`SC_RESTORE`, matching Far's direct-console path. The resulting ConPTY resize
+comes back through the ordinary terminal resize path.
 
 The class check is deliberately narrow: a generic foreground-window guess
 would maximize an unrelated application if focus changed during Alt+F9.
