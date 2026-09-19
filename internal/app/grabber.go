@@ -64,7 +64,18 @@ func NewGrabberFrame() *GrabberFrame {
 // Callers wire this to Alt+Ins in every frame that could hold input
 // focus (panel.PanelsFrame, editor.EditorView, viewer.ViewerView, …).
 func OpenGrabber() {
-	vtui.FrameManager.Push(NewGrabberFrame())
+	g := NewGrabberFrame()
+	// Freeze the screen as the user last saw it. Some frames (the history
+	// dialogs) finish painting in FrameManager.OnRender, after every frame's
+	// Show and only while they are the top frame, so the pass that shows the
+	// grabber would repaint them without that layer (#1237). The buffer keeps
+	// the last composed frame until the next render starts.
+	if scr := vtui.FrameManager.Screen(); scr != nil {
+		g.mu.Lock()
+		g.snapshot(scr)
+		g.mu.Unlock()
+	}
+	vtui.FrameManager.Push(g)
 	vtui.FrameManager.Redraw()
 }
 
