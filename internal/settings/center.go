@@ -597,6 +597,9 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	c.apply = vtui.NewButton(0, 0, settingsText("Apply", "&Apply"))
 	c.ok = vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	c.cancel = vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
+	// Enter applies (see ProcessKey), so Apply is the dialog's default button
+	// and vtui highlights it even when it is not focused (#320).
+	c.apply.IsDefault = true
 	c.previous = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Previous", "Previous match"))}
 	c.next = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Next", "Next match"))}
 	c.previous.ScreenObject.SetText("[←]")
@@ -834,7 +837,8 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		// An Enter the focused control has no use for (a checkbox, a radio
 		// group, a text field) used to reach vtui's BaseWindow fallback,
 		// Group.TriggerDefaultAction. With no default button in this dialog
-		// it presses the first button it meets while descending the page:
+		// (before Apply was flagged as one) it pressed the first button it met
+		// while descending the page:
 		// Enter on the first checkbox of Terminal & environment clicked
 		// Environment profiles' Add, and the unnamed profile failed the next
 		// Apply; File associations and User menus saved an empty record
