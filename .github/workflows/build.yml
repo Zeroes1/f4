@@ -778,7 +778,7 @@ jobs:
       CGO_ENABLED: 0
       GOOS: windows
       GOARCH: 386
-      GO2XP_REF: 00a22a52036948ed8eddd1e14f5101e7dba5d3de
+      GO2XP_REF: cd906f3002233bda80e91dd1ad0728aa6ec8f1d6
 
     steps:
     - name: Checkout code
