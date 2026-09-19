@@ -9,11 +9,10 @@ import (
 // the host's own shell on a real pseudo-terminal instead of cmd.exe. The
 // decisions that need no Wine to make live here so they run in every test.
 
-// WindowsShellSyntax reports whether the shell behind the built-in terminal
-// speaks cmd.exe: a Windows build that is not driving a native POSIX shell
-// through libwinescape. Everything that composes text for the shell -- quoting,
-// the prompt, cd, drive letters -- asks this, not GOOS, so that a shell running
-// on the host under Wine is spoken to in its own language.
+// WindowsShellSyntax reports whether the local command language is cmd.exe.
+// UseWinescape selects a process personality, not just a faster filesystem:
+// when it is active under Wine, every local command path speaks POSIX even if
+// the PTY probe failed and execution has degraded to a simple mode.
 func WindowsShellSyntax() bool {
 	return runtime.GOOS == "windows" && !nativeShellActive()
 }

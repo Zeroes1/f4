@@ -16,7 +16,7 @@ import (
 // command string: the same one exec.Command is given a few lines above, kept
 // in one place so the two spawn paths cannot drift apart.
 func shellCommandFlag() string {
-	if runtime.GOOS == "windows" {
+	if terminal.WindowsShellSyntax() {
 		return "/c"
 	}
 	return "-c"
@@ -53,18 +53,6 @@ func modMsvcrtProc() interface {
 // and restoring vtui.
 func (pf *PanelsFrame) RunSimpleInlineCommand(dir, command string) {
 	shell := terminal.GetSystemShell()
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command(shell, "/c", command)
-	} else {
-		cmd = exec.Command(shell, "-c", command)
-	}
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if dir != "" {
-		cmd.Dir = dir
-	}
 
 	// Always clear the overlay before running the command so output
 	// does not scroll trailing keybar or command-line cells into history.
@@ -86,16 +74,34 @@ func (pf *PanelsFrame) RunSimpleInlineCommand(dir, command string) {
 
 	vtui.Suspend()
 
-	// Start the child the way cmd.exe starts a program -- inheriting the
-	// console itself, with no explicit standard handles -- rather than the
-	// way os/exec does. On ReactOS the explicit handles arrive in the child
-	// invalid and every byte it writes is refused, which is issue #513's
-	// invisible output (and its unresponsive "pause"); see
-	// terminal/console_spawn_windows.go and WINE.md §17.3e. Everywhere else
-	// this path declines and the os/exec call below runs exactly as before.
-	runErr := terminal.RunOnHostConsole(dir, shell, shellCommandFlag(), command)
-	if errors.Is(runErr, terminal.ErrConsoleSpawnUnavailable) {
-		runErr = cmd.Run()
+	var runErr error
+	if terminal.WindowsShellSyntax() {
+		// Start the cmd child the way cmd.exe starts a program -- inheriting
+		// the console itself, with no explicit standard handles -- rather than
+		// the way os/exec does. On ReactOS the explicit handles arrive invalid
+		// in the child; see terminal/console_spawn_windows.go and WINE.md
+		// §17.3e. The branch is deliberately limited to the Windows shell
+		// personality: POSIX Wine mode must use the host process transport.
+		cmd := exec.Command(shell, "/c", command)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if dir != "" {
+			cmd.Dir = dir
+		}
+		runErr = terminal.RunOnHostConsole(dir, shell, shellCommandFlag(), command)
+		if errors.Is(runErr, terminal.ErrConsoleSpawnUnavailable) {
+			runErr = cmd.Run()
+		}
+	} else {
+		// This includes a Windows binary under Wine with UseWinescape on.
+		// The host shell is selected by $SHELL and is started through
+		// libwinescape, because os/exec cannot execute a host ELF path from
+		// the Windows process.
+		runErr = terminal.RunLocalCommandInline(dir, command)
+		if runErr != nil {
+			fmt.Fprintf(os.Stderr, "\r\nf4: host shell: %v\r\n", runErr)
+		}
 	}
 	vtui.DebugLog("EXEC: shell=%q command=%q err=%v", shell, command, runErr)
 

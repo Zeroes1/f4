@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"reflect"
@@ -4771,17 +4770,7 @@ func executeCapturedCommand(pf *PanelsFrame, action string, cmdStr string) {
 
 	if action == "clip" {
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			var cmd *exec.Cmd
-			if runtime.GOOS == "windows" {
-				cmd = exec.CommandContext(ctx.Context, "cmd.exe", "/c", cmdStr)
-			} else {
-				cmd = exec.CommandContext(ctx.Context, "sh", "-c", cmdStr)
-			}
-			if dir != "" {
-				cmd.Dir = dir
-			}
-
-			out, err := cmd.CombinedOutput()
+			out, err := terminal.RunLocalCommandCapture(ctx.Context, dir, cmdStr)
 			ctx.RunOnUI(func() {
 				if err != nil && len(out) == 0 {
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Execution failed:\n%v", err), []string{"&Ok"})
@@ -4796,17 +4785,7 @@ func executeCapturedCommand(pf *PanelsFrame, action string, cmdStr string) {
 	}
 
 	pf.RunProgressTask(" Executing ", "Running: "+vtui.TruncateMiddle(cmdStr, 30), false, func(ctx context.Context, update func(msg string, percent int)) error {
-		var cmd *exec.Cmd
-		if runtime.GOOS == "windows" {
-			cmd = exec.CommandContext(ctx, "cmd.exe", "/c", cmdStr)
-		} else {
-			cmd = exec.CommandContext(ctx, "sh", "-c", cmdStr)
-		}
-		if dir != "" {
-			cmd.Dir = dir
-		}
-
-		out, err := cmd.CombinedOutput()
+		out, err := terminal.RunLocalCommandCapture(ctx, dir, cmdStr)
 		if err != nil && len(out) == 0 {
 			return err
 		}
@@ -5857,9 +5836,10 @@ func (pf *PanelsFrame) MoveFolderHistory(fsp *FileSystemPanel, direction int) bo
 // "cd" typed on the command line.
 func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 	lowerCmd := strings.ToLower(trimmedCmd)
+	windowsShell := terminal.WindowsShellSyntax()
 
 	// Drive letter changes (e.g., "C:", "D:\") on Windows
-	if runtime.GOOS == "windows" && len(trimmedCmd) >= 2 && len(trimmedCmd) <= 3 && trimmedCmd[1] == ':' {
+	if windowsShell && len(trimmedCmd) >= 2 && len(trimmedCmd) <= 3 && trimmedCmd[1] == ':' {
 		if lowerCmd[0] >= 'a' && lowerCmd[0] <= 'z' {
 			targetPath = trimmedCmd
 			if len(trimmedCmd) == 2 {
@@ -5870,9 +5850,9 @@ func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 		return "", false
 	}
 
-	if strings.HasPrefix(lowerCmd, "cd ") || strings.HasPrefix(lowerCmd, "chdir ") || (runtime.GOOS == "windows" && strings.HasPrefix(lowerCmd, "cd /d ")) {
+	if strings.HasPrefix(lowerCmd, "cd ") || strings.HasPrefix(lowerCmd, "chdir ") || (windowsShell && strings.HasPrefix(lowerCmd, "cd /d ")) {
 		prefixLen := 3
-		if strings.HasPrefix(lowerCmd, "cd /d ") {
+		if windowsShell && strings.HasPrefix(lowerCmd, "cd /d ") {
 			prefixLen = 6
 		} else if strings.HasPrefix(lowerCmd, "chdir ") {
 			prefixLen = 6
@@ -5890,7 +5870,7 @@ func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 	if lowerCmd == "cd.." || lowerCmd == "cd .." {
 		return "..", true
 	}
-	if lowerCmd == "cd\\" || lowerCmd == "cd/" {
+	if lowerCmd == "cd/" || (windowsShell && lowerCmd == "cd\\") {
 		return string(os.PathSeparator), true
 	}
 	return "", false

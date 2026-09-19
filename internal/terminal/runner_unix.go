@@ -3,6 +3,7 @@
 package terminal
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -11,7 +12,14 @@ import (
 )
 
 func newLocalShellCommand(command string) *exec.Cmd {
-	return exec.Command(GetSystemShell(), "-c", command)
+	return newLocalShellCommandContext(nil, command)
+}
+
+func newLocalShellCommandContext(ctx context.Context, command string) *exec.Cmd {
+	if ctx == nil {
+		return exec.Command(GetSystemShell(), "-c", command)
+	}
+	return exec.CommandContext(ctx, GetSystemShell(), "-c", command)
 }
 
 func localCommandDialect() vfs.CommandDialect { return vfs.CommandDialectPOSIX }
