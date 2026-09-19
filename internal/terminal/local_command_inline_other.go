@@ -11,7 +11,7 @@ import (
 // inherited stdio. Windows/Wine has a separate implementation because a
 // Windows Go process cannot reach the host ELF shell through os/exec.
 func RunLocalCommandInline(dir, command string) error {
-	cmd := exec.Command(GetSystemShell(), "-c", command)
+	cmd := exec.Command(GetSystemShell(), "-c", command) // #nosec G204 -- this is the intentional local shell command line.
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

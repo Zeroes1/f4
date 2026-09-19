@@ -13,7 +13,3 @@ func runNativeLocalCommand(context.Context, string, string, func([]byte)) (bool,
 func runNativeLocalCommandCapture(context.Context, string, string) (bool, []byte, error) {
 	return false, nil, nil
 }
-
-func runNativeLocalCommandInline(string, string) (bool, error) {
-	return false, nil
-}

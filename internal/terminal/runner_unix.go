@@ -12,14 +12,11 @@ import (
 )
 
 func newLocalShellCommand(command string) *exec.Cmd {
-	return newLocalShellCommandContext(nil, command)
+	return exec.Command(GetSystemShell(), "-c", command) // #nosec G204 -- this is the intentional local shell command line.
 }
 
 func newLocalShellCommandContext(ctx context.Context, command string) *exec.Cmd {
-	if ctx == nil {
-		return exec.Command(GetSystemShell(), "-c", command)
-	}
-	return exec.CommandContext(ctx, GetSystemShell(), "-c", command)
+	return exec.CommandContext(ctx, GetSystemShell(), "-c", command) // #nosec G204 -- this is the intentional local shell command line.
 }
 
 func localCommandDialect() vfs.CommandDialect { return vfs.CommandDialectPOSIX }
