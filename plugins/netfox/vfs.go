@@ -209,9 +209,9 @@ func (v *NetFoxVFS) SetPath(p string) error { return nil }
 func (v *NetFoxVFS) ReadDir(ctx context.Context, p string, onChunk func([]vfs.VFSItem)) error {
 	configs := v.getConfigs()
 	var items []vfs.VFSItem
-	items = append(items, vfs.VFSItem{Name: "<Add connection>", IsDir: false, IsExecutable: true})
+	items = append(items, vfs.VFSItem{Name: "<Add connection>", IsDir: false})
 	for name := range configs {
-		items = append(items, vfs.VFSItem{Name: name, IsDir: false, IsExecutable: true})
+		items = append(items, vfs.VFSItem{Name: name, IsDir: false})
 	}
 	if len(items) > 0 {
 		onChunk(items)
@@ -222,11 +222,11 @@ func (v *NetFoxVFS) ReadDir(ctx context.Context, p string, onChunk func([]vfs.VF
 func (v *NetFoxVFS) Stat(ctx context.Context, p string) (vfs.VFSItem, error) {
 	name := v.Base(p)
 	if name == "<Add connection>" {
-		return vfs.VFSItem{Name: name, IsDir: false, IsExecutable: true}, nil
+		return vfs.VFSItem{Name: name, IsDir: false}, nil
 	}
 	configs := v.getConfigs()
 	if _, ok := configs[name]; ok {
-		return vfs.VFSItem{Name: name, IsDir: false, IsExecutable: true}, nil
+		return vfs.VFSItem{Name: name, IsDir: false}, nil
 	}
 	return vfs.VFSItem{}, os.ErrNotExist
 }
