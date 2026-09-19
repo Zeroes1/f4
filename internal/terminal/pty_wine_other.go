@@ -8,5 +8,3 @@ package terminal
 func newWinePTY() (PtyBackend, bool, error) { return nil, false, nil }
 
 func nativeShellActive() bool { return false }
-
-func nativeSystemShell() (string, bool) { return "", false }
