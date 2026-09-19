@@ -1274,6 +1274,7 @@ QuickView.Size=Размер
 QuickView.Image=<изображение>
 QuickView.Binary=<бинарные данные — шестнадцатеричный просмотр>
 QuickView.ReadError=Ошибка чтения
+
 Player.Title= Плеер
 Player.Idle=Ничего не играет. F5 в другой панели добавляет файлы в плейлист; Enter на записи проигрывает её.
 Player.PausedMark=(пауза)
@@ -1513,8 +1514,8 @@ KeyBar.SheetF7=Поиск
 KeyBar.SheetF10=Меню
 KeyBar.SheetShiftF2=Записать как
 KeyBar.SheetShiftF3=Экспорт
-Arkanoid.Title=А Р К А Н О И Д
 
+Arkanoid.Title=А Р К А Н О И Д
 Arkanoid.HighScores= Рекорды
 
 PlugRing.Title= f4 PlugRing
@@ -1882,6 +1883,7 @@ DriveLink.ErrorTitle= Ошибка ссылки
 DriveLink.NameRequired=Необходимо указать имя.
 DriveLink.PathRequired=Необходимо указать путь.
 DriveLink.SaveError=Не удалось сохранить ссылку:\n%v
+
 Mounts.Title= Точки монтирования
 Mounts.UnmountAll=Отмонтировать все (%d)
 
@@ -1919,8 +1921,8 @@ NetFox.ProxyModeSystem=Системные настройки
 NetFox.ProxyModeDirect=Без прокси
 NetFox.ProxyModeHTTP=HTTP-прокси
 NetFox.ProxyModeSOCKS5=SOCKS5-прокси
-Queue.Title=Очередь операций
 
+Queue.Title=Очередь операций
 Queue.BtnCancel=&Отменить задачу
 Queue.BtnClear=Очистить &выполненные
 Queue.ColID=№
