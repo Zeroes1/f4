@@ -2411,26 +2411,59 @@ func actionRename(pf *panel.PanelsFrame) {
 	})
 }
 
-// renameEntry renames name to newName inside the panel's current folder.
+// renameEntry renames name to newName inside the panel's current folder. When
+// newName is already taken by a file it asks whether to overwrite it, the way
+// F5/F6 do; a rename never replaces anything on its own (#1229).
 func renameEntry(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, name, newName string) {
-	oldPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
-	newPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), newName)
+	v := fsp.Vfs
+	oldPath := v.Join(v.GetPath(), name)
+	newPath := v.Join(v.GetPath(), newName)
+
+	rename := func(overwrite bool) {
+		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+			// Carry the atomic replace/no-replace decision so remote providers
+			// cannot silently destroy an entry that already has the requested
+			// name.
+			err := v.Rename(vfs.WithDestinationOverwrite(ctx.Context, overwrite), oldPath, newPath)
+			ctx.RunOnUI(func() {
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to rename:\n%v", err), []string{"&Ok"})
+					fsp.PendingSelection = name
+				} else {
+					// Clear cache to ensure the new name is visible immediately
+					delete(fsp.DirCache, fsp.CacheKey(fsp.Vfs.GetPath()))
+					fsp.PendingSelection = newName
+				}
+				pf.RefreshAll()
+			})
+		})
+	}
 
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
-		// The rename dialog never asks for overwrite confirmation. Carry an
-		// atomic no-replace decision so remote providers cannot silently
-		// destroy an entry that already has the requested name.
-		err := fsp.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, false), oldPath, newPath)
-		ctx.RunOnUI(func() {
-			if err != nil {
-				vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to rename:\n%v", err), []string{"&Ok"})
-				fsp.PendingSelection = name
-			} else {
-				// Clear cache to ensure the new name is visible immediately
-				delete(fsp.DirCache, fsp.CacheKey(fsp.Vfs.GetPath()))
-				fsp.PendingSelection = newName
+		// A case-only rename names the same entry on a case-insensitive file
+		// system, and a folder cannot be replaced by a rename.
+		taken := false
+		if !strings.EqualFold(name, newName) {
+			if existing, err := v.Stat(ctx.Context, newPath); err == nil && !existing.IsDir {
+				taken = true
 			}
-			pf.RefreshAll()
+		}
+		ctx.RunOnUI(func() {
+			if !taken {
+				rename(false)
+				return
+			}
+			dlg := vtui.ShowMessageEx(i18n.Msg("Warning.Title"),
+				i18n.Msg("FileOp.FileAlreadyExists")+"\n"+vtui.TruncateMiddle(newName, 60),
+				[]string{i18n.Msg("FileOp.Overwrite"), i18n.Msg("vtui.Cancel")}, vtui.MessageWarn)
+			dlg.OnResult = func(code int) {
+				if code == 0 {
+					rename(true)
+					return
+				}
+				fsp.PendingSelection = name
+				pf.RefreshAll()
+			}
 		})
 	})
 }
