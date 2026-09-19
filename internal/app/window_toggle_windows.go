@@ -13,7 +13,7 @@ import (
 var (
 	windowToggleUser32      = syscall.NewLazyDLL("user32.dll")
 	windowToggleIsZoomed    = windowToggleUser32.NewProc("IsZoomed")
-	windowTogglePostMessage = windowToggleUser32.NewProc("PostMessageW")
+	windowToggleSendMessage = windowToggleUser32.NewProc("SendMessageW")
 	windowToggleGetClass    = windowToggleUser32.NewProc("GetClassNameW")
 )
 
@@ -27,9 +27,9 @@ const (
 // Windows Terminal starts f4 without WT_SESSION and without making the
 // PseudoConsoleWindow returned by GetConsoleWindow owned by the terminal.
 // While Alt+F9 is pressed, the actual WT host is nevertheless the foreground
-// window. Post the same system command vtui uses for an owned pseudoconsole.
-// PostMessage is intentional: the host window belongs to another process and
-// the caller must not wait for its UI thread.
+// window. Send the same system command Far uses for a console window. The
+// message is sent to another process just as it is for a normal console
+// window; Windows marshals this system command across the thread boundary.
 func toggleDirectWindowsTerminalWindow() bool {
 	activeBackend := vtui.ActiveBackend()
 	if activeBackend != "" {
@@ -51,11 +51,8 @@ func toggleDirectWindowsTerminalWindow() bool {
 		command = windowToggleSCRestore
 		name = "SC_RESTORE"
 	}
-	if ok, _, err := windowTogglePostMessage.Call(uintptr(hwnd), windowToggleWMSysCommand, command, 0); ok == 0 {
-		vtui.DebugLog("CONSOLE: direct Windows Terminal window %#x class %q, posting %s failed: %v", hwnd, class, name, err)
-		return false
-	}
-	vtui.DebugLog("CONSOLE: direct Windows Terminal window %#x class %q, posted %s", hwnd, class, name)
+	windowToggleSendMessage.Call(uintptr(hwnd), windowToggleWMSysCommand, command, 0)
+	vtui.DebugLog("CONSOLE: direct Windows Terminal window %#x class %q, sent %s", hwnd, class, name)
 	return true
 }
 
