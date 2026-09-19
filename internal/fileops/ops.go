@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1198,6 +1197,18 @@ func resolveSymlinksForCompare(p string) string {
 	}
 }
 
+// foldOSPathCase lowercases both sides of a source/destination comparison when
+// the OS filesystem ignores case, so that copying Foo onto foo is caught as
+// copying a file onto itself. Under Wine's posix personality the filesystem is
+// the host's and distinguishes them, and folding would turn a legitimate copy of
+// /a/Foo to /a/foo into a refusal.
+func foldOSPathCase(cleanSrc, cleanDst string, caseInsensitive bool) (string, string) {
+	if caseInsensitive {
+		return strings.ToLower(cleanSrc), strings.ToLower(cleanDst)
+	}
+	return cleanSrc, cleanDst
+}
+
 func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs vfs.VFS, destPath string, state *FileOpState, depth int) (resultErr error) {
 	if depth > 1000 {
 		return fmt.Errorf("maximum recursion depth exceeded (circular structure?)")
@@ -1241,9 +1252,8 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 	} else if !dstIsURI {
 		cleanDst = path.Clean("/" + strings.TrimLeft(strings.ReplaceAll(realDst, "\\", "/"), "/"))
 	}
-	if runtime.GOOS == "windows" && srcIsOS && dstIsOS {
-		cleanSrc = strings.ToLower(cleanSrc)
-		cleanDst = strings.ToLower(cleanDst)
+	if srcIsOS && dstIsOS {
+		cleanSrc, cleanDst = foldOSPathCase(cleanSrc, cleanDst, vfs.WindowsPersonality())
 	}
 	sameNamespace := (srcIsOS && dstIsOS) || vfs.SameSession(srcVfs, dstVfs)
 

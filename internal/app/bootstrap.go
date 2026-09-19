@@ -908,13 +908,22 @@ func InitCore() *vtui.ScreenBuf {
 
 	vtui.FrameManager.Init(scr)
 
-	SetupUI()
+	// Only this console path may pick the first-start style from the console:
+	// the GUI window draws in true colour whatever the process's console is.
+	setupUI(consoleFirstRunColorStyle)
 
 	vtui.DebugLog("CORE: Initialization complete")
 	return scr
 }
 
 func SetupUI() {
+	setupUI(nil)
+}
+
+// setupUI is SetupUI with one hook: firstRunStyle, when set, may name the
+// colour style to start with in place of the built-in default. It is asked only
+// when no settings.ini has chosen a style (issue #513).
+func setupUI(firstRunStyle func() (string, bool)) {
 	configureUnicodeInput()
 	vtui.ConfigDiskLogging(os.Getenv("VTUI_DEBUG") != "")
 	vtui.DebugLog("=== F4 STARTUP [%s] PID:%d ===", getFormattedVersionInfo(), os.Getpid())
@@ -933,6 +942,7 @@ func SetupUI() {
 	vtui.FrameManager.ConfigureWorkspaceTabOverlay(config.App.WorkspaceTabsOverlay)
 	vtui.FrameManager.ConfigureWorkspaceAltNumberSwitch(config.App.AltNumberSwitchesTabs)
 	initLang()
+	applyFirstRunColorStyle(firstRunStyle)
 	if err := theme.ApplyColorStyle(config.App.ColorStyle); err != nil {
 		vtui.DebugLog("COLORS: %v; falling back to Modern", err)
 		config.App.ColorStyle = "Modern"

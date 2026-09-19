@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/unxed/f4/internal/ini"
@@ -833,8 +834,23 @@ func normalizeHighlighter(name string) string {
 	return "Chroma"
 }
 
+// colorStyleConfigured records whether any settings.ini that LoadConfig read
+// names a ColorStyle. It is the only way to tell "the user chose Radiola" from
+// "nobody chose anything, so Radiola is the fallback", which is what lets a
+// first start pick a style that suits the console (see app.firstRunColorStyle).
+var colorStyleConfigured atomic.Bool
+
+// ColorStyleConfigured reports whether the last LoadConfig found a ColorStyle
+// in a settings.ini. False means the value in App.ColorStyle is only the
+// built-in default.
+func ColorStyleConfigured() bool {
+	return colorStyleConfigured.Load()
+}
+
 func LoadConfig() {
-	parseConfigInto(&App, loadSettingsIni())
+	merged := loadSettingsIni()
+	parseConfigInto(&App, merged)
+	colorStyleConfigured.Store(merged.GetString("Interface", "ColorStyle", "") != "")
 	// What was read takes effect only here. parseConfigInto itself touches
 	// nothing outside the struct it fills, which is what lets f4:config work
 	// out defaults and try an edit without disturbing the running f4.
