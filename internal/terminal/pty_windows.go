@@ -354,7 +354,9 @@ func ConPTYAvailable() bool {
 	return conPTYWorks.ok
 }
 func isPlatformPTYUsable() bool {
-	return ConPTYAvailable()
+	// ConPTY where it exists; under Wine, a native host pty when libwinescape
+	// is allowed and works (pty_wine_windows.go).
+	return ConPTYAvailable() || winePTYUsable()
 }
 
 // PTY для Windows реализован через ConPTY API (доступно в Windows 10+).
@@ -712,6 +714,9 @@ func processIsGUI(pid uint32) bool {
 }
 
 func GetSystemShell() string {
+	if shell, ok := nativeSystemShell(); ok {
+		return shell
+	}
 	shell := os.Getenv("COMSPEC")
 	if shell == "" {
 		return "cmd.exe"

@@ -36,7 +36,7 @@ require (
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
 	github.com/unxed/id3-go v0.1.2
-	github.com/unxed/libwinescape v0.1.5
+	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.6
 	github.com/unxed/sevenzip v0.0.0-20260917192431-7f00f7c8d17b
 	github.com/unxed/tar v0.1.132
