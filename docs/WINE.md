@@ -5142,7 +5142,7 @@ wineconsole определяется по бэкенду, а не по ней.
 | Reparse points, junction | **Сделано.** `isReparsePoint` уже был закрыт; теперь и `resolveReparseCandidates`, `wellKnownJunction` и три места вызова (`os_vfs.go`, `os_vfs_listing.go`) стоят за `vfs.WindowsPersonality()`. Раньше отказ в доступе к `/root` запускал догадки про `All Users` и `CreateFile` с POSIX-путём. |
 | `$HOME`, `$XDG_CONFIG_HOME` | **Не сделано.** Нужно решение автора: где жить конфигу в posix-режиме (в префиксе Wine, как сейчас, или в `~/.config/f4`; перенос меняет место, где существующие пользователи ищут настройки). Места вызова `os.UserHomeDir`/`os.UserConfigDir`: `panel/frame.go` (2431, 5901), `panel/drives_menu.go:74`, `app/actions.go:4360`, `app/command_palette_panels.go:424`, `app/vtvibe_host.go:275`, `app/actions_framework.go:343`, `terminal/child_env.go:205`. У libwinescape есть `HostGetenv`, читающий `/proc/self/environ` мимо таблицы окружения Wine. |
 | Регистр в сравнениях | Частично. **Исправлена** проверка «источник равен приёмнику» в `fileops/ops.go`: копирование `/a/Foo` в `/a/foo` под posix-режимом отвергалось как копирование файла на себя. Не сделано: `panel/associations.go:228`, `panel/frame.go:5714`, `fusefs/fusefs.go:407`. |
-| Шелл | **Не сделано**, см. §18.3. |
+| Шелл | **Сделано в коде, вживую не проверено**, см. §18.3: под posix-режимом оболочка — `$SHELL` хоста на нативном pty, а текст для неё собирается по правилам POSIX-оболочки (`terminal.WindowsShellSyntax()` вместо `GOOS == "windows"` в `panel/frame.go`). Запуск внешних команд через `exec.Command("cmd.exe", "/c", …)` (`panel/frame.go` 4755, 4780) и простые режимы (`panel/exec.go`) остались на `cmd.exe`. |
 | Диалог атрибутов, `rename_noreplace` | Сделано раньше (§14.2). |
 
 Дополнительно исправлено в этом заходе (не входило в список §14.2):
@@ -5176,20 +5176,34 @@ winescape». Значит, любой такой бэкенд спрашивае
 libwinescape, закрыто тестом `cmd/f4/winescape_gate_test.go`: новый файл падает,
 пока не внесён в список с пояснением, как он подчиняется настройке.
 
-Сам бэкенд **не написан**, и причина не в объёме. В libwinescape v0.1.5 есть
-`Execve`, `Pipe2`, `Dup3`, `Ioctl`/`TIOCGWINSZ`, `Tcgetattr`/`MakeRaw`, `Open`,
-`Kill`, `Wait4`, но нет ни `Fork`/`Clone`, ни `Setsid`, ни `openpty`/`forkpty`, ни
-`poll`; в таблице номеров системных вызовов их тоже нет. `Execve` заменяет
-процесс Wine, поэтому без fork ребёнка не создать, а сырой fork многопоточного
-процесса с ABI Windows рискован и не проверен. Блокирующее чтение из pty к тому
-же не отдаёт P планировщику Go (`libwinescape/docs/threading.md`), значит нужен
-пул `gort` или неблокирующие дескрипторы. План §5 Stage B5 (`CreateProcess` c
-`\\?\unix\bin\sh`, запасной вариант `start.exe /unix`) помечен устаревшим, а
-умеет ли `CreateProcess` под Wine запускать ELF, никто не проверял. Порядок:
-сначала эксперимент под живым Wine (может ли `CreateProcess` запустить
-`/bin/sh`, что даёт `start.exe /unix`), и только потом код; оценка объёма —
-порядка 400–700 строк в новом `pty_wine_windows.go` плюс проводка в `NewPTY` и
-`isPlatformPTYUsable`.
+Сам бэкенд был заблокирован тем, что в libwinescape v0.1.5 не было ни `Fork`/`Clone`, ни
+`Setsid`, ни `openpty`/`forkpty`, ни `poll`; `Execve` заменяет процесс Wine, поэтому без
+fork ребёнка не создать. Это исправлено в самой библиотеке (v0.2.1, `unxed/winescape`):
+`Spawn` (fork через `clone(SIGCHLD)`; в ребёнке только сырые системные вызовы из
+`nosplit`-кода над заранее подготовленными данными: пересборка таблицы дескрипторов,
+`setsid`, `TIOCSCTTY`, `chdir`, возврат сигналам поведения по умолчанию, очистка маски,
+`execve`; ошибка на любом шаге доходит до родителя по close-on-exec-каналу),
+`StartPTY`/`OpenPTY`, `Poll`, `SetWinsize`, `Tcgetpgrp`, `WaitStatus`. У библиотеки
+теперь есть CI с прогоном под настоящим Wine 9.0: десять тестов `Spawn` проходят,
+включая вывод и код выхода на pty, управляющий терминал, сброс `SIGPIPE` (Wine игнорирует
+его у себя, а игнорируемый сигнал переживает `execve`), размер окна, `^C` через мастер,
+`tcgetpgrp`, отказ `execve` и fork при параллельной нагрузке на сборщик мусора.
+
+Бэкенд f4 — `internal/terminal/pty_wine_windows.go`, тип `winePTY`. Выбор идёт через
+`terminal.NewLocalPTY()` (шов `newLocalPTY` в `panel/frame.go`) и `isPlatformPTYUsable`, и
+только если `hostmode.Posix()` истинно (он уже учитывает `UseWinescape`) и выделение pty на
+хосте удалось. Чтение и запись мастера никогда не блокируются в ядре: опрос с нулевым
+таймаутом и короткий сон в Go, поэтому `Close` всегда прерывает ожидание, а idle-терминал не
+удерживает `P`; цена — несколько миллисекунд задержки эха. Оболочка — `$SHELL` хоста
+(fish/csh/tcsh заменяются на bash), окружение берётся из `/proc/self/environ` хоста, а не из
+таблицы Wine, `TERM` по умолчанию `xterm-256color`. Файл внесён в список сторожа
+`winescape_gate_test.go`.
+
+**Не проверено вживую:** сам f4 с этим бэкендом под Wine не запускался; у f4 нет CI-задачи с
+Wine, проверена только библиотека. Чистые части (выбор оболочки, поиск исполняемого файла
+по `PATH`, окружение) покрыты тестами на любой платформе. Что стоит посмотреть первым при
+живом прогоне: `SHELL: mode=own` в отладочном логе и строку `PTY_WINE: native host pty is
+available`, затем ввод команды, `Ctrl+C`, изменение размера окна и выход из оболочки.
 
 ### 18.4. Сообщения Wine в консоли f4 («read access error»)
 

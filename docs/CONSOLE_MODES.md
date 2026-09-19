@@ -59,8 +59,15 @@ Unix.** Основной режим обязан сохранять PTY.
 
 ### 2.3. Wine
 
-`vtui.IsWine()` уже есть и используется в `main.go`. Под Wine ConPTY сырой → PTY считаем
-недоступным и **не пытаемся его создавать**.
+`vtui.IsWine()` уже есть и используется в `main.go`. Под Wine ConPTY сырой, поэтому его
+**не создаём**. С версии, где появился нативный терминал (WINE.md §18.3), у PTY под Wine есть
+второй путь: настоящий pty хоста через libwinescape (`Spawn`/`StartPTY`, `internal/terminal/pty_wine_windows.go`).
+Он включается тем же решением, что и весь posix-режим файлового слоя, `hostmode.Posix()`, то есть
+подчиняется настройке «использовать winescape» (`UseWinescape`), и только если выделение
+псевдотерминала на хосте действительно удалось (проба выполняется один раз). Оболочка тогда —
+`$SHELL` хоста, а не `cmd.exe`, и вся сборка текста для неё (кавычки, приглашение, `cd`)
+идёт через `terminal.WindowsShellSyntax()`. Если галка выключена или проба не удалась,
+остаётся прежнее поведение: PTY нет, режим — simple-inline или simple-captured.
 
 ## 3. Три режима исполнения команд
 
@@ -140,9 +147,10 @@ func resolveShellMode(cfg ShellModeConfig) ShellMode
 | Среда | конфиг `own` | конфиг `host` |
 |---|---|---|
 | TTY + PTY ок | own | **host** |
-| TTY, PTY нет (Wine в консоли) | simple-inline | simple-inline |
+| TTY, PTY нет (Wine в консоли; `UseWinescape` выключена или проба pty не удалась) | simple-inline | simple-inline |
 | GUI + PTY ок | own | own |
-| GUI, PTY нет (дефолт Wine) | simple-captured | simple-captured |
+| GUI, PTY нет (Wine; `UseWinescape` выключена или проба pty не удалась) | simple-captured | simple-captured |
+| Wine, нативный pty хоста доступен | own | host |
 
 Режим вычисляется **один раз при создании `PanelsFrame`** и хранится в `pf.shellMode`.
 Переключение на лету не поддерживается: `TERM` и прочее окружение шелла формируются при

@@ -126,13 +126,13 @@ func (pf *PanelsFrame) AddCommandHistory(cmd string) {
 func (pf *PanelsFrame) InsertPathToCmdLine(path string) {
 	if path != "" {
 		special := " &|;<>()$`\\\"'"
-		if runtime.GOOS == "windows" {
+		if terminal.WindowsShellSyntax() {
 			// Backslash is the path separator there, not an escape
 			// character; with it in the set every single path got quoted.
 			special = " &|;<>()^\"'"
 		}
 		if strings.ContainsAny(path, special) {
-			if runtime.GOOS == "windows" {
+			if terminal.WindowsShellSyntax() {
 				if !strings.HasPrefix(path, "\"") {
 					path = "\"" + path + "\""
 				}
@@ -463,7 +463,7 @@ func NewPanelsFrame() *PanelsFrame {
 			}
 		})
 	}
-	if runtime.GOOS == "windows" {
+	if terminal.WindowsShellSyntax() {
 		pf.CmdSession = newCmdShellSession(pf)
 		pf.TermView.OnShellMark = func(mark string, snap terminal.PromptSnapshot) {
 			if pf.localShellIsActive() {
@@ -533,7 +533,7 @@ func (pf *PanelsFrame) InsertSelectedFileName() bool {
 	}
 	// Escape spaces and special characters for shell commands.
 	if strings.ContainsAny(name, " &|;<>()$`\\\"'") {
-		if runtime.GOOS == "windows" {
+		if terminal.WindowsShellSyntax() {
 			if !strings.HasPrefix(name, "\"") {
 				name = "\"" + name + "\""
 			}
@@ -929,7 +929,7 @@ func (pf *PanelsFrame) BuildPrompt() []vtui.CharInfo {
 	sepStr := ":"
 	suffixStr := "$ "
 
-	if runtime.GOOS == "windows" {
+	if terminal.WindowsShellSyntax() {
 		sepStr = " "
 		suffixStr = ">"
 		// Windows prompt usually displays the absolute path without '~'
@@ -1032,7 +1032,7 @@ var SpawnLocalShellPTY = true
 // uses the platform terminal.PTY implementation; tests can provide a controllable
 // backend without allocating a real terminal.
 var newLocalPTY = func() (terminal.PtyBackend, error) {
-	return terminal.NewPTY()
+	return terminal.NewLocalPTY()
 }
 
 // resetLocalShell tears down the current local shell and starts a fresh one.
@@ -1189,7 +1189,7 @@ func (pf *PanelsFrame) InitPTY() {
 				return
 			}
 
-			if runtime.GOOS == "windows" {
+			if terminal.WindowsShellSyntax() {
 				os.Setenv("PROMPT", windowsShellPrompt)
 			}
 			inheritedEnvironmentGeneration := terminal.GlobalProcessEnvironment.CurrentGeneration()
@@ -2583,7 +2583,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		commandInputActive := !pf.SearchFirstMode() || pf.CommandLineFocused || !pf.ShowPanels
 		if commandInputActive && !pf.CmdLine.IsEmpty() {
 			cmd := pf.CmdLine.Edit.GetText()
-			if cmdline.CommandHasUnmatchedQuote(cmd, runtime.GOOS == "windows") {
+			if cmdline.CommandHasUnmatchedQuote(cmd, terminal.WindowsShellSyntax()) {
 				vtui.ShowMessage(" Error ", "Unmatched quote in command. Close the quote and press Enter again.", []string{"&Ok"})
 				return true
 			}
@@ -2717,7 +2717,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			activePty := pf.GetActivePTY()
 			if activePty != nil {
 				var path string
-				isWindowsShell := runtime.GOOS == "windows"
+				isWindowsShell := terminal.WindowsShellSyntax()
 				var localShellVFS vfs.VFS
 				var integration vfs.PtyShellIntegration
 				if fsp, ok := pf.Panels[pf.ActiveIdx].(*FileSystemPanel); ok {
@@ -4394,7 +4394,7 @@ func (pf *PanelsFrame) menuItemsWithKeyLabels(title string, items []vtui.MenuIte
 }
 
 func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
-	isWindowsShell := runtime.GOOS == "windows"
+	isWindowsShell := terminal.WindowsShellSyntax()
 	sync := false
 	if _, isOS := v.(*vfs.OSVFS); isOS {
 		sync = true
