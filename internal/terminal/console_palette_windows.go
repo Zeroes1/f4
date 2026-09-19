@@ -47,6 +47,9 @@ type consoleBufferInfoEx struct {
 // silent: a console that will not say what its colours are is left as it is.
 func keepConsoleColorTable() (restore func()) {
 	restore = func() {}
+	if !consoleBufferInfoExAvailable() {
+		return
+	}
 	if _, src := wincon.ConsoleWindow(); !src.Trusted() {
 		return
 	}
@@ -62,6 +65,16 @@ func keepConsoleColorTable() (restore func()) {
 	return func() {
 		restoreConsoleColorTable(h, saved.ColorTable)
 	}
+}
+
+// consoleBufferInfoExAvailable says whether the console API has the two Ex
+// calls. They came with Vista, and LazyProc.Call panics on a missing export
+// where Find just reports it, which is the difference between the legacy
+// windows/386 build starting on XP and not. There is nothing to keep there in
+// any case: the console of XP has no OSC 4 for f4 to have loaded a theme with.
+func consoleBufferInfoExAvailable() bool {
+	return procGetConsoleScreenBufferInfoEx.Find() == nil &&
+		procSetConsoleScreenBufferInfoEx.Find() == nil
 }
 
 func readConsoleBufferInfoEx(h syscall.Handle) (consoleBufferInfoEx, bool) {
