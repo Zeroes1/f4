@@ -3,7 +3,6 @@ package vfs
 import (
 	"errors"
 	"os"
-	"runtime"
 
 	"github.com/unxed/f4/vfs/hostfs"
 )
@@ -40,7 +39,7 @@ func (e *NotListableError) Unwrap() error { return e.Err }
 func checkOSDirListable(dir string) error {
 	err := openOSDirOnce(dir)
 	// Same condition ReadDir uses before it tries the candidates.
-	if err != nil && os.IsPermission(err) && runtime.GOOS == "windows" {
+	if err != nil && os.IsPermission(err) && WindowsPersonality() {
 		for _, candidate := range resolveReparseCandidates(dir) {
 			if openOSDirOnce(candidate) == nil {
 				return nil

@@ -745,11 +745,20 @@ jobs:
   # with the go2xp shim linked in and the import table repointed at its
   # polyfills afterwards (github.com/unxed/go2xp).
   #
-  # The profile is ReactOS 0.4.16, whose absent-export set was read out of the
-  # released image rather than out of documentation, and where the result is
-  # tested: f4 draws its panels, copies, views, edits and runs commands there.
-  # XP is close but not identical -- it lacks four functions ReactOS has -- so
-  # an XP artifact needs profiles/xp.json and an XP machine to sign it off.
+  # One artifact serves Windows XP SP3 and ReactOS, built with the XP profile.
+  # The header is what makes that possible: XP refuses an image whose OS or
+  # subsystem version is above 5.1 ("not a valid Win32 application", issue
+  # #897), and ReactOS, which reports 5.2, loads anything up to that. The
+  # earlier ReactOS profile declared 5.2 and so could not start on XP at all.
+  #
+  # The cost falls on ReactOS and is small: the XP profile redirects ReOpenFile,
+  # FindFirstStreamW and FindNextStreamW to failing stubs, and ReactOS has real
+  # ones. f4 calls none of them itself; Go's standard library reaches ReOpenFile
+  # only to chmod a read-only file inside an os.Root, and NTFS streams do not
+  # exist on the FAT volumes ReactOS installs onto. The ReactOS result was
+  # measured with the ReactOS profile (f4 draws its panels, copies, views, edits
+  # and runs commands there); this artifact has not been run on ReactOS or on XP
+  # yet. XP needs a machine to sign it off (docs/WINE.md, legacy Windows).
   #
   # go2xp is pinned by commit: it decides which imports get redirected, and a
   # silent change there would change the artifact without changing this tree.
@@ -820,10 +829,22 @@ jobs:
         set -euo pipefail
         # The patcher runs on the runner, not on the target.
         (cd go2xp-src && env -u GOOS -u GOARCH go build -o /tmp/go2xp ./cmd/go2xp)
-        profile=go2xp-src/profiles/reactos.json
+        profile=go2xp-src/profiles/xp.json
         /tmp/go2xp patch -profile "$profile" build/f4.exe build/f4-legacy.exe \
           | tee build/go2xp-patch.txt
         /tmp/go2xp verify -profile "$profile" build/f4-legacy.exe
+        # The version XP checks is in the PE header, and a profile that
+        # declares more than 5.1 makes the artifact unstartable there.
+        python3 - build/f4-legacy.exe <<'EOF'
+        import struct, sys
+        d = open(sys.argv[1], 'rb').read()
+        opt = struct.unpack_from('<I', d, 0x3c)[0] + 24
+        os_v = struct.unpack_from('<HH', d, opt + 40)
+        ss_v = struct.unpack_from('<HH', d, opt + 48)
+        print('PE header: OS %d.%d, subsystem %d.%d' % (os_v + ss_v))
+        if os_v > (5, 1) or ss_v > (5, 1):
+            sys.exit('a header above 5.1 is refused by Windows XP SP3 (not a valid Win32 application)')
+        EOF
         /tmp/go2xp audit -profile "$profile" build/f4-legacy.exe \
           | tee build/go2xp-audit.txt
         (cd go2xp-src && git rev-parse HEAD) > build/go2xp-commit.txt
