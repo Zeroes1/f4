@@ -1515,7 +1515,7 @@ func init() {
 			// far2l's Alt+F9: maximize the window, or restore it when it is
 			// maximized. vtui does it for every GUI backend and for a classic
 			// Windows console window, from the window's real state.
-			if vtui.FrameManager != nil && vtui.FrameManager.ToggleWindowMaximized() {
+			if toggleDirectWindowsTerminalWindow() || (vtui.FrameManager != nil && vtui.FrameManager.ToggleWindowMaximized()) {
 				return
 			}
 			// A terminal emulator's window is out of reach; the xterm resize
