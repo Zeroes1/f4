@@ -832,6 +832,17 @@ jobs:
         cp -r internal/i18n/lang internal/dialog/help build/
         cp f4.example.ini build/
 
+    - name: Verify clean embedded revision
+      if: steps.affected.outputs.build == 'yes'
+      run: |
+        set -euo pipefail
+        metadata="$(go version -m build/f4.exe)"
+        printf '%s\n' "$metadata"
+        if grep -Eq 'vcs\.modified(=|[[:space:]])true' <<<"$metadata"; then
+          echo 'go build embedded vcs.modified=true' >&2
+          exit 1
+        fi
+
     - name: Patch the import table and audit it
       if: steps.affected.outputs.build == 'yes'
       run: |
