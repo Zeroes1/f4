@@ -2407,25 +2407,30 @@ func actionRename(pf *panel.PanelsFrame) {
 		if newName == "" || newName == name {
 			return
 		}
-		oldPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
-		newPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), newName)
+		renameEntry(pf, fsp, name, newName)
+	})
+}
 
-		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			// The rename dialog never asks for overwrite confirmation. Carry an
-			// atomic no-replace decision so remote providers cannot silently
-			// destroy an entry that already has the requested name.
-			err := fsp.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, false), oldPath, newPath)
-			ctx.RunOnUI(func() {
-				if err != nil {
-					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to rename:\n%v", err), []string{"&Ok"})
-					fsp.PendingSelection = name
-				} else {
-					// Clear cache to ensure the new name is visible immediately
-					delete(fsp.DirCache, fsp.CacheKey(fsp.Vfs.GetPath()))
-					fsp.PendingSelection = newName
-				}
-				pf.RefreshAll()
-			})
+// renameEntry renames name to newName inside the panel's current folder.
+func renameEntry(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, name, newName string) {
+	oldPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
+	newPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), newName)
+
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// The rename dialog never asks for overwrite confirmation. Carry an
+		// atomic no-replace decision so remote providers cannot silently
+		// destroy an entry that already has the requested name.
+		err := fsp.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, false), oldPath, newPath)
+		ctx.RunOnUI(func() {
+			if err != nil {
+				vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to rename:\n%v", err), []string{"&Ok"})
+				fsp.PendingSelection = name
+			} else {
+				// Clear cache to ensure the new name is visible immediately
+				delete(fsp.DirCache, fsp.CacheKey(fsp.Vfs.GetPath()))
+				fsp.PendingSelection = newName
+			}
+			pf.RefreshAll()
 		})
 	})
 }
