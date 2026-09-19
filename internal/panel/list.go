@@ -2664,6 +2664,10 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				}
 				fp.setEntries(entries)
 				fp.SetCursorIndex(0)
+			} else if showUpEntry && hasUpItemStat {
+				// The ".." row was created with the first chunk, before the
+				// parent was stat'ed (that happens only after ReadDir).
+				fp.applyUpItemStat(upItemStat)
 			}
 
 			if fp.PendingSelection != "" {
@@ -2674,6 +2678,23 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 			loadFrames.Redraw()
 		})
 	})
+}
+
+// applyUpItemStat gives the ".." row the times, mode and owner of the parent
+// folder, the same values the other load paths put into a freshly built row.
+func (fp *FileSystemPanel) applyUpItemStat(st vfs.VFSItem) {
+	for _, e := range fp.AllEntries() {
+		if e.Name != ".." {
+			continue
+		}
+		e.MTime = st.MTime
+		e.ATime = st.ATime
+		e.CTime = st.CTime
+		e.UnixMode = st.UnixMode
+		e.Uid = st.Uid
+		e.Gid = st.Gid
+		return
+	}
 }
 
 func (fp *FileSystemPanel) Refresh() {
