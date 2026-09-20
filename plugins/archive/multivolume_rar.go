@@ -219,7 +219,7 @@ func openArchiveFileSystem(ctx context.Context, localPath, displayName, password
 			return newRARArchiveFileSystem(localPath, password)
 		}
 	}
-	return zipperarchive.OpenFS(localPath, zipperarchive.Options{Password: password})
+	return zipperarchive.OpenFS(localPath, zipperarchive.Options{Password: password, IndexPath: tarIndexPath(localPath)})
 }
 
 func identifyArchiveFormat(ctx context.Context, localPath, displayName string) (archives.Format, error) {
