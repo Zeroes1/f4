@@ -82,14 +82,14 @@ func tarFingerprint(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
 	if err != nil {
 		return "", err
 	}
 	size := st.Size()
 	h := sha256.New()
-	fmt.Fprintf(h, "%d\x00", size)
+	_, _ = fmt.Fprintf(h, "%d\x00", size)
 	head := io.NewSectionReader(f, 0, min(size, tarIndexEdge))
 	if _, err := io.Copy(h, head); err != nil {
 		return "", err

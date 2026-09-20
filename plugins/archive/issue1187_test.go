@@ -53,7 +53,7 @@ func listTarRoot(t *testing.T, path string) []string {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer fsys.Close()
+	defer func() { _ = fsys.Close() }()
 	entries, err := fsys.ReadDir(".")
 	if err != nil {
 		t.Fatalf("list %s: %v", path, err)
