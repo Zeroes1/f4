@@ -1229,7 +1229,9 @@ func configureNestedInputMode() {
 // the way far keeps both in one dialog. Themes may not define them.
 func loadHighlightIni(file *ini.File) {
 	theme.GlobalFileHighlighter.LoadFromIni(file)
-	panel.GlobalSortGroups.LoadFromIni(file)
+	// A Group key inside a coloured [Highlight_N] section puts the files that
+	// rule matches into that group: one matcher both paints and places (#413).
+	panel.GlobalSortGroups.LoadFromIni(file, theme.GlobalFileHighlighter.UserRules)
 }
 
 var getSessionIniPath = func() string {
