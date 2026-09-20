@@ -28,6 +28,8 @@ func newFlickerEditor(t *testing.T) (*EditorView, *ColorerHighlighter) {
 		ch.storeAttrs(line, []uint64{uint64(line + 1)}, uint64(10+line), nil)
 	}
 	ev.Highlighter = ch
+	// What a drawn frame records: the colours above belong to four lines.
+	ch.noteLineCount(ev.Li.LineCount())
 	return ev, ch
 }
 
