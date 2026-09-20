@@ -101,6 +101,33 @@ func fitHotkeyColumnWidths(widths []int, budget int) []int {
 	return widths
 }
 
+// fitHotkeyColumns squeezes the Command, Key, Area and When columns into
+// budget cells. The chord and the area are short and useless once cut ("Ctrl+
+// Alt+Sh", "Com"), while a command name or a condition still reads when
+// shortened, so those two give way first, in two rounds, each down to a floor;
+// only if that is not enough does everything shrink evenly (#1239).
+func fitHotkeyColumns(widths []int, budget int) []int {
+	const (
+		command = 0
+		key     = 1
+		area    = 2
+		when    = 3
+	)
+	for _, step := range []struct{ col, floor int }{{when, 8}, {command, 16}, {when, 4}, {command, 10}, {area, 6}, {key, 12}} {
+		if step.col >= len(widths) {
+			continue
+		}
+		over := sumInts(widths) - budget
+		if over <= 0 {
+			return widths
+		}
+		if give := min(over, widths[step.col]-step.floor); give > 0 {
+			widths[step.col] -= give
+		}
+	}
+	return fitHotkeyColumnWidths(widths, budget)
+}
+
 func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
 	titles := []string{"Command", "Key", "Area", "When", "Description"}
 	widths := make([]int, len(titles))
@@ -115,11 +142,14 @@ func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
 		}
 	}
 
-	// The description column remains elastic. Reserve its header, the four
+	// The description column remains elastic. Reserve room for it, the four
 	// column separators, and the table's side padding before fitting the other
-	// columns to the actual dialog width.
-	fixedBudget := dialogWidth - 4 - (len(widths) - 1) - vtui.StringWidth(titles[len(titles)-1])
-	fixed := fitHotkeyColumnWidths(append([]int(nil), widths[:len(widths)-1]...), fixedBudget)
+	// columns to the actual dialog width. Its header alone is not enough room
+	// to read anything (#1239): it gets a quarter of the dialog, from the
+	// header's width up to 30 cells.
+	descRoom := min(max(dialogWidth/4, vtui.StringWidth(titles[len(titles)-1])), 30)
+	fixedBudget := dialogWidth - 4 - (len(widths) - 1) - descRoom
+	fixed := fitHotkeyColumns(append([]int(nil), widths[:len(widths)-1]...), fixedBudget)
 	columns := make([]vtui.TableColumn, 0, len(widths))
 	for i, width := range fixed {
 		columns = append(columns, vtui.TableColumn{Title: titles[i], Width: width})
