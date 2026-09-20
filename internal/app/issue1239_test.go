@@ -1,8 +1,12 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/testutil"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -74,5 +78,71 @@ func TestIssue1239NarrowPaneStillFits(t *testing.T) {
 	}
 	if got := columns[1].Width; got < 12 {
 		t.Errorf("key column is %d wide, want at least 12", got)
+	}
+}
+
+// dialogTexts collects the text of every static line in a frame.
+func dialogTexts(frame vtui.Frame) string {
+	var out []string
+	var walk func(vtui.UIElement)
+	walk = func(el vtui.UIElement) {
+		if t, ok := el.(interface{ GetText() string }); ok {
+			out = append(out, t.GetText())
+		}
+		if c, ok := el.(vtui.Container); ok {
+			for _, child := range c.GetChildren() {
+				walk(child)
+			}
+		}
+	}
+	if el, ok := frame.(vtui.UIElement); ok {
+		walk(el)
+	}
+	return strings.Join(out, "\n")
+}
+
+// TestIssue1239F3ShowsTheWholeRow: a row of the hotkey list is cut to the
+// width of its columns, so F3 has to show it in full, the way F3 shows a file
+// in the other big dialogs.
+func TestIssue1239F3ShowsTheWholeRow(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(testutil.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(140, 35)
+	vtui.FrameManager.Init(scr)
+
+	owner := vtui.NewCenteredDialog(100, 25, "Settings")
+	vtui.FrameManager.Push(owner)
+	page := (settingsHost{}).HotkeyPage(owner, nil).(*hotkeyPage)
+	page.SetPosition(owner.X1+1, owner.Y1+1, owner.X1+60, owner.Y1+20)
+	rows := []hotkeyRow{
+		{Label: "Alpha", Key: "F8", Area: "Shell"},
+		{
+			Label:     "Appearance and language settings dialog",
+			Key:       "Ctrl+Alt+Shift+F12",
+			Area:      "Terminal",
+			Condition: "FrameworkNoTerminalCtrlNWorkspace",
+			Desc:      "Open the settings on the page that holds this group of options and then keep going until ENDOFDESCRIPTION",
+			Editable:  true,
+		},
+	}
+	page.table.SetRows([]vtui.TableRow{rows[0], rows[1]})
+	page.table.SetSelectPos(1)
+	page.SetFocusedItem(page.table)
+
+	if !page.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F3}) {
+		t.Fatal("F3 in the hotkey list was not handled")
+	}
+	top := vtui.FrameManager.GetTopFrame()
+	if top == vtui.Frame(owner) {
+		t.Fatal("F3 did not open anything over the settings dialog")
+	}
+	text := dialogTexts(top)
+	for _, want := range []string{"Appearance and language settings dialog", "Ctrl+Alt+Shift+F12", "Terminal", "FrameworkNoTerminalCtrlNWorkspace", "ENDOFDESCRIPTION"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the details window lacks %q; it shows:\n%s", want, text)
+		}
 	}
 }

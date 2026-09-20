@@ -602,12 +602,57 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 
 type hotkeyPage struct {
 	*vtui.Group
+	owner          *vtui.Window
 	table          *vtui.Table
 	assign, unbind *vtui.Button
 }
 
+// hotkeyDetailsText is one row of the list in full. The table cuts every cell
+// to the width of its column, and a long description or condition is lost that
+// way (#1239).
+func hotkeyDetailsText(row hotkeyRow) string {
+	var lines []string
+	for _, field := range []struct{ title, value string }{
+		{i18n.Msg("Hotkeys.ColCommand"), row.Label},
+		{i18n.Msg("Hotkeys.ColKey"), row.Key},
+		{i18n.Msg("Hotkeys.ColArea"), row.Area},
+		{i18n.Msg("Hotkeys.ColWhen"), row.Condition},
+	} {
+		if field.value != "" {
+			lines = append(lines, field.title+": "+field.value)
+		}
+	}
+	if row.Desc != "" {
+		lines = append(lines, "", row.Desc)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// rows returns the list's rows in the order the table holds them.
+func (p *hotkeyPage) rows() []hotkeyRow {
+	rows := make([]hotkeyRow, 0, len(p.table.Rows))
+	for _, row := range p.table.Rows {
+		if r, ok := row.(hotkeyRow); ok {
+			rows = append(rows, r)
+		}
+	}
+	return rows
+}
+
 // Keep vertical navigation inside the configurator, while Tab can still leave it.
 func (p *hotkeyPage) ProcessKey(e *vtinput.InputEvent) bool {
+	const modifiers = vtinput.ShiftPressed | vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_F3 && e.ControlKeyState&modifiers == 0 {
+		if row, ok := selectedHotkeyRow(p.table, p.rows()); ok {
+			title, text, buttons := i18n.Msg("Hotkeys.Title"), hotkeyDetailsText(row), []string{i18n.Msg("vtui.Ok")}
+			if p.owner != nil {
+				vtui.ShowMessageOnEx(p.owner, title, text, buttons, vtui.MessageInfo)
+			} else {
+				vtui.ShowMessageEx(title, text, buttons, vtui.MessageInfo)
+			}
+			return true
+		}
+	}
 	previous := p.WrapFocus
 	p.WrapFocus = e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN)
 	defer func() { p.WrapFocus = previous }()
@@ -617,13 +662,7 @@ func (p *hotkeyPage) ProcessKey(e *vtinput.InputEvent) bool {
 func (p *hotkeyPage) SetPosition(x1, y1, x2, y2 int) {
 	p.Group.SetPosition(x1, y1, x2, y2)
 	p.table.SetPosition(x1, y1, x2, y2-2)
-	rows := make([]hotkeyRow, 0, len(p.table.Rows))
-	for _, row := range p.table.Rows {
-		if r, ok := row.(hotkeyRow); ok {
-			rows = append(rows, r)
-		}
-	}
-	p.table.Columns = hotkeyTableColumns(rows, x2-x1+5)
+	p.table.Columns = hotkeyTableColumns(p.rows(), x2-x1+5)
 	x := x1
 	for _, button := range []*vtui.Button{p.assign, p.unbind} {
 		width := vtui.StringWidth(button.GetCaption()) + 4
@@ -632,7 +671,7 @@ func (p *hotkeyPage) SetPosition(x1, y1, x2, y2 int) {
 	}
 }
 func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyManager)) vtui.UIElement {
-	p := &hotkeyPage{Group: vtui.NewGroup(0, 0, 40, 10)}
+	p := &hotkeyPage{Group: vtui.NewGroup(0, 0, 40, 10), owner: owner}
 	p.SetId("hotkey-configurator")
 	p.table = vtui.NewTable(0, 0, 40, 7, hotkeyTableColumns(nil, 44))
 	p.table.SetId("hotkey-table")
