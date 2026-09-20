@@ -1025,11 +1025,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 		config.CreateDefaultHighlightIni(highlightPath)
 	}
 	if _, err := os.Stat(highlightPath); err == nil {
-		highlightIni := ini.Load(highlightPath)
-		theme.GlobalFileHighlighter.LoadFromIni(highlightIni)
-		// Sort groups share the file (and the rule syntax) with highlighting,
-		// the way far keeps both in one dialog. Themes may not define them.
-		panel.GlobalSortGroups.LoadFromIni(highlightIni)
+		loadHighlightIni(ini.Load(highlightPath))
 	}
 
 	// CrashDirFull задаётся рано (см. main()); здесь только повторная
@@ -1226,6 +1222,14 @@ func configureNestedInputMode() {
 		// has been asked to. See prepareNestedConsoleInput.
 		prepareNestedConsoleInput()
 	}
+}
+
+// loadHighlightIni hands highlight.ini to the file highlighter and to the sort
+// groups. Sort groups share the file (and the rule syntax) with highlighting,
+// the way far keeps both in one dialog. Themes may not define them.
+func loadHighlightIni(file *ini.File) {
+	theme.GlobalFileHighlighter.LoadFromIni(file)
+	panel.GlobalSortGroups.LoadFromIni(file)
 }
 
 var getSessionIniPath = func() string {
