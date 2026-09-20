@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/menuhotkeys"
 	"github.com/unxed/f4/internal/panel"
 
 	"github.com/unxed/f4/internal/action"
@@ -57,7 +58,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		}
 		text := a.DisplayLabel()
 		if !strings.Contains(text, "&") {
-			text = "&" + text // first letter becomes the menu hotkey
+			text = menuhotkeys.Auto(text) // first letter becomes the menu hotkey
 		}
 		if a.Checked != nil && a.Checked() {
 			text = "√ " + text
@@ -86,7 +87,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 					subTitle = a.MenuSubPath
 				}
 				if !strings.Contains(subTitle, "&") {
-					subTitle = "&" + subTitle
+					subTitle = menuhotkeys.Auto(subTitle)
 				}
 				m.items = append(m.items, vtui.MenuItem{
 					Text:     subTitle,
@@ -122,7 +123,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		}
 		text := action.PlainLabel(plughost.PluginCommandDisplayLabel(command))
 		if !strings.Contains(text, "&") {
-			text = "&" + text
+			text = menuhotkeys.Auto(text)
 		}
 		if !m.pluginSeparator {
 			m.pluginSeparator = true
@@ -194,6 +195,9 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		}
 		result = append(result, vtui.MenuBarItem{Label: m.title, SubItems: normalizeMenuSeparators(items)})
 	}
+	// Every item above took the first letter of its label, so the menus were
+	// full of items that shared a hotkey (#1258).
+	menuhotkeys.UniqueBar(result)
 	return result
 }
 

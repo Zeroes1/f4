@@ -1688,19 +1688,16 @@ func TestPanelsFrame_FilesMenuLabels(t *testing.T) {
 		t.Errorf("Expected Files menu label '&Files', got %q", filesMenu.Label)
 	}
 
-	expected := "&" + i18n.Msg("Menu.Files.RenMov")
+	expected := plainMenuText(i18n.Msg("Menu.Files.RenMov"))
 	var renMove *vtui.MenuItem
 	for i := range filesMenu.SubItems {
-		if filesMenu.SubItems[i].Text == expected {
+		if plainMenuText(filesMenu.SubItems[i].Text) == expected {
 			renMove = &filesMenu.SubItems[i]
 			break
 		}
 	}
 	if renMove == nil {
 		t.Fatalf("Files menu has no item %q", expected)
-	}
-	if renMove.Text != expected {
-		t.Errorf("Expected Files item %q, got %q", expected, renMove.Text)
 	}
 
 	if renMove.Shortcut != "F6" {
@@ -1797,12 +1794,12 @@ func TestPanelsFrame_F9HiddenPanels_UsesShellMenuAndKeepsTerminalLog(t *testing.
 	}
 
 	wantTerminalItems := map[string]bool{
-		i18n.Msg("Action.Terminal.ViewLog"): false,
-		i18n.Msg("Action.Terminal.EditLog"): false,
+		plainMenuText(i18n.Msg("Action.Terminal.ViewLog")): false,
+		plainMenuText(i18n.Msg("Action.Terminal.EditLog")): false,
 	}
 	for _, item := range items[0].SubItems {
-		if _, ok := wantTerminalItems[item.Text]; ok {
-			wantTerminalItems[item.Text] = true
+		if _, ok := wantTerminalItems[plainMenuText(item.Text)]; ok {
+			wantTerminalItems[plainMenuText(item.Text)] = true
 		}
 	}
 	for label, found := range wantTerminalItems {
