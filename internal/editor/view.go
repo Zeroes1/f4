@@ -2611,6 +2611,9 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 
 		ev.Pt.Insert(offset, []byte("\n"))
 		ev.Li.UpdateAfterInsert(offset, []byte("\n"))
+		// The new line number shifts everything below; cached colours are keyed
+		// by line number, so they are stale from the edited line on (#1230).
+		ev.invalidateStates(ev.CursorLine)
 		ev.Engine.InvalidateFrom(ev.CursorLine)
 		ev.CursorLine++
 		ev.CursorPos = 0
