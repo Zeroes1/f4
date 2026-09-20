@@ -727,7 +727,7 @@ func (ev *EditorView) invalidateStates(fromLine int) {
 		ev.lineStates = ev.lineStates[:fromLine]
 	}
 	if ch, ok := ev.Highlighter.(*ColorerHighlighter); ok {
-		ch.DropFrom(fromLine)
+		ch.DropAfterEdit(fromLine, ev.Li.LineCount())
 	}
 }
 
@@ -1619,6 +1619,12 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 		}
 	}
 	startLogLine, startFragIdx := ev.Engine.GetLogLineAtVisualRow(ev.ScrollTopRow)
+
+	// Colours cached now belong to this many lines; an edit compares against it
+	// to see how far it moved the ones below (#1230).
+	if ch, isColorer := ev.Highlighter.(*ColorerHighlighter); isColorer {
+		ch.noteLineCount(ev.Li.LineCount())
+	}
 
 	// FarColorer's pairs: the paired token under the cursor, and its match
 	// when it is on screen, drawn in their own colours. Only visible lines
