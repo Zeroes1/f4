@@ -46,8 +46,8 @@ var (
 	procIconSendMessageW          = iconUser32.NewProc("SendMessageW")
 	procIconGetModuleHandleW      = iconKernel32.NewProc("GetModuleHandleW")
 	procIconGetConsoleWindow      = iconKernel32.NewProc("GetConsoleWindow")
-	procDwmSetWindowAttribute         = iconDWMAPI.NewProc("DwmSetWindowAttribute")
-	findWindowCallbackHandle = syscall.NewCallback(findWindowsAppWindowCallback)
+	procDwmSetWindowAttribute     = iconDWMAPI.NewProc("DwmSetWindowAttribute")
+	findWindowCallbackHandle      = syscall.NewCallback(findWindowsAppWindowCallback)
 )
 
 type windowsTheme uint8
