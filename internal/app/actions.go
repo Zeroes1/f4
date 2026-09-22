@@ -2029,11 +2029,47 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	// Trying to scan it from an archive crosses the virtual root and produces
 	// misleading path-escape errors (issue #510).
 	if name == ".." {
+		if temp, ok := fsp.Vfs.(*panel.TempPanelVFS); ok && temp.IsAtRoot() {
+			actionCalcTempPanelSize(pf, fsp, temp)
+		}
 		return
 	}
 	basePath := fsp.Vfs.GetPath()
 
 	var targetPath = fsp.Vfs.Join(basePath, name)
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return vfs.CalculateStats(ctx, fsp.Vfs, targetPath, []string{""}, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			entry.Size = totalStats.Bytes
+			entry.SizeCalculated = true
+			if fsp.SortMode == panel.SortSize || fsp.GroupBy == panel.GroupSize {
+				fsp.SortEntries()
+				// Keep cursor on the same item after re-sorting
+				for i, e := range fsp.Entries {
+					if e == entry {
+						fsp.SetCursorIndex(i)
+						break
+					}
+				}
+			}
+		})
+}
+
+func actionCalcTempPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, temp *panel.TempPanelVFS) {
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return temp.CalculateTotal(ctx, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			temp.SetCalculatedTotal(totalStats)
+		})
+}
+
+type panelSizeScan func(context.Context, vfs.ScanCallback) (vfs.OpStats, error)
+
+func actionRunSizeScan(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, scan panelSizeScan, apply func(vfs.OpStats)) {
 
 	opDlg := fileops.NewFileOpProgressDialog(" Calculating Size... ")
 	var taskCtx *vtui.TaskContext
@@ -2051,7 +2087,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	taskCtx = vtui.RunAsync(func(ctx *vtui.TaskContext) {
 		var totalStats vfs.OpStats
 		lastScanUpdate := time.Now()
-		totalStats, scanErr := vfs.CalculateStats(ctx.Context, fsp.Vfs, targetPath, []string{""}, func(currentPath string, stats vfs.OpStats) {
+		totalStats, scanErr := scan(ctx.Context, func(currentPath string, stats vfs.OpStats) {
 			now := time.Now()
 			if now.Sub(lastScanUpdate) > 50*time.Millisecond {
 				lastScanUpdate = now
@@ -2069,18 +2105,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 				return
 			}
 			if ctx.Err() == nil {
-				entry.Size = totalStats.Bytes
-				entry.SizeCalculated = true
-				if fsp.SortMode == panel.SortSize || fsp.GroupBy == panel.GroupSize {
-					fsp.SortEntries()
-					// Keep cursor on the same item after re-sorting
-					for i, e := range fsp.Entries {
-						if e == entry {
-							fsp.SetCursorIndex(i)
-							break
-						}
-					}
-				}
+				apply(totalStats)
 				fsp.Refresh()
 			}
 		})
