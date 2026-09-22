@@ -122,3 +122,15 @@ func removeOldTarIndexes(dir, prefix, current string) {
 		_ = os.Remove(filepath.Join(dir, name))
 	}
 }
+
+// removeTarIndex removes the temporary index and SQLite's side files. The tar
+// package needs a path even when the cache is disabled, so the index lives only
+// for the lifetime of the opened filesystem in that mode.
+func removeTarIndex(indexPath string) {
+	if indexPath == "" {
+		return
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		_ = os.Remove(indexPath + suffix)
+	}
+}

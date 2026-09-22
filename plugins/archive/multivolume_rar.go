@@ -12,8 +12,20 @@ import (
 	"sync"
 
 	"github.com/unxed/archives"
+	"github.com/unxed/f4/internal/config"
 	zipperarchive "github.com/unxed/zipper/archive"
 )
+
+type uncachedTarFileSystem struct {
+	zipperarchive.FileSystem
+	indexPath string
+}
+
+func (f *uncachedTarFileSystem) Close() error {
+	err := f.FileSystem.Close()
+	removeTarIndex(f.indexPath)
+	return err
+}
 
 // rarArchiveFileSystem keeps the volume-aware RAR reader on the filesystem
 // path. zipper's generic fallback receives only one input stream, while
@@ -219,7 +231,18 @@ func openArchiveFileSystem(ctx context.Context, localPath, displayName, password
 			return newRARArchiveFileSystem(localPath, password)
 		}
 	}
-	return zipperarchive.OpenFS(localPath, zipperarchive.Options{Password: password, IndexPath: tarIndexPath(localPath)})
+	indexPath := tarIndexPath(localPath)
+	fsys, err := zipperarchive.OpenFS(localPath, zipperarchive.Options{Password: password, IndexPath: indexPath})
+	if err != nil {
+		if !config.App.ArchiveTarIndexCache {
+			removeTarIndex(indexPath)
+		}
+		return nil, err
+	}
+	if !config.App.ArchiveTarIndexCache && indexPath != "" {
+		return &uncachedTarFileSystem{FileSystem: fsys, indexPath: indexPath}, nil
+	}
+	return fsys, nil
 }
 
 func identifyArchiveFormat(ctx context.Context, localPath, displayName string) (archives.Format, error) {
