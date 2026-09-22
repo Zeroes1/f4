@@ -337,6 +337,16 @@ func init() {
 		Handler:     actionWorkspaceNew,
 	})
 	registerAction(action.Action{
+		Name:        "Workspace.Fork",
+		Area:        "Common",
+		Label:       "Fork Workspace",
+		LabelKey:    "Action.Workspace.Fork",
+		Description: "Clone the current panels into a new workspace",
+		DescKey:     "Action.Workspace.Fork.Desc",
+		DefaultKeys: []string{"CtrlF11"},
+		Handler:     actionWorkspaceNew,
+	})
+	registerAction(action.Action{
 		Name:        "Workspace.NewTerminal",
 		Area:        "Common",
 		Label:       "Terminal in New Workspace",
@@ -431,6 +441,16 @@ func init() {
 		DefaultKeys: []string{"F3", "Num5"},
 		MenuPath:    "Files",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFile(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "File.ViewHex",
+		Area:        "Shell",
+		Label:       "View in Hex",
+		LabelKey:    "Action.File.ViewHex",
+		Description: "Open the selected file in the hex viewer",
+		DescKey:     "Action.File.ViewHex.Desc",
+		DefaultKeys: []string{"AltF3"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFileHex(pf) }),
 	})
 	registerAction(action.Action{
 		Name:        "File.Edit",
