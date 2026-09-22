@@ -483,6 +483,20 @@ func TestBuildMenuBarItemsFoldsRareCommandsIntoSubMenus(t *testing.T) {
 			t.Errorf("%q is listed both at the top level and in the %q submenu", act.DisplayLabel(), action.PlainLabel(sub.title))
 		}
 	}
+
+	historyMenu := find(commands, i18n.Msg("Menu.Shell.Commands.History"))
+	if historyMenu == nil {
+		t.Fatal("Commands menu has no History submenu")
+	}
+	for _, member := range []string{"History.ImportFar2l", "History.ImportFar2lFolders"} {
+		act, ok := GetAction(member)
+		if !ok {
+			t.Fatalf("%s is not registered", member)
+		}
+		if find(historyMenu.SubItems, act.DisplayLabel()) == nil {
+			t.Errorf("%q is missing from the History submenu", act.DisplayLabel())
+		}
+	}
 }
 
 func TestSettingsFirstInEveryOptionsMenu(t *testing.T) {

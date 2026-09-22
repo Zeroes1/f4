@@ -4412,25 +4412,28 @@ func actionUpdateSettings(pf *panel.PanelsFrame) {
 	vtui.FrameManager.Push(dlg)
 }
 
-func actionImportFar2lHistory(pf *panel.PanelsFrame) {
+type far2lHistoryLoader func(history.Far2lHistoryFile, string) ([]history.HistoryRecord, error)
+type far2lHistoryMerger func(*history.F4HistoryProvider, []history.HistoryRecord) (int, error)
+
+func importFar2lHistoryFile(path, title, prompt, subject string, load far2lHistoryLoader, merge far2lHistoryMerger) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		vtui.ShowMessage(" Error ", "Cannot find user home directory.", []string{"&Ok"})
 		return
 	}
-	far2lConfig := filepath.Join(home, ".config", "far2l", "history", "commands.hst")
-	if _, err := os.Stat(far2lConfig); os.IsNotExist(err) {
-		vtui.ShowMessage(" Error ", "far2l history not found at:\n"+far2lConfig, []string{"&Ok"})
+	path = filepath.Join(home, path)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		vtui.ShowMessage(" Error ", "far2l history not found at:\n"+path, []string{"&Ok"})
 		return
 	}
 
-	dlg := vtui.ShowMessage(" Import History ", "Do you want to import command history from far2l?\nThis will merge it with your current history.", []string{"&Import", "Cancel"})
+	dlg := vtui.ShowMessage(title, prompt, []string{"&Import", "Cancel"})
 	dlg.OnResult = func(code int) {
 		if code != 0 {
 			return
 		}
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			recs, err := history.ImportFar2lHistory(ini.Load(far2lConfig), far2lConfig)
+			recs, err := load(ini.Load(path), path)
 			ctx.RunOnUI(func() {
 				if err != nil {
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import history:\n%v", err), []string{"&Ok"})
@@ -4443,41 +4446,85 @@ func actionImportFar2lHistory(pf *panel.PanelsFrame) {
 					return
 				}
 
-				current := hp.LoadRichHistory("cmdline")
-				seen := make(map[string]bool)
-				var merged []history.HistoryRecord
-
-				for _, r := range current {
-					if !seen[r.Name] {
-						seen[r.Name] = true
-						merged = append(merged, r)
-					}
+				imported, err := merge(hp, recs)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import history:\n%v", err), []string{"&Ok"})
+					return
 				}
-
-				for _, r := range recs {
-					if !seen[r.Name] {
-						seen[r.Name] = true
-						merged = append(merged, r)
-					}
-				}
-
-				limit := pf.CmdLine.Edit.HistoryLimit
-				if limit <= 0 {
-					limit = 100
-				}
-				if len(merged) > limit {
-					merged = merged[:limit]
-				}
-
-				hp.SaveRichHistory("cmdline", merged)
-
-				h := history.ExtractNames(merged)
-				pf.CmdLine.Edit.History = h
-
-				toast.Show(fmt.Sprintf("Imported %d new commands from far2l.", len(merged)-len(current)), 3*time.Second)
+				toast.Show(fmt.Sprintf("Imported %d new %s from far2l.", imported, subject), 3*time.Second)
 			})
 		})
 	}
+}
+
+func actionImportFar2lHistory(pf *panel.PanelsFrame) {
+	importFar2lHistoryFile(
+		filepath.Join(".config", "far2l", "history", "commands.hst"),
+		" Import History ",
+		"Do you want to import command history from far2l?\nThis will merge it with your current history.",
+		"commands",
+		history.ImportFar2lHistory,
+		func(hp *history.F4HistoryProvider, recs []history.HistoryRecord) (int, error) {
+			current := hp.LoadRichHistory("cmdline")
+			seen := make(map[string]bool)
+			var merged []history.HistoryRecord
+
+			for _, r := range current {
+				if !seen[r.Name] {
+					seen[r.Name] = true
+					merged = append(merged, r)
+				}
+			}
+			for _, r := range recs {
+				if !seen[r.Name] {
+					seen[r.Name] = true
+					merged = append(merged, r)
+				}
+			}
+
+			limit := pf.CmdLine.Edit.HistoryLimit
+			if limit <= 0 {
+				limit = 100
+			}
+			if len(merged) > limit {
+				merged = merged[:limit]
+			}
+			hp.SaveRichHistory("cmdline", merged)
+			pf.CmdLine.Edit.History = history.ExtractNames(merged)
+			return len(merged) - len(current), nil
+		},
+	)
+}
+
+func actionImportFar2lFolderHistory(_ *panel.PanelsFrame) {
+	importFar2lHistoryFile(
+		filepath.Join(".config", "far2l", "history", "folders.hst"),
+		" Import Folder History ",
+		"Do you want to import folder history from far2l?\nThis will merge it with your current folder history.",
+		"folders",
+		history.ImportFar2lFolderHistory,
+		func(hp *history.F4HistoryProvider, recs []history.HistoryRecord) (int, error) {
+			current, _ := history.LoadFolderHistoryRecords(hp)
+			merged := append([]history.HistoryRecord(nil), current...)
+			imported := 0
+			for _, record := range recs {
+				duplicate := false
+				for _, old := range merged {
+					if history.SamePath(old.Name, record.Name) {
+						duplicate = true
+						break
+					}
+				}
+				if duplicate {
+					continue
+				}
+				merged = append(merged, record)
+				imported++
+			}
+			history.SaveFolderHistoryRecords(hp, history.LimitRichHistory(merged, 100))
+			return imported, nil
+		},
+	)
 }
 
 func actionAppearanceSettings(pf *panel.PanelsFrame) {
