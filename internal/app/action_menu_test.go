@@ -188,6 +188,51 @@ func TestBuildMenuBarItems_Shell(t *testing.T) {
 	}
 }
 
+func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
+	old := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	defer func() { keymap.GlobalHotkeysMgr = old }()
+
+	items := BuildMenuBarItems("Shell")
+	if len(items) < 2 {
+		t.Fatalf("expected Files and Commands menus, got %+v", items)
+	}
+
+	want := map[string]rune{
+		"File.View":       'v',
+		"File.Edit":       'e',
+		"File.Copy":       'c',
+		"File.Move":       'r',
+		"File.MakeDir":    'm',
+		"File.Delete":     'd',
+		"App.Spreadsheet": 's',
+	}
+	found := make(map[string]bool, len(want))
+	for _, menu := range items {
+		var visit func([]vtui.MenuItem)
+		visit = func(menuItems []vtui.MenuItem) {
+			for _, item := range menuItems {
+				for name, hotkey := range want {
+					if item.UserData != history.MenuHistoryItemKey(name) {
+						continue
+					}
+					found[name] = true
+					if got := vtui.ExtractHotkey(item.Text); got != hotkey {
+						t.Errorf("%s mnemonic = %q, want %q (%q)", name, got, hotkey, item.Text)
+					}
+				}
+				visit(item.SubItems)
+			}
+		}
+		visit(menu.SubItems)
+	}
+	for name := range want {
+		if !found[name] {
+			t.Errorf("menu item %s was not found", name)
+		}
+	}
+}
+
 func TestBuildMenuBarItems_Terminal(t *testing.T) {
 	old := keymap.GlobalHotkeysMgr
 	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
