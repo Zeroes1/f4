@@ -497,6 +497,13 @@ func TestBuildMenuBarItemsFoldsRareCommandsIntoSubMenus(t *testing.T) {
 			t.Errorf("%q is missing from the History submenu", act.DisplayLabel())
 		}
 	}
+	settingsImport, ok := GetAction("Settings.ImportFar2l")
+	if !ok {
+		t.Fatal("Settings.ImportFar2l is not registered")
+	}
+	if find(commands, settingsImport.DisplayLabel()) == nil {
+		t.Errorf("%q is missing from the Commands menu", settingsImport.DisplayLabel())
+	}
 }
 
 func TestSettingsFirstInEveryOptionsMenu(t *testing.T) {

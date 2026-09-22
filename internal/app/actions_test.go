@@ -756,6 +756,32 @@ Times=804c4587aa28dd01 004e237daa28dd01 0021f27baa28dd01
 		t.Errorf("Record 1 mismatch: %+v", recs[1])
 	}
 }
+
+func TestImportFar2lSettingsCopiesAvailableFiles(t *testing.T) {
+	sourceDir := t.TempDir()
+	targetDir := filepath.Join(t.TempDir(), "f4", "settings")
+	source := filepath.Join(sourceDir, "bookmarks.ini")
+	target := filepath.Join(targetDir, "bookmarks.ini")
+	content := []byte("[0]\nPath=/home/user\n")
+	if err := os.WriteFile(source, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := importFar2lSettings(sourceDir, []far2lSettingFile{
+		{name: "bookmarks.ini", target: target},
+		{name: "associations.ini", target: filepath.Join(targetDir, "associations.ini")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "bookmarks.ini" {
+		t.Fatalf("imported files = %#v", got)
+	}
+	if actual, err := os.ReadFile(target); err != nil || string(actual) != string(content) {
+		t.Fatalf("imported bookmarks = %q, err=%v", actual, err)
+	}
+}
+
 func TestActionDelete_SuccessorLogic(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := panel.NewPanelsFrame()
