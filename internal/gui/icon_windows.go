@@ -47,7 +47,7 @@ var (
 	procIconGetModuleHandleW      = iconKernel32.NewProc("GetModuleHandleW")
 	procIconGetConsoleWindow      = iconKernel32.NewProc("GetConsoleWindow")
 	procDwmSetWindowAttribute         = iconDWMAPI.NewProc("DwmSetWindowAttribute")
-	findWindowsAppWindowCallbackHandle = syscall.NewCallback(findWindowsAppWindowCallback)
+	findWindowCallbackHandle = syscall.NewCallback(findWindowsAppWindowCallback)
 )
 
 type windowsTheme uint8
@@ -215,7 +215,7 @@ func applyWindowTheme(hwnd uintptr, theme windowsTheme) bool {
 func findWindowsAppWindow(pid uint32) uintptr {
 	search := windowSearch{pid: pid}
 	procIconEnumWindows.Call(
-		findWindowsAppWindowCallbackHandle,
+		findWindowCallbackHandle,
 		uintptr(unsafe.Pointer(&search)),
 	)
 	return search.hwnd
