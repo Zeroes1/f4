@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/unxed/f4/internal/config"
 )
 
 // isolateUserCache points every platform's user cache directory at a fresh
@@ -127,6 +129,23 @@ func TestIssue1187UnchangedTarKeepsItsIndex(t *testing.T) {
 	listTarRoot(t, path)
 	if second := indexFilesIn(t, cacheDir); !reflect.DeepEqual(first, second) {
 		t.Errorf("index files changed on an open of an unchanged archive: %v -> %v", first, second)
+	}
+}
+
+func TestIssue1187DisabledTarIndexCacheLeavesNoIndex(t *testing.T) {
+	isolateUserCache(t)
+	previous := config.App.ArchiveTarIndexCache
+	config.App.ArchiveTarIndexCache = false
+	t.Cleanup(func() { config.App.ArchiveTarIndexCache = previous })
+	path := filepath.Join(t.TempDir(), "uncached.tar")
+	writeIssue1187Tar(t, path, map[string]string{"file.txt": "content"})
+
+	if got, want := listTarRoot(t, path), []string{"file.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("listing = %v, want %v", got, want)
+	}
+	cacheDir := filepath.Join(os.Getenv("XDG_CACHE_HOME"), "f4", "tar-indexes")
+	if got := indexFilesIn(t, cacheDir); len(got) != 0 {
+		t.Fatalf("disabled cache left index files in %s: %v", cacheDir, got)
 	}
 }
 
