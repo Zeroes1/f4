@@ -1119,6 +1119,10 @@ func findOpenedViewer(v vfs.VFS, path string) (*viewer.ViewerView, int) {
 }
 
 func showViewer(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string) {
+	showViewerMode(pf, vv, path, false)
+}
+
+func showViewerMode(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string, forceHex bool) {
 	if fileops.GlobalFileState != nil && path != "" {
 		if state := fileops.GlobalFileState.GetState(fileops.FileStateKey(vv.VFS, path)); state != nil {
 			vv.TopOffset = state.ViewerOffset
@@ -1135,11 +1139,19 @@ func showViewer(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string) {
 			vv.HexAuto = false
 		}
 	}
+	if forceHex {
+		vv.HexMode = true
+		vv.HexAuto = false
+	}
 	vv.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.AddScreen(vv)
 }
 
 func actionOpenViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) {
+	actionOpenViewerMode(pf, v, path, false)
+}
+
+func actionOpenViewerMode(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
 	rememberViewerEditorHistory(v, path, historyModeView)
 	existingViewer, screenIdx := findOpenedViewer(v, path)
 	if existingViewer != nil {
@@ -1150,19 +1162,24 @@ func actionOpenViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			dlg.OnResult = func(res int) {
 				switch res {
 				case 0:
+					if forceHex {
+						existingViewer.HexMode = true
+						existingViewer.HexAuto = false
+					}
 					vtui.FrameManager.SwitchScreen(screenIdx)
 				case 1: // Reload
 					existingViewer.Close()
-					openViewerInternal(pf, v, path)
+					openViewerInternalMode(pf, v, path, forceHex)
 				case 2: // New instance
-					openViewerInternal(pf, v, path)
+					openViewerInternalMode(pf, v, path, forceHex)
 				}
 			}
 		})
 		return
 	}
-	openViewerInternal(pf, v, path)
+	openViewerInternalMode(pf, v, path, forceHex)
 }
+
 func actionSwitchEditorToViewer(ev *editor.EditorView) {
 	if ev == nil || ev.FilePath == "" || ev.Vfs == nil {
 		return
@@ -1546,10 +1563,14 @@ func imageSiblingPaths(pf *panel.PanelsFrame, v vfs.VFS, path string) ([]string,
 }
 
 func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
+	openViewerInternalMode(pf, v, path, false)
+}
+
+func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
 	// Viewer settings -> "Open images and video in their own viewers" (issue
 	// #991). Off, a picture or a video opens like any other file: as text or
 	// as hex, whatever the viewer's own binary check decides.
-	if config.App.ViewerOpenAsSupportedType {
+	if !forceHex && config.App.ViewerOpenAsSupportedType {
 		if tryOpenVideoPlayer(pf, v, path) {
 			return
 		}
@@ -1571,7 +1592,7 @@ func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			vv, err := viewer.NewViewerView(ctx.Context, v, path)
 			ctx.RunOnUI(func() {
 				if err == nil {
-					showViewer(pf, vv, path)
+					showViewerMode(pf, vv, path, forceHex)
 				} else {
 					vtui.DebugLog("PANELS: Failed to open vv for %s: %v", path, err)
 					if err == os.ErrInvalid {
@@ -1603,7 +1624,7 @@ func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			}
 			return
 		}
-		showViewer(pf, vv, path)
+		showViewerMode(pf, vv, path, forceHex)
 	})
 }
 
@@ -2002,6 +2023,14 @@ func actionEditTerminalLog(pf *panel.PanelsFrame) {
 }
 
 func actionViewFile(pf *panel.PanelsFrame) {
+	actionViewFileMode(pf, false)
+}
+
+func actionViewFileHex(pf *panel.PanelsFrame) {
+	actionViewFileMode(pf, true)
+}
+
+func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 	if fsp := pf.GetActivePanel(); fsp != nil {
 		idx := fsp.GetCursorIndex()
 		if idx < 0 || idx >= len(fsp.Entries) {
@@ -2013,12 +2042,12 @@ func actionViewFile(pf *panel.PanelsFrame) {
 		}
 		// A matching View association intercepts before the built-in
 		// viewer, so users can wire F3 to feh, less, or anything else.
-		if panel.TryFileAssociation(pf, panel.AssocView) {
+		if !forceHex && panel.TryFileAssociation(pf, panel.AssocView) {
 			return
 		}
 		name := fsp.GetSelectedName()
 		path := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
-		actionOpenViewer(pf, fsp.Vfs, path)
+		actionOpenViewerMode(pf, fsp.Vfs, path, forceHex)
 	}
 }
 

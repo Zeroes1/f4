@@ -8,6 +8,7 @@ App.Help
 App.MainMenu
 App.LastMenuItem
 Workspace.New
+Workspace.Fork
 Workspace.NewTerminal
 Workspace.Close
 Workspace.Next
@@ -15,6 +16,7 @@ Workspace.Previous
 Workspace.List
 Debug.ScreenDump
 File.View
+File.ViewHex
 File.Edit
 File.New
 File.ApplyCommand
