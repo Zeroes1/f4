@@ -5276,6 +5276,9 @@ func editorTempSibling(filesystem vfs.VFS, FilePath string) (string, error) {
 }
 
 func (ev *EditorView) SaveToFile(afterSave func()) {
+	if rv, ok := ev.Vfs.(interface{ IsReadOnly() bool }); ok && rv.IsReadOnly() {
+		return
+	}
 	ev.saveToFile(afterSave, false)
 }
 
