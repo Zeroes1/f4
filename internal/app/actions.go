@@ -4527,6 +4527,66 @@ func actionImportFar2lFolderHistory(_ *panel.PanelsFrame) {
 	)
 }
 
+type far2lSettingFile struct {
+	name   string
+	target string
+}
+
+func importFar2lSettings(sourceDir string, files []far2lSettingFile) ([]string, error) {
+	var imported []string
+	for _, file := range files {
+		data, err := os.ReadFile(filepath.Join(sourceDir, file.name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", file.name, err)
+		}
+		if err := config.WriteUserFileAtomically(file.target, data, 0o600); err != nil {
+			return nil, fmt.Errorf("write %s: %w", file.name, err)
+		}
+		imported = append(imported, file.name)
+	}
+	if len(imported) == 0 {
+		return nil, fmt.Errorf("no compatible far2l settings found in %s", sourceDir)
+	}
+	return imported, nil
+}
+
+func actionImportFar2lSettings(_ *panel.PanelsFrame) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		vtui.ShowMessage(" Error ", "Cannot find user home directory.", []string{"&Ok"})
+		return
+	}
+	sourceDir := filepath.Join(home, ".config", "far2l", "settings")
+	dlg := vtui.ShowMessage(
+		" Import far2l Settings ",
+		"Do you want to import bookmarks, associations and user menu from far2l?\nExisting f4 files will be replaced.",
+		[]string{"&Import", "Cancel"},
+	)
+	dlg.OnResult = func(code int) {
+		if code != 0 {
+			return
+		}
+		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+			files := []far2lSettingFile{
+				{name: "bookmarks.ini", target: panel.BookmarksFilePath()},
+				{name: "associations.ini", target: panel.AssociationsFilePath()},
+				{name: "user_menu.ini", target: panel.MainMenuFilePath()},
+			}
+			imported, err := importFar2lSettings(sourceDir, files)
+			ctx.RunOnUI(func() {
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import far2l settings:\n%v", err), []string{"&Ok"})
+					return
+				}
+				toast.Show(fmt.Sprintf("Imported far2l settings: %s.", strings.Join(imported, ", ")), 3*time.Second)
+			})
+		})
+	}
+}
+
 func actionAppearanceSettings(pf *panel.PanelsFrame) {
 	const width, height = 64, 30
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("AppearanceSettings.Title"))
