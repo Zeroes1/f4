@@ -46,7 +46,7 @@ var (
 	procIconSendMessageW          = iconUser32.NewProc("SendMessageW")
 	procIconGetModuleHandleW      = iconKernel32.NewProc("GetModuleHandleW")
 	procIconGetConsoleWindow      = iconKernel32.NewProc("GetConsoleWindow")
-	procDwmSetWindowAttribute     = iconDWMAPI.NewProc("DwmSetWindowAttribute")
+	procDwmSetWindowAttribute         = iconDWMAPI.NewProc("DwmSetWindowAttribute")
 	findWindowsAppWindowCallbackHandle = syscall.NewCallback(findWindowsAppWindowCallback)
 )
 
@@ -66,7 +66,7 @@ type windowSearch struct {
 // startWindowsWindowIconManager fills two gaps in the Windows GUI backends: it
 // assigns the embedded icon to the HWND and opts the native title bar into the
 // current Windows light/dark app theme. Polling lets both settings follow DPI
-// and theme changes without replacing gogpu's window procedure.
+// and theme changes without replacing the backend's window procedure.
 func startWindowsWindowIconManager() func() {
 	pid := uint32(os.Getpid())
 	return startWindowsWindowAppearanceManager(func() uintptr {
