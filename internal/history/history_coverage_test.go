@@ -164,6 +164,24 @@ func TestImportFar2lHistoryReportsMissingLines(t *testing.T) {
 	}
 }
 
+func TestImportFar2lFolderHistoryUsesFolderSection(t *testing.T) {
+	ini := sectionINI{section: "SavedFolderHistory", values: map[string]string{
+		"Lines": `"/home/user\n/tmp"`,
+		"Locks": "01",
+		"Times": "0000000000000000 0080B9A4D6DDBF01",
+	}}
+	got, err := ImportFar2lFolderHistory(ini, "folders.hst")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Name != "/home/user" || got[1].Name != "/tmp" {
+		t.Fatalf("decoded folder records = %#v", got)
+	}
+	if got[0].Lock || !got[1].Lock {
+		t.Errorf("decoded folder locks = %#v", got)
+	}
+}
+
 func TestCommandHistoryPathsRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "history.json")
 	hp := NewProviderAtPath(path)
@@ -191,6 +209,20 @@ type stubINI map[string]string
 func (s stubINI) GetString(_, key, fallback string) string {
 	if value, ok := s[key]; ok {
 		return value
+	}
+	return fallback
+}
+
+type sectionINI struct {
+	section string
+	values  map[string]string
+}
+
+func (s sectionINI) GetString(section, key, fallback string) string {
+	if section == s.section {
+		if value, ok := s.values[key]; ok {
+			return value
+		}
 	}
 	return fallback
 }

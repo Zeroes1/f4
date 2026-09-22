@@ -960,6 +960,15 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lHistory(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "History.ImportFar2lFolders",
+		Area:        "Shell",
+		Label:       "Import far2l Folder History",
+		Description: "Import folder history from far2l (.hst)",
+		MenuPath:    "Commands",
+		MenuSubPath: "History",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lFolderHistory(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.GoParent",
 		Area:        "Shell",
 		Label:       "Parent Folder",
