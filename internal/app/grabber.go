@@ -94,6 +94,13 @@ func handleForcedMouseSelectionEvent(e *vtinput.InputEvent) bool {
 		e.ButtonState != vtinput.FromLeft1stButtonPressed {
 		return false
 	}
+	// Let the visible function-key bar keep first refusal. Its mouse handler
+	// turns a click into the corresponding (possibly Shift-modified) F-key
+	// event; opening the grabber here would make Shift+F10, for example,
+	// impossible to invoke with the mouse (#1289).
+	if keyBarContainsMouse(e) {
+		return false
+	}
 
 	const modifierMask = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed |
 		vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed
@@ -115,6 +122,16 @@ func handleForcedMouseSelectionEvent(e *vtinput.InputEvent) bool {
 	grabber.ProcessMouse(e)
 	vtui.FrameManager.Redraw()
 	return true
+}
+
+func keyBarContainsMouse(e *vtinput.InputEvent) bool {
+	if e == nil || vtui.FrameManager == nil || vtui.FrameManager.KeyBar == nil ||
+		!vtui.FrameManager.KeyBar.IsVisible() {
+		return false
+	}
+	x1, y1, x2, y2 := vtui.FrameManager.KeyBar.GetPosition()
+	x, y := int(e.MouseX), int(e.MouseY)
+	return x >= x1 && x <= x2 && y >= y1 && y <= y2
 }
 
 // actionScreenGrab is the context-aware terminal.App.ScreenGrab handler. Invoking the
