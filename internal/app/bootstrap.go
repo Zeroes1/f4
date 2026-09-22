@@ -155,15 +155,17 @@ func startupDirArgs(args []string) []string {
 	return dirs
 }
 
-// rememberStartupDirs records those directories, but only for a start from a
-// terminal. It must run before checkAndDetach and before the daemon is spawned:
-// both hand the next process /dev/null on stdin. Values inherited from the
-// parent win, they are the answer that process already worked out.
+// rememberStartupDirs records those directories. Explicit command-line paths
+// must also be carried by a GUI start without a terminal (for example
+// `f4-gui.exe path1 path2`); a plain GUI start still leaves the restored
+// session alone. It must run before checkAndDetach and before the daemon is
+// spawned: both hand the next process /dev/null on stdin. Values inherited
+// from the parent win, they are the answer that process already worked out.
 func rememberStartupDirs(args []string) {
 	if os.Getenv(startupDirEnv) != "" {
 		return
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if len(args) == 0 && !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
 	}
 	cwd, err := os.Getwd()
