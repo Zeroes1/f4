@@ -2752,16 +2752,26 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	var totCount int
 	var totFiles int
 	var totDirs int
-	for _, e := range fp.Entries {
-		if e.Name == ".." {
-			continue
+	if provider, ok := fp.Vfs.(interface{ CalculatedPanelTotal() (vfs.OpStats, bool) }); ok && fp.Vfs.IsAtRoot() {
+		if stats, hasTotal := provider.CalculatedPanelTotal(); hasTotal {
+			totSize = stats.Bytes
+			totFiles = int(stats.Files)
+			totDirs = int(stats.Dirs)
+			totCount = totFiles + totDirs
 		}
-		totCount++
-		if e.IsDir {
-			totDirs++
-		} else {
-			totFiles++
-			totSize += e.Size
+	}
+	if totCount == 0 {
+		for _, e := range fp.Entries {
+			if e.Name == ".." {
+				continue
+			}
+			totCount++
+			if e.IsDir {
+				totDirs++
+			} else {
+				totFiles++
+				totSize += e.Size
+			}
 		}
 	}
 	freeSpaceStr := ""
