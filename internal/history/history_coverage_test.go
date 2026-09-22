@@ -168,7 +168,7 @@ func TestImportFar2lFolderHistoryUsesFolderSection(t *testing.T) {
 	ini := sectionINI{section: "SavedFolderHistory", values: map[string]string{
 		"Lines": `"/home/user\n/tmp"`,
 		"Locks": "01",
-		"Times":  "0000000000000000 0080B9A4D6DDBF01",
+		"Times": "0000000000000000 0080B9A4D6DDBF01",
 	}}
 	got, err := ImportFar2lFolderHistory(ini, "folders.hst")
 	if err != nil {
