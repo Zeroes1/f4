@@ -10,15 +10,31 @@ import (
 	"github.com/unxed/f4/internal/panel"
 )
 
-// A start with no terminal -- Dock, the detached GUI copy, the daemon -- names
-// no startup directory, so the panels keep what the session restored. `go test`
-// runs without a terminal on stdin, which is exactly that case.
+// A plain start with no terminal -- Dock, the detached GUI copy, the daemon --
+// names no startup directory, so the panels keep what the session restored.
+// `go test` runs without a terminal on stdin, which is exactly that case.
 func TestRememberStartupDirsIgnoresStartWithoutTerminal(t *testing.T) {
 	t.Setenv(startupDirEnv, "")
 	t.Setenv(startupDirRightEnv, "")
-	rememberStartupDirs([]string{"/home/u/a"})
+	rememberStartupDirs(nil)
 	if left, right := startupDirs(); left != "" || right != "" {
 		t.Fatalf("startupDirs() = (%q, %q), want empty for a start without a terminal", left, right)
+	}
+}
+
+func TestRememberStartupDirsKeepsExplicitPathsWithoutTerminal(t *testing.T) {
+	t.Setenv(startupDirEnv, "")
+	t.Setenv(startupDirRightEnv, "")
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rememberStartupDirs([]string{"left", "right"})
+	left, right := startupDirs()
+	wantLeft := filepath.Join(cwd, "left")
+	wantRight := filepath.Join(cwd, "right")
+	if left != wantLeft || right != wantRight {
+		t.Fatalf("startupDirs() = (%q, %q), want (%q, %q)", left, right, wantLeft, wantRight)
 	}
 }
 
