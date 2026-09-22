@@ -519,7 +519,7 @@ Action.AI.ApplyPatch=Применить патч AP
 Action.AI.ApplyPatch.Desc=Применить AP-патч из последнего ответа к папке в другой панели
 Action.Settings.Proxy.Desc=Настроить прокси для обновлений, плагинов и сетевых соединений
 ; --- Электронные таблицы ---
-Action.App.Spreadsheet=&Электронные таблицы
+Action.App.Spreadsheet=Электронные таблицы
 Action.App.Spreadsheet.Desc=Открыть рабочее пространство электронных таблиц
 ; --- SQLite ---
 Action.App.SQLite=&Клиент SQLite

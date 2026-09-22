@@ -519,7 +519,7 @@ Action.AI.ApplyPatch=Apply AP Patch
 Action.AI.ApplyPatch.Desc=Apply the ap patch from the last answer to the folder in the other panel
 Action.Settings.Proxy.Desc=Configure the proxy used for updates, plugins and network connections
 ; --- Spreadsheet ---
-Action.App.Spreadsheet=&Spreadsheet
+Action.App.Spreadsheet=Spreadsheet
 Action.App.Spreadsheet.Desc=Open the spreadsheet workspace
 ; --- SQLite ---
 Action.App.SQLite=SQLite &client

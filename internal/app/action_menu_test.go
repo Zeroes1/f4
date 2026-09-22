@@ -205,9 +205,9 @@ func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
 		"File.Move":       'r',
 		"File.MakeDir":    'm',
 		"File.Delete":     'd',
-		"App.Spreadsheet": 's',
 	}
 	found := make(map[string]bool, len(want))
+	spreadsheetHotkey := rune(0)
 	for _, menu := range items {
 		var visit func([]vtui.MenuItem)
 		visit = func(menuItems []vtui.MenuItem) {
@@ -221,6 +221,9 @@ func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
 						t.Errorf("%s mnemonic = %q, want %q (%q)", name, got, hotkey, item.Text)
 					}
 				}
+				if item.UserData == history.MenuHistoryItemKey("App.Spreadsheet") {
+					spreadsheetHotkey = vtui.ExtractHotkey(item.Text)
+				}
 				visit(item.SubItems)
 			}
 		}
@@ -230,6 +233,9 @@ func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
 		if !found[name] {
 			t.Errorf("menu item %s was not found", name)
 		}
+	}
+	if spreadsheetHotkey == 0 {
+		t.Error("App.Spreadsheet has no mnemonic")
 	}
 }
 
