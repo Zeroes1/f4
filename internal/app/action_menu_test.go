@@ -198,14 +198,13 @@ func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
 		t.Fatalf("expected Files and Commands menus, got %+v", items)
 	}
 
-	want := map[string]rune{
-		"File.View":       'v',
-		"File.Edit":       'e',
-		"File.Copy":       'c',
-		"File.Move":       'r',
-		"File.MakeDir":    'm',
-		"File.Delete":     'd',
-	}
+	want := make(map[string]rune)
+	want["File.View"] = 'v'
+	want["File.Edit"] = 'e'
+	want["File.Copy"] = 'c'
+	want["File.Move"] = 'r'
+	want["File.MakeDir"] = 'm'
+	want["File.Delete"] = 'd'
 	found := make(map[string]bool, len(want))
 	spreadsheetHotkey := rune(0)
 	for _, menu := range items {
