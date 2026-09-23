@@ -17,6 +17,8 @@ import (
 	"strings"
 )
 
+const pathMarkerSuffix = ".f4-path"
+
 // userCacheDir is os.UserCacheDir, replaceable by the tests.
 var userCacheDir = os.UserCacheDir
 
@@ -39,6 +41,69 @@ func Prefix(archivePath string) string {
 	}
 	sum := sha256.Sum256([]byte(abs))
 	return filepath.Base(archivePath) + "-" + hex.EncodeToString(sum[:16])
+}
+
+// PathFile is the small registry entry that records which archive owns a
+// prefix. The index filename hashes the path, so without this entry a cache
+// file left by an archive deleted outside f4 cannot be identified later.
+func PathFile(archivePath string) string {
+	return filepath.Join(Dir(), Prefix(archivePath)+pathMarkerSuffix)
+}
+
+// Track records the path that owns the indexes with its prefix.
+func Track(archivePath string) {
+	abs, err := filepath.Abs(archivePath)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(PathFile(archivePath), []byte(abs+"\n"), 0o600)
+}
+
+// Cleanup removes indexes whose tracked archive was deleted outside f4.
+// Failures are ignored: a concurrently opened or removed file is only clutter.
+func Cleanup() {
+	dir := Dir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, pathMarkerSuffix) {
+			continue
+		}
+		marker := filepath.Join(dir, name)
+		data, err := os.ReadFile(marker)
+		if err != nil || strings.TrimSpace(string(data)) == "" {
+			continue
+		}
+		archivePath := strings.TrimSpace(string(data))
+		if _, err := os.Stat(archivePath); err == nil {
+			continue
+		}
+		prefix := strings.TrimSuffix(name, pathMarkerSuffix)
+		for _, file := range osReadDirFiles(dir, prefix) {
+			_ = os.Remove(file)
+		}
+		_ = os.Remove(marker)
+	}
+}
+
+func osReadDirFiles(dir, prefix string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		if belongs(e.Name(), prefix) {
+			files = append(files, filepath.Join(dir, e.Name()))
+		}
+	}
+	return files
 }
 
 // belongs reports whether a cache file name is one of prefix's: the prefix must
@@ -84,6 +149,7 @@ func Move(oldPath, newPath string) {
 		name := filepath.Base(file)
 		_ = os.Rename(file, filepath.Join(dir, newPrefix+name[len(oldPrefix):]))
 	}
+	_ = os.Rename(PathFile(oldPath), PathFile(newPath))
 }
 
 // Clear removes every cached index and reports how many files went. It is the
@@ -99,6 +165,9 @@ func Clear() int {
 	removed := 0
 	for _, e := range entries {
 		if e.IsDir() || !strings.Contains(e.Name(), ".index.sqlite") {
+			if strings.HasSuffix(e.Name(), pathMarkerSuffix) {
+				_ = os.Remove(filepath.Join(dir, e.Name()))
+			}
 			continue
 		}
 		if os.Remove(filepath.Join(dir, e.Name())) == nil {

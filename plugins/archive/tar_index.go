@@ -33,6 +33,7 @@ func tarIndexPath(localPath string) string {
 	if !looksLikeTar(localPath) {
 		return ""
 	}
+	tarindexcache.Cleanup()
 	// A sidecar index next to the archive is the user's (ratarmount's own
 	// convention); leave it to the library, which prefers it.
 	for _, ext := range []string{".index.sqlite", ".index.arcidx", ".arcidx"} {
@@ -62,6 +63,7 @@ func tarIndexPath(localPath string) string {
 	}
 	removeOldTarIndexes(dir, prefix, current)
 	removeTarIndexesWithFingerprint(dir, current, fingerprint)
+	tarindexcache.Track(localPath)
 	return filepath.Join(dir, current)
 }
 
