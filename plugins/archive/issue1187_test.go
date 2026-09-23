@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/tarindexcache"
 )
 
 // isolateUserCache points every platform's user cache directory at a fresh
@@ -129,6 +130,27 @@ func TestIssue1187UnchangedTarKeepsItsIndex(t *testing.T) {
 	listTarRoot(t, path)
 	if second := indexFilesIn(t, cacheDir); !reflect.DeepEqual(first, second) {
 		t.Errorf("index files changed on an open of an unchanged archive: %v -> %v", first, second)
+	}
+}
+
+func TestIssue1187ExternalRenameDropsOldContentIndex(t *testing.T) {
+	isolateUserCache(t)
+	oldPath := filepath.Join(t.TempDir(), "before.tar")
+	newPath := filepath.Join(filepath.Dir(oldPath), "after.tar")
+	writeIssue1187Tar(t, oldPath, map[string]string{"file.txt": "content"})
+
+	listTarRoot(t, oldPath)
+	if got := tarindexcache.Files(oldPath); len(got) != 1 {
+		t.Fatalf("old archive index files = %v, want one", got)
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := listTarRoot(t, newPath), []string{"file.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("renamed archive listing = %v, want %v", got, want)
+	}
+	if got := tarindexcache.Files(oldPath); len(got) != 0 {
+		t.Fatalf("old archive index files after external rename = %v, want none", got)
 	}
 }
 

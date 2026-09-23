@@ -61,6 +61,7 @@ func tarIndexPath(localPath string) string {
 		return filepath.Join(dir, current)
 	}
 	removeOldTarIndexes(dir, prefix, current)
+	removeTarIndexesWithFingerprint(dir, current, fingerprint)
 	return filepath.Join(dir, current)
 }
 
@@ -120,6 +121,35 @@ func removeOldTarIndexes(dir, prefix, current string) {
 			continue
 		}
 		_ = os.Remove(filepath.Join(dir, name))
+	}
+}
+
+// removeTarIndexesWithFingerprint drops a cached index for the same archive
+// content under another path. A rename done outside f4 cannot go through the
+// file-operation hook that moves cache files, but the content fingerprint still
+// lets us retire the old path when the renamed archive is opened.
+func removeTarIndexesWithFingerprint(dir, current, fingerprint string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	base := filepath.Base(current)
+	suffixes := []string{
+		"-" + fingerprint + ".index.sqlite",
+		"-" + fingerprint + ".index.sqlite-wal",
+		"-" + fingerprint + ".index.sqlite-shm",
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if name == base {
+			continue
+		}
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(name, suffix) {
+				_ = os.Remove(filepath.Join(dir, name))
+				break
+			}
+		}
 	}
 }
 
