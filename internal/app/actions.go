@@ -2063,9 +2063,14 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	// Trying to scan it from an archive crosses the virtual root and produces
 	// misleading path-escape errors (issue #510).
 	if name == ".." {
+		if fsp.Vfs == nil {
+			return
+		}
 		if temp, ok := fsp.Vfs.(*panel.TempPanelVFS); ok && temp.IsAtRoot() {
 			actionCalcTempPanelSize(pf, fsp, temp)
+			return
 		}
+		actionCalcPanelSize(pf, fsp)
 		return
 	}
 	basePath := fsp.Vfs.GetPath()
@@ -2092,12 +2097,37 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 }
 
 func actionCalcTempPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, temp *panel.TempPanelVFS) {
+	basePath := temp.GetPath()
 	actionRunSizeScan(pf, fsp,
 		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
 			return temp.CalculateTotal(ctx, cb)
 		},
 		func(totalStats vfs.OpStats) {
+			if temp.GetPath() != basePath {
+				return
+			}
 			temp.SetCalculatedTotal(totalStats)
+			fsp.SetCalculatedPanelTotal(totalStats)
+		})
+}
+
+func actionCalcPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
+	basePath := fsp.Vfs.GetPath()
+	var names []string
+	for _, entry := range fsp.AllEntries() {
+		if entry != nil && entry.Name != ".." {
+			names = append(names, entry.Name)
+		}
+	}
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return vfs.CalculateStats(ctx, fsp.Vfs, basePath, names, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			if fsp.Vfs.GetPath() != basePath {
+				return
+			}
+			fsp.SetCalculatedPanelTotal(totalStats)
 		})
 }
 
