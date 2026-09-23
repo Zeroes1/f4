@@ -78,7 +78,7 @@ func Cleanup() {
 			continue
 		}
 		archivePath := strings.TrimSpace(string(data))
-		if _, err := os.Stat(archivePath); err == nil {
+		if _, err := os.Stat(archivePath); err == nil { // #nosec G703 -- this path is the archive path written by f4's own marker.
 			continue
 		}
 		prefix := strings.TrimSuffix(name, pathMarkerSuffix)
