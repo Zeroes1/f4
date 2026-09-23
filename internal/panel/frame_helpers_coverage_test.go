@@ -4,21 +4,21 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/vfs"
 )
 
 func TestPanelsFrameConvenienceHelpersCoverage(t *testing.T) {
 	dir := t.TempDir()
-	fsp := &FileSystemPanel{
-		Vfs: vfs.NewOSVFS(dir),
-		Entries: []*FileEntry{
-			{VFSItem: vfs.VFSItem{Name: "one.txt"}, Selected: true},
-			{VFSItem: vfs.VFSItem{Name: "two.txt"}},
-		},
-		CursorIdx: 1,
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ActiveIdx = 0
+	fsp := pf.Panels[0].(*FileSystemPanel)
+	fsp.Vfs = vfs.NewOSVFS(dir)
+	fsp.Entries = []*FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "one.txt"}, Selected: true},
+		{VFSItem: vfs.VFSItem{Name: "two.txt"}},
 	}
-	other := &FileSystemPanel{Vfs: vfs.NewNullVFS(0)}
-	pf := &PanelsFrame{Panels: [2]Panel{fsp, other}, ActiveIdx: 0}
+	other := pf.Panels[1].(*FileSystemPanel)
 
 	if pf.GetActivePanelVFS() != fsp.Vfs || pf.GetPassivePanelVFS() != other.Vfs {
 		t.Fatal("panel VFS helpers returned the wrong side")

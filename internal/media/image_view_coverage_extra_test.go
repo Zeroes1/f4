@@ -12,8 +12,8 @@ func TestImageViewSmallHelpersCoverage(t *testing.T) {
 		t.Fatalf("nil GalleryState = %v, %d, %q", gal, cursor, Path)
 	}
 
-	iv := NewGalleryView("second.png", []string{"first.png", "second.png"}, 1, 3)
-	if gal, cursor, Path := iv.GalleryState(); gal != iv.Gal || cursor != 3 || Path != "second.png" {
+	iv := NewGalleryView("second.png", []string{"first.png", "second.png"}, 1, 1)
+	if gal, cursor, Path := iv.GalleryState(); gal != iv.Gal || cursor != 1 || Path != "second.png" {
 		t.Fatalf("GalleryState = %p, %d, %q", gal, cursor, Path)
 	}
 	if iv.barHeight() != 1 {
