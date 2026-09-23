@@ -347,6 +347,17 @@ func Main() {
 		}
 		return
 	}
+	if backupPath, found, err := update.ParseRestoreHelperArgs(os.Args[1:]); found {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		if err := update.RunRestoreHelper(backupPath); err != nil {
+			fmt.Fprintf(os.Stderr, "f4 restore helper failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	installConsoleCtrlHandler()
 	var sudoDispatcher string
 

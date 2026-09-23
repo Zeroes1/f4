@@ -21,6 +21,23 @@ func TestUpdater_ParseUpdateHelperArgs(t *testing.T) {
 	}
 }
 
+func TestUpdater_ParseRestoreHelperArgs(t *testing.T) {
+	backup, found, err := ParseRestoreHelperArgs([]string{RestoreHelperFlag, `C:\Users\Test User\f4-update-backup`})
+	if err != nil || !found {
+		t.Fatalf("ParseRestoreHelperArgs() failed: found=%v err=%v", found, err)
+	}
+	if backup != `C:\Users\Test User\f4-update-backup` {
+		t.Fatalf("ParseRestoreHelperArgs() = %q; want backup path", backup)
+	}
+
+	if _, found, err := ParseRestoreHelperArgs([]string{RestoreHelperFlag}); !found || err == nil {
+		t.Fatalf("malformed restore helper invocation: found=%v err=%v", found, err)
+	}
+	if _, found, err := ParseRestoreHelperArgs([]string{"--gui=win32"}); found || err != nil {
+		t.Fatalf("normal invocation parsed as restore helper: found=%v err=%v", found, err)
+	}
+}
+
 func TestUpdater_ManualBuildVersionUsesBuildTimestamp(t *testing.T) {
 	manual := Build{Version: "manual-build-sha", TimeText: "2026-08-21T12:00:00Z"}
 
