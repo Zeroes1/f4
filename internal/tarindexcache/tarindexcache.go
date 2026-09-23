@@ -82,28 +82,15 @@ func Cleanup() {
 			continue
 		}
 		prefix := strings.TrimSuffix(name, pathMarkerSuffix)
-		for _, file := range osReadDirFiles(dir, prefix) {
-			_ = os.Remove(file)
+		for _, cacheEntry := range entries {
+			cacheName := cacheEntry.Name()
+			if cacheEntry.IsDir() || !belongs(cacheName, prefix) {
+				continue
+			}
+			_ = os.Remove(filepath.Join(dir, cacheName))
 		}
 		_ = os.Remove(marker)
 	}
-}
-
-func osReadDirFiles(dir, prefix string) []string {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	var files []string
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
-			continue
-		}
-		if belongs(e.Name(), prefix) {
-			files = append(files, filepath.Join(dir, e.Name()))
-		}
-	}
-	return files
 }
 
 // belongs reports whether a cache file name is one of prefix's: the prefix must
