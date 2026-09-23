@@ -81,6 +81,8 @@ Panel.Folder=Folder
 Panel.Symlink=Symlink
 Panel.Junction=Junction
 Panel.SelectedInfo=Bytes: %s, files: %d, folders: %d
+Panel.Base64.Title=File Base64
+Panel.Base64.Created=Created: %s
 
 Panels.Prompt=>
 
@@ -561,8 +563,6 @@ Editor.GotoOffsetPrompt=Byte offset:
 Editor.GotoInvalid=Line and position must be positive numbers.
 Editor.Plugins.Title=Plugins
 Editor.Base64.NoSelection=Select text first.
-Panel.Base64.Title=File Base64
-Panel.Base64.Created=Created: %s
 Editor.Sort.Title=Sort lines
 Editor.Sort.Direction=Direction:
 Editor.Sort.Ascending=&Ascending

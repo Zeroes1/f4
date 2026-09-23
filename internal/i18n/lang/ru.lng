@@ -81,6 +81,8 @@ Panel.Folder=Папка
 Panel.Symlink=Ссылка
 Panel.Junction=Связь
 Panel.SelectedInfo=Байт: %s, файлов: %d, папок: %d
+Panel.Base64.Title=Base64-файл
+Panel.Base64.Created=Создано: %s
 
 Panels.Prompt=>
 
@@ -561,8 +563,6 @@ Editor.GotoOffsetPrompt=Смещение в байтах:
 Editor.GotoInvalid=Строка и позиция должны быть положительными числами.
 Editor.Plugins.Title= Плагины
 Editor.Base64.NoSelection=Сначала выделите текст.
-Panel.Base64.Title=Base64-файл
-Panel.Base64.Created=Создано: %s
 Editor.Sort.Title= Сортировка строк
 Editor.Sort.Direction=Направление:
 Editor.Sort.Ascending=По &возрастанию
