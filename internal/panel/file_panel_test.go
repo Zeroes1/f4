@@ -3226,6 +3226,29 @@ func TestFileSystemPanel_MaskSelection(t *testing.T) {
 	}
 }
 
+func TestFileSystemPanel_TempPanelMaskSelectionUsesBasename(t *testing.T) {
+	fp := &FileSystemPanel{
+		Vfs:   new(TempPanelVFS),
+		Table: vtui.NewTable(0, 0, 10, 10, nil),
+		Entries: []*FileEntry{
+			{VFSItem: vfs.VFSItem{Name: ".."}},
+			{VFSItem: vfs.VFSItem{Name: "/home/user/notes/readme.txt"}},
+			{VFSItem: vfs.VFSItem{Name: `C:\\work\\source.go`}},
+			{VFSItem: vfs.VFSItem{Name: "/home/user/notes/image.png"}},
+		},
+	}
+
+	fp.ApplyMaskSelection("*.txt", true)
+	if !fp.Entries[1].Selected || fp.Entries[2].Selected || fp.Entries[3].Selected {
+		t.Fatalf("Temp Panel mask selection selected wrong entries: %+v", fp.Entries)
+	}
+
+	fp.ApplyMaskSelection("*.txt", false)
+	if fp.Entries[1].Selected {
+		t.Fatal("Temp Panel mask deselection did not clear the matching file")
+	}
+}
+
 func TestFileSystemPanel_TitleDoesNotContainSortIndicator(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	v := vfs.NewOSVFS(t.TempDir())
