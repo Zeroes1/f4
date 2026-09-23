@@ -167,6 +167,9 @@ func TestTransformSelectedFileRoundTripsSelectedFile(t *testing.T) {
 	if err != nil || string(encodedData) != base64.StdEncoding.EncodeToString([]byte("hello base64")) {
 		t.Fatalf("encoded file = %q, %v", encodedData, err)
 	}
+	if err := os.Remove(filepath.Join(root, "sample.txt")); err != nil {
+		t.Fatal(err)
+	}
 	pf.GetActivePanel().Entries[0].Name = filepath.Base(encoded)
 	decoded, err := TransformSelectedFileBase64(pf, false)
 	if err != nil {
