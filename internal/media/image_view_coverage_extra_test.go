@@ -36,9 +36,9 @@ func TestImageViewSmallHelpersCoverage(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct {
-		rotation   int
+		rotation     int
 		flipH, flipV bool
-		want       string
+		want         string
 	}{
 		{0, false, false, ""},
 		{90, false, false, "90°"},
