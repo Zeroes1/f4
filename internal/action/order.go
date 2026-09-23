@@ -61,6 +61,8 @@ var actionMenuOrder = []string{
 	"Panel.ToggleCommandLineFocus",
 	"Panel.UserMenu",
 	"Panel.FileAssociations",
+	"Panel.Base64EncodeFile",
+	"Panel.Base64DecodeFile",
 	"File.Find",
 	"File.FindDuplicates",
 	"Panel.CompareFolders",
