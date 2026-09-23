@@ -248,6 +248,15 @@ type PanelsFrame struct {
 	CmdLine *cmdline.CommandLine
 	KeyBar  *vtui.KeyBar
 
+	// consoleOverlay* mirror the modifier state that vtui's KeyBar normally
+	// keeps while the Far-style console overlay owns the physical keybar row.
+	// The overlay unregisters FrameManager.KeyBar before drawing, so it must
+	// retain this state itself (notably for standalone modifier events from
+	// terminal hosts such as Konsole).
+	consoleOverlayShift bool
+	consoleOverlayCtrl  bool
+	consoleOverlayAlt   bool
+
 	ShowKeyBar     bool
 	ShowPanels     bool
 	ShowLeftPanel  bool
@@ -2197,6 +2206,7 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 }
 
 func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
+	pf.updateConsoleOverlayModifiers(e)
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0

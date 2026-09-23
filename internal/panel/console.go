@@ -75,6 +75,56 @@ func (pf *PanelsFrame) OverlayLines() int {
 	return n
 }
 
+// updateConsoleOverlayModifiers keeps the manually rendered keybar in sync
+// with keyboard events after DrawConsoleOverlay unregisters FrameManager.KeyBar.
+// Some terminal hosts report the modifier bit one event late (or omit it on a
+// standalone modifier event), so the modifier key's own VK and KeyDown state
+// take precedence over ControlKeyState.
+func (pf *PanelsFrame) updateConsoleOverlayModifiers(e *vtinput.InputEvent) {
+	if e == nil {
+		return
+	}
+	if e.Type == vtinput.FocusEventType {
+		pf.consoleOverlayShift = false
+		pf.consoleOverlayCtrl = false
+		pf.consoleOverlayAlt = false
+		return
+	}
+	if e.Type != vtinput.KeyEventType {
+		return
+	}
+
+	pf.consoleOverlayShift = e.ControlKeyState&vtinput.ShiftPressed != 0
+	pf.consoleOverlayCtrl = e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
+	pf.consoleOverlayAlt = e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
+	switch e.VirtualKeyCode {
+	case vtinput.VK_SHIFT, vtinput.VK_LSHIFT, vtinput.VK_RSHIFT:
+		pf.consoleOverlayShift = e.KeyDown
+	case vtinput.VK_CONTROL, vtinput.VK_LCONTROL, vtinput.VK_RCONTROL:
+		pf.consoleOverlayCtrl = e.KeyDown
+	case vtinput.VK_MENU, vtinput.VK_LMENU, vtinput.VK_RMENU:
+		pf.consoleOverlayAlt = e.KeyDown
+	}
+}
+
+// consoleOverlayLabels selects the same precedence as vtui.KeyBar: Shift,
+// then Ctrl, then Alt, then the unmodified row.
+func consoleOverlayLabels(labels *vtui.KeySet, shift, ctrl, alt bool) vtui.KeyBarLabels {
+	if labels == nil {
+		return vtui.KeyBarLabels{}
+	}
+	if shift {
+		return labels.Shift
+	}
+	if ctrl {
+		return labels.Ctrl
+	}
+	if alt {
+		return labels.Alt
+	}
+	return labels.Normal
+}
+
 // overlayKeybarSlots lays the keybar out exactly the way vtui.KeyBar does, so
 // the console overlay and the panel keybar agree on slot width and label
 // truncation. The overlay used to hardcode five columns per label, which is why
@@ -138,7 +188,8 @@ func (pf *PanelsFrame) buildConsoleOverlayContent() terminal.ConsoleOverlayConte
 
 	if pf.ShowKeyBar && ov.Lines >= 2 {
 		if labels := pf.GetKeyLabels(); labels != nil {
-			ov.Keys = OverlayKeybarSlots(labels.Normal, pf.LastW)
+			active := consoleOverlayLabels(labels, pf.consoleOverlayShift, pf.consoleOverlayCtrl, pf.consoleOverlayAlt)
+			ov.Keys = OverlayKeybarSlots(active, pf.LastW)
 		}
 	}
 
