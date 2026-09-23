@@ -19,6 +19,7 @@ func TestPanelsFrameConvenienceHelpersCoverage(t *testing.T) {
 		},
 	}
 	fsp.Table.Columns = []vtui.TableColumn{{Title: "Name", Width: 20}}
+	fsp.CursorIdx = 1
 	other := &FileSystemPanel{Vfs: vfs.NewNullVFS(0)}
 	pf := &PanelsFrame{Panels: [2]Panel{fsp, other}, ActiveIdx: 0}
 
