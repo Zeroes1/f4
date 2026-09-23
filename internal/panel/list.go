@@ -569,6 +569,12 @@ type FileSystemPanel struct {
 	// (selection is per-directory, matches far/far2l).
 	lastLoadedPath string
 
+	// calculatedPanelTotal is the recursive total requested for the current
+	// directory by pressing F3 on its ".." row.  Keep it on the panel rather
+	// than on one particular VFS so every file panel can display the result.
+	calculatedPanelTotal     *vfs.OpStats
+	calculatedPanelTotalPath string
+
 	// shiftSessionActive / shiftSessionMode implement FAR-style
 	// Shift+nav selection. The mode (select vs deselect) is
 	// decided on the first Shift+nav from the state of the row
@@ -2238,6 +2244,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 		}
 		fp.DirectoryEpoch++
 		fp.selectionEpoch = make(map[string]uint64)
+		fp.clearCalculatedPanelTotal()
 	}
 	fp.lastLoadedPath = path
 	if directoryChanged && !suppressFolderHistory && ShouldRecordFolderHistory(fp, path) {
@@ -2711,6 +2718,38 @@ func (fp *FileSystemPanel) Refresh() {
 	}
 }
 
+// SetCalculatedPanelTotal stores a recursive total for the panel's current
+// directory. The path tag prevents a result from being shown after a VFS has
+// moved elsewhere before the asynchronous scan completes.
+func (fp *FileSystemPanel) SetCalculatedPanelTotal(stats vfs.OpStats) {
+	if fp == nil || fp.Vfs == nil {
+		return
+	}
+	statsCopy := stats
+	fp.calculatedPanelTotal = &statsCopy
+	fp.calculatedPanelTotalPath = fp.Vfs.GetPath()
+}
+
+func (fp *FileSystemPanel) clearCalculatedPanelTotal() {
+	if fp == nil {
+		return
+	}
+	fp.calculatedPanelTotal = nil
+	fp.calculatedPanelTotalPath = ""
+}
+
+// CalculatedPanelTotal returns the recursive total if it still belongs to the
+// directory currently displayed by the panel.
+func (fp *FileSystemPanel) CalculatedPanelTotal() (vfs.OpStats, bool) {
+	if fp == nil || fp.Vfs == nil || fp.calculatedPanelTotal == nil {
+		return vfs.OpStats{}, false
+	}
+	if fp.calculatedPanelTotalPath != fp.Vfs.GetPath() {
+		return vfs.OpStats{}, false
+	}
+	return *fp.calculatedPanelTotal, true
+}
+
 func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	fp.Frame.Show(scr)
 	titleAttr := vtui.Palette[theme.ColPanelTitle]
@@ -2752,15 +2791,19 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	var totCount int
 	var totFiles int
 	var totDirs int
-	if provider, ok := fp.Vfs.(interface{ CalculatedPanelTotal() (vfs.OpStats, bool) }); ok && fp.Vfs.IsAtRoot() {
-		if stats, hasTotal := provider.CalculatedPanelTotal(); hasTotal {
-			totSize = stats.Bytes
-			totFiles = int(stats.Files)
-			totDirs = int(stats.Dirs)
-			totCount = totFiles + totDirs
+	calculatedTotal, hasCalculatedTotal := fp.CalculatedPanelTotal()
+	if !hasCalculatedTotal {
+		if provider, ok := fp.Vfs.(interface{ CalculatedPanelTotal() (vfs.OpStats, bool) }); ok && fp.Vfs.IsAtRoot() {
+			calculatedTotal, hasCalculatedTotal = provider.CalculatedPanelTotal()
 		}
 	}
-	if totCount == 0 {
+	if hasCalculatedTotal {
+		totSize = calculatedTotal.Bytes
+		totFiles = int(calculatedTotal.Files)
+		totDirs = int(calculatedTotal.Dirs)
+		totCount = totFiles + totDirs
+	}
+	if !hasCalculatedTotal {
 		for _, e := range fp.Entries {
 			if e.Name == ".." {
 				continue
@@ -2801,6 +2844,9 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 
 			dateStr := e.MTime.Format("02.01.06 15:04")
 			sizeStr := entrySizeText(e)
+			if e.Name == ".." && hasCalculatedTotal {
+				sizeStr = fileops.FormatIntWithSpaces(calculatedTotal.Bytes)
+			}
 
 			nameStr := e.Name
 			if e.IsSymlink && fp.Vfs != nil {
@@ -2911,6 +2957,9 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 		if idx := fp.GetCursorIndex(); idx >= 0 && idx < len(fp.Entries) {
 			e := fp.Entries[idx]
 			curStr := entrySizeText(e)
+			if e.Name == ".." && hasCalculatedTotal {
+				curStr = fileops.FormatIntWithSpaces(calculatedTotal.Bytes)
+			}
 			if e.IsSymlink && fp.Vfs != nil {
 				if target, err := vfs.Readlink(context.Background(), fp.Vfs, fp.Vfs.Join(fp.Vfs.GetPath(), e.Name)); err == nil && target != "" {
 					curStr = "→ " + target
