@@ -76,13 +76,12 @@ func TestPlayerVetoesFilePanelHotkeysBeforeGlobalActions(t *testing.T) {
 		}
 	}
 
-	for _, state := range []uint32{vtinput.LeftCtrlPressed, vtinput.LeftAltPressed} {
-		e := &vtinput.InputEvent{
-			Type: vtinput.KeyEventType, KeyDown: true,
-			VirtualKeyCode: vtinput.VK_F4, ControlKeyState: state,
-		}
+	for _, e := range []*vtinput.InputEvent{
+		{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F4, ControlKeyState: vtinput.LeftCtrlPressed},
+		{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F4, ControlKeyState: vtinput.LeftAltPressed},
+	} {
 		if p.VetoActionKey(e) {
-			t.Errorf("VetoActionKey(%d) = true with modifier 0x%x, want false", e.VirtualKeyCode, state)
+			t.Errorf("VetoActionKey(%d) = true with modifier 0x%x, want false", e.VirtualKeyCode, e.ControlKeyState)
 		}
 	}
 }
