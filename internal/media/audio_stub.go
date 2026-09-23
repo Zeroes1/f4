@@ -19,6 +19,7 @@ func (a *AudioEngine) Play()                   {}
 func (a *AudioEngine) Pause()                  {}
 func (a *AudioEngine) TogglePause() bool       { return false }
 func (a *AudioEngine) Stop()                   {}
+func (a *AudioEngine) Seek(time.Duration) bool { return false }
 func (a *AudioEngine) IsPlaying() bool         { return false }
 func (a *AudioEngine) IsLoaded() bool          { return false }
 func (a *AudioEngine) Finished() bool          { return false }

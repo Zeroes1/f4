@@ -150,6 +150,10 @@ func (a *AudioEngine) observePlaybackLocked() {
 func (a *AudioEngine) Load(Path string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	return a.loadLocked(Path)
+}
+
+func (a *AudioEngine) loadLocked(Path string) error {
 	vtui.DebugLog("AUDIO: load requested Path=%q", Path)
 	a.unloadLocked()
 
@@ -192,6 +196,44 @@ func (a *AudioEngine) Load(Path string) error {
 	a.loaded = true
 	vtui.DebugLog("AUDIO: track prepared Path=%q duration=%s bitrate_kbps=%d source_rate=%d output_rate=%d mono=%v buffered=%d", Path, a.duration, a.info.BitrateKbps, srcRate, a.ctxRate, a.info.Mono, a.player.BufferedSize())
 	return nil
+}
+
+// Seek moves the current track by delta and keeps its playing/paused state.
+// Decoders expose a common PCM stream rather than a common seek interface,
+// so the engine reloads the source and discards decoded PCM up to the target.
+// This is deliberately format-independent: native FLAC/MP3/WAV and ffmpeg
+// backed AMR use exactly the same path.
+func (a *AudioEngine) Seek(delta time.Duration) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.checkErrorsLocked()
+	if a.player == nil || !a.loaded || a.Path == "" {
+		return false
+	}
+
+	path := a.Path
+	wasPlaying := a.player.IsPlaying()
+	target := a.PositionLocked() + delta
+	if target < 0 {
+		target = 0
+	}
+	if a.duration > 0 && target > a.duration {
+		target = a.duration
+	}
+	if err := a.loadLocked(path); err != nil {
+		vtui.DebugLog("AUDIO: seek reload failed Path=%q: %v", path, err)
+		return false
+	}
+
+	bytes := int64(float64(target) / float64(time.Second) * float64(a.ctxRate*AudioBytesPerFrame))
+	if bytes > 0 {
+		_, _ = io.CopyN(io.Discard, a.tap, bytes)
+	}
+	if wasPlaying {
+		a.player.Play()
+	}
+	vtui.DebugLog("AUDIO: seek requested Path=%q delta=%s target=%s playing=%v", path, delta, target, wasPlaying)
+	return true
 }
 
 func (a *AudioEngine) unloadLocked() {
