@@ -3228,7 +3228,7 @@ func TestFileSystemPanel_MaskSelection(t *testing.T) {
 
 func TestFileSystemPanel_TempPanelMaskSelectionUsesBasename(t *testing.T) {
 	fp := &FileSystemPanel{
-		Vfs: new(TempPanelVFS),
+		Vfs:   new(TempPanelVFS),
 		Table: vtui.NewTable(0, 0, 10, 10, nil),
 		Entries: []*FileEntry{
 			{VFSItem: vfs.VFSItem{Name: ".."}},
