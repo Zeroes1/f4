@@ -41,7 +41,7 @@ func ParseRestoreHelperArgs(args []string) (backupPath string, found bool, err e
 		if arg != RestoreHelperFlag {
 			continue
 		}
-		if len(args) != i+2 {
+		if i+1 >= len(args) || len(args) != i+2 {
 			return "", true, fmt.Errorf("%s requires backup path", RestoreHelperFlag)
 		}
 		backupPath = strings.TrimSpace(args[i+1])

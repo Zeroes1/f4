@@ -89,7 +89,7 @@ func runElevated(data []byte, archiveKind string) error {
 	return runElevatedCommand([]string{HelperFlag, tmpPath, archiveKind})
 }
 
-func restoreExecutableElevated(backup string) error {
+var restoreExecutableElevated = func(backup string) error {
 	return runElevatedCommand([]string{RestoreHelperFlag, backup})
 }
 

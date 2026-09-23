@@ -192,7 +192,7 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 
 		backupPath, err = update.BackupExecutable()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to back up executable: %w\n(Close other f4 instances, check Task Manager for ghost f4 processes, or try running as admin/root)", err)
 		}
 
 		if err := update.Install(data, cand.ArchiveKind); err != nil {
