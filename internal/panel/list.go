@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -4115,7 +4116,14 @@ func (fp *FileSystemPanel) ApplyMaskSelection(mask string, state bool) {
 		if e.Name == ".." {
 			continue
 		}
-		nameLower := strings.ToLower(e.Name)
+		matchName := e.Name
+		if _, ok := fp.Vfs.(*TempPanelVFS); ok {
+			// Temp Panel displays the referenced full path.  Far's file-mask
+			// selection still applies to the item name, so a mask such as
+			// "*.txt" must match the basename rather than the path separators.
+			matchName = path.Base(strings.ReplaceAll(matchName, "\\", "/"))
+		}
+		nameLower := strings.ToLower(matchName)
 		matched, _ := filepath.Match(maskLower, nameLower)
 		if matched {
 			fp.SetItemSelected(i, state)
