@@ -2590,10 +2590,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 				if fsp := pf.GetActivePanel(); fsp != nil {
 					if key == 'j' {
 						fsp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN})
+						pf.autoplayPlayerForPanel(fsp, &vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN})
 						return true
 					}
 					if key == 'k' {
 						fsp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_UP})
+						pf.autoplayPlayerForPanel(fsp, &vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_UP})
 						return true
 					}
 				}
@@ -3023,6 +3025,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// 3. Try Active Panel
 	if pf.ShowPanels && (!pf.SearchFirstMode() || !pf.CommandLineFocused) {
 		if pf.Active().ProcessKey(e) {
+			pf.autoplayPlayerForPanel(pf.GetActivePanel(), e)
 			return true
 		}
 	} else {
@@ -3551,6 +3554,46 @@ func (pf *PanelsFrame) GetInactivePanel() *FileSystemPanel {
 		return fsp
 	}
 	return nil
+}
+
+// autoplayPlayerForPanel follows a file-panel cursor in the player opened
+// for that panel. The player is an alternate view in the opposite slot, so
+// normal Up/Down navigation still belongs to the file panel underneath it.
+func (pf *PanelsFrame) autoplayPlayerForPanel(fsp *FileSystemPanel, e *vtinput.InputEvent) {
+	if fsp == nil || e == nil || !e.KeyDown || e.ControlKeyState != 0 {
+		return
+	}
+	switch e.VirtualKeyCode {
+	case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT:
+	default:
+		return
+	}
+	osv, ok := fsp.Vfs.(*vfs.OSVFS)
+	if !ok {
+		return
+	}
+	names, pos := fsp.AudioSiblings()
+	if pos < 0 {
+		return
+	}
+	dir := fsp.Vfs.GetPath()
+	files := make([]string, 0, len(names))
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		if abs, err := osv.Abs(path); err == nil {
+			path = abs
+		}
+		files = append(files, path)
+	}
+	for _, alt := range pf.AltPanels {
+		player, ok := alt.(*PlayerPanel)
+		if !ok || player.Source() != fsp {
+			continue
+		}
+		if player.AutoPlayFile(files, pos) && vtui.FrameManager != nil {
+			vtui.FrameManager.Redraw()
+		}
+	}
 }
 
 // cancelFastFind closes the transient search UI whenever control leaves the
