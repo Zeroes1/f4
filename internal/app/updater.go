@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/unxed/f4/internal/panel"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/update"
 	"github.com/unxed/vtui"
 )
@@ -146,6 +148,28 @@ func reportUpdateError(manual bool, msg string) {
 	}
 }
 
+func restartCommand(executable string, args []string, workingDir string) *exec.Cmd {
+	cmd := update.SelfCommand(executable, args...)
+	cmd.Dir = workingDir
+	return cmd
+}
+
+func startUpdatedF4() error {
+	executable, err := update.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot locate the updated f4 executable: %w", err)
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot preserve the working directory: %w", err)
+	}
+	cmd := restartCommand(executable, os.Args[1:], workingDir)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("cannot restart the updated f4: %w", err)
+	}
+	return nil
+}
+
 func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 	if pf == nil {
 		return
@@ -180,9 +204,13 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 		config.App.LastUpdateVersion = cand.UpdateKey
 		config.SaveConfig()
 
-		dlg := vtui.ShowMessage(" Update Successful ", "f4 has been updated successfully.\nPlease restart the application to apply changes.", []string{"E&xit now", "&Later"})
+		dlg := vtui.ShowMessage(" Update Successful ", "f4 has been updated successfully.\nRestart the application now to apply changes?", []string{"&Restart now", "&Later"})
 		dlg.OnResult = func(code int) {
 			if code == 0 {
+				if err := startUpdatedF4(); err != nil {
+					vtui.ShowMessage(" Update Failed ", err.Error(), []string{"&Ok"})
+					return
+				}
 				panel.CancelOperationsForShutdown()
 				vtui.FrameManager.Shutdown()
 			}

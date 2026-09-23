@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,20 @@ func TestUpdater_ShouldCheck(t *testing.T) {
 	config.App.LastUpdateCheck = now - 8*24*3600
 	if !shouldCheck() {
 		t.Error("Should check weekly if > 7 days passed")
+	}
+}
+
+func TestRestartCommandPreservesArgumentsAndWorkingDirectory(t *testing.T) {
+	cmd := restartCommand("/tmp/f4", []string{"--gui", "wayland", "/tmp/work file"}, "/tmp/work dir")
+
+	if got, want := cmd.Path, "/tmp/f4"; got != want {
+		t.Fatalf("restart command path = %q, want %q", got, want)
+	}
+	if got, want := cmd.Args, []string{"/tmp/f4", "--gui", "wayland", "/tmp/work file"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("restart command args = %q, want %q", got, want)
+	}
+	if got, want := cmd.Dir, "/tmp/work dir"; got != want {
+		t.Fatalf("restart command directory = %q, want %q", got, want)
 	}
 }
 
