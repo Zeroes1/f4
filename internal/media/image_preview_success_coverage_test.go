@@ -29,11 +29,11 @@ func makeExifPreviewJPEG(t *testing.T) []byte {
 	binary.LittleEndian.PutUint16(tiff[16:18], 0x0201)
 	binary.LittleEndian.PutUint32(tiff[24:28], 48)
 	binary.LittleEndian.PutUint16(tiff[28:30], 0x0202)
-	binary.LittleEndian.PutUint32(tiff[36:40], uint32(len(thumbnail)))
+	binary.LittleEndian.PutUint32(tiff[36:40], uint32(len(thumbnail))) //nolint:gosec // the encoded test thumbnail is bounded by the test buffer
 	copy(tiff[48:], thumbnail)
 
 	segmentLength := 2 + 6 + len(tiff)
-	data := []byte{0xff, 0xd8, 0xff, 0xe1, byte(segmentLength >> 8), byte(segmentLength)}
+	data := []byte{0xff, 0xd8, 0xff, 0xe1, byte(segmentLength >> 8), byte(segmentLength)} //nolint:gosec // JPEG segment length is bounded by the test fixture
 	data = append(data, []byte{'E', 'x', 'i', 'f', 0, 0}...)
 	return append(data, tiff...)
 }
