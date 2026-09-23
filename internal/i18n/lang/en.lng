@@ -81,6 +81,8 @@ Panel.Folder=Folder
 Panel.Symlink=Symlink
 Panel.Junction=Junction
 Panel.SelectedInfo=Bytes: %s, files: %d, folders: %d
+Panel.Base64.Title=File Base64
+Panel.Base64.Created=Created: %s
 
 Panels.Prompt=>
 
@@ -386,6 +388,10 @@ Action.Panel.UserMenu=&User menu
 Action.Panel.UserMenu.Desc=Show the user menu
 Action.Panel.FileAssociations=File &associations…
 Action.Panel.FileAssociations.Desc=Configure per-mask commands for Enter, F3 and F4
+Action.Panel.Base64EncodeFile=Encode selected file as &Base64
+Action.Panel.Base64EncodeFile.Desc=Create a Base64 copy of the selected file
+Action.Panel.Base64DecodeFile=Decode selected Base64 file
+Action.Panel.Base64DecodeFile.Desc=Create a decoded copy of the selected Base64 file
 Action.Panel.Bookmarks.Desc=Show folder bookmarks dialog
 Action.Panel.CompareFolders.Desc=Compare the two panels and mark what differs
 Action.Panel.SyncDirs.Desc=Compare the two panels and copy or delete what differs

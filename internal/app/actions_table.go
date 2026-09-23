@@ -834,6 +834,38 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { panel.ShowFileAssociations(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.Base64EncodeFile",
+		Area:        "Shell",
+		Label:       "Encode selected file as Base64",
+		LabelKey:    "Action.Panel.Base64EncodeFile",
+		Description: "Create a Base64 copy of the selected file",
+		DescKey:     "Action.Panel.Base64EncodeFile.Desc",
+		MenuPath:    "Commands",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if path, err := panel.TransformSelectedFileBase64(pf, true); err != nil {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+			} else {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), fmt.Sprintf(i18n.Msg("Panel.Base64.Created"), path), []string{i18n.Msg("vtui.Ok")})
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Base64DecodeFile",
+		Area:        "Shell",
+		Label:       "Decode selected Base64 file",
+		LabelKey:    "Action.Panel.Base64DecodeFile",
+		Description: "Create a decoded copy of the selected Base64 file",
+		DescKey:     "Action.Panel.Base64DecodeFile.Desc",
+		MenuPath:    "Commands",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if path, err := panel.TransformSelectedFileBase64(pf, false); err != nil {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+			} else {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), fmt.Sprintf(i18n.Msg("Panel.Base64.Created"), path), []string{i18n.Msg("vtui.Ok")})
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:                "File.Find",
 		Area:                "Shell",
 		Label:               "Find File",

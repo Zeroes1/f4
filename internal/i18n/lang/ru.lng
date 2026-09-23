@@ -81,6 +81,8 @@ Panel.Folder=Папка
 Panel.Symlink=Ссылка
 Panel.Junction=Связь
 Panel.SelectedInfo=Байт: %s, файлов: %d, папок: %d
+Panel.Base64.Title=Base64-файл
+Panel.Base64.Created=Создано: %s
 
 Panels.Prompt=>
 
@@ -386,6 +388,10 @@ Action.Panel.UserMenu=&Меню пользователя
 Action.Panel.UserMenu.Desc=Показать меню пользователя
 Action.Panel.FileAssociations=Файловые &ассоциации…
 Action.Panel.FileAssociations.Desc=Задать команды по маскам для Enter, F3 и F4
+Action.Panel.Base64EncodeFile=Кодировать выбранный файл в &Base64
+Action.Panel.Base64EncodeFile.Desc=Создать копию выбранного файла в Base64
+Action.Panel.Base64DecodeFile=Декодировать выбранный Base64-файл
+Action.Panel.Base64DecodeFile.Desc=Создать декодированную копию выбранного Base64-файла
 Action.Panel.Bookmarks.Desc=Показать диалог закладок на папки
 Action.Panel.CompareFolders.Desc=Сравнить панели и пометить различия
 Action.Panel.SyncDirs.Desc=Сравнить панели и скопировать или удалить различающееся
