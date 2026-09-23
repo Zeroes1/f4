@@ -13,6 +13,18 @@ func testFishPoolConn() *fishConn {
 	return &fishConn{client: fishplus.NewClient(sess)}
 }
 
+func testFishConnClosed(conn *fishConn) bool {
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	return conn.closed
+}
+
+func testFishPoolEntryCount(pool *fishPool) int {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	return len(pool.entries)
+}
+
 func TestFishPoolKeyValidity(t *testing.T) {
 	if (fishPoolKey{}).valid() {
 		t.Fatal("the zero pool key is valid")
@@ -46,7 +58,7 @@ func TestFishPoolParkAndTakeRetainsConnection(t *testing.T) {
 	if conn.refs != 1 {
 		t.Fatalf("refs after take = %d, want 1", conn.refs)
 	}
-	if len(p.entries) != 0 {
+	if testFishPoolEntryCount(p) != 0 {
 		t.Fatal("take left an entry in the pool")
 	}
 	if err := conn.shutdown(); err != nil {
@@ -64,7 +76,7 @@ func TestFishPoolTakeDiscardsBrokenConnection(t *testing.T) {
 	if got := p.take(key); got != nil {
 		t.Fatal("take returned a broken connection")
 	}
-	if !conn.closed {
+	if !testFishConnClosed(conn) {
 		t.Fatal("discarded broken connection was not shut down")
 	}
 }
@@ -77,7 +89,7 @@ func TestFishPoolParkReplacesOldEntry(t *testing.T) {
 	p.park(old, key)
 	p.park(newConn, key)
 
-	if !old.closed {
+	if !testFishConnClosed(old) {
 		t.Fatal("superseded connection was not shut down")
 	}
 	if got := p.take(key); got != newConn {
@@ -93,10 +105,10 @@ func TestFishPoolCloseAllClosesEveryEntry(t *testing.T) {
 	p.park(two, fishPoolKey{host: "two"})
 
 	p.closeAll()
-	if len(p.entries) != 0 {
+	if testFishPoolEntryCount(p) != 0 {
 		t.Fatal("closeAll left pool entries behind")
 	}
-	if !one.closed || !two.closed {
+	if !testFishConnClosed(one) || !testFishConnClosed(two) {
 		t.Fatal("closeAll did not shut down every connection")
 	}
 }
@@ -110,7 +122,7 @@ func TestFishPoolIdleTimerShutsDownEntry(t *testing.T) {
 	p.park(conn, fishPoolKey{host: "idle"})
 
 	deadline := time.After(2 * time.Second)
-	for !conn.closed {
+	for !testFishConnClosed(conn) {
 		select {
 		case <-deadline:
 			t.Fatal("idle timer did not shut down the connection")
@@ -118,7 +130,7 @@ func TestFishPoolIdleTimerShutsDownEntry(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	if len(p.entries) != 0 {
+	if testFishPoolEntryCount(p) != 0 {
 		t.Fatal("idle timer left an entry in the pool")
 	}
 }
@@ -129,7 +141,7 @@ func TestFishConnectionReleaseShutsUnpoolableSession(t *testing.T) {
 	if err := conn.release(); err != nil {
 		t.Fatalf("release: %v", err)
 	}
-	if !conn.closed {
+	if !testFishConnClosed(conn) {
 		t.Fatal("an unpoolable session was not shut down")
 	}
 }
@@ -146,7 +158,7 @@ func TestFishConnectionReleaseParksPoolableSession(t *testing.T) {
 	if err := conn.release(); err != nil {
 		t.Fatalf("release: %v", err)
 	}
-	if conn.closed {
+	if testFishConnClosed(conn) {
 		t.Fatal("a poolable session was shut down instead of parked")
 	}
 	if got := globalFishPool.take(conn.key); got != conn {
@@ -163,7 +175,7 @@ func TestFishConnectionShutdownIsIdempotent(t *testing.T) {
 	if err := conn.shutdown(); err != nil {
 		t.Fatalf("second shutdown: %v", err)
 	}
-	if !conn.closed {
+	if !testFishConnClosed(conn) {
 		t.Fatal("shutdown did not mark the connection closed")
 	}
 }
