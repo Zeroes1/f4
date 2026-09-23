@@ -108,7 +108,7 @@ func TestSettingsProviderRejectsExternalIgnoredVariableChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft.Values["envman.IgnoredVariables"] = "NEW"
-	config.AlwaysUseEditor = true
+	config.IgnoredVariables = []string{"OUTSIDE"}
 	if err := store.Save(config); err != nil {
 		t.Fatal(err)
 	}
@@ -186,4 +186,3 @@ func TestSettingsProviderCommitSavesAndApplies(t *testing.T) {
 		t.Fatal("commit did not persist editor preference")
 	}
 }
-
