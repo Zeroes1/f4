@@ -59,11 +59,11 @@ func TestHostDefaultAISetViewMode(t *testing.T) {
 	old := AISetViewMode
 	t.Cleanup(func() { AISetViewMode = old })
 	called := false
-	AISetViewMode = func(fsp *FileSystemPanel, path string, isChat bool) {
-		called = fsp == nil && path == "context" && isChat
+	var panel FileSystemPanel
+	AISetViewMode = func(got *FileSystemPanel, path string, isChat bool) {
+		called = got == &panel && path == "context" && isChat
 	}
-	var fsp FileSystemPanel
-	fsp.AiSetViewMode("context", true)
+	panel.AiSetViewMode("context", true)
 	if !called {
 		t.Fatal("AiSetViewMode was not forwarded")
 	}
