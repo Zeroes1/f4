@@ -174,6 +174,8 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 	if pf == nil {
 		return
 	}
+	previousLastVersion := config.App.LastUpdateVersion
+	backupPath := ""
 	pf.RunProgressTask(" Updating f4 ", "Downloading...", false, func(ctx context.Context, updateProgress func(msg string, percent int)) error {
 		if _, err := update.TargetDir(); err != nil {
 			return err
@@ -188,6 +190,11 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 
 		updateProgress("Extracting and installing...", -1)
 
+		backupPath, err = update.BackupExecutable()
+		if err != nil {
+			return fmt.Errorf("failed to back up executable: %w\n(Close other f4 instances, check Task Manager for ghost f4 processes, or try running as admin/root)", err)
+		}
+
 		if err := update.Install(data, cand.ArchiveKind); err != nil {
 			return fmt.Errorf("failed to extract/install update: %w\n(Close other f4 instances, check Task Manager for ghost f4 processes, or try running as admin/root)", err)
 		}
@@ -195,6 +202,12 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 		return nil
 	}, func(err error) {
 		if err != nil {
+			if backupPath != "" {
+				if restoreErr := update.RestoreExecutable(backupPath); restoreErr != nil {
+					err = fmt.Errorf("%v; rollback failed: %w", err, restoreErr)
+				}
+				backupPath = ""
+			}
 			if err != context.Canceled {
 				vtui.ShowMessage(" Update Failed ", err.Error(), []string{"&Ok"})
 			}
@@ -208,11 +221,23 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 		dlg.OnResult = func(code int) {
 			if code == 0 {
 				if err := startUpdatedF4(); err != nil {
+					if restoreErr := update.RestoreExecutable(backupPath); restoreErr != nil {
+						err = fmt.Errorf("%v; rollback failed: %w", err, restoreErr)
+					}
+					config.App.LastUpdateVersion = previousLastVersion
+					config.SaveConfig()
+					backupPath = ""
 					vtui.ShowMessage(" Update Failed ", err.Error(), []string{"&Ok"})
 					return
 				}
+				if err := update.RemoveExecutableBackup(backupPath); err != nil {
+					vtui.DebugLog("UPDATER: %v", err)
+				}
+				backupPath = ""
 				panel.CancelOperationsForShutdown()
 				vtui.FrameManager.Shutdown()
+			} else if err := update.RemoveExecutableBackup(backupPath); err != nil {
+				vtui.DebugLog("UPDATER: %v", err)
 			}
 		}
 	})
