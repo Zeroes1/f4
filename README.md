@@ -1,6 +1,6 @@
 # f4 — efficient and cozy file manager in go
 
-[![codecov](https://codecov.io/gh/unxed/f4/branch/main/graph/badge.svg)](https://codecov.io/gh/unxed/f4)
+[![codecov](https://codecov.io/gh/unxed/f4/branch/main/graph/badge.svg)](https://app.codecov.io/gh/unxed/f4)
 
 ![](https://raw.githubusercontent.com/unxed/f4/refs/heads/main/.github/assets/screenshot.png)
 ### ⚡ Quick Download (Nightly Builds)
