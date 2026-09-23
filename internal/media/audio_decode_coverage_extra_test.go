@@ -27,6 +27,7 @@ func TestDecodeWAVCoverageRejectsBrokenHeadersAndFormats(t *testing.T) {
 	chunk := func(id string, body []byte) []byte {
 		var b bytes.Buffer
 		b.WriteString(id)
+		//nolint:gosec // test chunks are intentionally built from bounded slices.
 		_ = binary.Write(&b, binary.LittleEndian, uint32(len(body)))
 		b.Write(body)
 		return b.Bytes()
@@ -70,7 +71,7 @@ func TestDecodeWAVCoverageFloatExtensibleAndUnknownChunk(t *testing.T) {
 	}
 	out, err := io.ReadAll(src)
 	src.Close()
-	if err != nil || len(out) != AudioBytesPerFrame || int16(binary.LittleEndian.Uint16(out)) != 32767 {
+	if err != nil || len(out) != AudioBytesPerFrame || binary.LittleEndian.Uint16(out) != uint16(32767) {
 		t.Fatalf("float WAV output = %v, err=%v", out, err)
 	}
 
@@ -89,6 +90,7 @@ func TestDecodeWAVCoverageFloatExtensibleAndUnknownChunk(t *testing.T) {
 	b.Write([]byte{1, 2, 3})
 	b.WriteByte(0)
 	b.WriteString("fmt ")
+	//nolint:gosec // the test fixture is a fixed, bounded WAV chunk.
 	_ = binary.Write(&b, binary.LittleEndian, uint32(len(extensible)))
 	b.Write(extensible)
 	b.WriteString("data")
@@ -110,11 +112,10 @@ func TestDecodeWAVCoverageFloatExtensibleAndUnknownChunk(t *testing.T) {
 
 func TestWAVPCM32AndShortReads(t *testing.T) {
 	var frame [4]byte
-	sample := int32(-65536)
-	binary.LittleEndian.PutUint32(frame[:], uint32(sample))
+	binary.LittleEndian.PutUint32(frame[:], 0xffff0000)
 	w := &wavPCM{r: bytes.NewReader(frame[:]), bits: 32, channels: 1, left: int64(len(frame)), frame: make([]byte, 4)}
 	out := make([]byte, AudioBytesPerFrame)
-	if n, err := w.Read(out); n != AudioBytesPerFrame || err != nil || int16(binary.LittleEndian.Uint16(out)) != -1 {
+	if n, err := w.Read(out); n != AudioBytesPerFrame || err != nil || binary.LittleEndian.Uint16(out) != uint16(0xffff) {
 		t.Fatalf("32-bit sample = n%d err%v bytes%v", n, err, out)
 	}
 	if n, err := w.Read(out); n != 0 || err != io.EOF {
