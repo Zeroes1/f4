@@ -26,7 +26,6 @@ func yandexDialogControls(t *testing.T, dialog *vtui.Window) (*vtui.Edit, []*vtu
 	}
 	return edit, buttons
 }
-
 func yandexDialog(t *testing.T, ctx context.Context) (*vtui.Window, chan yandexCodeResult) {
 	t.Helper()
 	result := make(chan yandexCodeResult, 1)
@@ -192,4 +191,3 @@ func TestShowYandexAuthorizationCodeDialogClosesOnContextCancel(t *testing.T) {
 		t.Fatalf("context cancellation result = %#v", got)
 	}
 }
-
