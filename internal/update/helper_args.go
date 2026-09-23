@@ -41,10 +41,12 @@ func ParseRestoreHelperArgs(args []string) (backupPath string, found bool, err e
 		if arg != RestoreHelperFlag {
 			continue
 		}
-		if i+1 >= len(args) || len(args) != i+2 {
+		if len(args) != i+2 {
 			return "", true, fmt.Errorf("%s requires backup path", RestoreHelperFlag)
 		}
-		backupPath = strings.TrimSpace(args[i+1])
+		var helperArgs [1]string
+		copy(helperArgs[:], args[i+1:])
+		backupPath = strings.TrimSpace(helperArgs[0])
 		if backupPath == "" {
 			return "", true, fmt.Errorf("%s requires non-empty backup path", RestoreHelperFlag)
 		}
