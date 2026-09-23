@@ -3332,11 +3332,11 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 		active := pf.GetActivePTY()
 		if active != nil && terminalWantsMouseEvent(pf.TermView.MouseTrackingMode, e) {
-			seq := keymap.TranslateMouseInput(keymap.RebaseTerminalMouseEvent(
+			seq := keymap.TranslateMouseInputWithMode(keymap.RebaseTerminalMouseEvent(
 				e,
 				pf.TermView.X1, pf.TermView.Y1,
 				pf.TermView.Width, pf.TermView.Height,
-			))
+			), pf.TermView.MouseSGRMode)
 			_, _ = pf.WritePTY(active, []byte(seq))
 			return true
 		}

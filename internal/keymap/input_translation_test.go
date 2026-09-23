@@ -121,6 +121,30 @@ func TestTranslateMouseInput(t *testing.T) {
 	}
 }
 
+func TestTranslateMouseInputWithMode_LegacyX10(t *testing.T) {
+	press := &vtinput.InputEvent{
+		KeyDown:     true,
+		MouseX:      10,
+		MouseY:      5,
+		ButtonState: vtinput.FromLeft1stButtonPressed,
+	}
+	if got, want := TranslateMouseInputWithMode(press, false), "\x1b[M"+string([]byte{32, 43, 38}); got != want {
+		t.Fatalf("legacy press = %q, want %q", got, want)
+	}
+
+	release := &vtinput.InputEvent{KeyDown: false, MouseX: 10, MouseY: 5}
+	if got, want := TranslateMouseInputWithMode(release, false), "\x1b[M"+string([]byte{35, 43, 38}); got != want {
+		t.Fatalf("legacy release = %q, want %q", got, want)
+	}
+}
+
+func TestTranslateMouseInputWithMode_LargeCoordinateUsesSGR(t *testing.T) {
+	e := &vtinput.InputEvent{KeyDown: true, MouseX: 224, MouseY: 5, ButtonState: vtinput.FromLeft1stButtonPressed}
+	if got, want := TranslateMouseInputWithMode(e, false), "\x1b[<0;225;6M"; got != want {
+		t.Fatalf("large-coordinate fallback = %q, want %q", got, want)
+	}
+}
+
 // A program that reads a line in cooked mode ignores an Enter or a Backspace
 // whose record has no character: DiskPart never took the "exit" typed into it
 // under `su` (#207). Backends that deliver these keys without one get it added.
