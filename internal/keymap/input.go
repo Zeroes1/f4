@@ -66,6 +66,15 @@ func clampMouseCoord(v, size int) int {
 }
 
 func TranslateMouseInput(e *vtinput.InputEvent) string {
+	return TranslateMouseInputWithMode(e, true)
+}
+
+// TranslateMouseInputWithMode encodes a mouse event in the format selected by
+// the terminal application. SGR (DECSET 1006) is the unambiguous format used
+// by modern TUIs. Without it, VT mouse modes use the original X10 wire format;
+// this matters for native Windows console applications such as FAR running
+// behind ConPTY, which can request mouse tracking without requesting SGR.
+func TranslateMouseInputWithMode(e *vtinput.InputEvent, sgr bool) string {
 	cb := 0
 	isRelease := false
 	isMove := e.MouseEventFlags&vtinput.MouseMoved != 0
@@ -124,6 +133,16 @@ func TranslateMouseInput(e *vtinput.InputEvent) string {
 	endChar := "M"
 	if isRelease {
 		endChar = "m"
+	}
+
+	if !sgr {
+		// X10 stores each coordinate in one byte after adding 32, so it can
+		// represent cells 0..223 only. Keep the event lossless on a larger
+		// terminal instead of wrapping a coordinate into another cell.
+		x, y := int(e.MouseX), int(e.MouseY)
+		if x >= 0 && x <= 223 && y >= 0 && y <= 223 {
+			return fmt.Sprintf("\x1b[M%c%c%c", byte(cb+32), byte(x+33), byte(y+33))
+		}
 	}
 
 	return fmt.Sprintf("\x1b[<%d;%d;%d%s", cb, e.MouseX+1, e.MouseY+1, endChar)
