@@ -141,7 +141,7 @@ func TranslateMouseInputWithMode(e *vtinput.InputEvent, sgr bool) string {
 		// terminal instead of wrapping a coordinate into another cell.
 		x, y := int(e.MouseX), int(e.MouseY)
 		if x >= 0 && x <= 223 && y >= 0 && y <= 223 {
-			return fmt.Sprintf("\x1b[M%c%c%c", byte(cb+32), byte(x+33), byte(y+33))
+			return fmt.Sprintf("\x1b[M%c%c%c", cb+32, x+33, y+33)
 		}
 	}
 
