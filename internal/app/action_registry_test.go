@@ -118,6 +118,18 @@ func TestHotkeyManager_PanelPathDefaults(t *testing.T) {
 	}
 }
 
+func TestHotkeyManager_SyncPanelsDoesNotStealAltI(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	hm.InitDefaults()
+
+	if got := hm.GetAction("Shell", "AltI"); got == "Panel.SyncPanels" {
+		t.Fatal("Shell/AltI must remain available to panel fast find")
+	}
+	if got := hm.GetAction("Shell", "AltShiftI"); got != "Panel.SyncPanels" {
+		t.Fatalf("Shell/AltShiftI = %q, want Panel.SyncPanels", got)
+	}
+}
+
 func TestHotkeyManager_ViewerEditorSearchDirections(t *testing.T) {
 	hm := keymap.NewHotkeyManager("")
 	hm.InitDefaults()

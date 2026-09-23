@@ -1949,7 +1949,7 @@ func init() {
 		Label:       "Sync Panels",
 		Description: "Open the active panel's directory in the passive panel",
 		DescKey:     "Action.Panel.SyncPanels.Desc",
-		DefaultKeys: []string{"AltI"},
+		DefaultKeys: []string{"AltShiftI"},
 		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.SyncPassivePanel() }),
 	})
 	registerAction(action.Action{
