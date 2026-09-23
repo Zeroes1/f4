@@ -1789,14 +1789,19 @@ func runViewerSearch(vv *viewer.ViewerView, pattern string, reverse bool) {
 	})
 }
 
-// openPlayerPanel is the player when it is open on the passive side, which
-// is the only side it can be on while a file panel is active.
+// openPlayerPanel returns the player regardless of which side currently owns
+// the active file panel. Switching sides must not make an already open player
+// unreachable from actions such as playing the selected audio file.
 func openPlayerPanel(pf *panel.PanelsFrame) *panel.PlayerPanel {
 	if pf == nil || !pf.ShowPanels || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
 		return nil
 	}
-	player, _ := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel)
-	return player
+	for _, alt := range pf.AltPanels {
+		if player, ok := alt.(*panel.PlayerPanel); ok {
+			return player
+		}
+	}
+	return nil
 }
 
 // tryPlayInPlayerPanel is Enter on a recording while the player panel is
