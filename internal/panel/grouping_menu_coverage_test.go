@@ -13,6 +13,7 @@ func TestShowGroupMenuActions(t *testing.T) {
 
 	fp := groupTestPanel(t)
 	fp.GroupBy = GroupName
+	fp.GroupFoldersSeparately = false
 	fp.X1, fp.X2 = 0, 79
 	oldRunAction := RunAction
 	groupSettingsOpened := false
