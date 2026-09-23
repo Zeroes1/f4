@@ -8,8 +8,8 @@ import (
 )
 
 func TestPanelsFrameWideAndViewModeGuards(t *testing.T) {
-	left := &FileSystemPanel{Table: vtui.NewTable(0, 0, 20, 10, nil), Vfs: vfs.NewNullVFS(0)}
-	right := &FileSystemPanel{Table: vtui.NewTable(0, 0, 20, 10, nil), Vfs: vfs.NewNullVFS(0)}
+	left := &FileSystemPanel{Table: vtui.NewTable(0, 0, 20, 10, nil), Frame: vtui.NewBorderedFrame(0, 0, 20, 10, vtui.SingleBox, ""), Vfs: vfs.NewNullVFS(0)}
+	right := &FileSystemPanel{Table: vtui.NewTable(0, 0, 20, 10, nil), Frame: vtui.NewBorderedFrame(0, 0, 20, 10, vtui.SingleBox, ""), Vfs: vfs.NewNullVFS(0)}
 	left.Table.Columns = []vtui.TableColumn{{Title: "Name", Width: 20}}
 	right.Table.Columns = []vtui.TableColumn{{Title: "Name", Width: 20}}
 	pf := &PanelsFrame{Panels: [2]Panel{left, right}, ActiveIdx: 0}
