@@ -14,11 +14,10 @@ func TestSelectedSpreadsheetPathFiltersPanelSelection(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	root := t.TempDir()
-	left := panel.NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
-	right := panel.NewFileSystemPanel(40, 0, 40, 20, vfs.NewOSVFS(t.TempDir()))
-	paneltest.WaitForLoad(t, left)
-	paneltest.WaitForLoad(t, right)
-	pf := &panel.PanelsFrame{Panels: [2]panel.Panel{left, right}, ActiveIdx: 0}
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ActiveIdx = 0
+	left := pf.Panels[0].(*panel.FileSystemPanel)
+	left.Vfs = vfs.NewOSVFS(root)
 	vtui.FrameManager.Push(pf)
 
 	for _, tc := range []struct {
