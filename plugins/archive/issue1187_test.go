@@ -154,6 +154,26 @@ func TestIssue1187ExternalRenameDropsOldContentIndex(t *testing.T) {
 	}
 }
 
+func TestIssue1187ExternalDeleteDropsOldContentIndex(t *testing.T) {
+	isolateUserCache(t)
+	oldPath := filepath.Join(t.TempDir(), "deleted.tar")
+	writeIssue1187Tar(t, oldPath, map[string]string{"old.txt": "old"})
+	listTarRoot(t, oldPath)
+	if got := tarindexcache.Files(oldPath); len(got) != 1 {
+		t.Fatalf("deleted archive index files = %v, want one", got)
+	}
+	if err := os.Remove(oldPath); err != nil {
+		t.Fatal(err)
+	}
+
+	nextPath := filepath.Join(t.TempDir(), "next.tar")
+	writeIssue1187Tar(t, nextPath, map[string]string{"new.txt": "new"})
+	listTarRoot(t, nextPath)
+	if got := tarindexcache.Files(oldPath); len(got) != 0 {
+		t.Fatalf("deleted archive index files after cleanup = %v, want none", got)
+	}
+}
+
 func TestIssue1187DisabledTarIndexCacheLeavesNoIndex(t *testing.T) {
 	isolateUserCache(t)
 	previous := config.App.ArchiveTarIndexCache

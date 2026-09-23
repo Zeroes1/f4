@@ -65,6 +65,7 @@ func TestMoveKeepsTheIndexUnderTheNewName(t *testing.T) {
 	oldPath, newPath := filepath.Join(dir, "old.tar"), filepath.Join(dir, "sub", "new.tar")
 	put(t, Prefix(oldPath)+"-ffff.index.sqlite")
 	put(t, Prefix(oldPath)+"-ffff.index.sqlite-journal")
+	Track(oldPath)
 
 	Move(oldPath, newPath)
 
@@ -82,6 +83,12 @@ func TestMoveKeepsTheIndexUnderTheNewName(t *testing.T) {
 	Move(newPath, newPath)
 	if len(Files(newPath)) != 2 {
 		t.Fatal("moving onto the same name lost files")
+	}
+	if _, err := os.Stat(PathFile(oldPath)); !os.IsNotExist(err) {
+		t.Fatalf("old path marker still exists: %v", err)
+	}
+	if _, err := os.Stat(PathFile(newPath)); err != nil {
+		t.Fatalf("new path marker is missing: %v", err)
 	}
 }
 
@@ -115,5 +122,23 @@ func TestClearRemovesEveryIndexAndOnlyIndexes(t *testing.T) {
 	}
 	if got := Clear(); got != 0 {
 		t.Fatalf("a second Clear removed %d files", got)
+	}
+}
+
+func TestCleanupRemovesIndexesOfMissingArchives(t *testing.T) {
+	withCache(t)
+	archive := filepath.Join(t.TempDir(), "gone.tar")
+	put(t, Prefix(archive)+"-aaaa.index.sqlite")
+	Track(archive)
+	if err := os.Remove(archive); !os.IsNotExist(err) && err != nil {
+		t.Fatal(err)
+	}
+
+	Cleanup()
+	if got := Files(archive); len(got) != 0 {
+		t.Fatalf("indexes after cleanup = %v, want none", got)
+	}
+	if _, err := os.Stat(PathFile(archive)); !os.IsNotExist(err) {
+		t.Fatalf("path marker after cleanup exists: %v", err)
 	}
 }
