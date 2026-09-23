@@ -70,13 +70,13 @@ func TestSelectedPanelActionPathsCoverage(t *testing.T) {
 	}
 
 	fsp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "fallback.txt"}}}
-	fsp.SetCursorIndex(0)
+	fsp.CursorIdx = 0
 	paths = SelectedPanelActionPaths(fsp)
 	if len(paths) != 1 || paths[0] != filepath.Join(dir, "fallback.txt") {
 		t.Fatalf("fallback paths = %v", paths)
 	}
 	fsp.Entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
-	fsp.SetCursorIndex(0)
+	fsp.CursorIdx = 0
 	if got := SelectedPanelActionPaths(fsp); len(got) != 0 {
 		t.Fatalf("parent entry should not produce action paths: %v", got)
 	}

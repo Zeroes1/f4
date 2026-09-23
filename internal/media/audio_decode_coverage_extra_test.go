@@ -110,7 +110,8 @@ func TestDecodeWAVCoverageFloatExtensibleAndUnknownChunk(t *testing.T) {
 
 func TestWAVPCM32AndShortReads(t *testing.T) {
 	var frame [4]byte
-	binary.LittleEndian.PutUint32(frame[:], uint32(int32(-65536)))
+	sample := int32(-65536)
+	binary.LittleEndian.PutUint32(frame[:], uint32(sample))
 	w := &wavPCM{r: bytes.NewReader(frame[:]), bits: 32, channels: 1, left: int64(len(frame)), frame: make([]byte, 4)}
 	out := make([]byte, AudioBytesPerFrame)
 	if n, err := w.Read(out); n != AudioBytesPerFrame || err != nil || int16(binary.LittleEndian.Uint16(out)) != -1 {
