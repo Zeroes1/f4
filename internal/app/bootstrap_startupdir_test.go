@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/vtui"
 )
 
 // A plain start with no terminal -- Dock, the detached GUI copy, the daemon --
@@ -281,5 +283,25 @@ func TestStartupDirsChoice(t *testing.T) {
 	}
 	if _, right, _ := startupDirsChoice(cwd, []string{dir}, false); right != panel.StartupKeepPanel {
 		t.Errorf("one folder, far2l style: right = %q, want the keep marker", right)
+	}
+}
+
+func TestApplyStartupDirsRemembersLegacySessionPaths(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	oldLeft, oldRight := panel.LastLeftPath, panel.LastRightPath
+	defer func() { panel.LastLeftPath, panel.LastRightPath = oldLeft, oldRight }()
+
+	left := t.TempDir()
+	right := t.TempDir()
+	pf := panel.NewPanelsFrame()
+	pf.ResizeConsole(80, 25)
+	t.Cleanup(pf.Close)
+
+	applyAndRememberStartupDirs(pf, left, right)
+	if panel.LastLeftPath != left || panel.LastRightPath != right {
+		t.Fatalf("legacy session paths = (%q, %q), want (%q, %q)",
+			panel.LastLeftPath, panel.LastRightPath, left, right)
 	}
 }
