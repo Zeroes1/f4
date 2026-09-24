@@ -279,8 +279,10 @@ keybar/menubar). Зеркало `termView.Resize()` — тем же размер
 ### 5.1. `ShellModeSimpleInline` (есть хостовый tty, PTY нет)
 
 Резидентного шелла нет. Каждая команда: `vtui.Suspend()` → запуск с наследованием
-`stdio` и `cmd.Dir = <путь активной панели>` → `Wait()` → «Press any key» →
-`vtui.Resume()`. В Windows-персоне это `cmd.exe /c`; в POSIX-персоне Wine это
+`stdio` и `cmd.Dir = <путь активной панели>` → `Wait()` → `vtui.Resume()`. Команда,
+запущенная с панелей, возвращает к ним сразу, как в Far и far2l и как в режимах с PTY
+(§4.8); вывод остаётся в консоли и виден по `Ctrl+O`. Паузы «Press any key» после
+команды больше нет (#897). В Windows-персоне это `cmd.exe /c`; в POSIX-персоне Wine это
 `$SHELL -c` через `libwinescape.Spawn`. Деградация PTY не должна менять язык
 командной строки.
 Прототип уже есть — `runExternalEditor()` в `actions.go`. `cd` и смена диска перехватываются
