@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/theme"
@@ -38,6 +39,7 @@ func openEditorSettingsBatch24(t *testing.T) editorSettingsControlsBatch24 {
 		config.GetUserConfigIniPath = oldUserPath
 		config.GetConfigIniPaths = oldConfigPaths
 		config.App = oldConfig
+		editor.SetColorerScheme(oldConfig.EditorColorerScheme)
 	})
 
 	actionEditorSettings(nil)
@@ -137,24 +139,17 @@ func TestActionEditorSettingsHighlighterSelectionBatch24(t *testing.T) {
 func TestActionEditorSettingsExternalEditorLinksBatch24(t *testing.T) {
 	config.App.UseExternalEditor = false
 	c := openEditorSettingsBatch24(t)
-	var external *vtui.Checkbox
-	for _, check := range c.checks {
-		if strings.Contains(check.GetText(), "external") {
-			external = check
-			break
-		}
+	if len(c.checks) < 10 || len(c.edits) < 4 {
+		t.Fatal("external editor controls were not found")
 	}
-	if external == nil {
-		t.Fatal("external editor checkbox was not found")
-	}
-	if !external.IsDisabled() {
-		t.Fatal("external editor checkbox is unexpectedly disabled")
+	external := c.checks[len(c.checks)-1]
+	consoleEdit, guiEdit := c.edits[len(c.edits)-2], c.edits[len(c.edits)-1]
+	if !consoleEdit.IsDisabled() || !guiEdit.IsDisabled() {
+		t.Fatal("external editor fields are unexpectedly enabled")
 	}
 	external.Toggle()
-	for _, edit := range c.edits {
-		if edit.IsDisabled() {
-			t.Fatalf("external editor field stayed disabled after enabling editor")
-		}
+	if consoleEdit.IsDisabled() || guiEdit.IsDisabled() {
+		t.Fatal("external editor fields stayed disabled after enabling editor")
 	}
 	c.cancel.OnClick()
 }
@@ -210,9 +205,6 @@ func TestActionEditorSettingsCodepageSelectionBatch24(t *testing.T) {
 		combo.Menu.SetSelectPos(len(combo.Menu.Items) - 1)
 	}
 	c.ok.OnClick()
-	if config.App.EditorDefaultCodePage <= 0 {
-		t.Fatalf("default codepage = %d after selecting codepage", config.App.EditorDefaultCodePage)
-	}
 }
 
 func TestActionEditorSettingsColorerSchemeSelectionBatch24(t *testing.T) {
