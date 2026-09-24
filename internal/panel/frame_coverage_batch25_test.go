@@ -160,7 +160,7 @@ func TestFolderHistoryStepBoundariesCoverageBatch25(t *testing.T) {
 func TestSameFolderHistoryPathCoverageBatch25(t *testing.T) {
 	cases := []struct {
 		a, b string
-		want  bool
+		want bool
 	}{
 		{"foo/../bar", "bar", true},
 		{"https://example.test/a", "https://example.test/a", true},
