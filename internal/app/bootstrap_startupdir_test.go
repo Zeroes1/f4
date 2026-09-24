@@ -9,7 +9,6 @@ import (
 
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
-	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
 
