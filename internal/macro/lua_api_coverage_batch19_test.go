@@ -12,9 +12,9 @@ func TestMacroValueFromLuaScalars(t *testing.T) {
 	defer L.Close()
 
 	tests := []struct {
-		name string
+		name  string
 		value lua.LValue
-		want any
+		want  any
 	}{
 		{name: "nil", value: lua.LNil, want: nil},
 		{name: "bool", value: lua.LTrue, want: true},
@@ -95,7 +95,7 @@ func TestMacroValueToLuaScalarsAndBytes(t *testing.T) {
 	defer L.Close()
 
 	values := []struct {
-		name string
+		name  string
 		value any
 		want  lua.LValue
 	}{
