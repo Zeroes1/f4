@@ -69,8 +69,10 @@ func startupDirsFor(cwd string, args []string) (left, right string) {
 }
 
 // plainStartOpensCwd says what `f4` with no folders, started from a terminal,
-// shows: the current directory in both panels, the way mc does (issue #822),
-// or the panels the session restored.
+// shows when the "open the current folder at start" setting is on: the current
+// directory in both panels, the way mc does (issue #822), or the panels the
+// session restored. With the setting off (the default, far2l's way, issue #495)
+// a plain start always restores the session; see farStartupDirs.
 //
 // Outside Windows a terminal on stdin is what proves that a shell chose that
 // directory; a Dock or desktop start has no terminal and names nothing. On
@@ -96,6 +98,43 @@ func startupDirsOverride(cwd string, args []string, plainOpensCwd bool) (left, r
 	return left, right, true
 }
 
+// farStartupDirs is what far2l and Far make of the command line: no folders
+// leaves the panels as the last session left them, a first folder replaces the
+// panel it names, a second replaces the other one. With a single folder the
+// other panel is not touched, which panel.StartupKeepPanel says in place of a
+// path. f4 has always named the panels by side, so the first folder goes to the
+// left one, and takes the focus with it (panel.ApplyStartupDirs).
+//
+// far2l is the reference: `far2l path1 path2` opens path1 in the active panel
+// and path2 in the passive one, and without paths the panels come from the saved
+// setup (far2l/src/main.cpp, Opt.strLeftFolder and friends).
+func farStartupDirs(cwd string, args []string) (left, right string, ok bool) {
+	abs := func(path string) string {
+		if filepath.IsAbs(path) {
+			return filepath.Clean(path)
+		}
+		return filepath.Join(cwd, path)
+	}
+	switch len(args) {
+	case 0:
+		return "", "", false
+	case 1:
+		return abs(args[0]), panel.StartupKeepPanel, true
+	default:
+		return abs(args[0]), abs(args[1]), true
+	}
+}
+
+// startupDirsChoice picks between the two ways to read a start from a
+// terminal: mc's (Settings: open the current folder at start), which
+// startupDirsOverride implements, and far2l's, which is the default.
+func startupDirsChoice(cwd string, args []string, currentFolderStyle bool) (left, right string, ok bool) {
+	if currentFolderStyle {
+		return startupDirsOverride(cwd, args, plainStartOpensCwd)
+	}
+	return farStartupDirs(cwd, args)
+}
+
 // startupDirArgs picks the panel directories out of a command line: the words
 // before the first switch, plus everything after a "--" separator. --gui and
 // --tty take their backend as a separate word, so a word after a switch could
@@ -116,22 +155,24 @@ func startupDirArgs(args []string) []string {
 	return dirs
 }
 
-// rememberStartupDirs records those directories, but only for a start from a
-// terminal. It must run before checkAndDetach and before the daemon is spawned:
-// both hand the next process /dev/null on stdin. Values inherited from the
-// parent win, they are the answer that process already worked out.
+// rememberStartupDirs records those directories. Explicit command-line paths
+// must also be carried by a GUI start without a terminal (for example
+// `f4-gui.exe path1 path2`); a plain GUI start still leaves the restored
+// session alone. It must run before checkAndDetach and before the daemon is
+// spawned: both hand the next process /dev/null on stdin. Values inherited
+// from the parent win, they are the answer that process already worked out.
 func rememberStartupDirs(args []string) {
 	if os.Getenv(startupDirEnv) != "" {
 		return
 	}
-	if !term.IsTerminal(int(os.Stdin.Fd())) {
+	if len(args) == 0 && !term.IsTerminal(int(os.Stdin.Fd())) {
 		return
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return
 	}
-	left, right, ok := startupDirsOverride(cwd, args, plainStartOpensCwd)
+	left, right, ok := startupDirsChoice(cwd, args, config.App.StartInCurrentFolder)
 	if !ok {
 		return
 	}
@@ -306,6 +347,17 @@ func Main() {
 		}
 		return
 	}
+	if backupPath, found, err := update.ParseRestoreHelperArgs(os.Args[1:]); found {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		if err := update.RunRestoreHelper(backupPath); err != nil {
+			fmt.Fprintf(os.Stderr, "f4 restore helper failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	installConsoleCtrlHandler()
 	var sudoDispatcher string
 
@@ -392,6 +444,7 @@ func Main() {
 	vtui.ConfigDiskLogging(false)
 	var serverPath, clientPath string
 	var cpuprofile string
+	var diagFlags diagnosticFlags
 	var guiMode bool
 	var guiBackend string
 	var guiBackendGiven bool
@@ -488,6 +541,15 @@ func Main() {
 				cpuprofile = os.Args[i+1]
 				i++
 			}
+		case "--trace", "--stall-watchdog":
+			consumed, err := diagFlags.apply(flagName, flagVal, argAfter(os.Args, i))
+			if err != nil {
+				// stdout, like --version and --help: f4 has already taken stderr
+				// over for its own log by the time a switch is read.
+				fmt.Printf("%s: %v\n", flagName, err)
+				os.Exit(2)
+			}
+			i += consumed
 		case "--new-plugin":
 			pluginName := flagVal
 			if pluginName == "" && i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
@@ -584,6 +646,13 @@ The following switches may be used in the command line:
  --attached             Force run in Attached-mode
  --client [clientPath]
  --cpuprofile [cpuprofile]
+ --trace [file]         Write a runtime execution trace, which records GC
+                         pauses, blocking syscalls and scheduling as well as
+                         CPU; read it with "go tool trace"
+ --stall-watchdog [d]   Write every goroutine's stack into the profile's
+                         crashes folder whenever one UI frame takes longer
+                         than d (default 250ms). Answers what a freeze was
+                         waiting on, which a CPU profile cannot.
  --debug                Log to profile logs/debug.log (equivalent to --log=1)
  --dump-screen-after N  Auto-run Debug.ScreenDump N seconds after startup
                          (bypasses hotkeys entirely -- useful under Wine
@@ -650,14 +719,8 @@ see in vtinput project: https://github.com/unxed/vtinput
 		}
 	}
 
-	if serverPath != "" {
-		terminal.RunServer(serverPath)
-		return
-	}
-	if clientPath != "" {
-		terminal.RunClient(clientPath, 0)
-		return
-	}
+	// Before the daemon and client branches below, so that a daemon started
+	// with these switches measures itself (#884).
 	if cpuprofile != "" {
 		// #nosec G703 -- cpuprofile is the path the user typed after
 		// --cpuprofile; writing where they asked is the whole feature.
@@ -667,6 +730,20 @@ see in vtinput project: https://github.com/unxed/vtinput
 		}
 		_ = pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
+	}
+	if diagFlags.wanted() {
+		stopDiagnostics := diagFlags.arm(filepath.Join(config.GetF4ConfigDir(), "crashes"))
+		defer stopDiagnostics()
+	}
+	terminal.ServerDiagnosticArgs = serverDiagnosticArgs(cpuprofile, diagFlags)
+
+	if serverPath != "" {
+		terminal.RunServer(serverPath)
+		return
+	}
+	if clientPath != "" {
+		terminal.RunClient(clientPath, 0)
+		return
 	}
 
 	// Settings.ini supplies whatever this run did not (issue #601). The
@@ -887,13 +964,22 @@ func InitCore() *vtui.ScreenBuf {
 
 	vtui.FrameManager.Init(scr)
 
-	SetupUI()
+	// Only this console path may pick the first-start style from the console:
+	// the GUI window draws in true colour whatever the process's console is.
+	setupUI(consoleFirstRunColorStyle)
 
 	vtui.DebugLog("CORE: Initialization complete")
 	return scr
 }
 
 func SetupUI() {
+	setupUI(nil)
+}
+
+// setupUI is SetupUI with one hook: firstRunStyle, when set, may name the
+// colour style to start with in place of the built-in default. It is asked only
+// when no settings.ini has chosen a style (issue #513).
+func setupUI(firstRunStyle func() (string, bool)) {
 	configureUnicodeInput()
 	vtui.ConfigDiskLogging(os.Getenv("VTUI_DEBUG") != "")
 	vtui.DebugLog("=== F4 STARTUP [%s] PID:%d ===", getFormattedVersionInfo(), os.Getpid())
@@ -912,6 +998,7 @@ func SetupUI() {
 	vtui.FrameManager.ConfigureWorkspaceTabOverlay(config.App.WorkspaceTabsOverlay)
 	vtui.FrameManager.ConfigureWorkspaceAltNumberSwitch(config.App.AltNumberSwitchesTabs)
 	initLang()
+	applyFirstRunColorStyle(firstRunStyle)
 	if err := theme.ApplyColorStyle(config.App.ColorStyle); err != nil {
 		vtui.DebugLog("COLORS: %v; falling back to Modern", err)
 		config.App.ColorStyle = "Modern"
@@ -994,11 +1081,7 @@ func SetupUI() {
 		config.CreateDefaultHighlightIni(highlightPath)
 	}
 	if _, err := os.Stat(highlightPath); err == nil {
-		highlightIni := ini.Load(highlightPath)
-		theme.GlobalFileHighlighter.LoadFromIni(highlightIni)
-		// Sort groups share the file (and the rule syntax) with highlighting,
-		// the way far keeps both in one dialog. Themes may not define them.
-		panel.GlobalSortGroups.LoadFromIni(highlightIni)
+		loadHighlightIni(ini.Load(highlightPath))
 	}
 
 	// CrashDirFull задаётся рано (см. main()); здесь только повторная
@@ -1197,6 +1280,16 @@ func configureNestedInputMode() {
 	}
 }
 
+// loadHighlightIni hands highlight.ini to the file highlighter and to the sort
+// groups. Sort groups share the file (and the rule syntax) with highlighting,
+// the way far keeps both in one dialog. Themes may not define them.
+func loadHighlightIni(file *ini.File) {
+	theme.GlobalFileHighlighter.LoadFromIni(file)
+	// A Group key inside a coloured [Highlight_N] section puts the files that
+	// rule matches into that group: one matcher both paints and places (#413).
+	panel.GlobalSortGroups.LoadFromIni(file, theme.GlobalFileHighlighter.UserRules)
+}
+
 var getSessionIniPath = func() string {
 	return filepath.Join(config.GetF4ConfigDir(), "session.ini")
 }
@@ -1238,6 +1331,12 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Left", "SortMode", "0"), "%d", &panel.LastLeftSortMode)
 	panel.LastLeftSortRev = ini.GetString("Panel/Left", "SortReverse", "0") == "1"
 	panel.LastLeftSortGroups = ini.GetString("Panel/Left", "UseSortGroups", "0") == "1"
+	if _, err := fmt.Sscanf(ini.GetString("Panel/Left", "GroupBy", "0"), "%d", &panel.LastLeftGroupBy); err != nil {
+		panel.LastLeftGroupBy = panel.GroupNone
+	}
+	panel.LastLeftGroupBy = panel.ValidGroupMode(panel.LastLeftGroupBy)
+	panel.LastLeftGroupReverse = ini.GetString("Panel/Left", "GroupReverse", "0") == "1"
+	panel.LastLeftGroupFoldersSeparately = ini.GetString("Panel/Left", "GroupFoldersSeparately", "1") == "1"
 
 	// Восстанавливаем состояние правой панели
 	panel.LastRightPath = ini.GetString("Panel/Right", "Folder", "")
@@ -1246,6 +1345,12 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Right", "SortMode", "0"), "%d", &panel.LastRightSortMode)
 	panel.LastRightSortRev = ini.GetString("Panel/Right", "SortReverse", "0") == "1"
 	panel.LastRightSortGroups = ini.GetString("Panel/Right", "UseSortGroups", "0") == "1"
+	if _, err := fmt.Sscanf(ini.GetString("Panel/Right", "GroupBy", "0"), "%d", &panel.LastRightGroupBy); err != nil {
+		panel.LastRightGroupBy = panel.GroupNone
+	}
+	panel.LastRightGroupBy = panel.ValidGroupMode(panel.LastRightGroupBy)
+	panel.LastRightGroupReverse = ini.GetString("Panel/Right", "GroupReverse", "0") == "1"
+	panel.LastRightGroupFoldersSeparately = ini.GetString("Panel/Right", "GroupFoldersSeparately", "1") == "1"
 
 	// Восстанавливаем глобальное состояние сессии
 	activeStr := ini.GetString("Session", "ActivePanel", "1")
@@ -1437,6 +1542,7 @@ func saveSessionFileError(path string, savePanelSettings, saveCurrentPanel bool)
 	fmt.Fprintf(&sb, "SortMode = %d\n", panel.LastLeftSortMode)
 	fmt.Fprintf(&sb, "SortReverse = %d\n", map[bool]int{true: 1, false: 0}[panel.LastLeftSortRev])
 	fmt.Fprintf(&sb, "UseSortGroups = %d\n", map[bool]int{true: 1, false: 0}[panel.LastLeftSortGroups])
+	fmt.Fprintf(&sb, "GroupBy = %d\nGroupReverse = %d\nGroupFoldersSeparately = %d\n", panel.LastLeftGroupBy, map[bool]int{true: 1}[panel.LastLeftGroupReverse], map[bool]int{true: 1}[panel.LastLeftGroupFoldersSeparately])
 
 	sb.WriteString("\n[Panel/Right]\n")
 	fmt.Fprintf(&sb, "Folder = %s\n", panel.LastRightPath)
@@ -1445,6 +1551,7 @@ func saveSessionFileError(path string, savePanelSettings, saveCurrentPanel bool)
 	fmt.Fprintf(&sb, "SortMode = %d\n", panel.LastRightSortMode)
 	fmt.Fprintf(&sb, "SortReverse = %d\n", map[bool]int{true: 1, false: 0}[panel.LastRightSortRev])
 	fmt.Fprintf(&sb, "UseSortGroups = %d\n", map[bool]int{true: 1, false: 0}[panel.LastRightSortGroups])
+	fmt.Fprintf(&sb, "GroupBy = %d\nGroupReverse = %d\nGroupFoldersSeparately = %d\n", panel.LastRightGroupBy, map[bool]int{true: 1}[panel.LastRightGroupReverse], map[bool]int{true: 1}[panel.LastRightGroupFoldersSeparately])
 	panel.WriteWorkspaceSessions(&sb, panel.LastWorkspaceSessions, panel.LastActiveWorkspace)
 
 	return config.WriteUserFileAtomically(path, []byte(sb.String()), 0600)

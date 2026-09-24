@@ -3655,6 +3655,39 @@ func TestPanelsFrame_MouseForwarding_ToPTY(t *testing.T) {
 	}
 }
 
+func TestPanelsFrame_MouseForwarding_UsesLegacyFormatWhenRequested(t *testing.T) {
+	pf := setupMockPanelsFrame(t)
+	pty := pf.Pty.(*mockPty)
+	defer pf.Close()
+
+	pf.ShowPanels = false
+	pf.TermView.MouseTrackingMode = 1003
+	pf.TermView.MouseSGRMode = false
+
+	press := &vtinput.InputEvent{
+		Type:        vtinput.MouseEventType,
+		KeyDown:     true,
+		MouseX:      10,
+		MouseY:      10,
+		ButtonState: vtinput.FromLeft1stButtonPressed,
+	}
+	if !pf.ProcessMouse(press) {
+		t.Fatal("legacy mouse press should be handled by PanelsFrame")
+	}
+	release := &vtinput.InputEvent{
+		Type:    vtinput.MouseEventType,
+		KeyDown: false,
+		MouseX:  10,
+		MouseY:  10,
+	}
+	if !pf.ProcessMouse(release) {
+		t.Fatal("legacy mouse release should be handled by PanelsFrame")
+	}
+	if got, want := pty.String(), "\x1b[M"+string([]byte{32, 43, 43})+"\x1b[M"+string([]byte{35, 43, 43}); got != want {
+		t.Fatalf("legacy mouse stream = %q, want %q", got, want)
+	}
+}
+
 // Button-event tracking (1002) reports motion only while a button is held.
 // A GUI backend delivering hover motion for URL underlining (#459) must not
 // leak it into a TUI that asked for 1002 -- xterm would not send it either.
@@ -3762,9 +3795,6 @@ func TestPanelsFrame_CaptureCommands(t *testing.T) {
 	vtui.SetClipboard("")
 
 	cmdStr := "clip:<< echo f4_capture_test"
-	if runtime.GOOS == "windows" {
-		cmdStr = "clip:<< cmd.exe /c echo f4_capture_test"
-	}
 
 	pf.CmdLine.Edit.SetText(cmdStr)
 	pressKey(pf, &vtinput.InputEvent{

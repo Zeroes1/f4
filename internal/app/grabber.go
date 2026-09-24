@@ -64,7 +64,18 @@ func NewGrabberFrame() *GrabberFrame {
 // Callers wire this to Alt+Ins in every frame that could hold input
 // focus (panel.PanelsFrame, editor.EditorView, viewer.ViewerView, …).
 func OpenGrabber() {
-	vtui.FrameManager.Push(NewGrabberFrame())
+	g := NewGrabberFrame()
+	// Freeze the screen as the user last saw it. Some frames (the history
+	// dialogs) finish painting in FrameManager.OnRender, after every frame's
+	// Show and only while they are the top frame, so the pass that shows the
+	// grabber would repaint them without that layer (#1237). The buffer keeps
+	// the last composed frame until the next render starts.
+	if scr := vtui.FrameManager.Screen(); scr != nil {
+		g.mu.Lock()
+		g.snapshot(scr)
+		g.mu.Unlock()
+	}
+	vtui.FrameManager.Push(g)
 	vtui.FrameManager.Redraw()
 }
 
@@ -81,6 +92,13 @@ func handleForcedMouseSelectionEvent(e *vtinput.InputEvent) bool {
 	if e == nil || e.Type != vtinput.MouseEventType || !e.KeyDown ||
 		e.MouseEventFlags&vtinput.MouseMoved != 0 ||
 		e.ButtonState != vtinput.FromLeft1stButtonPressed {
+		return false
+	}
+	// Let the visible function-key bar keep first refusal. Its mouse handler
+	// turns a click into the corresponding (possibly Shift-modified) F-key
+	// event; opening the grabber here would make Shift+F10, for example,
+	// impossible to invoke with the mouse (#1289).
+	if keyBarContainsMouse(e) {
 		return false
 	}
 
@@ -104,6 +122,16 @@ func handleForcedMouseSelectionEvent(e *vtinput.InputEvent) bool {
 	grabber.ProcessMouse(e)
 	vtui.FrameManager.Redraw()
 	return true
+}
+
+func keyBarContainsMouse(e *vtinput.InputEvent) bool {
+	if e == nil || vtui.FrameManager == nil || vtui.FrameManager.KeyBar == nil ||
+		!vtui.FrameManager.KeyBar.IsVisible() {
+		return false
+	}
+	x1, y1, x2, y2 := vtui.FrameManager.KeyBar.GetPosition()
+	x, y := int(e.MouseX), int(e.MouseY)
+	return x >= x1 && x <= x2 && y >= y1 && y <= y2
 }
 
 // actionScreenGrab is the context-aware terminal.App.ScreenGrab handler. Invoking the

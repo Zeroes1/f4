@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
-	"github.com/unxed/f4/internal/panel"
+	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/update"
 	"github.com/unxed/vtui"
 )
@@ -146,10 +148,34 @@ func reportUpdateError(manual bool, msg string) {
 	}
 }
 
+func restartCommand(executable string, args []string, workingDir string) *exec.Cmd {
+	cmd := update.SelfCommand(executable, args...)
+	cmd.Dir = workingDir
+	return cmd
+}
+
+func startUpdatedF4() error {
+	executable, err := update.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot locate the updated f4 executable: %w", err)
+	}
+	workingDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("cannot preserve the working directory: %w", err)
+	}
+	cmd := restartCommand(executable, os.Args[1:], workingDir)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("cannot restart the updated f4: %w", err)
+	}
+	return nil
+}
+
 func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 	if pf == nil {
 		return
 	}
+	previousLastVersion := config.App.LastUpdateVersion
+	backupPath := ""
 	pf.RunProgressTask(" Updating f4 ", "Downloading...", false, func(ctx context.Context, updateProgress func(msg string, percent int)) error {
 		if _, err := update.TargetDir(); err != nil {
 			return err
@@ -164,6 +190,11 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 
 		updateProgress("Extracting and installing...", -1)
 
+		backupPath, err = update.BackupExecutable()
+		if err != nil {
+			return fmt.Errorf("failed to back up executable: %w\n(Close other f4 instances, check Task Manager for ghost f4 processes, or try running as admin/root)", err)
+		}
+
 		if err := update.Install(data, cand.ArchiveKind); err != nil {
 			return fmt.Errorf("failed to extract/install update: %w\n(Close other f4 instances, check Task Manager for ghost f4 processes, or try running as admin/root)", err)
 		}
@@ -171,6 +202,12 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 		return nil
 	}, func(err error) {
 		if err != nil {
+			if backupPath != "" {
+				if restoreErr := update.RestoreExecutable(backupPath); restoreErr != nil {
+					err = fmt.Errorf("%v; rollback failed: %w", err, restoreErr)
+				}
+				backupPath = ""
+			}
 			if err != context.Canceled {
 				vtui.ShowMessage(" Update Failed ", err.Error(), []string{"&Ok"})
 			}
@@ -180,11 +217,27 @@ func performUpdate(pf *panel.PanelsFrame, cand update.Candidate) {
 		config.App.LastUpdateVersion = cand.UpdateKey
 		config.SaveConfig()
 
-		dlg := vtui.ShowMessage(" Update Successful ", "f4 has been updated successfully.\nPlease restart the application to apply changes.", []string{"E&xit now", "&Later"})
+		dlg := vtui.ShowMessage(" Update Successful ", "f4 has been updated successfully.\nRestart the application now to apply changes?", []string{"&Restart now", "&Later"})
 		dlg.OnResult = func(code int) {
 			if code == 0 {
+				if err := startUpdatedF4(); err != nil {
+					if restoreErr := update.RestoreExecutable(backupPath); restoreErr != nil {
+						err = fmt.Errorf("%v; rollback failed: %w", err, restoreErr)
+					}
+					config.App.LastUpdateVersion = previousLastVersion
+					config.SaveConfig()
+					backupPath = ""
+					vtui.ShowMessage(" Update Failed ", err.Error(), []string{"&Ok"})
+					return
+				}
+				if err := update.RemoveExecutableBackup(backupPath); err != nil {
+					vtui.DebugLog("UPDATER: %v", err)
+				}
+				backupPath = ""
 				panel.CancelOperationsForShutdown()
 				vtui.FrameManager.Shutdown()
+			} else if err := update.RemoveExecutableBackup(backupPath); err != nil {
+				vtui.DebugLog("UPDATER: %v", err)
 			}
 		}
 	})

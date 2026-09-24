@@ -40,6 +40,7 @@ The original-dialog column links to the original implementation and its backing 
 | StartupMode | startup / Launch defaults | [actionStartupSettings](../cmd/f4/startup_settings.go#L39), [actionStartupSettings](../cmd/f4/startup_settings.go#L107) | settings.ini / Startup / Mode | [main.go](../cmd/f4/main.go#L531), [main.go](../cmd/f4/main.go#L542), [startup_settings.go](../cmd/f4/startup_settings.go#L39) | Startup mode: Choose how plain f4 launches. Explicit --gui or --tty arguments override this default for that launch. Takes effect: restart. Choices: auto:Automatic;tty:Terminal;gui:Graphical |
 | GuiBackend | startup / Launch defaults | [actionStartupSettings](../cmd/f4/startup_settings.go#L48), [actionStartupSettings](../cmd/f4/startup_settings.go#L108) | settings.ini / Startup / GuiBackend | [main.go](../cmd/f4/main.go#L538), [main.go](../cmd/f4/main.go#L539), [startup_settings.go](../cmd/f4/startup_settings.go#L48) | Graphical renderer: Default graphical renderer. Automatic uses startup detection. Command-line choices override this value; unknown external renderer IDs are preserved. Takes effect: restart. |
 | TTYBackend | startup / Launch defaults | [actionStartupSettings](../cmd/f4/startup_settings.go#L57), [actionStartupSettings](../cmd/f4/startup_settings.go#L109) | settings.ini / Startup / TTYBackend | [main.go](../cmd/f4/main.go#L540), [startup_settings.go](../cmd/f4/startup_settings.go#L57), [startup_settings.go](../cmd/f4/startup_settings.go#L109) | Terminal renderer: Default terminal renderer. Command-line renderer choices override this preference. Takes effect: restart. Choices: :Automatic;ansi:ANSI;winapi:Windows console |
+| StartInCurrentFolder | startup / Launch defaults | none: no original dialog | settings.ini / Startup / StartInCurrentFolder | [bootstrap.go](../internal/app/bootstrap.go) | Open the current folder at start: When f4 is started from a terminal, open the current folder in both panels, as mc does. Off restores the panels of the last session, as far2l and Far do. Folders named on the command line always win: with this on the other panel shows the current folder, with it off the other panel stays as it was. Takes effect: restart. |
 | WorkspaceTabMode | workspaces / Tab presentation | [actionAppearanceSettings](../cmd/f4/actions.go#L4641), [actionAppearanceSettings](../cmd/f4/actions.go#L4825), [actionAppearanceSettings](../cmd/f4/actions.go#L4841) | settings.ini / Interface / WorkspaceTabMode | [actions.go](../cmd/f4/actions.go#L4641), [actions.go](../cmd/f4/actions.go#L4825), [actions.go](../cmd/f4/actions.go#L4841) | Show workspace tabs: Show tabs always, only with multiple workspaces, while Ctrl is held, or never. Takes effect: live. Choices: 0:Always;1:Multiple workspaces;2:While Ctrl is held;3:Never |
 | WorkspaceTabsOverlay | workspaces / Tab presentation | [actionAppearanceSettings](../cmd/f4/actions.go#L4648), [actionAppearanceSettings](../cmd/f4/actions.go#L4649), [actionAppearanceSettings](../cmd/f4/actions.go#L4826) | settings.ini / Interface / WorkspaceTabsOverlay | [actions.go](../cmd/f4/actions.go#L4648), [actions.go](../cmd/f4/actions.go#L4649), [actions.go](../cmd/f4/actions.go#L4826) | Overlay workspace tabs: Draw workspace tabs over the content instead of reserving a layout row. Takes effect: live. |
 | WorkspaceTabNumbering | workspaces / Tab presentation | [actionAppearanceSettings](../cmd/f4/actions.go#L4682), [actionAppearanceSettings](../cmd/f4/actions.go#L4830), [actionAppearanceSettings](../cmd/f4/actions.go#L4831) | settings.ini / Interface / WorkspaceTabNumbering | [actions.go](../cmd/f4/actions.go#L4682), [actions.go](../cmd/f4/actions.go#L4830), [actions.go](../cmd/f4/actions.go#L4831) | Workspace numbering: Keep numbers permanently, keep them during this session, or renumber to match the current tab order. Takes effect: live. Choices: 0:Permanent;1:Session;2:Current order |
@@ -53,10 +54,12 @@ The original-dialog column links to the original implementation and its backing 
 | AutoSaveGUIWindow | workspaces / Automatic saving | [actionAutoSaveSettings](../cmd/f4/actions.go#L3645), [actionAutoSaveSettings](../cmd/f4/actions.go#L3673), [actionPanelSettings](../cmd/f4/actions.go#L3846) | settings.ini / System / AutoSaveGUIWindow | [actions.go](../cmd/f4/actions.go#L3645), [actions.go](../cmd/f4/actions.go#L3673), [actions.go](../cmd/f4/actions.go#L3846) | Save graphical window automatically: Remember supported graphical-window dimensions and position, not external terminal geometry. Takes effect: live. |
 | ShowHiddenFiles | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3695), [actionPanelSettings](../cmd/f4/actions.go#L3835) | settings.ini / Panel / ShowHiddenFiles | [actions.go](../cmd/f4/actions.go#L3695), [actions.go](../cmd/f4/actions.go#L3835), [action_registry.go](../cmd/f4/action_registry.go#L1918) | Show hidden files: Include hidden files and folders in the listing. The parent-directory entry remains visible. Takes effect: live. |
 | ShowDirPrefix | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3701), [actionPanelSettings](../cmd/f4/actions.go#L3836) | settings.ini / Panel / ShowDirPrefix | [actions.go](../cmd/f4/actions.go#L3701), [actions.go](../cmd/f4/actions.go#L3836), [file_panel.go](../cmd/f4/file_panel.go#L143) | Prefix folder names: Prefix folder names with a slash, unless a highlight rule already supplies one. Takes effect: live. |
-| ShowHighlightMarks | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3707), [actionPanelSettings](../cmd/f4/actions.go#L3837) | settings.ini / Panel / ShowHighlightMarks | [actions.go](../cmd/f4/actions.go#L3707), [actions.go](../cmd/f4/actions.go#L3837), [file_panel.go](../cmd/f4/file_panel.go#L135) | Show highlight marks: Show markers from matching file-highlight rules. Also affects path suggestions; symlinks retain their fallback arrow. Takes effect: live. |
+| ShowHighlightMarks | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3707), [actionPanelSettings](../cmd/f4/actions.go#L3837) | settings.ini / Panel / ShowHighlightMarks | [actions.go](../cmd/f4/actions.go#L3707), [actions.go](../cmd/f4/actions.go#L3837), [file_panel.go](../cmd/f4/file_panel.go#L135) | Show highlight marks: Show markers from matching file-highlight rules. Also affects path suggestions; a symlink no rule marks follows its own arrow setting. Takes effect: live. |
+| ShowSymlinkArrow | panels / File listing | [actionPanelSettings](../internal/app/actions.go#L3627), [actionPanelSettings](../internal/app/actions.go#L3762) | settings.ini / Panel / ShowSymlinkArrow | [actions.go](../internal/app/actions.go#L3627), [actions.go](../internal/app/actions.go#L3762), [list.go](../internal/panel/list.go#L130) | Arrow before symbolic links: Prefix the name of a symbolic link with an arrow when no highlight rule marks it. The link target shown beside the focused entry is not affected. Takes effect: live. |
 | SeparateFileExtensions | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3712), [actionPanelSettings](../cmd/f4/actions.go#L3838) | settings.ini / Panel / SeparateFileExtensions | [actions.go](../cmd/f4/actions.go#L3712), [actions.go](../cmd/f4/actions.go#L3838), [file_panel.go](../cmd/f4/file_panel.go#L169) | Separate filename extensions: Align the final extension separately in the name column. Excludes folders, extensionless names and leading dots alone. Takes effect: live. |
 | ShowPanelFileInfo | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3716), [actionPanelSettings](../cmd/f4/actions.go#L3839) | settings.ini / Panel / ShowPanelFileInfo | [actions.go](../cmd/f4/actions.go#L3716), [actions.go](../cmd/f4/actions.go#L3839), [file_panel.go](../cmd/f4/file_panel.go#L2702) | Focused-file status row: Reserve a bottom row for the focused name, size and modification time. Short panels suppress this row. Takes effect: live. |
 | PanelScrollbarMode | panels / File listing | [actionPanelSettings](../cmd/f4/actions.go#L3727), [actionPanelSettings](../cmd/f4/actions.go#L3728), [actionPanelSettings](../cmd/f4/actions.go#L3840) | settings.ini / Panel / PanelScrollbarMode | [actions.go](../cmd/f4/actions.go#L3727), [actions.go](../cmd/f4/actions.go#L3728), [actions.go](../cmd/f4/actions.go#L3840) | Panel scrollbar: Hide the scrollbar, show a minimal one, or show the full scrollbar with arrows. Takes effect: live. Choices: 0:Off;1:Minimal;2:Full |
+| ArchiveTarIndexCache | panels / Directory loading | none: no original dialog | settings.ini / Panel / ArchiveTarIndexCache | [tar_index.go](../plugins/archive/tar_index.go) | Cache tar archive indexes: Keep the file index of an opened tar archive in the cache, so opening it again is instant. Off rebuilds the index each time the archive is opened: slower, but never out of date. Takes effect: live. |
 | SyncPanelLoad | panels / Directory loading | [actionPanelAdditionalSettings](../cmd/f4/actions.go#L3880), [actionPanelAdditionalSettings](../cmd/f4/actions.go#L4015) | settings.ini / Panel / SyncPanelLoad | [actions.go](../cmd/f4/actions.go#L3880), [actions.go](../cmd/f4/actions.go#L4015), [file_panel.go](../cmd/f4/file_panel.go#L736) | Wait for complete directory listing: Replace the listing only when all directory results are ready and bypass cached previews. Off permits incremental results. It does not block all UI work. Takes effect: next directory load. |
 | InfoPanelCPUGPU | panels / Information panels | [actionPanelAdditionalSettings](../cmd/f4/actions.go#L3891), [actionPanelAdditionalSettings](../cmd/f4/actions.go#L4018) | settings.ini / Panel / InfoPanelCPUGPU | [actions.go](../cmd/f4/actions.go#L3891), [actions.go](../cmd/f4/actions.go#L4018), [info_panel.go](../cmd/f4/info_panel.go#L843) | Show CPU and GPU information: Include locally collected CPU and GPU sections when the information provider does not supply authoritative information. Takes effect: live. |
 | InfoPanelBytes | panels / Information panels | Core setting bound by its canonical backing value | settings.ini / Panel / InfoPanelBytes | [action_registry.go](../cmd/f4/action_registry.go#L1905), [info_panel.go](../cmd/f4/info_panel.go#L1116) | Show sizes in bytes: Display raw bytes instead of human-readable sizes in information and quick-view panels. Takes effect: live. |
@@ -383,10 +386,10 @@ in both the command line and eligible dialog fields. The former Navigation &
 suggestions category is removed; its terminology remains searchable, and the
 legacy path-hints action opens Terminal & environment.
 
-The former Options → Save Settings entry is now a deep link into Workspaces &
-saving, alongside the existing Manual saving commands. App.SaveSettings and its
-Shift+F9 binding remain compatible; it no longer exposes a separate menu item
-or opens the legacy save-settings dialog.
+Options → Save Settings (Shift+F9, as in Far) opens its own small dialog that
+asks what to save. It was briefly a deep link into Workspaces & saving; that left
+Shift+F9 without the question and the Center without a hotkey (#1282). The Manual
+saving commands of Workspaces & saving remain as another way to do the same.
 Settings search hover profiling (2026-09-09): `BenchmarkSettingsHoverSearch`
 measures a mouse move followed by a silent-screen repaint with real core/provider
 snapshots. The nonempty `editor` query previously repeated catalog matching for
@@ -456,3 +459,29 @@ or replacing the Settings inline editors. Global drive options, plugin
 configuration (including Environment Manager), and application preference actions
 still open the Center. Environment Manager's contextual profile editor was not
 redirected and needs no rollback.
+
+## Panel grouping
+
+F9 → Left/Right → Group by, or the link in Sort modes, opens independent grouping.
+Actions `Panel.GroupMenu`, `Panel.GroupBy<mode>`, `Panel.GroupReverse`,
+`Panel.GroupFoldersSeparately` and `Panel.GroupSettings` are available to the
+command palette, macros and hotkey configuration, with no new default keys.
+The canonical mode IDs are in `panel.GroupModes`.
+
+Group by defaults to Off. Each panel remembers its mode, reverse order and folder
+placement in the session, subject to AutoSavePanelSettings. Folder placement
+defaults to a separate first group. Unknown modes in old/newer sessions load as
+Off; workspace cloning carries grouping settings. Sorting applies within groups.
+
+Panels → Grouping configures `PanelGroupSmallMiB`, `PanelGroupMediumMiB`, and
+`PanelGroupLargeMiB` under `[Panel]` in settings.ini, initially 5, 10 and 100.
+These are inclusive upper bounds for Small, Medium and Large, followed by Extra
+large. They apply to logical and physical size. Apply requires positive, strictly
+increasing integers whose byte values fit int64. Cancel changes nothing; invalid
+saved tuples load the defaults. Settings changes immediately regroup open panels.
+
+Date groups use the local calendar: future days, today, yesterday, two days ago,
+then month/year newest first. Groups are refreshed on the first panel timer tick
+after midnight. Unknown metadata stays last; the parent row stays first outside
+groups. Reverse leaves both anchors and the separate Folders group in place.
+Folder sizes join size buckets only after explicit size calculation.

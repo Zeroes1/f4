@@ -44,6 +44,28 @@ func TestWithOptionReadsTheValueBackLikeLoadConfig(t *testing.T) {
 	if next := WithOption(cfg, "Panel", "ShowHiddenFiles", "yes"); next.ShowHiddenFiles {
 		t.Error("ShowHiddenFiles = yes was kept as on")
 	}
+	// The symlink arrow is off unless the key asks for it.
+	if cfg.ShowSymlinkArrow {
+		t.Error("ShowSymlinkArrow is on by default; the arrow must appear only when it is switched on")
+	}
+	if next := WithOption(cfg, "Panel", "ShowSymlinkArrow", "1"); !next.ShowSymlinkArrow {
+		t.Error("ShowSymlinkArrow = 1 was not honoured")
+	}
+	// A plain start restores the panels (far2l) unless the key asks for the
+	// current folder (mc).
+	if cfg.StartInCurrentFolder {
+		t.Error("StartInCurrentFolder is on by default; a plain start must restore the panels like far2l")
+	}
+	if next := WithOption(cfg, "Startup", "StartInCurrentFolder", "1"); !next.StartInCurrentFolder {
+		t.Error("Startup/StartInCurrentFolder = 1 was not honoured")
+	}
+	// The tar index cache is on unless the key turns it off.
+	if !cfg.ArchiveTarIndexCache {
+		t.Error("ArchiveTarIndexCache is off by default")
+	}
+	if next := WithOption(cfg, "Panel", "ArchiveTarIndexCache", "0"); next.ArchiveTarIndexCache {
+		t.Error("Panel/ArchiveTarIndexCache = 0 was not honoured")
+	}
 	cfg.EditorTabSize = 2
 	next := WithOption(cfg, "Panel", "ShowDirPrefix", "1")
 	if !next.ShowDirPrefix || next.EditorTabSize != 2 {

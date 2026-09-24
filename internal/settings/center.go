@@ -336,19 +336,31 @@ func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 		v.scroll = max(0, min(v.bar.Max, v.scroll+step))
 		v.positionRows()
+		// The rows moved under a pointer that did not: the setting it is over
+		// now is the one to explain (#1273).
+		v.describeRowAt(int(e.MouseY))
 		return true
 	}
 	if int(e.MouseX) == v.X2 && v.bar.ProcessMouse(e) {
 		return true
 	}
 	handled := v.Group.ProcessMouse(e)
+	v.describeRowAt(int(e.MouseY))
+	return handled
+}
+
+// describeRowAt hands the setting drawn on screen row y to onFocus, which
+// shows what it does.
+func (v *settingsViewport) describeRowAt(y int) {
+	if v.onFocus == nil {
+		return
+	}
 	for _, r := range v.rows {
-		if int(e.MouseY) >= v.Y1+r.y-v.scroll && int(e.MouseY) < v.Y1+r.y+r.height-v.scroll && v.onFocus != nil {
+		if y >= v.Y1+r.y-v.scroll && y < v.Y1+r.y+r.height-v.scroll {
 			v.onFocus(r)
-			break
+			return
 		}
 	}
-	return handled
 }
 
 type settingsHelp struct {
@@ -597,6 +609,9 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 	c.apply = vtui.NewButton(0, 0, settingsText("Apply", "&Apply"))
 	c.ok = vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	c.cancel = vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
+	// Enter applies (see ProcessKey), so Apply is the dialog's default button
+	// and vtui highlights it even when it is not focused (#320).
+	c.apply.IsDefault = true
 	c.previous = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Previous", "Previous match"))}
 	c.next = &settingsSearchButton{vtui.NewButton(0, 0, settingsText("Next", "Next match"))}
 	c.previous.ScreenObject.SetText("[←]")
@@ -692,12 +707,26 @@ func (c *settingsCenter) restrictTo(ids ...string) {
 	c.layoutWindow()
 }
 
+// A terminal smaller than this cannot hold the settings in a window of half its
+// width: the pages, and the hotkey table above all, need every column there is.
+// The dialog then opens maximized, and its zoom button gives the ordinary size
+// back (#1239).
+const (
+	smallSettingsScreenWidth  = 120
+	smallSettingsScreenHeight = 30
+)
+
 func (c *settingsCenter) ResizeConsole(w, h int) {
 	c.screenW, c.screenH = max(1, w), max(1, h)
 	if !c.positioned {
 		dw, dh := min(w, max(72, w/2)), min(h, max(22, h*3/4))
 		c.SetPosition((w-dw)/2, (h-dh)/2, (w+dw)/2-1, (h+dh)/2-1)
 		c.positioned = true
+		if w < smallSettingsScreenWidth || h < smallSettingsScreenHeight {
+			c.SavedBounds = &vtui.Rect{X1: c.X1, Y1: c.Y1, X2: c.X2, Y2: c.Y2}
+			top := vtui.FrameManager.WorkspaceTopInset()
+			c.SetPosition(0, top, w-1, max(top, h-2))
+		}
 	} else if c.SavedBounds != nil {
 		// Match vtui's BaseWindow.ToggleZoom: the workspace tab strip owns the
 		// rows above and the key bar owns the row below, and both are drawn
@@ -834,7 +863,8 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		// An Enter the focused control has no use for (a checkbox, a radio
 		// group, a text field) used to reach vtui's BaseWindow fallback,
 		// Group.TriggerDefaultAction. With no default button in this dialog
-		// it presses the first button it meets while descending the page:
+		// (before Apply was flagged as one) it pressed the first button it met
+		// while descending the page:
 		// Enter on the first checkbox of Terminal & environment clicked
 		// Environment profiles' Add, and the unnamed profile failed the next
 		// Apply; File associations and User menus saved an empty record
@@ -964,6 +994,19 @@ func (c *settingsCenter) groupLabel(id string) string {
 	return settingsText(settingsGroupKey(id), id)
 }
 func settingsError(format string, args ...any) error { return f4settings.Error(format, args...) }
+
+// reportFailure puts a failure in the status line. That line is one row long
+// and cuts what does not fit, and what does not fit is often the part that says
+// what is wrong: a Colorer error names the file it could not open at the very
+// end (#277). A text that was cut is shown whole in a message as well.
+func (c *settingsCenter) reportFailure(text string) {
+	c.status = text
+	if c.apply == nil || vtui.StringWidth(text) <= max(0, c.apply.X1-c.X1-3) {
+		return
+	}
+	vtui.ShowMessageOnEx(c.Window, settingsText("Title", "Settings"), text, []string{i18n.Msg("vtui.Ok")}, vtui.MessageWarn)
+}
+
 func settingsErrorText(err error) string {
 	if localized, ok := err.(interface {
 		Localized(string, func(string) string) string
@@ -1258,7 +1301,7 @@ func (c *settingsCenter) commit(closeAfter bool) {
 		settingsTraceDirty(s)
 		for id, err := range s.draft.Validate() {
 			vtui.DebugLog("SETTINGS_TRACE: validate %s failed: %s: %v", s.catalog.ID, id, err)
-			c.status = id + ": " + settingsErrorText(err)
+			c.reportFailure(id + ": " + settingsErrorText(err))
 			return
 		}
 	}
@@ -1291,7 +1334,7 @@ func (c *settingsCenter) commit(closeAfter bool) {
 			}
 			if len(r.Errors) > 0 {
 				for id, err := range r.Errors {
-					c.status = id + ": " + settingsErrorText(err)
+					c.reportFailure(id + ": " + settingsErrorText(err))
 					break
 				}
 				c.rebuildCategory()
@@ -1319,8 +1362,21 @@ func (c *settingsCenter) runBackground(worker func(context.Context) error, done 
 	c.apply.SetDisabled(true)
 	c.ok.SetDisabled(true)
 	c.running = vtui.RunAsync(func(task *vtui.TaskContext) {
-		err := worker(task)
+		progressShown := false
+		report := func(text string) {
+			task.RunOnUI(func() {
+				if c.running != nil {
+					progressShown = true
+					c.status = text
+					vtui.FrameManager.Redraw()
+				}
+			})
+		}
+		err := worker(context.WithValue(task, settingsProgressKey{}, report))
 		task.RunOnUI(func() {
+			if progressShown && err == nil {
+				c.status = "" // what it said while working is not a result
+			}
 			c.running = nil
 			c.search.SetDisabled(false)
 			c.sidebar.SetDisabled(false)
@@ -1328,7 +1384,7 @@ func (c *settingsCenter) runBackground(worker func(context.Context) error, done 
 			c.ok.SetDisabled(false)
 			c.rebuildCategory()
 			if err != nil {
-				c.status = settingsErrorText(err)
+				c.reportFailure(settingsErrorText(err))
 			}
 			if done != nil {
 				done(err)
@@ -1339,6 +1395,12 @@ func (c *settingsCenter) runBackground(worker func(context.Context) error, done 
 		})
 	})
 }
+
+// AllowsProgressOverlay lets an operation started from the settings (an update
+// download, a plugin install) show its progress screen over this window
+// instead of waiting for it to close.
+func (c *settingsCenter) AllowsProgressOverlay() bool { return true }
+
 func (c *settingsCenter) Close() {
 	if c.running != nil {
 		c.closePending = true
@@ -1586,6 +1648,18 @@ func (c *settingsCenter) navigate(category, collection, record string, create bo
 		for i, cat := range c.categories {
 			if cat.ID == category {
 				c.sidebar.SetSelectPos(i)
+			}
+		}
+	}
+	if collection == "" && record != "" {
+		for _, row := range c.page.rows {
+			if row.control != nil && row.control.GetId() == "setting:"+record {
+				c.page.scroll = row.y
+				c.page.positionRows()
+				c.SetFocusedItem(c.page)
+				c.page.SetFocusedItem(row.control)
+				c.describe(row)
+				break
 			}
 		}
 	}

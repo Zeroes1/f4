@@ -19,7 +19,6 @@ import (
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/plughost"
-	"github.com/unxed/f4/internal/settings"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
@@ -528,9 +527,15 @@ func TestPanelsFrame_CtrlViewModes(t *testing.T) {
 }
 
 func TestPanelsFrame_KeyHandling(t *testing.T) {
+	// Keep global hotkey conditions from observing a frame left by another shuffled test.
+	// The action's NoTerminalApp condition must inspect this test's panel.
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
 	pf := panel.NewPanelsFrame()
 	defer pf.Close()
 	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
 
 	// 1. Test Tab to switch active panel
 	if pf.ActiveIdx != 1 {
@@ -969,6 +974,56 @@ func TestPanelsFrame_BToggle_WithQuickView(t *testing.T) {
 	config.App.InfoPanelBytes = before
 }
 
+func TestPanelsFrame_CurrentExtensionShortcuts(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	old := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = old })
+	oldMacros := macro.MacroMgr
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() { macro.MacroMgr = oldMacros })
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	fp := pf.GetActivePanel()
+	fp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "one.TXT"}},
+		{VFSItem: vfs.VFSItem{Name: "two.txt"}},
+		{VFSItem: vfs.VFSItem{Name: "three.go"}},
+		{VFSItem: vfs.VFSItem{Name: "folder.txt", IsDir: true}},
+	}
+	fp.SetCursorIndex(1)
+	fp.Refresh()
+	pf.CmdLine.Edit.SetText("unfinished command")
+	for _, ctrl := range []vtinput.ControlKeyState{vtinput.LeftCtrlPressed, vtinput.RightCtrlPressed} {
+		for _, pair := range [][2]string{{"CtrlAdd", "CtrlSubtract"}, {"Ctrl=", "Ctrl-"}} {
+			for _, noChar := range []bool{false, true} {
+				for i, key := range pair {
+					e := keymap.ParseFarKey(key)
+					e.ControlKeyState = ctrl
+					if noChar {
+						e.Char = 0
+					}
+					if !pressKey(pf, e) {
+						t.Errorf("%s (ctrl=%d noChar=%t) was not handled", key, ctrl, noChar)
+					}
+					for idx, entry := range fp.Entries {
+						want := i == 0 && (idx == 1 || idx == 2)
+						if entry.Selected != want {
+							t.Errorf("%s (ctrl=%d noChar=%t): %s selected=%t, want %t", key, ctrl, noChar, entry.Name, entry.Selected, want)
+						}
+					}
+					if fp.GetCursorIndex() != 1 || pf.CmdLine.Edit.GetText() != "unfinished command" {
+						t.Fatalf("%s: cursor=%d command=%q", key, fp.GetCursorIndex(), pf.CmdLine.Edit.GetText())
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestPanelsFrame_SelectionByMask(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
@@ -1250,9 +1305,9 @@ func TestPanelsFrame_CtrlF12SortMenu(t *testing.T) {
 	if !ok {
 		t.Fatalf("Ctrl+F12 top frame = %T, want *vtui.VMenu", vtui.FrameManager.GetTopFrame())
 	}
-	// Five sort modes plus the sort-group toggle on the last row.
-	if len(menu.Items) != 6 {
-		t.Fatalf("sort menu has %d items, want 6", len(menu.Items))
+	// Five sort modes, the legacy sort-group toggle and the grouping menu.
+	if len(menu.Items) != 7 {
+		t.Fatalf("sort menu has %d items, want 7", len(menu.Items))
 	}
 	if !strings.Contains(menu.Items[5].Text, i18n.Msg("Menu.SortUseGroups")) {
 		t.Fatalf("last sort menu row = %q, want the sort-group toggle", menu.Items[5].Text)
@@ -1632,19 +1687,16 @@ func TestPanelsFrame_FilesMenuLabels(t *testing.T) {
 		t.Errorf("Expected Files menu label '&Files', got %q", filesMenu.Label)
 	}
 
-	expected := "&" + i18n.Msg("Menu.Files.RenMov")
+	expected := plainMenuText(i18n.Msg("Menu.Files.RenMov"))
 	var renMove *vtui.MenuItem
 	for i := range filesMenu.SubItems {
-		if filesMenu.SubItems[i].Text == expected {
+		if plainMenuText(filesMenu.SubItems[i].Text) == expected {
 			renMove = &filesMenu.SubItems[i]
 			break
 		}
 	}
 	if renMove == nil {
 		t.Fatalf("Files menu has no item %q", expected)
-	}
-	if renMove.Text != expected {
-		t.Errorf("Expected Files item %q, got %q", expected, renMove.Text)
 	}
 
 	if renMove.Shortcut != "F6" {
@@ -1741,12 +1793,12 @@ func TestPanelsFrame_F9HiddenPanels_UsesShellMenuAndKeepsTerminalLog(t *testing.
 	}
 
 	wantTerminalItems := map[string]bool{
-		i18n.Msg("Action.Terminal.ViewLog"): false,
-		i18n.Msg("Action.Terminal.EditLog"): false,
+		plainMenuText(i18n.Msg("Action.Terminal.ViewLog")): false,
+		plainMenuText(i18n.Msg("Action.Terminal.EditLog")): false,
 	}
 	for _, item := range items[0].SubItems {
-		if _, ok := wantTerminalItems[item.Text]; ok {
-			wantTerminalItems[item.Text] = true
+		if _, ok := wantTerminalItems[plainMenuText(item.Text)]; ok {
+			wantTerminalItems[plainMenuText(item.Text)] = true
 		}
 	}
 	for label, found := range wantTerminalItems {
@@ -1883,28 +1935,13 @@ func TestPanelsFrame_ShiftF9_SaveSettings(t *testing.T) {
 	if !pressKey(pf, ev) {
 		t.Error("Expected PanelsFrame to handle Shift+F9 keypress")
 	}
-	center, ok := vtui.FrameManager.GetTopFrame().(*settings.Center)
-	if !ok || center.Category() != "workspaces" {
-		t.Fatalf("Shift+F9 top frame=%T", vtui.FrameManager.GetTopFrame())
+	// Shift+F9 is Far's "save setup": the dialog that asks what to save (#1282).
+	top := vtui.FrameManager.GetTopFrame()
+	dlg, ok := top.(vtui.Container)
+	if !ok || top.GetTitle() != i18n.Msg("SaveSettings.Title") {
+		t.Fatalf("Shift+F9 top frame=%T, want the save-settings dialog", top)
 	}
-	defer center.Close()
-	var save *vtui.Button
-	var walk func(vtui.UIElement)
-	walk = func(item vtui.UIElement) {
-		if item.GetId() == "settings-command:save.preferences" {
-			save, _ = item.(*vtui.Button)
-		}
-		if c, ok := item.(vtui.Container); ok {
-			for _, child := range c.GetChildren() {
-				walk(child)
-			}
-		}
-	}
-	walk(center)
-	if save == nil {
-		t.Fatal("manual save command missing")
-	}
-	save.OnClick()
+	testutil.ClickDialogButton(t, dlg, "Save")
 
 	// Проверяем, что файл настроек действительно был записан на диск
 	info, err := os.Stat(tmp.Name())

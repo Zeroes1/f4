@@ -64,6 +64,23 @@ var architectureLayers = map[string]int{
 	// all four without putting one of them under another.
 	"internal/ini": 0,
 
+	// The far2l file mask matcher. A leaf because a file mask is a string
+	// question with no owner: the panel matches associations with it, the
+	// archive plugin asks it which names Enter must leave to their
+	// association, and neither may import the other.
+	"internal/filemask": 0,
+
+	// Menu hotkeys made distinct once a menu is built. A leaf over vtui only.
+	"internal/menuhotkeys": 0,
+
+	// Where f4 keeps the indexes of the tar archives it opened: paths and file
+	// names only, so the archive plugin and the file operations can share it.
+	"internal/tarindexcache": 0,
+
+	// The frame watchdog: a leaf that imports nothing of ours, so any view
+	// can mark its frame and the root can arm it from a command line switch.
+	"internal/stallwatch": 0,
+
 	// The shared primitives: a notification channel and the history store.
 	// Both are leaves and both take what they cannot reach as a seam —
 	// history.SamePath and the config directory are set by the root.

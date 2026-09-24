@@ -103,6 +103,59 @@ func init() {
 		}
 	}
 
+	for _, spec := range panel.GroupModes {
+		registerAction(action.Action{Name: "Panel.GroupBy" + spec.ID,
+			Area:        "Shell",
+			Label:       "Group by: " + spec.Label,
+			LabelKey:    "Action.Panel.GroupBy" + spec.ID,
+			Description: "Choose the grouping field independently of sorting",
+			DescKey:     "Group.Choose.Desc",
+			Handler: withPF(func(pf *panel.PanelsFrame) {
+				if fp := pf.GetActivePanel(); fp != nil {
+					fp.SetGrouping(spec.Mode, fp.GroupReverse, fp.GroupFoldersSeparately)
+				}
+			})})
+	}
+	registerAction(action.Action{Name: "Panel.GroupMenu",
+		Area:        "Shell",
+		Label:       "Group by...",
+		LabelKey:    "Group.Menu",
+		Description: "Show panel grouping modes",
+		DescKey:     "Group.Menu.Desc",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fp := pf.GetActivePanel(); fp != nil {
+				fp.ShowGroupMenu()
+			}
+		})})
+	registerAction(action.Action{Name: "Panel.GroupReverse",
+		Area:        "Shell",
+		Label:       "Reverse group order",
+		LabelKey:    "Group.Reverse",
+		Description: "Reverse the order of groups",
+		DescKey:     "Group.Reverse.Desc",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fp := pf.GetActivePanel(); fp != nil {
+				fp.SetGrouping(fp.GroupBy, !fp.GroupReverse, fp.GroupFoldersSeparately)
+			}
+		})})
+	registerAction(action.Action{Name: "Panel.GroupFoldersSeparately",
+		Area:        "Shell",
+		Label:       "Group folders separately",
+		LabelKey:    "Group.SeparateFolders",
+		Description: "Toggle a separate first group for folders",
+		DescKey:     "Group.SeparateFolders.Desc",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fp := pf.GetActivePanel(); fp != nil {
+				fp.SetGrouping(fp.GroupBy, fp.GroupReverse, !fp.GroupFoldersSeparately)
+			}
+		})})
+	registerAction(action.Action{Name: "Panel.GroupSettings",
+		Area:        "Shell",
+		Label:       "Group size thresholds",
+		LabelKey:    "Group.Settings",
+		Description: "Configure the size boundaries for panel groups",
+		DescKey:     "Group.Settings.Desc"})
+
 	// withMultiEditor is for the handful of actions that know about the
 	// multi-caret set and act on it themselves.
 	withMultiEditor := func(fn func(ev *editor.EditorView)) func() bool {
@@ -284,6 +337,16 @@ func init() {
 		Handler:     actionWorkspaceNew,
 	})
 	registerAction(action.Action{
+		Name:        "Workspace.Fork",
+		Area:        "Common",
+		Label:       "Fork Workspace",
+		LabelKey:    "Action.Workspace.Fork",
+		Description: "Clone the current panels into a new workspace",
+		DescKey:     "Action.Workspace.Fork.Desc",
+		DefaultKeys: []string{"CtrlF11"},
+		Handler:     actionWorkspaceNew,
+	})
+	registerAction(action.Action{
 		Name:        "Workspace.NewTerminal",
 		Area:        "Common",
 		Label:       "Terminal in New Workspace",
@@ -375,9 +438,19 @@ func init() {
 		LabelKey:    "Menu.Files.View",
 		Description: "Open file in viewer",
 		DescKey:     "Action.File.View.Desc",
-		DefaultKeys: []string{"F3"},
+		DefaultKeys: []string{"F3", "Num5"},
 		MenuPath:    "Files",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFile(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "File.ViewHex",
+		Area:        "Shell",
+		Label:       "View in Hex",
+		LabelKey:    "Action.File.ViewHex",
+		Description: "Open the selected file in the hex viewer",
+		DescKey:     "Action.File.ViewHex.Desc",
+		DefaultKeys: []string{"AltF3"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFileHex(pf) }),
 	})
 	registerAction(action.Action{
 		Name:        "File.Edit",
@@ -607,7 +680,7 @@ func init() {
 		LabelKey:            "Action.Panel.SelectGroup",
 		Description:         "Select files by mask",
 		DescKey:             "Action.Panel.SelectGroup.Desc",
-		DefaultKeys:         []string{"Add"},
+		DefaultKeys:         []string{"Add", "CtrlShiftVK_BB"},
 		MenuPath:            "Files",
 		MenuSeparatorBefore: true,
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -630,7 +703,7 @@ func init() {
 		LabelKey:    "Action.Panel.DeselectGroup",
 		Description: "Deselect files by mask",
 		DescKey:     "Action.Panel.DeselectGroup.Desc",
-		DefaultKeys: []string{"Subtract"},
+		DefaultKeys: []string{"Subtract", "CtrlShiftVK_BD"},
 		MenuPath:    "Files",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
@@ -643,6 +716,40 @@ func init() {
 			}
 		}),
 	})
+	// Ctrl+Gray +/- is standard Far Manager extension selection, documented in
+	// FarEng.hlf's PanelCmd/SelectFiles topics. Keep Ctrl+=/- as aliases so this
+	// operation remains available on laptops and keyboards without a numpad.
+	// OEM aliases use the stable VK spelling expected by EventToHotkeyString.
+	registerAction(action.Action{
+		Name:        "Panel.SelectCurrentExtension",
+		Area:        "Shell",
+		Label:       "Select Current Extension",
+		LabelKey:    "Action.Panel.SelectCurrentExtension",
+		Description: "Select files with the current extension, or all folders",
+		DescKey:     "Action.Panel.SelectCurrentExtension.Desc",
+		DefaultKeys: []string{"CtrlAdd", "CtrlVK_BB"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.ApplyCurrentExtensionSelection(true)
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.DeselectCurrentExtension",
+		Area:        "Shell",
+		Label:       "Deselect Current Extension",
+		LabelKey:    "Action.Panel.DeselectCurrentExtension",
+		Description: "Deselect files with the current extension, or all folders",
+		DescKey:     "Action.Panel.DeselectCurrentExtension.Desc",
+		DefaultKeys: []string{"CtrlSubtract", "CtrlVK_BD"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.ApplyCurrentExtensionSelection(false)
+			}
+		}),
+	})
 	registerAction(action.Action{
 		Name:        "Panel.InvertSelection",
 		Area:        "Shell",
@@ -650,7 +757,7 @@ func init() {
 		LabelKey:    "Action.Panel.InvertSelection",
 		Description: "Invert file selection",
 		DescKey:     "Action.Panel.InvertSelection.Desc",
-		DefaultKeys: []string{"Multiply"},
+		DefaultKeys: []string{"Multiply", "AltVK_BB"},
 		MenuPath:    "Files",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
@@ -725,6 +832,38 @@ func init() {
 		DescKey:     "Action.Panel.FileAssociations.Desc",
 		MenuPath:    "Commands",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { panel.ShowFileAssociations(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Base64EncodeFile",
+		Area:        "Shell",
+		Label:       "Encode selected file as Base64",
+		LabelKey:    "Action.Panel.Base64EncodeFile",
+		Description: "Create a Base64 copy of the selected file",
+		DescKey:     "Action.Panel.Base64EncodeFile.Desc",
+		MenuPath:    "Commands",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if path, err := panel.TransformSelectedFileBase64(pf, true); err != nil {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+			} else {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), fmt.Sprintf(i18n.Msg("Panel.Base64.Created"), path), []string{i18n.Msg("vtui.Ok")})
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Base64DecodeFile",
+		Area:        "Shell",
+		Label:       "Decode selected Base64 file",
+		LabelKey:    "Action.Panel.Base64DecodeFile",
+		Description: "Create a decoded copy of the selected Base64 file",
+		DescKey:     "Action.Panel.Base64DecodeFile.Desc",
+		MenuPath:    "Commands",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if path, err := panel.TransformSelectedFileBase64(pf, false); err != nil {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+			} else {
+				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), fmt.Sprintf(i18n.Msg("Panel.Base64.Created"), path), []string{i18n.Msg("vtui.Ok")})
+			}
+		}),
 	})
 	registerAction(action.Action{
 		Name:                "File.Find",
@@ -871,6 +1010,23 @@ func init() {
 		MenuPath:    "Commands",
 		MenuSubPath: "History",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lHistory(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "History.ImportFar2lFolders",
+		Area:        "Shell",
+		Label:       "Import far2l Folder History",
+		Description: "Import folder history from far2l (.hst)",
+		MenuPath:    "Commands",
+		MenuSubPath: "History",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lFolderHistory(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "Settings.ImportFar2l",
+		Area:        "Shell",
+		Label:       "Import far2l Settings",
+		Description: "Import compatible settings from far2l (.ini)",
+		MenuPath:    "Commands",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lSettings(pf) }),
 	})
 	registerAction(action.Action{
 		Name:        "Panel.GoParent",
@@ -1346,6 +1502,18 @@ func init() {
 		Handler:             withPF(func(pf *panel.PanelsFrame) { vtui.FrameManager.EmitCommand(appcmd.CmUpdateSettings, nil) }),
 	})
 	registerAction(action.Action{
+		Name:        "Settings.CheckUpdates",
+		Area:        "Shell",
+		Label:       "Check for Updates",
+		LabelKey:    "Menu.CheckUpdates",
+		Description: "Check for a new f4 release now and offer to install it",
+		DescKey:     "Action.Settings.CheckUpdates.Desc",
+		MenuPath:    "Options",
+		// The check waits for GitHub, so it must not hold the UI loop; it
+		// posts its result back through FrameManager when it completes.
+		Handler: withPF(func(pf *panel.PanelsFrame) { go CheckForUpdates(pf, true) }),
+	})
+	registerAction(action.Action{
 		Name:        "Settings.Proxy",
 		Area:        "Shell",
 		Label:       "Proxy Settings",
@@ -1416,7 +1584,7 @@ func init() {
 			// far2l's Alt+F9: maximize the window, or restore it when it is
 			// maximized. vtui does it for every GUI backend and for a classic
 			// Windows console window, from the window's real state.
-			if vtui.FrameManager != nil && vtui.FrameManager.ToggleWindowMaximized() {
+			if toggleDirectWindowsTerminalWindow() || (vtui.FrameManager != nil && vtui.FrameManager.ToggleWindowMaximized()) {
 				return
 			}
 			// A terminal emulator's window is out of reach; the xterm resize
@@ -1781,7 +1949,7 @@ func init() {
 		Label:       "Sync Panels",
 		Description: "Open the active panel's directory in the passive panel",
 		DescKey:     "Action.Panel.SyncPanels.Desc",
-		DefaultKeys: []string{"AltI"},
+		DefaultKeys: []string{"AltShiftI"},
 		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.SyncPassivePanel() }),
 	})
 	registerAction(action.Action{
@@ -1993,6 +2161,7 @@ func init() {
 		Name:         "App.Quit",
 		Area:         "Shell",
 		Label:        "Quit",
+		LabelKey:     "KeyBar.F10",
 		Description:  "Quit f4",
 		DescKey:      "Action.App.Quit.Desc",
 		DefaultKeys:  []string{"F10:NoAltScreenApp"},
@@ -2207,6 +2376,28 @@ func init() {
 		DefaultKeys: []string{"CtrlShiftN"},
 		MenuPath:    "Edit",
 		Handler:     withMultiEditor(func(ev *editor.EditorView) { ev.AddCursorAtNextOccurrence() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.SkipOccurrence",
+		Area:        "Editor",
+		Label:       "Skip Occurrence",
+		LabelKey:    "Action.Editor.SkipOccurrence",
+		Description: "Move the last added cursor to the next copy of the selected text, without keeping the one it leaves",
+		DescKey:     "Action.Editor.SkipOccurrence.Desc",
+		DefaultKeys: []string{"CtrlAltShiftN"},
+		MenuPath:    "Edit",
+		Handler:     withMultiEditor(func(ev *editor.EditorView) { ev.SkipOccurrence() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.RemoveLastOccurrence",
+		Area:        "Editor",
+		Label:       "Remove Last Occurrence",
+		LabelKey:    "Action.Editor.RemoveLastOccurrence",
+		Description: "Take back the last added cursor and go back to the previous copy",
+		DescKey:     "Action.Editor.RemoveLastOccurrence.Desc",
+		DefaultKeys: []string{"CtrlAltShiftU"},
+		MenuPath:    "Edit",
+		Handler:     withMultiEditor(func(ev *editor.EditorView) { ev.RemoveLastOccurrence() }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.SelectAllOccurrences",

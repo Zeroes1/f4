@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/unxed/f4/internal/ini"
@@ -468,6 +469,7 @@ type F4Config struct {
 	ShowHiddenFiles          bool
 	ShowDirPrefix            bool
 	ShowHighlightMarks       bool
+	ShowSymlinkArrow         bool
 	SeparateFileExtensions   bool
 	PanelScrollbarMode       PanelScrollbarMode
 	ShowPanelFileInfo        bool
@@ -490,12 +492,23 @@ type F4Config struct {
 	PromptFormat             string
 	NavigationMode           PanelNavigationMode
 	PanelAutoFilter          bool // panel quick search hides non-matching rows instead of moving the cursor
+	PanelGroupSmallMiB       int
+	PanelGroupMediumMiB      int
+	PanelGroupLargeMiB       int
 	SearchCommandStayFocused bool
 	SyncPanelLoad            bool
 	SearchExactOnHit         bool // QuickSearch keeps only exact matches when at least one exists
 	ApplyCommandParallelism  int  // 0 = unlimited; absent config defaults to runtime.NumCPU()
 	EditorAutoComplete       bool
 	EditorAutoCompleteMask   string
+	// ArchiveEnterExcludeMask names the files Enter must not open as an
+	// archive even when their content is one. It is a far2l file mask, so
+	// "|" still carves an exception out of it.
+	ArchiveEnterExcludeMask string
+	// ArchiveTarIndexCache keeps the file index of an opened tar archive in the
+	// cache so that opening it again is instant. Off rebuilds the index every
+	// time, which is slower and never out of date (#1187).
+	ArchiveTarIndexCache     bool
 	EditorExpandTabs         int
 	EditorAutoIndent         bool
 	EditorCursorBeyondEOL    bool
@@ -596,9 +609,15 @@ type F4Config struct {
 	// StartupMode, GuiBackend and TTYBackend answer "what should plain `f4`
 	// do?". They are only defaults: --gui/--tty still win on any single run.
 	// An empty backend means automatic selection.
-	StartupMode            StartupMode
-	GuiBackend             string
-	TTYBackend             string
+	StartupMode StartupMode
+	GuiBackend  string
+	TTYBackend  string
+	// StartInCurrentFolder picks what a start from a terminal does with the
+	// panels. Off is far2l's and Far's way: `f4` restores the panels of the
+	// last session, and a folder on the command line replaces only its own
+	// panel. On is mc's way: `f4` opens the current folder in both panels
+	// (issues #822, #495).
+	StartInCurrentFolder   bool
 	ConsoleTitleTemplate   string
 	DisplayFullPathInTitle bool
 	UpdateChannel          int // 0 = Stable, 1 = Nightly
@@ -659,6 +678,7 @@ var App = F4Config{
 	ShowHiddenFiles:          true,
 	ShowDirPrefix:            false,
 	ShowHighlightMarks:       false,
+	ShowSymlinkArrow:         false,
 	SeparateFileExtensions:   false,
 	PanelScrollbarMode:       PanelScrollbarMinimal,
 	ShowPanelFileInfo:        false,
@@ -681,12 +701,20 @@ var App = F4Config{
 	PromptFormat:             "$u@$n:$p$# ",
 	NavigationMode:           NavigationClassic,
 	PanelAutoFilter:          false,
+	PanelGroupSmallMiB:       5,
+	PanelGroupMediumMiB:      10,
+	PanelGroupLargeMiB:       100,
 	SearchCommandStayFocused: false,
 	SyncPanelLoad:            false,
 	SearchExactOnHit:         false,
 	ApplyCommandParallelism:  runtime.NumCPU(),
 	EditorAutoComplete:       true,
 	EditorAutoCompleteMask:   "*.go;*.c;*.cpp;*.h;*.hpp;*.py;*.js;*.ts;*.rs;*.java;*.sh;*.txt;*.md;*.html;*.css;*.json",
+	// far2l's KnownDocumentTypes (multiarc/src/MultiArc.cpp), the list it
+	// refuses to sink into on Enter "even while its really archive", plus
+	// .epub, which f4 issue #1184 named and far2l's list does not.
+	ArchiveTarIndexCache:     true,
+	ArchiveEnterExcludeMask:  "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub",
 	EditorExpandTabs:         0,
 	EditorAutoIndent:         true,
 	EditorCursorBeyondEOL:    false,
@@ -763,6 +791,7 @@ var App = F4Config{
 	GuiPosY:                  0,
 	GuiPositionSaved:         false,
 	StartupMode:              StartupModeAuto,
+	StartInCurrentFolder:     false,
 	GuiBackend:               "",
 	TTYBackend:               "",
 	ConsoleTitleTemplate:     "f4 %Ver %Platform %Admin - %State",
@@ -817,8 +846,23 @@ func normalizeHighlighter(name string) string {
 	return "Chroma"
 }
 
+// colorStyleConfigured records whether any settings.ini that LoadConfig read
+// names a ColorStyle. It is the only way to tell "the user chose Radiola" from
+// "nobody chose anything, so Radiola is the fallback", which is what lets a
+// first start pick a style that suits the console (see app.firstRunColorStyle).
+var colorStyleConfigured atomic.Bool
+
+// ColorStyleConfigured reports whether the last LoadConfig found a ColorStyle
+// in a settings.ini. False means the value in App.ColorStyle is only the
+// built-in default.
+func ColorStyleConfigured() bool {
+	return colorStyleConfigured.Load()
+}
+
 func LoadConfig() {
-	parseConfigInto(&App, loadSettingsIni())
+	merged := loadSettingsIni()
+	parseConfigInto(&App, merged)
+	colorStyleConfigured.Store(merged.GetString("Interface", "ColorStyle", "") != "")
 	// What was read takes effect only here. parseConfigInto itself touches
 	// nothing outside the struct it fills, which is what lets f4:config work
 	// out defaults and try an edit without disturbing the running f4.
@@ -880,6 +924,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	}
 	cfg.ShowDirPrefix = merged.GetString("Panel", "ShowDirPrefix", "0") == "1"
 	cfg.ShowHighlightMarks = merged.GetString("Panel", "ShowHighlightMarks", "0") == "1"
+	cfg.ShowSymlinkArrow = merged.GetString("Panel", "ShowSymlinkArrow", "0") == "1"
 	cfg.SeparateFileExtensions = merged.GetString("Panel", "SeparateFileExtensions", "0") == "1"
 	if mode := merged.GetString("Panel", "PanelScrollbarMode", ""); mode != "" {
 		cfg.PanelScrollbarMode = ParsePanelScrollbarMode(mode)
@@ -921,6 +966,12 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 		cfg.NavigationMode = NavigationClassic
 	}
 	cfg.PanelAutoFilter = merged.GetString("Panel", "PanelAutoFilter", "0") == "1"
+	cfg.PanelGroupSmallMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupSmallMiB", "5"))
+	cfg.PanelGroupMediumMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupMediumMiB", "10"))
+	cfg.PanelGroupLargeMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupLargeMiB", "100"))
+	if !ValidPanelGroupLimits(cfg.PanelGroupSmallMiB, cfg.PanelGroupMediumMiB, cfg.PanelGroupLargeMiB) {
+		cfg.PanelGroupSmallMiB, cfg.PanelGroupMediumMiB, cfg.PanelGroupLargeMiB = 5, 10, 100
+	}
 	cfg.SearchCommandStayFocused = merged.GetString("Panel", "SearchCommandStayFocused", "0") == "1"
 	cfg.SyncPanelLoad = merged.GetString("Panel", "SyncPanelLoad", "0") == "1"
 	cfg.SearchExactOnHit = merged.GetString("Panel", "SearchExactOnHit", "0") == "1"
@@ -983,6 +1034,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.StartupMode = ParseStartupMode(merged.GetString("Startup", "Mode", "auto"))
 	cfg.GuiBackend = NormalizeStartupGuiBackend(merged.GetString("Startup", "GuiBackend", ""))
 	cfg.TTYBackend = NormalizeStartupTTYBackend(merged.GetString("Startup", "TTYBackend", ""))
+	cfg.StartInCurrentFolder = merged.GetString("Startup", "StartInCurrentFolder", "0") == "1"
 	cfg.EnforceColorCorrection = merged.GetString("Dialogs", "EnforceColorCorrection", "1") == "1"
 	cfg.MenuLoopScroll = merged.GetString("VMenu", "MenuStopWrapOnEdge", "1") == "1"
 	_, _ = fmt.Sscanf(merged.GetString("Appearance", "HighlightPriority", "0"), "%d", &cfg.HighlightPriority)
@@ -1001,6 +1053,8 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 
 	cfg.EditorAutoComplete = merged.GetString("Editor", "AutoComplete", "1") == "1"
 	cfg.EditorAutoCompleteMask = merged.GetString("Editor", "AutoCompleteMask", "*.go;*.c;*.cpp;*.h;*.hpp;*.py;*.js;*.ts;*.rs;*.java;*.sh;*.txt;*.md;*.html;*.css;*.json")
+	cfg.ArchiveTarIndexCache = merged.GetString("Panel", "ArchiveTarIndexCache", "1") == "1"
+	cfg.ArchiveEnterExcludeMask = merged.GetString("Panel", "ArchiveEnterExcludeMask", "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub")
 
 	cfg.EditorExpandTabs = 0
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "ExpandTabs", "0"), "%d", &cfg.EditorExpandTabs)
@@ -1206,9 +1260,12 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "WorkspaceTabNumbering = %s\n", cfg.WorkspaceTabNumbering.String())
 	fmt.Fprintf(&sb, "MacKeyboard = %s\n\n", ParseMacKeysMode(cfg.MacKeyboard))
 	sb.WriteString("[Panel]\n")
+	fmt.Fprintf(&sb, "ArchiveEnterExcludeMask = %s\n", cfg.ArchiveEnterExcludeMask)
+	fmt.Fprintf(&sb, "ArchiveTarIndexCache = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveTarIndexCache])
 	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHiddenFiles])
 	fmt.Fprintf(&sb, "ShowDirPrefix = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowDirPrefix])
 	fmt.Fprintf(&sb, "ShowHighlightMarks = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHighlightMarks])
+	fmt.Fprintf(&sb, "ShowSymlinkArrow = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowSymlinkArrow])
 	fmt.Fprintf(&sb, "SeparateFileExtensions = %d\n", map[bool]int{true: 1, false: 0}[cfg.SeparateFileExtensions])
 	fmt.Fprintf(&sb, "PanelScrollbarMode = %s\n", cfg.PanelScrollbarMode.String())
 	fmt.Fprintf(&sb, "ShowPanelFileInfo = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowPanelFileInfo])
@@ -1230,6 +1287,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
 	fmt.Fprintf(&sb, "PanelAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelAutoFilter])
+	fmt.Fprintf(&sb, "PanelGroupSmallMiB = %d\nPanelGroupMediumMiB = %d\nPanelGroupLargeMiB = %d\n", cfg.PanelGroupSmallMiB, cfg.PanelGroupMediumMiB, cfg.PanelGroupLargeMiB)
 	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchCommandStayFocused])
 	// Keep the legacy key synchronized for older f4 versions and shared configs.
 	fmt.Fprintf(&sb, "VimHotkeys = %d\n", map[bool]int{true: 1, false: 0}[cfg.NavigationMode == NavigationVim])
@@ -1279,6 +1337,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "Mode = %s\n", cfg.StartupMode.String())
 	fmt.Fprintf(&sb, "GuiBackend = %s\n", cfg.GuiBackend)
 	fmt.Fprintf(&sb, "TTYBackend = %s\n", cfg.TTYBackend)
+	fmt.Fprintf(&sb, "StartInCurrentFolder = %d\n", map[bool]int{true: 1, false: 0}[cfg.StartInCurrentFolder])
 
 	sb.WriteString("\n[Update]\n")
 	fmt.Fprintf(&sb, "Channel = %d\n", cfg.UpdateChannel)
@@ -1716,10 +1775,21 @@ func CreateDefaultHighlightIni(path string) {
 # FileNameUnderCursor = foreground:#FFFFFF | background:#008080
 # FileNameSelectedUnderCursor = foreground:#FFFF00 | background:#008080
 #
-# To use one coloured rule for sorting too, add Group to that Highlight
-# section. The same mask and attributes then control both its colour and its
-# position; sections with the same Group number form one cluster. Legacy
-# [SortGroup_N] sections are still accepted for old profiles.
+# Sort groups put files of one kind together on a panel that has "Use sort
+# groups" switched on (Left/Right menu). There are two ways to define them, and
+# both may be used in one file:
+#
+# 1. Add "Group = N" to a coloured [Highlight_N] section: its mask and
+#    attributes then decide both the colour and the position, and sections
+#    with the same Group number form one cluster. Remember that the first
+#    matching Highlight section wins, so a Highlight section written only for
+#    sorting hides the colours of the sections below it unless it also says
+#    ContinueProcessing = 1.
+# 2. A [SortGroup_N] section is a rule that only sorts and colours nothing;
+#    the examples below are of this kind. It has the same Mask and attribute
+#    keys and does not interfere with the colours.
+#
+# f4 reads this file at start: restart it after editing.
 
 [SortGroup_1]
 Name = Executables

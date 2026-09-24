@@ -171,6 +171,8 @@ func handleSudoClient(conn *net.UnixConn) {
 				resp.Error = err.Error()
 			} else {
 				resp.Item = VFSItem{
+					KnownMetadata: MetadataExplicit | MetadataPermissions | MetadataMTime | MetadataHidden | MetadataExecutable, SizeKnown: true,
+					UnixMode:     uint32(info.Mode().Perm()),
 					Name:         info.Name(),
 					Size:         info.Size(),
 					IsDir:        info.IsDir(),
@@ -178,6 +180,8 @@ func handleSudoClient(conn *net.UnixConn) {
 					IsExecutable: info.Mode().Perm()&0111 != 0,
 					IsHidden:     strings.HasPrefix(info.Name(), "."),
 				}
+				fillPlatformTimes(&resp.Item, info)
+				fillPhysicalSizeCheap(&resp.Item, info)
 			}
 
 		case CmdMkDir:
@@ -193,10 +197,25 @@ func handleSudoClient(conn *net.UnixConn) {
 			}
 
 		case CmdRename:
-			err := os.Rename(req.Path, req.Path2)
+			var err error
+			if req.Flags&SudoRenameNoReplace != 0 {
+				err = renameNoReplace(req.Path, req.Path2)
+			} else {
+				err = os.Rename(req.Path, req.Path2)
+			}
 			if err != nil {
 				resp.Error = err.Error()
 			}
+		case CmdSymlink:
+			if err := os.Symlink(req.Path2, req.Path); err != nil {
+				resp.Error = err.Error()
+			}
+
+		case CmdHardlink:
+			if err := os.Link(req.Path2, req.Path); err != nil {
+				resp.Error = err.Error()
+			}
+
 		case CmdSetAttributes:
 			// Apply all 3 metadata types at once under root
 			err := os.Chmod(req.Path, os.FileMode(req.Item.UnixMode))
@@ -237,14 +256,23 @@ func handleSudoClient(conn *net.UnixConn) {
 						}
 					}
 
-					resp.Items = append(resp.Items, VFSItem{
+					item := VFSItem{
+						KnownMetadata: MetadataExplicit | MetadataHidden, SizeKnown: info != nil,
+						IsSymlink:    e.Type()&os.ModeSymlink != 0,
 						Name:         e.Name(),
 						Size:         size,
 						IsDir:        isDir,
 						MTime:        mtime,
 						IsExecutable: isExec,
 						IsHidden:     strings.HasPrefix(e.Name(), "."),
-					})
+					}
+					if info != nil {
+						item.UnixMode = uint32(info.Mode().Perm())
+						item.KnownMetadata |= MetadataPermissions | MetadataMTime | MetadataExecutable
+						fillPlatformTimes(&item, info)
+						fillPhysicalSizeCheap(&item, info)
+					}
+					resp.Items = append(resp.Items, item)
 				}
 			}
 		}

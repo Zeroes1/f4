@@ -598,11 +598,14 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		Shortcut: keymap.MenuShortcutsForAction("Shell", "Panel.SortUseGroups"),
 	})
 
+	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Group.Menu")})
 	menu.SetSelectPos(selected)
 	menu.OnAction = func(idx int) {
 		switch {
 		case idx >= 0 && idx < len(entries):
 			fsp.SetSortMode(entries[idx].mode)
+		case idx == len(entries)+1:
+			fsp.ShowGroupMenu()
 		case idx == len(entries):
 			fsp.ToggleSortGroups()
 		default:
@@ -612,7 +615,7 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		vtui.FrameManager.Redraw()
 	}
 
-	w, h := 36, len(entries)+3
+	w, h := 36, len(entries)+4
 	panelX1, panelY1, panelX2, panelY2 := fsp.GetPosition()
 	panelW := panelX2 - panelX1 + 1
 	panelH := panelY2 - panelY1 + 1
@@ -1116,6 +1119,10 @@ func findOpenedViewer(v vfs.VFS, path string) (*viewer.ViewerView, int) {
 }
 
 func showViewer(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string) {
+	showViewerMode(pf, vv, path, false)
+}
+
+func showViewerMode(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string, forceHex bool) {
 	if fileops.GlobalFileState != nil && path != "" {
 		if state := fileops.GlobalFileState.GetState(fileops.FileStateKey(vv.VFS, path)); state != nil {
 			vv.TopOffset = state.ViewerOffset
@@ -1132,11 +1139,19 @@ func showViewer(pf *panel.PanelsFrame, vv *viewer.ViewerView, path string) {
 			vv.HexAuto = false
 		}
 	}
+	if forceHex {
+		vv.HexMode = true
+		vv.HexAuto = false
+	}
 	vv.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.AddScreen(vv)
 }
 
 func actionOpenViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) {
+	actionOpenViewerMode(pf, v, path, false)
+}
+
+func actionOpenViewerMode(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
 	rememberViewerEditorHistory(v, path, historyModeView)
 	existingViewer, screenIdx := findOpenedViewer(v, path)
 	if existingViewer != nil {
@@ -1147,19 +1162,24 @@ func actionOpenViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			dlg.OnResult = func(res int) {
 				switch res {
 				case 0:
+					if forceHex {
+						existingViewer.HexMode = true
+						existingViewer.HexAuto = false
+					}
 					vtui.FrameManager.SwitchScreen(screenIdx)
 				case 1: // Reload
 					existingViewer.Close()
-					openViewerInternal(pf, v, path)
+					openViewerInternalMode(pf, v, path, forceHex)
 				case 2: // New instance
-					openViewerInternal(pf, v, path)
+					openViewerInternalMode(pf, v, path, forceHex)
 				}
 			}
 		})
 		return
 	}
-	openViewerInternal(pf, v, path)
+	openViewerInternalMode(pf, v, path, forceHex)
 }
+
 func actionSwitchEditorToViewer(ev *editor.EditorView) {
 	if ev == nil || ev.FilePath == "" || ev.Vfs == nil {
 		return
@@ -1543,10 +1563,14 @@ func imageSiblingPaths(pf *panel.PanelsFrame, v vfs.VFS, path string) ([]string,
 }
 
 func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
+	openViewerInternalMode(pf, v, path, false)
+}
+
+func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
 	// Viewer settings -> "Open images and video in their own viewers" (issue
 	// #991). Off, a picture or a video opens like any other file: as text or
 	// as hex, whatever the viewer's own binary check decides.
-	if config.App.ViewerOpenAsSupportedType {
+	if !forceHex && config.App.ViewerOpenAsSupportedType {
 		if tryOpenVideoPlayer(pf, v, path) {
 			return
 		}
@@ -1568,7 +1592,7 @@ func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			vv, err := viewer.NewViewerView(ctx.Context, v, path)
 			ctx.RunOnUI(func() {
 				if err == nil {
-					showViewer(pf, vv, path)
+					showViewerMode(pf, vv, path, forceHex)
 				} else {
 					vtui.DebugLog("PANELS: Failed to open vv for %s: %v", path, err)
 					if err == os.ErrInvalid {
@@ -1600,7 +1624,7 @@ func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			}
 			return
 		}
-		showViewer(pf, vv, path)
+		showViewerMode(pf, vv, path, forceHex)
 	})
 }
 
@@ -1765,14 +1789,19 @@ func runViewerSearch(vv *viewer.ViewerView, pattern string, reverse bool) {
 	})
 }
 
-// openPlayerPanel is the player when it is open on the passive side, which
-// is the only side it can be on while a file panel is active.
+// openPlayerPanel returns the player regardless of which side currently owns
+// the active file panel. Switching sides must not make an already open player
+// unreachable from actions such as playing the selected audio file.
 func openPlayerPanel(pf *panel.PanelsFrame) *panel.PlayerPanel {
 	if pf == nil || !pf.ShowPanels || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
 		return nil
 	}
-	player, _ := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel)
-	return player
+	for _, alt := range pf.AltPanels {
+		if player, ok := alt.(*panel.PlayerPanel); ok {
+			return player
+		}
+	}
+	return nil
 }
 
 // tryPlayInPlayerPanel is Enter on a recording while the player panel is
@@ -1848,7 +1877,7 @@ func actionExecute(pf *panel.PanelsFrame, v vfs.VFS, dir, name, path string) {
 				}
 				_, isOS := v.(*vfs.OSVFS)
 				_, isPty := v.(vfs.PtyProvider)
-				isWindowsShell := runtime.GOOS == "windows" && isOS
+				isWindowsShell := terminal.WindowsShellSyntax() && isOS
 
 				if !isWindowsShell {
 					historyCmd = "./" + historyCmd
@@ -1999,6 +2028,14 @@ func actionEditTerminalLog(pf *panel.PanelsFrame) {
 }
 
 func actionViewFile(pf *panel.PanelsFrame) {
+	actionViewFileMode(pf, false)
+}
+
+func actionViewFileHex(pf *panel.PanelsFrame) {
+	actionViewFileMode(pf, true)
+}
+
+func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 	if fsp := pf.GetActivePanel(); fsp != nil {
 		idx := fsp.GetCursorIndex()
 		if idx < 0 || idx >= len(fsp.Entries) {
@@ -2010,12 +2047,12 @@ func actionViewFile(pf *panel.PanelsFrame) {
 		}
 		// A matching View association intercepts before the built-in
 		// viewer, so users can wire F3 to feh, less, or anything else.
-		if panel.TryFileAssociation(pf, panel.AssocView) {
+		if !forceHex && panel.TryFileAssociation(pf, panel.AssocView) {
 			return
 		}
 		name := fsp.GetSelectedName()
 		path := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
-		actionOpenViewer(pf, fsp.Vfs, path)
+		actionOpenViewerMode(pf, fsp.Vfs, path, forceHex)
 	}
 }
 
@@ -2026,11 +2063,77 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	// Trying to scan it from an archive crosses the virtual root and produces
 	// misleading path-escape errors (issue #510).
 	if name == ".." {
+		if fsp.Vfs == nil {
+			return
+		}
+		if temp, ok := fsp.Vfs.(*panel.TempPanelVFS); ok && temp.IsAtRoot() {
+			actionCalcTempPanelSize(pf, fsp, temp)
+			return
+		}
+		actionCalcPanelSize(pf, fsp)
 		return
 	}
 	basePath := fsp.Vfs.GetPath()
 
 	var targetPath = fsp.Vfs.Join(basePath, name)
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return vfs.CalculateStats(ctx, fsp.Vfs, targetPath, []string{""}, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			entry.Size = totalStats.Bytes
+			entry.SizeCalculated = true
+			if fsp.SortMode == panel.SortSize || fsp.GroupBy == panel.GroupSize {
+				fsp.SortEntries()
+				// Keep cursor on the same item after re-sorting
+				for i, e := range fsp.Entries {
+					if e == entry {
+						fsp.SetCursorIndex(i)
+						break
+					}
+				}
+			}
+		})
+}
+
+func actionCalcTempPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, temp *panel.TempPanelVFS) {
+	basePath := temp.GetPath()
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return temp.CalculateTotal(ctx, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			if temp.GetPath() != basePath {
+				return
+			}
+			temp.SetCalculatedTotal(totalStats)
+			fsp.SetCalculatedPanelTotal(totalStats)
+		})
+}
+
+func actionCalcPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
+	basePath := fsp.Vfs.GetPath()
+	var names []string
+	for _, entry := range fsp.AllEntries() {
+		if entry != nil && entry.Name != ".." {
+			names = append(names, entry.Name)
+		}
+	}
+	actionRunSizeScan(pf, fsp,
+		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
+			return vfs.CalculateStats(ctx, fsp.Vfs, basePath, names, cb)
+		},
+		func(totalStats vfs.OpStats) {
+			if fsp.Vfs.GetPath() != basePath {
+				return
+			}
+			fsp.SetCalculatedPanelTotal(totalStats)
+		})
+}
+
+type panelSizeScan func(context.Context, vfs.ScanCallback) (vfs.OpStats, error)
+
+func actionRunSizeScan(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, scan panelSizeScan, apply func(vfs.OpStats)) {
 
 	opDlg := fileops.NewFileOpProgressDialog(" Calculating Size... ")
 	var taskCtx *vtui.TaskContext
@@ -2048,7 +2151,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	taskCtx = vtui.RunAsync(func(ctx *vtui.TaskContext) {
 		var totalStats vfs.OpStats
 		lastScanUpdate := time.Now()
-		totalStats, scanErr := vfs.CalculateStats(ctx.Context, fsp.Vfs, targetPath, []string{""}, func(currentPath string, stats vfs.OpStats) {
+		totalStats, scanErr := scan(ctx.Context, func(currentPath string, stats vfs.OpStats) {
 			now := time.Now()
 			if now.Sub(lastScanUpdate) > 50*time.Millisecond {
 				lastScanUpdate = now
@@ -2066,18 +2169,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 				return
 			}
 			if ctx.Err() == nil {
-				entry.Size = totalStats.Bytes
-				entry.SizeCalculated = true
-				if fsp.SortMode == panel.SortSize {
-					fsp.SortEntries()
-					// Keep cursor on the same item after re-sorting
-					for i, e := range fsp.Entries {
-						if e == entry {
-							fsp.SetCursorIndex(i)
-							break
-						}
-					}
-				}
+				apply(totalStats)
 				fsp.Refresh()
 			}
 		})
@@ -2404,14 +2496,24 @@ func actionRename(pf *panel.PanelsFrame) {
 		if newName == "" || newName == name {
 			return
 		}
-		oldPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
-		newPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), newName)
+		renameEntry(pf, fsp, name, newName)
+	})
+}
 
+// renameEntry renames name to newName inside the panel's current folder. When
+// newName is already taken by a file it asks whether to overwrite it, the way
+// F5/F6 do; a rename never replaces anything on its own (#1229).
+func renameEntry(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, name, newName string) {
+	v := fsp.Vfs
+	oldPath := v.Join(v.GetPath(), name)
+	newPath := v.Join(v.GetPath(), newName)
+
+	rename := func(overwrite bool) {
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			// The rename dialog never asks for overwrite confirmation. Carry an
-			// atomic no-replace decision so remote providers cannot silently
-			// destroy an entry that already has the requested name.
-			err := fsp.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, false), oldPath, newPath)
+			// Carry the atomic replace/no-replace decision so remote providers
+			// cannot silently destroy an entry that already has the requested
+			// name.
+			err := v.Rename(vfs.WithDestinationOverwrite(ctx.Context, overwrite), oldPath, newPath)
 			ctx.RunOnUI(func() {
 				if err != nil {
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to rename:\n%v", err), []string{"&Ok"})
@@ -2424,8 +2526,54 @@ func actionRename(pf *panel.PanelsFrame) {
 				pf.RefreshAll()
 			})
 		})
+	}
+
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// A folder cannot be replaced by a rename. Names that differ only in
+		// case are one entry on a case-insensitive file system, where the
+		// listing carries the old spelling alone, and two on a case-sensitive
+		// one, where the target may really be another file: only the exact
+		// name in the listing tells them apart.
+		taken := false
+		if strings.EqualFold(name, newName) {
+			taken = fileListedAs(ctx.Context, v, v.GetPath(), newName)
+		} else if existing, err := v.Stat(ctx.Context, newPath); err == nil && !existing.IsDir {
+			taken = true
+		}
+		ctx.RunOnUI(func() {
+			if !taken {
+				rename(false)
+				return
+			}
+			dlg := vtui.ShowMessageEx(i18n.Msg("Warning.Title"),
+				i18n.Msg("FileOp.FileAlreadyExists")+"\n"+vtui.TruncateMiddle(newName, 60),
+				[]string{i18n.Msg("FileOp.Overwrite"), i18n.Msg("vtui.Cancel")}, vtui.MessageWarn)
+			dlg.OnResult = func(code int) {
+				if code == 0 {
+					rename(true)
+					return
+				}
+				fsp.PendingSelection = name
+				pf.RefreshAll()
+			}
+		})
 	})
 }
+
+// fileListedAs reports whether the listing of dir holds a file named exactly
+// name, letter case included.
+func fileListedAs(ctx context.Context, v vfs.VFS, dir, name string) bool {
+	found := false
+	_ = v.ReadDir(ctx, dir, func(items []vfs.VFSItem) {
+		for _, item := range items {
+			if item.Name == name && !item.IsDir {
+				found = true
+			}
+		}
+	})
+	return found
+}
+
 func actionCreateLink(pf *panel.PanelsFrame) {
 	fspSrc := pf.GetActivePanel()
 	fspDst := pf.GetInactivePanel()
@@ -3598,7 +3746,9 @@ func actionPanelSettings(pf *panel.PanelsFrame) {
 	// display options live in actionPanelAdditionalSettings below. Keeping both
 	// pages as ordinary dialogs means they remain usable on a 25-row terminal
 	// without introducing a second scrolling container for interactive items.
-	dlg := vtui.NewCenteredDialog(60, 24, i18n.Msg("PanelSettings.Title"))
+	// This page now spends that whole budget: the next option added here needs
+	// a row freed somewhere else, or a home on the Additional page.
+	dlg := vtui.NewCenteredDialog(60, 25, i18n.Msg("PanelSettings.Title"))
 	dlg.ShowClose = true
 
 	chkHidden := vtui.NewCheckbox(0, 0, i18n.Msg("PanelSettings.ShowHidden"), false)
@@ -3617,6 +3767,12 @@ func actionPanelSettings(pf *panel.PanelsFrame) {
 	chkHighlightMarks.State = 0
 	if config.App.ShowHighlightMarks {
 		chkHighlightMarks.State = 1
+	}
+
+	chkSymlinkArrow := vtui.NewCheckbox(0, 0, i18n.Msg("PanelSettings.ShowSymlinkArrow"), false)
+	chkSymlinkArrow.State = 0
+	if config.App.ShowSymlinkArrow {
+		chkSymlinkArrow.State = 1
 	}
 
 	chkSeparateExtensions := vtui.NewCheckbox(0, 0, i18n.Msg("PanelSettings.SeparateExtensions"), false)
@@ -3690,6 +3846,7 @@ func actionPanelSettings(pf *panel.PanelsFrame) {
 	dlg.AddItem(chkHidden)
 	dlg.AddItem(chkDirPrefix)
 	dlg.AddItem(chkHighlightMarks)
+	dlg.AddItem(chkSymlinkArrow)
 	dlg.AddItem(chkSeparateExtensions)
 	dlg.AddItem(chkFileInfo)
 	dlg.AddItem(lblScrollbars)
@@ -3706,11 +3863,12 @@ func actionPanelSettings(pf *panel.PanelsFrame) {
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnCancel)
 
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, 56, 20)
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, 56, 21)
 	// First checkbox cluster — stack tight, no blank rows between.
 	vbox.Add(chkHidden, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(chkDirPrefix, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(chkHighlightMarks, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(chkSymlinkArrow, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(chkSeparateExtensions, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(chkFileInfo, vtui.Margins{}, vtui.AlignLeft)
 	// Blank row before the scrollbar combo — transition to a different
@@ -3746,6 +3904,7 @@ func actionPanelSettings(pf *panel.PanelsFrame) {
 		config.App.ShowHiddenFiles = chkHidden.State == 1
 		config.App.ShowDirPrefix = chkDirPrefix.State == 1
 		config.App.ShowHighlightMarks = chkHighlightMarks.State == 1
+		config.App.ShowSymlinkArrow = chkSymlinkArrow.State == 1
 		config.App.SeparateFileExtensions = chkSeparateExtensions.State == 1
 		config.App.ShowPanelFileInfo = chkFileInfo.State == 1
 		config.App.PanelScrollbarMode = config.PanelScrollbarMode(comboScrollbars.Menu.SelectPos)
@@ -4342,25 +4501,28 @@ func actionUpdateSettings(pf *panel.PanelsFrame) {
 	vtui.FrameManager.Push(dlg)
 }
 
-func actionImportFar2lHistory(pf *panel.PanelsFrame) {
+type far2lHistoryLoader func(history.Far2lHistoryFile, string) ([]history.HistoryRecord, error)
+type far2lHistoryMerger func(*history.F4HistoryProvider, []history.HistoryRecord) (int, error)
+
+func importFar2lHistoryFile(path, title, prompt, subject string, load far2lHistoryLoader, merge far2lHistoryMerger) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		vtui.ShowMessage(" Error ", "Cannot find user home directory.", []string{"&Ok"})
 		return
 	}
-	far2lConfig := filepath.Join(home, ".config", "far2l", "history", "commands.hst")
-	if _, err := os.Stat(far2lConfig); os.IsNotExist(err) {
-		vtui.ShowMessage(" Error ", "far2l history not found at:\n"+far2lConfig, []string{"&Ok"})
+	path = filepath.Join(home, path)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		vtui.ShowMessage(" Error ", "far2l history not found at:\n"+path, []string{"&Ok"})
 		return
 	}
 
-	dlg := vtui.ShowMessage(" Import History ", "Do you want to import command history from far2l?\nThis will merge it with your current history.", []string{"&Import", "Cancel"})
+	dlg := vtui.ShowMessage(title, prompt, []string{"&Import", "Cancel"})
 	dlg.OnResult = func(code int) {
 		if code != 0 {
 			return
 		}
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			recs, err := history.ImportFar2lHistory(ini.Load(far2lConfig), far2lConfig)
+			recs, err := load(ini.Load(path), path)
 			ctx.RunOnUI(func() {
 				if err != nil {
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import history:\n%v", err), []string{"&Ok"})
@@ -4373,38 +4535,142 @@ func actionImportFar2lHistory(pf *panel.PanelsFrame) {
 					return
 				}
 
-				current := hp.LoadRichHistory("cmdline")
-				seen := make(map[string]bool)
-				var merged []history.HistoryRecord
+				imported, err := merge(hp, recs)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import history:\n%v", err), []string{"&Ok"})
+					return
+				}
+				toast.Show(fmt.Sprintf("Imported %d new %s from far2l.", imported, subject), 3*time.Second)
+			})
+		})
+	}
+}
 
-				for _, r := range current {
-					if !seen[r.Name] {
-						seen[r.Name] = true
-						merged = append(merged, r)
+func actionImportFar2lHistory(pf *panel.PanelsFrame) {
+	importFar2lHistoryFile(
+		filepath.Join(".config", "far2l", "history", "commands.hst"),
+		" Import History ",
+		"Do you want to import command history from far2l?\nThis will merge it with your current history.",
+		"commands",
+		history.ImportFar2lHistory,
+		func(hp *history.F4HistoryProvider, recs []history.HistoryRecord) (int, error) {
+			current := hp.LoadRichHistory("cmdline")
+			seen := make(map[string]bool)
+			var merged []history.HistoryRecord
+
+			for _, r := range current {
+				if !seen[r.Name] {
+					seen[r.Name] = true
+					merged = append(merged, r)
+				}
+			}
+			for _, r := range recs {
+				if !seen[r.Name] {
+					seen[r.Name] = true
+					merged = append(merged, r)
+				}
+			}
+
+			limit := pf.CmdLine.Edit.HistoryLimit
+			if limit <= 0 {
+				limit = 100
+			}
+			if len(merged) > limit {
+				merged = merged[:limit]
+			}
+			hp.SaveRichHistory("cmdline", merged)
+			pf.CmdLine.Edit.History = history.ExtractNames(merged)
+			return len(merged) - len(current), nil
+		},
+	)
+}
+
+func actionImportFar2lFolderHistory(_ *panel.PanelsFrame) {
+	importFar2lHistoryFile(
+		filepath.Join(".config", "far2l", "history", "folders.hst"),
+		" Import Folder History ",
+		"Do you want to import folder history from far2l?\nThis will merge it with your current folder history.",
+		"folders",
+		history.ImportFar2lFolderHistory,
+		func(hp *history.F4HistoryProvider, recs []history.HistoryRecord) (int, error) {
+			current, _ := history.LoadFolderHistoryRecords(hp)
+			merged := append([]history.HistoryRecord(nil), current...)
+			imported := 0
+			for _, record := range recs {
+				duplicate := false
+				for _, old := range merged {
+					if history.SamePath(old.Name, record.Name) {
+						duplicate = true
+						break
 					}
 				}
-
-				for _, r := range recs {
-					if !seen[r.Name] {
-						seen[r.Name] = true
-						merged = append(merged, r)
-					}
+				if duplicate {
+					continue
 				}
+				merged = append(merged, record)
+				imported++
+			}
+			history.SaveFolderHistoryRecords(hp, history.LimitRichHistory(merged, 100))
+			return imported, nil
+		},
+	)
+}
 
-				limit := pf.CmdLine.Edit.HistoryLimit
-				if limit <= 0 {
-					limit = 100
+type far2lSettingFile struct {
+	name   string
+	target string
+}
+
+func importFar2lSettings(sourceDir string, files []far2lSettingFile) ([]string, error) {
+	var imported []string
+	for _, file := range files {
+		data, err := os.ReadFile(filepath.Join(sourceDir, file.name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", file.name, err)
+		}
+		if err := config.WriteUserFileAtomically(file.target, data, 0o600); err != nil {
+			return nil, fmt.Errorf("write %s: %w", file.name, err)
+		}
+		imported = append(imported, file.name)
+	}
+	if len(imported) == 0 {
+		return nil, fmt.Errorf("no compatible far2l settings found in %s", sourceDir)
+	}
+	return imported, nil
+}
+
+func actionImportFar2lSettings(_ *panel.PanelsFrame) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		vtui.ShowMessage(" Error ", "Cannot find user home directory.", []string{"&Ok"})
+		return
+	}
+	sourceDir := filepath.Join(home, ".config", "far2l", "settings")
+	dlg := vtui.ShowMessage(
+		" Import far2l Settings ",
+		"Do you want to import bookmarks, associations and user menu from far2l?\nExisting f4 files will be replaced.",
+		[]string{"&Import", "Cancel"},
+	)
+	dlg.OnResult = func(code int) {
+		if code != 0 {
+			return
+		}
+		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+			files := []far2lSettingFile{
+				{name: "bookmarks.ini", target: panel.BookmarksFilePath()},
+				{name: "associations.ini", target: panel.AssociationsFilePath()},
+				{name: "user_menu.ini", target: panel.MainMenuFilePath()},
+			}
+			imported, err := importFar2lSettings(sourceDir, files)
+			ctx.RunOnUI(func() {
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to import far2l settings:\n%v", err), []string{"&Ok"})
+					return
 				}
-				if len(merged) > limit {
-					merged = merged[:limit]
-				}
-
-				hp.SaveRichHistory("cmdline", merged)
-
-				h := history.ExtractNames(merged)
-				pf.CmdLine.Edit.History = h
-
-				toast.Show(fmt.Sprintf("Imported %d new commands from far2l.", len(merged)-len(current)), 3*time.Second)
+				toast.Show(fmt.Sprintf("Imported far2l settings: %s.", strings.Join(imported, ", ")), 3*time.Second)
 			})
 		})
 	}

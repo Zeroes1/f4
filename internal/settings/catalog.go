@@ -47,6 +47,7 @@ DisplayFullPathInTitle|appearance|Titles and menus|Full file paths in titles|Sho
 StartupMode|startup|Launch defaults|Startup mode|Choose how plain f4 launches. Explicit --gui or --tty arguments override this default for that launch.|auto:Automatic;tty:Terminal;gui:Graphical|restart
 GuiBackend|startup|Launch defaults|Graphical renderer|Default graphical renderer. Automatic uses startup detection. Command-line choices override this value; unknown external renderer IDs are preserved.||restart
 TTYBackend|startup|Launch defaults|Terminal renderer|Default terminal renderer. Command-line renderer choices override this preference.|:Automatic;ansi:ANSI;winapi:Windows console|restart
+StartInCurrentFolder|startup|Launch defaults|Open the current folder at start|When f4 is started from a terminal, open the current folder in both panels, as mc does. Off restores the panels of the last session, as far2l and Far do. Folders named on the command line always win: with this on the other panel shows the current folder, with it off the other panel stays as it was.||restart
 WorkspaceTabMode|workspaces|Tab presentation|Show workspace tabs|Show tabs always, only with multiple workspaces, while Ctrl is held, or never.|0:Always;1:Multiple workspaces;2:While Ctrl is held;3:Never|live
 WorkspaceTabsOverlay|workspaces|Tab presentation|Overlay workspace tabs|Draw workspace tabs over the content instead of reserving a layout row.||live
 WorkspaceTabNumbering|workspaces|Tab presentation|Workspace numbering|Keep numbers permanently, keep them during this session, or renumber to match the current tab order.|0:Permanent;1:Session;2:Current order|live
@@ -60,14 +61,19 @@ AutoSaveCurrentPanel|workspaces|Automatic saving|Save panel locations automatica
 AutoSaveGUIWindow|workspaces|Automatic saving|Save graphical window automatically|Remember supported graphical-window dimensions and position, not external terminal geometry.||live
 ShowHiddenFiles|panels|File listing|Show hidden files|Include hidden files and folders in the listing. The parent-directory entry remains visible.||live
 ShowDirPrefix|panels|File listing|Prefix folder names|Prefix folder names with a slash, unless a highlight rule already supplies one.||live
-ShowHighlightMarks|panels|File listing|Show highlight marks|Show markers from matching file-highlight rules. Also affects path suggestions; symlinks retain their fallback arrow.||live
+ShowHighlightMarks|panels|File listing|Show highlight marks|Show markers from matching file-highlight rules. Also affects path suggestions; a symlink no rule marks follows its own arrow setting.||live
+ShowSymlinkArrow|panels|File listing|Arrow before symbolic links|Prefix the name of a symbolic link with an arrow when no highlight rule marks it. The link target shown beside the focused entry is not affected.||live
 SeparateFileExtensions|panels|File listing|Separate filename extensions|Align the final extension separately in the name column. Excludes folders, extensionless names and leading dots alone.||live
 ShowPanelFileInfo|panels|File listing|Focused-file status row|Reserve a bottom row for the focused name, size and modification time. Short panels suppress this row.||live
 PanelScrollbarMode|panels|File listing|Panel scrollbar|Hide the scrollbar, show a minimal one, or show the full scrollbar with arrows.|0:Off;1:Minimal;2:Full|live
+ArchiveTarIndexCache|panels|Directory loading|Cache tar archive indexes|Keep the file index of an opened tar archive in the cache, so opening it again is instant. Off rebuilds the index each time the archive is opened: slower, but never out of date.||live
 SyncPanelLoad|panels|Directory loading|Wait for complete directory listing|Replace the listing only when all directory results are ready and bypass cached previews. Off permits incremental results. It does not block all UI work.||next directory load
 InfoPanelCPUGPU|panels|Information panels|Show CPU and GPU information|Include locally collected CPU and GPU sections when the information provider does not supply authoritative information.||live
 InfoPanelBytes|panels|Information panels|Show sizes in bytes|Display raw bytes instead of human-readable sizes in information and quick-view panels.||live
 NavigationMode|panels|Typing and focus|Panel navigation|Classic types into the command line. Vim adds j/k and double dd/cc/mm actions. Search-first separates filename-search and command focus.|0:Classic;1:Vim;2:Search first|live
+PanelGroupSmallMiB|panels|Grouping|Small group limit (MiB)|Inclusive upper size bound for Small. The three group limits must be positive and strictly increasing.||live
+PanelGroupMediumMiB|panels|Grouping|Medium group limit (MiB)|Inclusive upper size bound for Medium. Applies to logical size and size on disk.||live
+PanelGroupLargeMiB|panels|Grouping|Large group limit (MiB)|Inclusive upper size bound for Large. Larger files belong to Extra large.||live
 PanelAutoFilter|panels|Typing and focus|Autofilter instead of quick search|Typing a name in a panel hides the rows that do not match instead of moving the cursor to the first match. Esc or Enter brings the hidden rows back.||live
 SearchCommandStayFocused|panels|Typing and focus|Keep command input focused|In Search-first mode, keep command entry focused after executing a command rather than returning to the panel.||live
 CommandLineAutoComplete|terminal|Path suggestions|Enable filesystem suggestions|Enable filesystem path suggestions in the command line and path-enabled dialog fields.||live

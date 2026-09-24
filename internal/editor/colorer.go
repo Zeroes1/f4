@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -225,6 +227,36 @@ type ColorerSource struct {
 	UserHRCSettings string
 }
 
+var colorerPercentVar = regexp.MustCompile(`%([A-Za-z_][A-Za-z0-9_]*)%`)
+
+// expandColorerUserPath resolves what a user writes in a path setting: a
+// leading ~ for the home folder, $NAME and ${NAME}, and %NAME% on Windows. The
+// library is handed a plain path, and "stat ~/.config/...: no such file" was
+// the answer to a path that was perfectly good in a shell (#277). Names that are
+// not set are left as written.
+func expandColorerUserPath(path string) string {
+	if runtime.GOOS == "windows" {
+		path = colorerPercentVar.ReplaceAllStringFunc(path, func(m string) string {
+			if value, ok := os.LookupEnv(m[1 : len(m)-1]); ok {
+				return value
+			}
+			return m
+		})
+	}
+	path = os.Expand(path, func(name string) string {
+		if value, ok := os.LookupEnv(name); ok {
+			return value
+		}
+		return "$" + name
+	})
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			return filepath.Join(home, path[1:])
+		}
+	}
+	return path
+}
+
 // CurrentColorerSource is the source the applied configuration names.
 func CurrentColorerSource() ColorerSource {
 	return ColorerSource{
@@ -248,13 +280,13 @@ func (src ColorerSource) userOptions() []colorer.Option {
 		opts = append(opts, colorer.WithHRCSettings(settings))
 	}
 	if src.UserHRD != "" {
-		opts = append(opts, colorer.WithUserHRD(src.UserHRD))
+		opts = append(opts, colorer.WithUserHRD(expandColorerUserPath(src.UserHRD)))
 	}
 	if src.UserHRC != "" {
-		opts = append(opts, colorer.WithUserHRC(src.UserHRC))
+		opts = append(opts, colorer.WithUserHRC(expandColorerUserPath(src.UserHRC)))
 	}
 	if src.UserHRCSettings != "" {
-		opts = append(opts, colorer.WithUserHRCSettings(src.UserHRCSettings))
+		opts = append(opts, colorer.WithUserHRCSettings(expandColorerUserPath(src.UserHRCSettings)))
 	}
 	return opts
 }
@@ -690,6 +722,12 @@ func (ch *ColorerHighlighter) useFallback(ev *EditorView) {
 	})
 }
 
+// colorerStaleLine is one line's colours kept from before an edit.
+type colorerStaleLine struct {
+	attrs []uint64
+	bg    uint64
+}
+
 type ColorerHighlighter struct {
 	session    *colorer.Session
 	fallback   vtui.Highlighter
@@ -715,6 +753,14 @@ type ColorerHighlighter struct {
 	// regionCache holds each parsed line's regions, kept and evicted with
 	// attrCache, for select region.
 	regionCache map[int][]colorerRegionSpan
+
+	// stale holds the colours an edit dropped. Fresh colours come from the
+	// worker a moment later; until then the old ones are drawn instead of
+	// plain text, so a keystroke does not blink every line below it (#1230).
+	// lineCount is the document's line count when the colours were last
+	// current, to tell how far an edit moved the lines below it.
+	stale     map[int]colorerStaleLine
+	lineCount int
 
 	// The type the user picked from the list of types, "" to choose by file
 	// name; and the type the file name chose. Both UI-owned. workerFileType
@@ -832,7 +878,7 @@ func (ch *ColorerHighlighter) HighlightLine(idx int, line string, baseAttr uint6
 	// a bounded snapshot of the required context and the worker does all WASM
 	// calls asynchronously.
 	ch.queueLine(idx, line, baseAttr)
-	return nil
+	return ch.stale[idx].attrs
 }
 
 // colorerContextPlan decides how the session gets to idx: fed forward from
@@ -871,12 +917,127 @@ func colorerForgetPlan(parsedIdx, forgottenUpTo int) (keepFrom int, do bool) {
 // DropFrom forgets everything the highlighter knows from line idx on. An edit
 // invalidates the colours below it, and it invalidates the session itself
 // whenever the session has already parsed past that line: its cache cannot be
-// unwound, only thrown away.
+// unwound, only thrown away. Nothing is kept to draw in the meantime; that is
+// for DropAfterEdit, where the old colours are still a good guess.
 func (ch *ColorerHighlighter) DropFrom(idx int) {
 	if idx < 0 {
 		idx = 0
 	}
 	ch.dropCacheFrom(idx)
+	for key := range ch.stale {
+		if key >= idx {
+			delete(ch.stale, key)
+		}
+	}
+	ch.abandonWork()
+}
+
+// DropAfterEdit is DropFrom for a text edit at line idx that leaves the
+// document with lineCount lines. The colours it drops are kept, moved along
+// with the lines they belonged to, and drawn until the worker has the new ones:
+// without that every keystroke would show the lines below it as plain text for
+// a moment (#1230).
+func (ch *ColorerHighlighter) DropAfterEdit(idx, lineCount int) {
+	if idx < 0 {
+		idx = 0
+	}
+	delta := 0
+	if ch.lineCount > 0 {
+		delta = lineCount - ch.lineCount
+	}
+	ch.lineCount = lineCount
+	ch.keepStale(idx, delta)
+	ch.dropCacheFrom(idx)
+	ch.abandonWork()
+}
+
+// DropAfterReplace is DropAfterEdit for Undo and Redo, which put back an
+// earlier text without saying what changed. The colours of every line are kept
+// to draw until the worker has fresh ones (else the whole screen blinks plain,
+// #1230); the lines from idx on, where the change begins, move by the change in
+// the line count, and those above it stay where they are. Everything is
+// recomputed from the top: none of it is trusted as current.
+func (ch *ColorerHighlighter) DropAfterReplace(idx, lineCount int) {
+	if idx < 0 {
+		idx = 0
+	}
+	delta := 0
+	if ch.lineCount > 0 {
+		delta = lineCount - ch.lineCount
+	}
+	ch.lineCount = lineCount
+
+	old := make(map[int]colorerStaleLine, len(ch.stale)+len(ch.attrCache))
+	for key, line := range ch.stale {
+		old[key] = line
+	}
+	for key, attrs := range ch.attrCache {
+		old[key] = colorerStaleLine{attrs: attrs, bg: ch.bgCache[key]}
+	}
+	ch.stale = make(map[int]colorerStaleLine, len(old))
+	// The lines that moved go in first, so that one that lands on a line above
+	// the change does not displace what has always been there.
+	for key, line := range old {
+		if key >= idx {
+			if to := key + delta; to >= idx {
+				ch.stale[to] = line
+			}
+		}
+	}
+	for key, line := range old {
+		if key < idx {
+			ch.stale[key] = line
+		}
+	}
+	ch.dropCacheFrom(0)
+	ch.abandonWork()
+}
+
+// noteLineCount records the line count the cached colours belong to. The
+// editor calls it every frame, so an edit sees how many lines it added or
+// removed.
+func (ch *ColorerHighlighter) noteLineCount(n int) {
+	ch.lineCount = n
+}
+
+// keepStale moves the colours of lines idx and below, fresh or already stale,
+// into the stale set, delta lines further down (up, if negative). The edited
+// line keeps its old colours in place as well: the text of it changed, but
+// most of it is where it was.
+func (ch *ColorerHighlighter) keepStale(idx, delta int) {
+	moved := make(map[int]colorerStaleLine)
+	for key, line := range ch.stale {
+		if key >= idx {
+			moved[key] = line
+			delete(ch.stale, key)
+		}
+	}
+	for key, attrs := range ch.attrCache {
+		if key >= idx {
+			moved[key] = colorerStaleLine{attrs: attrs, bg: ch.bgCache[key]}
+		}
+	}
+	if len(moved) == 0 {
+		return
+	}
+	if ch.stale == nil {
+		ch.stale = make(map[int]colorerStaleLine, len(moved))
+	}
+	for key, line := range moved {
+		if to := key + delta; to >= idx {
+			ch.stale[to] = line
+		}
+	}
+	if line, ok := moved[idx]; ok {
+		if _, taken := ch.stale[idx]; !taken {
+			ch.stale[idx] = line
+		}
+	}
+}
+
+// abandonWork throws away what the worker was doing: the results of a job in
+// flight describe text that is gone, and the session is re-anchored next frame.
+func (ch *ColorerHighlighter) abandonWork() {
 	// An edit moves the text a pair search walks; its tokens are stale, and
 	// so is an outline collected so far.
 	ch.pairSearch = nil
@@ -890,17 +1051,11 @@ func (ch *ColorerHighlighter) DropFrom(idx int) {
 }
 
 func (ch *ColorerHighlighter) GetLineBackground(idx int, defaultAttr uint64) uint64 {
-	if ch.bgCache == nil {
-		return defaultAttr
-	}
-	if idx < ch.parsedIdx-100 {
-		if bg, ok := ch.bgCache[idx]; ok {
-			return bg
-		}
-		return defaultAttr
-	}
 	if bg, ok := ch.bgCache[idx]; ok {
 		return bg
+	}
+	if line, ok := ch.stale[idx]; ok {
+		return line.bg
 	}
 	return defaultAttr
 }
@@ -933,6 +1088,7 @@ func (ch *ColorerHighlighter) storeAttrs(idx int, attrs []uint64, bg uint64, pai
 	}
 	ch.attrCache[idx] = attrs
 	ch.bgCache[idx] = bg
+	delete(ch.stale, idx)
 	delete(ch.outlineCache, idx)
 	delete(ch.regionCache, idx)
 	if len(pairs) > 0 {
@@ -986,6 +1142,7 @@ func (ch *ColorerHighlighter) Close() error {
 	ch.outlineCache = nil
 	ch.outlineBuild = nil
 	ch.regionCache = nil
+	ch.stale = nil
 	ch.parsedIdx = 0
 	if closer, ok := ch.fallback.(io.Closer); ok {
 		closer.Close()

@@ -129,7 +129,7 @@ func TestBuildMenuBarItems_Shell(t *testing.T) {
 	}
 	var foundEditSymlink bool
 	for _, item := range files {
-		if item.Text == editSymlinkAction.DisplayLabel() || item.Text == "&"+editSymlinkAction.DisplayLabel() {
+		if plainMenuText(item.Text) == plainMenuText(editSymlinkAction.DisplayLabel()) {
 			foundEditSymlink = true
 			break
 		}
@@ -185,6 +185,56 @@ func TestBuildMenuBarItems_Shell(t *testing.T) {
 	checkShortcuts(items[1].SubItems)
 	for label := range wantCommandShortcuts {
 		t.Errorf("Commands menu is missing %q", label)
+	}
+}
+
+func TestBuildMenuBarItemsUsesFarMnemonics(t *testing.T) {
+	old := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	defer func() { keymap.GlobalHotkeysMgr = old }()
+
+	items := BuildMenuBarItems("Shell")
+	if len(items) < 2 {
+		t.Fatalf("expected Files and Commands menus, got %+v", items)
+	}
+
+	want := make(map[string]rune)
+	want["File.View"] = 'v'
+	want["File.Edit"] = 'e'
+	want["File.Copy"] = 'c'
+	want["File.Move"] = 'r'
+	want["File.MakeDir"] = 'm'
+	want["File.Delete"] = 'd'
+	found := make(map[string]bool, len(want))
+	spreadsheetHotkey := rune(0)
+	for _, menu := range items {
+		var visit func([]vtui.MenuItem)
+		visit = func(menuItems []vtui.MenuItem) {
+			for _, item := range menuItems {
+				for name, hotkey := range want {
+					if item.UserData != history.MenuHistoryItemKey(name) {
+						continue
+					}
+					found[name] = true
+					if got := vtui.ExtractHotkey(item.Text); got != hotkey {
+						t.Errorf("%s mnemonic = %q, want %q (%q)", name, got, hotkey, item.Text)
+					}
+				}
+				if item.UserData == history.MenuHistoryItemKey("App.Spreadsheet") {
+					spreadsheetHotkey = vtui.ExtractHotkey(item.Text)
+				}
+				visit(item.SubItems)
+			}
+		}
+		visit(menu.SubItems)
+	}
+	for name := range want {
+		if !found[name] {
+			t.Errorf("menu item %s was not found", name)
+		}
+	}
+	if spreadsheetHotkey == 0 {
+		t.Error("App.Spreadsheet has no mnemonic")
 	}
 }
 
@@ -432,6 +482,27 @@ func TestBuildMenuBarItemsFoldsRareCommandsIntoSubMenus(t *testing.T) {
 		if find(commands, act.DisplayLabel()) != nil {
 			t.Errorf("%q is listed both at the top level and in the %q submenu", act.DisplayLabel(), action.PlainLabel(sub.title))
 		}
+	}
+
+	historyMenu := find(commands, i18n.Msg("Menu.Shell.Commands.History"))
+	if historyMenu == nil {
+		t.Fatal("Commands menu has no History submenu")
+	}
+	for _, member := range []string{"History.ImportFar2l", "History.ImportFar2lFolders"} {
+		act, ok := GetAction(member)
+		if !ok {
+			t.Fatalf("%s is not registered", member)
+		}
+		if find(historyMenu.SubItems, act.DisplayLabel()) == nil {
+			t.Errorf("%q is missing from the History submenu", act.DisplayLabel())
+		}
+	}
+	settingsImport, ok := GetAction("Settings.ImportFar2l")
+	if !ok {
+		t.Fatal("Settings.ImportFar2l is not registered")
+	}
+	if find(commands, settingsImport.DisplayLabel()) == nil {
+		t.Errorf("%q is missing from the Commands menu", settingsImport.DisplayLabel())
 	}
 }
 

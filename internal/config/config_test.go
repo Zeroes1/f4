@@ -38,6 +38,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.EditorColorerBackground = false
 	App.CommandLineAutoComplete = false
 	App.SeparateFileExtensions = true
+	App.ShowSymlinkArrow = true
+	App.StartInCurrentFolder = true
+	App.ArchiveTarIndexCache = false
 	App.PanelScrollbarMode = PanelScrollbarMinimal
 	App.ShowPanelFileInfo = true
 	App.MacroRecordFormat = 1
@@ -71,6 +74,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.EditorCrosshair = false
 	App.EditorColorerBackground = true
 	App.SeparateFileExtensions = false
+	App.ShowSymlinkArrow = false
+	App.StartInCurrentFolder = false
+	App.ArchiveTarIndexCache = true
 	App.PanelScrollbarMode = PanelScrollbarOff
 	App.ShowPanelFileInfo = false
 	App.MacroRecordFormat = 0
@@ -148,6 +154,15 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if !App.SeparateFileExtensions {
 		t.Error("LoadConfig failed to restore SeparateFileExtensions")
+	}
+	if !App.ShowSymlinkArrow {
+		t.Error("LoadConfig failed to restore an enabled ShowSymlinkArrow")
+	}
+	if !App.StartInCurrentFolder {
+		t.Error("LoadConfig failed to restore an enabled StartInCurrentFolder")
+	}
+	if App.ArchiveTarIndexCache {
+		t.Error("LoadConfig failed to restore a disabled ArchiveTarIndexCache")
 	}
 	if App.PanelScrollbarMode != PanelScrollbarMinimal {
 		t.Errorf("LoadConfig restored PanelScrollbarMode %v, want minimal", App.PanelScrollbarMode)

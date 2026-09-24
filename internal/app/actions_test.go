@@ -756,6 +756,32 @@ Times=804c4587aa28dd01 004e237daa28dd01 0021f27baa28dd01
 		t.Errorf("Record 1 mismatch: %+v", recs[1])
 	}
 }
+
+func TestImportFar2lSettingsCopiesAvailableFiles(t *testing.T) {
+	sourceDir := t.TempDir()
+	targetDir := filepath.Join(t.TempDir(), "f4", "settings")
+	source := filepath.Join(sourceDir, "bookmarks.ini")
+	target := filepath.Join(targetDir, "bookmarks.ini")
+	content := []byte("[0]\nPath=/home/user\n")
+	if err := os.WriteFile(source, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := importFar2lSettings(sourceDir, []far2lSettingFile{
+		{name: "bookmarks.ini", target: target},
+		{name: "associations.ini", target: filepath.Join(targetDir, "associations.ini")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "bookmarks.ini" {
+		t.Fatalf("imported files = %#v", got)
+	}
+	if actual, err := os.ReadFile(target); err != nil || string(actual) != string(content) {
+		t.Fatalf("imported bookmarks = %q, err=%v", actual, err)
+	}
+}
+
 func TestActionDelete_SuccessorLogic(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := panel.NewPanelsFrame()
@@ -1662,7 +1688,65 @@ func TestActionPanelSettings_Flow(t *testing.T) {
 	vtui.FrameManager.Pop()
 }
 
+// The arrow before a symbolic link is off by default and the checkbox next to
+// the other name-column switches is what turns it on. Toggle it and OK must
+// carry that into config and into the file the dialog writes.
+func TestActionPanelSettings_SymlinkArrowCheckbox(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+
+	path := filepath.Join(t.TempDir(), "settings.ini")
+	origUserPathFunc := config.GetUserConfigIniPath
+	origPathsFunc := config.GetConfigIniPaths
+	oldConfig := config.App
+	defer func() {
+		config.GetUserConfigIniPath = origUserPathFunc
+		config.GetConfigIniPaths = origPathsFunc
+		config.App = oldConfig
+	}()
+	config.GetUserConfigIniPath = func() string { return path }
+	config.GetConfigIniPaths = func() []string { return []string{path} }
+	config.App.ShowSymlinkArrow = false
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+
+	actionPanelSettings(pf)
+	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
+
+	label := testutil.GetCleanText(vtui.NewCheckbox(0, 0, i18n.Msg("PanelSettings.ShowSymlinkArrow"), false))
+	var arrow *vtui.Checkbox
+	for _, itm := range dlg.GetChildren() {
+		if chk, ok := itm.(*vtui.Checkbox); ok && testutil.GetCleanText(chk) == label {
+			arrow = chk
+			break
+		}
+	}
+	if arrow == nil {
+		t.Fatalf("no %q checkbox in the panel settings dialog", label)
+	}
+	if arrow.State != 0 {
+		t.Fatalf("checkbox state = %d, want the default-off setting to arrive cleared", arrow.State)
+	}
+
+	arrow.State = 1
+	testutil.ClickDialogButton(t, dlg, testutil.GetCleanText(vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))))
+
+	if !config.App.ShowSymlinkArrow {
+		t.Error("checking the checkbox left ShowSymlinkArrow off")
+	}
+	config.App.ShowSymlinkArrow = false
+	config.LoadConfig()
+	if !config.App.ShowSymlinkArrow {
+		t.Error("OK did not persist the enabled ShowSymlinkArrow")
+	}
+}
+
 func TestActionPanelSettings_FitsSmallTerminal(t *testing.T) {
+	// Layout assertions must not inherit frames or screen state from shuffled tests.
+	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	theme.SetDefaultF4Palette()
 
@@ -2221,6 +2305,7 @@ func TestActionOpenViewer_PromptStaysAboveDelayedProgressDialog(t *testing.T) {
 			t.Fatal("progress dialog appeared after the prompt was dismissed")
 		}
 		if len(vtui.FrameManager.Screens) > 1 {
+			vtui.FrameManager.CloseActiveScreen()
 			return
 		}
 	}

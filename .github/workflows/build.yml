@@ -745,11 +745,20 @@ jobs:
   # with the go2xp shim linked in and the import table repointed at its
   # polyfills afterwards (github.com/unxed/go2xp).
   #
-  # The profile is ReactOS 0.4.16, whose absent-export set was read out of the
-  # released image rather than out of documentation, and where the result is
-  # tested: f4 draws its panels, copies, views, edits and runs commands there.
-  # XP is close but not identical -- it lacks four functions ReactOS has -- so
-  # an XP artifact needs profiles/xp.json and an XP machine to sign it off.
+  # One artifact serves Windows XP SP3 and ReactOS, built with the XP profile.
+  # The header is what makes that possible: XP refuses an image whose OS or
+  # subsystem version is above 5.1 ("not a valid Win32 application", issue
+  # #897), and ReactOS, which reports 5.2, loads anything up to that. The
+  # earlier ReactOS profile declared 5.2 and so could not start on XP at all.
+  #
+  # The cost falls on ReactOS and is small: the XP profile redirects ReOpenFile,
+  # FindFirstStreamW and FindNextStreamW to failing stubs, and ReactOS has real
+  # ones. f4 calls none of them itself; Go's standard library reaches ReOpenFile
+  # only to chmod a read-only file inside an os.Root, and NTFS streams do not
+  # exist on the FAT volumes ReactOS installs onto. The ReactOS result was
+  # measured with the ReactOS profile (f4 draws its panels, copies, views, edits
+  # and runs commands there); this artifact has not been run on ReactOS or on XP
+  # yet. XP needs a machine to sign it off (docs/WINE.md, legacy Windows).
   #
   # go2xp is pinned by commit: it decides which imports get redirected, and a
   # silent change there would change the artifact without changing this tree.
@@ -757,6 +766,11 @@ jobs:
   # symbol names to report what the target lacks; the audit is the gate that
   # fails this job if an absent export is neither polyfilled nor accepted by
   # the profile.
+  #
+  # release and nightly must list this job in needs. They download every
+  # artifact of the run with no filter, so a job missing from needs got into
+  # the release only when it happened to finish before they started -- and the
+  # README links f4-legacy-windows-386.zip as the ReactOS download.
   build-reactos:
     name: Build (legacy windows/386)
     runs-on: ubuntu-latest
@@ -764,7 +778,7 @@ jobs:
       CGO_ENABLED: 0
       GOOS: windows
       GOARCH: 386
-      GO2XP_REF: 00a22a52036948ed8eddd1e14f5101e7dba5d3de
+      GO2XP_REF: cd906f3002233bda80e91dd1ad0728aa6ec8f1d6
 
     steps:
     - name: Checkout code
@@ -790,6 +804,10 @@ jobs:
         ref: ${{ env.GO2XP_REF }}
         path: go2xp-src
 
+    - name: Move go2xp outside the f4 checkout
+      if: steps.affected.outputs.build == 'yes'
+      run: mv go2xp-src "$RUNNER_TEMP/go2xp-src"
+
     - name: Build binaries
       if: steps.affected.outputs.build == 'yes'
       run: |
@@ -800,7 +818,7 @@ jobs:
         cp go.sum /tmp/f4-go2xp.sum
         go mod edit -modfile=/tmp/f4-go2xp.mod \
           -require=github.com/unxed/go2xp@v0.0.0 \
-          -replace=github.com/unxed/go2xp="$PWD/go2xp-src"
+          -replace=github.com/unxed/go2xp="$RUNNER_TEMP/go2xp-src"
 
         mkdir -p build
         LDFLAGS="-w"
@@ -814,19 +832,43 @@ jobs:
         cp -r internal/i18n/lang internal/dialog/help build/
         cp f4.example.ini build/
 
+    - name: Verify clean embedded revision
+      if: steps.affected.outputs.build == 'yes'
+      run: |
+        set -euo pipefail
+        metadata="$(go version -m build/f4.exe)"
+        printf '%s\n' "$metadata"
+        if grep -Eq 'vcs\.modified(=|[[:space:]])true' <<<"$metadata"; then
+          echo 'go build embedded vcs.modified=true' >&2
+          exit 1
+        fi
+
     - name: Patch the import table and audit it
       if: steps.affected.outputs.build == 'yes'
       run: |
         set -euo pipefail
         # The patcher runs on the runner, not on the target.
-        (cd go2xp-src && env -u GOOS -u GOARCH go build -o /tmp/go2xp ./cmd/go2xp)
-        profile=go2xp-src/profiles/reactos.json
+        go2xp_dir="$RUNNER_TEMP/go2xp-src"
+        (cd "$go2xp_dir" && env -u GOOS -u GOARCH go build -o /tmp/go2xp ./cmd/go2xp)
+        profile="$go2xp_dir/profiles/xp.json"
         /tmp/go2xp patch -profile "$profile" build/f4.exe build/f4-legacy.exe \
           | tee build/go2xp-patch.txt
         /tmp/go2xp verify -profile "$profile" build/f4-legacy.exe
+        # The version XP checks is in the PE header, and a profile that
+        # declares more than 5.1 makes the artifact unstartable there.
+        python3 - build/f4-legacy.exe <<'EOF'
+        import struct, sys
+        d = open(sys.argv[1], 'rb').read()
+        opt = struct.unpack_from('<I', d, 0x3c)[0] + 24
+        os_v = struct.unpack_from('<HH', d, opt + 40)
+        ss_v = struct.unpack_from('<HH', d, opt + 48)
+        print('PE header: OS %d.%d, subsystem %d.%d' % (os_v + ss_v))
+        if os_v > (5, 1) or ss_v > (5, 1):
+            sys.exit('a header above 5.1 is refused by Windows XP SP3 (not a valid Win32 application)')
+        EOF
         /tmp/go2xp audit -profile "$profile" build/f4-legacy.exe \
           | tee build/go2xp-audit.txt
-        (cd go2xp-src && git rev-parse HEAD) > build/go2xp-commit.txt
+        (cd "$go2xp_dir" && git rev-parse HEAD) > build/go2xp-commit.txt
         rm build/f4.exe
 
     - name: Package
@@ -909,8 +951,8 @@ jobs:
         set -euo pipefail
         while IFS= read -r cell; do
           TARGET=$(jq -r '.target' <<<"$cell")
-          GCFLAGS=$(jq -r '.gcflags // ""' <<<"$cell")
-          TAGS=$(jq -r '.tags // ""' <<<"$cell")
+          GCFLAGS=$(jq -r 'if .gcflags then .gcflags else "" end' <<<"$cell")
+          TAGS=$(jq -r 'if .tags then .tags else "" end' <<<"$cell")
 
           # An array, so the empty GCFLAGS of most cells contributes no argument
           # rather than an empty one.
@@ -1160,8 +1202,8 @@ jobs:
         # Windows-only; elsewhere the variable is unused.
         F4_NATIVE_CONPTY_PACKAGE: '1'
         # Coverage is collected on one Linux cell and both shards of each
-        # split desktop cell. Reusing an OS flag lets Codecov combine the two
-        # shard profiles without spending another full test matrix.
+        # split desktop cell. Each shard gets its own Codecov flag so the service
+        # cannot replace a rest profile with the A-D profile.
         COVER: ${{ matrix.cover && '-coverpkg=./... -coverprofile=cover.out' || '' }}
       run: |
         # Pull requests test only the packages their diff reaches through
@@ -1194,6 +1236,11 @@ jobs:
           read -r -a cover_args <<< "$COVER"
         fi
         go test "${cover_args[@]}" -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' "${run_args[@]}" "${targets[@]}"
+        # go test -coverpkg=./... emits one copy of every instrumented block per package. Codecov does not merge those duplicate records reliably, so normalize the profile before upload.
+        if [ -n "" ]; then
+          go run github.com/wadey/gocovmerge@b5bfa59ec0adc420475f97f89b58045c721d761c cover.out > cover.merged.out
+          mv cover.merged.out cover.out
+        fi
         # Layout validation mutates shared UI registries from parallel
         # subtests. Go 1.26 schedules them aggressively enough to expose the
         # upstream race, so isolate that test in a single-threaded process.
@@ -1240,7 +1287,7 @@ jobs:
         # looks like a report and picks up internal/i18n/lang/coverage_baseline.txt,
         # which counts translation keys, not statements.
         disable_search: true
-        flags: ${{ matrix.cover }}
+        flags: ${{ matrix.cover }}${{ matrix.shard && format('-{0}', matrix.shard) || '' }}
         token: ${{ secrets.CODECOV_TOKEN }}
         # Coverage is a report, not a gate: a failed upload (or a repository
         # with no token yet) must not turn the test run red.
@@ -1398,7 +1445,7 @@ jobs:
   release:
     name: Release
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-win7, build-termux, test, race]
+    needs: [build, build-batch, build-win7, build-reactos, build-termux, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -1507,7 +1554,7 @@ jobs:
   nightly:
     name: Nightly
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-win7, build-termux, test, race]
+    needs: [build, build-batch, build-win7, build-reactos, build-termux, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
