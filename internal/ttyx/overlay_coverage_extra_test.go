@@ -38,9 +38,9 @@ func TestOverlayDrawWithoutDisplay(t *testing.T) {
 
 func TestOverlaySuspendWithoutDisplay(t *testing.T) {
 	var s Session
-	o := &Overlay{s: &s, mapped: true}
+	o := &Overlay{s: &s, Mapped: true}
 	o.Suspend()
-	if !o.mapped {
+	if !o.Mapped {
 		t.Fatal("Suspend must not change mapping without a display")
 	}
 }
