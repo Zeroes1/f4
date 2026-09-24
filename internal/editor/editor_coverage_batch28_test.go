@@ -43,7 +43,7 @@ func TestConvertLineEndingsToUnixCoverageBatch28(t *testing.T) {
 }
 
 func TestConvertLineEndingsToDosCoverageBatch28(t *testing.T) {
-	if got := convertLineEndings([]byte("a\nb\rc\nd"), []byte("\r\n")); !bytes.Equal(got, []byte("a\r\nb\r\nc\r\n")) {
+	if got := convertLineEndings([]byte("a\nb\rc\nd"), []byte("\r\n")); !bytes.Equal(got, []byte("a\r\nb\r\nc\r\nd")) {
 		t.Fatalf("DOS conversion = %q", got)
 	}
 }
