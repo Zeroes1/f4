@@ -456,10 +456,6 @@ howett.net/plist v1.0.1/go.mod h1:lqaXoTrLY4hg8tnEzNru53gicrbv7rrk+2xJA/7hw9g=
 software.sslmate.com/src/go-pkcs12 v0.7.2 h1:Rh9FoMaI5k7Oo6EOS+2/BnoZ+JFIS+XHjM0VGkSPXLM=
 software.sslmate.com/src/go-pkcs12 v0.7.2/go.mod h1:Qiz0EyvDRJjjxGyUQa2cCNZn/wMyzrRJ/qcDXOQazLI=
 
-github.com/unxed/archives v0.0.0-20260924070254-993171f5a88d h1:ZF7/Rz4TgolfL2Nw2NWj/wnOouhntFVYRq3quWg7P4Y=
-github.com/unxed/archives v0.0.0-20260924070254-993171f5a88d/go.mod h1:ClyE/fYGwppv2n7Z4gCm2GqlRcoYvEpNiL7Hte9tSlk=
-github.com/unxed/sevenzip v0.0.0-20260924071214-2857f0bea623 h1:IMpfRdBFN8F7+tg1AbjfOroh+YIEx848gjjjgNKcA20=
-github.com/unxed/sevenzip v0.0.0-20260924071214-2857f0bea623/go.mod h1:GhuB6Lq1xCpP1sps+horjZ8lgiKPJcy2zUX3prla9wc=
 github.com/unxed/vtui v0.1.357-0.20260924065402-8508b6e88d24 h1:52eyTKKkY5FUB5iKH+ceTqNuGrxkZps7Nq52RX0gREU=
 github.com/unxed/vtui v0.1.357-0.20260924065402-8508b6e88d24/go.mod h1:PlSowvK+7wehtSmYxT32cRpxMxs5WYA5P6y1g7yJsCU=
 github.com/unxed/pureffi v0.1.20-0.20260924064017-dda2b733e593 h1:Nkh9Hs9zha2ospOw/nY4kI+WtmKMgyl9pk2fEFxVw3I=
