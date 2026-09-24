@@ -58,7 +58,7 @@ func TestParseDirChangeCommandCoverageBatch25(t *testing.T) {
 	}{
 		{"cd /tmp", "/tmp", true},
 		{"chdir 'folder with spaces'", "folder with spaces", true},
-		{"cd "folder with spaces"", "folder with spaces", true},
+		{"cd \"folder with spaces\"", "folder with spaces", true},
 		{"cd..", "..", true},
 		{"cd ..", "..", true},
 		{"cd/", string(os.PathSeparator), true},
