@@ -188,6 +188,19 @@ func TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376(t *testin
 	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "F7"); got != "File.MakeDir" {
 		t.Errorf("Terminal F7 in the idle terminal = %q, want File.MakeDir", got)
 	}
+
+	// A running child owns these keys even if f4's panels have not yet been
+	// hidden.  Only Ctrl+O is deliberately left with f4 as an escape hatch.
+	pf.ShowPanels = true
+	pf.Executing = true
+	for _, key := range keys {
+		if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", key); got != "" {
+			t.Errorf("Terminal %s while a child is busy with panels visible = %q, want empty", key, got)
+		}
+	}
+	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "CtrlO"); got != "Panel.Toggle" {
+		t.Errorf("Terminal CtrlO while a child is busy with panels visible = %q, want Panel.Toggle", got)
+	}
 }
 
 // TestPanelsFrame_F2_OpensUserMenu_WhenPanelsHidden is the end-to-end
