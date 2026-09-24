@@ -44,6 +44,12 @@ type GrabberFrame struct {
 	// press inside the grabber, so motion events extend the
 	// rectangular selection until the button is released.
 	mouseSelecting bool
+
+	// restoreKeyBar puts back the key bar that belonged to the frame below
+	// the grabber. While the grabber is active the key bar must not receive
+	// drag motion: it would steal the pointer update and leave the selection
+	// rectangle one row short (#1289).
+	restoreKeyBar func()
 }
 
 // NewGrabberFrame constructs an empty grabber. The screen snapshot is
@@ -75,6 +81,7 @@ func OpenGrabber() {
 		g.snapshot(scr)
 		g.mu.Unlock()
 	}
+	g.suppressUnderlyingKeyBar()
 	vtui.FrameManager.Push(g)
 	vtui.FrameManager.Redraw()
 }
@@ -122,6 +129,32 @@ func handleForcedMouseSelectionEvent(e *vtinput.InputEvent) bool {
 	grabber.ProcessMouse(e)
 	vtui.FrameManager.Redraw()
 	return true
+}
+
+// suppressUnderlyingKeyBar keeps the full-screen grabber in charge of every
+// mouse event, including motion over the visible function-key row. The
+// original bar is restored when the grabber exits, and the guard in the
+// restore closure avoids overwriting a bar installed by a different frame.
+func (g *GrabberFrame) suppressUnderlyingKeyBar() {
+	if vtui.FrameManager == nil {
+		return
+	}
+	if g.restoreKeyBar == nil && vtui.FrameManager.KeyBar != nil {
+		previous := vtui.FrameManager.KeyBar
+		g.restoreKeyBar = func() {
+			if vtui.FrameManager != nil && vtui.FrameManager.KeyBar == nil {
+				vtui.FrameManager.KeyBar = previous
+			}
+		}
+	}
+	vtui.FrameManager.KeyBar = nil
+}
+
+func (g *GrabberFrame) restoreUnderlyingKeyBar() {
+	if g.restoreKeyBar != nil {
+		g.restoreKeyBar()
+		g.restoreKeyBar = nil
+	}
 }
 
 func keyBarContainsMouse(e *vtinput.InputEvent) bool {
@@ -227,6 +260,7 @@ func (g *GrabberFrame) clampCursor() {
 func (g *GrabberFrame) Show(scr *vtui.ScreenBuf) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.suppressUnderlyingKeyBar()
 
 	if !g.hasSnap || scr.Width() != g.snapW || scr.Height() != g.snapH {
 		g.snapshot(scr)
@@ -327,10 +361,12 @@ func (g *GrabberFrame) copyAndExit() {
 		// eventually settles in the background.
 		terminal.SetClipboardAsync(text)
 	}
+	g.restoreUnderlyingKeyBar()
 	g.SetExitCode(1)
 }
 
 func (g *GrabberFrame) cancel() {
+	g.restoreUnderlyingKeyBar()
 	g.SetExitCode(-1)
 }
 
