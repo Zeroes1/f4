@@ -51,12 +51,12 @@ func TestActionFindFileInitializesAllOptions(t *testing.T) {
 	actionFindFile(pf)
 	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
 	want := map[string]int{
-		settingsCoverageCaption("FindFile.CaseSensitive"):  1,
-		settingsCoverageCaption("FindFile.WholeWords"):     0,
-		settingsCoverageCaption("FindFile.Regexp"):         1,
-		settingsCoverageCaption("FindFile.NotContaining"):  1,
-		settingsCoverageCaption("FindFile.Folders"):        0,
-		settingsCoverageCaption("FindFile.Symlinks"):       1,
+		settingsCoverageCaption("FindFile.CaseSensitive"): 1,
+		settingsCoverageCaption("FindFile.WholeWords"):    0,
+		settingsCoverageCaption("FindFile.Regexp"):        1,
+		settingsCoverageCaption("FindFile.NotContaining"): 1,
+		settingsCoverageCaption("FindFile.Folders"):       0,
+		settingsCoverageCaption("FindFile.Symlinks"):      1,
 	}
 	for caption, state := range want {
 		checkbox := settingsCoverageCheckbox(dlg, caption)
