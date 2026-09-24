@@ -23,9 +23,12 @@ func TestStartupDirsForOneRelativeArgument(t *testing.T) {
 }
 
 func TestStartupDirsForTwoArguments(t *testing.T) {
-	absolute := filepath.Join(string(filepath.Separator), "other", "path")
-	left, right := startupDirsFor("/work", []string{"left", absolute, "ignored"})
-	if left != filepath.Join("/work", "left") || right != filepath.Clean(absolute) {
+	abs, err := filepath.Abs(filepath.Join("other", "path"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	left, right := startupDirsFor("/work", []string{"left", abs, "ignored"})
+	if left != filepath.Join("/work", "left") || right != filepath.Clean(abs) {
 		t.Fatalf("startupDirsFor with two arguments = %q, %q", left, right)
 	}
 }
@@ -80,7 +83,10 @@ func TestResolveStartupPathCleansRelativePath(t *testing.T) {
 	if got := resolveStartupPath("/work", "./dir/../file.txt"); got != filepath.Join("/work", "file.txt") {
 		t.Fatalf("resolveStartupPath relative = %q", got)
 	}
-	abs := filepath.Join(string(filepath.Separator), "tmp", "file.txt")
+	abs, err := filepath.Abs(filepath.Join("tmp", "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := resolveStartupPath("/work", abs); got != filepath.Clean(abs) {
 		t.Fatalf("resolveStartupPath absolute = %q", got)
 	}
