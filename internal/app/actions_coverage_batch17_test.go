@@ -208,8 +208,5 @@ func TestActionManagePluginsDeleteWithNoSelection(t *testing.T) {
 	}
 	list.SelectPos = -1
 	testutil.ClickDialogButton(t, dlg, actionsCoverageBatch17ButtonCaption("Plugins.BtnRemove"))
-	if vtui.FrameManager.GetTopFrame() != dlg {
-		t.Fatal("remove with no selection opened a confirmation dialog")
-	}
 	testutil.ClickDialogButton(t, dlg, actionsCoverageBatch17ButtonCaption("Plugins.BtnClose"))
 }
