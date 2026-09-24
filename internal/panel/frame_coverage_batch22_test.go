@@ -35,7 +35,7 @@ func TestSameFolderHistoryPathCoverageBatch22(t *testing.T) {
 		a, b string
 		want bool
 	}{
-		{"", "/tmp" , false},
+		{"", "/tmp", false},
 		{"/tmp/one/../folder", "/tmp/folder", true},
 		{"/tmp/one", "/tmp/two", false},
 	}
