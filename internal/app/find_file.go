@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/unxed/f4/internal/panel"
 	"io"
-	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -15,6 +14,7 @@ import (
 	"github.com/coregx/coregex"
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/internal/appcmd"
+	"github.com/unxed/f4/internal/filemask"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
@@ -74,7 +74,7 @@ func splitFindMasks(mask string) (includes, excludes []string, err error) {
 			if field == "" {
 				continue
 			}
-			// Far compatibility: *.* translates to * in filepath.Match logic.
+			// Far compatibility: *.* translates to * in filemask matching.
 			masks = append(masks, strings.ReplaceAll(field, "*.*", "*"))
 		}
 		return masks
@@ -93,9 +93,9 @@ func splitFindMasks(mask string) (includes, excludes []string, err error) {
 	return includes, excludes, nil
 }
 
-func findFileMaskMatches(name string, masks []string) bool {
+func findFileMaskMatches(name string, masks []string, ignoreCase bool) bool {
 	for _, mask := range masks {
-		if matched, _ := filepath.Match(mask, name); matched {
+		if filemask.Match(name, mask, ignoreCase) {
 			return true
 		}
 	}
@@ -228,7 +228,7 @@ func ExecuteFindFile(pf *panel.PanelsFrame, v vfs.VFS, startDir, mask, text stri
 					if item.Name == ".." {
 						continue
 					}
-					if findFileMaskMatches(item.Name, excludeMasks) {
+					if findFileMaskMatches(item.Name, excludeMasks, !options.CaseSensitive) {
 						// An excluded directory is pruned, not merely omitted from
 						// the result, so an excluded tree cannot contribute hits.
 						continue
@@ -244,7 +244,7 @@ func ExecuteFindFile(pf *panel.PanelsFrame, v vfs.VFS, startDir, mask, text stri
 						item.IsDir = false
 					}
 
-					matched := findFileMaskMatches(item.Name, masks)
+					matched := findFileMaskMatches(item.Name, masks, !options.CaseSensitive)
 
 					if item.IsDir {
 						if options.FindFolders && text == "" && matched {

@@ -116,6 +116,12 @@ func collectArchiveIndexes(ctx context.Context, v vfs.VFS, p string) []string {
 		abs, _ := v.Abs(p)
 		// The indexes f4 keeps in its cache would otherwise stay for good.
 		indexes := tarindexcache.Files(abs)
+		// The path marker belongs to the same archive cache entry. Remove it
+		// together with the indexes, otherwise Cleanup has to discover the
+		// already-deleted archive again on a later startup (#1187).
+		if marker := tarindexcache.PathFile(abs); fileExists(marker) {
+			indexes = append(indexes, marker)
+		}
 		idx, _ := tar.GetStandardIndexPath(abs)
 		if _, err := os.Stat(idx); err == nil {
 			indexes = append(indexes, idx)
@@ -123,6 +129,11 @@ func collectArchiveIndexes(ctx context.Context, v vfs.VFS, p string) []string {
 		return indexes
 	}
 	return nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func removeArchiveIndexes(indexes []string) {
