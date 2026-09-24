@@ -31,7 +31,7 @@ func TestSFTPCommandExitStatusNilCoverageBatch30(t *testing.T) {
 
 type batch30ExitStatusError struct{ code int }
 
-func (e batch30ExitStatusError) Error() string { return "remote command failed" }
+func (e batch30ExitStatusError) Error() string   { return "remote command failed" }
 func (e batch30ExitStatusError) ExitStatus() int { return e.code }
 
 func TestSFTPCommandExitStatusExtractsRemoteCodeCoverageBatch30(t *testing.T) {
