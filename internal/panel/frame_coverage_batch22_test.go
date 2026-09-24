@@ -65,7 +65,7 @@ func TestFolderHistoryStepCoverageBatch22(t *testing.T) {
 func TestParseDirChangeCommandCoverageBatch22(t *testing.T) {
 	cases := []struct {
 		command, want string
-		ok           bool
+		ok            bool
 	}{
 		{"cd /tmp/work", "/tmp/work", true},
 		{"chdir 'folder with spaces'", "folder with spaces", true},
@@ -84,7 +84,7 @@ func TestParseDirChangeCommandCoverageBatch22(t *testing.T) {
 func TestParsePlainEditCommandCoverageBatch22(t *testing.T) {
 	cases := []struct {
 		command, want string
-		ok           bool
+		ok            bool
 	}{
 		{" edit: notes.txt ", "notes.txt", true},
 		{"EDIT:/tmp/report", "/tmp/report", true},
