@@ -27,6 +27,18 @@ func pumpUntil(t *testing.T, what string, cond func() bool) {
 	}
 }
 
+
+func drainRenameTasks(t *testing.T) {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(10 * time.Millisecond):
+			return
+		}
+	}
+}
 func setupRenameConflict(t *testing.T) (*panel.PanelsFrame, *panel.FileSystemPanel, string) {
 	t.Helper()
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
