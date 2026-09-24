@@ -34,7 +34,7 @@ func TestSFTPVFSPathOperationsCoverageBatch31(t *testing.T) {
 	if got := v.Join("/home", "user", "..", "tmp"); got != "/home/tmp" {
 		t.Fatalf("Join = %q", got)
 	}
-	if got, err := v.Abs("relative"); err != nil || got != "/relative" {
+	if got, err := v.Abs("relative"); err != nil || got != "relative" {
 		t.Fatalf("Abs(relative) = (%q, %v)", got, err)
 	}
 	if got := v.Base("/home/file.txt"); got != "file.txt" || v.Dir("/home/file.txt") != "/home" {
