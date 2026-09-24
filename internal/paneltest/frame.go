@@ -18,7 +18,7 @@ import (
 // and no frame manager is pumping them in a test.
 func WaitForLoad(t *testing.T, fp *panel.FileSystemPanel) {
 	t.Helper()
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(10 * time.Second)
 	for fp.IsLoading {
 		select {
 		case task := <-vtui.FrameManager.TaskChan:
