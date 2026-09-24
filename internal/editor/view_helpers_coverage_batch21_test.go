@@ -29,7 +29,7 @@ func TestExtraCaretSelectionRange(t *testing.T) {
 	}
 }
 
-func TestHighlightDuty(t *testing.T) {
+func TestHighlightDutyCoverageBatch21(t *testing.T) {
 	if highlightDuty(false, true) != hlDutyIndexing {
 		t.Fatal("indexing did not take priority")
 	}
@@ -94,7 +94,7 @@ func TestEditorVisualClusters(t *testing.T) {
 	}
 }
 
-func TestEditorRenderClip(t *testing.T) {
+func TestEditorRenderClipCoverageBatch21(t *testing.T) {
 	short := "short"
 	if editorRenderClip(short, 20) != short || editorRenderClip(short, 0) != short {
 		t.Fatal("short text was changed by clipping")
