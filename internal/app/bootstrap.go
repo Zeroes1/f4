@@ -972,6 +972,19 @@ func InitCore() *vtui.ScreenBuf {
 	return scr
 }
 
+// applyAndRememberStartupDirs applies explicit command-line paths and mirrors
+// the resulting panel state into the legacy session fields. The live panels
+// remain the source of truth during a normal save, but the legacy snapshot is
+// the fallback used if a GUI backend tears down its screens before Main's
+// deferred SaveSession runs.
+func applyAndRememberStartupDirs(panels *panel.PanelsFrame, left, right string) {
+	panel.ApplyStartupDirs(panels, left, right)
+	if left == "" {
+		return
+	}
+	panel.SetLegacyWorkspaceSession(panel.CaptureWorkspaceSession(panels))
+}
+
 func SetupUI() {
 	setupUI(nil)
 }
@@ -1145,7 +1158,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	// The startup directories outrank the restored paths. A client attaching to
 	// a running daemon brings its own instead -- see attachPayload.
 	startLeft, startRight := startupDirs()
-	panel.ApplyStartupDirs(panels, startLeft, startRight)
+	applyAndRememberStartupDirs(panels, startLeft, startRight)
 	vtui.FrameManager.Push(panels)
 	if len(states) > 1 {
 		// AddScreenBackground inserts immediately after the active workspace;
