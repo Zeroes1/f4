@@ -1202,8 +1202,8 @@ jobs:
         # Windows-only; elsewhere the variable is unused.
         F4_NATIVE_CONPTY_PACKAGE: '1'
         # Coverage is collected on one Linux cell and both shards of each
-        # split desktop cell. Reusing an OS flag lets Codecov combine the two
-        # shard profiles without spending another full test matrix.
+        # split desktop cell. Each shard gets its own Codecov flag so the service
+        # cannot replace a rest profile with the A-D profile.
         COVER: ${{ matrix.cover && '-coverpkg=./... -coverprofile=cover.out' || '' }}
       run: |
         # Pull requests test only the packages their diff reaches through
@@ -1287,7 +1287,7 @@ jobs:
         # looks like a report and picks up internal/i18n/lang/coverage_baseline.txt,
         # which counts translation keys, not statements.
         disable_search: true
-        flags: ${{ matrix.cover }}
+        flags: ${{ matrix.cover }}${{ matrix.shard && format('-{0}', matrix.shard) || '' }}
         token: ${{ secrets.CODECOV_TOKEN }}
         # Coverage is a report, not a gate: a failed upload (or a repository
         # with no token yet) must not turn the test run red.
