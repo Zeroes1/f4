@@ -86,7 +86,7 @@ func TestResolveStartupPathCleansRelativePath(t *testing.T) {
 	}
 }
 
-func TestStartupViewFilesSelectsExistingFiles(t *testing.T) {
+func TestStartupViewFilesSelectsExistingRelativeFile(t *testing.T) {
 	tmp := t.TempDir()
 	file := filepath.Join(tmp, "note.txt")
 	dir := filepath.Join(tmp, "folder")
