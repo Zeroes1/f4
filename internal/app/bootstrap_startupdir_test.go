@@ -296,6 +296,7 @@ func TestApplyStartupDirsRemembersLegacySessionPaths(t *testing.T) {
 	left := t.TempDir()
 	right := t.TempDir()
 	pf := panel.NewPanelsFrame()
+	pf.ResizeConsole(80, 25)
 	t.Cleanup(pf.Close)
 
 	applyAndRememberStartupDirs(pf, left, right)
