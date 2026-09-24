@@ -123,9 +123,9 @@ func TestForcedMouseSelectionDragThroughKeyBarCopiesKeyBarRow(t *testing.T) {
 		t.Fatal("active grabber must own pointer motion instead of the key bar")
 	}
 
-	grabber.ProcessMouse(mouseEvent(15, testGrabberH-1, vtinput.FromLeft1stButtonPressed, true, true))
-	grabber.ProcessMouse(mouseEvent(15, testGrabberH-1, 0, false, false))
-	if got := grabber.copyText(); got != "hello world\nsecond line trailing spaces\nthird\n\nF1 Help / F2" {
+	grabber.ProcessMouse(mouseEvent(17, testGrabberH-1, vtinput.FromLeft1stButtonPressed, true, true))
+	grabber.ProcessMouse(mouseEvent(17, testGrabberH-1, 0, false, false))
+	if got := grabber.copyText(); got != "hello world\nsecond line trailing spaces\nthird\n\nF1 Help / F2 View" {
 		t.Fatalf("selection through key bar = %q", got)
 	}
 
