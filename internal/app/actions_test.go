@@ -2305,6 +2305,7 @@ func TestActionOpenViewer_PromptStaysAboveDelayedProgressDialog(t *testing.T) {
 			t.Fatal("progress dialog appeared after the prompt was dismissed")
 		}
 		if len(vtui.FrameManager.Screens) > 1 {
+			vtui.FrameManager.CloseActiveScreen()
 			return
 		}
 	}
