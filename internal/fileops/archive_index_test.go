@@ -233,6 +233,7 @@ func TestArchiveIndex_MoveAndDeleteTakeTheCachedIndexAlong(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(tarindexcache.Dir(), tarindexcache.Prefix(oldPath)+"-ffff.index.sqlite"), []byte("index"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	tarindexcache.Track(oldPath)
 
 	if err := os.Rename(oldPath, newPath); err != nil {
 		t.Fatal(err)
@@ -241,14 +242,23 @@ func TestArchiveIndex_MoveAndDeleteTakeTheCachedIndexAlong(t *testing.T) {
 	if len(tarindexcache.Files(oldPath)) != 0 || len(tarindexcache.Files(newPath)) != 1 {
 		t.Fatalf("after the move: old %v, new %v", tarindexcache.Files(oldPath), tarindexcache.Files(newPath))
 	}
+	if _, err := os.Stat(tarindexcache.PathFile(oldPath)); !os.IsNotExist(err) {
+		t.Fatalf("old archive path marker after move: %v", err)
+	}
+	if _, err := os.Stat(tarindexcache.PathFile(newPath)); err != nil {
+		t.Fatalf("new archive path marker after move: %v", err)
+	}
 
 	indexes := collectArchiveIndexes(context.Background(), v, newPath)
-	if len(indexes) != 1 {
-		t.Fatalf("collected %v, want the cached index of the archive", indexes)
+	if len(indexes) != 2 {
+		t.Fatalf("collected %v, want the cached index and path marker of the archive", indexes)
 	}
 	removeArchiveIndexes(indexes)
 	if left := tarindexcache.Files(newPath); len(left) != 0 {
 		t.Fatalf("the cached index stayed after the delete: %v", left)
+	}
+	if _, err := os.Stat(tarindexcache.PathFile(newPath)); !os.IsNotExist(err) {
+		t.Fatalf("archive path marker stayed after the delete: %v", err)
 	}
 
 	// A copy keeps the original's index and builds its own on demand.
