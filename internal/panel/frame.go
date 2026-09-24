@@ -336,6 +336,11 @@ type PanelsFrame struct {
 	termSelClickAt  time.Time // time of the last click
 	termSelClickX   int
 	termSelClickY   int
+
+	// Windows Console mouse records report button release as KeyDown=true with
+	// ButtonState=0. Remember the button from the forwarded press so an SGR
+	// terminal event can name the button being released (#1294).
+	terminalMouseButton uint32
 }
 
 func (pf *PanelsFrame) Left() Panel  { return pf.Panels[0] }
@@ -3308,6 +3313,33 @@ func terminalWantsMouseEvent(mode int, e *vtinput.InputEvent) bool {
 	}
 }
 
+func (pf *PanelsFrame) terminalMouseEventForEncoding(e *vtinput.InputEvent) *vtinput.InputEvent {
+	if e == nil || e.Type != vtinput.MouseEventType || e.WheelDirection != 0 ||
+		e.MouseEventFlags&vtinput.MouseMoved != 0 {
+		return e
+	}
+
+	local := *e
+	if e.KeyDown && e.ButtonState != 0 {
+		switch e.ButtonState {
+		case vtinput.FromLeft1stButtonPressed, vtinput.FromLeft2ndButtonPressed, vtinput.RightmostButtonPressed:
+			pf.terminalMouseButton = uint32(e.ButtonState)
+		}
+		return &local
+	}
+
+	// Windows keeps KeyDown set on MOUSE_EVENT records, including release
+	// records. Its zero ButtonState is therefore the release signal, not a
+	// buttonless press. Re-express it as a normal release with the remembered
+	// button so SGR can emit the correct button code.
+	if e.ButtonState == 0 && pf.terminalMouseButton != 0 {
+		local.KeyDown = false
+		local.ButtonState = pf.terminalMouseButton
+	}
+	pf.terminalMouseButton = 0
+	return &local
+}
+
 func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 	trace := menuClickTraced(e)
 	if trace {
@@ -3331,9 +3363,14 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 			}
 		}
 		active := pf.GetActivePTY()
+		if pf.TermView.MouseTrackingMode == 0 && e.Type == vtinput.MouseEventType &&
+			e.WheelDirection == 0 && e.ButtonState == 0 {
+			pf.terminalMouseButton = 0
+		}
 		if active != nil && terminalWantsMouseEvent(pf.TermView.MouseTrackingMode, e) {
+			encoded := pf.terminalMouseEventForEncoding(e)
 			seq := keymap.TranslateMouseInputWithMode(keymap.RebaseTerminalMouseEvent(
-				e,
+				encoded,
 				pf.TermView.X1, pf.TermView.Y1,
 				pf.TermView.Width, pf.TermView.Height,
 			), pf.TermView.MouseSGRMode)

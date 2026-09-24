@@ -138,6 +138,27 @@ func TestTranslateMouseInputWithMode_LegacyX10(t *testing.T) {
 	}
 }
 
+func TestTranslateMouseInputWithMode_SGRReleaseKeepsReleasedButton(t *testing.T) {
+	release := &vtinput.InputEvent{
+		KeyDown:     false,
+		MouseX:      10,
+		MouseY:      5,
+		ButtonState: vtinput.FromLeft1stButtonPressed,
+	}
+	if got, want := TranslateMouseInputWithMode(release, true), "\x1b[<0;11;6m"; got != want {
+		t.Fatalf("SGR release = %q, want %q", got, want)
+	}
+
+	// A backend that cannot identify the released button retains the old
+	// compatibility code; PanelsFrame supplies the remembered button for the
+	// Windows Console shape before reaching this function.
+	unknown := *release
+	unknown.ButtonState = 0
+	if got, want := TranslateMouseInputWithMode(&unknown, true), "\x1b[<3;11;6m"; got != want {
+		t.Fatalf("buttonless SGR release = %q, want %q", got, want)
+	}
+}
+
 func TestTranslateMouseInputWithMode_LargeCoordinateUsesSGR(t *testing.T) {
 	e := &vtinput.InputEvent{KeyDown: true, MouseX: 224, MouseY: 5, ButtonState: vtinput.FromLeft1stButtonPressed}
 	if got, want := TranslateMouseInputWithMode(e, false), "\x1b[<0;225;6M"; got != want {
