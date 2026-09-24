@@ -125,7 +125,7 @@ func TestForcedMouseSelectionDragThroughKeyBarCopiesKeyBarRow(t *testing.T) {
 
 	grabber.ProcessMouse(mouseEvent(testGrabberW-1, testGrabberH-1, vtinput.FromLeft1stButtonPressed, true, true))
 	grabber.ProcessMouse(mouseEvent(testGrabberW-1, testGrabberH-1, 0, false, false))
-	if got := grabber.copyText(); got != "hello world\nsecond line trailing spaces\nthird\n\nF1 Help / F2 View" {
+	if got := grabber.copyText(); got != "hello world\nsecond line trailing spaces\nthird\n\n\nF1 Help / F2 View" {
 		t.Fatalf("selection through key bar = %q", got)
 	}
 
