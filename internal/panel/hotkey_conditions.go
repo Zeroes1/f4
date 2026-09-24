@@ -92,6 +92,15 @@ var hotkeyConditions = map[string]func() bool{
 	// binding of such a key unconditional.
 	"noterminalapp": func() bool {
 		if pf := FindPanelsFrameAnyScreen(); pf != nil {
+			// A child keeps ownership of its function keys even while f4's
+			// panels are visible.  Otherwise Ctrl+F1/Ctrl+F2/Ctrl+P can make
+			// f4 repaint over a running full-screen program and leave stale
+			// fragments behind when its panels are hidden (#1376).  Ctrl+O
+			// uses the looser NoAltScreenApp condition and remains f4's escape
+			// hatch.
+			if pf.IsPtyBusy() && pf.ShellMode != terminal.ShellModeSimpleInline {
+				return false
+			}
 			if pf.ShowPanels {
 				return true
 			}
