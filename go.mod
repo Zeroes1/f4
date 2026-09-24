@@ -31,17 +31,17 @@ require (
 	github.com/mholt/archives v0.1.5
 	github.com/pkg/sftp v1.13.6
 	github.com/tetratelabs/wazero v1.12.0
-	github.com/unxed/archives v0.0.0-20260917192539-4ad5487d1940
+	github.com/unxed/archives v0.0.0-20260924070254-993171f5a88d
 	github.com/unxed/colorer4go v0.1.23
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.6
-	github.com/unxed/sevenzip v0.0.0-20260917192431-7f00f7c8d17b
+	github.com/unxed/sevenzip v0.0.0-20260924071214-2857f0bea623
 	github.com/unxed/tar v0.1.132
 	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.357-0.20260920230126-053fc1101d68
+	github.com/unxed/vtui v0.1.357-0.20260924065402-8508b6e88d24
 	github.com/unxed/zip v0.1.140-0.20260924053511-cd3c7523a2c8
 	github.com/unxed/zipper v0.1.169-0.20260924054956-b56116444056
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -182,8 +182,8 @@ require (
 	software.sslmate.com/src/go-pkcs12 v0.7.2 // indirect
 )
 
-replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.19
+replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.20-0.20260924064017-dda2b733e593
 
 replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 
-replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.9-0.20260920144017-3dab79554729
+replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.9-0.20260924065738-6dc0842bfac6
