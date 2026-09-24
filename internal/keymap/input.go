@@ -103,7 +103,23 @@ func TranslateMouseInputWithMode(e *vtinput.InputEvent, sgr bool) string {
 		cb += 32
 	} else {
 		if !e.KeyDown {
-			cb = 3 // Release
+			// SGR mouse mode identifies a release by the button that was
+			// released and the lowercase final byte. The legacy X10 format
+			// has only one release code, so keep its historical value there.
+			if sgr {
+				switch e.ButtonState {
+				case vtinput.FromLeft1stButtonPressed:
+					cb = 0
+				case vtinput.FromLeft2ndButtonPressed:
+					cb = 1
+				case vtinput.RightmostButtonPressed:
+					cb = 2
+				default:
+					cb = 3
+				}
+			} else {
+				cb = 3 // Release
+			}
 			isRelease = true
 		} else {
 			switch e.ButtonState {

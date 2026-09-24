@@ -3655,6 +3655,36 @@ func TestPanelsFrame_MouseForwarding_ToPTY(t *testing.T) {
 	}
 }
 
+func TestPanelsFrame_MouseForwarding_WindowsReleaseUsesPressedButton(t *testing.T) {
+	pf := setupMockPanelsFrame(t)
+	pty := pf.Pty.(*mockPty)
+	defer pf.Close()
+
+	pf.ShowPanels = false
+	pf.TermView.MouseTrackingMode = 1003
+	pf.TermView.MouseSGRMode = true
+
+	if !pf.ProcessMouse(&vtinput.InputEvent{
+		Type:        vtinput.MouseEventType,
+		KeyDown:     true,
+		MouseX:      10,
+		MouseY:      10,
+		ButtonState: vtinput.FromLeft1stButtonPressed,
+	}) {
+		t.Fatal("mouse press was not forwarded")
+	}
+	// The Windows console reader reports the release as another key-down
+	// shaped record with no button bits.
+	if !pf.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true, MouseX: 10, MouseY: 10}) {
+		t.Fatal("Windows-shaped mouse release was not forwarded")
+	}
+
+	want := "\x1b[<0;11;11M\x1b[<0;11;11m"
+	if got := pty.String(); got != want {
+		t.Fatalf("Windows-shaped SGR mouse stream = %q, want %q", got, want)
+	}
+}
+
 func TestPanelsFrame_MouseForwarding_UsesLegacyFormatWhenRequested(t *testing.T) {
 	pf := setupMockPanelsFrame(t)
 	pty := pf.Pty.(*mockPty)
