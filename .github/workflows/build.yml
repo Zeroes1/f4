@@ -1202,8 +1202,8 @@ jobs:
         # Windows-only; elsewhere the variable is unused.
         F4_NATIVE_CONPTY_PACKAGE: '1'
         # Coverage is collected on one Linux cell and both shards of each
-        # split desktop cell. Reusing an OS flag lets Codecov combine the two
-        # shard profiles without spending another full test matrix.
+        # split desktop cell. Each shard gets its own Codecov flag so the service
+        # cannot replace a rest profile with the A-D profile.
         COVER: ${{ matrix.cover && '-coverpkg=./... -coverprofile=cover.out' || '' }}
       run: |
         # Pull requests test only the packages their diff reaches through
@@ -1236,6 +1236,11 @@ jobs:
           read -r -a cover_args <<< "$COVER"
         fi
         go test "${cover_args[@]}" -shuffle="$TEST_SHUFFLE" -timeout 15m -skip '^TestAllDialogs_LayoutValidation$' "${run_args[@]}" "${targets[@]}"
+        # go test -coverpkg=./... emits one copy of every instrumented block per package. Codecov does not merge those duplicate records reliably, so normalize the profile before upload.
+        if [ -n "" ]; then
+          go run github.com/wadey/gocovmerge@b5bfa59ec0adc420475f97f89b58045c721d761c cover.out > cover.merged.out
+          mv cover.merged.out cover.out
+        fi
         # Layout validation mutates shared UI registries from parallel
         # subtests. Go 1.26 schedules them aggressively enough to expose the
         # upstream race, so isolate that test in a single-threaded process.
@@ -1282,7 +1287,7 @@ jobs:
         # looks like a report and picks up internal/i18n/lang/coverage_baseline.txt,
         # which counts translation keys, not statements.
         disable_search: true
-        flags: ${{ matrix.cover }}
+        flags: ${{ matrix.cover }}${{ matrix.shard && format('-{0}', matrix.shard) || '' }}
         token: ${{ secrets.CODECOV_TOKEN }}
         # Coverage is a report, not a gate: a failed upload (or a repository
         # with no token yet) must not turn the test run red.
