@@ -23,6 +23,15 @@ type editorSettingsControlsBatch24 struct {
 	cancel *vtui.Button
 }
 
+func preserveEditorConfigBatch24(t *testing.T) {
+	t.Helper()
+	before := config.App
+	t.Cleanup(func() {
+		config.App = before
+		editor.SetColorerScheme(before.EditorColorerScheme)
+	})
+}
+
 func openEditorSettingsBatch24(t *testing.T) editorSettingsControlsBatch24 {
 	t.Helper()
 	t.Cleanup(paneltest.SwapFrameManager(t))
@@ -72,6 +81,7 @@ func openEditorSettingsBatch24(t *testing.T) editorSettingsControlsBatch24 {
 }
 
 func TestActionEditorSettingsSaveAllControlsBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorTabSize = 4
 	config.App.EditorAutoIndent = false
 	c := openEditorSettingsBatch24(t)
@@ -98,6 +108,7 @@ func TestActionEditorSettingsSaveAllControlsBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsCancelBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorAutoIndent = false
 	before := config.App
 	c := openEditorSettingsBatch24(t)
@@ -109,6 +120,7 @@ func TestActionEditorSettingsCancelBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsInvalidTabSizeDefaultsBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorTabSize = 6
 	c := openEditorSettingsBatch24(t)
 	for _, edit := range c.edits {
@@ -123,6 +135,7 @@ func TestActionEditorSettingsInvalidTabSizeDefaultsBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsHighlighterSelectionBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorHighlighter = "Colorer"
 	c := openEditorSettingsBatch24(t)
 	if len(c.combos) < 2 {
@@ -137,6 +150,7 @@ func TestActionEditorSettingsHighlighterSelectionBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsExternalEditorLinksBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.UseExternalEditor = false
 	c := openEditorSettingsBatch24(t)
 	if len(c.checks) < 10 || len(c.edits) < 4 {
@@ -155,6 +169,7 @@ func TestActionEditorSettingsExternalEditorLinksBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsInvalidExpandTabsBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorExpandTabs = 99
 	c := openEditorSettingsBatch24(t)
 	if len(c.combos) == 0 || c.combos[0].Menu.SelectPos != 0 {
@@ -164,6 +179,7 @@ func TestActionEditorSettingsInvalidExpandTabsBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsMaskRoundTripBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.EditorAutoCompleteMask = "*.go"
 	c := openEditorSettingsBatch24(t)
 	for _, edit := range c.edits {
@@ -178,6 +194,7 @@ func TestActionEditorSettingsMaskRoundTripBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsExternalCommandsRoundTripBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	config.App.ExternalEditorConsole = "old-console"
 	config.App.ExternalEditorGUI = "old-gui"
 	c := openEditorSettingsBatch24(t)
@@ -196,6 +213,7 @@ func TestActionEditorSettingsExternalCommandsRoundTripBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsCodepageSelectionBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	c := openEditorSettingsBatch24(t)
 	if len(c.combos) < 4 {
 		t.Fatal("codepage combo was not found")
@@ -208,6 +226,7 @@ func TestActionEditorSettingsCodepageSelectionBatch24(t *testing.T) {
 }
 
 func TestActionEditorSettingsColorerSchemeSelectionBatch24(t *testing.T) {
+	preserveEditorConfigBatch24(t)
 	c := openEditorSettingsBatch24(t)
 	if len(c.combos) < 3 {
 		t.Fatal("colorer scheme combo was not found")
