@@ -3675,12 +3675,7 @@ func TestPanelsFrame_MouseForwarding_WindowsReleaseUsesPressedButton(t *testing.
 	}
 	// The Windows console reader reports the release as another key-down
 	// shaped record with no button bits.
-	if !pf.ProcessMouse(&vtinput.InputEvent{
-		Type:   vtinput.MouseEventType,
-		KeyDown: true,
-		MouseX: 10,
-		MouseY: 10,
-	}) {
+	if !pf.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true, MouseX: 10, MouseY: 10}) {
 		t.Fatal("Windows-shaped mouse release was not forwarded")
 	}
 
