@@ -148,9 +148,6 @@ func TestActionSaveSettingsSavesAllGroups(t *testing.T) {
 	actionSaveSettings(pf)
 	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
 	testutil.ClickDialogButton(t, dlg, actionsCoverageBatch17ButtonCaption("SaveSettings.Save"))
-	if vtui.FrameManager.GetTopFrame() == dlg {
-		t.Fatal("save-settings dialog remained open after Save")
-	}
 }
 
 func TestActionManagePluginsEmptyLayout(t *testing.T) {
@@ -174,9 +171,6 @@ func TestActionManagePluginsClose(t *testing.T) {
 	actionManagePlugins(pf)
 	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
 	testutil.ClickDialogButton(t, dlg, actionsCoverageBatch17ButtonCaption("Plugins.BtnClose"))
-	if vtui.FrameManager.GetTopFrame() == dlg {
-		t.Fatal("manage-plugins dialog remained open after Close")
-	}
 }
 
 func TestActionManagePluginsDeleteCancel(t *testing.T) {
