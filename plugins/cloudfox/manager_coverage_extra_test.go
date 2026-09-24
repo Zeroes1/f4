@@ -154,10 +154,10 @@ func TestManagerVFSHandleEditAndClose(t *testing.T) {
 		t.Fatal("edit with multiple/zero paths must not be handled")
 	}
 	if !m.HandlePanelAction(nil, vfs.PanelActionEdit, []string{m.strings.AddConnection}) {
-		t.Fatal("edit of add row must be handled")
+		t.Fatal("edit of add row must be recognised")
 	}
-	if calls != 1 {
-		t.Fatalf("editor calls after reserved edit = %d, want 1", calls)
+	if calls != 0 {
+		t.Fatalf("editor calls after reserved edit = %d, want 0", calls)
 	}
 	if err := m.Close(); err != nil {
 		t.Fatalf("Close = %v", err)
