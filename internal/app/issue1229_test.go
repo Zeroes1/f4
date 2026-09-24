@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -57,6 +58,8 @@ func setupRenameConflict(t *testing.T) (*panel.PanelsFrame, *panel.FileSystemPan
 	fsp := pf.Panels[0].(*panel.FileSystemPanel)
 	fsp.Vfs = vfs.NewOSVFS(dir)
 	pf.ActiveIdx = 0
+	paneltest.WaitForLoad(t, fsp)
+	t.Cleanup(func() { drainRenameTasks(t) })
 	return pf, fsp, dir
 }
 
