@@ -7,7 +7,7 @@ import (
 )
 
 func TestArchiveAutoQueueContext(t *testing.T) {
-	if autoQueueRequested(nil) || autoQueueRequested(context.Background()) {
+	if autoQueueRequested(context.WithValue(context.Background(), autoQueueContextKey{}, false)) || autoQueueRequested(context.Background()) {
 		t.Fatal("ordinary contexts must not request automatic queueing")
 	}
 	if !autoQueueRequested(WithAutoQueue(context.Background())) {
