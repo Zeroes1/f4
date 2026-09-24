@@ -55,8 +55,10 @@ var hotkeyConditions = map[string]func() bool{
 		}
 		return false
 	},
-	// noaltscreenapp gates keys that must reach an interactive AltScreen
-	// application (mc, htop) instead of triggering f4's own actions.
+	// noaltscreenapp is the looser gate: it stands down only for an AltScreen
+	// application (mc, htop), not for a child that is merely busy. Ctrl+O is
+	// bound through it so that no running program can lock the panels away
+	// (#50); keys that belong to the running program use noterminalapp.
 	"noaltscreenapp": func() bool {
 		if pf := FindPanelsFrameAnyScreen(); pf != nil {
 			if pf.ShowPanels {
@@ -81,9 +83,13 @@ var hotkeyConditions = map[string]func() bool{
 	// noterminalapp is the stricter sibling of noaltscreenapp: it also
 	// stands down for a plain child process that is merely busy (a shell
 	// command, a REPL). With the panels hidden such a process owns the
-	// keyboard and the command line is not even drawn, so actions that
-	// type into it must not fire. With the panels shown nothing is in the
-	// way, which keeps the Shell binding of such a key unconditional.
+	// keyboard, as it does in far2l's terminal, and the command line is not
+	// even drawn, so neither actions that type into it nor the file-manager
+	// keys (F2, F7, F10, Alt+F1...) may fire. The AltScreen test alone is not
+	// enough for those: a Windows console program such as Far Manager draws
+	// full screen without ever switching to the alternate screen (#1376).
+	// With the panels shown nothing is in the way, which keeps the Shell
+	// binding of such a key unconditional.
 	"noterminalapp": func() bool {
 		if pf := FindPanelsFrameAnyScreen(); pf != nil {
 			if pf.ShowPanels {

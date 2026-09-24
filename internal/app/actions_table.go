@@ -470,7 +470,7 @@ func init() {
 		LabelKey:     "Action.File.New",
 		Description:  "Create and open a new file in editor",
 		DescKey:      "Action.File.New.Desc",
-		DefaultKeys:  []string{"ShiftF4:NoAltScreenApp"},
+		DefaultKeys:  []string{"ShiftF4:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		MenuPath:     "Files",
 		Handler:      withPF(func(pf *panel.PanelsFrame) { actionNewFile(pf) }),
@@ -566,7 +566,7 @@ func init() {
 		LabelKey:     "Menu.Files.MkDir",
 		Description:  "Create a new directory",
 		DescKey:      "Action.File.MakeDir.Desc",
-		DefaultKeys:  []string{"F7:NoAltScreenApp"},
+		DefaultKeys:  []string{"F7:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		MenuPath:     "Files",
 		Handler:      withPF(func(pf *panel.PanelsFrame) { actionMkDir(pf) }),
@@ -818,7 +818,7 @@ func init() {
 		LabelKey:     "Action.Panel.UserMenu",
 		Description:  "Show the user menu",
 		DescKey:      "Action.Panel.UserMenu.Desc",
-		DefaultKeys:  []string{"F2:NoAltScreenApp"},
+		DefaultKeys:  []string{"F2:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		MenuPath:     "Commands",
 		Handler:      withPF(func(pf *panel.PanelsFrame) { panel.ShowUserMenu(pf) }),
@@ -1564,7 +1564,7 @@ func init() {
 		LabelKey:     "Action.App.SaveSettings",
 		Description:  "Save settings and session",
 		DescKey:      "Action.App.SaveSettings.Desc",
-		DefaultKeys:  []string{"ShiftF9:NoAltScreenApp"},
+		DefaultKeys:  []string{"ShiftF9:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		MenuPath:     "Options",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -1679,7 +1679,7 @@ func init() {
 		Label:        "Toggle Left Panel",
 		Description:  "Show or hide the left panel",
 		DescKey:      "Action.Panel.ToggleLeftPanel.Desc",
-		DefaultKeys:  []string{"CtrlF1:NoAltScreenApp"},
+		DefaultKeys:  []string{"CtrlF1:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
@@ -1708,7 +1708,7 @@ func init() {
 		Label:        "Toggle Right Panel",
 		Description:  "Show or hide the right panel",
 		DescKey:      "Action.Panel.ToggleRightPanel.Desc",
-		DefaultKeys:  []string{"CtrlF2:NoAltScreenApp"},
+		DefaultKeys:  []string{"CtrlF2:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
@@ -1737,7 +1737,7 @@ func init() {
 		Label:        "Toggle Passive Panel",
 		Description:  "Show or hide the passive panel",
 		DescKey:      "Action.Panel.TogglePassivePanel.Desc",
-		DefaultKeys:  []string{"CtrlP:NoAltScreenApp"},
+		DefaultKeys:  []string{"CtrlP:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.ExitWide()
@@ -2071,7 +2071,7 @@ func init() {
 		LabelKey:     "Menu.Left.DriveMenu",
 		Description:  "Show the drive menu for the left panel",
 		DescKey:      "Action.Panel.LeftDriveMenu.Desc",
-		DefaultKeys:  []string{"AltF1:NoAltScreenApp", "CtrlShiftLeft:NoAltScreenApp"},
+		DefaultKeys:  []string{"AltF1:NoTerminalApp", "CtrlShiftLeft:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler:      withPF(func(pf *panel.PanelsFrame) { pf.ShowDriveMenu(0) }),
 	})
@@ -2082,7 +2082,7 @@ func init() {
 		LabelKey:     "Menu.Right.DriveMenu",
 		Description:  "Show the drive menu for the right panel",
 		DescKey:      "Action.Panel.RightDriveMenu.Desc",
-		DefaultKeys:  []string{"AltF2:NoAltScreenApp", "CtrlShiftRight:NoAltScreenApp"},
+		DefaultKeys:  []string{"AltF2:NoTerminalApp", "CtrlShiftRight:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler:      withPF(func(pf *panel.PanelsFrame) { pf.ShowDriveMenu(1) }),
 	})
@@ -2164,7 +2164,7 @@ func init() {
 		LabelKey:     "KeyBar.F10",
 		Description:  "Quit f4",
 		DescKey:      "Action.App.Quit.Desc",
-		DefaultKeys:  []string{"F10:NoAltScreenApp"},
+		DefaultKeys:  []string{"F10:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler:      func() bool { return vtui.FrameManager.EmitCommand(vtui.CmQuit, nil) },
 	})

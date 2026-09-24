@@ -16,8 +16,8 @@ import (
 // With panels hidden (area="Terminal") the file-manager F-keys used to
 // fall through, so F2/F7/Shift+F4/Shift+F9/F10/Alt+F1/Alt+F2/Ctrl+P did
 // nothing. They now carry DefaultAreas: []string{"Terminal"} with a
-// NoAltScreenApp condition so they fire in the panels-hidden idle
-// terminal but stay out of the way of full-screen apps.
+// NoTerminalApp condition so they fire in the panels-hidden idle
+// terminal but stay out of the way of a running program (#1376).
 func TestHotkeys_ShellActionsBoundInTerminalArea_Issue354(t *testing.T) {
 	hm := keymap.NewHotkeyManager("")
 
@@ -39,10 +39,10 @@ func TestHotkeys_ShellActionsBoundInTerminalArea_Issue354(t *testing.T) {
 	for _, tc := range cases {
 		got, ok := hm.Bindings["Terminal"][tc.key]
 		if !ok {
-			t.Errorf("Terminal area missing binding for %s (expected %s:NoAltScreenApp)", tc.key, tc.action)
+			t.Errorf("Terminal area missing binding for %s (expected %s:NoTerminalApp)", tc.key, tc.action)
 			continue
 		}
-		want := tc.action + ":NoAltScreenApp"
+		want := tc.action + ":NoTerminalApp"
 		if got != want {
 			t.Errorf("Terminal/%s = %q, want %q", tc.key, got, want)
 		}
@@ -109,8 +109,8 @@ func TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927(t *testing.T) {
 // TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen ensures the
 // Terminal-area bindings do NOT fire when a full-screen application
 // (mc, htop, vim, less) is active — those keys belong to the app.
-// The gate is NoAltScreenApp, which returns true when panels are
-// shown OR no AltScreen mode is engaged.
+// The gate is NoTerminalApp, which returns true when panels are
+// shown OR neither an AltScreen mode nor a busy child is engaged.
 func TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen_Issue354(t *testing.T) {
 	// Register a hidden-panels panel.PanelsFrame with an AltScreen app active —
 	// that's the state where the condition must fail. It is never popped, so
@@ -129,7 +129,7 @@ func TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen_Issue354(t *testing.
 		keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
 	}
 
-	// With AltScreen active the condition NoAltScreenApp is false, so
+	// With AltScreen active the condition NoTerminalApp is false, so
 	// the Terminal-area binding must resolve to "" (fall-through to term.PTY).
 	if got := keymap.GlobalHotkeysMgr.GetAction("Terminal", "F2"); got != "" {
 		t.Errorf("Terminal F2 with AltScreen active: got %q, want empty (must fall through to app)", got)
@@ -145,6 +145,48 @@ func TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen_Issue354(t *testing.
 	}
 	if got := keymap.GlobalHotkeysMgr.GetAction("Terminal", "F10"); got != "App.Quit" {
 		t.Errorf("Terminal F10 without AltScreen: got %q, want term.App.Quit", got)
+	}
+}
+
+// TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376 covers
+// a program that draws full screen without the alternate screen, as Far
+// Manager does in a Windows console: while it runs, its F-keys are its own,
+// as in far2l. Only Ctrl+O stays with f4, so the panels can always be
+// reached (#50).
+func TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previousHotkeys })
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShowPanels = false
+	pf.TermView.UseAltScreen = false
+	pf.Executing = true
+	vtui.FrameManager.Push(pf)
+
+	hm := keymap.GlobalHotkeysMgr
+	keys := []string{"F2", "F7", "F10", "ShiftF4", "ShiftF9", "CtrlF1", "RCtrlF1", "CtrlF2", "RCtrlF2",
+		"CtrlP", "AltF1", "AltF2", "CtrlShiftLeft", "CtrlShiftRight"}
+	for _, key := range keys {
+		if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", key); got != "" {
+			t.Errorf("Terminal %s while a child is busy = %q, want empty (the key belongs to the program)", key, got)
+		}
+	}
+	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "CtrlO"); got != "Panel.Toggle" {
+		t.Errorf("Terminal CtrlO while a child is busy = %q, want Panel.Toggle", got)
+	}
+
+	// The same keys come back to f4 once the child is gone (#354).
+	pf.Executing = false
+	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "F10"); got != "App.Quit" {
+		t.Errorf("Terminal F10 in the idle terminal = %q, want App.Quit", got)
+	}
+	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "F7"); got != "File.MakeDir" {
+		t.Errorf("Terminal F7 in the idle terminal = %q, want File.MakeDir", got)
 	}
 }
 

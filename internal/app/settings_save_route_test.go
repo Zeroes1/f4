@@ -17,7 +17,7 @@ func TestSettingsSaveActionIsTheSaveDialogNotADeepLink(t *testing.T) {
 	if action.HideFromMenu {
 		t.Fatal("Save Settings must be in the Options menu, where Far has it")
 	}
-	if len(action.DefaultKeys) != 1 || action.DefaultKeys[0] != "ShiftF9:NoAltScreenApp" {
+	if len(action.DefaultKeys) != 1 || action.DefaultKeys[0] != "ShiftF9:NoTerminalApp" {
 		t.Fatal("Shift+F9 is not the shortcut of Save Settings")
 	}
 }
