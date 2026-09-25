@@ -1231,21 +1231,30 @@ func init() {
 				terminal.SetF4Clipboard(pf.CmdLine.Edit.GetText())
 				return
 			}
-			if fsp := pf.GetActivePanel(); fsp != nil {
-				idx := fsp.GetCursorIndex()
-				if idx < 0 || idx >= len(fsp.Entries) {
-					return
-				}
-				name := fsp.Entries[idx].Name
-				if name == ".." {
-					// far2l docs: with the cursor on ".." this hotkey
-					// treats it as the name of the current folder.
-					// Mirrors far2l's PointToName(GetCurDir()) branch
-					// in FileList::CopyNames() (FullPathName=false).
-					name = fsp.Vfs.Base(fsp.Vfs.GetPath())
-				}
-				terminal.SetF4Clipboard(name)
+			fsp := pf.GetActivePanel()
+			if fsp == nil {
+				return
 			}
+			// far2l/Far3: with the command line empty, marked files take
+			// priority over the cursor item (f4 #1408) — same names,
+			// newline-joined, as Panel.CopySelectedNames below.
+			if names := fsp.GetMarkedNames(); len(names) > 0 {
+				terminal.SetClipboardAsync(strings.Join(names, "\n"))
+				return
+			}
+			idx := fsp.GetCursorIndex()
+			if idx < 0 || idx >= len(fsp.Entries) {
+				return
+			}
+			name := fsp.Entries[idx].Name
+			if name == ".." {
+				// far2l docs: with the cursor on ".." this hotkey
+				// treats it as the name of the current folder.
+				// Mirrors far2l's PointToName(GetCurDir()) branch
+				// in FileList::CopyNames() (FullPathName=false).
+				name = fsp.Vfs.Base(fsp.Vfs.GetPath())
+			}
+			terminal.SetF4Clipboard(name)
 		}),
 	})
 	registerAction(action.Action{
