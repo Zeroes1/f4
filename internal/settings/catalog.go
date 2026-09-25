@@ -75,6 +75,7 @@ PanelGroupSmallMiB|panels|Grouping|Small group limit (MiB)|Inclusive upper size 
 PanelGroupMediumMiB|panels|Grouping|Medium group limit (MiB)|Inclusive upper size bound for Medium. Applies to logical size and size on disk.||live
 PanelGroupLargeMiB|panels|Grouping|Large group limit (MiB)|Inclusive upper size bound for Large. Larger files belong to Extra large.||live
 PanelAutoFilter|panels|Typing and focus|Autofilter instead of quick search|Typing a name in a panel hides the rows that do not match instead of moving the cursor to the first match. Esc or Enter brings the hidden rows back.||live
+PanelStrictAutoFilter|panels|Typing and focus|Strict autofilter and quick search|Require an exact match instead of tolerating one typo when filtering or jumping to a name in a panel. Off by default: short queries like "tes" also match "destroy".||live
 SearchCommandStayFocused|panels|Typing and focus|Keep command input focused|In Search-first mode, keep command entry focused after executing a command rather than returning to the panel.||live
 CommandLineAutoComplete|terminal|Path suggestions|Enable filesystem suggestions|Enable filesystem path suggestions in the command line and path-enabled dialog fields.||live
 UsePromptFormat|terminal|Command line prompt|Use a prompt format string|Build the command line prompt from the format string below instead of the built-in user@host:path layout. Panels showing a virtual filesystem keep the built-in prompt.||live

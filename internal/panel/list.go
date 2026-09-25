@@ -534,6 +534,7 @@ type FileSystemPanel struct {
 	FastFindMode               bool
 	FastFindStr                string
 	fastFindMatcherKey         string
+	fastFindMatcherStrict      bool
 	fastFindMatchers           []*vtui.FuzzyMatcher
 	// autoFilterOn is set while the quick search is narrowing the panel
 	// rather than moving the cursor. unfilteredEntries then holds the
@@ -3017,15 +3018,22 @@ func (fp *FileSystemPanel) fastFindMatch(name string) (startRunes, matchedRunes 
 		return 0, 0, anywhere
 	}
 	// Matchers are cached per query text: the needle tables are built once
-	// per keystroke, not once per visible row per redraw.
-	if fp.fastFindMatcherKey != queryText {
+	// per keystroke, not once per visible row per redraw. The strict setting
+	// is part of the cache key too, so toggling it (a "live" f4:config
+	// option) takes effect on the next redraw instead of the next keystroke.
+	strict := config.App.PanelStrictAutoFilter
+	if fp.fastFindMatcherKey != queryText || fp.fastFindMatcherStrict != strict {
 		fp.fastFindMatcherKey = queryText
+		fp.fastFindMatcherStrict = strict
 		fp.fastFindMatchers = fp.fastFindMatchers[:0]
 		for _, query := range []string{
 			queryText,
 			vtui.GlobalXlator.TranscodeString(queryText),
 		} {
 			if m := vtui.NewFuzzyMatcher(query, false); m != nil {
+				if strict {
+					m.Strict()
+				}
 				fp.fastFindMatchers = append(fp.fastFindMatchers, m)
 			}
 		}
