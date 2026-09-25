@@ -115,6 +115,10 @@ func TestIssue1250_CancelledPromptReleasesHold(t *testing.T) {
 	if _, err := promptArchivePasswordForRetry(context.Background(), "x"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v", err)
 	}
+	deadline := time.Now().Add(passwordRetryGrace + 2*time.Second)
+	for time.Now().Before(deadline) && vfs.InteractivePromptPending() {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if vfs.InteractivePromptPending() {
 		t.Fatal("a cancelled prompt left the interactive hold in place")
 	}
