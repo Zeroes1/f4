@@ -77,7 +77,6 @@ jobs:
         if [ -n "$(gofmt -s -l .)" ]; then
           echo "The following files are not properly formatted:"
           gofmt -s -l .
-          gofmt -s -d .
           echo "Please run 'gofmt -s -w .' locally and commit the changes."
           exit 1
         fi
