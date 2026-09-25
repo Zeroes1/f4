@@ -66,6 +66,10 @@ func TestCommandPaletteLegacyShortcutSurvivesTheBuiltInBindings(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
+	// This test models an idle terminal; an actual running terminal app owns Ctrl+Alt+P.
+	previousNoTerminal, _ := keymap.SetCondition("NoTerminalApp", func() bool { return true })
+	t.Cleanup(func() { keymap.SetCondition("NoTerminalApp", previousNoTerminal) })
+
 	previous := keymap.GlobalHotkeysMgr
 	manager := keymap.NewHotkeyManager(filepath.Join(t.TempDir(), "hotkeys.ini"))
 	keymap.GlobalHotkeysMgr = manager

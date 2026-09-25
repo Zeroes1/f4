@@ -322,10 +322,11 @@ type PanelsFrame struct {
 	LastPtyVFS  vfs.VFS
 	Closed      bool
 
-	ShellMode         terminal.ShellMode
-	HostConsoleActive bool
-	hostConsoleMu     sync.Mutex
-	lastOverlayDraw   time.Time
+	ShellMode             terminal.ShellMode
+	HostConsoleActive     bool
+	hostConsoleMu         sync.Mutex
+	hostConsoleReplyState hostConsoleReplyState
+	lastOverlayDraw       time.Time
 
 	// Terminal mouse-selection state. Kept in PanelsFrame because
 	// mouse routing lives here; the highlight and text extraction
@@ -1321,6 +1322,9 @@ func (pf *PanelsFrame) consumeLocalOutput(p terminal.PtyBackend, data []byte) {
 		// flags mean what reflow needs only for the session that wrote them.
 		pf.TermView.SetReflow(reflow)
 	}
+	if shouldProcess && pf.ShellMode == terminal.ShellModeHost {
+		pf.noteHostConsoleQueries(p, data)
+	}
 	pf.displayLocalOutput(shouldProcess, data)
 }
 
@@ -2251,6 +2255,9 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 
 func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	pf.updateConsoleOverlayModifiers(e)
+	if pf.consumeHostConsoleReply(e) {
+		return true
+	}
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
