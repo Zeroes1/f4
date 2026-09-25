@@ -182,8 +182,8 @@ require (
 	software.sslmate.com/src/go-pkcs12 v0.7.2 // indirect
 )
 
-replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.20-0.20260924072930-e11eecd4d6bd
+replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.20
 
 replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 
-replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.9-0.20260924065738-6dc0842bfac6
+replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.9
