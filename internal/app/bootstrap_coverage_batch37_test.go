@@ -9,9 +9,9 @@ import (
 
 func batch37Workspace(number int, left, right string, active int) panel.WorkspaceSessionState {
 	return panel.WorkspaceSessionState{
-		Number: number,
-		Left: panel.PanelSessionState{Path: left, Cursor: left + "-cursor", ViewMode: 1},
-		Right: panel.PanelSessionState{Path: right, Cursor: right + "-cursor", ViewMode: 2},
+		Number:      number,
+		Left:        panel.PanelSessionState{Path: left, Cursor: left + "-cursor", ViewMode: 1},
+		Right:       panel.PanelSessionState{Path: right, Cursor: right + "-cursor", ViewMode: 2},
 		ActivePanel: active,
 		ShowPanels:  true,
 	}
