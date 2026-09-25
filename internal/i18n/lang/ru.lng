@@ -172,7 +172,7 @@ Move.Prompt=Переименовать или перенести %d элемен
 Move.Btn=&Перенести
 
 ConfigEditor.Title= Редактор конфигурации - f4:config
-ConfigEditor.Hint=Enter или F4 изменить, Del сбросить, Ctrl+H только изменённые, Ctrl+A выровнять, Ctrl+Alt+F фильтр, Esc закрыть
+ConfigEditor.Hint=Enter или F4 изменить, Del сбросить, Ctrl+H только изменённые, Ctrl+A выровнять, Shift+F1 справка, Ctrl+Alt+F фильтр, Esc закрыть
 ConfigEditor.DefaultPrompt=По умолчанию: %s
 ConfigEditor.NoDefault=(нет значения по умолчанию)
 ConfigEditor.ResetTitle= Сброс к умолчанию

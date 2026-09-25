@@ -172,7 +172,7 @@ Move.Prompt=Rename or move %d item(s) to:
 Move.Btn=&Rename
 
 ConfigEditor.Title= Configuration editor - f4:config
-ConfigEditor.Hint=Enter or F4 edit, Del reset, Ctrl+H changed only, Ctrl+A align, Ctrl+Alt+F filter, Esc close
+ConfigEditor.Hint=Enter or F4 edit, Del reset, Ctrl+H changed only, Ctrl+A align, Shift+F1 help, Ctrl+Alt+F filter, Esc close
 ConfigEditor.DefaultPrompt=Default: %s
 ConfigEditor.NoDefault=(no default)
 ConfigEditor.ResetTitle= Reset to default
