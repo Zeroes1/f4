@@ -104,6 +104,14 @@ func (c *settingsCenter) addCollections(category string) {
 			settingsDialogTable(table)
 			// Record lists are editable settings surfaces, like the adjacent inputs.
 			table.ColorTextIdx = vtui.ColDialogEdit
+			// The cursor row is the record the fields below edit. The dialog
+			// cursor colour is the same black on cyan as the edit surface, so
+			// a clicked record looked like all the others (#1148). Mark it the
+			// way a combo dropdown marks its cursor on that surface, and keep
+			// the mark while the focus is in those fields, as far2l's dialog
+			// lists do: that is when it tells which record is being edited.
+			table.ColorSelectedTextIdx = vtui.ColDialogComboSelectedText
+			table.AlwaysShowCursor = true
 			table.SetId("collection:" + col.ID)
 			var rows []vtui.TableRow
 			for _, record := range s.draft.Records[col.ID] {

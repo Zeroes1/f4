@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/sdk/f4settings"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -129,4 +131,59 @@ func TestSettingsDriveLinkShortcutValidation(t *testing.T) {
 			t.Errorf("shortcut %q accepted", value)
 		}
 	}
+}
+
+// A click on a record selects it for the fields below, and the list has to
+// show which record that is: while it has the focus, and while one of those
+// fields has it. On the edit-coloured list the cursor used the dialog cursor
+// colour, which is the same black on cyan, so it could not be seen (#1148).
+func TestSettingsCollectionCursorIsVisible(t *testing.T) {
+	c, d := driveLinksCenter(t)
+	defer d.Close()
+	c.restrictTo("drives")
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	c.Show(scr)
+	control := func(id string) vtui.UIElement {
+		for _, row := range c.page.rows {
+			if row.control != nil && row.control.GetId() == id {
+				return row.control
+			}
+		}
+		t.Fatalf("no control %q on the page", id)
+		return nil
+	}
+	table := func() *vtui.Table { return control("collection:drive-links").(*vtui.Table) }
+	click := func(x, y int) {
+		c.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseX: testutil.Int16(x), MouseY: testutil.Int16(y), KeyDown: true, ButtonState: vtinput.FromLeft1stButtonPressed})
+		c.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseX: testutil.Int16(x), MouseY: testutil.Int16(y)})
+		c.Show(scr)
+	}
+	x, y, _, _ := table().GetPosition()
+	check := func(when string) {
+		t.Helper()
+		if table().SelectPos != 2 {
+			t.Fatalf("%s: the click selected record %d, not 2", when, table().SelectPos)
+		}
+		selected := scr.GetCell(x+1, y+2).Attributes
+		for _, row := range []int{0, 1} {
+			if scr.GetCell(x+1, y+row).Attributes == selected {
+				t.Fatalf("%s: the selected record is drawn like record %d", when, row)
+			}
+		}
+	}
+
+	click(x+1, y+2)
+	if !table().IsFocused() {
+		t.Fatal("the click did not focus the record list")
+	}
+	check("list focused")
+
+	name := control("record-field:drive-links:link.Name")
+	nx, ny, _, _ := name.GetPosition()
+	click(nx+1, ny)
+	if table().IsFocused() {
+		t.Fatal("the click on Link name left the focus on the record list")
+	}
+	check("field focused")
 }
