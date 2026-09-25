@@ -2150,6 +2150,117 @@ func TestPanelsFrame_CtrlPgDn_EntersDir(t *testing.T) {
 	}
 }
 
+// f4 #1394: a macro's Keys("CtrlPgUp")/Keys("CtrlPgDn") queues an injected
+// event that bypasses the hotkey manager (FrameManager.EventFilter), unlike a
+// real keypress. Calling ProcessKey directly, without going through pressKey's
+// macroFilter step, reproduces exactly that bypass. Before the fix, the panel
+// swallowed it as a plain page-up/down cursor move onto/near "..", so the
+// directory never actually changed and a macro needed an extra Enter.
+func TestPanelsFrame_InjectedCtrlPgUp_GoesToParent(t *testing.T) {
+	// This asserts the *default* CtrlPgUp binding resolves through
+	// macroLookupHotkey, so it needs a clean default HotkeyManager rather
+	// than whatever a shuffled-order sibling test left in the shared
+	// globals (several tests install a minimal HotkeyManager/MacroManager
+	// for their own scenario and restore it via t.Cleanup on exit).
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
+	vtui.SetDefaultPalette()
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.Panels[pf.ActiveIdx].(*panel.FileSystemPanel)
+	tmp := t.TempDir()
+	sub := filepath.Join(tmp, "sub")
+	if err := os.MkdirAll(sub, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsp.Vfs.SetPath(sub); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_PRIOR,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	}
+
+	if !pf.ProcessKey(ev) {
+		t.Error("Expected PanelsFrame to handle an injected Ctrl+PgUp")
+	}
+	if filepath.Clean(fsp.Vfs.GetPath()) != filepath.Clean(tmp) {
+		t.Errorf("injected Ctrl+PgUp failed to go up: expected %q, got %q", tmp, fsp.Vfs.GetPath())
+	}
+	if fsp.PendingSelection != "sub" {
+		t.Errorf("injected Ctrl+PgUp should position cursor on 'sub', got %q", fsp.PendingSelection)
+	}
+}
+
+func TestPanelsFrame_InjectedCtrlPgDn_EntersDir(t *testing.T) {
+	// See TestPanelsFrame_InjectedCtrlPgUp_GoesToParent: needs the default
+	// binding, not whatever a shuffled-order sibling test left behind.
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
+	vtui.SetDefaultPalette()
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.Panels[pf.ActiveIdx].(*panel.FileSystemPanel)
+	tmp := t.TempDir()
+	sub := filepath.Join(tmp, "sub")
+	if err := os.MkdirAll(sub, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsp.Vfs.SetPath(tmp); err != nil {
+		t.Fatal(err)
+	}
+
+	fsp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "sub", IsDir: true}},
+	}
+	fsp.Refresh()
+	fsp.SelectName("sub")
+
+	ev := &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_NEXT,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	}
+
+	if !pf.ProcessKey(ev) {
+		t.Error("Expected PanelsFrame to handle an injected Ctrl+PgDn")
+	}
+	if filepath.Clean(fsp.Vfs.GetPath()) != filepath.Clean(sub) {
+		t.Errorf("injected Ctrl+PgDn failed to enter directory: expected %q, got %q", sub, fsp.Vfs.GetPath())
+	}
+}
+
 func TestPanelsFrame_ShiftEnter_ExplorerLaunch(t *testing.T) {
 	if _, _, supported := panel.SystemFileManagerCommand("test", true); !supported {
 		t.Skipf("system file manager is unsupported on %s", runtime.GOOS)
