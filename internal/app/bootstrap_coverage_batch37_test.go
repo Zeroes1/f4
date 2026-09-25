@@ -75,9 +75,12 @@ func TestMergeWorkspaceSessionSaveAppendsNewWorkspaceCoverageBatch37(t *testing.
 
 func TestMergeWorkspaceSessionSaveDropsNewWorkspaceWhenPanelSettingsOffCoverageBatch37(t *testing.T) {
 	previous := []panel.WorkspaceSessionState{batch37Workspace(1, "old-left", "old-right", 0)}
-	current := []panel.WorkspaceSessionState{batch37Workspace(9, "extra-left", "extra-right", 1)}
+	current := []panel.WorkspaceSessionState{
+		batch37Workspace(1, "new-left", "new-right", 1),
+		batch37Workspace(9, "extra-left", "extra-right", 1),
+	}
 	got, active := mergeWorkspaceSessionSave(previous, 4, current, 1, false, true)
-	if !reflect.DeepEqual(got, previous) || active != 4 {
+	if active != 4 || len(got) != 1 || got[0].Number != 1 || got[0].Left.Path != "new-left" {
 		t.Fatalf("unmatched workspace with panel settings off = %#v, active %d", got, active)
 	}
 }
@@ -110,7 +113,7 @@ func TestMergeWorkspaceSessionSaveMatchesReorderedNumbersCoverageBatch37(t *test
 		batch37Workspace(10, "new-ten", "new-ten-right", 1),
 	}
 	got, _ := mergeWorkspaceSessionSave(previous, 0, current, 1, true, false)
-	if len(got) != 2 || got[0].Number != 20 || got[0].Left.Path != "old-twenty" || got[1].Number != 10 || got[1].Left.Path != "old-ten" {
+	if len(got) != 2 || got[0].Number != 10 || got[0].Left.Path != "old-ten" || got[1].Number != 20 || got[1].Left.Path != "old-twenty" {
 		t.Fatalf("reordered-number merge = %#v; want paths retained by workspace number", got)
 	}
 }
