@@ -233,6 +233,7 @@ var actionMenuOrder = []string{
 	"Editor.ColorerReloadBase",
 	"Viewer.SwitchToEditor",
 	"Viewer.Reload",
+	"Viewer.ToggleHighlighting",
 	"Viewer.Quit",
 	"Viewer.WrapMode",
 	"Viewer.HexMode",
