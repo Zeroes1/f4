@@ -53,7 +53,7 @@ func TestTranslateKeyToKittyEnhancedF4UsesKittyFunctionSuffixCoverageBatch39(t *
 func TestTranslateKeyToKittyLeftShiftModifierCoverageBatch39(t *testing.T) {
 	e := &vtinput.InputEvent{
 		VirtualKeyCode:  vtinput.VK_LSHIFT,
-		ControlKeyState: vtinput.LeftShiftPressed,
+		ControlKeyState: vtinput.ShiftPressed,
 		KeyDown:         true,
 	}
 	if got, want := TranslateKeyToKitty(e, 8, false), "\x1b[57441;2u"; got != want {
@@ -65,7 +65,7 @@ func TestTranslateKeyToKittyRightShiftScanCodeCoverageBatch39(t *testing.T) {
 	e := &vtinput.InputEvent{
 		VirtualKeyCode:  vtinput.VK_RSHIFT,
 		VirtualScanCode: vtinput.ScanCodeRightShift,
-		ControlKeyState: vtinput.RightShiftPressed,
+		ControlKeyState: vtinput.ShiftPressed,
 		KeyDown:         true,
 	}
 	if got, want := TranslateKeyToKitty(e, 8, false), "\x1b[57447;2u"; got != want {
