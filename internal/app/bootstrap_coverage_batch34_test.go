@@ -73,7 +73,7 @@ func TestStartupDirArgsCoverageBatch34(t *testing.T) {
 		want []string
 	}{
 		{args: []string{"left", "right", "--gui", "ignored"}, want: []string{"left", "right"}},
-		{args: []string{"--tty", "ignored", "left"}, want: []string{}},
+		{args: []string{"--tty", "ignored", "left"}, want: nil},
 		{args: []string{"--gui", "ignored", "--", "after", "--switch"}, want: []string{"after", "--switch"}},
 	}
 	for _, tc := range cases {
