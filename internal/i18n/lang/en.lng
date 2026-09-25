@@ -1462,6 +1462,7 @@ SQLite.ExecutingSQL=Executing SQL...
 SQLite.SQLError=SQL error: %v
 SQLite.Rows=%d row(s)
 SQLite.StatementCompleted=Statement completed; %d row(s) affected
+SQLite.PanelReadOnly=The database panel is read-only; press Enter or F4 on a table to change it in the SQLite client
 
 Terminal.PTYAllocFailed=Could not start the local terminal: %v
 Terminal.NotAvailableInEnv=Terminal is not available in this environment.

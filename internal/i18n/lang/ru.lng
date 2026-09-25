@@ -1462,6 +1462,7 @@ SQLite.ExecutingSQL=Выполнение SQL...
 SQLite.SQLError=Ошибка SQL: %v
 SQLite.Rows=%d строк(и)
 SQLite.StatementCompleted=Запрос выполнен; затронуто строк: %d
+SQLite.PanelReadOnly=Панель базы данных только для чтения; чтобы изменить таблицу, нажмите на ней Enter или F4 — откроется клиент SQLite
 
 Terminal.PTYAllocFailed=Не удалось запустить локальный терминал: %v
 Terminal.NotAvailableInEnv=Терминал недоступен в этом окружении.
