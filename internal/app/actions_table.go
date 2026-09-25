@@ -1390,6 +1390,16 @@ func init() {
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionPanelSettings(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "Settings.PanelModes",
+		Area:        "Shell",
+		Label:       "File Panel Modes",
+		LabelKey:    "Menu.PanelModes",
+		Description: "Edit the columns of the file panel modes",
+		DescKey:     "Action.Settings.PanelModes.Desc",
+		MenuPath:    "Options",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { panel.ShowPanelModesMenu(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "Settings.Editor",
 		Area:        "Shell",
 		Label:       "Editor Settings",
@@ -2020,8 +2030,31 @@ func init() {
 		DescKey:     "Action.Panel.ViewWide.Desc",
 		DefaultKeys: []string{"Ctrl4"},
 		Visible:     func() bool { return !isAIPanelActive() },
-		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.SetWidePanel(pf.ActiveIdx) }),
+		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.SetPanelViewMode(pf.ActiveIdx, panel.ViewModeWide) }),
 	})
+	// far2l's other six panel modes, Ctrl+5 .. Ctrl+9 and Ctrl+0 (f4 #1400).
+	for _, spec := range []struct {
+		name, label, description, descKey, key string
+		mode                                   panel.ViewMode
+	}{
+		{"Panel.ViewMode5", "Panel Mode 5", "Set active panel to panel mode 5", "Action.Panel.ViewMode5.Desc", "Ctrl5", panel.ViewMode5},
+		{"Panel.ViewMode6", "Panel Mode 6", "Set active panel to panel mode 6", "Action.Panel.ViewMode6.Desc", "Ctrl6", panel.ViewMode6},
+		{"Panel.ViewMode7", "Panel Mode 7", "Set active panel to panel mode 7", "Action.Panel.ViewMode7.Desc", "Ctrl7", panel.ViewMode7},
+		{"Panel.ViewMode8", "Panel Mode 8", "Set active panel to panel mode 8", "Action.Panel.ViewMode8.Desc", "Ctrl8", panel.ViewMode8},
+		{"Panel.ViewMode9", "Panel Mode 9", "Set active panel to panel mode 9", "Action.Panel.ViewMode9.Desc", "Ctrl9", panel.ViewMode9},
+		{"Panel.ViewMode0", "Panel Mode 0", "Set active panel to panel mode 0", "Action.Panel.ViewMode0.Desc", "Ctrl0", panel.ViewMode0},
+	} {
+		registerAction(action.Action{
+			Name:        spec.name,
+			Area:        "Shell",
+			Label:       spec.label,
+			Description: spec.description,
+			DescKey:     spec.descKey,
+			DefaultKeys: []string{spec.key},
+			Visible:     func() bool { return !isAIPanelActive() },
+			Handler:     withPF(func(pf *panel.PanelsFrame) { pf.SetPanelViewMode(pf.ActiveIdx, spec.mode) }),
+		})
+	}
 	registerAction(action.Action{
 		Name:        "Panel.SortByName",
 		Area:        "Shell",

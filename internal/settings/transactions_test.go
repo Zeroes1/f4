@@ -51,7 +51,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 	fieldRow := c.page.rows[len(c.page.rows)-1]
 	fieldRow.field.Unavailable = "Retained compatibility setting"
 	for iteration := 0; iteration < 2; iteration++ {
-		for j, id := range []int{vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogComboSelectedText, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton, vtui.ColDialogBox, vtui.ColDialogEdit, vtui.ColDialogEditSelected, vtui.ColDialogEditUnchanged} {
+		for j, id := range []int{vtui.ColDialogText, vtui.ColDialogSelectedButton, vtui.ColDialogHighlightText, vtui.ColDialogHighlightSelectedButton, vtui.ColDialogBox, vtui.ColDialogEdit, vtui.ColDialogEditSelected, vtui.ColDialogEditUnchanged, vtui.ColDialogComboSelectedText} {
 			vtui.Palette[id] = uint64(0x21 + j + iteration*16)
 		}
 		c.query = "Record 1"
@@ -70,6 +70,7 @@ func TestSettingsCollectionFocusAndSemanticRendering(t *testing.T) {
 		if attr := scr.GetCell(table.X1, table.Y1).Attributes; attr != vtui.DimColor(vtui.Palette[vtui.ColDialogEdit]) {
 			t.Fatalf("theme %d nonmatching record: %x", iteration, attr)
 		}
+		// Record lists mark their cursor in the combo cursor colour (#1148).
 		if attr := scr.GetCell(table.X1, table.Y1+1).Attributes; attr != vtui.Palette[vtui.ColDialogComboSelectedText] {
 			t.Fatalf("theme %d selected matching record: %x", iteration, attr)
 		}

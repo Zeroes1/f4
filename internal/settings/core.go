@@ -93,10 +93,11 @@ func setCoreSetting(cfg *config.F4Config, id, value string) error {
 	return nil
 }
 
-func (p coreSettingsProvider) Catalog() f4settings.Catalog {
-	if p.catalog != nil {
-		return *p.catalog
-	}
+// coreSettingsStaticFields is every core field with its label and
+// description, before Catalog adds what it discovers at run time: installed
+// fonts, colour styles, languages and renderers. f4:config reads the texts
+// from here, so opening it scans nothing.
+func coreSettingsStaticFields() []f4settings.Field {
 	fields := coreSettingsFields()
 	for _, area := range []string{"Panel", "Editor", "Viewer", "Menu", "Table"} {
 		for _, direction := range []string{"Up", "Down"} {
@@ -115,6 +116,23 @@ func (p coreSettingsProvider) Catalog() f4settings.Catalog {
 		}
 		fields = append(fields, f)
 	}
+	for i := range fields {
+		f := &fields[i]
+		if f.Label.Key == "" {
+			f.Label.Key = "SettingsCenter." + f.ID + ".Label"
+		}
+		if f.Description.Key == "" {
+			f.Description.Key = "SettingsCenter." + f.ID + ".Description"
+		}
+	}
+	return fields
+}
+
+func (p coreSettingsProvider) Catalog() f4settings.Catalog {
+	if p.catalog != nil {
+		return *p.catalog
+	}
+	fields := coreSettingsStaticFields()
 	for i := range fields {
 		f := &fields[i]
 		switch f.ID {
@@ -160,12 +178,6 @@ func (p coreSettingsProvider) Catalog() f4settings.Catalog {
 		case "EditorColorerScheme":
 			f.Kind = f4settings.ChoiceKind
 			f.Choices = settingsChoices(":Built-in default")
-		}
-		if f.Label.Key == "" {
-			f.Label.Key = "SettingsCenter." + f.ID + ".Label"
-		}
-		if f.Description.Key == "" {
-			f.Description.Key = "SettingsCenter." + f.ID + ".Description"
 		}
 		f.Aliases = append(f.Aliases, "settings", f.ID)
 		if f.Group == "Typing and focus" || f.Group == "Path suggestions" {

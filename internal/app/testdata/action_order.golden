@@ -97,6 +97,7 @@ Panel.GroupFoldersSeparately
 Panel.GroupSettings
 Settings.Language
 Settings.Panel
+Settings.PanelModes
 Settings.Editor
 Settings.Viewer
 Settings.Colorer
@@ -140,6 +141,12 @@ Panel.ViewBrief
 Panel.ViewMedium
 Panel.ViewDetailed
 Panel.ViewWide
+Panel.ViewMode5
+Panel.ViewMode6
+Panel.ViewMode7
+Panel.ViewMode8
+Panel.ViewMode9
+Panel.ViewMode0
 Panel.SortByName
 Panel.SortByExt
 Panel.SortByTime

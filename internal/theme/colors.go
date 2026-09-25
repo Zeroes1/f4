@@ -484,6 +484,47 @@ func CorrectContrast(fg, bg uint32) uint32 {
 	return toRGB24(newFg)
 }
 
+// OnBackgroundOf is attr moved onto the background of bg: attr's foreground
+// and style over bg's background. An attr already on that background comes
+// back as it is. Otherwise, with contrast correction on, the foreground is
+// corrected for the new pair, as ApplyContrast does for the palette: bg may
+// come from somewhere that pass never saw, a Colorer style's own background.
+func OnBackgroundOf(attr, bg uint64) uint64 {
+	_, from := GetColorRGBBoth(attr)
+	_, to := GetColorRGBBoth(bg)
+	if from == to {
+		return attr
+	}
+	if bg&vtui.IsBgRGB != 0 {
+		attr = vtui.SetRGBBack(attr, vtui.GetRGBBack(bg))
+	} else {
+		attr = vtui.SetIndexBack(attr, vtui.GetIndexBack(bg))
+	}
+	if config.App.EnforceColorCorrection {
+		fg, back := GetColorRGBBoth(attr)
+		if nfg := CorrectContrast(fg, back); nfg != fg {
+			attr = vtui.SetRGBFore(attr, nfg)
+		}
+	}
+	return attr
+}
+
+// OnTextBackground is palette entry idx for an element drawn beside a text
+// area whose theme entry is textIdx, when the text is actually drawn over
+// text. A theme that gives the element the text's background means it to
+// sit on the text, so it follows the background the text really has, a
+// Colorer style's own for instance, instead of showing as a stripe of the
+// theme's (#1232). A theme that sets the element apart keeps it apart.
+func OnTextBackground(idx, textIdx int, text uint64) uint64 {
+	attr := vtui.Palette[idx]
+	_, own := GetColorRGBBoth(attr)
+	_, themeText := GetColorRGBBoth(vtui.Palette[textIdx])
+	if own != themeText {
+		return attr
+	}
+	return OnBackgroundOf(attr, text)
+}
+
 // isFrameLineSlot reports whether a slot colours frame lines, which far2l
 // leaves out of contrast correction: it skips every key ending in ".Box". The
 // table column separator is such a line too, but it lost the suffix when

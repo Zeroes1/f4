@@ -880,7 +880,11 @@ command line. f4 handles them itself; they never reach the shell.
                * when it differs from its default. Also Commands >
                Configuration editor. Enter or F4 edit a value, Del resets it,
                Ctrl+H keeps only the changed keys, Ctrl+A aligns the names on
-               the dot.
+               the dot. Under the list the key under the cursor is
+               explained: its name, its default and the description Settings
+               Center gives it; keys Settings Center does not show are
+               described in English, as in far2l. Shift+F1 opens the help
+               topic closest to the key.
 
 An unknown f4: command shows the list of the commands that exist.
 

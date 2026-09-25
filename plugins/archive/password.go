@@ -173,6 +173,33 @@ func promptArchivePasswordUntilProvided(ctx context.Context, displayName string)
 	}
 }
 
+// promptArchivePasswordForRetry asks for a password for an operation that is
+// about to be retried with it (testing or extracting an archive from the
+// panel). The prompt is held as interactive while it is on screen and for
+// passwordRetryGrace after the answer, so a retry that rejects the password
+// brings the next dialog back before any progress screen appears (issue
+// #816). The hold used to last until the whole operation had ended, so with
+// the right password its progress screen never appeared at all: the user saw
+// nothing until the result (#1250).
+func promptArchivePasswordForRetry(ctx context.Context, displayName string) (string, error) {
+	release := vfs.HoldInteractivePrompt()
+	password, err := promptArchivePasswordUntilProvided(ctx, displayName)
+	if err != nil {
+		release()
+		return "", err
+	}
+	time.AfterFunc(passwordRetryGrace, release)
+	return password, nil
+}
+
+// installedPassword is the password the archive was last opened with, empty
+// when it needed none.
+func (v *ArchiveVFS) installedPassword() string {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return v.password
+}
+
 // openArchiveFSWithPasswordPrompt opens the archive and, when it needs a
 // password, keeps asking until the archive opens or the user gives up. The
 // whole ask/retry cycle is held as one interactive prompt: the retry with a

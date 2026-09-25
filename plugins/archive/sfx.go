@@ -249,9 +249,32 @@ func sfxVolumePlanFor(filename string, embedded embeddedArchive) (sfxVolumePlan,
 		}
 	case ".rar":
 		plan = planRARVolumes(filepath.Dir(filename), stem, entries)
+		// WinRAR names a self-extracting set in the new volume scheme
+		// name.part01.exe, name.part02.rar, ...: the stub carries the
+		// number of the first volume, so the companions are named after
+		// "name", not after "name.part01" (#1250). The name as it stands is
+		// tried first, so an archive that is itself called "x.part1" keeps
+		// finding x.part1.r00 and the like.
+		if base, ok := rarVolumeSetStem(stem); ok && len(plan.companions) == 0 {
+			if volumes := planRARVolumes(filepath.Dir(filename), base, entries); len(volumes.companions) > 0 {
+				plan = volumes
+			}
+		}
 	}
 
 	return plan, nil
+}
+
+var rarVolumePartSuffix = regexp.MustCompile(`(?i)^(.+)\.part[0-9]+$`)
+
+// rarVolumeSetStem strips the ".partN" a first RAR volume carries in the new
+// volume naming scheme and returns the name the whole set shares.
+func rarVolumeSetStem(stem string) (string, bool) {
+	match := rarVolumePartSuffix.FindStringSubmatch(stem)
+	if match == nil {
+		return "", false
+	}
+	return match[1], true
 }
 
 func findCaseInsensitiveEntry(entries []os.DirEntry, target string) string {

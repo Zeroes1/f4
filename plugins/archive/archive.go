@@ -190,24 +190,12 @@ func extractArchiveWithPasswordPrompt(ctx context.Context, srcPath, destDir stri
 	}
 
 	var password string
-	var release func()
-	defer func() {
-		if release != nil {
-			release()
-		}
-	}()
 	for {
-		err := extractArchiveOnce(ctx, backingPath, destDir, password, reporter)
+		err := rarPasswordError(backingPath, password, extractArchiveOnce(ctx, backingPath, destDir, password, reporter))
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}
-
-		// One hold for the whole ask/retry cycle; see
-		// openArchiveFSWithPasswordPrompt.
-		if release == nil {
-			release = vfs.HoldInteractivePrompt()
-		}
-		password, err = promptArchivePasswordUntilProvided(ctx, filepath.Base(srcPath))
+		password, err = promptArchivePasswordForRetry(ctx, filepath.Base(srcPath))
 		if err != nil {
 			return err
 		}
@@ -225,10 +213,18 @@ func actionTestArchive(app vfs.App) {
 		}
 		return
 	}
+	// Inside the archive, test with the password it was entered with: the
+	// user has already typed it once, and extraction from the same panel
+	// does not ask again either (#1250). The dialog still comes back if the
+	// password does not open everything.
+	var password string
+	if archiveVFS, ok := app.GetActivePanelVFS().(*ArchiveVFS); ok {
+		password = archiveVFS.installedPassword()
+	}
 	go func() {
 		app.RunAdvancedProgressTask(" Testing... ", false, func(ctx context.Context, reporter vfs.TaskReporter) error {
 			reporter.UpdateTransfer("Testing", filepath.Base(srcPath), -1, "", -1, "")
-			return testArchiveWithPasswordPrompt(ctx, srcPath, reporter)
+			return testArchiveStartingWith(ctx, srcPath, password, reporter)
 		}, func(err error) { finishArchiveTest(app, srcPath, err) })
 	}()
 }
@@ -250,6 +246,12 @@ func finishArchiveTest(app vfs.App, srcPath string, err error) {
 }
 
 func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter vfs.TaskReporter) error {
+	return testArchiveStartingWith(ctx, srcPath, "", reporter)
+}
+
+// testArchiveStartingWith tests the archive with password first, and asks for
+// another one only when that is missing or rejected.
+func testArchiveStartingWith(ctx context.Context, srcPath, password string, reporter vfs.TaskReporter) error {
 	// See extractArchiveWithPasswordPrompt: an SFX is tested from the copy
 	// panel entry reads, so "enters fine" and "tests fine" cannot disagree.
 	backingPath, backing, err := localArchiveBacking(srcPath)
@@ -260,24 +262,12 @@ func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter
 		defer func() { _ = backing.Close() }()
 	}
 
-	var password string
-	var release func()
-	defer func() {
-		if release != nil {
-			release()
-		}
-	}()
-
 	for {
-		err := testArchiveOnce(ctx, srcPath, backingPath, password, reporter)
+		err := rarPasswordError(backingPath, password, testArchiveOnce(ctx, srcPath, backingPath, password, reporter))
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}
-
-		if release == nil {
-			release = vfs.HoldInteractivePrompt()
-		}
-		password, err = promptArchivePasswordUntilProvided(ctx, filepath.Base(srcPath))
+		password, err = promptArchivePasswordForRetry(ctx, filepath.Base(srcPath))
 		if err != nil {
 			return err
 		}

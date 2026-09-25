@@ -72,20 +72,7 @@ func (fp *FileSystemPanel) GetCellText(row, col int) string {
 	if idx < 0 || idx >= len(fp.Entries) {
 		return ""
 	}
-	if fp.gridColumnCount() == 1 {
-		e := fp.Entries[idx]
-		if col == 0 && len(fp.Table.Columns) > 0 {
-			return formatPanelFileNameAt(e, fp.Table.Columns[0].Width, fp.nameLeftPos)
-		}
-		return e.GetCellText(col)
-	}
-
-	e := fp.Entries[idx]
-	width := 0
-	if col >= 0 && col < len(fp.Table.Columns) {
-		width = fp.Table.Columns[col].Width
-	}
-	return formatPanelFileNameAt(e, width, fp.nameLeftPos)
+	return fp.columnCellText(fp.Entries[idx], col)
 }
 
 // IsCellSelected implements vtui.TableCellColSelectProvider. Unlike a plain
@@ -101,21 +88,25 @@ func (fp *FileSystemPanel) IsCellSelected(row, col int) bool {
 }
 
 // entryIndex resolves the fp.entries index shown at (row, col) for the
-// current view mode: a single file-column in Wide/Detailed, or several
-// file-columns of height ViewHeight in Medium/Brief.
+// current view mode: every column of a stripe shows the same file, and the
+// stripes are file-columns of height ViewHeight (Medium/Brief).
 func (fp *FileSystemPanel) entryIndex(row, col int) int {
-	return fp.entryAtDisplay(fp.viewportDisplayRow(row, col))
+	return fp.entryAtDisplay(fp.viewportDisplayRow(row, fp.stripeOfColumn(col)))
 }
 
 func (fp *FileSystemPanel) GetCellAttr(row, col int, defaultAttr uint64) uint64 {
 	idx := fp.entryIndex(row, col)
-	if idx < 0 || idx >= len(fp.Entries) {
+	inRange := idx >= 0 && idx < len(fp.Entries)
+	if perStripe, stripes := fp.columnStripes(); perStripe > 1 && stripes > 1 && fp.Table.CellSelection {
+		// vtui paints the cursor on the one column SelectCol names; a stripe
+		// of several columns (N,S,N,S) carries it across all of them.
+		onCursor := inRange && row == fp.Table.SelectPos && fp.stripeOfColumn(col) == fp.Table.SelectCol
+		defaultAttr = fp.tableStateAttr(onCursor, inRange && fp.Entries[idx].Selected)
+	}
+	if !inRange {
 		return defaultAttr
 	}
-	if fp.gridColumnCount() == 1 {
-		return fp.Entries[idx].GetCellAttr(col, defaultAttr)
-	}
-	return fp.Entries[idx].GetCellAttr(0, defaultAttr)
+	return fp.Entries[idx].GetCellAttr(col, defaultAttr)
 }
 
 func (f *FileEntry) displayName(name string) string {
@@ -505,14 +496,19 @@ type FileSystemPanel struct {
 	DirectoryEpoch        uint64
 	ViewMode              ViewMode
 	Wide                  bool
-	CursorIdx             int
-	lastRightClickedIdx   int
-	rightDragActive       bool
-	rightDragSelect       bool
-	rowDragButton         uint32
-	dragScrollDirection   int
-	dragScrollTimer       *time.Timer
-	dragScrollGeneration  uint64
+	// wideViewMode is the mode shown while Wide is on (see WideViewMode);
+	// layout is the current mode fitted to the panel's width.
+	wideViewMode         ViewMode
+	wideViewModeSet      bool
+	layout               panelLayout
+	CursorIdx            int
+	lastRightClickedIdx  int
+	rightDragActive      bool
+	rightDragSelect      bool
+	rowDragButton        uint32
+	dragScrollDirection  int
+	dragScrollTimer      *time.Timer
+	dragScrollGeneration uint64
 
 	loadCtx        context.Context
 	CancelLoad     context.CancelFunc
@@ -989,7 +985,11 @@ func (fp *FileSystemPanel) sortEntriesAt(now time.Time) {
 }
 
 func (fp *FileSystemPanel) SetViewMode(mode ViewMode) {
-	if mode == ViewModeWide {
+	if !mode.Valid() {
+		mode = ViewModeMedium
+	}
+	if mode == ViewModeWide && PanelViewModeSettings(ViewModeWide).FullScreen {
+		fp.SetWideViewMode(ViewModeWide)
 		fp.SetWide(true)
 		return
 	}
@@ -1141,47 +1141,23 @@ func (fp *FileSystemPanel) SetWide(wide bool) {
 
 func (fp *FileSystemPanel) EffectiveViewMode() ViewMode {
 	if fp.Wide {
-		return ViewModeWide
+		return fp.WideViewMode()
 	}
 	return fp.ViewMode
 }
 
+// gridColumnCount is the number of stripes: file-columns the entries flow
+// through, top to bottom and then left to right.
 func (fp *FileSystemPanel) gridColumnCount() int {
-	switch fp.EffectiveViewMode() {
-	case ViewModeBrief:
-		return 3
-	case ViewModeMedium:
-		return 2
-	default:
-		return 1
-	}
+	_, stripes := fp.columnStripes()
+	return stripes
 }
 
 func (fp *FileSystemPanel) columnSortMode(column int) (SortMode, bool) {
 	if column < 0 || column >= len(fp.Table.Columns) {
 		return SortUnsorted, false
 	}
-	switch fp.EffectiveViewMode() {
-	case ViewModeWide:
-		switch column {
-		case 0:
-			return SortName, true
-		case 1:
-			return SortSize, true
-		case 2:
-			return SortTime, true
-		}
-	case ViewModeDetailed:
-		if column == 0 {
-			return SortName, true
-		}
-		if column == 1 {
-			return SortSize, true
-		}
-	default:
-		return SortName, true
-	}
-	return SortUnsorted, false
+	return panelColumnSortMode(fp.panelColumnAt(column).Type)
 }
 
 func (fp *FileSystemPanel) SortIsAscending() bool {
@@ -1240,20 +1216,7 @@ func hiddenSortColumnTitle(mode SortMode, ascending bool, width int) string {
 func (fp *FileSystemPanel) updateSortColumnTitles() {
 	visibleSortColumn := false
 	for column := range fp.Table.Columns {
-		title := i18n.Msg("Panel.Column.Name")
-		switch fp.EffectiveViewMode() {
-		case ViewModeWide:
-			switch column {
-			case 1:
-				title = i18n.Msg("Panel.Column.Size")
-			case 2:
-				title = i18n.Msg("Panel.Column.Modified")
-			}
-		case ViewModeDetailed:
-			if column == 1 {
-				title = i18n.Msg("Panel.Column.Size")
-			}
-		}
+		title := panelColumnTitle(fp.panelColumnAt(column).Type)
 
 		mode, sortable := fp.columnSortMode(column)
 		if sortable && fp.SortMode != SortUnsorted && fp.SortMode == mode {
@@ -1271,7 +1234,7 @@ func (fp *FileSystemPanel) updateSortColumnTitles() {
 		right := hiddenSortColumnTitle(
 			fp.SortMode, fp.SortIsAscending(), fp.Table.Columns[0].Width)
 		fp.Table.Columns[0].Title = composePanelColumnTitle(
-			i18n.Msg("Panel.Column.Name"), right, fp.Table.Columns[0].Width)
+			panelColumnTitle(fp.panelColumnAt(0).Type), right, fp.Table.Columns[0].Width)
 	}
 }
 
@@ -1482,8 +1445,13 @@ func minimalPanelScrollThumb(height, value, maximum int) (position, length int) 
 // vtui.Table draws all separators in one pass after drawing its rows, which
 // otherwise overwrites the cursor attributes in single-entry-per-row modes.
 func (fp *FileSystemPanel) drawCursorSeparators(scr *vtui.ScreenBuf) {
-	if fp.gridColumnCount() != 1 || !fp.Table.ShowSeparators || !fp.Table.IsFocused() {
+	perStripe, stripes := fp.columnStripes()
+	if perStripe <= 1 || !fp.Table.ShowSeparators || !fp.Table.IsFocused() {
 		return
+	}
+	cursorStripe := 0
+	if stripes > 1 {
+		cursorStripe = fp.Table.SelectCol
 	}
 
 	y := fp.Table.Y1 + fp.Table.MarginTop + fp.Table.SelectPos - fp.Table.TopPos
@@ -1494,6 +1462,11 @@ func (fp *FileSystemPanel) drawCursorSeparators(scr *vtui.ScreenBuf) {
 	x := fp.Table.X1
 	for column := 0; column < len(fp.Table.Columns)-1; column++ {
 		x += fp.Table.Columns[column].Width
+		// Only the separators inside the cursor's stripe belong to it.
+		if column/perStripe != cursorStripe || (column+1)/perStripe != cursorStripe {
+			x++
+			continue
+		}
 		// Keep the separator's own foreground and copy only the rendered
 		// cursor cell's background. The separator must not inherit the file
 		// name/highlighter foreground color.
@@ -1530,16 +1503,21 @@ func (fp *FileSystemPanel) visibleNameCells(fn func(entry *FileEntry, x, y, widt
 	if height <= 0 {
 		return
 	}
-	columns := fp.gridColumnCount()
 	for rowOffset := 0; rowOffset < height; rowOffset++ {
 		row := fp.Table.TopPos + rowOffset
 		y := fp.Table.Y1 + fp.Table.MarginTop + rowOffset
 		x := fp.Table.X1
-		for column := 0; column < columns && column < len(fp.Table.Columns); column++ {
+		for column := range fp.Table.Columns {
 			width := fp.Table.Columns[column].Width
-			entryIndex := fp.entryIndex(row, column)
-			if entryIndex >= 0 && entryIndex < len(fp.Entries) {
-				fn(fp.Entries[entryIndex], x, y, width)
+			if spec := fp.panelColumnAt(column); spec.Type == NameColumn {
+				entryIndex := fp.entryIndex(row, column)
+				if entryIndex >= 0 && entryIndex < len(fp.Entries) {
+					nameX, nameWidth := x, width
+					if spec.Flags&ColumnMark != 0 && nameWidth > 1 {
+						nameX, nameWidth = nameX+1, nameWidth-1
+					}
+					fn(fp.Entries[entryIndex], nameX, y, nameWidth)
+				}
 			}
 			x += width + 1
 		}
@@ -3089,34 +3067,20 @@ func (fp *FileSystemPanel) drawFastFindMatches(scr *vtui.ScreenBuf) {
 	if !fp.FastFindMode || fp.FastFindStr == "" || !fp.Table.IsVisible() {
 		return
 	}
-	height := fp.Table.ViewHeight
-	if height <= 0 {
+	if fp.Table.ViewHeight <= 0 {
 		return
 	}
-	columns := fp.gridColumnCount()
 	matchAttr := vtui.Palette[theme.ColPanelHighlightText]
-
-	for rowOffset := 0; rowOffset < height; rowOffset++ {
-		row := fp.Table.TopPos + rowOffset
-		y := fp.Table.Y1 + fp.Table.MarginTop + rowOffset
-		x := fp.Table.X1
-		for column := 0; column < columns && column < len(fp.Table.Columns); column++ {
-			entryIndex := fp.entryIndex(row, column)
-			cellWidth := fp.Table.Columns[column].Width
-			if entryIndex >= 0 && entryIndex < len(fp.Entries) {
-				entry := fp.Entries[entryIndex]
-				matchStart, matchedRunes, _ := fp.fastFindMatch(entry.Name)
-				for _, span := range panelFileNameMatchSpansAt(entry, cellWidth, fp.nameLeftPos, matchStart, matchedRunes) {
-					for cellOffset := 0; cellOffset < span.width; cellOffset++ {
-						cell := scr.GetCell(x+span.start+cellOffset, y)
-						cell.Attributes = fastFindMatchAttr(cell.Attributes, matchAttr)
-						scr.Write(x+span.start+cellOffset, y, []vtui.CharInfo{cell})
-					}
-				}
+	fp.visibleNameCells(func(entry *FileEntry, x, y, cellWidth int) {
+		matchStart, matchedRunes, _ := fp.fastFindMatch(entry.Name)
+		for _, span := range panelFileNameMatchSpansAt(entry, cellWidth, fp.nameLeftPos, matchStart, matchedRunes) {
+			for cellOffset := 0; cellOffset < span.width; cellOffset++ {
+				cell := scr.GetCell(x+span.start+cellOffset, y)
+				cell.Attributes = fastFindMatchAttr(cell.Attributes, matchAttr)
+				scr.Write(x+span.start+cellOffset, y, []vtui.CharInfo{cell})
 			}
-			x += cellWidth + 1
 		}
-	}
+	})
 }
 
 func (fp *FileSystemPanel) SetPosition(x1, y1, x2, y2 int) {
@@ -3133,46 +3097,15 @@ func (fp *FileSystemPanel) SetPosition(x1, y1, x2, y2 int) {
 func (fp *FileSystemPanel) Resize(w, h int) {
 	fp.SetPosition(fp.X1, fp.Y1, fp.X1+w-1, fp.Y1+h-1)
 
-	switch fp.EffectiveViewMode() {
-	case ViewModeWide:
-		nameW := w - 2 - 2 - panelSizeColumnWidth - panelModifiedColumnWidth
-		if nameW < 1 {
-			nameW = 1
-		}
-		fp.Table.Columns = []vtui.TableColumn{
-			{Title: i18n.Msg("Panel.Column.Name"), Width: nameW},
-			{Title: i18n.Msg("Panel.Column.Size"), Width: panelSizeColumnWidth, Alignment: vtui.AlignRight},
-			{Title: i18n.Msg("Panel.Column.Modified"), Width: panelModifiedColumnWidth},
-		}
-	case ViewModeDetailed:
-		// The panel's inner table is w-2 characters wide. The size column
-		// consumes 11 and its separator consumes 1, leaving w-14 for Name.
-		nameW := w - 14
-		if nameW < 5 {
-			nameW = 5
-		}
-		fp.Table.Columns = []vtui.TableColumn{
-			{Title: i18n.Msg("Panel.Column.Name"), Width: nameW},
-			{Title: i18n.Msg("Panel.Column.Size"), Width: panelSizeColumnWidth, Alignment: vtui.AlignRight},
-		}
-	default:
-		columnCount := fp.gridColumnCount()
-		available := w - 2 - (columnCount - 1)
-		if available < columnCount {
-			available = columnCount
-		}
-		columns := make([]vtui.TableColumn, columnCount)
-		remaining := available
-		for i := range columns {
-			width := remaining / (columnCount - i)
-			if width < 1 {
-				width = 1
-			}
-			columns[i] = vtui.TableColumn{Title: i18n.Msg("Panel.Column.Name"), Width: width}
-			remaining -= width
-		}
-		fp.Table.Columns = columns
-	}
+	// The panel's inner table is w-2 cells wide; the mode's columns share it
+	// the way far2l's PrepareColumnWidths shares a panel.
+	mode := fp.EffectiveViewMode()
+	layout := preparePanelLayout(PanelViewModeSettings(mode).Columns, w-2)
+	layout.mode = mode
+	layout.generation = panelViewModes.generation
+	fp.layout = layout
+	fp.Table.Columns = panelTableColumns(layout)
+	fp.configureCellSelection()
 	fp.updateSortColumnTitles()
 	fp.Refresh()
 }
@@ -3253,7 +3186,7 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 	// Detailed view has no horizontal cell navigation. Outside Vim mode,
 	// reuse plain Left/Right as Page Up/Page Down while preserving the rest
 	// of the event (notably Shift selection).
-	if fp.ViewMode == ViewModeDetailed && config.App.NavigationMode != config.NavigationVim && !ctrl && !alt &&
+	if panelViewModeIsSingleStripe(fp.ViewMode) && config.App.NavigationMode != config.NavigationVim && !ctrl && !alt &&
 		(e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT) {
 		Mapped := *e
 		if e.VirtualKeyCode == vtinput.VK_LEFT {
@@ -3794,8 +3727,10 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 			if H <= 0 {
 				H = 1
 			}
-			// SelectPos is already absolute (TopPos + row) in Medium mode,
-			// so we just add the column offset.
+			// vtui set SelectCol to the table column clicked; the panel keeps
+			// the stripe there. SelectPos is already absolute (TopPos + row)
+			// in Medium mode, so we just add the stripe offset.
+			fp.Table.SelectCol = fp.stripeOfColumn(fp.Table.SelectCol)
 			newIdx := fp.Table.SelectPos + fp.Table.SelectCol*H
 
 			// Fix for "click in empty space": if we selected an empty slot,

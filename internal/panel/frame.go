@@ -322,10 +322,11 @@ type PanelsFrame struct {
 	LastPtyVFS  vfs.VFS
 	Closed      bool
 
-	ShellMode         terminal.ShellMode
-	HostConsoleActive bool
-	hostConsoleMu     sync.Mutex
-	lastOverlayDraw   time.Time
+	ShellMode             terminal.ShellMode
+	HostConsoleActive     bool
+	hostConsoleMu         sync.Mutex
+	hostConsoleReplyState hostConsoleReplyState
+	lastOverlayDraw       time.Time
 
 	// Terminal mouse-selection state. Kept in PanelsFrame because
 	// mouse routing lives here; the highlight and text extraction
@@ -882,9 +883,15 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 
 	if pf.Wide && pf.WidePanel == 0 {
 		lMode = ViewModeWide
+		if fsp, ok := pf.Panels[0].(*FileSystemPanel); ok {
+			lMode = fsp.WideViewMode()
+		}
 	}
 	if pf.Wide && pf.WidePanel == 1 {
 		rMode = ViewModeWide
+		if fsp, ok := pf.Panels[1].(*FileSystemPanel); ok {
+			rMode = fsp.WideViewMode()
+		}
 	}
 	modeItems := []struct {
 		mode ViewMode
@@ -1210,6 +1217,9 @@ func (pf *PanelsFrame) InitPTY() {
 	// Always initialize the parser to prevent nil dereference
 	pf.Parser = terminal.NewAnsiParser(pf.TermView, nil)
 	pf.Parser.ReplyTo = pf.activeReplyPTY
+	// Every cd /d line f4 types goes through WritePTY, which announces its
+	// echo; only that echo loses the prefix (#1376).
+	pf.Parser.TrackWindowsSyncEcho()
 
 	if !SpawnLocalShellPTY {
 		return
@@ -1311,6 +1321,9 @@ func (pf *PanelsFrame) consumeLocalOutput(p terminal.PtyBackend, data []byte) {
 		// One view serves the local shell and every remote one; the wrap
 		// flags mean what reflow needs only for the session that wrote them.
 		pf.TermView.SetReflow(reflow)
+	}
+	if shouldProcess && pf.ShellMode == terminal.ShellModeHost {
+		pf.noteHostConsoleQueries(p, data)
 	}
 	pf.displayLocalOutput(shouldProcess, data)
 }
@@ -1455,8 +1468,19 @@ func (pf *PanelsFrame) SetPanelViewMode(idx int, mode ViewMode) {
 	if idx < 0 || idx > 1 {
 		return
 	}
+	fsp, isFilePanel := pf.Panels[idx].(*FileSystemPanel)
+	if PanelViewModeSettings(mode).FullScreen && (isFilePanel || mode == ViewModeWide) {
+		// far2l's FullScreen flag: the mode takes the whole width, which is
+		// f4's Wide layout showing this mode's columns.
+		if isFilePanel {
+			fsp.SetWideViewMode(mode)
+		}
+		pf.SetWidePanel(idx)
+		pf.UpdateMenuCheckmarks()
+		return
+	}
 	pf.ExitWide()
-	if fsp, ok := pf.Panels[idx].(*FileSystemPanel); ok {
+	if isFilePanel {
 		fsp.SetViewMode(mode)
 	}
 	pf.UpdateMenuCheckmarks()
@@ -2231,6 +2255,9 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 
 func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	pf.updateConsoleOverlayModifiers(e)
+	if pf.consumeHostConsoleReply(e) {
+		return true
+	}
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
@@ -3823,7 +3850,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		pf.SetPanelViewMode(0, ViewModeDetailed)
 		return true
 	case appcmd.CmLeftWide:
-		pf.SetWidePanel(0)
+		pf.SetPanelViewMode(0, ViewModeWide)
 		return true
 	case appcmd.CmRightBrief:
 		pf.SetPanelViewMode(1, ViewModeBrief)
@@ -3835,7 +3862,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		pf.SetPanelViewMode(1, ViewModeDetailed)
 		return true
 	case appcmd.CmRightWide:
-		pf.SetWidePanel(1)
+		pf.SetPanelViewMode(1, ViewModeWide)
 		return true
 	case appcmd.CmLeftAIContext:
 		if aiCmd, ok := pf.Panels[0].(interface{ AiSetViewMode(string, bool) }); ok {

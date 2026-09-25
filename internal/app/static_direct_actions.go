@@ -120,11 +120,7 @@ func runFixedPanelView(index int, mode panel.ViewMode) bool {
 	if !ok {
 		return false
 	}
-	if mode == panel.ViewModeWide {
-		pf.SetWidePanel(index)
-	} else {
-		pf.SetPanelViewMode(index, mode)
-	}
+	pf.SetPanelViewMode(index, mode)
 	return true
 }
 

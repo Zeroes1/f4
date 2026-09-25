@@ -25,6 +25,7 @@ const sqliteCommandID = "f4.sqlite.open"
 type Plugin struct {
 	mu           sync.Mutex
 	registration vfs.Registration
+	provider     *databaseProvider
 	initialized  bool
 }
 
@@ -74,8 +75,14 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 		return fmt.Errorf("SQLite: register panel command: %w", err)
 	}
 
+	// Enter and Ctrl+PgDn on a database file mount it in the panel, the way
+	// they mount an archive (#1268).
+	provider := &databaseProvider{}
+	api.RegisterVFSProvider(provider)
+
 	p.mu.Lock()
 	p.registration = registration
+	p.provider = provider
 	p.initialized = true
 	p.mu.Unlock()
 	return nil
@@ -84,11 +91,16 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 func (p *Plugin) Close() error {
 	p.mu.Lock()
 	registration := p.registration
+	provider := p.provider
 	p.registration = nil
+	p.provider = nil
 	p.initialized = false
 	p.mu.Unlock()
 	if registration != nil {
 		registration.Unregister()
+	}
+	if provider != nil {
+		vfs.UnregisterProvider(provider)
 	}
 	return nil
 }
@@ -585,6 +597,13 @@ func displayValue(value any) string {
 }
 
 func (p *Plugin) openCurrent(app vfs.App) {
+	if mounted, ok := app.GetActivePanelVFS().(*databaseVFS); ok && mounted != nil {
+		// Inside a mounted database the command opens that database, on
+		// the table under the cursor.
+		table, _ := mounted.tableOf(mounted.Join(mounted.GetPath(), app.GetSelectedName()))
+		openDatabaseBrowser(app, mounted.GetPath(), table, app.RefreshAll)
+		return
+	}
 	path, ok := selectedSQLitePath(app)
 	if !ok {
 		// Nothing usable under the cursor is not a dead end: ask for a name.
@@ -622,6 +641,14 @@ func databasePathIn(app vfs.App, path string) string {
 }
 
 func (p *Plugin) openPath(app vfs.App, path string) {
+	openDatabaseBrowser(app, path, "", nil)
+}
+
+// openDatabaseBrowser opens the client on a database, showing table when it
+// is one of the database's tables and the first table otherwise. onClose, when
+// set, runs once the client has closed; the database panel uses it to read
+// the tables again, since the SQL box can create and drop them.
+func openDatabaseBrowser(app vfs.App, path, table string, onClose func()) {
 	var (
 		session *databaseSession
 		tables  []string
@@ -644,7 +671,8 @@ func (p *Plugin) openPath(app vfs.App, path string) {
 				}
 				return
 			}
-			browser := newBrowser(app, session, tables)
+			browser := newBrowserAt(app, session, tables, table)
+			browser.onClose = onClose
 			vtui.FrameManager.Push(browser.frame)
 		})
 }

@@ -577,9 +577,23 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 	if err == nil && (fi.Mode()&(os.ModeNamedPipe|os.ModeSocket) != 0) {
 		return nil, os.ErrInvalid
 	}
-	f, err := hostfs.OpenFile(prepareOSPath(path), os.O_RDWR, 0)
-	if err != nil {
+	// A regular file is opened for reading only. Nothing writes through
+	// this handle (in-place patching and OpenWriteAt open their own), and
+	// the editor and the viewer keep it for as long as they show the file.
+	// On Windows a handle with write access makes the file unreadable to
+	// every program that opens it with FILE_SHARE_READ alone -- .NET's
+	// File.OpenRead, StreamReader(path) and File.ReadLines among them --
+	// until the editor is closed (#1364). The read-write attempt stays for
+	// what is not known to be a regular file: it came in with block-device
+	// support, and a device is what it was for.
+	var f hostfs.File
+	if err == nil && fi.Mode().IsRegular() {
 		f, err = hostfs.Open(prepareOSPath(path))
+	} else {
+		f, err = hostfs.OpenFile(prepareOSPath(path), os.O_RDWR, 0)
+		if err != nil {
+			f, err = hostfs.Open(prepareOSPath(path))
+		}
 	}
 	if err != nil {
 		if os.IsPermission(err) && globalSudoClient.IsAvailable() {

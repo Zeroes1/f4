@@ -51,6 +51,8 @@ func TestSettingsCollectionInputSurfacePalette(t *testing.T) {
 				c.Show(scr)
 				for row := 0; row < 2; row++ {
 					want := vtui.Palette[vtui.ColDialogEdit]
+					// Row 0 is the cursor: it is marked in the combo cursor
+					// colour whether or not the list has the focus (#1148).
 					if row == 0 {
 						want = vtui.Palette[vtui.ColDialogComboSelectedText]
 					}
