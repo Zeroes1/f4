@@ -197,7 +197,7 @@ func extractArchiveWithPasswordPrompt(ctx context.Context, srcPath, destDir stri
 		}
 	}()
 	for {
-		err := extractArchiveOnce(ctx, backingPath, destDir, password, reporter)
+		err := rarPasswordError(backingPath, password, extractArchiveOnce(ctx, backingPath, destDir, password, reporter))
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}
@@ -269,7 +269,7 @@ func testArchiveWithPasswordPrompt(ctx context.Context, srcPath string, reporter
 	}()
 
 	for {
-		err := testArchiveOnce(ctx, srcPath, backingPath, password, reporter)
+		err := rarPasswordError(backingPath, password, testArchiveOnce(ctx, srcPath, backingPath, password, reporter))
 		if err == nil || !isArchivePasswordRetryError(err) {
 			return err
 		}

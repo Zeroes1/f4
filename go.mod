@@ -144,7 +144,7 @@ require (
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/neurlang/wayland v0.4.4 // indirect
 	github.com/neurlang/winc v0.1.2 // indirect
-	github.com/nwaples/rardecode/v2 v2.2.3 // indirect
+	github.com/nwaples/rardecode/v2 v2.2.3
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/rivo/uniseg v0.2.0

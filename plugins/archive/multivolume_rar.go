@@ -34,6 +34,7 @@ func (f *uncachedTarFileSystem) Close() error {
 type rarArchiveFileSystem struct {
 	root   *archives.ArchiveFS
 	format archives.Rar
+	path   string
 
 	mu     sync.RWMutex
 	closed bool
@@ -56,7 +57,14 @@ func newRARArchiveFileSystem(localPath, password string) (zipperarchive.FileSyst
 			Context: context.Background(),
 		},
 		format: format,
+		path:   localPath,
 	}, nil
+}
+
+// passwordError lets a wrong password for a RAR archive with encrypted
+// headers bring the password dialog back; see rarPasswordError.
+func (r *rarArchiveFileSystem) passwordError(err error) error {
+	return rarPasswordError(r.path, r.format.Password, err)
 }
 
 func (r *rarArchiveFileSystem) rootFS() (*archives.ArchiveFS, error) {
@@ -79,12 +87,12 @@ func (r *rarArchiveFileSystem) Open(name string) (fs.File, error) {
 
 	info, err := root.Stat(name)
 	if err != nil {
-		return nil, err
+		return nil, r.passwordError(err)
 	}
 	if info.IsDir() {
 		entries, err := root.ReadDir(name)
 		if err != nil {
-			return nil, err
+			return nil, r.passwordError(err)
 		}
 		return &rarDirectoryFile{info: info, entries: append([]fs.DirEntry(nil), entries...)}, nil
 	}
@@ -128,7 +136,7 @@ func (r *rarArchiveFileSystem) Open(name string) (fs.File, error) {
 		return fs.SkipAll
 	})
 	if err != nil {
-		return nil, &fs.PathError{Op: "open", Path: name, Err: fmt.Errorf("extract: %w", err)}
+		return nil, &fs.PathError{Op: "open", Path: name, Err: fmt.Errorf("extract: %w", r.passwordError(err))}
 	}
 	if !found {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
@@ -152,7 +160,8 @@ func (r *rarArchiveFileSystem) ReadDir(name string) ([]fs.DirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return root.ReadDir(name)
+	entries, err := root.ReadDir(name)
+	return entries, r.passwordError(err)
 }
 
 func (r *rarArchiveFileSystem) Stat(name string) (fs.FileInfo, error) {
@@ -163,7 +172,8 @@ func (r *rarArchiveFileSystem) Stat(name string) (fs.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return root.Stat(name)
+	info, err := root.Stat(name)
+	return info, r.passwordError(err)
 }
 
 func (r *rarArchiveFileSystem) Close() error {
