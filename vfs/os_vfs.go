@@ -596,6 +596,10 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 		}
 	}
 	if err != nil {
+		if os.IsPermission(err) && !ElevationAllowed(ctx) {
+			vtui.DebugLog("VFS: Permission denied for Open(%q); the caller ruled out sudo", path)
+			return nil, err
+		}
 		if os.IsPermission(err) && globalSudoClient.IsAvailable() {
 			vtui.DebugLog("VFS: Permission denied for Open(%q), attempting sudo...", path)
 			sudoF, sudoErr := globalSudoClient.Open(prepareOSPath(path), os.O_RDONLY, 0)

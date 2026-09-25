@@ -1023,6 +1023,31 @@ func DestinationOverwrite(ctx context.Context) (overwrite, known bool) {
 	return overwrite, known
 }
 
+type noElevationKeyType struct{}
+
+// WithoutElevation marks ctx so that OSVFS reports a refusal as it is instead
+// of retrying the call through sudo.
+//
+// It is for code on the UI goroutine. The sudo password prompt is a dialog,
+// and only that goroutine can show it: SudoClient waits for the elevated
+// dispatcher while the prompt it needs sits in the task queue behind the
+// wait, so an elevated call made from the UI goroutine waits for itself
+// until SudoClient gives up on the dispatcher. Such code reads without
+// elevation and hands a refused read to a worker goroutine.
+func WithoutElevation(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noElevationKeyType{}, true)
+}
+
+// ElevationAllowed reports whether a refused call made with ctx may be
+// retried through sudo.
+func ElevationAllowed(ctx context.Context) bool {
+	if ctx == nil {
+		return true
+	}
+	off, _ := ctx.Value(noElevationKeyType{}).(bool)
+	return !off
+}
+
 type ProgressCallback func(msg string, percent int)
 
 type TaskReporter interface {

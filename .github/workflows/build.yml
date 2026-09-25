@@ -30,6 +30,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
+# Where a tag build writes the tag with -X: every build step below takes the
+# name from here. The linker skips an -X whose name resolves to nothing without
+# a word, which is how tagged builds came to report a commit hash once the
+# variable moved from package main to internal/app. Two checks keep that from
+# returning: TestReleaseWorkflowWritesBuildVersion in internal/app ties this
+# line to the variable on every run, and on a tag the smoke tests run
+# scripts/check_release_version.sh on the binaries they start.
+env:
+  VERSION_SYMBOL: github.com/unxed/f4/internal/app.buildVersion
+
 jobs:
   # The build matrix is deliberately inline data. Pull requests build all
   # six cells because those are the artifacts anyone actually downloads
@@ -158,7 +168,7 @@ jobs:
         # prerelease tags such as v0.2.0-beta available to the updater.
         APP_LDFLAGS="$LDFLAGS"
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-          APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+          APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
         # fakecgo supplies environ/__progname (and __ps_strings on NetBSD)
@@ -258,6 +268,10 @@ jobs:
     # probes the loader paths itself with raw syscalls and so would find the
     # runner's own glibc and report a pass that means nothing.
     #
+    # On a tag every run here also has to report exactly that tag as its
+    # version (scripts/check_release_version.sh): the tag is written in with
+    # -X, which the linker skips silently when the name does not resolve.
+    #
     # The container runs ride with pushes and tags, where the nightly and
     # release jobs publish and a red run blocks them via needs. Pull requests
     # keep the ELF contract above (which catches the realistic breakage: a
@@ -281,7 +295,7 @@ jobs:
         OLD_GLIBC_IMAGE=debian:bullseye-slim
 
         if [ "$GOARCH_CELL" = "amd64" ]; then
-          ./build/f4 --version
+          bash scripts/check_release_version.sh ./build/f4 --version
         fi
 
         if [ "$CROSS_LIBC_SMOKE" != "true" ]; then
@@ -296,7 +310,7 @@ jobs:
 
         for image in "$GLIBC_IMAGE" "$OLD_GLIBC_IMAGE" "$MUSL_IMAGE"; do
           echo "==> $image"
-          docker run "${run_args[@]}" "$image" /mnt/f4 --version
+          bash scripts/check_release_version.sh docker run "${run_args[@]}" "$image" /mnt/f4 --version
         done
 
     - name: Package
@@ -395,7 +409,7 @@ jobs:
 
           APP_LDFLAGS="$LDFLAGS"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+            APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
           fi
 
           # fakecgo supplies environ/__progname (and __ps_strings on NetBSD)
@@ -484,7 +498,7 @@ jobs:
             sudo apt-get install -y -qq qemu-user-static </dev/null
             QEMU_READY=yes
           fi
-          "qemu-$QEMU-static" "$BUILD_DIR/f4" --version </dev/null
+          bash scripts/check_release_version.sh "qemu-$QEMU-static" "$BUILD_DIR/f4" --version </dev/null
         done < <(jq -c '.[]' <<<"$CELLS")
 
     - name: Package
@@ -606,7 +620,7 @@ jobs:
 
         APP_LDFLAGS="-s -w -r $TERMUX_PREFIX/lib"
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-          APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+          APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
         mkdir -p build
@@ -744,7 +758,7 @@ jobs:
         LDFLAGS="-s -w"
         APP_LDFLAGS="$LDFLAGS"
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-          APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+          APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
         go build -trimpath -ldflags="$APP_LDFLAGS" -o build/f4.exe ./cmd/f4
@@ -858,7 +872,7 @@ jobs:
         LDFLAGS="-w"
         APP_LDFLAGS="$LDFLAGS"
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-          APP_LDFLAGS="$APP_LDFLAGS -X main.buildVersion=$GITHUB_REF_NAME"
+          APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
         go build -trimpath -ldflags="$APP_LDFLAGS" -tags=go2xp \
           -modfile=/tmp/f4-go2xp.mod -o build/f4.exe ./cmd/f4

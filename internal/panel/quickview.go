@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
+	"io/fs"
 	"runtime"
 	"strings"
 	"sync"
@@ -1167,11 +1168,22 @@ func (q *QuickViewPanel) refreshCache(key quickViewSelectionKey, path string, it
 	request := vfs.QuickViewRequest{VFS: q.src.Vfs, Path: path, Item: item.VFSItem}
 	providers := vfs.QuickViewProvidersFor(request)
 	if len(providers) != 0 {
-		q.startFilePreview(key, request, providers)
+		q.startFilePreview(key, request, providers, LoadDefaultQuickView)
 		return
 	}
 
-	q.applyFilePreview(LoadDefaultQuickView(context.Background(), request.VFS, request.Path))
+	// The plain text-or-hex preview is read right here, on the UI goroutine,
+	// so it is read without sudo: the password prompt is a dialog this
+	// goroutine has to show, and an elevated read started from here would
+	// hold it up for as long as SudoClient waits for the dispatcher, five
+	// minutes, with f4 frozen meanwhile. A file only root can read goes to
+	// the worker instead, where the prompt can appear.
+	loaded := LoadDefaultQuickView(vfs.WithoutElevation(context.Background()), request.VFS, request.Path)
+	if errors.Is(loaded.Err, fs.ErrPermission) {
+		q.startFilePreview(key, request, nil, loadRefusedQuickView)
+		return
+	}
+	q.applyFilePreview(loaded)
 }
 
 type quickViewFileResult struct {
@@ -1197,7 +1209,8 @@ func makeQuickViewSelectionKey(filesystem vfs.VFS, path string, item vfs.VFSItem
 // startFilePreview tries matching providers in priority order away from the
 // UI thread. Only an explicit ErrQuickViewUnsupported advances to the next
 // provider; an actual parse/read error is useful information and is shown.
-func (q *QuickViewPanel) startFilePreview(key quickViewSelectionKey, request vfs.QuickViewRequest, providers []vfs.QuickViewProvider) {
+// When no provider takes the file, fallback reads it, on the same worker.
+func (q *QuickViewPanel) startFilePreview(key quickViewSelectionKey, request vfs.QuickViewRequest, providers []vfs.QuickViewProvider, fallback func(context.Context, vfs.VFS, string) quickViewFileResult) {
 	ctx, cancel := context.WithCancel(context.Background())
 	q.previewCancel = cancel
 	gen := q.previewGen
@@ -1228,7 +1241,7 @@ func (q *QuickViewPanel) startFilePreview(key quickViewSelectionKey, request vfs
 			break
 		}
 		if !handled {
-			loaded = LoadDefaultQuickView(ctx, request.VFS, request.Path)
+			loaded = fallback(ctx, request.VFS, request.Path)
 		}
 		if ctx.Err() != nil {
 			return
@@ -1282,6 +1295,27 @@ func LoadDefaultQuickView(parent context.Context, filesystem vfs.VFS, path strin
 		return quickViewFileResult{Err: err}
 	}
 	defer rc.Close()
+	return readQuickViewPreview(ctx, rc)
+}
+
+// loadRefusedQuickView is LoadDefaultQuickView for a file the UI goroutine
+// was refused, and runs on the preview worker. Opening it may go through sudo
+// and wait while the password is typed, so the 500 ms budget covers the read
+// alone and starts once the file is open; counted from before the open, it
+// would run out during the prompt and turn the read into a deadline error.
+func loadRefusedQuickView(parent context.Context, filesystem vfs.VFS, path string) quickViewFileResult {
+	rc, err := filesystem.Open(parent, path)
+	if err != nil {
+		return quickViewFileResult{Err: err}
+	}
+	defer rc.Close()
+	ctx, cancel := context.WithTimeout(parent, 500*time.Millisecond)
+	defer cancel()
+	return readQuickViewPreview(ctx, rc)
+}
+
+// readQuickViewPreview reads the first previewMax bytes of rc as text or hex.
+func readQuickViewPreview(ctx context.Context, rc vfs.ReadAtCloser) quickViewFileResult {
 	buf := make([]byte, previewMax)
 	n, readErr := rc.ReadAt(ctx, buf, 0)
 	if readErr != nil && readErr != io.EOF {
