@@ -2157,6 +2157,19 @@ func TestPanelsFrame_CtrlPgDn_EntersDir(t *testing.T) {
 // swallowed it as a plain page-up/down cursor move onto/near "..", so the
 // directory never actually changed and a macro needed an extra Enter.
 func TestPanelsFrame_InjectedCtrlPgUp_GoesToParent(t *testing.T) {
+	// This asserts the *default* CtrlPgUp binding resolves through
+	// macroLookupHotkey, so it needs a clean default HotkeyManager rather
+	// than whatever a shuffled-order sibling test left in the shared
+	// globals (several tests install a minimal HotkeyManager/MacroManager
+	// for their own scenario and restore it via t.Cleanup on exit).
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
 	vtui.SetDefaultPalette()
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
@@ -2196,6 +2209,16 @@ func TestPanelsFrame_InjectedCtrlPgUp_GoesToParent(t *testing.T) {
 }
 
 func TestPanelsFrame_InjectedCtrlPgDn_EntersDir(t *testing.T) {
+	// See TestPanelsFrame_InjectedCtrlPgUp_GoesToParent: needs the default
+	// binding, not whatever a shuffled-order sibling test left behind.
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
 	vtui.SetDefaultPalette()
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
