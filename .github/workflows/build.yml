@@ -73,14 +73,14 @@ jobs:
       # Deliberately not gated on build impact: gofmt covers test files too,
       # so a tests-only pull request still needs this check.
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-       run: |
-         if [ -n "$(gofmt -s -l .)" ]; then
-           echo "The following files are not properly formatted:"
-           gofmt -s -l .
-           gofmt -s -d .
-           echo "Please run 'gofmt -s -w .' locally and commit the changes."
-           exit 1
-         fi
+      run: |
+        if [ -n "$(gofmt -s -l .)" ]; then
+          echo "The following files are not properly formatted:"
+          gofmt -s -l .
+          gofmt -s -d .
+          echo "Please run 'gofmt -s -w .' locally and commit the changes."
+          exit 1
+        fi
 
     - name: Check language file formatting
       # One cell carries the repo-wide checks; linux/amd64 is the fastest.
