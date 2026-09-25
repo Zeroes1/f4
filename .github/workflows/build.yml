@@ -274,6 +274,11 @@ jobs:
         # Pinned so a rebuilt upstream image cannot change what this proves.
         GLIBC_IMAGE=debian:bookworm-slim
         MUSL_IMAGE=alpine:3.24.1
+        # glibc 2.31. Until 2.34 glibc kept pthread_create and dlopen out of
+        # libc.so.6, in libpthread.so.0 and libdl.so.2, so a bridge that
+        # preloads libc alone starts on bookworm and dies on Ubuntu 20.04
+        # before main (#1381). bookworm cannot tell the two apart; this can.
+        OLD_GLIBC_IMAGE=debian:bullseye-slim
 
         if [ "$GOARCH_CELL" = "amd64" ]; then
           ./build/f4 --version
@@ -289,7 +294,7 @@ jobs:
           run_args+=(--platform "linux/$GOARCH_CELL")
         fi
 
-        for image in "$GLIBC_IMAGE" "$MUSL_IMAGE"; do
+        for image in "$GLIBC_IMAGE" "$OLD_GLIBC_IMAGE" "$MUSL_IMAGE"; do
           echo "==> $image"
           docker run "${run_args[@]}" "$image" /mnt/f4 --version
         done

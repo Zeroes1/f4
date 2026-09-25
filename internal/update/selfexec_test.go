@@ -5,9 +5,13 @@ import (
 	"testing"
 )
 
+// The preload list stays one argument: the loader splits it on spaces or
+// colons itself, and splitting it here would hand it the second library as
+// the program to run.
 func TestLoaderArgv(t *testing.T) {
-	got := loaderArgv("libc.so.6", "/proc/self/fd/3", []string{"--server", "/tmp/f4.sock"})
-	want := []string{"--preload", "libc.so.6", "/proc/self/fd/3", "--server", "/tmp/f4.sock"}
+	const preload = "libc.so.6 libpthread.so.0 libdl.so.2"
+	got := loaderArgv(preload, "/proc/self/fd/3", []string{"--server", "/tmp/f4.sock"})
+	want := []string{"--preload", preload, "/proc/self/fd/3", "--server", "/tmp/f4.sock"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("loaderArgv() = %q, want %q", got, want)
 	}

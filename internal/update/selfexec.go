@@ -35,7 +35,7 @@ import (
 // malloc"; on musl it is a jump to an unbound symbol.
 //
 // So when this process came through the loader, its children go through it
-// too, with the same libc pre-loaded and the same image -- exactly the argv
+// too, with the same libraries pre-loaded and the same image -- exactly the argv
 // goffi's bridge would have built. The loader shifts argv the way it always
 // does, so the child still sees os.Args[0] as the image and its own arguments
 // from os.Args[1] on.
@@ -56,7 +56,7 @@ func SelfCommand(self string, args ...string) *exec.Cmd {
 // selfExecArgv picks the program and arguments SelfCommand runs. Split out so
 // the universal case can be checked without starting a process.
 func selfExecArgv(self string, args []string) (string, []string) {
-	loader, libc, ok := universalHostLoader()
+	loader, preload, ok := universalHostLoader()
 	if !ok {
 		return self, args
 	}
@@ -64,14 +64,15 @@ func selfExecArgv(self string, args []string) (string, []string) {
 	// "our path" is the loader (os.Executable()) or a name that no longer
 	// resolves to a loadable image, while argv[0] is the image goffi handed
 	// the loader and is the only thing that can be run again.
-	return loader, loaderArgv(libc, os.Args[0], args)
+	return loader, loaderArgv(preload, os.Args[0], args)
 }
 
 // loaderArgv is the argument vector for running image through the host
-// dynamic loader with libc pre-loaded, followed by args.
-func loaderArgv(libc, image string, args []string) []string {
+// dynamic loader with the libraries in preload (one argument, as the loader
+// takes it) pre-loaded, followed by args.
+func loaderArgv(preload, image string, args []string) []string {
 	argv := make([]string, 0, len(args)+3)
-	argv = append(argv, "--preload", libc, image)
+	argv = append(argv, "--preload", preload, image)
 	return append(argv, args...)
 }
 

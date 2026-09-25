@@ -36,8 +36,8 @@ const goffiUniversalEnvPrefix = "GOFFI_UNIVERSAL_"
 // loaded from. That recipe (goffi's own, in docs/PROFILE_U.md) cannot be used
 // here. sudo takes one program path and no arguments -- neither for the
 // command, which must stay "f4 --sudo-dispatcher <socket>" for sudoers rules
-// to be written against, nor for SUDO_ASKPASS, which has no place to put
-// "--preload libc.so.6" at all -- and the image the recipe would hand the
+// to be written against, nor for SUDO_ASKPASS, which has no place to put a
+// "--preload <libraries>" at all -- and the image the recipe would hand the
 // loader is, on glibc, a memfd of this process that no child of sudo can
 // open. So the children are started by path, from disk, and what they need is
 // simply not to be lied to about having a libc already.

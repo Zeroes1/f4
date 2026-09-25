@@ -7,14 +7,17 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/go-webgpu/goffi/ffi"
 )
 
 // With the guard set, f4 must build the same argv goffi's bridge builds:
-// loader, --preload, host libc, the image argv[0] names, then our arguments.
+// loader, --preload, the host's preload list, the image argv[0] names, then
+// our arguments.
 func TestSelfExecArgvUniversal(t *testing.T) {
 	t.Setenv(GoffiUniversalGuard, "1")
 
-	loader, libc, ok := universalHostLoader()
+	loader, preload, ok := universalHostLoader()
 	if !ok {
 		t.Skip("host runs a libc goffi does not recognise; nothing to imitate")
 	}
@@ -23,17 +26,35 @@ func TestSelfExecArgvUniversal(t *testing.T) {
 	if name != loader {
 		t.Errorf("program = %q, want the host loader %q", name, loader)
 	}
-	want := []string{"--preload", libc, os.Args[0], "--server", "/tmp/f4.sock"}
+	want := []string{"--preload", preload, os.Args[0], "--server", "/tmp/f4.sock"}
 	if !reflect.DeepEqual(argv, want) {
 		t.Errorf("args = %q, want %q", argv, want)
+	}
+}
+
+// What children are started with has to be what the bridge preloaded, and on
+// glibc that is more than libc: a copy started with libc.so.6 alone dies before
+// main on glibc older than 2.34 (#1381).
+func TestUniversalHostLoaderPreloadsWhatTheBridgeDid(t *testing.T) {
+	t.Setenv(GoffiUniversalGuard, "1")
+
+	_, preload, ok := universalHostLoader()
+	if !ok {
+		t.Skip("host runs a libc goffi does not recognise; nothing to imitate")
+	}
+	if want := ffi.HostPreload(); preload != want {
+		t.Errorf("preload = %q, want goffi's HostPreload() %q", preload, want)
+	}
+	if ffi.LibcKind() == "glibc" && preload == ffi.HostLibC() {
+		t.Errorf("preload = %q on glibc, want more than libc alone", preload)
 	}
 }
 
 // No guard, no detour: an ordinary build must not be sent through a loader.
 func TestUniversalHostLoaderNeedsGuard(t *testing.T) {
 	t.Setenv(GoffiUniversalGuard, "")
-	if loader, libc, ok := universalHostLoader(); ok {
-		t.Errorf("universalHostLoader() = %q, %q, true without the guard set", loader, libc)
+	if loader, preload, ok := universalHostLoader(); ok {
+		t.Errorf("universalHostLoader() = %q, %q, true without the guard set", loader, preload)
 	}
 }
 

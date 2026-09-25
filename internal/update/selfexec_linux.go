@@ -100,20 +100,25 @@ func selfExecEnv() []string {
 	return env
 }
 
-// universalHostLoader reports the host dynamic loader and libc SONAME that
-// copies of this process must be started through, and whether that applies at
-// all. It does only when this process itself came up that way; an ordinary
-// dynamic or static build wants none of it.
-func universalHostLoader() (loader, libc string, ok bool) {
+// universalHostLoader reports the host dynamic loader, and the libraries it
+// must preload, that copies of this process must be started through, and
+// whether that applies at all. It does only when this process itself came up
+// that way; an ordinary dynamic or static build wants none of it.
+//
+// The preload list is goffi's HostPreload, not HostLibC: on glibc older than
+// 2.34 the pthread_* and dl* functions the runtime imports are in
+// libpthread.so.0 and libdl.so.2, and a copy started with libc alone dies
+// before main with "undefined symbol: pthread_attr_getstacksize" (#1381).
+func universalHostLoader() (loader, preload string, ok bool) {
 	if os.Getenv(GoffiUniversalGuard) == "" {
 		return "", "", false
 	}
 	// The same table the bridge used, through goffi's public accessors: an
 	// empty answer means the host runs a libc goffi does not recognise, and
 	// then there was no re-exec to imitate.
-	loader, libc = ffi.HostLoader(), ffi.HostLibC()
-	if loader == "" || libc == "" {
+	loader, preload = ffi.HostLoader(), ffi.HostPreload()
+	if loader == "" || preload == "" {
 		return "", "", false
 	}
-	return loader, libc, true
+	return loader, preload, true
 }
