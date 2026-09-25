@@ -163,3 +163,64 @@ func TestViewerDrawsAroundHighlightedLinesOnTheirBackground(t *testing.T) {
 		}
 	}
 }
+
+// f4 #1413: RefreshHighlighting drops the colorizer a window already built,
+// so the next redraw calls NewWindowColorizer again — the mechanism
+// Viewer.ToggleHighlighting (CtrlL) relies on to take effect on an already
+// open viewer instead of only on the next one.
+func TestViewerRefreshHighlightingRebuildsTheColorizer(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	root := t.TempDir()
+	path := filepath.Join(root, "a.txt")
+	if err := os.WriteFile(path, []byte("hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	oldAuto, oldDefault := config.App.ViewerAutodetectCodePage, config.App.ViewerDefaultCodePage
+	config.App.ViewerAutodetectCodePage, config.App.ViewerDefaultCodePage = false, 65001
+	t.Cleanup(func() { config.App.ViewerAutodetectCodePage, config.App.ViewerDefaultCodePage = oldAuto, oldDefault })
+
+	builds := 0
+	var last *recordingColorizer
+	old := NewWindowColorizer
+	NewWindowColorizer = func(string, string, uint64, func()) WindowColorizer {
+		builds++
+		last = &recordingColorizer{}
+		return last
+	}
+	t.Cleanup(func() { NewWindowColorizer = old })
+
+	vv, err := NewViewerView(context.Background(), vfs.NewOSVFS(root), path)
+	if err != nil {
+		t.Fatalf("NewViewerView: %v", err)
+	}
+	defer vv.Close()
+	deadline := time.After(2 * time.Second)
+	for {
+		if _, err := vv.Backend.ReadAt(0, int(vv.Backend.Size())); err == nil {
+			break
+		}
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("the file did not load")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+
+	if got := vv.windowColorizer(); got == nil || builds != 1 {
+		t.Fatalf("windowColorizer() built %d colorizer(s), want exactly 1", builds)
+	}
+	first := last
+	if second := vv.windowColorizer(); second != first || builds != 1 {
+		t.Fatalf("a second call rebuilt the colorizer (builds=%d) instead of reusing it", builds)
+	}
+
+	vv.RefreshHighlighting()
+	if !first.closed {
+		t.Error("RefreshHighlighting did not close the old colorizer")
+	}
+	if got := vv.windowColorizer(); got == nil || got == first || builds != 2 {
+		t.Fatalf("after RefreshHighlighting, windowColorizer() built %d colorizer(s) (want 2) or reused the old one", builds)
+	}
+}

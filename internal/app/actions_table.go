@@ -2909,6 +2909,24 @@ func init() {
 		Handler:     withViewer(func(vv *viewer.ViewerView) { vv.Reload() }),
 	})
 	registerAction(action.Action{
+		Name:        "Viewer.ToggleHighlighting",
+		Area:        "Viewer",
+		Label:       "Toggle syntax highlighting",
+		LabelKey:    "Action.Viewer.ToggleHighlighting",
+		Description: "Turn this viewer's syntax highlighting on or off (f4 #1413)",
+		DescKey:     "Action.Viewer.ToggleHighlighting.Desc",
+		DefaultKeys: []string{"CtrlL"},
+		MenuPath:    "File",
+		Handler: withViewer(func(vv *viewer.ViewerView) {
+			if config.App.ViewerHighlighting == config.ViewerHighlightAll {
+				config.App.ViewerHighlighting = config.ViewerHighlightOff
+			} else {
+				config.App.ViewerHighlighting = config.ViewerHighlightAll
+			}
+			vv.RefreshHighlighting()
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Viewer.Quit",
 		Area:        "Viewer",
 		Label:       "Quit",

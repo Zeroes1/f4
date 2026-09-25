@@ -52,6 +52,21 @@ const (
 	viewerHighlightMaxBytes     = 64 * 1024
 )
 
+// RefreshHighlighting drops the colorizer this window built on first use, so
+// the next redraw asks NewWindowColorizer again and picks up a setting
+// changed since then (f4 #1413: toggling ViewerHighlighting for a viewer
+// that is already open).
+func (vv *ViewerView) RefreshHighlighting() {
+	if vv.highlight != nil {
+		vv.highlight.Close()
+	}
+	vv.highlight = nil
+	vv.highlightTried = false
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
 // windowColorizer is the viewer's colorizer, created on first use.
 func (vv *ViewerView) windowColorizer() WindowColorizer {
 	if !vv.highlightTried {
