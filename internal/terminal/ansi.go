@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/unxed/vtui"
@@ -47,7 +48,14 @@ type AnsiParser struct {
 	lastRune           rune
 	pendingWindowsSync []byte
 	seenWindowsSync    []byte
-	osc52WG            sync.WaitGroup // tracks OSC 52 read goroutines while tests or owners replace clipboard state
+	// syncEchoTracked limits the excision to lines f4 itself typed: once
+	// set, a cd /d prefix is only cut while syncEchoArms counts an echo that
+	// is still due (see ExpectWindowsSyncEcho). The flags are atomic because
+	// the command is typed on the UI goroutine while the output is parsed on
+	// the PTY reader's.
+	syncEchoTracked atomic.Bool
+	syncEchoArms    atomic.Int32
+	osc52WG         sync.WaitGroup // tracks OSC 52 read goroutines while tests or owners replace clipboard state
 
 	// DCS state: the final byte of the introducer and the string that
 	// follows it, kept apart from CurParam because the parameters of the
@@ -82,11 +90,57 @@ func (p *AnsiParser) replyPty() PtyBackend {
 
 const maxPendingWindowsSync = 64 * 1024
 
+// maxSyncEchoArms bounds the echoes waited for, so that lines typed while
+// nothing echoed them cannot pile up into a standing licence to cut.
+const maxSyncEchoArms = 4
+
+// WindowsSyncCommandPrefix is how every line f4 types into cmd.exe to follow
+// the panel's directory begins: cd /d "path" & command.
+var WindowsSyncCommandPrefix = []byte(`cd /d "`)
+
 var (
-	windowsSyncStart = []byte(`cd /d "`)
+	windowsSyncStart = WindowsSyncCommandPrefix
 	windowsSyncEnd   = []byte(`" & rem f4_sync`)
 	windowsSyncSep   = []byte(`" & `)
 )
+
+// TrackWindowsSyncEcho makes the parser cut the directory-sync prefix only
+// from the echo of a line f4 typed, announced by ExpectWindowsSyncEcho. The
+// same text elsewhere in the output is left alone: Far Manager, run from f4,
+// repaints the console's own copy of those lines when it hides a panel, and
+// cutting forty characters out of the middle of such a row shifted the panel
+// drawn after them across the screen (#1376). A parser that is never asked
+// to track -- one not wired to a shell f4 types into -- cuts every
+// occurrence, as before.
+func (p *AnsiParser) TrackWindowsSyncEcho() {
+	p.syncEchoTracked.Store(true)
+}
+
+// ExpectWindowsSyncEcho announces that f4 has typed one cd /d line whose
+// echo is due in the output.
+func (p *AnsiParser) ExpectWindowsSyncEcho() {
+	for {
+		n := p.syncEchoArms.Load()
+		if n >= maxSyncEchoArms || p.syncEchoArms.CompareAndSwap(n, n+1) {
+			return
+		}
+	}
+}
+
+// wantsWindowsSync reports whether a cd /d prefix in the output may be cut.
+func (p *AnsiParser) wantsWindowsSync() bool {
+	return !p.syncEchoTracked.Load() || p.syncEchoArms.Load() > 0
+}
+
+// consumeWindowsSyncEcho books one excised echo against the lines typed.
+func (p *AnsiParser) consumeWindowsSyncEcho() {
+	for {
+		n := p.syncEchoArms.Load()
+		if n <= 0 || p.syncEchoArms.CompareAndSwap(n, n-1) {
+			return
+		}
+	}
+}
 
 func cloneBytes(data []byte) []byte {
 	if len(data) == 0 {
@@ -130,6 +184,12 @@ func longestSuffixPrefix(data, prefix []byte) int {
 // wipes the fragment that reached the screen along with the rest of the
 // command. The cost is that the fragment can be visible for one frame.
 func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
+	if len(p.pendingWindowsSync) == 0 && len(p.seenWindowsSync) == 0 && !p.wantsWindowsSync() {
+		if bytes.Contains(data, windowsSyncStart) {
+			vtui.DebugLog("ANSI_PARSER: cd /d text with no typed line awaiting its echo; left as is")
+		}
+		return data
+	}
 	if len(p.pendingWindowsSync) > 0 {
 		combined := make([]byte, 0, len(p.pendingWindowsSync)+len(data))
 		combined = append(combined, p.pendingWindowsSync...)
@@ -163,6 +223,11 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 	}
 
 	for len(data) > 0 {
+		if !p.wantsWindowsSync() {
+			// Every echo that was due has been cut; the rest is output.
+			emit(data)
+			return visible
+		}
 		startIdx := bytes.Index(data, windowsSyncStart)
 		if startIdx == -1 {
 			emit(data)
@@ -202,6 +267,7 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 			}
 
 			vtui.DebugLog("ANSI_PARSER: Excising background Windows CD sync")
+			p.consumeWindowsSyncEcho()
 			// The erase takes the whole line, so whatever part of the
 			// command already reached the screen goes with it.
 			skip = 0
@@ -232,6 +298,8 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 
 		// This is another command after a quoted cd, not f4's marker. Keep
 		// the command itself visible while removing only the technical cd.
+		vtui.DebugLog("ANSI_PARSER: Excising Windows CD prefix of a typed command")
+		p.consumeWindowsSyncEcho()
 		data = data[separatorEnd:]
 	}
 	return visible

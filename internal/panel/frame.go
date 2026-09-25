@@ -1210,6 +1210,9 @@ func (pf *PanelsFrame) InitPTY() {
 	// Always initialize the parser to prevent nil dereference
 	pf.Parser = terminal.NewAnsiParser(pf.TermView, nil)
 	pf.Parser.ReplyTo = pf.activeReplyPTY
+	// Every cd /d line f4 types goes through WritePTY, which announces its
+	// echo; only that echo loses the prefix (#1376).
+	pf.Parser.TrackWindowsSyncEcho()
 
 	if !SpawnLocalShellPTY {
 		return

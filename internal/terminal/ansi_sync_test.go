@@ -95,3 +95,47 @@ func TestWindowsSyncLeavesRealCommandsAlone(t *testing.T) {
 		t.Errorf("the user's command must survive: %q", got)
 	}
 }
+
+// A parser that tracks the lines f4 types cuts the prefix from their echo
+// only. Far Manager, run from f4, repaints the console's own copy of those
+// lines when it hides a panel; the same text there is output, and cutting it
+// out of the middle of the row moved the panel drawn after it forty columns
+// to the left (#1376).
+func TestWindowsSyncTrackedCutsOnlyTheAnnouncedEcho(t *testing.T) {
+	tv, p, _ := syncEnv(t)
+	p.TrackWindowsSyncEcho()
+
+	// The echo of a line f4 typed loses its technical prefix.
+	p.ExpectWindowsSyncEcho()
+	p.Process([]byte("C:\\FAR>cd /d \"C:\\FAR\" & Far.exe\r\n"))
+	if got := syncRow(tv, 0); got != "C:\\FAR>Far.exe" {
+		t.Fatalf("typed line echo = %q, want the prefix cut", got)
+	}
+
+	// A repaint of that row by the program is drawn as it is, and what
+	// follows it on the row stays in its column.
+	row := "C:\\FAR>cd /d \"C:\\FAR\" & Far.exe"
+	p.Process([]byte("\x1b[2;1H" + row + "\x1b[2;41HPANEL"))
+	if got := syncRow(tv, 1); got != row+strings.Repeat(" ", 40-len(row))+"PANEL" {
+		t.Errorf("repainted row = %q, want it unchanged with PANEL at column 41", got)
+	}
+	p.Process([]byte("\x1b[3;1HC:\\F4>cd /d \"C:\\FAR\" & rem f4_sync\r\n"))
+	if got := syncRow(tv, 2); !strings.Contains(got, "rem f4_sync") {
+		t.Errorf("repainted sync line = %q, want it left on the screen", got)
+	}
+}
+
+// Each announced echo is cut once, so a second copy of the same line in one
+// chunk -- the program's repaint right behind the echo -- is kept.
+func TestWindowsSyncTrackedEchoIsCutOnce(t *testing.T) {
+	tv, p, _ := syncEnv(t)
+	p.TrackWindowsSyncEcho()
+	p.ExpectWindowsSyncEcho()
+	p.Process([]byte("cd /d \"C:\\tmp\" & rem f4_sync\r\nok\r\ncd /d \"C:\\tmp\" & rem f4_sync\r\n"))
+	if got := syncRow(tv, 0); got != "ok" {
+		t.Errorf("row 0 = %q, want the echo cut and ok on its row", got)
+	}
+	if got := syncRow(tv, 1); !strings.Contains(got, "rem f4_sync") {
+		t.Errorf("row 1 = %q, want the second copy kept", got)
+	}
+}
