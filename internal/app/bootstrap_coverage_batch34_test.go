@@ -52,7 +52,7 @@ func TestFarStartupDirsCoverageBatch34(t *testing.T) {
 	if left, right, ok := farStartupDirs(cwd, []string{"left"}); !ok || left != filepath.Join(cwd, "left") || right != "-" {
 		t.Fatalf("far one = (%q, %q, %v), want left and keep marker", left, right, ok)
 	}
-	if left, right, ok := farStartupDirs(cwd, []string{"left", "/right"}); !ok || left != filepath.Join(cwd, "left") || right != "/right" {
+	if left, right, ok := farStartupDirs(cwd, []string{"left", filepath.Join(cwd, "right")}); !ok || left != filepath.Join(cwd, "left") || right != filepath.Join(cwd, "right") {
 		t.Fatalf("far two = (%q, %q, %v), want both paths", left, right, ok)
 	}
 }
