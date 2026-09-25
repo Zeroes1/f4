@@ -882,9 +882,15 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 
 	if pf.Wide && pf.WidePanel == 0 {
 		lMode = ViewModeWide
+		if fsp, ok := pf.Panels[0].(*FileSystemPanel); ok {
+			lMode = fsp.WideViewMode()
+		}
 	}
 	if pf.Wide && pf.WidePanel == 1 {
 		rMode = ViewModeWide
+		if fsp, ok := pf.Panels[1].(*FileSystemPanel); ok {
+			rMode = fsp.WideViewMode()
+		}
 	}
 	modeItems := []struct {
 		mode ViewMode
@@ -1458,8 +1464,19 @@ func (pf *PanelsFrame) SetPanelViewMode(idx int, mode ViewMode) {
 	if idx < 0 || idx > 1 {
 		return
 	}
+	fsp, isFilePanel := pf.Panels[idx].(*FileSystemPanel)
+	if PanelViewModeSettings(mode).FullScreen && (isFilePanel || mode == ViewModeWide) {
+		// far2l's FullScreen flag: the mode takes the whole width, which is
+		// f4's Wide layout showing this mode's columns.
+		if isFilePanel {
+			fsp.SetWideViewMode(mode)
+		}
+		pf.SetWidePanel(idx)
+		pf.UpdateMenuCheckmarks()
+		return
+	}
 	pf.ExitWide()
-	if fsp, ok := pf.Panels[idx].(*FileSystemPanel); ok {
+	if isFilePanel {
 		fsp.SetViewMode(mode)
 	}
 	pf.UpdateMenuCheckmarks()
@@ -3826,7 +3843,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		pf.SetPanelViewMode(0, ViewModeDetailed)
 		return true
 	case appcmd.CmLeftWide:
-		pf.SetWidePanel(0)
+		pf.SetPanelViewMode(0, ViewModeWide)
 		return true
 	case appcmd.CmRightBrief:
 		pf.SetPanelViewMode(1, ViewModeBrief)
@@ -3838,7 +3855,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		pf.SetPanelViewMode(1, ViewModeDetailed)
 		return true
 	case appcmd.CmRightWide:
-		pf.SetWidePanel(1)
+		pf.SetPanelViewMode(1, ViewModeWide)
 		return true
 	case appcmd.CmLeftAIContext:
 		if aiCmd, ok := pf.Panels[0].(interface{ AiSetViewMode(string, bool) }); ok {

@@ -385,6 +385,7 @@ Every file tracked in the repository. Regenerate with
     │   ├── issue-561-solutions.md
     │   ├── ISSUES
     │   │   ├── ISSUE_1179_7Z_SFX_DETECTION_AND_TESTING.md
+    │   │   ├── ISSUE_1400_PANEL_MODES.md
     │   │   ├── ISSUE_165_CONPTY_SYNC_MARKER.md
     │   │   ├── ISSUE_215_WINDOWS_UPDATE_ELEVATION.md
     │   │   ├── ISSUE_247_QUEUE_PROGRESS_THROTTLE.md
@@ -1333,6 +1334,9 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── usermenu_subst.go
     │   │   ├── usermenu_ui.go
     │   │   ├── user_menu_ui_test.go
+    │   │   ├── viewmodes.go
+    │   │   ├── viewmodes_dialog.go
+    │   │   ├── viewmodes_test.go
     │   │   ├── workspace.go
     │   │   └── workspace_startup_test.go
     │   ├── paneltest
