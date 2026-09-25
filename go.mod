@@ -31,19 +31,19 @@ require (
 	github.com/mholt/archives v0.1.5
 	github.com/pkg/sftp v1.13.6
 	github.com/tetratelabs/wazero v1.12.0
-	github.com/unxed/archives v0.0.0-20260925075031-27e0c6794474
+	github.com/unxed/archives v0.1.0
 	github.com/unxed/colorer4go v0.1.23
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.6
-	github.com/unxed/sevenzip v0.0.0-20260925074956-1fd8e92986d5
+	github.com/unxed/sevenzip v0.1.4
 	github.com/unxed/tar v0.1.132
 	github.com/unxed/vtinput v0.1.8
 	github.com/unxed/vtui v0.1.360
 	github.com/unxed/zip v0.1.140
-	github.com/unxed/zipper v0.1.169
+	github.com/unxed/zipper v0.1.171
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
@@ -144,7 +144,7 @@ require (
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/neurlang/wayland v0.4.4 // indirect
 	github.com/neurlang/winc v0.1.2 // indirect
-	github.com/nwaples/rardecode/v2 v2.2.3
+	github.com/nwaples/rardecode/v2 v2.4.1
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/rivo/uniseg v0.2.0
