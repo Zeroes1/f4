@@ -125,6 +125,9 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 	}
 	vv.ScrollBar = vtui.NewScrollBar(0, 0, 0)
 	vv.ScrollBar.ColorIdx = theme.ColViewerScrollbar
+	vv.ScrollBar.Attr = func() uint64 {
+		return theme.OnTextBackground(theme.ColViewerScrollbar, theme.ColViewerText, vv.textAttr())
+	}
 	vv.ScrollBar.SetOwner(vv)
 	vv.ScrollBar.OnScroll = func(v int) {
 		newOff := int64(v)
@@ -454,7 +457,7 @@ func (vv *ViewerView) DisplayObject(scr *vtui.ScreenBuf) {
 	height := vv.Y2 - vv.Y1 + 1
 	contentHeight := height - 1
 
-	bgAttr := vtui.Palette[theme.ColViewerText]
+	bgAttr := vv.textAttr()
 
 	// 1. Draw Background
 	scr.FillRect(vv.X1, vv.Y1+1, vv.X2, vv.Y2, ' ', bgAttr)
@@ -611,12 +614,12 @@ func (vv *ViewerView) decodeStep(off int64) int64 {
 
 func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) {
 
-	attr := vtui.Palette[theme.ColViewerText]
 	currOffset := vv.TopOffset
 	// Highlighting follows logical lines: lineStart is where the line of the
 	// current row begins, and every line on screen is collected for the
 	// colorizer.
 	hl := vv.windowColorizer()
+	attr := vv.textAttr()
 	var hlLines []WindowLine
 	hlTexts := map[int64]string{}
 	lineStart, hlOK := int64(0), hl != nil

@@ -30,6 +30,10 @@ type WindowColorizer interface {
 	// offset, or nil while it is not highlighted with this text. The slice is
 	// shared and must not be modified.
 	LineAttrs(offset int64, text string) []uint64
+	// BaseAttr returns the attribute the highlighted lines are drawn over —
+	// the base the colorizer was given, or a Colorer style's own background
+	// on top of it — once the first lines arrived; ok is false until then.
+	BaseAttr() (attr uint64, ok bool)
 	// Close stops the work and releases what it holds.
 	Close()
 }
@@ -62,6 +66,22 @@ func (vv *ViewerView) windowColorizer() WindowColorizer {
 		}
 	}
 	return vv.highlight
+}
+
+// textAttr is what the text view is drawn over: Viewer.Text, or, once the
+// colorizer says what it draws highlighted lines over, that, so the rest of
+// the view does not show as strips of another background around the lines,
+// as it does when Colorer paints them on its style's own background (#1232).
+// The hex and decode views are not highlighted and stay on Viewer.Text.
+func (vv *ViewerView) textAttr() uint64 {
+	attr := vtui.Palette[theme.ColViewerText]
+	if vv.HexMode || vv.DecodeMode || vv.highlight == nil {
+		return attr
+	}
+	if base, ok := vv.highlight.BaseAttr(); ok {
+		return base
+	}
+	return attr
 }
 
 // highlightLineStart finds where the logical line holding off begins, looking

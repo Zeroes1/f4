@@ -530,6 +530,11 @@ func NewEditorViewWith(Pt *piecetable.PieceTable, v vfs.VFS, path string, useEdi
 	vtui.DebugLog("EDITOR_INIT: Path=%q, Highlighter=%T", path, ev.Highlighter)
 	ev.scrollBar = vtui.NewScrollBar(0, 0, 0)
 	ev.scrollBar.ColorIdx = theme.ColEditorScrollbar
+	// The bar sits on the background the text is drawn on, which is a
+	// Colorer style's own when Colorer paints the editor (#1232).
+	ev.scrollBar.Attr = func() uint64 {
+		return theme.OnTextBackground(theme.ColEditorScrollbar, theme.ColEditorText, ev.colorerBaseAttr())
+	}
 	ev.scrollBar.SetOwner(ev)
 	ev.scrollBar.OnScroll = func(v int) {
 		if ev.HexMode || ev.DecodeMode {
@@ -1074,9 +1079,18 @@ func (ev *EditorView) updateDesiredVisualCol() {
 	_, vCol := ev.Engine.LogicalToVisual(curOffset)
 	ev.DesiredVisualCol = vCol + ev.CursorVirtualSpaces
 }
+
+// hexOffsetAttr is the colour of the offsets down the left of the hex and
+// decode views: the viewer's offset colour (Viewer.Arrows) on the background
+// the bytes are drawn on, so the column reads as it does in the viewer rather
+// than as a strip of the status line's colour (#1232).
+func hexOffsetAttr(text uint64) uint64 {
+	return theme.OnBackgroundOf(vtui.Palette[theme.ColViewerArrows], text)
+}
+
 func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 	bgAttr := ev.colorerBaseAttr()
-	offAttr := vtui.Palette[theme.ColEditorStatus]
+	offAttr := hexOffsetAttr(bgAttr)
 	currOffset := ev.HexTopOffset
 	absPos := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
 
@@ -1140,7 +1154,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 
 		// ASCII part
 		asciiStartX := ev.X1 + 12 + 50
-		scr.Write(asciiStartX-2, ev.Y1+1+y, vtui.StringToCharInfo("│ ", offAttr))
+		scr.Write(asciiStartX-2, ev.Y1+1+y, vtui.StringToCharInfo("│ ", bgAttr))
 		for i := 0; i < len(data); i++ {
 			r := rune(data[i])
 			if r < 32 || r > 126 {
@@ -1157,7 +1171,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 }
 func (ev *EditorView) renderDecode(scr *vtui.ScreenBuf, width, contentHeight int) {
 	bgAttr := ev.colorerBaseAttr()
-	offAttr := vtui.Palette[theme.ColEditorStatus]
+	offAttr := hexOffsetAttr(bgAttr)
 	currOffset := ev.HexTopOffset
 	absPos := int(ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos)
 
