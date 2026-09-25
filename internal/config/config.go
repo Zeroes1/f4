@@ -492,6 +492,7 @@ type F4Config struct {
 	PromptFormat             string
 	NavigationMode           PanelNavigationMode
 	PanelAutoFilter          bool // panel quick search hides non-matching rows instead of moving the cursor
+	PanelStrictAutoFilter    bool // panel quick search/autofilter requires an exact match instead of tolerating one typo
 	PanelGroupSmallMiB       int
 	PanelGroupMediumMiB      int
 	PanelGroupLargeMiB       int
@@ -701,6 +702,7 @@ var App = F4Config{
 	PromptFormat:             "$u@$n:$p$# ",
 	NavigationMode:           NavigationClassic,
 	PanelAutoFilter:          false,
+	PanelStrictAutoFilter:    false,
 	PanelGroupSmallMiB:       5,
 	PanelGroupMediumMiB:      10,
 	PanelGroupLargeMiB:       100,
@@ -966,6 +968,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 		cfg.NavigationMode = NavigationClassic
 	}
 	cfg.PanelAutoFilter = merged.GetString("Panel", "PanelAutoFilter", "0") == "1"
+	cfg.PanelStrictAutoFilter = merged.GetString("Panel", "PanelStrictAutoFilter", "0") == "1"
 	cfg.PanelGroupSmallMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupSmallMiB", "5"))
 	cfg.PanelGroupMediumMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupMediumMiB", "10"))
 	cfg.PanelGroupLargeMiB = parseGroupLimit(merged.GetString("Panel", "PanelGroupLargeMiB", "100"))
@@ -1287,6 +1290,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
 	fmt.Fprintf(&sb, "PanelAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelAutoFilter])
+	fmt.Fprintf(&sb, "PanelStrictAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelStrictAutoFilter])
 	fmt.Fprintf(&sb, "PanelGroupSmallMiB = %d\nPanelGroupMediumMiB = %d\nPanelGroupLargeMiB = %d\n", cfg.PanelGroupSmallMiB, cfg.PanelGroupMediumMiB, cfg.PanelGroupLargeMiB)
 	fmt.Fprintf(&sb, "SearchCommandStayFocused = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchCommandStayFocused])
 	// Keep the legacy key synchronized for older f4 versions and shared configs.
