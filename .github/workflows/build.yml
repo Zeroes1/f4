@@ -543,17 +543,37 @@ jobs:
   # (ANDROID_NDK_ROOT), so nothing has to be installed. API level 24 is
   # Termux's floor.
   #
-  # Only arm64 for now; it covers nearly every active Android device.
-  # armv7 and x86_64 can be added as cells on request.
+  # Cells: arm64, which covers nearly every active Android device, and
+  # 32-bit armv7 (#1380). The asset is named after GOARCH because that is
+  # what the in-app updater asks for (internal/update assetSuffixes:
+  # android/arm -> -termux-arm.tar.gz); deb_arch is Termux's own name for
+  # the architecture, which is what apt in Termux compares against. GOARM=7
+  # is what Termux itself builds its Go packages with on arm. x86_64 can be
+  # added as another cell on request.
   build-termux:
-    name: Build (termux/arm64)
+    name: Build (termux/${{ matrix.goarch }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: arm64
+            goarm: ''
+            cc: aarch64-linux-android24-clang
+            deb_arch: aarch64
+            elf_machine: AArch64
+          - goarch: arm
+            goarm: '7'
+            cc: armv7a-linux-androideabi24-clang
+            deb_arch: arm
+            elf_machine: ARM
     env:
       GOOS: android
-      GOARCH: arm64
+      GOARCH: ${{ matrix.goarch }}
+      GOARM: ${{ matrix.goarm }}
       CGO_ENABLED: 1
       TERMUX_PREFIX: /data/data/com.termux/files/usr
-      ASSET: f4-termux-arm64
+      ASSET: f4-termux-${{ matrix.goarch }}
 
     steps:
     - name: Checkout code
@@ -576,7 +596,7 @@ jobs:
       run: |
         set -euo pipefail
         NDK_BIN="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
-        export CC="$NDK_BIN/aarch64-linux-android24-clang"
+        export CC="$NDK_BIN/${{ matrix.cc }}"
         "$CC" --version | head -1
 
         APP_LDFLAGS="-s -w -r $TERMUX_PREFIX/lib"
@@ -595,11 +615,17 @@ jobs:
     # The binary cannot run here (it needs Bionic's loader), so assert the
     # two things that separate it from the useless pure-Go build instead:
     # it is dynamically linked and it names $PREFIX/lib as its RUNPATH.
+    # Also that it is built for the cell's machine, so a wrong CC or GOARCH
+    # in the matrix cannot publish one architecture under another's name.
     - name: Check the ELF contract
       if: steps.affected.outputs.build == 'yes'
+      env:
+        ELF_MACHINE: ${{ matrix.elf_machine }}
       run: |
         set -euo pipefail
         file build/f4
+        readelf -h build/f4 | tee /tmp/hdr
+        grep -Eq "^[[:space:]]*Machine:[[:space:]]+$ELF_MACHINE\$" /tmp/hdr
         readelf -d build/f4 | tee /tmp/dyn
         grep -q 'NEEDED' /tmp/dyn
         grep -q "RUNPATH.*$TERMUX_PREFIX/lib" /tmp/dyn
@@ -607,13 +633,16 @@ jobs:
     # Two artifacts. The tarball mirrors the other platforms and is what
     # the in-app updater picks up (internal/update assetSuffixes maps GOOS=android
     # to the termux name). The .deb is the
-    # native way to install in Termux: `pkg install ./f4-termux-arm64.deb`.
+    # native way to install in Termux: `pkg install ./f4-termux-arm64.deb`
+    # (./f4-termux-arm.deb on armv7).
     # Termux runs with no chroot, so the paths inside are absolute
     # $PREFIX paths. Assets live in share/f4 next to the real binary and
     # bin/f4 is a symlink into it, which is how f4 finds help/ next to
     # os.Executable() without any lookup changes.
     - name: Package
       if: steps.affected.outputs.build == 'yes'
+      env:
+        DEB_ARCH: ${{ matrix.deb_arch }}
       run: |
         set -euo pipefail
         tar -czvf "$ASSET.tar.gz" -C build .
@@ -631,7 +660,7 @@ jobs:
         cat > "$DEB/DEBIAN/control" <<EOF
         Package: f4
         Version: $VERSION
-        Architecture: aarch64
+        Architecture: $DEB_ARCH
         Maintainer: unxed <https://github.com/unxed/f4>
         Homepage: https://github.com/unxed/f4
         Description: efficient and cozy two-panel file manager

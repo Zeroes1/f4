@@ -22,8 +22,17 @@ func universalHostLoader() (loader, libc string, ok bool) {
 }
 
 // executable is os.Executable where no build mode moves the executable out
-// from under the program.
+// from under the program -- except the Android loader launch, which is not a
+// build mode. Termux on 32-bit ARM (android/arm, #1380) lands in this file,
+// because selfexec_linux.go is built only for amd64 and arm64, and it comes
+// up through /system/bin/linker exactly as arm64 comes up through linker64:
+// SelfCommand always starts the child that way (applySystemLinkerExec), and
+// /proc/self/exe then names the loader. The same correction as in
+// selfexec_linux.go applies, and outside Android it answers "no".
 func executable() (string, error) {
+	if p, ok := systemLinkerExecutable(); ok {
+		return p, nil
+	}
 	return os.Executable()
 }
 

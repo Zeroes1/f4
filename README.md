@@ -11,7 +11,7 @@
 | **Windows 7/8/8.1** | .zip | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-windows7-amd64.zip) |
 | **ReactOS** ([details](#-reactos)) | .zip | [x86](https://github.com/unxed/f4/releases/download/nightly/f4-legacy-windows-386.zip) |
 | **macOS** | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-darwin-amd64.tar.gz) / [arm64](https://github.com/unxed/f4/releases/download/nightly/f4-darwin-arm64.tar.gz) |
-| **Android (Termux)** | .tar.gz / .deb | [arm64 archive](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm64.tar.gz) / [arm64 package](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm64.deb) |
+| **Android (Termux)** | .tar.gz / .deb | [arm64 archive](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm64.tar.gz) / [arm64 package](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm64.deb) / [armv7 archive](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm.tar.gz) / [armv7 package](https://github.com/unxed/f4/releases/download/nightly/f4-termux-arm.deb) |
 | **Linux** | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-amd64.tar.gz) / [arm64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-arm64.tar.gz) / [armv7l](https://github.com/unxed/f4/releases/download/nightly/f4-linux-arm.tar.gz) / [386](https://github.com/unxed/f4/releases/download/nightly/f4-linux-386.tar.gz) / [mips](https://github.com/unxed/f4/releases/download/nightly/f4-linux-mips.tar.gz) / [mipsle](https://github.com/unxed/f4/releases/download/nightly/f4-linux-mipsle.tar.gz) / [mips64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-mips64.tar.gz) / [mips64le](https://github.com/unxed/f4/releases/download/nightly/f4-linux-mips64le.tar.gz) / [riscv64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-riscv64.tar.gz) / [loong64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-loong64.tar.gz) / [ppc64](https://github.com/unxed/f4/releases/download/nightly/f4-linux-ppc64.tar.gz) / [ppc64le](https://github.com/unxed/f4/releases/download/nightly/f4-linux-ppc64le.tar.gz) |
 | **FreeBSD** | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-freebsd-amd64.tar.gz) / [arm64](https://github.com/unxed/f4/releases/download/nightly/f4-freebsd-arm64.tar.gz) |
 | **DragonflyBSD** | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-dragonfly-amd64.tar.gz) |
@@ -46,16 +46,19 @@ The tap carries tagged releases only, so a nightly build has to come from f4 its
 
 ### 📱 Install on Android via Termux
 
-The Android build currently targets **arm64 in Termux**. Download the `.deb`
-package above and install it from Termux:
+The Android build targets **Termux** on **arm64** and on 32-bit **armv7**
+devices. Download the `.deb` package for your device above and install it from
+Termux (`dpkg --print-architecture` in Termux prints `aarch64` or `arm`, which
+tells you which one you need):
 
 ```sh
-pkg install ./f4-termux-arm64.deb
+pkg install ./f4-termux-arm64.deb   # arm64
+pkg install ./f4-termux-arm.deb     # armv7
 ```
 
 Alternatively, extract the `.tar.gz` archive and run `./f4`. Both artifacts
 are linked against Termux's libraries and are intended to run inside Termux;
-they are not standalone Android APKs. Other Android architectures are not
+they are not standalone Android APKs. x86_64 (Chromebooks, emulators) is not
 published yet.
 
 ### 🪟 ReactOS

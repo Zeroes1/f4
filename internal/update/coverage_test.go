@@ -54,6 +54,11 @@ func TestUpdateHelpersCoverChannelsAndAssets(t *testing.T) {
 	if got := assetSuffixes("android", "arm64", ""); !reflect.DeepEqual(got, []string{"-termux-arm64.tar.gz"}) {
 		t.Fatalf("Android asset suffixes = %v", got)
 	}
+	// The armv7 Termux asset is published as f4-termux-arm.* (build.yml
+	// build-termux names it after GOARCH); the updater must ask for that.
+	if got := assetSuffixes("android", "arm", ""); !reflect.DeepEqual(got, []string{"-termux-arm.tar.gz"}) {
+		t.Fatalf("Android arm asset suffixes = %v", got)
+	}
 	if got := assetSuffixes("linux", "amd64", "musl"); !reflect.DeepEqual(got, []string{
 		"-linux-musl-amd64.tar.gz",
 		"-linux-amd64.tar.gz",
