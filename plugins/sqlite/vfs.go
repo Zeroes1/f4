@@ -238,6 +238,20 @@ func (v *databaseVFS) TransferName(srcPath string, _ vfs.VFS) string {
 
 func (v *databaseVFS) ParentVFS() vfs.VFS { return v.parent }
 
+// databaseHandlerName is how the panel title names what opened the database.
+const databaseHandlerName = "SQLite"
+
+// PanelTitle names the database by what reads it, "SQLite:panelmodes.db",
+// the way an archive is named "Zipper:7z:Far.7z" (#1383). The folder the
+// file lies in is where ".." returns to.
+func (v *databaseVFS) PanelTitle(p string) string {
+	abs, err := v.Abs(p)
+	if err != nil || abs != v.dbPath {
+		return ""
+	}
+	return databaseHandlerName + ":" + hostpath.Base(v.dbPath)
+}
+
 // Clone gets a connection of its own, opened when it is first used, so that
 // closing one panel on the database does not pull the other one's from under
 // it.
@@ -282,6 +296,7 @@ var (
 	_ vfs.VFS                  = (*databaseVFS)(nil)
 	_ vfs.PanelActionHandler   = (*databaseVFS)(nil)
 	_ vfs.TransferNameProvider = (*databaseVFS)(nil)
+	_ vfs.PanelTitleProvider   = (*databaseVFS)(nil)
 	_ vfs.VFSProvider          = (*databaseProvider)(nil)
 )
 

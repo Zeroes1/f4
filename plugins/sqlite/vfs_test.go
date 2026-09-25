@@ -151,6 +151,14 @@ func TestDatabaseVFSListsTablesAndViewsAsFiles(t *testing.T) {
 		}
 	}
 
+	// The title names what opened the file, not where it lies (#1383).
+	if got := mounted.PanelTitle(mounted.GetPath()); got != "SQLite:test.db" {
+		t.Errorf("panel title = %q, want SQLite:test.db", got)
+	}
+	if got := mounted.PanelTitle(filepath.Dir(path)); got != "" {
+		t.Errorf("a path outside the database got the title %q", got)
+	}
+
 	root, err := mounted.Stat(context.Background(), path)
 	if err != nil || !root.IsDir {
 		t.Fatalf("Stat(root) = %#v, %v", root, err)
