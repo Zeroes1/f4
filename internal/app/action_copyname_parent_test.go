@@ -189,3 +189,27 @@ func TestAction_PanelCopyName_CursorOnParentUsesCurrentFolderName(t *testing.T) 
 		t.Errorf("cursor-on-.. clipboard = %q, want %q", got, want)
 	}
 }
+
+// f4 #1408: with the command line empty, marked files take priority over the
+// cursor item, matching far2l/Far3 — the same names CtrlShiftIns already
+// copies via Panel.CopySelectedNames.
+func TestAction_PanelCopyName_MarkedFilesTakePriorityOverCursor(t *testing.T) {
+	tmp := t.TempDir()
+	for _, n := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(tmp, n), []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pf := seedMarkedPanel(t, tmp, []string{"a.txt", "b.txt", "c.txt"}, 2)
+	fsp := pf.GetActivePanel()
+	fsp.SetCursorIndex(3) // "c.txt", unmarked — must not win over the marks
+	vtui.SetClipboard("")
+
+	if !RunAction("Panel.CopyName") {
+		t.Fatal("Panel.CopyName did not run")
+	}
+	want := "a.txt\nb.txt"
+	if got := waitForMarkedClipboard(t, want); got != want {
+		t.Errorf("clipboard = %q, want %q", got, want)
+	}
+}
