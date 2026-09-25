@@ -51,7 +51,7 @@ func TestSettingsCollectionInputSurfacePalette(t *testing.T) {
 				c.Show(scr)
 				for row := 0; row < 2; row++ {
 					want := vtui.Palette[vtui.ColDialogEdit]
-					if row == 0 && active {
+					if row == 0 {
 						want = vtui.Palette[vtui.ColDialogComboSelectedText]
 					}
 					if query != "" {
