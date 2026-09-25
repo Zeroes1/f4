@@ -74,9 +74,8 @@ jobs:
       # so a tests-only pull request still needs this check.
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
-        if [ -n "$(gofmt -s -l .)" ]; then
-          echo "The following files are not properly formatted:"
-          gofmt -s -l .`n          gofmt -s -d .
+        if [ -n "$(gofmt -s -l .
+        if [ -n "$(gofmt -s -d .
           echo "Please run 'gofmt -s -w .' locally and commit the changes."
           exit 1
         fi
