@@ -11,10 +11,10 @@ func TestStartupDirsForCoverageBatch34(t *testing.T) {
 	cwd := filepath.Join("/tmp", "f4-start")
 	abs := filepath.Join(cwd, "absolute")
 	cases := []struct {
-		name       string
-		args       []string
-		wantLeft   string
-		wantRight  string
+		name      string
+		args      []string
+		wantLeft  string
+		wantRight string
 	}{
 		{name: "none", wantLeft: cwd},
 		{name: "one relative", args: []string{"left"}, wantLeft: filepath.Join(cwd, "left"), wantRight: cwd},
