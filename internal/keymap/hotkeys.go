@@ -458,6 +458,14 @@ func (hm *HotkeyManager) GetAction(area, key string) string {
 		return action
 	}
 
+	// Common bindings carry no conditions and follow the user everywhere
+	// f4 has the keyboard. A program running in the terminal is the one place
+	// f4 does not: there its keys are its own, as in far2l, and only the
+	// Terminal area's bindings -- each gated by what they may take from it --
+	// apply. Far Manager has Shift+F10 and Alt+F9 of its own (#1376).
+	useCommon := area != "Common" &&
+		!(strings.EqualFold(area, "Terminal") && !ConditionTrue("NoTerminalApp"))
+
 	if binds, ok := hm.Bindings[area]; ok {
 		if binding, ok := binds[key]; ok {
 			if action := evalBinding(binding); action != "" {
@@ -465,7 +473,7 @@ func (hm *HotkeyManager) GetAction(area, key string) string {
 			}
 		}
 	}
-	if area != "Common" {
+	if useCommon {
 		if binds, ok := hm.Bindings["Common"]; ok {
 			if binding, ok := binds[key]; ok {
 				if action := evalBinding(binding); action != "" {
@@ -486,7 +494,7 @@ func (hm *HotkeyManager) GetAction(area, key string) string {
 				}
 			}
 		}
-		if area != "Common" {
+		if useCommon {
 			if binds, ok := hm.Bindings["Common"]; ok {
 				if binding, ok := binds[alias]; ok {
 					if action := evalBinding(binding); action != "" {

@@ -581,19 +581,30 @@ func TestPanelsFrame_KeyHandling(t *testing.T) {
 		t.Errorf("Ctrl+Enter failed: expected '%s', got '%s'", expectedName, pf.CmdLine.Edit.GetText())
 	}
 
-	// 4. Test Ctrl+O to toggle panels even when terminal.PTY is busy (Issue #50)
+	// 4. A busy program keeps Ctrl+O, as in far2l (#249, #1376); Ctrl+Alt+Z
+	// still reaches the panels, so the program cannot lock them away (#50).
 	pf.ShowPanels = false
-	pf.Pty = &paneltest.MockPty{}
+	busyPty := &paneltest.MockPty{}
+	pf.Pty = busyPty
 	pf.Executing = true // terminal.PTY is busy
 
-	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_O, ControlKeyState: vtinput.LeftCtrlPressed})
-	if !pf.ShowPanels {
-		t.Error("Ctrl+O should show panels even when term.PTY is busy")
+	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_O, Char: 15, ControlKeyState: vtinput.LeftCtrlPressed})
+	if pf.ShowPanels {
+		t.Error("Ctrl+O must reach the busy program, not show the panels")
+	}
+	if !strings.Contains(busyPty.String(), "\x0f") {
+		t.Errorf("busy program did not receive Ctrl+O; PTY got %q", busyPty.String())
 	}
 
+	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_Z, ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed})
+	if !pf.ShowPanels {
+		t.Error("Ctrl+Alt+Z should show panels even when term.PTY is busy")
+	}
+
+	// With the panels raised the keyboard is f4's: Ctrl+O hands it back.
 	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_O, ControlKeyState: vtinput.LeftCtrlPressed})
 	if pf.ShowPanels {
-		t.Error("Ctrl+O should hide panels even when term.PTY is busy")
+		t.Error("Ctrl+O should hide panels raised over a busy program")
 	}
 }
 

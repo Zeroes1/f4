@@ -152,6 +152,10 @@ func commandPaletteLegacyShortcut(area string, e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown || keymap.EventToHotkeyString(e) != commandPaletteLegacyKey {
 		return false
 	}
+	// A program running in the terminal keeps its keys (#1376).
+	if strings.EqualFold(area, "Terminal") && !keymap.ConditionTrue("NoTerminalApp") {
+		return false
+	}
 	if keymap.GlobalHotkeysMgr == nil {
 		return true
 	}

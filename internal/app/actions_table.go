@@ -1662,12 +1662,15 @@ func init() {
 		Label:       "Toggle Panels",
 		Description: "Show or hide panels",
 		DescKey:     "Action.Panel.Toggle.Desc",
-		// NoAltScreenApp, not the stricter NoTerminalApp: a blocked CLI tool
-		// or a GUI program holding the PTY must never lock the panels away,
-		// so Ctrl+O still reaches f4 while a child is merely busy (#50). The
-		// cost is that mc, whose own Ctrl+O leaves the alternate screen, hands
-		// f4 the next press (#249) -- the lock-out is the worse of the two.
-		DefaultKeys:  []string{"CtrlO:NoAltScreenApp", "Esc:EscToggle", "Del:EscToggle", "NumDel:EscToggle"},
+		// Ctrl+O belongs to the program running in the terminal, as in far2l:
+		// mc (#249) and Far Manager (#1376) use it themselves, so it stands
+		// down under NoTerminalApp while a child is busy. A blocked CLI tool
+		// or a GUI program holding the PTY must still never lock the panels
+		// away (#50), so Ctrl+Alt+Z -- far2l's key for leaving a running
+		// command -- raises them under the looser NoAltScreenApp, in every
+		// state where Ctrl+O used to. Both are ordinary bindings and can be
+		// reassigned in the hotkey settings.
+		DefaultKeys:  []string{"CtrlO:NoTerminalApp", "CtrlAltZ:NoAltScreenApp", "Esc:EscToggle", "Del:EscToggle", "NumDel:EscToggle"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.TogglePanelsVisibility()

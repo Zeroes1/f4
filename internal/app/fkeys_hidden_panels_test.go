@@ -150,9 +150,9 @@ func TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen_Issue354(t *testing.
 
 // TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376 covers
 // a program that draws full screen without the alternate screen, as Far
-// Manager does in a Windows console: while it runs, its F-keys are its own,
-// as in far2l. Only Ctrl+O stays with f4, so the panels can always be
-// reached (#50).
+// Manager does in a Windows console: while it runs, its keys are its own,
+// Ctrl+O included, as in far2l. Ctrl+Alt+Z, far2l's key for leaving a
+// running command, stays with f4, so the panels can always be reached (#50).
 func TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
@@ -170,36 +170,36 @@ func TestHotkeys_ShellActions_TerminalArea_BusyChildOwnsKeys_Issue1376(t *testin
 
 	hm := keymap.GlobalHotkeysMgr
 	keys := []string{"F2", "F7", "F10", "ShiftF4", "ShiftF9", "CtrlF1", "RCtrlF1", "CtrlF2", "RCtrlF2",
-		"CtrlP", "AltF1", "AltF2", "CtrlShiftLeft", "CtrlShiftRight"}
+		"CtrlP", "AltF1", "AltF2", "CtrlShiftLeft", "CtrlShiftRight", "CtrlO", "RCtrlO",
+		// Common-area bindings follow f4 everywhere except into a running program.
+		"ShiftF10", "AltF9", "CtrlShiftP", "CtrlF11"}
 	for _, key := range keys {
 		if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", key); got != "" {
 			t.Errorf("Terminal %s while a child is busy = %q, want empty (the key belongs to the program)", key, got)
 		}
 	}
-	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "CtrlO"); got != "Panel.Toggle" {
-		t.Errorf("Terminal CtrlO while a child is busy = %q, want Panel.Toggle", got)
+	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "CtrlAltZ"); got != "Panel.Toggle" {
+		t.Errorf("Terminal CtrlAltZ while a child is busy = %q, want Panel.Toggle (the escape hatch)", got)
+	}
+
+	// Panels raised over the running program: the keyboard is f4's again,
+	// so its keys work in its panels and Ctrl+O hands the terminal back.
+	// With the panels shown the dispatcher resolves keys in the Shell area.
+	pf.ShowPanels = true
+	for key, want := range map[string]string{"F7": "File.MakeDir", "F10": "App.Quit", "CtrlO": "Panel.Toggle"} {
+		if got := keymap.ConfiguredHotkeyAction(hm, "Shell", key); got != want {
+			t.Errorf("Shell %s over a busy child = %q, want %s", key, got, want)
+		}
 	}
 
 	// The same keys come back to f4 once the child is gone (#354).
+	pf.ShowPanels = false
 	pf.Executing = false
-	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "F10"); got != "App.Quit" {
-		t.Errorf("Terminal F10 in the idle terminal = %q, want App.Quit", got)
-	}
-	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "F7"); got != "File.MakeDir" {
-		t.Errorf("Terminal F7 in the idle terminal = %q, want File.MakeDir", got)
-	}
-
-	// A running child owns these keys even if f4's panels have not yet been
-	// hidden.  Only Ctrl+O is deliberately left with f4 as an escape hatch.
-	pf.ShowPanels = true
-	pf.Executing = true
-	for _, key := range keys {
-		if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", key); got != "" {
-			t.Errorf("Terminal %s while a child is busy with panels visible = %q, want empty", key, got)
+	for key, want := range map[string]string{"F7": "File.MakeDir", "F10": "App.Quit", "CtrlO": "Panel.Toggle",
+		"ShiftF10": "App.LastMenuItem"} {
+		if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", key); got != want {
+			t.Errorf("Terminal %s in the idle terminal = %q, want %s", key, got, want)
 		}
-	}
-	if got := keymap.ConfiguredHotkeyAction(hm, "Terminal", "CtrlO"); got != "Panel.Toggle" {
-		t.Errorf("Terminal CtrlO while a child is busy with panels visible = %q, want Panel.Toggle", got)
 	}
 }
 

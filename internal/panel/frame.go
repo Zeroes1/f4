@@ -1777,6 +1777,19 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	pf.UpdateMenuCheckmarks()
 }
 
+// TerminalOwnsKeyboard reports a program running in the terminal behind hidden
+// panels: a full-screen application or a busy child. Its keys are its own, as
+// in far2l's terminal, so f4's global shortcuts, plugin hotkeys and panel
+// actions stand down; only Terminal-area bindings that ask for it -- the
+// escape hatch Ctrl+Alt+Z -- still reach f4 (#1376). SimpleInline has no PTY
+// of its own and never hands the keyboard to a foreign program.
+func (pf *PanelsFrame) TerminalOwnsKeyboard() bool {
+	if pf.ShowPanels || pf.ShellMode == terminal.ShellModeSimpleInline {
+		return false
+	}
+	return pf.TermView == nil || pf.TermView.UseAltScreen || pf.IsPtyBusy()
+}
+
 func (pf *PanelsFrame) IsPtyBusy() bool {
 	active := pf.GetActivePTY()
 	if active == nil {
@@ -2029,6 +2042,12 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 // the default bindings.
 func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.KeyEventType || !e.KeyDown {
+		return false
+	}
+	// Plugin hotkeys (the archive keys Shift+F1..F3 among them) and the
+	// easter egg belong to f4's panels, not to a program running in the
+	// terminal: Far Manager has Shift+F1..F3 of its own (#1376).
+	if pf.TerminalOwnsKeyboard() {
 		return false
 	}
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
@@ -2330,8 +2349,11 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			}
 		}
 	}
-	// Crash test hotkey: Ctrl+Alt+C
-	if e.VirtualKeyCode == vtinput.VK_C && alt && ctrl && e.KeyDown {
+	// Crash test hotkey: Ctrl+Alt+C. Not while a program owns the terminal:
+	// the raw forwarding below hands the key to it, and a chord that belongs
+	// to the running program must not bring down f4 together with it (#1376).
+	terminalOwnsKeys := !pf.ShowPanels && (pf.IsPtyBusy() || pf.ShellMode == terminal.ShellModeHost)
+	if e.VirtualKeyCode == vtinput.VK_C && alt && ctrl && e.KeyDown && !terminalOwnsKeys {
 		panic("Manual safe crash triggered by user (Ctrl+Alt+C) for testing!")
 	}
 
@@ -2453,7 +2475,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 
 	// Raw input mode fallback for active shell commands (non-AltScreen, e.g. ping),
 	// and for any interactive shell session when host console mode is active.
-	// We forward text and navigation to term.PTY, but let global shortcuts (Ctrl+O) fall through.
+	// We forward text and navigation to term.PTY, but let global shortcuts (Ctrl+Alt+Z) fall through.
 	if !pf.ShowPanels && (pf.IsPtyBusy() || pf.ShellMode == terminal.ShellModeHost) {
 		if e.KeyDown || pf.TermView.Win32InputMode || pf.TermView.KittyFlags != 0 {
 			active := pf.GetActivePTY()

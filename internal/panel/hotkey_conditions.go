@@ -56,9 +56,10 @@ var hotkeyConditions = map[string]func() bool{
 		return false
 	},
 	// noaltscreenapp is the looser gate: it stands down only for an AltScreen
-	// application (mc, htop), not for a child that is merely busy. Ctrl+O is
-	// bound through it so that no running program can lock the panels away
-	// (#50); keys that belong to the running program use noterminalapp.
+	// application (mc, htop), not for a child that is merely busy. The escape
+	// hatch Ctrl+Alt+Z is bound through it so that no running program can lock
+	// the panels away (#50); keys that belong to the running program, Ctrl+O
+	// included (#249, #1376), use noterminalapp.
 	"noaltscreenapp": func() bool {
 		if pf := FindPanelsFrameAnyScreen(); pf != nil {
 			if pf.ShowPanels {
@@ -89,31 +90,18 @@ var hotkeyConditions = map[string]func() bool{
 	// enough for those: a Windows console program such as Far Manager draws
 	// full screen without ever switching to the alternate screen (#1376).
 	// With the panels shown nothing is in the way, which keeps the Shell
-	// binding of such a key unconditional.
+	// binding of such a key unconditional -- also when those panels were
+	// raised over a program that is still running: the keyboard is f4's
+	// then, and Ctrl+O has to be able to hand it back.
 	"noterminalapp": func() bool {
 		if pf := FindPanelsFrameAnyScreen(); pf != nil {
-			// A child keeps ownership of its function keys even while f4's
-			// panels are visible.  Otherwise Ctrl+F1/Ctrl+F2/Ctrl+P can make
-			// f4 repaint over a running full-screen program and leave stale
-			// fragments behind when its panels are hidden (#1376).  Ctrl+O
-			// uses the looser NoAltScreenApp condition and remains f4's escape
-			// hatch.
-			if pf.IsPtyBusy() && pf.ShellMode != terminal.ShellModeSimpleInline {
-				return false
-			}
-			if pf.ShowPanels {
-				return true
-			}
-			if pf.ShellMode == terminal.ShellModeSimpleInline {
-				// Same reasoning as noaltscreenapp above: no terminal.PTY means no
-				// foreign process can be busy on screen in this mode. A
-				// command f4 itself launched (runSimpleInlineCommand) still
-				// owns the keyboard while it runs, but that state already
-				// routes through SetBusy/isPtyBusy on f4's own frame, not
-				// through this background termView.
-				return true
-			}
-			return pf.TermView != nil && !pf.TermView.UseAltScreen && !pf.IsPtyBusy()
+			// Same reasoning for SimpleInline as noaltscreenapp above: no
+			// terminal.PTY means no foreign process can be busy on screen in
+			// this mode. A command f4 itself launched (runSimpleInlineCommand)
+			// still owns the keyboard while it runs, but that state already
+			// routes through SetBusy/isPtyBusy on f4's own frame, not through
+			// the background termView. TerminalOwnsKeyboard encodes all of it.
+			return !pf.TerminalOwnsKeyboard()
 		}
 		return false
 	},
