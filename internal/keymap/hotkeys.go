@@ -464,7 +464,7 @@ func (hm *HotkeyManager) GetAction(area, key string) string {
 	// Terminal area's bindings -- each gated by what they may take from it --
 	// apply. Far Manager has Shift+F10 and Alt+F9 of its own (#1376).
 	useCommon := area != "Common" &&
-		!(strings.EqualFold(area, "Terminal") && !ConditionTrue("NoTerminalApp"))
+		(!strings.EqualFold(area, "Terminal") || ConditionTrue("NoTerminalApp"))
 
 	if binds, ok := hm.Bindings[area]; ok {
 		if binding, ok := binds[key]; ok {
