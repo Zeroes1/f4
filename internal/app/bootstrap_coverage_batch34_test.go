@@ -8,7 +8,7 @@ import (
 )
 
 func TestStartupDirsForCoverageBatch34(t *testing.T) {
-	cwd := filepath.Join("/tmp", "f4-start")
+	cwd := t.TempDir()
 	abs := filepath.Join(cwd, "absolute")
 	cases := []struct {
 		name      string
@@ -32,7 +32,7 @@ func TestStartupDirsForCoverageBatch34(t *testing.T) {
 }
 
 func TestStartupDirsOverrideCoverageBatch34(t *testing.T) {
-	cwd := filepath.Join("/tmp", "f4-start")
+	cwd := t.TempDir()
 	if left, right, ok := startupDirsOverride(cwd, nil, false); ok || left != "" || right != "" {
 		t.Fatalf("empty override disabled = (%q, %q, %v), want empty and false", left, right, ok)
 	}
@@ -45,7 +45,7 @@ func TestStartupDirsOverrideCoverageBatch34(t *testing.T) {
 }
 
 func TestFarStartupDirsCoverageBatch34(t *testing.T) {
-	cwd := filepath.Join("/tmp", "f4-start")
+	cwd := t.TempDir()
 	if left, right, ok := farStartupDirs(cwd, nil); ok || left != "" || right != "" {
 		t.Fatalf("far empty = (%q, %q, %v), want empty and false", left, right, ok)
 	}
@@ -58,7 +58,7 @@ func TestFarStartupDirsCoverageBatch34(t *testing.T) {
 }
 
 func TestStartupDirsChoiceCoverageBatch34(t *testing.T) {
-	cwd := filepath.Join("/tmp", "f4-start")
+	cwd := t.TempDir()
 	if left, right, ok := startupDirsChoice(cwd, []string{"dir"}, true); !ok || left != filepath.Join(cwd, "dir") || right != cwd {
 		t.Fatalf("current-folder choice = (%q, %q, %v), want override", left, right, ok)
 	}
@@ -84,7 +84,7 @@ func TestStartupDirArgsCoverageBatch34(t *testing.T) {
 }
 
 func TestResolveStartupPathCoverageBatch34(t *testing.T) {
-	cwd := filepath.Join("/tmp", "f4-start")
+	cwd := t.TempDir()
 	if got := resolveStartupPath(cwd, "a/../note.txt"); got != filepath.Join(cwd, "note.txt") {
 		t.Fatalf("relative resolve = %q, want %q", got, filepath.Join(cwd, "note.txt"))
 	}
