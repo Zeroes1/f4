@@ -3315,6 +3315,16 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 		return true
 
 	case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_PRIOR, vtinput.VK_NEXT, vtinput.VK_HOME, vtinput.VK_END:
+		if ctrl && (e.VirtualKeyCode == vtinput.VK_PRIOR || e.VirtualKeyCode == vtinput.VK_NEXT) {
+			// CtrlPgUp/CtrlPgDn are hotkeys (Panel.GoParent / Panel.EnterDirectory).
+			// A real keypress never reaches here: the hotkey manager consumes it
+			// before FrameManager.EventFilter calls ProcessKey. An injected event
+			// (a macro's Keys("CtrlPgUp")) bypasses that filter and would
+			// otherwise be swallowed here as a plain page-up/down cursor move,
+			// landing on ".." without actually entering it (f4 #1394). Declining
+			// it lets step 4's MacroHotkey fallback run the real action.
+			return false
+		}
 		// FAR-style Shift+nav selection.
 		//
 		// The session concept unifies "select" and "deselect"
