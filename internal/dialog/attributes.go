@@ -60,24 +60,118 @@ type unixAttributesEdit struct {
 	keepMode uint32
 }
 
-func setUnixAttributesForTargets(ctx context.Context, v vfs.VFS, targets []AttributesTarget, edit unixAttributesEdit) error {
-	for _, target := range targets {
-		item := target.Item
-		if edit.setUid {
-			item.Uid = edit.uid
-		}
-		if edit.setGid {
-			item.Gid = edit.gid
-		}
-		if edit.setMTime {
-			item.MTime = edit.mtime
-		}
-		item.UnixMode = (item.UnixMode & edit.keepMode) | (edit.mode &^ edit.keepMode)
-		if err := v.SetAttributes(ctx, target.Path, item); err != nil {
-			return fmt.Errorf("%s: %w", target.Path, err)
-		}
+// applyUnixAttributesToOne is the single-item primitive: turn edit into the
+// object's new VFSItem and write it. It is the one place edit is applied, so
+// that setUnixAttributesForTargets (top-level selection) and
+// walkUnixAttributesRecursive (f4#1502: recursive Set) do exactly the same
+// thing to every object they reach, including symlinks -- Lchown for the
+// owner, Chmod (which follows the link) for the mode, exactly as a single
+// selected symlink is already handled today via OSVFS.SetAttributes.
+func applyUnixAttributesToOne(ctx context.Context, v vfs.VFS, path string, item vfs.VFSItem, edit unixAttributesEdit) error {
+	if edit.setUid {
+		item.Uid = edit.uid
+	}
+	if edit.setGid {
+		item.Gid = edit.gid
+	}
+	if edit.setMTime {
+		item.MTime = edit.mtime
+	}
+	item.UnixMode = (item.UnixMode & edit.keepMode) | (edit.mode &^ edit.keepMode)
+	if err := v.SetAttributes(ctx, path, item); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
 	return nil
+}
+
+// setUnixAttributesForTargets applies edit to every selected object and,
+// when recursive is set, to everything a selected real directory contains
+// (f4#1502 -- "Смена владельца/прав не работает рекурсивно"). applied counts
+// every object actually written, selected or descendant, for the caller's
+// completion summary. It stops at the first error, same as before this
+// object had no recursion at all: a multi-object Set has always stopped
+// there, and a recursive one keeps that rather than inventing a
+// continue-past-errors policy for just this one path.
+func setUnixAttributesForTargets(ctx context.Context, v vfs.VFS, targets []AttributesTarget, edit unixAttributesEdit, recursive bool) (applied int, err error) {
+	for _, target := range targets {
+		if err := applyUnixAttributesToOne(ctx, v, target.Path, target.Item, edit); err != nil {
+			return applied, err
+		}
+		applied++
+		// A symlink is a leaf here even when it resolves to a directory --
+		// the same convention f4's own recursive tree walks already use:
+		// OSVFS.Remove's os.RemoveAll only ever removes the link itself,
+		// and vfs.ScanOptions{FollowSymlinkDirs: false} (QuickView) counts
+		// a symlink once instead of walking its target. Recursing through
+		// it here would let a Set on one selected folder reach arbitrary
+		// files outside that folder, and could loop forever on a symlink
+		// that points back into its own tree.
+		if recursive && target.Item.IsDir && !target.Item.IsSymlink {
+			n, walkErr := walkUnixAttributesRecursive(ctx, v, target.Path, edit, 0)
+			applied += n
+			if walkErr != nil {
+				return applied, walkErr
+			}
+		}
+	}
+	return applied, nil
+}
+
+// walkUnixAttributesRecursive applies edit to every entry ReadDir finds
+// under dirPath, recursing into real subdirectories only (see the symlink
+// note on setUnixAttributesForTargets). Each entry is applied through
+// applyUnixAttributesToOne, the very primitive the non-recursive Set already
+// uses, so a permission error partway through the tree gets exactly the
+// same sudo-elevation fallback that OSVFS.SetAttributes already gives a
+// single object (the mechanism #1255/#1261 fixed) -- no separate privilege
+// path for the recursive case.
+func walkUnixAttributesRecursive(ctx context.Context, v vfs.VFS, dirPath string, edit unixAttributesEdit, depth int) (applied int, err error) {
+	if depth > 1000 {
+		return 0, fmt.Errorf("%s: maximum recursion depth exceeded (circular structure?)", dirPath)
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	var items []vfs.VFSItem
+	if err := v.ReadDir(ctx, dirPath, func(chunk []vfs.VFSItem) {
+		items = append(items, chunk...)
+	}); err != nil {
+		return 0, fmt.Errorf("%s: %w", dirPath, err)
+	}
+	for _, item := range items {
+		if item.Name == "" || item.Name == ".." {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return applied, err
+		}
+		childPath := v.Join(dirPath, item.Name)
+		if err := applyUnixAttributesToOne(ctx, v, childPath, item, edit); err != nil {
+			return applied, err
+		}
+		applied++
+		if item.IsDir && !item.IsSymlink {
+			n, err := walkUnixAttributesRecursive(ctx, v, childPath, edit, depth+1)
+			applied += n
+			if err != nil {
+				return applied, err
+			}
+		}
+	}
+	return applied, nil
+}
+
+// targetsIncludeRealDir reports whether the recursive checkbox has anything
+// to do: it is offered only when a real directory (not a symlink, even one
+// that resolves to a directory -- see the symlink note above) is among the
+// selected objects.
+func targetsIncludeRealDir(targets []AttributesTarget) bool {
+	for _, target := range targets {
+		if target.Item.IsDir && !target.Item.IsSymlink {
+			return true
+		}
+	}
+	return false
 }
 
 func ShowSymlinkTargetDialog(refresh func(), v vfs.VFS, path, target string) {
@@ -508,6 +602,14 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 		}
 	}
 
+	// The recursive checkbox (f4#1502) only makes sense, and is only shown,
+	// when a real directory is actually selected -- a selection of plain
+	// files has nothing under it to walk.
+	showRecursive := targetsIncludeRealDir(targets)
+	if showRecursive {
+		height++
+	}
+
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("Attributes.Title"))
 	dlg.ShowClose = true
 
@@ -555,6 +657,17 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 	gbPerms := vtui.NewGroupBox(0, 0, 66, 7, " "+i18n.Msg("Attributes.Permissions")+" ")
 	dlg.AddItem(gbPerms)
 	mainVBox.Add(gbPerms, vtui.Margins{Top: 0}, vtui.AlignFill)
+
+	// Recursive checkbox (f4#1502). Opt-in and off by default, the way
+	// Sync.Subdirs/Compare.Recursive ("&Subfolders") are in this codebase's
+	// other apply-to-a-tree dialogs -- a plain checkbox next to the other
+	// options rather than its own group box.
+	var cbRecursive *vtui.Checkbox
+	if showRecursive {
+		cbRecursive = vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Recursive"), false)
+		dlg.AddItem(cbRecursive)
+		mainVBox.Add(cbRecursive, vtui.Margins{Top: 0}, vtui.AlignLeft)
+	}
 
 	// Time Row. far2l leaves the dates of a multiple selection blank; a blank
 	// field left blank changes nothing.
@@ -768,6 +881,7 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 			edit.mtime, edit.setMTime = t, true
 		}
 		edit.mode, edit.keepMode = unixModeEdit(editOctal.GetText(), allChecks)
+		recursive := cbRecursive != nil && cbRecursive.State == 1
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
 			if targetEdited {
 				if err := ReplaceSymlinkTarget(ctx.Context, v, path, newTarget); err != nil {
@@ -777,15 +891,22 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 					return
 				}
 			}
-			err := setUnixAttributesForTargets(ctx.Context, v, targets, edit)
+			applied, err := setUnixAttributesForTargets(ctx.Context, v, targets, edit, recursive)
 			ctx.RunOnUI(func() {
 				if err != nil {
 					vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
-				} else {
-					dlg.Close()
-					if refresh != nil {
-						refresh()
-					}
+					return
+				}
+				dlg.Close()
+				if refresh != nil {
+					refresh()
+				}
+				// A recursive Set can silently touch a tree the user cannot
+				// see the size of from the dialog alone; a one-line count
+				// is this ticket's "smaller first cut" instead of a full
+				// progress dialog (f4#1502).
+				if recursive {
+					vtui.ShowMessage(i18n.Msg("Info.Title"), fmt.Sprintf(i18n.Msg("Attributes.RecursiveApplied"), applied), []string{"&Ok"})
 				}
 			})
 		})

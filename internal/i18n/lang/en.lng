@@ -1638,6 +1638,8 @@ Attributes.ReadOnly=&Read only
 Attributes.Hidden=&Hidden
 Attributes.System=&System
 Attributes.Archive=&Archive
+Attributes.Recursive=&Subfolders
+Attributes.RecursiveApplied=%d objects updated
 
 Compare.Title= Advanced compare
 Compare.Process= Process
