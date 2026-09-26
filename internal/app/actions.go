@@ -4745,12 +4745,18 @@ func importShellHistoryFile(pf *panel.PanelsFrame, shell history.ShellKind) {
 		return
 	}
 	path := history.ShellHistoryPath(shell, os.Getenv("HISTFILE"), home)
+	// #nosec G703 -- path is history.ShellHistoryPath's answer: either the
+	// user's own $HISTFILE or a default filename under hostmode.UserHomeDir(),
+	// both read from this same local process's environment, not from any
+	// remote or otherwise attacker-controlled input.
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		vtui.ShowMessage(" Error ", fmt.Sprintf("%s history not found at:\n%s", shell, path), []string{"&Ok"})
 		return
 	}
 
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// #nosec G703 -- same path as above: the user's own shell history
+		// file, not attacker-controlled input.
 		data, readErr := os.ReadFile(path)
 		ctx.RunOnUI(func() {
 			if readErr != nil {

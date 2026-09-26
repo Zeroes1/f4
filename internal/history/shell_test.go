@@ -1,6 +1,7 @@
 package history
 
 import (
+	"runtime"
 	"testing"
 	"time"
 )
@@ -158,6 +159,9 @@ func TestMergeShellHistoryRecordsRespectsLimit(t *testing.T) {
 }
 
 func TestShellHistoryPathPrefersHistfile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell history import is POSIX-only (bash/zsh); the POSIX-style fixture paths below get backslashed by filepath.Join on Windows")
+	}
 	if got := ShellHistoryPath(ShellBash, "/custom/histfile", "/home/user"); got != "/custom/histfile" {
 		t.Errorf("ShellHistoryPath with HISTFILE set = %q, want %q", got, "/custom/histfile")
 	}
