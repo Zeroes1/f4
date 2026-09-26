@@ -279,7 +279,7 @@ returns the failure and everything Colorer reported at warning level or worse.
   dropping sessions; "Check all schemes" loads every type behind a progress
   dialog and applies nothing. Reports that did not stop the load are shown and
   do not block.
-- Settings Center: "Reload schemas" runs the quick check, and the new "Check
+- Settings Center: "Reload schemes" runs the quick check, and the new "Check
   all schemes" the full one; either returns the findings as its error.
 - FarColorer's "Reload all" (`TestLoadBase`) calls `getBaseScheme()` on each
   type, which in this Colorer version returns the pointer without loading;
@@ -287,6 +287,15 @@ returns the failure and everything Colorer reported at warning level or worse.
 - Loading every type of the bundled catalog took 89 s on a single-core
   sandbox, and reports two errors: `markdown:markdown` inherits
   `markdown2:markdown2`, which no type defines.
+- Issue #277, later comment: the check got slower call after call instead of
+  costing about the same each time, because every type stayed in the same
+  colorer4go session, and colorer4go's HRC engine re-links and rebuilds the
+  search dispatch table of every scheme the session has ever loaded — not just
+  the new one — after each type it loads (`HrcLibrary::Impl::updateLinks`,
+  called from `parseHRC`). That makes one shared session for every type
+  quadratic in the number of types. `CheckColorerSource` now closes the
+  session and opens a fresh one every `checkAllBatchSize` types, which bounds
+  the work any single load re-processes and keeps the total roughly linear.
 
 ### 3.10 Pairs
 

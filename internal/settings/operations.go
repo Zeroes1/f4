@@ -37,7 +37,7 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 		return host.SaveGeometry()
 	})
 	add("colors.export", "appearance", "Theme", "Export applied colors", "Write the complete applied palette to farcolors.ini in the current configuration directory.", false, func(context.Context) error { return theme.ExportColors(theme.UserColorOverridesPath()) })
-	add("syntax.reload", "syntax", "Colorer", "Reload schemas", "Load the applied Colorer configuration, report what Colorer finds wrong with it, then drop cached sessions, regions and scheme so subsequent highlighting uses it.", true, func(ctx context.Context) error {
+	add("syntax.reload", "syntax", "Colorer", "Reload schemes", "Load the applied Colorer configuration, report what Colorer finds wrong with it, then drop cached sessions, regions and scheme so subsequent highlighting uses it.", true, func(ctx context.Context) error {
 		check := editor.CheckColorerSource(ctx, editor.CurrentColorerSource(), config.App.EditorColorerScheme, false, nil)
 		if check.Err == nil {
 			editor.ResetColorerSessions()
@@ -57,7 +57,7 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 			reportSettingsProgress(ctx, fmt.Sprintf("%d/%d  %s", done+1, total, label))
 		}))
 	})
-	add("syntax.download", "syntax", "Colorer", "Download schemas", "Download and validate the Colorer schema archive, then install it at the applied configuration directory.", true, func(ctx context.Context) error {
+	add("syntax.download", "syntax", "Colorer", "Download schemes", "Download and validate the Colorer schema archive, then install it at the applied configuration directory.", true, func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, "GET", editor.ColorerDownloadURL, nil)
