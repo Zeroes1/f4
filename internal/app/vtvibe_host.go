@@ -463,10 +463,10 @@ func aiAskAction() bool {
 				if len(ctxParts) > 0 {
 					prompt = "[" + strings.Join(ctxParts, ", ") + "]\n"
 				}
-				cp.input.SetText(prompt)
+				cp.Input.SetText(prompt)
 				lines := len(strings.Split(prompt, "\n"))
 				if lines > 0 {
-					cp.input.SetCursorPos(lines-1, 0)
+					cp.Input.SetCursorPos(lines-1, 0)
 				}
 				cp.ScrollToBottom()
 			}
