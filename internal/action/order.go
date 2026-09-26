@@ -77,6 +77,7 @@ var actionMenuOrder = []string{
 	"Panel.ViewerEditorHistory",
 	"History.ImportFar2l",
 	"History.ImportFar2lFolders",
+	"History.ImportShell",
 	"Settings.ImportFar2l",
 	"Panel.GoParent",
 	"Panel.GoRoot",

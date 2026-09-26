@@ -1029,6 +1029,15 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportFar2lFolderHistory(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "History.ImportShell",
+		Area:        "Shell",
+		Label:       "Import Shell History",
+		Description: "Import command history from the current shell (bash/zsh)",
+		MenuPath:    "Commands",
+		MenuSubPath: "History",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionImportShellHistory(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "Settings.ImportFar2l",
 		Area:        "Shell",
 		Label:       "Import far2l Settings",
