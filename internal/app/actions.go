@@ -25,6 +25,7 @@ import (
 	"github.com/unxed/f4/internal/history"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/ini"
+	"github.com/unxed/f4/internal/install"
 	"github.com/unxed/f4/internal/media"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/plughost"
@@ -4685,6 +4686,99 @@ func actionImportFar2lFolderHistory(_ *panel.PanelsFrame) {
 			return imported, nil
 		},
 	)
+}
+
+// shellHistoryChoice pairs a ShellKind with the button label offered for it
+// in actionImportShellHistory's picker.
+type shellHistoryChoice struct {
+	shell history.ShellKind
+	label string
+}
+
+// shellHistoryChoices orders the bash/zsh picker so the shell $SHELL points
+// at comes first -- the same signal install.DetectShellProfile already uses
+// to pick a profile file for `f4 --install`. $SHELL names the user's login
+// shell, not necessarily whatever process actually launched f4, so this is
+// only a default suggestion for which button to reach for: it is never
+// enough on its own to skip the choice and just guess (f4#1505).
+func shellHistoryChoices() []shellHistoryChoice {
+	bash := shellHistoryChoice{history.ShellBash, "&Bash"}
+	zsh := shellHistoryChoice{history.ShellZsh, "&Zsh"}
+	if profile, ok := install.DetectShellProfile("", os.Getenv("SHELL")); ok && profile.Shell == "zsh" {
+		return []shellHistoryChoice{zsh, bash}
+	}
+	return []shellHistoryChoice{bash, zsh}
+}
+
+// actionImportShellHistory implements f4#1505's manual, POSIX-only first
+// slice: pick which shell's history file to read (bash or zsh -- cmd.exe
+// and PowerShell are deliberately out of scope, and so is the optional
+// reverse direction, f4 history -> shell), then merge it into f4's own
+// "cmdline" history.
+func actionImportShellHistory(pf *panel.PanelsFrame) {
+	choices := shellHistoryChoices()
+	buttons := make([]string, 0, len(choices)+1)
+	for _, c := range choices {
+		buttons = append(buttons, c.label)
+	}
+	buttons = append(buttons, "Cancel")
+
+	dlg := vtui.ShowMessage(
+		" Import Shell History ",
+		"Import command history from which shell?\nThis reads that shell's own history file and merges it with your current command history.",
+		buttons,
+	)
+	dlg.OnResult = func(code int) {
+		if code < 0 || code >= len(choices) {
+			return
+		}
+		importShellHistoryFile(pf, choices[code].shell)
+	}
+}
+
+// importShellHistoryFile does the actual read-parse-merge-save for one
+// shell, once actionImportShellHistory knows which one to use.
+func importShellHistoryFile(pf *panel.PanelsFrame, shell history.ShellKind) {
+	home, err := hostmode.UserHomeDir()
+	if err != nil {
+		vtui.ShowMessage(" Error ", "Cannot find user home directory.", []string{"&Ok"})
+		return
+	}
+	path := history.ShellHistoryPath(shell, os.Getenv("HISTFILE"), home)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		vtui.ShowMessage(" Error ", fmt.Sprintf("%s history not found at:\n%s", shell, path), []string{"&Ok"})
+		return
+	}
+
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		data, readErr := os.ReadFile(path)
+		ctx.RunOnUI(func() {
+			if readErr != nil {
+				vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to read shell history:\n%v", readErr), []string{"&Ok"})
+				return
+			}
+
+			hp, isF4 := vtui.GlobalHistoryProvider.(*history.F4HistoryProvider)
+			if !isF4 {
+				vtui.ShowMessage(" Error ", "Incompatible history provider.", []string{"&Ok"})
+				return
+			}
+
+			imported := history.ParseShellHistory(shell, data)
+			current := hp.LoadRichHistory("cmdline")
+
+			limit := 100
+			if pf != nil && pf.CmdLine.Edit.HistoryLimit > 0 {
+				limit = pf.CmdLine.Edit.HistoryLimit
+			}
+			merged, added := history.MergeShellHistoryRecords(current, imported, limit)
+			hp.SaveRichHistory("cmdline", merged)
+			if pf != nil {
+				pf.CmdLine.Edit.History = history.ExtractNames(merged)
+			}
+			toast.Show(fmt.Sprintf("Imported %d new command(s) from %s history.", added, shell), 3*time.Second)
+		})
+	})
 }
 
 type far2lSettingFile struct {
