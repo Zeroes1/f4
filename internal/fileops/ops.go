@@ -243,6 +243,12 @@ type FileOpState struct {
 	Buffer       []byte
 	IsMove       bool
 	S2SDir       int // 0: unknown, 1: push, 2: pull, 3: disabled
+	// S2SUsePassword is set once a server-to-server transfer only succeeds
+	// with a saved password for its second hop (see vfs.SecondHopPasswordProvider
+	// and vfs.SecondHopSecretStager), so later files in the same operation go
+	// straight to that path instead of re-probing the key/agent attempt that
+	// already failed for this pair of hosts.
+	S2SUsePassword bool
 	// AccessRights is the F5/F6 "Access rights" choice for this operation.
 	AccessRights AccessRightsMode
 	// parentRights caches destination folder permissions for the inherit
@@ -1209,6 +1215,53 @@ func foldOSPathCase(cleanSrc, cleanDst string, caseInsensitive bool) (string, st
 	return cleanSrc, cleanDst
 }
 
+// s2sPasswordAttempt extends a failed key/agent-based server-to-server probe
+// with a password-based one (f4#370): when target's own saved connection
+// carries a password AND its "password auth for server-to-server transfers"
+// setting is on -- both are target's own business through
+// vfs.SecondHopPasswordProvider, not this function's -- it stages that
+// password on the executing side (vfs.SecondHopSecretStager) and reruns
+// scpCmd through sshpass -f, which reads the secret from a private file
+// rather than scpCmd's own text, an environment variable a sibling process
+// could inspect, or a log line.
+//
+// attempted is false whenever this path is unavailable at all: no saved
+// password (which, by construction, also covers the setting being off, its
+// default), or rner cannot stage a secret for itself. The caller's existing
+// fallback -- stream the file through the client -- is exactly as if this
+// function did not exist.
+func s2sPasswordAttempt(ctx context.Context, rner vfs.CommandRunner, target vfs.VFS, dir, scpCmd string) (code int, err error, attempted bool) {
+	provider, ok := target.(vfs.SecondHopPasswordProvider)
+	if !ok {
+		return 0, nil, false
+	}
+	password, ok := provider.SecondHopPassword()
+	if !ok {
+		return 0, nil, false
+	}
+	stager, ok := rner.(vfs.SecondHopSecretStager)
+	if !ok {
+		return 0, nil, false
+	}
+	ref, cleanup, err := stager.StageSecret(ctx, password)
+	if err != nil {
+		vtui.DebugLog("FILEOP: Server-to-server password staging failed: %v", err)
+		return 0, nil, false
+	}
+	defer cleanup(context.WithoutCancel(ctx))
+	vtui.DebugLog("FILEOP: Attempting server-to-server transfer with a saved password for the second hop")
+	code, err = rner.RunCommand(ctx, dir, "sshpass -f "+posixSingleQuoteArg(ref)+" "+scpCmd, nil)
+	return code, err, true
+}
+
+// posixSingleQuoteArg wraps s in single quotes for a POSIX shell command
+// line. s here is always a path this same process just asked the remote
+// host to mktemp for it, never externally supplied, but quoting it properly
+// regardless costs nothing and avoids relying on that assumption forever.
+func posixSingleQuoteArg(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
 func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs vfs.VFS, destPath string, state *FileOpState, depth int) (resultErr error) {
 	if depth > 1000 {
 		return fmt.Errorf("maximum recursion depth exceeded (circular structure?)")
@@ -1509,13 +1562,30 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 
 						scpCmd := fmt.Sprintf("scp -o ConnectTimeout=10 -P %s -o StrictHostKeyChecking=no -p %q %s",
 							port, srcPath, scpDst)
-						vtui.DebugLog("FILEOP: Attempting server-to-server push: %s", scpCmd)
-						codePush, errPush := rner.RunCommand(ctx, srcVfs.Dir(srcPath), scpCmd, nil)
-						if errPush == nil && codePush == 0 {
-							pushed = true
-							state.S2SDir = 1
-						} else {
-							vtui.DebugLog("FILEOP: Server-to-server push failed (code: %d): %v", codePush, errPush)
+
+						if !state.S2SUsePassword {
+							vtui.DebugLog("FILEOP: Attempting server-to-server push: %s", scpCmd)
+							codePush, errPush := rner.RunCommand(ctx, srcVfs.Dir(srcPath), scpCmd, nil)
+							if errPush == nil && codePush == 0 {
+								pushed = true
+								state.S2SDir = 1
+							} else {
+								vtui.DebugLog("FILEOP: Server-to-server push failed (code: %d): %v", codePush, errPush)
+							}
+						}
+
+						if !pushed {
+							codePush, errPush, attempted := s2sPasswordAttempt(ctx, rner, dstVfs, srcVfs.Dir(srcPath), scpCmd)
+							if attempted {
+								if errPush == nil && codePush == 0 {
+									pushed = true
+									state.S2SDir = 1
+									state.S2SUsePassword = true
+									vtui.DebugLog("FILEOP: Server-to-server push succeeded using a saved password for the second hop")
+								} else {
+									vtui.DebugLog("FILEOP: Server-to-server push with saved password failed (code: %d): %v", codePush, errPush)
+								}
+							}
 						}
 					}
 				}
@@ -1535,13 +1605,30 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 
 						scpCmd := fmt.Sprintf("scp -o ConnectTimeout=10 -P %s -o StrictHostKeyChecking=no -p %s %q",
 							port, scpSrc, destPathForFile)
-						vtui.DebugLog("FILEOP: Attempting server-to-server pull: %s", scpCmd)
-						codePull, errPull := rner.RunCommand(ctx, dstVfs.Dir(destPathForFile), scpCmd, nil)
-						if errPull == nil && codePull == 0 {
-							pulled = true
-							state.S2SDir = 2
-						} else {
-							vtui.DebugLog("FILEOP: Server-to-server pull failed (code: %d): %v", codePull, errPull)
+
+						if !state.S2SUsePassword {
+							vtui.DebugLog("FILEOP: Attempting server-to-server pull: %s", scpCmd)
+							codePull, errPull := rner.RunCommand(ctx, dstVfs.Dir(destPathForFile), scpCmd, nil)
+							if errPull == nil && codePull == 0 {
+								pulled = true
+								state.S2SDir = 2
+							} else {
+								vtui.DebugLog("FILEOP: Server-to-server pull failed (code: %d): %v", codePull, errPull)
+							}
+						}
+
+						if !pulled {
+							codePull, errPull, attempted := s2sPasswordAttempt(ctx, rner, srcVfs, dstVfs.Dir(destPathForFile), scpCmd)
+							if attempted {
+								if errPull == nil && codePull == 0 {
+									pulled = true
+									state.S2SDir = 2
+									state.S2SUsePassword = true
+									vtui.DebugLog("FILEOP: Server-to-server pull succeeded using a saved password for the second hop")
+								} else {
+									vtui.DebugLog("FILEOP: Server-to-server pull with saved password failed (code: %d): %v", codePull, errPull)
+								}
+							}
 						}
 					}
 				}

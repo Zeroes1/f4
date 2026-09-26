@@ -2015,3 +2015,5 @@ SettingsCenter.PanelGroupMediumMiB.Description=包含上限。必须为严格递
 SettingsCenter.PanelGroupLargeMiB.Label=Large 上限 (MiB)
 SettingsCenter.PanelGroupLargeMiB.Description=包含上限。必须为严格递增的正数，同时适用于大小和占用磁盘空间。
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=分组
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=服务器间传输的密码验证
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=允许 f4 使用已保存连接的密码来验证服务器间复制或移动的第二跳, 而不必依赖 SSH 密钥或代理访问. 默认关闭: 这会将该密码暴露给另一台服务器.

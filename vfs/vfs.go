@@ -914,6 +914,39 @@ type ConnectionInfoProvider interface {
 	ConnectionInfo() (host, port, user string, ok bool)
 }
 
+// SecondHopPasswordProvider lets a server-to-server copy or move authenticate
+// the leg it runs on this VFS's behalf with a password, instead of requiring
+// the two remote hosts to already trust each other through SSH keys or an
+// agent. A VFS answers for itself: ok is true only when it has a saved
+// password for its own connection AND the caller opted in to using saved
+// passwords this way (both are the implementation's business, not the
+// server-to-server orchestration's). False covers every other case --
+// the feature switched off, no saved connection matches, or the VFS kind
+// never carries a password at all -- uniformly, so a caller just falls back
+// to whatever access already exists between the two hosts.
+//
+// The password is looked up fresh on every call rather than cached on the
+// live connection, so it is held no longer than the one attempt that needs
+// it.
+type SecondHopPasswordProvider interface {
+	SecondHopPassword() (password string, ok bool)
+}
+
+// SecondHopSecretStager lets a server-to-server copy or move place a secret
+// where a command this same VFS is about to run (through CommandRunner.
+// RunCommand) can read it, without that secret ever appearing in the
+// command's own text, in a world-readable file, or in a log.
+//
+// StageSecret writes password into a private, freshly created location on
+// this VFS's host and returns a reference to it that is safe to embed in a
+// shell command line (typically a file path an argument like sshpass -f
+// expects). cleanup removes it again once the caller is done with it,
+// whether or not the command that used it succeeded, and must be called
+// exactly once.
+type SecondHopSecretStager interface {
+	StageSecret(ctx context.Context, password string) (ref string, cleanup func(context.Context), err error)
+}
+
 // HistoryPathProvider lets a panel plugin's VFS own its folder-history
 // entries, instead of the panel core judging one from GetPath() alone (see
 // panel.ShouldRecordFolderHistory). A plugin session's path is often

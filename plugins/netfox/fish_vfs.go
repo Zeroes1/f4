@@ -1164,7 +1164,66 @@ var (
 	_ vfs.CommandRunner                     = (*FishVFS)(nil)
 	_ vfs.CommandRunnerInfoProvider         = (*FishVFS)(nil)
 	_ vfs.CommandRunnerAvailabilityProvider = (*FishVFS)(nil)
+	_ vfs.SecondHopPasswordProvider         = (*FishVFS)(nil)
+	_ vfs.SecondHopSecretStager             = (*FishVFS)(nil)
 )
+
+// SecondHopPassword implements vfs.SecondHopPasswordProvider. It answers on
+// this site's own behalf: a server-to-server transfer that wants to
+// authenticate to this exact host, port and user with a password asks here,
+// and gets one back only when NetFox's "password auth for server-to-server
+// transfers" setting is on and a saved connection matches (see
+// secondHopPassword in s2s_password.go).
+func (v *FishVFS) SecondHopPassword() (string, bool) {
+	if v == nil {
+		return "", false
+	}
+	return secondHopPassword(v.host, v.port, v.user)
+}
+
+// s2sSecretFileTemplate is the mktemp template StageSecret uses. The prefix
+// makes a leftover file recognizable as f4's own if cleanup is ever missed
+// (a killed job, a session that dies mid-transfer); mktemp's own random
+// suffix is what keeps the name unguessable, and mktemp itself is what keeps
+// the file private (mode 0600, created rather than merely named) without
+// this client trusting a path it only guessed at.
+const s2sSecretFileTemplate = "f4-s2s-secret.XXXXXXXX" // #nosec G101 -- a mktemp template naming the file, not a credential.
+
+// StageSecret implements vfs.SecondHopSecretStager. The secret travels to
+// this host over the same encrypted FISH+ write channel every ordinary file
+// transfer already uses (Client.Write) -- never as part of a command's own
+// text, never through an environment variable a sibling process could read
+// out of /proc, and never logged -- and lands in a file mktemp created for
+// this call alone, which cleanup removes again once the caller is done.
+func (v *FishVFS) StageSecret(ctx context.Context, password string) (string, func(context.Context), error) {
+	if v.peerIsWindows() {
+		return "", nil, errors.New("fishplus: StageSecret needs a POSIX peer")
+	}
+	client := v.client()
+	if client == nil || !client.CanRun() {
+		return "", nil, fishplus.ErrNoJobs
+	}
+	lines, code, err := client.RunOutput(ctx, "",
+		"umask 077 && mktemp \"${TMPDIR:-/tmp}/"+s2sSecretFileTemplate+"\"")
+	if err != nil {
+		return "", nil, fmt.Errorf("fishplus: create secret file: %w", err)
+	}
+	path := ""
+	if len(lines) > 0 {
+		path = strings.TrimSpace(lines[0])
+	}
+	if code != 0 || path == "" {
+		return "", nil, fmt.Errorf("fishplus: create secret file: mktemp exited %d", code)
+	}
+	if err := client.Write(ctx, path, 0, []byte(password)); err != nil {
+		_, _ = client.Run(context.WithoutCancel(ctx), "", "rm -f "+posixSingleQuote(path), nil)
+		return "", nil, fmt.Errorf("fishplus: write secret file: %w", err)
+	}
+	cleanup := func(cctx context.Context) {
+		_, _ = client.Run(context.WithoutCancel(cctx), "", "rm -f "+posixSingleQuote(path), nil)
+	}
+	return path, cleanup, nil
+}
 
 // Close releases this view. The session itself goes away with its last
 // user, and closing the same view twice is harmless: a panel may well be

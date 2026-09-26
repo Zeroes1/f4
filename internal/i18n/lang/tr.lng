@@ -2094,3 +2094,5 @@ SettingsCenter.PanelGroupMediumMiB.Description=Üst sınır dahildir. Pozitif ve
 SettingsCenter.PanelGroupLargeMiB.Label=Large sınırı (MiB)
 SettingsCenter.PanelGroupLargeMiB.Description=Üst sınır dahildir. Pozitif ve kesin artan sınırlar boyuta ve diskteki boyuta uygulanır.
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=Gruplama
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Sunucudan sunucuya aktarımlar için parola kimlik doğrulaması
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=f4'ün, SSH anahtarları veya aracı erişimi gerektirmek yerine, kayıtlı bir bağlantının parolasını kullanarak sunucudan sunucuya kopyalama veya taşımanın ikinci sıçramasını doğrulamasına izin verir. Varsayılan olarak kapalıdır: bu, o parolayı diğer sunucuya açığa çıkarır.

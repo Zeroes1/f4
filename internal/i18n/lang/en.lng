@@ -3533,3 +3533,5 @@ Group.Month9=September
 Group.Month10=October
 Group.Month11=November
 Group.Month12=December
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Password auth for server-to-server transfers
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Let f4 use a saved connection's password to authenticate the second hop of a server-to-server copy or move, instead of requiring SSH keys or agent access. Off by default: this exposes that password to the other server.
