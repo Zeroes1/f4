@@ -41,6 +41,7 @@ var winescapeImporters = map[string]string{
 	"vfs/hostfs/errno_windows.go":                   "error translation for hostfs; reached only through it",
 	"vfs/hostfs/hostfs_windows.go":                  "every libwinescape call sits behind hostmode.Posix()",
 	"vfs/hostfs/hostfs_winescape.go":                "the posix backend of hostfs; reached only when hostmode.Posix()",
+	"internal/winex11drag/wineconn.go":              "#566 step 2, opening the X11 connection; asks hostmode.Posix() as its first line",
 	"vfs/hostmode/hostmode.go":                      "the decision itself: Allowed(), then the probe",
 	"vfs/os_vfs_physical_windows.go":                "branches on hostmode.Posix()",
 	"vfs/os_vfs_windows.go":                         "names the *winescape.Stat_t type in an assertion; makes no calls",

@@ -62,6 +62,7 @@ internal/        # everything the application is, in layers
   ttyx/          #     tty extensions
   unpack/        #     archive extraction
   wincon/        #     Windows console
+  winex11drag/   #     #566 steps 1-2: f4's X11 window, an X connection from Wine (unwired)
   hideconsole/   #     a vendored fork, console hiding on Windows
   testutil/      #   test scaffolding shared across packages; _test.go use only
   paneltest/     #   the same, for helpers that need a panels frame
