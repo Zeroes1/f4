@@ -1828,10 +1828,23 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 			// far2l marks a row that ends mid-line (word wrap, not the
 			// line's actual end) with a glyph in its last column, so it
 			// reads as "keeps going" rather than a real line break (f4
-			// #1415). There's nowhere to put it when the fragment's own
-			// text already reaches the last column.
+			// #1415). When the fragment's own text already reaches the
+			// last column there's no free cell to put the glyph in --
+			// most reliably on a hard mid-word break, which fills the
+			// width exactly every time regardless of window size. An
+			// earlier fix reserved a column for the glyph by shrinking
+			// the wrap engine's width by one whenever word wrap was on,
+			// but that changed where every wrapped line actually broke
+			// and broke unrelated cursor-navigation tests (e9999e6b); it
+			// was reverted. Retinting the column's own character instead
+			// -- same glyph, same column, only its colour changes -- marks
+			// the wrap without moving a single column of text.
 			if shouldDrawWrapMark(fIdx, len(frags), startX, maxX) {
 				scr.Write(maxX, currY, vtui.StringToCharInfo("»", vtui.Palette[theme.ColEditorWrapMark]))
+			} else if wrapMarkNeedsOverlay(fIdx, len(frags), startX, maxX) {
+				cell := scr.GetCell(maxX, currY)
+				cell.Attributes = vtui.Palette[theme.ColEditorWrapMark]
+				scr.Write(maxX, currY, []vtui.CharInfo{cell})
 			}
 
 			if absVRow == curVRow {
@@ -1930,6 +1943,17 @@ DoneRendering:
 // is the line's last fragment, the one that really does end the line.
 func shouldDrawWrapMark(fIdx, fragCount, startX, maxX int) bool {
 	return fIdx < fragCount-1 && startX <= maxX
+}
+
+// wrapMarkNeedsOverlay reports whether the row just rendered is a wrap
+// continuation (same "not the line's last fragment" test as
+// shouldDrawWrapMark) whose own text already reaches maxX, so there is no
+// free cell for the glyph. In that case the caller marks the wrap by
+// retinting the character already sitting at maxX instead of overwriting
+// it, which is what lets every continuation row carry a mark regardless of
+// window width without changing where any text sits (f4#1415).
+func wrapMarkNeedsOverlay(fIdx, fragCount, startX, maxX int) bool {
+	return fIdx < fragCount-1 && startX > maxX
 }
 
 // VetoActionKey reports modal input states in which the editor must see
