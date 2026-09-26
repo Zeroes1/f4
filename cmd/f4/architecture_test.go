@@ -32,6 +32,13 @@ var architectureLayers = map[string]int{
 	"internal/ttyx":     0,
 	"internal/wincon":   0,
 
+	// #566 step 1/2's foundation: finding f4's own Xlib window under Wine and
+	// opening a connection to the host's X server through libwinescape. A
+	// leaf over vfs/hostmode (which is not tracked by this map -- see its own
+	// package comment) and the vendored winescape/xgb; nothing of ours is
+	// wired to call it yet.
+	"internal/winex11drag": 0,
+
 	// Checked conversions, shared by seven packages. Zero imports of ours.
 	"internal/numeric": 0,
 

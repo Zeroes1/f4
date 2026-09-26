@@ -250,6 +250,19 @@ type PanelsFrame struct {
 	CmdLine *cmdline.CommandLine
 	KeyBar  *vtui.KeyBar
 
+	// menuItemsCache* remember the last BuildMenuItems result and the state it
+	// was built from. vtui's render loop asks the top frame for its menu bar
+	// every frame (stepWithSize -> GetActiveMenuBar -> GetMenuBar), so without
+	// this a held key repeating fast over SSH reran the whole action-table
+	// walk and menuhotkeys' hotkey-letter assignment on every single frame,
+	// falling further behind the longer the key stayed down (#884). The cache
+	// key (see menuItemsCacheKeyNow) is cheap on purpose: field reads and
+	// pointer/enum comparisons only, never anything that walks the menus
+	// themselves.
+	menuItemsCacheValid bool
+	menuItemsCacheKey   menuItemsCacheKey
+	menuItemsCache      []vtui.MenuBarItem
+
 	// consoleOverlay* mirror the modifier state that vtui's KeyBar normally
 	// keeps while the Far-style console overlay owns the physical keybar row.
 	// The overlay unregisters FrameManager.KeyBar before drawing, so it must
@@ -714,28 +727,108 @@ func appendTerminalMenuItems(items []vtui.MenuBarItem) []vtui.MenuBarItem {
 	return items
 }
 
+// menuItemsCacheKey captures everything BuildMenuItems' output depends on,
+// besides i18n.Msg's own table (i18nGen already covers that). It exists so
+// BuildMenuItems can tell "nothing that could change the menu changed" apart
+// from "vtui asked again this frame" without doing the work it would rather
+// skip to find out. Every field is a plain comparable value on purpose:
+// bools, an int, a couple of small structs and reflect.Type (a single pointer
+// comparison) — nothing here allocates or walks a slice or map, so computing
+// the key is cheap enough to do on every render frame.
+type menuItemsCacheKey struct {
+	showPanels bool
+	activeIdx  int // which side File.Share/AI.NewSession/etc. ask about
+	// leftVfsType/rightVfsType are the dynamic type of each side's VFS (or of
+	// the panel itself, for a panel that is not a *FileSystemPanel). This one
+	// field stands in for every "what can the active/left/right panel do"
+	// Visible check the action table has (AI panel detection, File.Share,
+	// File.ApplyCommand, File.FindDuplicates, File.RunRemoteCommand, and any
+	// later one shaped the same way): they all key off what the VFS is, and
+	// two panels backed by the same VFS type answer every one of those
+	// checks identically.
+	leftVfsType, rightVfsType reflect.Type
+	// panelsAvailable is Panel.CompareFolders/Panel.SyncDirs's own Visible
+	// check (both panels non-nil). In a frame pushed for rendering this is
+	// always true, but BuildMenuItems is also reachable with a zero-value
+	// PanelsFrame (tests, and the moment NewPanelsFrame builds its first
+	// bar), so it is here rather than assumed.
+	panelsAvailable bool
+	macKeyboard     string // config.App.MacKeyboard (Settings.MacKeyboard)
+	i18nGen         uint64 // i18n.Generation(): every label, menu title, etc.
+	hotkeysGen      uint64 // keymap.GlobalHotkeysMgr.Generation(): the shortcut column
+	appSignal       MenuContentSignalValue
+}
+
+// menuItemsCacheKeyNow computes pf's current menuItemsCacheKey.
+func (pf *PanelsFrame) menuItemsCacheKeyNow() menuItemsCacheKey {
+	key := menuItemsCacheKey{
+		showPanels:      pf.ShowPanels,
+		activeIdx:       pf.ActiveIdx,
+		leftVfsType:     panelVfsType(pf.Panels[0]),
+		rightVfsType:    panelVfsType(pf.Panels[1]),
+		panelsAvailable: pf.Panels[0] != nil && pf.Panels[1] != nil,
+		macKeyboard:     config.App.MacKeyboard,
+		i18nGen:         i18n.Generation(),
+		hotkeysGen:      keymap.GlobalHotkeysMgr.Generation(),
+		appSignal:       GetMenuContentSignal(),
+	}
+	return key
+}
+
+// panelVfsType is the part of a panel that BuildMenuItems' generated Visible
+// checks actually look at: not the panel itself (which never changes
+// identity while its VFS is swapped, e.g. toggling the AI panel or entering
+// an archive), but what its VFS can do. reflect.TypeOf of an interface value
+// is a single word read, not an allocation.
+func panelVfsType(p Panel) reflect.Type {
+	fsp, ok := p.(*FileSystemPanel)
+	if !ok || fsp == nil {
+		return reflect.TypeOf(p)
+	}
+	return reflect.TypeOf(fsp.Vfs)
+}
+
 // buildMenuItems assembles the main menu: the custom Left/Right panel
 // menus around the Files/Commands/Options menus generated from the
 // action registry. With panels hidden, the ordinary Shell menu remains
 // available so Options and panel actions do not disappear behind the
 // terminal-log menu.
+//
+// The result is cached on pf, keyed by menuItemsCacheKeyNow: vtui's render
+// loop calls GetMenuBar (and so this) on every frame regardless of whether
+// anything the menu depends on changed, and rebuilding walks the whole action
+// table plus menuhotkeys' hotkey-letter assignment, which is expensive enough
+// that a held key repeating over a slow connection fell further and further
+// behind redoing it every frame (#884). A cache hit returns the exact slice
+// built last time; nothing here mutates it in place afterwards, except
+// GetMenuBar's own checkmark refresh, which is unconditional and out of the
+// cache's way.
 func (pf *PanelsFrame) BuildMenuItems() []vtui.MenuBarItem {
-	if !pf.ShowPanels {
-		items := appendTerminalMenuItems(BuildMenuBarItems("Shell"))
-		menuhotkeys.UniqueBar(items)
-		return items
+	key := pf.menuItemsCacheKeyNow()
+	if pf.menuItemsCacheValid && key == pf.menuItemsCacheKey {
+		return pf.menuItemsCache
 	}
-	items := []vtui.MenuBarItem{pf.LeftMenu()}
-	items = append(items, BuildMenuBarItems("Shell")...)
-	items = append(items, pf.RightMenu())
-	// Also here, so that no menu ever holds the default-hotkey marker.
-	menuhotkeys.UniqueBar(items)
+	var items []vtui.MenuBarItem
+	if !pf.ShowPanels {
+		items = appendTerminalMenuItems(BuildMenuBarItems("Shell"))
+		menuhotkeys.UniqueBar(items)
+	} else {
+		items = []vtui.MenuBarItem{pf.LeftMenu()}
+		items = append(items, BuildMenuBarItems("Shell")...)
+		items = append(items, pf.RightMenu())
+		// Also here, so that no menu ever holds the default-hotkey marker.
+		menuhotkeys.UniqueBar(items)
+	}
+	pf.menuItemsCache = items
+	pf.menuItemsCacheKey = key
+	pf.menuItemsCacheValid = true
 	return items
 }
 
-// GetMenuBar returns the main menu bar. Items are rebuilt on every
-// call, so shortcuts and checkmarks always follow the active bindings
-// and the current panel state.
+// GetMenuBar returns the main menu bar. Checkmarks and shortcuts are
+// refreshed on every call, so they always follow the active bindings and the
+// current panel state; the items themselves come from BuildMenuItems, which
+// only rebuilds them when something they depend on actually changed.
 //
 // A frame that was not built by NewPanelsFrame may have no bar, and then
 // it provides none: nil is how vtui's GetActiveMenuBar learns to look
@@ -748,10 +841,19 @@ func (pf *PanelsFrame) GetMenuBar() *vtui.MenuBar {
 	}
 	pf.MenuBar.Items = pf.BuildMenuItems()
 	pf.UpdateMenuCheckmarks()
-	// After the checkmarks: they set the text of the side menus' rows again.
-	// The bar is the whole of it, the side menus and the generated ones
-	// together, so a hotkey is unique across the letters that open the menus.
-	menuhotkeys.UniqueBar(pf.MenuBar.Items)
+	// After the checkmarks: they set the text of the left and right side
+	// menus' rows again (indices 0 and 4 — see UpdateMenuCheckmarks), which is
+	// the only thing that can leave a bare autoMarker in the text since
+	// BuildMenuItems last ran menuhotkeys.UniqueBar over the whole bar. Redo
+	// that letter assignment for just those two menus rather than the whole
+	// bar: re-running it on Files/Commands/Options/the top-level labels,
+	// which UpdateMenuCheckmarks did not touch, is idempotent (they are
+	// already conflict-free) but not free, and doing it on every frame is
+	// exactly what made #884 slow.
+	if len(pf.MenuBar.Items) >= 5 {
+		menuhotkeys.Unique(pf.MenuBar.Items[0].SubItems)
+		menuhotkeys.Unique(pf.MenuBar.Items[4].SubItems)
+	}
 	return pf.MenuBar
 }
 
@@ -2919,13 +3021,28 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 				// this one-shot check only covers an Enter arriving before the
 				// next frame refresh.
 				if localShellVFS != nil && !isWindowsShell {
-					if path != pf.LastPtyPath || !fileops.SameVFSInstance(localShellVFS, pf.LastPtyVFS) {
+					synced := path == pf.LastPtyPath && fileops.SameVFSInstance(localShellVFS, pf.LastPtyVFS)
+					if !synced {
 						if pf.syncPTYDirectory(path, localShellVFS) {
 							pf.LastPtyPath = path
 							pf.LastPtyVFS = localShellVFS
+							synced = true
 						}
 					}
-					path = ""
+					// Only drop the panel path from the command about to be
+					// composed once the shell is confirmed to be there.
+					// syncPTYDirectory reports false when path needs sudo to
+					// even be looked at (f4#1255): the plain "cd" it just sent
+					// to this unprivileged shell may well have been refused,
+					// and blanking path here regardless is exactly what let
+					// the command that follows run in the shell's previous,
+					// unrelated directory instead. Keeping path non-empty
+					// makes the command below carry its own "cd '<path>' &&"
+					// again, so a refusal surfaces as the shell's own visible
+					// error rather than a silent wrong-directory run.
+					if synced {
+						path = ""
+					}
 				}
 
 				if integration != nil {
@@ -3839,6 +3956,13 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		return AppCommand(pf, cmd, args)
 	case appcmd.CmFindFile:
 		return AppCommand(pf, cmd, args)
+
+	case appcmd.CmWorkspaceNewTerminal:
+		// The side menus' "Terminal in New Workspace" item carried this
+		// command with no case to receive it (f4#128): the hotkey worked
+		// because it calls the action directly, but selecting the menu item
+		// did nothing. Route it the same way CmNew/CmView/... above do.
+		return AppCommand(pf, cmd, args)
 	case appcmd.CmSwitchToViewer:
 		if ev, ok := args.(*editor.EditorView); ok {
 			doSwitch := func() {
@@ -4663,8 +4787,23 @@ func (pf *PanelsFrame) menuItemsWithKeyLabels(title string, items []vtui.MenuIte
 func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
 	isWindowsShell := terminal.WindowsShellSyntax()
 	sync := false
-	if _, isOS := v.(*vfs.OSVFS); isOS {
+	// uncertain is set for a local OSVFS path this same unprivileged process
+	// cannot itself open (OSVFS.NeedsElevationToEnter, the same real access
+	// check SetPath's own refuseNotListable makes -- not NeedsElevation,
+	// which answers a different question and stays false for exactly this,
+	// the common "boundary folder" case, e.g. mode 0700 owned by someone
+	// else): the persistent shell is this same process's child, so a plain
+	// "cd" sent below is refused right there too. Sending it anyway costs
+	// nothing on the chance the directory grants search without read, but
+	// the caller must not take a plain "yes" for an answer -- it cannot
+	// watch the shell's own reply, so it cannot otherwise tell a real cd
+	// from a refused one, and trusting a refused cd is exactly what let a
+	// typed command silently run in the shell's previous (wrong) directory
+	// instead of the one the panel shows (f4#1255).
+	uncertain := false
+	if osfs, isOS := v.(*vfs.OSVFS); isOS {
 		sync = true
+		uncertain = osfs.NeedsElevationToEnter(path)
 	} else if vfsHasRemotePTY(v) {
 		sync = true
 		isWindowsShell = false
@@ -4702,7 +4841,7 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
 		// in every POSIX-ish shell including fish.
 		_, _ = pf.WritePTY(activePty, []byte(fmt.Sprintf(" cd '%s' && true f4_sync\r", sqPath)))
 	}
-	return true
+	return !uncertain
 }
 
 func vfsHasRemotePTY(v vfs.VFS) bool {
@@ -6142,6 +6281,38 @@ func (pf *PanelsFrame) NavigateAvailableFolderHistory(fsp *FileSystemPanel, hist
 		if idx >= 0 && idx < len(pf.FolderHistoryPos) {
 			pf.FolderHistoryPos[idx] = pos
 		}
+		return true
+	}
+	return false
+}
+
+// NavigateOpenPluginHistoryEntry resolves a panel-plugin-owned folder-history
+// entry (f4#262, see vfs.HistoryPathProvider): it looks only at this frame's
+// two panels for one whose VFS is already a live session of vfsType and
+// accepts ref, and if so switches focus to it. It never opens a new
+// connection or reconnects — an entry whose session is not open on either
+// panel is simply reported as unreachable, the same "skip it, do not
+// surprise the user" choice NavigateAvailableFolderHistory makes for an
+// ordinary entry it cannot open (#814).
+func (pf *PanelsFrame) NavigateOpenPluginHistoryEntry(vfsType, ref string) bool {
+	if vfsType == "" || ref == "" {
+		return false
+	}
+	for idx, candidate := range pf.Panels {
+		fsp, ok := candidate.(*FileSystemPanel)
+		if !ok || fsp == nil || fsp.Vfs == nil {
+			continue
+		}
+		if fmt.Sprintf("%T", fsp.Vfs) != vfsType {
+			continue
+		}
+		provider, ok := fsp.Vfs.(vfs.HistoryPathProvider)
+		if !ok || !provider.NavigateHistoryEntry(ref) {
+			continue
+		}
+		pf.ActiveIdx = idx
+		fsp.PendingSelection = ".."
+		fsp.ReadDirectory()
 		return true
 	}
 	return false

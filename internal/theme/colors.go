@@ -444,6 +444,12 @@ func FinishColors() {
 	cursorFg, _ := GetColorRGBBoth(vtui.Palette[ColTerminalCursor])
 	vtui.CursorColor = int(cursorFg)
 	vtui.DebugLog("COLORS: cursor color #%06X", cursorFg)
+
+	// Surface any harsh chroma/hue clash the finished palette still has
+	// (f4#363). Contrast is handled above by AdjustContrastLevels, on its
+	// own looser terms; see ColorValidationRules for why this does not
+	// re-check WCAG on top of that.
+	notifyColorIssues(ValidateActiveColors())
 }
 
 // applyBackgroundInheritance fills in the background of every slot with an
