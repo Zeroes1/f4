@@ -40,7 +40,7 @@ func buildRecursiveAttributesTree(t *testing.T) (root, dirSel, topFile, realSub,
 	innerFile = filepath.Join(realSub, "inner.txt")
 	leakedFile = filepath.Join(external, "leaked.txt")
 	for _, f := range []string{topFile, innerFile, leakedFile} {
-		if err := os.WriteFile(f, []byte("x"), 0644); err != nil {
+		if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
 			t.Fatalf("write %s: %v", f, err)
 		}
 	}
@@ -206,7 +206,7 @@ func TestAttributesDialog_RecursiveCheckboxHiddenWithoutARealDirectory(t *testin
 
 	root := t.TempDir()
 	filePath := filepath.Join(root, "plain.txt")
-	if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	linkPath := filepath.Join(root, "link_to_dir")
