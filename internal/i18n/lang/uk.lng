@@ -2098,3 +2098,5 @@ SettingsCenter.PanelGroupMediumMiB.Description=Верхня межа включ�
 SettingsCenter.PanelGroupLargeMiB.Label=Межа Large (МіБ)
 SettingsCenter.PanelGroupLargeMiB.Description=Верхня межа включно. Додатні, строго зростаючі межі застосовуються до розміру та розміру на диску.
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=Групування
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Парольна авторизація для передавання між серверами
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Дозволяє f4 використовувати пароль збереженого з'єднання для авторизації другого стрибка під час копіювання чи переміщення між серверами замість SSH-ключів або доступу агента. Вимкнено за замовчуванням: це розкриває цей пароль іншому серверу.

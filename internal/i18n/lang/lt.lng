@@ -2094,3 +2094,5 @@ SettingsCenter.PanelGroupMediumMiB.Description=Viršutinė riba įtraukiama. Tei
 SettingsCenter.PanelGroupLargeMiB.Label=Large riba (MiB)
 SettingsCenter.PanelGroupLargeMiB.Description=Viršutinė riba įtraukiama. Teigiamos, griežtai didėjančios ribos taikomos dydžiui ir dydžiui diske.
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=Grupavimas
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Slaptažodžio autentifikavimas serverio į serverį perdavimams
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Leidžia f4 naudoti išsaugoto ryšio slaptažodį antrojo šuolio autentifikavimui kopijuojant ar perkeliant failus tarp serverių, vietoj SSH raktų ar agento prieigos. Pagal numatytuosius nustatymus išjungta: tai atskleidžia šį slaptažodį kitam serveriui.

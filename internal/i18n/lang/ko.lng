@@ -2089,3 +2089,5 @@ SettingsCenter.PanelGroupMediumMiB.Description=상한을 포함합니다. 양수
 SettingsCenter.PanelGroupLargeMiB.Label=Large 상한 (MiB)
 SettingsCenter.PanelGroupLargeMiB.Description=상한을 포함합니다. 양수이며 엄격히 증가하는 한도는 크기와 디스크 할당 크기에 적용됩니다.
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=그룹화
+SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=서버 간 전송을 위한 비밀번호 인증
+SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=SSH 키나 에이전트 접근을 요구하는 대신, 저장된 연결의 비밀번호를 사용해 서버 간 복사 또는 이동의 두 번째 홉을 인증하도록 f4에 허용합니다. 기본값은 꺼짐이며, 이 경우 해당 비밀번호가 다른 서버에 노출됩니다.
