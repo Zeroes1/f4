@@ -957,9 +957,20 @@ func actionAddArchive(app vfs.App) {
 		return
 	}
 
-	arcName := activeVfs.Base(activeVfs.GetPath())
-	if arcName == "." || arcName == "" {
-		arcName = "archive"
+	// GetSelectedNames already folds "nothing marked" into the item under the
+	// cursor (see its doc comment), so a single name here covers both "one
+	// item marked" and "nothing marked" -- in either case the suggested
+	// archive name should be that item's own name, not the panel directory's
+	// (f4#1504). Only an explicit multi-selection keeps the old directory-
+	// derived suggestion, since there is no single item to name it after.
+	var arcName string
+	if len(names) == 1 {
+		arcName = names[0]
+	} else {
+		arcName = activeVfs.Base(activeVfs.GetPath())
+		if arcName == "." || arcName == "" {
+			arcName = "archive"
+		}
 	}
 	arcName += ".zip"
 
