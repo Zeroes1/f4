@@ -302,8 +302,26 @@ func (s *cmdShellSession) settle(seq uint64) {
 			return
 		}
 
+		// children is captured here so it can be logged below whichever way
+		// this comes out (held, or falling through to settled/release):
+		// f4#1376's residual "cls inside Far still drops to f4" report has no
+		// confirmed root cause yet (three earlier rounds, PRs
+		// #1451/#1495/#1498, each fixed a real but distinct bug in this file,
+		// and the report still reproduces after all three). The remaining
+		// candidate this scan cannot rule out from the code alone is that
+		// ChildProcesses -- a live, uncached, direct-children-only Toolhelp32
+		// scan of the *outer* shell -- momentarily does not list the console
+		// child (Far) at exactly the moment Far spawns its own grandchild (a
+		// console command or program run from inside it). Logging what this
+		// scan actually returned right at the settle/release decision,
+		// instead of only when it holds, is what the next --debug capture of
+		// the report needs: if `children` reads empty on the very call that
+		// releases the wait while Far is still visibly running on screen,
+		// that confirms this function as the source; if it is never empty,
+		// the drop is not coming from here at all.
+		var children []terminal.ChildProcess
 		if inspector, ok := pf.localPTY().(childInspector); ok {
-			children := inspector.ChildProcesses()
+			children = inspector.ChildProcesses()
 			if heldByChild(children, inBatch) {
 				vtui.DebugLog("CMD_SESSION: prompt %d held by child %v, rechecking", seq, children)
 				s.mu.Lock()
@@ -332,7 +350,7 @@ func (s *cmdShellSession) settle(seq uint64) {
 			}
 		}
 
-		vtui.DebugLog("CMD_SESSION: prompt %d settled (sent=%d pending=%v)", seq, sentSeq, pending)
+		vtui.DebugLog("CMD_SESSION: prompt %d settled (sent=%d pending=%v children=%v)", seq, sentSeq, pending, children)
 		s.release()
 	})
 }
@@ -382,7 +400,17 @@ func (s *cmdShellSession) retryOrRelease(seq uint64) {
 	inBatch := s.inBatch
 	s.mu.Unlock()
 
-	if inspector, ok := s.Pf.localPTY().(childInspector); ok && heldByChild(inspector.ChildProcesses(), inBatch) {
+	// children is logged below either way, for the same #1376 diagnostic
+	// reason settle() now logs it at its own settled/release call: the open
+	// question after three earlier fix rounds (#1451/#1495/#1498) is whether
+	// this live, uncached, direct-children-only scan of the outer shell ever
+	// reads empty here while Far is still genuinely running -- which is what
+	// the next --debug capture of the report needs to show.
+	var children []terminal.ChildProcess
+	if inspector, ok := s.Pf.localPTY().(childInspector); ok {
+		children = inspector.ChildProcesses()
+	}
+	if heldByChild(children, inBatch) {
 		vtui.DebugLog("CMD_SESSION: prompt %d flickering but held by a child, rechecking", seq)
 		s.mu.Lock()
 		if !s.Closed && seq == s.promptSeq {
@@ -393,7 +421,7 @@ func (s *cmdShellSession) retryOrRelease(seq uint64) {
 		return
 	}
 
-	vtui.DebugLog("CMD_SESSION: prompt %d never settled, releasing the wait", seq)
+	vtui.DebugLog("CMD_SESSION: prompt %d never settled, releasing the wait (children=%v)", seq, children)
 	s.release()
 }
 
