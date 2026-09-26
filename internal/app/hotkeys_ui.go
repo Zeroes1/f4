@@ -101,6 +101,31 @@ func fitHotkeyColumnWidths(widths []int, budget int) []int {
 	return widths
 }
 
+// hotkeyColumnTitles names the hotkey table's columns in the order
+// hotkeyTableColumns lays them out; the last one, Description, is the only
+// elastic one.
+var hotkeyColumnTitles = []string{"Command", "Key", "Area", "When", "Description"}
+
+// hotkeyColumnFloors are the readable minimum widths fitHotkeyColumns settles
+// the four balanced columns at once there is not enough room for everything
+// (#1239): Key and Area stay legible (no more "Ctrl+Alt+Sh" or "Com"), while
+// Command and When give up the rest of the room first. HotkeyTableMinDialogWidth
+// reuses these same numbers, plus Description's own header width, to size the
+// settings dialog's auto-maximize threshold instead of guessing one (#1239
+// follow-up).
+const (
+	hotkeyCommandFloor = 10
+	hotkeyKeyFloor     = 12
+	hotkeyAreaFloor    = 6
+	hotkeyWhenFloor    = 4
+	// hotkeyTablePadding is the table's own side padding, reserved before its
+	// columns are fitted to the available width.
+	hotkeyTablePadding = 4
+	// hotkeyDialogWidthOffset is added to the table's own page width by its
+	// callers before it reaches hotkeyTableColumns's dialogWidth parameter.
+	hotkeyDialogWidthOffset = 4
+)
+
 // fitHotkeyColumns squeezes the Command, Key, Area and When columns into
 // budget cells. The chord and the area are short and useless once cut ("Ctrl+
 // Alt+Sh", "Com"), while a command name or a condition still reads when
@@ -113,7 +138,7 @@ func fitHotkeyColumns(widths []int, budget int) []int {
 		area    = 2
 		when    = 3
 	)
-	for _, step := range []struct{ col, floor int }{{when, 8}, {command, 16}, {when, 4}, {command, 10}, {area, 6}, {key, 12}} {
+	for _, step := range []struct{ col, floor int }{{when, 8}, {command, 16}, {when, hotkeyWhenFloor}, {command, hotkeyCommandFloor}, {area, hotkeyAreaFloor}, {key, hotkeyKeyFloor}} {
 		if step.col >= len(widths) {
 			continue
 		}
@@ -128,8 +153,21 @@ func fitHotkeyColumns(widths []int, budget int) []int {
 	return fitHotkeyColumnWidths(widths, budget)
 }
 
+// hotkeyDescriptionMinWidth is the least room the elastic Description column
+// ever gets: its own header, whatever the dialog width (#1239).
+func hotkeyDescriptionMinWidth() int {
+	return vtui.StringWidth(hotkeyColumnTitles[len(hotkeyColumnTitles)-1])
+}
+
+// hotkeyDescriptionWidth is how much of dialogWidth the elastic Description
+// column gets: a quarter of the dialog, from its own header's width up to 30
+// cells (#1239).
+func hotkeyDescriptionWidth(dialogWidth int) int {
+	return min(max(dialogWidth/4, hotkeyDescriptionMinWidth()), 30)
+}
+
 func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
-	titles := []string{"Command", "Key", "Area", "When", "Description"}
+	titles := hotkeyColumnTitles
 	widths := make([]int, len(titles))
 	for i, title := range titles {
 		widths[i] = vtui.StringWidth(title)
@@ -147,8 +185,8 @@ func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
 	// columns to the actual dialog width. Its header alone is not enough room
 	// to read anything (#1239): it gets a quarter of the dialog, from the
 	// header's width up to 30 cells.
-	descRoom := min(max(dialogWidth/4, vtui.StringWidth(titles[len(titles)-1])), 30)
-	fixedBudget := dialogWidth - 4 - (len(widths) - 1) - descRoom
+	descRoom := hotkeyDescriptionWidth(dialogWidth)
+	fixedBudget := dialogWidth - hotkeyTablePadding - (len(widths) - 1) - descRoom
 	fixed := fitHotkeyColumns(append([]int(nil), widths[:len(widths)-1]...), fixedBudget)
 	columns := make([]vtui.TableColumn, 0, len(widths))
 	for i, width := range fixed {
@@ -156,6 +194,31 @@ func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
 	}
 	columns = append(columns, vtui.TableColumn{Title: titles[len(titles)-1], Width: 0})
 	return columns
+}
+
+// HotkeyTableMinDialogWidth is the narrowest dialogWidth (hotkeyTableColumns's
+// own units) that keeps every fixed column at its readable minimum -- Command,
+// Key, Area and When at their floors above, Description at its header --
+// rather than shrinking one of them further. It is derived from those same
+// constants, not measured, so it tracks them if they ever change (#1239
+// follow-up).
+func HotkeyTableMinDialogWidth() int {
+	floorSum := hotkeyCommandFloor + hotkeyKeyFloor + hotkeyAreaFloor + hotkeyWhenFloor
+	separators := len(hotkeyColumnTitles) - 1
+	for dialogWidth := floorSum + separators + hotkeyTablePadding + hotkeyDescriptionMinWidth(); ; dialogWidth++ {
+		fixedBudget := dialogWidth - hotkeyTablePadding - separators - hotkeyDescriptionWidth(dialogWidth)
+		if fixedBudget >= floorSum {
+			return dialogWidth
+		}
+	}
+}
+
+// HotkeyTableMinPageWidth is the narrowest the embedded hotkey table's own
+// page area (as internal/settings lays it out: page width = dialogWidth -
+// hotkeyDialogWidthOffset) can be while its columns stay at their readable
+// minimum (#1239 follow-up).
+func HotkeyTableMinPageWidth() int {
+	return HotkeyTableMinDialogWidth() - hotkeyDialogWidthOffset
 }
 
 func selectedHotkeyRowAt(table *vtui.Table, rows []hotkeyRow, displayPos int) (hotkeyRow, bool) {
@@ -681,7 +744,7 @@ func (p *hotkeyPage) ProcessKey(e *vtinput.InputEvent) bool {
 func (p *hotkeyPage) SetPosition(x1, y1, x2, y2 int) {
 	p.Group.SetPosition(x1, y1, x2, y2)
 	p.table.SetPosition(x1, y1, x2, y2-2)
-	p.table.Columns = hotkeyTableColumns(p.rows(), x2-x1+5)
+	p.table.Columns = hotkeyTableColumns(p.rows(), x2-x1+1+hotkeyDialogWidthOffset)
 	x := x1
 	for _, button := range []*vtui.Button{p.assign, p.unbind} {
 		width := vtui.StringWidth(button.GetCaption()) + 4
@@ -689,6 +752,15 @@ func (p *hotkeyPage) SetPosition(x1, y1, x2, y2 int) {
 		x += width + 1
 	}
 }
+
+// HotkeyTableMinPageWidth implements settings.HotkeyTableSizeHost: it lets
+// the Settings dialog size its auto-maximize threshold for the Hotkey
+// Configurator from the same column-width logic the embedded table itself
+// uses, rather than a guessed terminal-width constant (#1239 follow-up).
+func (settingsHost) HotkeyTableMinPageWidth() int {
+	return HotkeyTableMinPageWidth()
+}
+
 func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyManager)) vtui.UIElement {
 	p := &hotkeyPage{Group: vtui.NewGroup(0, 0, 40, 10), owner: owner}
 	p.SetId("hotkey-configurator")

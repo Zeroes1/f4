@@ -81,6 +81,39 @@ func TestIssue1239NarrowPaneStillFits(t *testing.T) {
 	}
 }
 
+// TestIssue1239HotkeyTableMinPageWidthIsTight: HotkeyTableMinPageWidth is the
+// narrowest the embedded table's own page area can be while every fixed
+// column (Command, Key, Area, When) stays at its readable minimum -- one
+// cell less, and at least one of them has to give up more room than that
+// (#1239 follow-up: the settings dialog uses this figure to size its
+// auto-maximize threshold for the Hotkey Configurator).
+func TestIssue1239HotkeyTableMinPageWidthIsTight(t *testing.T) {
+	rows := screenshotHotkeyRows()
+	floors := map[string]int{
+		"Command": hotkeyCommandFloor,
+		"Key":     hotkeyKeyFloor,
+		"Area":    hotkeyAreaFloor,
+		"When":    hotkeyWhenFloor,
+	}
+	allAtFloor := func(pageWidth int) bool {
+		columns := hotkeyTableColumns(rows, pageWidth+hotkeyDialogWidthOffset)
+		for _, col := range columns {
+			if floor, ok := floors[col.Title]; ok && col.Width < floor {
+				return false
+			}
+		}
+		return true
+	}
+
+	minPageWidth := HotkeyTableMinPageWidth()
+	if !allAtFloor(minPageWidth) {
+		t.Fatalf("HotkeyTableMinPageWidth()=%d, but a fixed column is still below its floor there", minPageWidth)
+	}
+	if allAtFloor(minPageWidth - 1) {
+		t.Fatalf("HotkeyTableMinPageWidth()=%d, but %d already keeps every fixed column at its floor -- it is not the minimum", minPageWidth, minPageWidth-1)
+	}
+}
+
 // dialogTexts collects the text of every static line in a frame.
 func dialogTexts(frame vtui.Frame) string {
 	var out []string
