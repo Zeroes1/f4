@@ -137,7 +137,7 @@ func NewAIChatPanel(src *panel.FileSystemPanel) *AIChatPanel {
 	}
 	cp.ExtraLink = extraChatOutputLink
 
-	cp.ChatWindow.SetPosition(x1, y1, x2, y2)
+	cp.SetPosition(x1, y1, x2, y2)
 	return cp
 }
 

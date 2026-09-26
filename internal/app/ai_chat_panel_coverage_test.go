@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/vtvibe"
@@ -141,9 +142,15 @@ func TestAIChatPanelRichMarkdownRenderingAndBusyState(t *testing.T) {
 	if !found {
 		t.Fatal("readme.txt link missing from the visible set")
 	}
-	mx := cp.X1 + 1 + readmeLink.Col
-	my := cp.Y1 + 1 + readmeLink.Row
-	if !cp.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true, MouseX: int16(mx), MouseY: int16(my), ButtonState: vtinput.FromLeft1stButtonPressed}) {
+	mx, ok := numeric.BoundedInt16(cp.X1 + 1 + readmeLink.Col)
+	if !ok {
+		t.Fatal("link column out of int16 range")
+	}
+	my, ok := numeric.BoundedInt16(cp.Y1 + 1 + readmeLink.Row)
+	if !ok {
+		t.Fatal("link row out of int16 range")
+	}
+	if !cp.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true, MouseX: mx, MouseY: my, ButtonState: vtinput.FromLeft1stButtonPressed}) {
 		t.Fatal("click on the readme.txt link was not handled")
 	}
 	if link, ok := cp.FocusedLink(); !ok || link.Target != "ai://ctx/readme.txt" {

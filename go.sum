@@ -303,6 +303,8 @@ github.com/unxed/vtui v0.1.364-0.20260926191016-e4a7e140944d h1:b6UBA6Ib/Xb0zQsI
 github.com/unxed/vtui v0.1.364-0.20260926191016-e4a7e140944d/go.mod h1:tW2t6fsFiUKXU8MtvTRQNYfUkPcat6eRGLon2O7/8E0=
 github.com/unxed/vtui v0.1.364-0.20260926192257-e43fcd5a34c4 h1:djwf2kLIvkrxD13zGFFhBZYZ5SqIFjaL+QLooeCKo9w=
 github.com/unxed/vtui v0.1.364-0.20260926192257-e43fcd5a34c4/go.mod h1:tW2t6fsFiUKXU8MtvTRQNYfUkPcat6eRGLon2O7/8E0=
+github.com/unxed/vtui v0.1.364-0.20260926194444-c7ae918726f4 h1:KMpg13sZYyRU9z/4Dymjq+jUebtUDOsoXiOo4PBDlX4=
+github.com/unxed/vtui v0.1.364-0.20260926194444-c7ae918726f4/go.mod h1:tW2t6fsFiUKXU8MtvTRQNYfUkPcat6eRGLon2O7/8E0=
 github.com/unxed/winkeys v0.1.1 h1:CeRhzQLrZtO2aVq8C8gPX1ySdbbvPombbUZ15cRjFTI=
 github.com/unxed/winkeys v0.1.1/go.mod h1:eCDbEJFdYcii0Fd4O9u+CAqjJ4SkkhWDkhikNFwBCd4=
 github.com/unxed/xkb-go v0.1.8 h1:hqPI2wJw2LQ7YOqghNYat/TJF3pFamCCPjhxI5I3lhU=
