@@ -223,7 +223,7 @@ func TestSettingsStatusSharesActionRow(t *testing.T) {
 					t.Fatal("status not rendered on action row")
 				}
 			}
-			if scr.GetCell(c.apply.X1, c.apply.Y1).Char != '[' || scr.GetCell(c.cancel.X1, c.cancel.Y1).Char != '[' {
+			if vtui.CellBaseRune(scr.GetCell(c.apply.X1, c.apply.Y1).Char) != '[' || vtui.CellBaseRune(scr.GetCell(c.cancel.X1, c.cancel.Y1).Char) != '[' {
 				t.Fatal("status overlaps buttons")
 			}
 		}

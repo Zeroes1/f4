@@ -343,7 +343,7 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 		titleX := c.page.X1 + (c.page.X2-c.page.X1+1-vtui.StringWidth(title))/2
 		for i, ch := range title {
 			cell := scr.GetCell(titleX+i, c.Y1+1)
-			if testutil.Rune(cell.Char) != ch || cell.Attributes != vtui.Palette[vtui.ColDialogBoxTitle] {
+			if vtui.CellBaseRune(cell.Char) != ch || cell.Attributes != vtui.Palette[vtui.ColDialogBoxTitle] {
 				t.Fatal("category title is not centered or does not follow the palette")
 			}
 		}
@@ -359,7 +359,7 @@ func TestSettingsActionCaptionsAppearOnce(t *testing.T) {
 		var rendered strings.Builder
 		for line := c.page.Y1; line <= c.page.Y2; line++ {
 			for col := c.page.X1; col <= c.page.X2; col++ {
-				rendered.WriteRune(testutil.Rune(scr.GetCell(col, line).Char))
+				rendered.WriteRune(vtui.CellBaseRune(scr.GetCell(col, line).Char))
 			}
 			rendered.WriteByte('\n')
 		}
@@ -404,7 +404,7 @@ func TestSettingsCategoryHeadingNotRepeatedInHelp(t *testing.T) {
 		c.Show(scr)
 		var top strings.Builder
 		for x := c.page.X1; x <= c.help.X2; x++ {
-			top.WriteRune(testutil.Rune(scr.GetCell(x, c.Y1+1).Char))
+			top.WriteRune(vtui.CellBaseRune(scr.GetCell(x, c.Y1+1).Char))
 		}
 		if strings.Count(top.String(), c.categoryLabel("operations")) != 1 {
 			t.Fatalf("category heading must appear once: %q", top.String())
@@ -661,7 +661,7 @@ func TestHotkeyCategoryHidesDescriptionRendering(t *testing.T) {
 				for y := 0; y < 30; y++ {
 					var line strings.Builder
 					for x := 0; x < width; x++ {
-						line.WriteRune(testutil.Rune(scr.GetCell(x, y).Char))
+						line.WriteRune(vtui.CellBaseRune(scr.GetCell(x, y).Char))
 					}
 					if strings.Contains(line.String(), "DESCRIPTION_SENTINEL") {
 						t.Fatal("hidden description overpainted hotkey page")
