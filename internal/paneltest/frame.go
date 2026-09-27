@@ -47,10 +47,19 @@ drain:
 		fp.LoadWorkerWG.Wait()
 		close(done)
 	}()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timeout waiting for directory worker to stop")
+	// Keep running UI tasks while waiting: the sentinel may queue behind a
+	// newer read that still posts back, and a loaded Windows runner can take
+	// well over two seconds to finish a directory read (CI hit that limit).
+	stop := time.After(10 * time.Second)
+	for {
+		select {
+		case <-done:
+			return
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-stop:
+			t.Fatal("timeout waiting for directory worker to stop")
+		}
 	}
 }
 
