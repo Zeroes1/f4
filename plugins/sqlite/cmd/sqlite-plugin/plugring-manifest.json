@@ -1,0 +1,11 @@
+{
+    "id": "sqlite",
+    "name": "SQLite database browser",
+    "version": "0.0.0-part1-not-yet-published",
+    "author": "unxed",
+    "description": "Mount a local SQLite database as a read-only top-level f4 drive: browse its tables and read one out as CSV. Ships as a native subprocess plugin so a build does not have to carry the WASM SQLite engine and its wazero runtime in its own binary (f4#1178).",
+    "url": "https://github.com/unxed/f4/releases/latest/download/sqlite-plugin-{os}-{arch}.tar.gz",
+    "entrypoint": "sqlite-plugin",
+    "category": "filesystem",
+    "runtimes": ["native"]
+}
