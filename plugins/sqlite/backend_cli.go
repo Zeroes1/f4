@@ -178,7 +178,10 @@ func readRecords(out []byte) ([][]string, error) {
 // typeof:hex form parseTyped takes apart. A real is written out with
 // printf('%!.17g') first: seventeen significant digits bring back the exact
 // double, where hex() of the number would carry whatever text this sqlite3
-// version converts it to, which in older ones is only fifteen digits.
+// version converts it to, which in older ones is only fifteen digits. The
+// digits are only as good as the SQLite doing the printing, though: macOS's
+// system SQLite formats with plain double arithmetic and hands an extreme
+// value such as 1e300 back one unit in the last place off.
 func typedValue(column string) string {
 	quoted := quoteIdentifier(column)
 	return "typeof(" + quoted + ")||':'||CASE typeof(" + quoted + ") WHEN 'real' THEN hex(printf('%!.17g', " + quoted + ")) ELSE hex(" + quoted + ") END"
