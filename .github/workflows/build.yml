@@ -2263,6 +2263,92 @@ jobs:
         # workflow runs, so this cannot recurse.
         git push
 
+  # Runs the flake's own checks - currently just the Home Manager module's
+  # tests (packaging/nix/home-manager-module-check.nix, added by PR #1584)
+  # - plus one darwin-side evaluation, which a Linux runner would otherwise
+  # skip entirely along with the rest of that platform's outputs.
+  #
+  # This started life as a second job in PR #1584's own version of nix.yml,
+  # written before that file was folded into this workflow by #1583. Folded
+  # in here for the same reason nix-vendor-hash above was: no per-job
+  # equivalent of a workflow-level `paths:` filter exists once a job lives
+  # in build.yml, so the "Determine whether this run touches the flake's
+  # Home Manager module" step below recomputes that decision from the diff,
+  # the same technique nix-vendor-hash uses for its own, differently-scoped
+  # watched-path set. go.mod/go.sum are deliberately not watched here: the
+  # check stands pkgs.hello in for f4 (see PR #1584's description) and never
+  # touches f4's own sources, so a plain dependency bump can't affect it.
+  flake-checks:
+    name: flake checks (Home Manager module)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Determine whether this run touches the flake's Home Manager module
+      id: paths
+      env:
+        BEFORE_SHA: ${{ github.event.before }}
+      run: |
+        set -euo pipefail
+
+        relevant() { echo "relevant=yes" >> "$GITHUB_OUTPUT"; echo "relevant: yes ($1)"; exit 0; }
+        not_relevant() { echo "relevant=no" >> "$GITHUB_OUTPUT"; echo "relevant: no ($1)"; exit 0; }
+
+        is_watched() {
+          case "$1" in
+            flake.nix|flake.lock|.github/workflows/build.yml) return 0 ;;
+            packaging/nix/*) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
+
+        if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+          relevant "workflow_dispatch always ran this check too"
+        fi
+
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          # Same technique as affected-packages and nix-vendor-hash above:
+          # fetch the base branch and diff against it.
+          git fetch --quiet --depth=1 origin "refs/heads/$GITHUB_BASE_REF" || relevant "base fetch failed"
+          files=$(git diff --name-only FETCH_HEAD HEAD)
+        elif [ "$GITHUB_EVENT_NAME" = "push" ]; then
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            not_relevant "push is not to refs/heads/main"
+          fi
+          case "$BEFORE_SHA" in
+            ""|0000000000000000000000000000000000000000)
+              relevant "no previous commit to diff against" ;;
+          esac
+          git fetch --quiet --depth=1 origin "$BEFORE_SHA" || relevant "before-commit fetch failed"
+          files=$(git diff --name-only FETCH_HEAD HEAD)
+        else
+          relevant "unrecognised event $GITHUB_EVENT_NAME; defaulting to running the check"
+        fi
+
+        [ -n "$files" ] || not_relevant "empty diff"
+
+        while IFS= read -r f; do
+          is_watched "$f" && relevant "$f changed"
+        done <<<"$files"
+
+        not_relevant "no watched path changed"
+
+    - name: Set up Nix
+      if: steps.paths.outputs.relevant == 'yes'
+      uses: cachix/install-nix-action@v31
+
+    - name: Run the flake checks
+      if: steps.paths.outputs.relevant == 'yes'
+      run: nix flake check -L
+
+    - name: Evaluate the module for macOS
+      # A Linux runner skips the darwin outputs entirely, including the
+      # module's macOS profile path. Instantiating one darwin check
+      # evaluates that side without building for it.
+      if: steps.paths.outputs.relevant == 'yes'
+      run: nix eval --raw .#checks.aarch64-darwin.home-manager-module.drvPath > /dev/null
+
   # f4 has had Wine-specific code (docs/WINE.md) since before this job
   # existed, verified only by unit tests of its "clean" parts and by manual
   # sessions under a real Wine on the author's machine. This is the missing

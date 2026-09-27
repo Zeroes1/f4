@@ -3,7 +3,12 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-  outputs = { self, nixpkgs }:
+  # Consumed by checks only: homeManagerModules below is a plain module and
+  # takes its Home Manager from whichever configuration imports it.
+  inputs.home-manager.url = "github:nix-community/home-manager";
+  inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { self, nixpkgs, home-manager }:
     let
       inherit (nixpkgs) lib;
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
@@ -91,6 +96,17 @@
       overlays.default = final: _: {
         f4 = self.packages.${final.stdenv.hostPlatform.system}.default;
       };
+
+      homeManagerModules = {
+        default = self.homeManagerModules.f4;
+        f4 = import ./packaging/nix/home-manager-module.nix;
+      };
+
+      checks = forAllSystems ({ pkgs, ... }: {
+        home-manager-module = import ./packaging/nix/home-manager-module-check.nix {
+          inherit pkgs home-manager;
+        };
+      });
 
       devShells = forAllSystems ({ pkgs, ... }: {
         default = pkgs.mkShell {
