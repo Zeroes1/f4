@@ -130,7 +130,6 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 		"panel.restoreselection":           true, // no dialog
 		"app.screengrab":                   true, // full screen raw frame
 		"app.plugring":                     true, // async fetch
-		"app.sqlite":                       true, // f4#1178 part 4: no plugin loaded opens PlugRing, same async fetch as app.plugring
 		"panel.leftdrivemenu":              true, // relies on active pty/panels
 		"panel.rightdrivemenu":             true, // relies on active pty/panels
 		"panel.enterdirectory":             true, // no dialog

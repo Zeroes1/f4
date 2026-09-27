@@ -31,8 +31,8 @@ open a database from the panel, which keeps unrelated `.db` files alone.
 A `-tags lite` build (see the "Lite build" section in [README.md](../README.md)
 for what that trims) writes
 the same information as a plain JSON document instead, under the same `.f4s`
-extension, so that a lite binary is not forced to link `ncruces/go-sqlite3` (and
-its embedded wazero runtime) for this one feature. **The two formats are not
+extension, so that a lite binary is not forced to link `ncruces/go-sqlite3` (the
+whole SQLite engine, translated to Go) for this one feature. **The two formats are not
 interchangeable**: a `.f4s` file saved by a lite build is JSON, and a regular
 build's `IsSheetFile` will not recognise it as a sheet (nor will any SQLite
 tool open it); a `.f4s.sqlite` file saved by a regular build is likewise not

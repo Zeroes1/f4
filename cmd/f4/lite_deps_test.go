@@ -206,16 +206,13 @@ func TestLiteSheetPackageExcludesSQLiteDependency(t *testing.T) {
 	}
 }
 
-// TestLiteBuildExcludesSQLiteDependency is the mechanical half of f4#1178's
-// last step (sqlite-free lite build). Between plugins/sqlite (the SQL
-// editor) moving out into its own RPC-plugin module (f4#1178's batch/f4/3,
-// merged in #1554: it now has its own go.mod at plugins/sqlite/go.mod and
-// is no longer part of this module's build graph at all -- internal/
-// plughost/manager.go's loadInternal no longer wires it in) and unxed/tar's
-// own sqlite-backed archive index having a FlatBuffers-backed replacement,
-// ArcidxIndex, selected via the tarindex_simple build tag, neither the
-// sqlite plugin nor tar/zipper archive indexing should be a reason a real
-// lite build links github.com/ncruces/go-sqlite3.
+// TestLiteBuildExcludesSQLiteDependency keeps github.com/ncruces/go-sqlite3,
+// about 7 MB of a stripped lite binary, out of the lite build. Three things
+// would link it there, and each has its own lite-side answer: the SQLite
+// client (plugins/sqlite) is registered from internal/plughost/
+// plugins_full.go only, internal/sheet saves as JSON (store_lite.go,
+// f4#1552), and unxed/tar's archive index switches to its FlatBuffers
+// backend under the tarindex_simple tag.
 //
 // The real lite build (build-lite in .github/workflows/build.yml) always
 // passes tarindex_simple alongside lite -- see that job's own comment for
@@ -225,15 +222,6 @@ func TestLiteSheetPackageExcludesSQLiteDependency(t *testing.T) {
 // unxed/tar's sqlite-backed index compiled in (its own sqlite_enabled.go
 // carries only a `!tarindex_simple` constraint, not a `lite` one), so it
 // would fail this check for a lite build that was never actually shipped.
-//
-// This is now the bare "must not appear" assertion the previous version of
-// this test could not honestly make while plugins/sqlite still lived inside
-// this module: with it extracted to its own module, it cannot be resolved
-// as a path inside this module's build graph, and by definition cannot be
-// the source of a dependency here either. If go-sqlite3 shows up in the
-// real lite build's dependency graph at all now, that is a regression, full
-// stop, the same as TestLiteSheetPackageExcludesSQLiteDependency already
-// asserts for internal/sheet (f4#1552).
 func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
@@ -275,6 +263,34 @@ func TestRegularBuildStillIncludesSQLiteDependency(t *testing.T) {
 		}
 	}
 	t.Fatalf("a regular build of ./cmd/f4 no longer depends on %s", sqlite)
+}
+
+// TestSQLiteClientIsBuiltInToTheRegularBuildOnly pins where the SQLite client
+// lives. The regular build links the SQLite engine anyway (the spreadsheet
+// and the archive index use it), so the client stays in-process there:
+// shipping it as a separate plugin binary would carry a second copy of the
+// engine and gain nothing. The lite build leaves it out, since it is what
+// would bring the engine back.
+func TestSQLiteClientIsBuiltInToTheRegularBuildOnly(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const client = "github.com/unxed/f4/plugins/sqlite"
+	contains := func(deps []string) bool {
+		for _, imported := range deps {
+			if imported == client {
+				return true
+			}
+		}
+		return false
+	}
+	if !contains(regularBuildDeps(t)) {
+		t.Errorf("a regular build of ./cmd/f4 no longer links %s in-process", client)
+	}
+	if contains(liteBuildDeps(t)) {
+		t.Errorf("a -tags lite,tarindex_simple build of ./cmd/f4 links %s", client)
+	}
 }
 
 func regularBuildDeps(t *testing.T) []string {

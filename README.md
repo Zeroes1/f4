@@ -102,14 +102,16 @@ their own FTP/SFTP backends) stay out entirely (f4#1178, part 3). That
 subprocess dialer covers key- and ssh-agent-based auth; password auth, an
 explicit HTTP/SOCKS5 proxy and this build's own host-key handling are not
 supported (its own comment in `plugins/netfox/fish_dialer_lite.go` has the
-detail on why). The built-in spreadsheet (`Ctrl+Alt+S`) keeps working too, but
-saves its native `.f4s` files as plain JSON instead of a SQLite database, so
-this build does not need to link `ncruces/go-sqlite3` (and its embedded wazero
-runtime) just for that one feature (f4#1178's last step; f4#1552). The two
-on-disk formats are not interchangeable — see the "Files" section of
-[docs/SPREADSHEET.md](docs/SPREADSHEET.md) for the trade-off. Everything
-else — panels, editor, viewer, plugins that do not need the above — works the
-same as the regular build. Built with `go build -tags lite`; see
+detail on why). The build links no SQLite engine (`ncruces/go-sqlite3`, about
+7 MB): the SQLite client (`Ctrl+Alt+D`) is not included, and the `.tar.gz`
+fast index is kept in unxed/tar's FlatBuffers format instead of a
+ratarmount-compatible `.index.sqlite`. The built-in spreadsheet (`Ctrl+Alt+S`)
+keeps working, but saves its native `.f4s` files as plain JSON instead of a
+SQLite database (f4#1552). The two on-disk formats are not interchangeable —
+see the "Files" section of [docs/SPREADSHEET.md](docs/SPREADSHEET.md) for the
+trade-off. Everything else — panels, editor, viewer, Lua and wasm plugins —
+works the same as the regular build. Built with
+`go build -tags lite,tarindex_simple`; see
 `internal/plughost`, `internal/gui`, `internal/editor`, `vfs/hostmode`,
 `internal/media`, `internal/fusefs` and `internal/sheet` for where each
 exclusion is implemented.

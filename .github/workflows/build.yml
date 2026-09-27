@@ -669,16 +669,14 @@ jobs:
   # for the FlatBuffers-backed one everywhere tar's Index/OpenIndex are
   # used through the tag-bound default (writer.go, indexer_enabled.go,
   # fs.go's NewFS when no explicit WithFSIndexBackend override is passed -
-  # none of f4's own callers pass one), dropping unxed/tar's own sqlite/
-  # go-sqlite3/wazero usage from this build. It reaches unxed/tar purely
+  # none of f4's own callers pass one), dropping unxed/tar's own
+  # go-sqlite3 usage from this build. It reaches unxed/tar purely
   # through this -tags string: Go build tags apply across the whole build
   # graph, not per-module, so tar's own package sees tarindex_simple the
-  # same as cmd/f4's. This alone does not yet drop go-sqlite3/wazero from
-  # the lite binary as of f4#1178's step 8: plugins/sqlite (the SQL editor)
-  # still imports the driver directly and unconditionally
-  # (internal/plughost/manager.go) - a separate, independent axis (step 9)
-  # from the same plan (see f4#1178) - so today's size delta printed below
-  # does not move yet; it will once that half lands too. A lite build
+  # same as cmd/f4's. The SQLite client (internal/plughost/plugins_full.go)
+  # and the spreadsheet's native format (internal/sheet/store_lite.go) are
+  # the other two go-sqlite3 users, both left out by -tags lite itself, so
+  # the lite binary links no SQLite engine at all (about 7 MB). A lite build
   # loses ratarmount sidecar/shadow-stream compatibility as a result -
   # opening a `.index.sqlite` someone else already produced, or an
   # archive-embedded ratarmount shadow index - falling back to sequential
@@ -1093,109 +1091,6 @@ jobs:
       with:
         name: ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
         path: plugins/ios/ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
-        retention-days: 7
-
-  # f4#1178 SQLite extraction, part 1 of 4 (mirrors build-cloudfox-plugin/
-  # build-android-plugin/build-ios-plugin above). plugins/sqlite (the panel
-  # command, the mounted-database VFS, the interactive client) no longer
-  # links into f4 at all, in either the full or the lite build; this job
-  # builds its own extracted module as its own binary to prove the
-  # extraction compiles, on the same desktop matrix the other three plugin
-  # jobs use (native plugins are not distributed through the community
-  # PlugRing catalog per PLUGRING.md, so the exotic build-batch tier does
-  # not apply here either).
-  #
-  # Unlike cloudfox/ios, this extraction sheds no *unique* heavy dependency:
-  # plugins/sqlite/rpc_plugin.go's own package comment explains why --
-  # internal/sheet/store.go (the native ".f4s.sqlite" spreadsheet format, an
-  # unrelated feature) imports the same github.com/ncruces/go-sqlite3 driver
-  # directly and unconditionally, so that dependency stays in the main
-  # `build`/`build-lite` jobs' own dependency graph regardless of this job
-  # existing. This job is still worth running: it is what proves
-  # plugins/sqlite's own extracted code (not the shared SQL engine) builds
-  # as a standalone binary at all.
-  #
-  # go.mod here was written by hand, for the same reason
-  # plugins/cloudfox/go.mod's own comment gives (this repo's policy is
-  # CI-only builds/toolchain runs, never local): the `go mod tidy` step
-  # below is the actual source of truth for it and go.sum.
-  #
-  # f4#1178 part 2 of 4: the release job below now publishes these builds as
-  # GitHub Release assets too, at the path plugring-manifest.json's URL
-  # template expects (mirrors build-cloudfox-plugin's own part 2). Same
-  # caveat as that job: this matrix only has 4 of the 6 desktop cells (no
-  # windows/arm64, darwin/arm64), so those two platforms still 404 on the
-  # manifest URL; widening it is left to a later part, same reasoning as
-  # cloudfox's own part 2 (CI job budget, see LUNOBOT.md).
-  #
-  # An install path through PlugRing (part 3) and a lite/full-build menu
-  # entry (part 4) are landed alongside this job, not left as follow-up:
-  # internal/plughost/plugring_firstparty.go's sqlite entry and
-  # internal/app/sqlite_actions.go's PlugRing-focused fallback.
-  build-sqlite-plugin:
-    name: Build sqlite-plugin (${{ matrix.name }})
-    needs: [should-run-full]
-    if: needs.should-run-full.outputs.run-full == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux/amd64
-            goos: linux
-            goarch: amd64
-          - name: linux/arm64
-            goos: linux
-            goarch: arm64
-          - name: windows/amd64
-            goos: windows
-            goarch: amd64
-          - name: darwin/amd64
-            goos: darwin
-            goarch: amd64
-    env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
-    defaults:
-      run:
-        working-directory: plugins/sqlite
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v7
-
-    - name: Set up Go
-      uses: actions/setup-go@v7
-      with:
-        go-version: '1.26.6'
-        cache-dependency-path: plugins/sqlite/go.sum
-
-    - name: go mod tidy
-      run: go mod tidy
-
-    - name: Build sqlite-plugin
-      run: go build -trimpath -o sqlite-plugin ./cmd/sqlite-plugin
-
-    - name: Run go vet (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: go vet ./...
-
-    # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
-    # plugring-manifest.json's URL template expects, for two reasons. First,
-    # the `release` job below downloads every artifact from this run with
-    # `merge-multiple: true`; four matrix cells all producing a file
-    # literally named `sqlite-plugin` would collide into one arbitrary
-    # binary instead of publishing four platform assets. Second, the
-    # release asset name has to be predictable for the manifest URL to
-    # resolve at all.
-    - name: Package sqlite-plugin
-      run: tar -czvf "sqlite-plugin-$GOOS-$GOARCH.tar.gz" sqlite-plugin
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: sqlite-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/sqlite/sqlite-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
         retention-days: 7
 
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
@@ -2384,7 +2279,7 @@ jobs:
   release:
     name: Release
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, build-sqlite-plugin, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -2503,7 +2398,7 @@ jobs:
   nightly:
     name: Nightly
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, build-sqlite-plugin, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

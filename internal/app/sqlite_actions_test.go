@@ -1,17 +1,14 @@
 package app
 
 import (
-	"context"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/i18n"
-	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -67,18 +64,11 @@ func TestSQLiteClientIsInTheCommandsMenuWithItsKey(t *testing.T) {
 }
 
 // TestSQLiteActionReachesThePluginCommand checks both ends of the bridge: no
-// plugin means no success (f4#1178 part 4 sends the user to PlugRing
-// instead, which TestSQLiteActionOpensPlugRingFocusedOnSQLiteWhenNotLoaded
-// pins down on its own; this test just drains and closes that dialog so it
-// does not linger), and a registered plugin is handed the panels frame even
-// when a popup is what the command was chosen from.
+// plugin means no success and no panic, and a registered plugin is handed the
+// panels frame even when a popup is what the command was chosen from.
 func TestSQLiteActionReachesThePluginCommand(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-
-	previousCatalog := plugRingCatalog
-	plugRingCatalog = func(context.Context) ([]plughost.PlugRingItem, error) { return nil, nil }
-	t.Cleanup(func() { plugRingCatalog = previousCatalog })
 
 	pf := panel.NewPanelsFrame()
 	defer pf.Close()
@@ -88,18 +78,6 @@ func TestSQLiteActionReachesThePluginCommand(t *testing.T) {
 	if actionSQLiteClient() {
 		t.Error("the action reported success with no SQLite plugin loaded")
 	}
-
-	dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
-	if !ok {
-		t.Fatalf("no SQLite plugin loaded did not open the PlugRing dialog, top frame = %T", vtui.FrameManager.GetTopFrame())
-	}
-	select {
-	case task := <-vtui.FrameManager.TaskChan:
-		task()
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the PlugRing catalog fetch")
-	}
-	dlg.Close()
 
 	var ran vfs.App
 	registration, err := (&coreAPI{}).RegisterPluginCommand(vfs.PluginCommand{
@@ -122,69 +100,5 @@ func TestSQLiteActionReachesThePluginCommand(t *testing.T) {
 	}
 	if ran != vfs.App(pf) {
 		t.Errorf("the command ran against %v, expected the panels frame", ran)
-	}
-}
-
-// TestSQLiteActionOpensPlugRingFocusedOnSQLiteWhenNotLoaded is f4#1178, part
-// 4 of 4: it pins down what Ctrl+Alt+D/the SQLite client menu row does now
-// that no build ever loads plugins/sqlite in-process any more (see
-// sqlitePluginCommandID's own comment for the history), the same way
-// TestAndroidDriveOpensPlugRingFocusedOnAndroid
-// (android_plugin_menu_test.go) and
-// TestCloudStorageLiteDriveOpensPlugRingFocusedOnCloudfox
-// (cloud_storage_lite_test.go) do for their own now-external plugin.
-func TestSQLiteActionOpensPlugRingFocusedOnSQLiteWhenNotLoaded(t *testing.T) {
-	t.Cleanup(paneltest.SwapFrameManager(t))
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-
-	previousCatalog := plugRingCatalog
-	plugRingCatalog = func(context.Context) ([]plughost.PlugRingItem, error) {
-		return []plughost.PlugRingItem{
-			{ID: "aaa-before", Name: "Alphabetically first", Entrypoint: "aaa.lua", Category: "tools"},
-			{ID: "sqlite", Name: "SQLite database browser", Entrypoint: "sqlite-plugin", Category: "filesystem", FirstParty: true},
-			{ID: "zzz-after", Name: "Alphabetically last", Entrypoint: "zzz.lua", Category: "tools"},
-		}, nil
-	}
-	t.Cleanup(func() { plugRingCatalog = previousCatalog })
-
-	pf := panel.NewPanelsFrame()
-	defer pf.Close()
-	vtui.FrameManager.Push(pf)
-
-	if actionSQLiteClient() {
-		t.Error("the action reported success with no SQLite plugin loaded")
-	}
-
-	dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
-	if !ok {
-		t.Fatalf("selecting the SQLite client with no plugin loaded did not open a dialog, top frame = %T", vtui.FrameManager.GetTopFrame())
-	}
-	if got, want := dlg.GetTitle(), i18n.Msg("PlugRing.Title"); got != want {
-		t.Fatalf("dialog title = %q, want the PlugRing dialog %q", got, want)
-	}
-
-	select {
-	case task := <-vtui.FrameManager.TaskChan:
-		task()
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the PlugRing catalog fetch")
-	}
-
-	var table *vtui.Table
-	for _, child := range dlg.GetChildren() {
-		if candidate, ok := child.(*vtui.Table); ok {
-			table = candidate
-			break
-		}
-	}
-	if table == nil {
-		t.Fatal("PlugRing dialog has no table")
-	}
-	if table.SelectPos < 0 || table.SelectPos >= len(table.Rows) {
-		t.Fatalf("SelectPos = %d out of range for %d rows", table.SelectPos, len(table.Rows))
-	}
-	row, ok := table.Rows[table.SelectPos].(plugRingRow)
-	if !ok || row.item.ID != "sqlite" {
-		t.Fatalf("opening the SQLite client with no plugin loaded did not land on the sqlite row, selected row = %#v", table.Rows[table.SelectPos])
 	}
 }
