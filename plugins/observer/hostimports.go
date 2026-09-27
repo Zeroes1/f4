@@ -3,6 +3,7 @@ package observer
 import (
 	"bytes"
 	"context"
+	"os"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -40,13 +41,17 @@ func (h *hostState) beginCall() {
 	h.lastStderr = ""
 }
 
-// stderrWriter captures the module's stderr into hostState.lastStderr.
+// stderrWriter captures the module's stderr into hostState.lastStderr, and
+// -- like colorer4go's streamWriter does absent a diagnostics handler --
+// also forwards it to the host process's own stderr, so a module's own
+// debug output (or an abort message on a live run) is not silently dropped.
 type stderrWriter struct {
 	host *hostState
 	buf  []byte
 }
 
 func (w *stderrWriter) Write(p []byte) (int, error) {
+	_, _ = os.Stderr.Write(p)
 	w.buf = append(w.buf, p...)
 	for {
 		i := bytes.IndexByte(w.buf, '\n')
