@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/ttyx"
 	"github.com/unxed/f4/internal/viewer"
@@ -185,7 +186,7 @@ func (vv *VideoView) Close() {
 func (vv *VideoView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
-			"", "", "", "", "", "", "", "", "", "Quit",
+			"", "", "", "", "", "", "", "", "", i18n.Msg("KeyBar.F10"),
 		},
 	}
 }
