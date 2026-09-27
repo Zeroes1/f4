@@ -40,7 +40,10 @@
           env.CGO_ENABLED = "0";
           dontPatchELF = true;
 
-          vendorHash = "sha256-oAc7nXGwMGgSSXfKI8seKRfmzBA27Hj4zq/OqmcwlwE=";
+          # Must track go.mod/go.sum: after a dependency change nix build
+          # fails with "hash mismatch in fixed-output derivation ... got:
+          # sha256-...", and that got: value is the new vendorHash.
+          vendorHash = "sha256-L35OALgavCndKB3EdYcZAvbO4xqizqTjYv+QTKwNOvE=";
 
           subPackages = [ "cmd/f4" ];
 
