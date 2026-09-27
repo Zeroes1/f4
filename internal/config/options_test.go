@@ -66,6 +66,13 @@ func TestWithOptionReadsTheValueBackLikeLoadConfig(t *testing.T) {
 	if next := WithOption(cfg, "Panel", "ArchiveTarIndexCache", "0"); next.ArchiveTarIndexCache {
 		t.Error("Panel/ArchiveTarIndexCache = 0 was not honoured")
 	}
+	// Preferring ratarmount is opt-in: off unless the user turns it on (#251).
+	if cfg.ArchiveUseRatarmountIfAvailable {
+		t.Error("ArchiveUseRatarmountIfAvailable is on by default")
+	}
+	if next := WithOption(cfg, "Panel", "ArchiveUseRatarmountIfAvailable", "1"); !next.ArchiveUseRatarmountIfAvailable {
+		t.Error("Panel/ArchiveUseRatarmountIfAvailable = 1 was not honoured")
+	}
 	cfg.EditorTabSize = 2
 	next := WithOption(cfg, "Panel", "ShowDirPrefix", "1")
 	if !next.ShowDirPrefix || next.EditorTabSize != 2 {

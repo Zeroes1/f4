@@ -33,6 +33,7 @@ func tarIndexPath(localPath string) string {
 	if !looksLikeTar(localPath) {
 		return ""
 	}
+	maybeLogRatarmountPreference()
 	tarindexcache.Cleanup()
 	// A sidecar index next to the archive is the user's (ratarmount's own
 	// convention); leave it to the library, which prefers it.

@@ -41,6 +41,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.ShowSymlinkArrow = true
 	App.StartInCurrentFolder = true
 	App.ArchiveTarIndexCache = false
+	App.ArchiveUseRatarmountIfAvailable = true
 	App.PanelScrollbarMode = PanelScrollbarMinimal
 	App.ShowPanelFileInfo = true
 	App.MacroRecordFormat = 1
@@ -77,6 +78,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.ShowSymlinkArrow = false
 	App.StartInCurrentFolder = false
 	App.ArchiveTarIndexCache = true
+	App.ArchiveUseRatarmountIfAvailable = false
 	App.PanelScrollbarMode = PanelScrollbarOff
 	App.ShowPanelFileInfo = false
 	App.MacroRecordFormat = 0
@@ -163,6 +165,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if App.ArchiveTarIndexCache {
 		t.Error("LoadConfig failed to restore a disabled ArchiveTarIndexCache")
+	}
+	if !App.ArchiveUseRatarmountIfAvailable {
+		t.Error("LoadConfig failed to restore an enabled ArchiveUseRatarmountIfAvailable")
 	}
 	if App.PanelScrollbarMode != PanelScrollbarMinimal {
 		t.Errorf("LoadConfig restored PanelScrollbarMode %v, want minimal", App.PanelScrollbarMode)
