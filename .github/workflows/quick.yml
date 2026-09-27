@@ -60,5 +60,27 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # plugins/observer's tests need a tiny wasm test fixture (f4#1563,
+      # part 1), compiled from testdata/stub/observer_stub.c with wasi-sdk
+      # and never checked in -- see scripts/build_observer_test_wasm.sh.
+      # Cached by wasi-sdk version so this costs a download only once.
+      - name: Cache wasi-sdk
+        id: cache-wasi-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/wasi-sdk
+          key: wasi-sdk-34-x86_64-linux
+
+      - name: Install wasi-sdk
+        if: steps.cache-wasi-sdk.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o /tmp/wasi-sdk.tar.gz \
+            https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz
+          sudo mkdir -p /opt/wasi-sdk
+          sudo tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C /opt/wasi-sdk
+
+      - name: Build plugins/observer test fixture
+        run: WASI_SDK_PATH=/opt/wasi-sdk ./scripts/build_observer_test_wasm.sh
+
       - name: Test
         run: go test ./...
