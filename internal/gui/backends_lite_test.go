@@ -1,4 +1,4 @@
-//go:build lite
+//go:build lite && !tty_only
 
 package gui
 

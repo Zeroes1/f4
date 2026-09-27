@@ -1943,6 +1943,10 @@ jobs:
           esac
         fi
 
+    - name: Test TTY-only GUI boundary
+      if: matrix.target == 'linux/amd64'
+      run: go test -tags tty_only,vtui_noebiten,vtui_nogogpu -run '^TestTTYOnly' ./internal/gui ./internal/app
+
     - name: Upload coverage to Codecov
       if: matrix.cover && hashFiles('cover.out') != ''
       uses: codecov/codecov-action@v7

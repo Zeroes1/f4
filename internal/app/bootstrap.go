@@ -865,6 +865,9 @@ func runGuiBackend(backend string, fromConfig bool) error {
 }
 
 func shouldTryGui() bool {
+	if !gui.Available {
+		return false
+	}
 	if runtime.GOOS == "windows" {
 		// Windows ships separate binaries for console (f4.exe) and GUI
 		// (f4-gui.exe). GUI mode is not auto-detected; it must be requested

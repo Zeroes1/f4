@@ -54,6 +54,14 @@ The repository is a flake. Run f4 without installing it:
 nix run github:unxed/f4
 ```
 
+The default package contains both terminal and graphical modes. To start a
+graphical window explicitly, use `nix run github:unxed/f4#gui`. The separate
+`f4-tty` package is compiled without GUI backends and installs `f4-tty`;
+run it with `nix run github:unxed/f4#tty`. Both packages can be installed
+together. The flake exports them as `packages.<system>.f4-gui` and
+`packages.<system>.f4-tty` (and as `pkgs.f4-gui` and `pkgs.f4-tty` through
+the overlay). `packages.<system>.f4` remains an alias of `f4-gui`.
+
 For a persistent install, add `overlays.default` to your configuration and
 use `pkgs.f4`; `nix develop github:unxed/f4` opens a Go development shell.
 
