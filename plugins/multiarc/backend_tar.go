@@ -17,18 +17,32 @@ func (tarBackend) id() string { return "tar" }
 
 func tarAvailable() bool { return toolAvailable("tar") }
 
+// tarForceLocalArgs is "--force-local" when the tar on PATH is GNU tar,
+// which otherwise reads an absolute path starting "C:\" (any Windows drive
+// letter) as a "host:path" remote-archive spec and fails to open a plain
+// local file; bsdtar and BusyBox tar have no such heuristic, and no such
+// flag, so they get nothing added.
+func tarForceLocalArgs(ctx context.Context) []string {
+	if probeTar(ctx).flavor == tarGNU {
+		return []string{"--force-local"}
+	}
+	return nil
+}
+
 func (tarBackend) list(ctx context.Context, localPath string) ([]entry, error) {
-	out, errOut, err := runTool(ctx, "tar", "-tf", localPath)
+	args := append(tarForceLocalArgs(ctx), "-tf", localPath)
+	out, errOut, err := runTool(ctx, "tar", args...)
 	if err != nil {
-		return nil, fmt.Errorf("multiarc: tar -tf %s: %w (%s)", localPath, err, strings.TrimSpace(string(errOut)))
+		return nil, fmt.Errorf("multiarc: tar %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(errOut)))
 	}
 	return parseBareNameListing(out), nil
 }
 
 func (tarBackend) extractAll(ctx context.Context, localPath, destDir string) error {
-	_, errOut, err := runTool(ctx, "tar", "-xf", localPath, "-C", destDir)
+	args := append(tarForceLocalArgs(ctx), "-xf", localPath, "-C", destDir)
+	_, errOut, err := runTool(ctx, "tar", args...)
 	if err != nil {
-		return fmt.Errorf("multiarc: tar -xf %s -C %s: %w (%s)", localPath, destDir, err, strings.TrimSpace(string(errOut)))
+		return fmt.Errorf("multiarc: tar %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(errOut)))
 	}
 	return nil
 }
@@ -37,9 +51,10 @@ func (tarBackend) extractOne(ctx context.Context, localPath, destDir, member str
 	if member == "" {
 		return errors.New("multiarc: extractOne needs a member path")
 	}
-	_, errOut, err := runTool(ctx, "tar", "-xf", localPath, "-C", destDir, "--", member)
+	args := append(tarForceLocalArgs(ctx), "-xf", localPath, "-C", destDir, "--", member)
+	_, errOut, err := runTool(ctx, "tar", args...)
 	if err != nil {
-		return fmt.Errorf("multiarc: tar -xf %s -C %s -- %s: %w (%s)", localPath, destDir, member, err, strings.TrimSpace(string(errOut)))
+		return fmt.Errorf("multiarc: tar %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(errOut)))
 	}
 	return nil
 }

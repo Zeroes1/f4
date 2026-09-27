@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -67,6 +68,9 @@ func TestHasWildcard(t *testing.T) {
 }
 
 func TestRewriteArchiveReplacesAndKeepsMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits")
+	}
 	dir := t.TempDir()
 	arc := filepath.Join(dir, "a.tar")
 	if err := os.WriteFile(arc, []byte("old"), 0o600); err != nil {

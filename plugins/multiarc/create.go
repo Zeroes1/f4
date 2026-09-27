@@ -98,15 +98,22 @@ func planCreateZip(ctx context.Context) (createBuild, error) {
 func sevenZipCreate(bin, typeSwitch string) createBuild {
 	return func(ctx context.Context, srcDir string, names []string, workDir, outName string) (string, error) {
 		args := append([]string{"a"}, sevenZipNameSwitches(names, typeSwitch, "-y")...)
-		args = append(append(args, filepath.Join(workDir, outName), "--"), names...)
+		args = append(append(args, filepath.Join(workDir, outName), "--"), sevenZipMemberArgs(names)...)
 		return outName, runToolChecked(ctx, srcDir, bin, args...)
 	}
 }
 
-// tarCreate runs "tar -c" with an optional compression option.
+// tarCreate runs "tar -c" with an optional compression option. --force-local
+// goes in for GNU tar: its own heuristics otherwise read the target's
+// leading "C:\" on Windows as a "host:path" remote-archive spec and fail
+// with "Cannot connect to C: resolve failed" rather than write a local
+// file; bsdtar and BusyBox tar have no such heuristic (and no such flag).
 func tarCreate(info tarInfo, flag string) createBuild {
 	return func(ctx context.Context, srcDir string, names []string, workDir, outName string) (string, error) {
 		args := []string{"-c"}
+		if info.flavor == tarGNU {
+			args = append(args, "--force-local")
+		}
 		if flag != "" {
 			args = append(args, flag)
 		}
