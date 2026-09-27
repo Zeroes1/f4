@@ -1,8 +1,10 @@
-//go:build lite
+//go:build lite && !tty_only
 
 package gui
 
 import "strings"
+
+const Available = true
 
 // BackendBuilt reports whether this binary carries the named GUI backend.
 //
