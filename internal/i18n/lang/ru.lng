@@ -585,6 +585,9 @@ Action.App.Spreadsheet.Desc=Открыть рабочее пространств
 ; --- SQLite ---
 Action.App.SQLite=&Клиент SQLite
 Action.App.SQLite.Desc=Открыть клиент SQLite для базы данных под курсором
+; --- ProcList ---
+Action.App.ProcList=Список процессов
+Action.App.ProcList.Desc=Открыть живой список процессов в активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Player.Desc=Показать или скрыть панель аудиоплеера
 Action.Settings.MacKeyboard=Клавиатура &Mac

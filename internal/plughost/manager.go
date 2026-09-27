@@ -10,6 +10,7 @@ import (
 	"github.com/unxed/f4/plugins/envman"
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/mediainfo"
+	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/visren"
 	"github.com/unxed/f4/vfs"
@@ -155,6 +156,7 @@ func (pm *PluginManager) loadInternal() {
 		envman.NewPlugin(config.GetF4ConfigDir()),
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
 		sqliteplugin.NewPlugin(),
+		proclist.NewPlugin(),
 	}
 	// cloudfox (cloud services), android (ADB device browsing) and iOS
 	// (Apple mobile devices over usbmuxd) stay excluded from both builds
