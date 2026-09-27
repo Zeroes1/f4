@@ -238,8 +238,8 @@ type StorageItemInfo struct {
 
 func decodeStorageItemInfo(b []byte) StorageItemInfo {
 	return StorageItemInfo{
-		Size:             int64(binary.LittleEndian.Uint64(b[storageItemInfoSizeOff:])), //nolint:gosec // G115: reinterprets bits, not a narrowing conversion.
-		PackedSize:       int64(binary.LittleEndian.Uint64(b[storageItemInfoPackedSizeOff:])),
+		Size:             int64(binary.LittleEndian.Uint64(b[storageItemInfoSizeOff:])),       //nolint:gosec // G115: reinterprets bits, not a narrowing conversion.
+		PackedSize:       int64(binary.LittleEndian.Uint64(b[storageItemInfoPackedSizeOff:])), //nolint:gosec // G115: reinterprets bits, not a narrowing conversion.
 		Attributes:       binary.LittleEndian.Uint32(b[storageItemInfoAttributesOff:]),
 		CreationTime:     decodeFileTime(b[storageItemInfoCreationTimeOff : storageItemInfoCreationTimeOff+fileTimeSize]),
 		ModificationTime: decodeFileTime(b[storageItemInfoModificationTimeOff : storageItemInfoModificationTimeOff+fileTimeSize]),
@@ -278,7 +278,7 @@ const (
 // error.
 func encodeExtractOperationParams(b []byte, itemIndex, flags int32, destPathPtr, passwordPtr, signalContext, fileProgress uint32) {
 	binary.LittleEndian.PutUint32(b[extractOperationParamsItemIndexOff:], uint32(itemIndex)) //nolint:gosec // G115: reinterprets bits, not a narrowing conversion.
-	binary.LittleEndian.PutUint32(b[extractOperationParamsFlagsOff:], uint32(flags))
+	binary.LittleEndian.PutUint32(b[extractOperationParamsFlagsOff:], uint32(flags))         //nolint:gosec // G115: reinterprets bits, not a narrowing conversion.
 	binary.LittleEndian.PutUint32(b[extractOperationParamsDestPathOff:], destPathPtr)
 	binary.LittleEndian.PutUint32(b[extractOperationParamsPasswordOff:], passwordPtr)
 	binary.LittleEndian.PutUint32(b[extractOperationParamsCallbacksOff+extractProcessCallbacksSignalContextOff:], signalContext)

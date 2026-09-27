@@ -41,13 +41,20 @@ func TestAbsInt(t *testing.T) {
 // privilege, unlike lowering it, which needs CAP_SYS_NICE/RLIMIT_NICE this
 // test's CI user may not have -- asserting that direction here would be
 // testing the environment, not this code.
+//
+// It checks the *outcome* (true nice value after == niceLadder[level]) via
+// rawPriorityToNice, rather than comparing raw before/after numbers: that
+// raw-to-nice mapping is platform-specific (see priority_raw_linux.go /
+// priority_raw_darwin.go), so a before-vs-after comparison in raw units
+// would only be valid on the platform it was written against.
 func TestChangePriorityLowersOwnNiceValue(t *testing.T) {
 	pid := os.Getpid()
-	before, err := unix.Getpriority(unix.PRIO_PROCESS, pid)
+	beforeRaw, err := unix.Getpriority(unix.PRIO_PROCESS, pid)
 	if err != nil {
 		t.Fatalf("Getpriority: %v", err)
 	}
-	t.Cleanup(func() { _ = unix.Setpriority(unix.PRIO_PROCESS, pid, 20-before) })
+	before := rawPriorityToNice(beforeRaw)
+	t.Cleanup(func() { _ = unix.Setpriority(unix.PRIO_PROCESS, pid, before) })
 
 	level, err := changePriority(pid, false)
 	if err != nil {
@@ -57,15 +64,16 @@ func TestChangePriorityLowersOwnNiceValue(t *testing.T) {
 		t.Fatalf("changePriority returned an out-of-range level %d", level)
 	}
 
-	after, err := unix.Getpriority(unix.PRIO_PROCESS, pid)
+	afterRaw, err := unix.Getpriority(unix.PRIO_PROCESS, pid)
 	if err != nil {
 		t.Fatalf("Getpriority after: %v", err)
 	}
-	// getpriority(2)'s raw return is 20-nice (see changePriority's own
-	// comment): a higher true nice value -- lower priority, what "lower"
-	// asked for -- reads back as a *smaller* raw number.
-	if after >= before {
-		t.Fatalf("nice value did not increase: before=%d after=%d (raw getpriority, 20-nice)", before, after)
+	after := rawPriorityToNice(afterRaw)
+	if after != niceLadder[level] {
+		t.Fatalf("nice value after changePriority = %d, want niceLadder[%d] = %d", after, level, niceLadder[level])
+	}
+	if after < before && nearestNiceIndex(before) > 0 {
+		t.Fatalf("changePriority(lower) moved priority up instead of down: before=%d after=%d", before, after)
 	}
 }
 
