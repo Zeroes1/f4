@@ -67,25 +67,24 @@ func TestLiteBuildStillIncludesFishPlus(t *testing.T) {
 	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", fishplus)
 }
 
-// TestLiteBuildExcludesWasmRuntime is the mechanical half of f4#1178's
-// wasm-plugin removal: internal/plughost/transport_wazero.go, the transport
-// that runs a .wasm plugin inside f4 via wazero, moved behind //go:build
-// !lite (see internal/plughost/transport_wazero_lite.go for the stand-in a
-// lite build gets instead). This is what catches wazero -- its runtime, the
-// wazevo JIT backends, wasi_snapshot_preview1 -- quietly coming back in
-// through a different, untagged file.
-func TestLiteBuildExcludesWasmRuntime(t *testing.T) {
+// TestLiteBuildStillIncludesWasmRuntime keeps wasm plugins in the lite
+// build. f4#1178 once moved internal/plughost/transport_wazero.go behind
+// //go:build !lite, but wazero weighs only about 1.5-2.7 MB there (4-5% of
+// the stripped binary, least on the arm and mipsle targets lite is for), and
+// a lite build without it cannot run the sandboxed plugins PlugRing is built
+// around. A build tag that drops the transport again fails here.
+func TestLiteBuildStillIncludesWasmRuntime(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
 	}
 
 	const wazero = "github.com/tetratelabs/wazero"
-	deps := liteBuildDeps(t)
-	for _, imported := range deps {
-		if imported == wazero || strings.HasPrefix(imported, wazero+"/") {
-			t.Fatalf("a -tags lite build of ./cmd/f4 still depends on %s", imported)
+	for _, imported := range liteBuildDeps(t) {
+		if imported == wazero {
+			return
 		}
 	}
+	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", wazero)
 }
 
 // TestLiteBuildExcludesAudioPlayerDependencies is the mechanical half of
@@ -156,9 +155,8 @@ func TestRegularBuildStillIncludesAudioPlayerDependencies(t *testing.T) {
 	}
 }
 
-// TestRegularBuildStillIncludesWasmRuntime is the other side of the same
-// check: an overzealous build tag that dropped the wasm transport out of a
-// regular build too would pass the test above for the wrong reason.
+// TestRegularBuildStillIncludesWasmRuntime is the regular build's half of
+// TestLiteBuildStillIncludesWasmRuntime.
 func TestRegularBuildStillIncludesWasmRuntime(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
