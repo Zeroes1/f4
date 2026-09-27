@@ -661,6 +661,29 @@ jobs:
   # comparison rather than against the main matrix's goffi_universal
   # linux/amd64), purely to print the size comparison f4#1178 asks for in
   # this job's own log; it is not packaged or uploaded.
+  #
+  # tarindex_simple (added alongside lite here, not on the control binary,
+  # same reasoning as goffi_static/noffi above - it's part of what "lite"
+  # means, not a baseline the comparison should share) is unxed/tar's own
+  # build tag (unxed/tar#10/#11): it swaps the sqlite-backed archive index
+  # for the FlatBuffers-backed one everywhere tar's Index/OpenIndex are
+  # used through the tag-bound default (writer.go, indexer_enabled.go,
+  # fs.go's NewFS when no explicit WithFSIndexBackend override is passed -
+  # none of f4's own callers pass one), dropping unxed/tar's own sqlite/
+  # go-sqlite3/wazero usage from this build. It reaches unxed/tar purely
+  # through this -tags string: Go build tags apply across the whole build
+  # graph, not per-module, so tar's own package sees tarindex_simple the
+  # same as cmd/f4's. This alone does not yet drop go-sqlite3/wazero from
+  # the lite binary as of f4#1178's step 8: plugins/sqlite (the SQL editor)
+  # still imports the driver directly and unconditionally
+  # (internal/plughost/manager.go) - a separate, independent axis (step 9)
+  # from the same plan (see f4#1178) - so today's size delta printed below
+  # does not move yet; it will once that half lands too. A lite build
+  # loses ratarmount sidecar/shadow-stream compatibility as a result -
+  # opening a `.index.sqlite` someone else already produced, or an
+  # archive-embedded ratarmount shadow index - falling back to sequential
+  # extraction there exactly as already happens on the BSD/Solaris/illumos
+  # OSes without cgo-free sqlite (see unxed/tar#9's package doc comment).
   build-lite:
     name: Build lite (${{ matrix.name }})
     needs: [should-run-full]
@@ -724,7 +747,7 @@ jobs:
           APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
-        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
+        go build -tags "lite,tarindex_simple,${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$APP_LDFLAGS" -o build/f4 ./cmd/f4
         go build -tags "${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$APP_LDFLAGS" -o build-control/f4 ./cmd/f4
@@ -738,7 +761,7 @@ jobs:
           | tee -a "$GITHUB_STEP_SUMMARY"
         rm -rf build-control
 
-        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
+        go build -tags "lite,tarindex_simple,${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$LDFLAGS" -o build/plugins/dummy_internal/f4-internal-dummy-plugin \
           ./plugins/dummy_internal
 

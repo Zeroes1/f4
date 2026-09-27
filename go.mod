@@ -29,11 +29,11 @@ require (
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.6
 	github.com/unxed/sevenzip v0.1.7
-	github.com/unxed/tar v0.1.136
+	github.com/unxed/tar v0.1.137
 	github.com/unxed/vtinput v0.1.8
 	github.com/unxed/vtui v0.1.367
 	github.com/unxed/zip v0.1.143
-	github.com/unxed/zipper v0.1.175
+	github.com/unxed/zipper v0.1.176
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
@@ -100,6 +100,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
 	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
