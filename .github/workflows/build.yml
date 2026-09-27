@@ -1831,6 +1831,32 @@ jobs:
       id: affected
       uses: ./.github/actions/affected-packages
 
+    # plugins/observer's tests need a tiny wasm test fixture (f4#1563, part
+    # 1). Built only on this one cell -- linux/amd64 is where the affected
+    # package (if any) is compiled everywhere else too, and wasi-sdk is only
+    # worth installing once, not on all nine cells -- everywhere else the
+    # tests skip themselves for lack of the fixture (see
+    # scripts/build_observer_test_wasm.sh and plugins/observer/observer_test.go).
+    - name: Cache wasi-sdk
+      id: cache-wasi-sdk
+      if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
+      uses: actions/cache@v4
+      with:
+        path: /opt/wasi-sdk
+        key: wasi-sdk-34-x86_64-linux
+
+    - name: Install wasi-sdk
+      if: runner.os == 'Linux' && matrix.target == 'linux/amd64' && steps.cache-wasi-sdk.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL -o /tmp/wasi-sdk.tar.gz \
+          https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz
+        sudo mkdir -p /opt/wasi-sdk
+        sudo tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C /opt/wasi-sdk
+
+    - name: Build plugins/observer test fixture
+      if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
+      run: WASI_SDK_PATH=/opt/wasi-sdk ./scripts/build_observer_test_wasm.sh
+
     - name: Run Tests
       shell: bash
       env:
