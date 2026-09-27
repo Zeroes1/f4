@@ -44,7 +44,7 @@ drain:
 	fp.EnqueueDirectoryLoad(func() {})
 	done := make(chan struct{})
 	go func() {
-		fp.LoadWorkerWG.Wait()
+		fp.WaitForIdle()
 		close(done)
 	}()
 	// Keep running UI tasks while waiting: the sentinel may queue behind a

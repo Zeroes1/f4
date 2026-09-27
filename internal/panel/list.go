@@ -526,9 +526,20 @@ type FileSystemPanel struct {
 	loadingFrame   int
 	loadingVisible bool
 
-	LoadingGeneration          uint64
-	loadQueueMu                sync.Mutex
-	LoadWorkerWG               sync.WaitGroup // joins the single directory-load queue worker
+	LoadingGeneration uint64
+	loadQueueMu       sync.Mutex
+	// loadIdleCh is closed while no directory-load worker is running for this
+	// panel, and replaced with a fresh (open) channel exactly when one starts;
+	// both transitions happen under loadQueueMu. WaitForIdle blocks on it
+	// instead of a WaitGroup: EnqueueDirectoryLoad only Adds once per "round"
+	// (a fresh worker started while none was active), and reusing a WaitGroup
+	// across independent rounds like that lets a fresh Add race a Wait that
+	// is still unblocking from the round before it -- sync.WaitGroup's own
+	// doc comment calls this out. That is exactly what -race caught: a
+	// leftover AI download's RefreshAll re-armed the queue while a test
+	// helper's join goroutine was still returning from the round that had
+	// just finished.
+	loadIdleCh                 chan struct{}
 	loadWorkerActive           bool
 	pendingDirectoryLoad       func()
 	ProviderOpenTask           *vtui.TaskContext
@@ -1952,7 +1963,7 @@ func (fp *FileSystemPanel) EnqueueDirectoryLoad(load func()) {
 		return
 	}
 	fp.loadWorkerActive = true
-	fp.LoadWorkerWG.Add(1)
+	fp.loadIdleCh = make(chan struct{})
 	// Every worker is also counted process-wide. A worker reads globals while
 	// it runs -- config.App and vtui.FrameManager, and the frame manager's task
 	// queue when it posts back -- so anything that replaces one of those has to
@@ -1965,7 +1976,6 @@ func (fp *FileSystemPanel) EnqueueDirectoryLoad(load func()) {
 
 	go func() {
 		defer DirectoryLoadWorkers.Done()
-		defer fp.LoadWorkerWG.Done()
 		next := load
 		for next != nil {
 			next()
@@ -1975,10 +1985,35 @@ func (fp *FileSystemPanel) EnqueueDirectoryLoad(load func()) {
 			fp.pendingDirectoryLoad = nil
 			if next == nil {
 				fp.loadWorkerActive = false
+				close(fp.loadIdleCh)
 			}
 			fp.loadQueueMu.Unlock()
 		}
 	}()
+}
+
+// WaitForIdle blocks until fp has no directory-load worker running. It is
+// how a test joins the queue between actions, and it must be used instead of
+// waiting on a WaitGroup directly: EnqueueDirectoryLoad above only Add(1)s
+// once per round (a fresh worker starting while none was active), so a
+// second, unrelated EnqueueDirectoryLoad call can legally re-arm the queue
+// at any time -- including while a caller here is still unblocking from the
+// round that just finished. sync.WaitGroup does not support that reuse
+// pattern without synchronizing the new Add against the outstanding Wait
+// itself, so calling Wait() directly races. loadIdleCh only ever changes
+// under loadQueueMu, so every wait below is on a channel a concurrent
+// EnqueueDirectoryLoad cannot be racing to close.
+func (fp *FileSystemPanel) WaitForIdle() {
+	for {
+		fp.loadQueueMu.Lock()
+		idleCh := fp.loadIdleCh
+		active := fp.loadWorkerActive
+		fp.loadQueueMu.Unlock()
+		if !active {
+			return
+		}
+		<-idleCh
+	}
 }
 
 // cancelProviderOpen invalidates an asynchronous VFS mount before asking its
