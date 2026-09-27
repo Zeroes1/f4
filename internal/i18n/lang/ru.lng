@@ -1680,6 +1680,8 @@ Compare.Moved=Панели больше не показывают сравнив
 Compare.Failed=Сравнение не удалось:\n%s
 Compare.ReadFailed=Некоторые файлы не удалось прочитать, они считаются различными:\n%s
 
+DiffView.Close=Закрыть
+
 Sync.Title= Синхронизация папок
 Sync.Left=Слева:
 Sync.Right=Справа:
