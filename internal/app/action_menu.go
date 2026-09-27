@@ -64,7 +64,12 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 			text = "√ " + text
 		}
 		item := vtui.MenuItem{
-			Text:     text,
+			Text: text,
+			// RunAction re-checks Enabled itself, so a stale Disabled flag
+			// (the action's context changed while this dropdown sat open)
+			// can never let the click through; this flag only decides how
+			// the row looks and whether vtui lets it get that far at all.
+			Disabled: a.Enabled != nil && !a.Enabled(),
 			OnClick:  func() { RunAction(a.Name) },
 			UserData: history.MenuHistoryItemKey(a.Name),
 		}

@@ -601,27 +601,32 @@ func KeyBarLabelsForArea(area string, fallbacks *vtui.KeySet) *vtui.KeySet {
 	if fallbacks != nil {
 		fbNormal, fbShift, fbAlt, fbCtrl = fallbacks.Normal, fallbacks.Shift, fallbacks.Alt, fallbacks.Ctrl
 	}
-	resolve := func(prefix, keyNum, fb string) string {
+	// resolve returns both the label and whether the action bound to it is
+	// currently disabled (Action.Enabled returning false). A fallback label
+	// (no binding, or the binding names an action the registry does not
+	// know) is never disabled: dimming only applies to a real, resolved
+	// action, the same one whose hotkey RunAction is about to refuse.
+	resolve := func(prefix, keyNum, fb string) (string, bool) {
 		if hm := GlobalHotkeysMgr; hm != nil {
 			if actName := hm.GetAction(area, prefix+keyNum); actName != "" {
 				if strings.EqualFold(actName, "none") {
-					return ""
+					return "", false
 				}
 				if act, ok := LookupAction(actName); ok {
-					return action.PlainLabel(act.DisplayLabel())
+					return action.PlainLabel(act.DisplayLabel()), act.Enabled != nil && !act.Enabled()
 				}
 			}
 		}
-		return fb
+		return fb, false
 	}
 
 	set := &vtui.KeySet{}
 	for i := 0; i < 12; i++ {
 		keyNum := fmt.Sprintf("F%d", i+1)
-		set.Normal[i] = resolve("", keyNum, fbNormal[i])
-		set.Shift[i] = resolve("Shift", keyNum, fbShift[i])
-		set.Alt[i] = resolve("Alt", keyNum, fbAlt[i])
-		set.Ctrl[i] = resolve("Ctrl", keyNum, fbCtrl[i])
+		set.Normal[i], set.NormalDisabled[i] = resolve("", keyNum, fbNormal[i])
+		set.Shift[i], set.ShiftDisabled[i] = resolve("Shift", keyNum, fbShift[i])
+		set.Alt[i], set.AltDisabled[i] = resolve("Alt", keyNum, fbAlt[i])
+		set.Ctrl[i], set.CtrlDisabled[i] = resolve("Ctrl", keyNum, fbCtrl[i])
 	}
 	return set
 }
