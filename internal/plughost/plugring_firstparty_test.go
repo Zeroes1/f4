@@ -211,14 +211,15 @@ FirstParty: true
 // feeds the PlugRing dialog: unrelated community entries survive, and a
 // community entry that collides on id with a first-party one is shadowed by
 // the first-party entry rather than the other way around. The first-party
-// catalog has three entries today (cloudfox, android, ios); the assertions
-// below count against len(FirstPartyPlugRingItems()) rather than a hardcoded
-// 3, so a future fourth entry does not silently break this test's
-// arithmetic.
+// catalog has four entries today (cloudfox, android, ios, sqlite); most of
+// the assertions below count against len(FirstPartyPlugRingItems()) rather
+// than a hardcoded 4, so a future fifth entry does not silently break their
+// arithmetic -- this one pin, on the count itself, exists precisely so
+// adding or removing an entry is a deliberate, visible edit here too.
 func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	firstPartyCount := len(FirstPartyPlugRingItems())
-	if firstPartyCount != 3 {
-		t.Fatalf("len(FirstPartyPlugRingItems()) = %d, want 3 (cloudfox, android, ios) -- update this test's expectations alongside the catalog", firstPartyCount)
+	if firstPartyCount != 4 {
+		t.Fatalf("len(FirstPartyPlugRingItems()) = %d, want 4 (cloudfox, android, ios, sqlite) -- update this test's expectations alongside the catalog", firstPartyCount)
 	}
 
 	community := []PlugRingItem{
