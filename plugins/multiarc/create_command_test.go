@@ -245,7 +245,7 @@ func TestAddToArchiveCreatesTheNamedArchive(t *testing.T) {
 	if app.suggestion != "project.tar.gz" {
 		t.Errorf("suggested name = %q, want the folder's name with the best format the tools make", app.suggestion)
 	}
-	want := []string{"tar -c -f <work>" + string(filepath.Separator) + "backup.tar -C <src> -- a.txt dir"}
+	want := []string{"tar -c --force-local -f <work>" + string(filepath.Separator) + "backup.tar -- a.txt dir"}
 	if got := placeholders(f.commands(), panelDir); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)
 	}

@@ -1,6 +1,7 @@
 package multiarc
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"os"
@@ -22,21 +23,60 @@ import (
 // and unzip, a macOS runner has bsdtar, and a Windows runner has bsdtar as
 // tar.exe and usually nothing else. The helpers below are shared by them.
 
-// toolCannotStart reports whether the executable at path is on PATH but
-// fails even to start. A CI runner's own copy of a tool can be present yet
-// broken -- missing a DLL it needs, say -- in which case Windows exits the
-// process with the loader's own NTSTATUS error code (0xC0000135 for
-// STATUS_DLL_NOT_FOUND, and the rest of that range for the loader's other
-// failures) instead of ever running it, which exec.LookPath cannot see.
-// Every real-exec test that needs a working tool, not just one that
-// resolves on PATH, treats that exactly like the tool being absent.
-func toolCannotStart(path string) bool {
+// runProbe reports whether running path with args exits with one of the
+// NTSTATUS-range codes Windows' own loader produces (0xC0000000 and up) --
+// 0xC0000135 for STATUS_DLL_NOT_FOUND among them -- rather than ever
+// running the tool's own code.
+func runProbe(path string, args ...string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, path) // #nosec G204 -- path came from exec.LookPath for a tool name the test itself chose; run with no arguments only to probe that it starts.
+	cmd := exec.CommandContext(ctx, path, args...) // #nosec G204 -- path came from exec.LookPath for a tool name the test itself chose; args are fixed literals or a throwaway probe file this same function made.
 	err := cmd.Run()
 	var exitErr *exec.ExitError
 	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) >= 0xC0000000
+}
+
+// toolCannotStart reports whether the executable at path, resolved for
+// name, is on PATH but fails even to start. A CI runner's own copy of a
+// tool can be present yet broken -- missing a DLL it needs, say -- which
+// exec.LookPath cannot see. Every real-exec test that needs a working
+// tool, not just one that resolves on PATH, treats that exactly like the
+// tool being absent.
+//
+// unzip gets its own probe rather than a bare invocation: the DLL it turned
+// out to be missing on a Windows runner is one it only loads to read a
+// real zip's central directory, not on a bare "unzip" with no archive to
+// open, so a bare probe never saw the failure at all -- unzipCannotStart
+// gives it one.
+func toolCannotStart(name, path string) bool {
+	if name == "unzip" {
+		return unzipCannotStart(path)
+	}
+	return runProbe(path)
+}
+
+// unzipCannotStart is toolCannotStart's probe for unzip: a real listing of
+// a real (if trivial) zip file, the same operation the zip backend depends
+// on unzip for, made with Go's own archive/zip so the probe needs nothing
+// beyond a tool that resolved on PATH.
+func unzipCannotStart(path string) bool {
+	dir, err := os.MkdirTemp("", "f4-unzip-probe-")
+	if err != nil {
+		return false // cannot tell; the real test will find out
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	probe := filepath.Join(dir, "probe.zip")
+	f, err := os.Create(probe) // #nosec G304 -- probe is this function's own t.TempDir-style file.
+	if err != nil {
+		return false
+	}
+	zw := zip.NewWriter(f)
+	if w, err := zw.Create("probe.txt"); err == nil {
+		_, _ = w.Write([]byte("probe"))
+	}
+	_ = zw.Close()
+	_ = f.Close()
+	return runProbe(path, "-Z1", probe)
 }
 
 // requireRealTool skips the test unless every one of names is on PATH and
@@ -48,7 +88,7 @@ func requireRealTool(t *testing.T, names ...string) {
 		if err != nil {
 			t.Skipf("%s is not on PATH", name)
 		}
-		if toolCannotStart(path) {
+		if toolCannotStart(name, path) {
 			t.Skipf("%s is on PATH but does not start", name)
 		}
 	}
@@ -153,7 +193,7 @@ func pathOnly(t *testing.T, tools map[string]string) {
 		if err != nil {
 			t.Skipf("%s is not on PATH", target)
 		}
-		if toolCannotStart(real) {
+		if toolCannotStart(target, real) {
 			t.Skipf("%s is on PATH but does not start", target)
 		}
 		link := filepath.Join(bin, name+filepath.Ext(real))
