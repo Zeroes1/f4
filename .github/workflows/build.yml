@@ -722,6 +722,15 @@ jobs:
   # user on either missing platform gets a 404 from the manifest URL today.
   # Widening this matrix is left to a later part -- it changes CI job budget
   # (see LUNOBOT.md), which this part deliberately did not touch.
+  #
+  # f4#1178 part 3 of 4: "not distributed through the community PlugRing
+  # catalog" above is still true of plugring/index.yaml specifically -- that
+  # is the file PLUGRING.md's policy governs, and a native per-platform
+  # binary still does not belong in it. It is no longer the whole story:
+  # internal/plughost/plugring_firstparty.go now offers this same binary
+  # through a separate, explicitly first-party PlugRing entry that the
+  # community distribution policy does not apply to (same repository, same
+  # review, same CI -- not a third party's unreviewable binary).
   build-cloudfox-plugin:
     name: Build cloudfox-plugin (${{ matrix.name }})
     runs-on: ubuntu-latest

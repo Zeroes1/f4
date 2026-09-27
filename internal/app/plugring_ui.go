@@ -121,9 +121,13 @@ func BuildPlugRingRows(items []plughost.PlugRingItem, installed map[string]plugh
 // fetch from escaping: the goroutine outlives the test that started it, and
 // plughost.FetchCatalog reads package state that another test writes.
 //
+// It is plughost.FetchPlugRingCatalog, not plughost.FetchCatalog directly, so
+// the dialog shows f4's first-party native plugins (cloudfox, f4#1178 part 3)
+// alongside the community catalog, from one combined list.
+//
 // refresh reads this on the goroutine that starts the task, not on the one that
 // runs it, so replacing it is safe while a refresh is in flight.
-var plugRingCatalog = plughost.FetchCatalog
+var plugRingCatalog = plughost.FetchPlugRingCatalog
 
 func actionPlugRing(pf *panel.PanelsFrame) {
 	w, h := 76, 22
