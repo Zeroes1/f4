@@ -67,6 +67,55 @@ func TestLiteBuildStillIncludesFishPlus(t *testing.T) {
 	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", fishplus)
 }
 
+// TestLiteBuildExcludesWasmRuntime is the mechanical half of f4#1178's
+// wasm-plugin removal: internal/plughost/transport_wazero.go, the transport
+// that runs a .wasm plugin inside f4 via wazero, moved behind //go:build
+// !lite (see internal/plughost/transport_wazero_lite.go for the stand-in a
+// lite build gets instead). This is what catches wazero -- its runtime, the
+// wazevo JIT backends, wasi_snapshot_preview1 -- quietly coming back in
+// through a different, untagged file.
+func TestLiteBuildExcludesWasmRuntime(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const wazero = "github.com/tetratelabs/wazero"
+	deps := liteBuildDeps(t)
+	for _, imported := range deps {
+		if imported == wazero || strings.HasPrefix(imported, wazero+"/") {
+			t.Fatalf("a -tags lite build of ./cmd/f4 still depends on %s", imported)
+		}
+	}
+}
+
+// TestRegularBuildStillIncludesWasmRuntime is the other side of the same
+// check: an overzealous build tag that dropped the wasm transport out of a
+// regular build too would pass the test above for the wrong reason.
+func TestRegularBuildStillIncludesWasmRuntime(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	command := exec.Command("go", "list", "-deps", "./cmd/f4")
+	command.Dir = testutil.ModuleRootDir(t)
+	out, err := command.Output()
+	if err != nil {
+		stderr := ""
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		t.Fatalf("go list -deps ./cmd/f4: %v\n%s", err, stderr)
+	}
+
+	const wazero = "github.com/tetratelabs/wazero"
+	for _, imported := range strings.Fields(string(out)) {
+		if imported == wazero {
+			return
+		}
+	}
+	t.Fatalf("a regular build of ./cmd/f4 no longer depends on %s", wazero)
+}
+
 func liteBuildDeps(t *testing.T) []string {
 	t.Helper()
 	command := exec.Command("go", "list", "-tags", "lite", "-deps", "./cmd/f4")
