@@ -127,13 +127,17 @@ func (b sevenZipBackend) extractOne(ctx context.Context, localPath, destDir, mem
 	if !ok {
 		return errors.New("multiarc: no 7z/7za/7zr on PATH")
 	}
-	// "--" (and -spd for a name holding "*" or "?", see
-	// sevenZipNameSwitches) keeps a member called "-x" from being read as a
-	// switch; sevenZipMemberArgs keeps one called "@list" from being read
-	// as a list file, which "--" does not prevent.
+	// "--" keeps a member called "-x" from being read as a switch. Unlike
+	// add and remove, extract asks for a name the listing already gave us
+	// verbatim (member came from the archive's own raw name, via
+	// rawName/Raw), so it is passed exactly as that -- sevenZipMemberArgs'
+	// "./" rewrite is for a member we are about to name for the first time,
+	// and applying it here as well broke reading back a member 7-Zip had
+	// stored under the plain name (7-Zip normalizes away the "./" an add
+	// was given, so asking to extract "./name" for one actually stored as
+	// "name" silently extracts nothing).
 	args := append([]string{"x"}, sevenZipNameSwitches([]string{member}, "-y", "-o"+destDir)...)
-	args = append(args, localPath, "--")
-	args = append(args, sevenZipMemberArgs([]string{member})...)
+	args = append(args, localPath, "--", member)
 	_, errOut, err := runTool(ctx, bin, args...)
 	if err != nil {
 		return toolFailure(bin, args, err, errOut)

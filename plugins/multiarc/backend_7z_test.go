@@ -120,10 +120,11 @@ func TestSevenZipBackendExtractOne(t *testing.T) {
 	}
 }
 
-// A member named "@list" is a list file to 7-Zip wherever it falls among
-// the file names, "--" or not, so it goes in as "./@list" instead (see
-// sevenZipMemberArgs); "-x" is a switch, but "--" alone stops that; a "*"
-// or "?" in a name needs -spd to stay literal.
+// extractOne is handed the archive's own raw name for the member, verbatim
+// (see rawName/Raw): "-x" needs "--" to stay a name, and a "*" or "?" needs
+// -spd, but a name already called "@list" (however 7-Zip came to store it
+// that way) is passed as is, not rewritten -- see the comment on
+// extractOne for why.
 func TestSevenZipBackendExtractOneOddNames(t *testing.T) {
 	f := &fakeArchiver{tools: map[string]bool{"7z": true}}
 	f.install(t)
@@ -133,7 +134,7 @@ func TestSevenZipBackendExtractOneOddNames(t *testing.T) {
 		}
 	}
 	want := []string{
-		"7z x -y -o/dest /a.7z -- ./@list.txt",
+		"7z x -y -o/dest /a.7z -- @list.txt",
 		"7z x -y -o/dest /a.7z -- -x",
 		"7z x -y -o/dest -spd /a.7z -- w*ld",
 	}
