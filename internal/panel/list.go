@@ -609,6 +609,24 @@ type FileSystemPanel struct {
 	// the session — the next Shift+nav starts a new one.
 	shiftSessionActive bool
 	shiftSessionMode   bool // true = select, false = deselect
+
+	// entriesRevision counts every change to what fp.Entries actually holds:
+	// a directory (re)load, an autofilter query narrowing or widening the
+	// visible rows, or anything else that calls Refresh (including a
+	// background size scan landing on an entry, f4#884's actionCalcDirSize).
+	// panelEntryTotals memoizes its full scan of fp.Entries against it, the
+	// same "don't recompute unless something actually changed" fix #1511 and
+	// #1536 already applied to the menu bar and the highlight rules — this is
+	// the panel's own bottom-border total, the other unconditional per-frame,
+	// per-file scan in the render path.
+	entriesRevision         uint64
+	entryTotalsRevision     uint64
+	entryTotalsValid        bool
+	cachedTotSize           int64
+	cachedTotCount          int
+	cachedTotFiles          int
+	cachedTotDirs           int
+	entryTotalsComputeCount int // test instrumentation: counts actual rescans
 }
 
 var DisableLoadingAnimationInTests = true
@@ -2835,6 +2853,14 @@ func (fp *FileSystemPanel) applyUpItemStat(st vfs.VFSItem) {
 }
 
 func (fp *FileSystemPanel) Refresh() {
+	// Refresh is the general "something about this panel's entries changed,
+	// redisplay" hook, called after every mutation that is not already routed
+	// through setEntries/addEntries/refilterEntries — a background size scan
+	// landing on an entry (actionCalcDirSize) chief among them. Bumping the
+	// entries revision here too, on top of those three, means panelEntryTotals
+	// never needs to trust that every future caller of such a mutation
+	// remembers to invalidate it by hand.
+	fp.entriesRevision++
 	idx := fp.GetCursorIndex()
 	fp.updateSortColumnTitles()
 	n := fp.displayCount()
@@ -2846,6 +2872,41 @@ func (fp *FileSystemPanel) Refresh() {
 		fp.Table.TopPos = maxTop
 		fp.SetCursorIndex(idx)
 	}
+}
+
+// panelEntryTotals sums the byte size, file count and directory count across
+// every entry the panel holds (not just the visible rows), for the fallback
+// bottom-border total Show draws when the VFS has not already supplied a
+// recursive one via CalculatedPanelTotal. Show used to redo this full scan of
+// fp.Entries on every single render frame regardless of whether anything about
+// the entries had changed since the previous one -- the exact same
+// per-frame-per-file cost, scaling with how many files are in the directory,
+// that #1511 and #1536 already fixed for the menu bar and the highlight
+// rules (f4#884). The result is memoized against entriesRevision, which every
+// place that can change what fp.Entries holds (setEntries, addEntries,
+// refilterEntries, and Refresh as a catch-all for direct entry mutations such
+// as actionCalcDirSize) increments.
+func (fp *FileSystemPanel) panelEntryTotals() (totSize int64, totCount, totFiles, totDirs int) {
+	if fp.entryTotalsValid && fp.entryTotalsRevision == fp.entriesRevision {
+		return fp.cachedTotSize, fp.cachedTotCount, fp.cachedTotFiles, fp.cachedTotDirs
+	}
+	for _, e := range fp.Entries {
+		if e.Name == ".." {
+			continue
+		}
+		totCount++
+		if e.IsDir {
+			totDirs++
+		} else {
+			totFiles++
+			totSize += e.Size
+		}
+	}
+	fp.cachedTotSize, fp.cachedTotCount, fp.cachedTotFiles, fp.cachedTotDirs = totSize, totCount, totFiles, totDirs
+	fp.entryTotalsRevision = fp.entriesRevision
+	fp.entryTotalsValid = true
+	fp.entryTotalsComputeCount++
+	return
 }
 
 // SetCalculatedPanelTotal stores a recursive total for the panel's current
@@ -2934,18 +2995,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 		totCount = totFiles + totDirs
 	}
 	if !hasCalculatedTotal {
-		for _, e := range fp.Entries {
-			if e.Name == ".." {
-				continue
-			}
-			totCount++
-			if e.IsDir {
-				totDirs++
-			} else {
-				totFiles++
-				totSize += e.Size
-			}
-		}
+		totSize, totCount, totFiles, totDirs = fp.panelEntryTotals()
 	}
 	freeSpaceStr := ""
 	if _, isLocal := fp.Vfs.(*vfs.OSVFS); isLocal {
