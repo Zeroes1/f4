@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
@@ -117,20 +118,22 @@ func TestMultiArcVFSSetPath(t *testing.T) {
 	}
 }
 
-func TestMultiArcVFSMutationsAreReadOnly(t *testing.T) {
-	v := newTestVFS(t, fakeBackend{})
+// A backend without the archiveWriter half cannot be changed at all, and
+// says so; vfs_write_test.go covers the ones that can.
+func TestMultiArcVFSMutationsNeedAWriter(t *testing.T) {
+	v := newTestVFS(t, fakeBackend{entries: []entry{{Path: "x"}}})
 	ctx := context.Background()
-	if err := v.MkDir(ctx, "/x"); err == nil {
-		t.Error("MkDir should fail")
+	if err := v.MkDir(ctx, "/y"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("MkDir = %v, want a cannot-be-changed refusal", err)
 	}
-	if err := v.Remove(ctx, "/x"); err == nil {
-		t.Error("Remove should fail")
+	if err := v.Remove(ctx, "/x"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("Remove = %v, want a cannot-be-changed refusal", err)
 	}
 	if err := v.Rename(ctx, "/x", "/y"); err == nil {
 		t.Error("Rename should fail")
 	}
-	if _, err := v.Create(ctx, "/x"); err == nil {
-		t.Error("Create should fail")
+	if _, err := v.Create(ctx, "/y"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("Create = %v, want a cannot-be-changed refusal", err)
 	}
 }
 

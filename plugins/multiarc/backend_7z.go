@@ -122,9 +122,14 @@ func (b sevenZipBackend) extractOne(ctx context.Context, localPath, destDir, mem
 	if !ok {
 		return errors.New("multiarc: no 7z/7za/7zr on PATH")
 	}
-	_, errOut, err := runTool(ctx, bin, "x", "-y", "-o"+destDir, localPath, member)
+	// "--" (and -spd for a name holding "*" or "?", see
+	// sevenZipNameSwitches) keeps a member called "-x" from being read as a
+	// switch and one called "@list" as a list file.
+	args := append([]string{"x"}, sevenZipNameSwitches([]string{member}, "-y", "-o"+destDir)...)
+	args = append(args, localPath, "--", member)
+	_, errOut, err := runTool(ctx, bin, args...)
 	if err != nil {
-		return fmt.Errorf("multiarc: %s x -y -o%s %s %s: %w (%s)", bin, destDir, localPath, member, err, strings.TrimSpace(string(errOut)))
+		return toolFailure(bin, args, err, errOut)
 	}
 	return nil
 }

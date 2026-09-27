@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -70,6 +72,88 @@ func openReal(t *testing.T, localPath string) *MultiArcVFS {
 		t.Fatalf("detectFormat(%s): no backend", localPath)
 	}
 	return NewMultiArcVFS(vfs.NewOSVFS(filepath.Dir(localPath)), localPath, filepath.Base(localPath), b, id)
+}
+
+// memberPaths lists every member the archive holds, sorted, directories
+// marked with a trailing "/", read back from a fresh listing rather than
+// from any state a MultiArcVFS might have cached. A member stored twice
+// (a tar -r that did not delete first) shows up twice.
+func memberPaths(t *testing.T, localPath string) []string {
+	t.Helper()
+	b, _, ok := detectFormat(filepath.Base(localPath))
+	if !ok {
+		t.Fatalf("detectFormat(%s): no backend", localPath)
+	}
+	entries, err := b.list(context.Background(), localPath)
+	if err != nil {
+		t.Fatalf("list %s: %v", localPath, err)
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		p := e.Path
+		if e.IsDir {
+			p += "/"
+		}
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// writeMember stores content as the member p through Create, the way the
+// copy engine and the editor do.
+func writeMember(t *testing.T, v *MultiArcVFS, p, content string) {
+	t.Helper()
+	w, err := v.Create(context.Background(), p)
+	if err != nil {
+		t.Fatalf("Create %s: %v", p, err)
+	}
+	if _, err := w.Write([]byte(content)); err != nil {
+		t.Fatalf("Write %s: %v", p, err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("Close %s: %v", p, err)
+	}
+}
+
+// pathOnly replaces PATH, for the rest of the test, with a directory
+// holding just the named tools, each a symlink to the real binary found on
+// the current PATH under the target name (so "tar": "bsdtar" puts bsdtar on
+// PATH as tar). It skips the test when a tool is missing or symlinks cannot
+// be made (Windows without the privilege).
+func pathOnly(t *testing.T, tools map[string]string) {
+	t.Helper()
+	bin := t.TempDir()
+	for name, target := range tools {
+		real, err := exec.LookPath(target)
+		if err != nil {
+			t.Skipf("%s is not on PATH", target)
+		}
+		link := filepath.Join(bin, name+filepath.Ext(real))
+		if err := os.Symlink(real, link); err != nil {
+			t.Skipf("cannot symlink %s: %v", real, err)
+		}
+	}
+	t.Setenv("PATH", bin)
+}
+
+// realTarFlavor is what the tar on the real PATH is.
+func realTarFlavor(t *testing.T) tarFlavor {
+	t.Helper()
+	requireRealTool(t, "tar")
+	return probeTar(context.Background()).flavor
+}
+
+func assertMembers(t *testing.T, localPath string, want ...string) {
+	t.Helper()
+	sort.Strings(want)
+	got := memberPaths(t, localPath)
+	if len(got) == 0 && len(want) == 0 {
+		return
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("members of %s =\n\t%q\nwant\n\t%q", filepath.Base(localPath), got, want)
+	}
 }
 
 // readMember reads one member back through MultiArcVFS.Open.

@@ -114,9 +114,29 @@ func TestSevenZipBackendExtractOne(t *testing.T) {
 	if gotBin != "7z" {
 		t.Fatalf("bin = %q, want 7z", gotBin)
 	}
-	want := []string{"x", "-y", "-o/dest", "/a.7z", "sub/data.bin"}
+	want := []string{"x", "-y", "-o/dest", "/a.7z", "--", "sub/data.bin"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %v, want %v", gotArgs, want)
+	}
+}
+
+// A member named "@list" is a list file to 7-Zip and "-x" a switch, unless
+// "--" comes first; a "*" or "?" in a name needs -spd to stay literal.
+func TestSevenZipBackendExtractOneOddNames(t *testing.T) {
+	f := &fakeArchiver{tools: map[string]bool{"7z": true}}
+	f.install(t)
+	for _, member := range []string{"@list.txt", "-x", "w*ld"} {
+		if err := (sevenZipBackend{bin: "7z"}).extractOne(context.Background(), "/a.7z", "/dest", member); err != nil {
+			t.Fatalf("extractOne %s: %v", member, err)
+		}
+	}
+	want := []string{
+		"7z x -y -o/dest /a.7z -- @list.txt",
+		"7z x -y -o/dest /a.7z -- -x",
+		"7z x -y -o/dest -spd /a.7z -- w*ld",
+	}
+	if got := f.commands(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %q, want %q", got, want)
 	}
 }
 
