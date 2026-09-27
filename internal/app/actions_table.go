@@ -31,6 +31,17 @@ import (
 // RunAction executes an action by name if it exists.
 func RunAction(name string) bool {
 	if a, ok := action.Lookup(name); ok && a.Handler != nil {
+		// An action with Enabled()==false is refused here regardless of how
+		// the call arrived -- menu OnClick, a hotkey resolved by
+		// HotkeyManager, a key-bar click synthesized into the same hotkey,
+		// or the command palette. This is the single choke point that turns
+		// the old "silent no-op" (f4#1356: Ctrl+A / F5 / F6 / F8 with no
+		// target quietly doing nothing) into a command that visibly can't be
+		// invoked: Handler never runs and nothing is shown, matching the
+		// dimmed menu item and key-bar F-key Enabled also produces.
+		if a.Enabled != nil && !a.Enabled() {
+			return false
+		}
 		// Fast Find is a transient panel input mode. Any action means the user
 		// is leaving it, including actions that replace a file panel in place
 		// (Info/Quick View) and therefore do not push a focus-stealing frame.
@@ -54,6 +65,28 @@ func GetAction(name string) (action.Action, bool) {
 		return panel.PluginActionForName(name)
 	}
 	return a, ok
+}
+
+// activePanelHasSelectionTarget reports whether the active panel's selection
+// (or, with nothing marked, its cursor) names anything at all: at least one
+// marked entry, or the cursor on something other than "..".
+// FileSystemPanel.GetSelectedNames already encodes this exact rule (used by
+// actionFileAttributes, actionCopyMove and actionDeleteWithDisposition to
+// decide whether they have a target); this is the Enabled predicate wired to
+// File.Attributes, File.Copy, File.Move, File.Delete and
+// File.DeletePermanent, so the menu item and F-key dim and the hotkey stops
+// short of the handler instead of the handler quietly returning early
+// (f4#1356).
+func activePanelHasSelectionTarget() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return false
+	}
+	return len(fsp.GetSelectedNames()) > 0
 }
 
 // cursorOnParent reports whether the panel's cursor sits on the ".."
@@ -504,6 +537,7 @@ func init() {
 		DefaultKeys:         []string{"F5"},
 		MenuPath:            "Files",
 		MenuSeparatorBefore: true,
+		Enabled:             activePanelHasSelectionTarget,
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, false) }),
 	})
 	registerAction(action.Action{
@@ -526,6 +560,7 @@ func init() {
 		DescKey:     "Action.File.Move.Desc",
 		DefaultKeys: []string{"F6"},
 		MenuPath:    "Files",
+		Enabled:     activePanelHasSelectionTarget,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, true) }),
 	})
 	registerAction(action.Action{
@@ -581,6 +616,7 @@ func init() {
 		DescKey:     "Action.File.Delete.Desc",
 		DefaultKeys: []string{"F8"},
 		MenuPath:    "Files",
+		Enabled:     activePanelHasSelectionTarget,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDelete(pf) }),
 	})
 	registerAction(action.Action{
@@ -592,6 +628,7 @@ func init() {
 		DescKey:     "Action.File.DeletePermanent.Desc",
 		DefaultKeys: []string{"ShiftDel", "ShiftNumDel"},
 		MenuPath:    "Files",
+		Enabled:     activePanelHasSelectionTarget,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDeletePermanent(pf) }),
 	})
 	registerAction(action.Action{
@@ -604,6 +641,7 @@ func init() {
 		DefaultKeys:         []string{"CtrlA"},
 		MenuPath:            "Files",
 		MenuSeparatorBefore: true,
+		Enabled:             activePanelHasSelectionTarget,
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionFileAttributes(pf) }),
 	})
 	registerAction(action.Action{
