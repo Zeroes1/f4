@@ -40,6 +40,38 @@ func TestFirstPartyPlugRingItemsIncludesCloudfox(t *testing.T) {
 	}
 }
 
+// TestFirstPartyPlugRingItemsIncludesAndroid is the equivalent pin for the
+// entry android-plugin's own part 3 adds, mirroring
+// plugins/android/cmd/android-plugin/plugring-manifest.json.
+func TestFirstPartyPlugRingItemsIncludesAndroid(t *testing.T) {
+	items := FirstPartyPlugRingItems()
+
+	var android *PlugRingItem
+	for i := range items {
+		if items[i].ID == "android" {
+			android = &items[i]
+		}
+	}
+	if android == nil {
+		t.Fatal("android is not in the first-party catalog")
+	}
+	if !android.FirstParty {
+		t.Error("android is not marked FirstParty")
+	}
+	if android.Entrypoint != "android-plugin" {
+		t.Errorf("entrypoint = %q, want android-plugin", android.Entrypoint)
+	}
+	if !strings.Contains(android.URL, "{os}") || !strings.Contains(android.URL, "{arch}") {
+		t.Errorf("url = %q, want per-platform {os}/{arch} placeholders", android.URL)
+	}
+	if ok, reason := PlugRingItemRunsHere(*android); !ok {
+		t.Errorf("android is reported unrunnable: %s", reason)
+	}
+	if problem := PlugRingItemProblem(*android); problem != "" {
+		t.Errorf("the first-party android entry was rejected: %s", problem)
+	}
+}
+
 // TestFirstPartyBypassesTheCommunityPolicyThatWouldRejectIt is the point of
 // this whole file: the fields that make PlugRingItemProblem reject an
 // ordinary community entry -- a per-platform URL, an entrypoint that is not a
@@ -140,8 +172,14 @@ func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	if !cloudfox.FirstParty || cloudfox.Name != "Cloud storage (CloudFox)" {
 		t.Errorf("a community entry with a colliding id shadowed the first-party one: %+v", cloudfox)
 	}
-	if len(merged) != 2 {
-		t.Errorf("len(merged) = %d, want 2 (no duplicate cloudfox entry)", len(merged))
+	// hello-plugring (unrelated, survives) + cloudfox + android (the two
+	// first-party entries, f4#1178 parts 3 of 4) = 3. The colliding
+	// "impostor" cloudfox community entry above is shadowed, not counted.
+	if len(merged) != 3 {
+		t.Errorf("len(merged) = %d, want 3 (no duplicate cloudfox entry, plus android)", len(merged))
+	}
+	if _, ok := byID["android"]; !ok {
+		t.Error("android is missing from the merged catalog")
 	}
 
 	// A community catalog with no collision keeps its own entries and gains
@@ -149,7 +187,7 @@ func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	noCollision := MergeFirstPartyPlugRingItems([]PlugRingItem{
 		{ID: "hello-plugring", Name: "Hello", Entrypoint: "hello.lua"},
 	})
-	if len(noCollision) != 2 {
-		t.Fatalf("len(noCollision) = %d, want 2", len(noCollision))
+	if len(noCollision) != 3 {
+		t.Fatalf("len(noCollision) = %d, want 3", len(noCollision))
 	}
 }
