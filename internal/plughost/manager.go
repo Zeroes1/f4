@@ -9,6 +9,7 @@ import (
 	"github.com/unxed/f4/plugins/dummy_internal"
 	"github.com/unxed/f4/plugins/envman"
 	"github.com/unxed/f4/plugins/id3editor"
+	"github.com/unxed/f4/plugins/ide"
 	"github.com/unxed/f4/plugins/mediainfo"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
@@ -160,6 +161,10 @@ func (pm *PluginManager) loadInternal() {
 		// backend_default_lite.go).
 		sqliteplugin.NewPlugin(),
 		proclist.NewPlugin(config.GetF4ConfigDir()),
+		// IDE mode (f4#382): scaffold only for now -- registration and the
+		// three IDE.Build/Run/Test commands, no toolchain integration yet.
+		// See plugins/ide's package doc for the full plan.
+		ide.NewPlugin(),
 	}
 	// cloudfox (cloud services), android (ADB device browsing) and iOS
 	// (Apple mobile devices over usbmuxd) stay excluded from both builds
