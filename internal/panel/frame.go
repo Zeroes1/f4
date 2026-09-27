@@ -1400,6 +1400,27 @@ func (pf *PanelsFrame) InitPTY() {
 				pf.TermView.Pty = serializedPTY
 			}
 			pf.PtyMutex.Unlock()
+
+			// f4#128, RUP step 1: a bare shell never requests the kitty
+			// keyboard protocol on its own, so without this Ctrl+Tab stays
+			// ambiguous with Tab (see the check in HandleKey below) until
+			// some nested program (far2l) asks for it itself. Feed the same
+			// request such a program would write, through the same parser,
+			// right away -- before the shell has printed anything -- so a
+			// plain bash/zsh session starts with it already on.
+			//
+			// win32-input-mode is deliberately left alone here: unlike the
+			// kitty flags, which are pure TerminalView bookkeeping, mode
+			// 9001 mirrors whether the real console child has turned on
+			// ENABLE_VIRTUAL_TERMINAL_INPUT on its own console handle.
+			// Claiming it here without that having actually happened would
+			// make every keystroke f4 sends unreadable to cmd.exe/PowerShell
+			// instead of merely leaving a few chords ambiguous, so it is not
+			// a safe no-op the way the kitty case is. Left for a later step.
+			if !terminal.WindowsShellSyntax() {
+				pf.Parser.Process([]byte(terminal.KittyEnableDisambiguateSeq))
+			}
+
 			pf.localShellStarted(inheritedEnvironmentGeneration)
 
 			uiFrames.PostTask(func() {
@@ -2461,7 +2482,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// instead (far2l's own panel switch, for one) — its own Ctrl+Shift+Tab
 	// still goes to f4 (f4#128).
 	if e.Type == vtinput.KeyEventType && e.VirtualKeyCode == vtinput.VK_TAB && ctrl && !alt {
-		advanced := pf.TermView.Win32InputMode || pf.TermView.KittyFlags != 0
+		advanced := pf.TermView.Win32InputMode || pf.TermView.KittyFlags.Load() != 0
 		if shift || !advanced {
 			return false
 		}
@@ -2477,10 +2498,10 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// Raw input mode check at the very top. If an interactive AltScreen app is active (e.g. mc, htop),
 	// we forward all non-global keys to terminal.PTY.
 	if !pf.ShowPanels && pf.TermView.OnAltScreen() {
-		if e.KeyDown || pf.TermView.Win32InputMode || pf.TermView.KittyFlags != 0 {
+		if e.KeyDown || pf.TermView.Win32InputMode || pf.TermView.KittyFlags.Load() != 0 {
 			active := pf.GetActivePTY()
 			if active != nil {
-				if seq := keymap.TranslateInput(e, pf.TermView.Win32InputMode, pf.TermView.KittyFlags, pf.TermView.ApplicationCursorKeys); seq != "" {
+				if seq := keymap.TranslateInput(e, pf.TermView.Win32InputMode, int(pf.TermView.KittyFlags.Load()), pf.TermView.ApplicationCursorKeys); seq != "" {
 					_, _ = pf.WritePTY(active, []byte(seq))
 				}
 			}
@@ -2656,10 +2677,10 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// and for any interactive shell session when host console mode is active.
 	// We forward text and navigation to term.PTY, but let global shortcuts (Ctrl+Alt+Z) fall through.
 	if !pf.ShowPanels && (pf.IsPtyBusy() || pf.ShellMode == terminal.ShellModeHost) {
-		if e.KeyDown || pf.TermView.Win32InputMode || pf.TermView.KittyFlags != 0 {
+		if e.KeyDown || pf.TermView.Win32InputMode || pf.TermView.KittyFlags.Load() != 0 {
 			active := pf.GetActivePTY()
 			if active != nil {
-				if seq := keymap.TranslateInput(e, pf.TermView.Win32InputMode, pf.TermView.KittyFlags, pf.TermView.ApplicationCursorKeys); seq != "" {
+				if seq := keymap.TranslateInput(e, pf.TermView.Win32InputMode, int(pf.TermView.KittyFlags.Load()), pf.TermView.ApplicationCursorKeys); seq != "" {
 					_, _ = pf.WritePTY(active, []byte(seq))
 				}
 			}

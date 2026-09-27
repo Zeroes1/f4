@@ -197,7 +197,7 @@ func nativeShortcutOwnedByCurrentContext(actionName, key string) bool {
 			return false
 		}
 		if strings.EqualFold(key, "CtrlTab") {
-			advanced := frame.TermView != nil && (frame.TermView.Win32InputMode || frame.TermView.KittyFlags != 0)
+			advanced := frame.TermView != nil && (frame.TermView.Win32InputMode || frame.TermView.KittyFlags.Load() != 0)
 			return advanced
 		}
 		if strings.EqualFold(key, "CtrlN") && config.App.TerminalCtrlNWorkspace {
