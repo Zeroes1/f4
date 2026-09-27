@@ -169,7 +169,7 @@ func (p *RPCPlugin) ReadDir(drive, path string) ([]f4plugin.VFSItem, error) {
 func (p *RPCPlugin) Stat(drive, path string) (f4plugin.VFSItem, error) {
 	ctx := context.Background()
 	if hostpath.Clean(path) == "" {
-		return f4plugin.VFSItem{KnownMetadata: vfs.MetadataExplicit, Name: databaseHandlerName, IsDir: true}, nil
+		return f4plugin.VFSItem{KnownMetadata: uint32(vfs.MetadataExplicit), Name: databaseHandlerName, IsDir: true}, nil
 	}
 	dbPath, ok := dbPathFor(path)
 	if !ok {
