@@ -235,11 +235,11 @@ func (p *RPCPlugin) CloseFile(fileID uint32) error {
 // as nothing through the in-process panel can (see vfs.go's own comment on
 // readOnlyError -- the client, not the panel, is where data changes, and
 // this RPC transport does not offer the client at all, see the type doc).
-func (p *RPCPlugin) MkDir(drive, path string) error { return readOnlyError{} }
-func (p *RPCPlugin) Remove(drive, path string) error { return readOnlyError{} }
+func (p *RPCPlugin) MkDir(drive, path string) error              { return readOnlyError{} }
+func (p *RPCPlugin) Remove(drive, path string) error             { return readOnlyError{} }
 func (p *RPCPlugin) Rename(drive, oldPath, newPath string) error { return readOnlyError{} }
-func (p *RPCPlugin) Create(drive, path string) (uint32, error) { return 0, readOnlyError{} }
-func (p *RPCPlugin) Write(fileID uint32, data []byte) error { return readOnlyError{} }
+func (p *RPCPlugin) Create(drive, path string) (uint32, error)   { return 0, readOnlyError{} }
+func (p *RPCPlugin) Write(fileID uint32, data []byte) error      { return readOnlyError{} }
 
 // Highlight, ProcessKey, OnHotkey and OnProgressTask complete the
 // sdk/f4plugin.Plugin interface. The SQLite drive offers no editor syntax
