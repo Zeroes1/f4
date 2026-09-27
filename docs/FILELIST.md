@@ -2449,6 +2449,18 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── wsl_dialer_windows_test.go
     │   │   ├── wsl_vfs_windows.go
     │   │   └── wsl_vfs_windows_test.go
+    │   ├── observer
+    │   │   ├── abi.go
+    │   │   ├── doc.go
+    │   │   ├── errors.go
+    │   │   ├── fsbridge.go
+    │   │   ├── hostimports.go
+    │   │   ├── observer_test.go
+    │   │   ├── runtime.go
+    │   │   ├── testdata
+    │   │   │   └── stub
+    │   │   │       └── observer_stub.c
+    │   │   └── wchar.go
     │   ├── proclist
     │   │   ├── collector_darwin.go
     │   │   ├── collector_darwin_test.go
@@ -2512,6 +2524,7 @@ Every file tracked in the repository. Regenerate with
     │   └── index.yaml
     ├── README.md
     ├── scripts
+    │   ├── build_observer_test_wasm.sh
     │   ├── check_archive_deps.sh
     │   ├── check_release_version.sh
     │   ├── filelist_update.sh
@@ -2790,4 +2803,4 @@ Every file tracked in the repository. Regenerate with
         ├── utils_test.go
         └── vfs.go
     
-    226 directories, 2560 files
+    229 directories, 2570 files
