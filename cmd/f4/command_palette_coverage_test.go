@@ -173,6 +173,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"iosfs.(*RPCPlugin).ProcessKey": {
 		class: paletteAuditTransportHook, rationale: "iOS moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc/cloudfox, not an in-process frame",
 	},
+	"androidfs.(*RPCPlugin).ProcessKey": {
+		class: paletteAuditTransportHook, rationale: "Android moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc/cloudfox/iOS, not an in-process frame",
+	},
 	"envman.(*managerWindow).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "Environment Manager owns these keys inside its plugin window, reached through its rich command",
 	},
