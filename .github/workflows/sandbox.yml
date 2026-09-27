@@ -1,0 +1,77 @@
+name: sandbox
+
+# One-off manual experiments -- "how does this specific piece of code behave
+# on Windows", a benchmark, a hypothesis check -- without paying for the full
+# build.yml matrix (~26-40 jobs) just to answer one narrow question. This is a
+# separate, self-contained mechanism: it never runs on push/pull_request and
+# never gates a merge. build.yml (the release/PR matrix) and quick.yml (the
+# per-branch smoke check) are untouched.
+#
+# Usage: gh workflow run sandbox.yml -f os=windows-latest -f command="go test ./internal/foo/... -run TestBar -v"
+# Then: gh run view <id> --log
+#
+# Security: `inputs.command` is attacker/operator-controlled free text and is
+# never interpolated directly into a `run:` script body -- doing that turns
+# the input into literal script text before it runs, which is the classic
+# GitHub Actions script-injection vector (any stray quote/backtick/$() in the
+# command could break out of the intended command and run something else, or
+# just fail to parse). Instead the value crosses into the step only through
+# `env:`, which the runner sets as a plain environment variable, and the run
+# step executes that variable rather than the raw expression. See "Security
+# hardening for GitHub Actions" / script injection in the GitHub docs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "Runner to execute the command on"
+        required: true
+        type: choice
+        default: ubuntu-latest
+        options:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - windows-latest
+          - windows-11-arm
+          - macos-latest
+          - macos-15-intel
+      command:
+        description: "Shell command to run after checkout + setup-go"
+        required: true
+        type: string
+
+jobs:
+  run:
+    name: Sandbox (${{ inputs.os }})
+    runs-on: ${{ inputs.os }}
+    # A one-off experiment can still hang (e.g. a test waiting on input); cap
+    # it the same way build.yml caps its test jobs instead of leaving it to
+    # the default 6h runner timeout.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive # f4 pulls in vtui/vtinput as submodules
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: go.sum
+
+      # Two steps, one per shell family, both keeping the untrusted input in
+      # an env var rather than in the run: script text (see the note above).
+      - name: Run sandbox command (bash)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          SANDBOX_COMMAND: ${{ inputs.command }}
+        run: $SANDBOX_COMMAND
+
+      - name: Run sandbox command (PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          SANDBOX_COMMAND: ${{ inputs.command }}
+        run: Invoke-Expression $env:SANDBOX_COMMAND
