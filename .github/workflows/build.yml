@@ -662,26 +662,11 @@ jobs:
   # linux/amd64), purely to print the size comparison f4#1178 asks for in
   # this job's own log; it is not packaged or uploaded.
   #
-  # tarindex_simple (added alongside lite here, not on the control binary,
-  # same reasoning as goffi_static/noffi above - it's part of what "lite"
-  # means, not a baseline the comparison should share) is unxed/tar's own
-  # build tag (unxed/tar#10/#11): it swaps the sqlite-backed archive index
-  # for the FlatBuffers-backed one everywhere tar's Index/OpenIndex are
-  # used through the tag-bound default (writer.go, indexer_enabled.go,
-  # fs.go's NewFS when no explicit WithFSIndexBackend override is passed -
-  # none of f4's own callers pass one), dropping unxed/tar's own
-  # go-sqlite3 usage from this build. It reaches unxed/tar purely
-  # through this -tags string: Go build tags apply across the whole build
-  # graph, not per-module, so tar's own package sees tarindex_simple the
-  # same as cmd/f4's. The SQLite client (internal/plughost/plugins_full.go)
-  # and the spreadsheet's native format (internal/sheet/store_lite.go) are
-  # the other two go-sqlite3 users, both left out by -tags lite itself, so
-  # the lite binary links no SQLite engine at all (about 7 MB). A lite build
-  # loses ratarmount sidecar/shadow-stream compatibility as a result -
-  # opening a `.index.sqlite` someone else already produced, or an
-  # archive-embedded ratarmount shadow index - falling back to sequential
-  # extraction there exactly as already happens on the BSD/Solaris/illumos
-  # OSes without cgo-free sqlite (see unxed/tar#9's package doc comment).
+  # A lite build links no archive library and no SQLite engine: archives
+  # go through plugins/multiarc's console-tool wrapper, internal/unpack reads
+  # f4's own release and plugin archives with the standard library, and the
+  # SQLite client and the spreadsheet's SQLite format are regular-build only.
+  # cmd/f4/lite_deps_test.go checks all of this from `go list -deps`.
   build-lite:
     name: Build lite (${{ matrix.name }})
     needs: [should-run-full]
@@ -745,7 +730,7 @@ jobs:
           APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
-        go build -tags "lite,tarindex_simple,${{ matrix.tags }}" -trimpath $GCFLAGS \
+        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$APP_LDFLAGS" -o build/f4 ./cmd/f4
         go build -tags "${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$APP_LDFLAGS" -o build-control/f4 ./cmd/f4
@@ -759,7 +744,7 @@ jobs:
           | tee -a "$GITHUB_STEP_SUMMARY"
         rm -rf build-control
 
-        go build -tags "lite,tarindex_simple,${{ matrix.tags }}" -trimpath $GCFLAGS \
+        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
           -ldflags="$LDFLAGS" -o build/plugins/dummy_internal/f4-internal-dummy-plugin \
           ./plugins/dummy_internal
 

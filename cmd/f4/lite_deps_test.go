@@ -67,6 +67,74 @@ func TestLiteBuildStillIncludesFishPlus(t *testing.T) {
 	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", fishplus)
 }
 
+// TestLiteBuildExcludesArchiveLibraries keeps the archive library chain
+// (docs/ARCHIVE_DEPENDENCIES.md) out of the lite build. Archives there go
+// through plugins/multiarc, which runs whichever console archiver the host
+// has, and internal/unpack reads f4's own release and plugin archives with
+// the standard library (formats_lite.go). Before f4#1178 closed them, two
+// leaks linked the whole chain anyway: internal/unpack's readers and
+// internal/fileops' tar index bookkeeping, which needs nothing from
+// github.com/unxed/tar but a sidecar file name.
+//
+// github.com/klauspost/compress's flate and zlib stay allowed: the PNG
+// decoder (internal/media) uses them, and they are not an archive format.
+func TestLiteBuildExcludesArchiveLibraries(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	forbidden := []string{
+		"github.com/unxed/f4/plugins/archive",
+		"github.com/unxed/zipper",
+		"github.com/unxed/zip",
+		"github.com/unxed/tar",
+		"github.com/unxed/sevenzip",
+		"github.com/unxed/xz",
+		"github.com/unxed/archives",
+		"github.com/unxed/par2",
+		"github.com/unxed/zlib4go",
+		"github.com/unxed/zipcharset",
+		"github.com/mholt/archives",
+		"github.com/bodgit/sevenzip",
+		"github.com/ulikunitz/xz",
+		"github.com/nwaples/rardecode",
+		"github.com/klauspost/pgzip",
+		"github.com/klauspost/compress/zstd",
+		"github.com/pierrec/lz4",
+		"github.com/andybalholm/brotli",
+		"github.com/stangelandcl/ppmd",
+	}
+
+	var offenders []string
+	for _, imported := range liteBuildDeps(t) {
+		for _, bad := range forbidden {
+			if imported == bad || strings.HasPrefix(imported, bad+"/") {
+				offenders = append(offenders, imported)
+			}
+		}
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("a -tags lite build of ./cmd/f4 still depends on:\n\t%s", strings.Join(offenders, "\n\t"))
+	}
+}
+
+// TestLiteBuildStillIncludesMultiarc is the other side of the same check:
+// archives must still open in a lite build, through the console-tool
+// wrapper, not just stop linking.
+func TestLiteBuildStillIncludesMultiarc(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const multiarc = "github.com/unxed/f4/plugins/multiarc"
+	for _, imported := range liteBuildDeps(t) {
+		if imported == multiarc {
+			return
+		}
+	}
+	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", multiarc)
+}
+
 // TestLiteBuildStillIncludesWasmRuntime keeps wasm plugins in the lite
 // build. f4#1178 once moved internal/plughost/transport_wazero.go behind
 // //go:build !lite, but wazero weighs only about 1.5-2.7 MB there (4-5% of
@@ -211,17 +279,8 @@ func TestLiteSheetPackageExcludesSQLiteDependency(t *testing.T) {
 // would link it there, and each has its own lite-side answer: the SQLite
 // client (plugins/sqlite) is registered from internal/plughost/
 // plugins_full.go only, internal/sheet saves as JSON (store_lite.go,
-// f4#1552), and unxed/tar's archive index switches to its FlatBuffers
-// backend under the tarindex_simple tag.
-//
-// The real lite build (build-lite in .github/workflows/build.yml) always
-// passes tarindex_simple alongside lite -- see that job's own comment for
-// why tarindex_simple belongs to what "lite" means here, not to a baseline
-// the job's size comparison should share. liteBuildDeps (below) mirrors
-// that pair of tags, not "lite" alone: -tags lite by itself still leaves
-// unxed/tar's sqlite-backed index compiled in (its own sqlite_enabled.go
-// carries only a `!tarindex_simple` constraint, not a `lite` one), so it
-// would fail this check for a lite build that was never actually shipped.
+// f4#1552), and unxed/tar, whose archive index is SQLite-backed, is not
+// linked at all (TestLiteBuildExcludesArchiveLibraries).
 func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
@@ -238,7 +297,7 @@ func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 	}
 	if len(offenders) > 0 {
 		t.Fatalf(
-			"a -tags lite,tarindex_simple build of ./cmd/f4 still depends on:\n\t%s",
+			"a -tags lite build of ./cmd/f4 still depends on:\n\t%s",
 			strings.Join(offenders, "\n\t"),
 		)
 	}
@@ -289,7 +348,7 @@ func TestSQLiteClientIsBuiltInToTheRegularBuildOnly(t *testing.T) {
 		t.Errorf("a regular build of ./cmd/f4 no longer links %s in-process", client)
 	}
 	if contains(liteBuildDeps(t)) {
-		t.Errorf("a -tags lite,tarindex_simple build of ./cmd/f4 links %s", client)
+		t.Errorf("a -tags lite build of ./cmd/f4 links %s", client)
 	}
 }
 
@@ -308,16 +367,11 @@ func regularBuildDeps(t *testing.T) []string {
 	return strings.Fields(string(out))
 }
 
-// liteBuildDeps mirrors the tag set the real lite build uses: build-lite in
-// .github/workflows/build.yml always passes tarindex_simple alongside lite
-// (see that job's own comment for why), so this does too. "-tags lite"
-// alone would leave unxed/tar's sqlite-backed archive index compiled in --
-// its own sqlite_enabled.go carries a `!tarindex_simple` constraint, not a
-// `lite` one -- which would make a dependency check here diverge from what
-// the shipped lite binary actually contains.
+// liteBuildDeps lists the packages a lite build of ./cmd/f4 links, with
+// the same -tags lite build-lite in .github/workflows/build.yml passes.
 func liteBuildDeps(t *testing.T) []string {
 	t.Helper()
-	command := exec.Command("go", "list", "-tags", "lite,tarindex_simple", "-deps", "./cmd/f4")
+	command := exec.Command("go", "list", "-tags", "lite", "-deps", "./cmd/f4")
 	command.Dir = testutil.ModuleRootDir(t)
 	out, err := command.Output()
 	if err != nil {
@@ -325,7 +379,7 @@ func liteBuildDeps(t *testing.T) []string {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr = string(exitErr.Stderr)
 		}
-		t.Fatalf("go list -tags lite,tarindex_simple -deps ./cmd/f4: %v\n%s", err, stderr)
+		t.Fatalf("go list -tags lite -deps ./cmd/f4: %v\n%s", err, stderr)
 	}
 	return strings.Fields(string(out))
 }

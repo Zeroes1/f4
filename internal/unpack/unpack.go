@@ -18,11 +18,8 @@ import (
 	"strings"
 	"sync"
 
-	gzip "github.com/klauspost/pgzip"
 	"github.com/unxed/f4/vfs"
-	"github.com/unxed/sevenzip"
 	"github.com/unxed/vtui"
-	"github.com/unxed/zip"
 )
 
 func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
@@ -137,7 +134,7 @@ func extractEntry(e archiveEntry, destDir string) error {
 
 func TarGz(data []byte, destDir string) error {
 	r := bytes.NewReader(data)
-	gzr, err := gzip.NewReader(r)
+	gzr, err := newGzipReader(r)
 	if err != nil {
 		return err
 	}
@@ -168,17 +165,12 @@ func TarGz(data []byte, destDir string) error {
 }
 
 func Zip(data []byte, destDir string) error {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	entries, err := zipEntries(data)
 	if err != nil {
 		return err
 	}
-	for _, f := range zr.File {
-		if err := extractEntry(archiveEntry{
-			name:  f.Name,
-			isDir: f.FileInfo().IsDir(),
-			mode:  f.Mode(),
-			open:  f.Open,
-		}, destDir); err != nil {
+	for _, e := range entries {
+		if err := extractEntry(e, destDir); err != nil {
 			return err
 		}
 	}
@@ -187,25 +179,15 @@ func Zip(data []byte, destDir string) error {
 
 // ZipParallel: Zip with entries in parallel; falls back when <2 entries.
 func ZipParallel(data []byte, destDir string, workers int) error {
-	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	entries, err := zipEntries(data)
 	if err != nil {
 		return err
 	}
-	if workers < 2 || len(zr.File) < 2 {
+	if workers < 2 || len(entries) < 2 {
 		return Zip(data, destDir)
 	}
-	if workers > len(zr.File) {
-		workers = len(zr.File)
-	}
-
-	entries := make([]archiveEntry, len(zr.File))
-	for i, f := range zr.File {
-		entries[i] = archiveEntry{
-			name:  f.Name,
-			isDir: f.FileInfo().IsDir(),
-			mode:  f.Mode(),
-			open:  f.Open,
-		}
+	if workers > len(entries) {
+		workers = len(entries)
 	}
 
 	errCh := make(chan error, 1)
@@ -246,22 +228,4 @@ func ZipParallel(data []byte, destDir string, workers int) error {
 	default:
 		return nil
 	}
-}
-
-func SevenZip(data []byte, destDir string) error {
-	szr, err := sevenzip.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return err
-	}
-	for _, f := range szr.File {
-		if err := extractEntry(archiveEntry{
-			name:  f.Name,
-			isDir: f.FileInfo().IsDir(),
-			mode:  f.Mode(),
-			open:  f.Open,
-		}, destDir); err != nil {
-			return err
-		}
-	}
-	return nil
 }

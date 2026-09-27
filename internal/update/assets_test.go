@@ -126,3 +126,59 @@ func TestUpdateAssetSuffixes_NonLinuxUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// The lite edition is published under the same GOOS/GOARCH as the regular
+// one (f4-lite-linux-amd64.tar.gz next to f4-linux-amd64.tar.gz), and both
+// names end with "-linux-amd64.tar.gz". Whichever the release listed first
+// used to win, so either edition could update itself into the other.
+func TestUpdateAssetSuffixes_EditionsDoNotCross(t *testing.T) {
+	assets := []Asset{
+		{Name: "f4-lite-linux-amd64.tar.gz", BrowserDownloadURL: "https://example/lite-amd64"},
+		{Name: "f4-linux-amd64.tar.gz", BrowserDownloadURL: "https://example/generic-amd64"},
+		{Name: "f4-lite-linux-arm.tar.gz", BrowserDownloadURL: "https://example/lite-arm"},
+		{Name: "f4-linux-arm.tar.gz", BrowserDownloadURL: "https://example/generic-arm"},
+	}
+	tests := []struct {
+		name    string
+		lite    bool
+		goarch  string
+		assets  []Asset
+		wantURL string
+	}{
+		{name: "regular build skips the lite asset listed first", goarch: "amd64", assets: assets, wantURL: "https://example/generic-amd64"},
+		{name: "regular build on arm skips the lite asset", goarch: "arm", assets: assets, wantURL: "https://example/generic-arm"},
+		{name: "lite build takes the lite asset", lite: true, goarch: "amd64", assets: assets, wantURL: "https://example/lite-amd64"},
+		{name: "lite build on arm takes the lite asset", lite: true, goarch: "arm", assets: assets, wantURL: "https://example/lite-arm"},
+		{
+			name:   "regular build refuses a lite-only release",
+			goarch: "amd64",
+			assets: []Asset{{Name: "f4-lite-linux-amd64.tar.gz", BrowserDownloadURL: "https://example/lite-amd64"}},
+		},
+		{
+			name:   "lite build refuses a release without a lite asset",
+			lite:   true,
+			goarch: "amd64",
+			assets: []Asset{{Name: "f4-linux-amd64.tar.gz", BrowserDownloadURL: "https://example/generic-amd64"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url, _, kind := pickAsset(tt.assets, editionAssetSuffixes(tt.lite, "linux", tt.goarch, ""))
+			if url != tt.wantURL {
+				t.Errorf("picked %q, want %q", url, tt.wantURL)
+			}
+			if tt.wantURL != "" && kind != "targz" {
+				t.Errorf("archive kind = %q, want targz", kind)
+			}
+		})
+	}
+}
+
+// A lite build cannot unpack .7z (internal/unpack's formats_lite.go), so on
+// Windows it looks for the .zip asset only.
+func TestUpdateAssetSuffixes_LiteWindowsIsZipOnly(t *testing.T) {
+	got := editionAssetSuffixes(true, "windows", "amd64", "")
+	if len(got) != 1 || got[0] != "-lite-windows-amd64.zip" {
+		t.Errorf("lite windows suffixes = %v, want [-lite-windows-amd64.zip]", got)
+	}
+}

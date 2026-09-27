@@ -14,9 +14,8 @@ import (
 // golang.org/x/crypto/ssh one) in place of the FTP/SFTP/FISH+ trio here,
 // and the SQLite client goes entirely. The SQLite client is the last thing
 // that would link github.com/ncruces/go-sqlite3 into a lite build once
-// internal/sheet and unxed/tar's archive index have their sqlite-free
-// backends there (store_lite.go, tarindex_simple), and that engine alone is
-// about 7 MB of the binary. See plugins_lite.go for the other half of this
+// internal/sheet saves as JSON there (store_lite.go) and the archive
+// libraries are gone, and that engine alone is about 7 MB of the binary. See plugins_lite.go for the other half of this
 // build tag's single point of truth.
 //
 // Cloud storage (plugins/cloudfox: S3, Google Drive, Yandex Disk, WebDAV)
