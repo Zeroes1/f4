@@ -43,7 +43,7 @@
           # Must track go.mod/go.sum: after a dependency change nix build
           # fails with "hash mismatch in fixed-output derivation ... got:
           # sha256-...", and that got: value is the new vendorHash.
-          vendorHash = "sha256-L35OALgavCndKB3EdYcZAvbO4xqizqTjYv+QTKwNOvE=";
+          vendorHash = "sha256-2FXcFfcqu9ITNnUHCleeEeUGamb63IMxYIS/WHgD18M=";
 
           subPackages = [ "cmd/f4" ];
 
