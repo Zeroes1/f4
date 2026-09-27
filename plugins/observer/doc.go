@@ -4,12 +4,12 @@
 // internal/plughost/transport_wazero.go runs a wasm plugin and colorer4go
 // (github.com/unxed/colorer4go) runs a wasm C++ library.
 //
-// # Scope of this part (f4#1563, part 1 of N)
+// # Scope so far (f4#1563)
 //
-// This package is infrastructure only. It has no notion of any real archive
-// format, is not registered as a vfs.VFSProvider, and is not reachable from
-// Enter on a panel. What it does provide, and what its tests exercise
-// end-to-end against a small test-only module (see testdata/stub), is:
+// This package is still infrastructure only: it has no notion of a
+// directory tree beyond one GetItem call at a time, is not registered as a
+// vfs.VFSProvider, and is not reachable from Enter on a panel. What it does
+// provide is:
 //
 //   - Go types and constants for the Observer module ABI (API v6, see
 //     src/common/ModuleDef.h in lazyhamster/Observer), laid out the way a
@@ -19,13 +19,21 @@
 //     targets).
 //   - A wazero host module ("observer") with the progress callback import.
 //   - A loader that can instantiate an arbitrary WASI-reactor .wasm module
-//     and drive LoadSubModule/OpenStorage/CloseStorage against it, proving
-//     the struct marshaling and the host imports both work.
+//     and drive LoadSubModule/OpenStorage/CloseStorage/GetItem/ExtractItem
+//     against it, proving the struct marshaling and the host imports all
+//     work -- part 1 proved this against a small test-only module
+//     (testdata/stub); part 2 against a real, unmodified upstream module
+//     (isoimg, built by scripts/build_isoimg_test_wasm.sh, see
+//     plugins/observer/testdata/isoimg/compat/); part 3 added GetItem; part
+//     4 added ExtractItem, all exercised against both.
 //   - Read access to the probed file for the guest, through a WASI
 //     filesystem mount backed by an io.ReaderAt-like view of the parent
-//     VFS, not a real path on the host disk. That is what will eventually
-//     let a module opened on a nested archive member read straight through
-//     to wherever the bytes actually live.
+//     VFS, not a real path on the host disk. That is what lets a module
+//     opened on a nested archive member read straight through to wherever
+//     the bytes actually live. A second, real read-write directory mount
+//     (LoadModule's WithExtractDir) gives ExtractItem somewhere to write
+//     extracted files, for now a plain host temp directory -- the same
+//     "extract to a temp file first" approach plugins/multiarc already uses.
 //
 // # The module_cbs indirection
 //
@@ -45,7 +53,41 @@
 // caller (or a test) can confirm the module actually populated its table --
 // f4 never calls through those values itself.
 //
-// Only the trampolines this part actually drives -- ExportOpenStorage and
-// ExportCloseStorage -- are required of testdata/stub's module; GetItem,
-// ExtractItem and PrepareFiles are reserved names for a later part.
+// Only ExportOpenStorage and ExportCloseStorage are in LoadModule's required
+// map: a module this package can drive at all must have those two, but
+// ExportGetItem/ExportExtractItem are resolved opportunistically
+// (Module.GetItem/Module.ExtractItem error clearly if a module lacks the
+// corresponding trampoline) so a module need not implement every trampoline
+// from day one. ExportPrepareFiles remains a reserved name, not yet driven
+// by anything in this package.
+//
+// ExtractItem's ExtractProcessCallbacks.FileProgress is a genuine function
+// pointer, not a struct field the host can just fill in the way it fills in
+// everything else: see ExportProgressTrampoline's own doc comment for how a
+// module hands the host something it actually can put there.
+//
+// # No random access to an item's own content
+//
+// The container file a module is opened on gets full random access already
+// (see "Read access to the probed file" above): the WASI mount serves
+// fd_pread/fd_seek straight off the parent VFS's own ReadAt, at whatever
+// offset the module's own CreateFile/ReadFile/SetFilePointer(Ex) calls ask
+// for, no different from a real file on disk.
+//
+// An individual *item* inside that container is a different matter. API v6
+// (ModuleDef.h, unchanged since 2016) has exactly one way to get an item's
+// bytes out: ExtractFunc, which always writes the whole item to a
+// caller-chosen DestPath on a real filesystem -- there is no
+// OpenItemStream/ReadItem/Seek in the ABI, and no flag in
+// ExtractOperationParams that asks for one. So an Observer-backed item can
+// never be opened for random-access reads the way vfs.ReadAtCloser
+// generally allows: Module.ExtractItem's only option, and this package's
+// only option in turn, is what LoadModule's WithExtractDir already does --
+// extract the whole item to a real file first (the same "extract to a temp
+// file" fallback plugins/archive already uses for solid 7z/RAR), then hand
+// out a ReadAtCloser over *that* file. This is an ABI limitation, not
+// something a smarter host implementation could work around; it also means
+// f4#1563's own item 5 (partial-decompression zran-style ReadAt for nested
+// archives) has no Observer-side equivalent to build -- only plugins/archive
+// zip/deflate members can ever get that treatment.
 package observer
