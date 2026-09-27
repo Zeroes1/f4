@@ -209,36 +209,33 @@ func TestLiteSheetPackageExcludesSQLiteDependency(t *testing.T) {
 }
 
 // TestLiteBuildExcludesSQLiteDependency is the mechanical half of f4#1178's
-// last step (10 of 11, sqlite-free lite build): plugins/sqlite (the SQL
-// editor) is meant to move out into its own RPC-plugin module the same way
-// cloudfox/android/iOS did, and unxed/tar's own sqlite-backed archive index
-// has a FlatBuffers-backed replacement, ArcidxIndex, selected via the
-// tarindex_simple build tag. Between those two, neither the sqlite plugin
-// nor tar/zipper archive indexing should be the reason a lite build links
-// github.com/ncruces/go-sqlite3.
+// last step (sqlite-free lite build). Between plugins/sqlite (the SQL
+// editor) moving out into its own RPC-plugin module (f4#1178's batch/f4/3,
+// merged in #1554: it now has its own go.mod at plugins/sqlite/go.mod and
+// is no longer part of this module's build graph at all -- internal/
+// plughost/manager.go's loadInternal no longer wires it in) and unxed/tar's
+// own sqlite-backed archive index having a FlatBuffers-backed replacement,
+// ArcidxIndex, selected via the tarindex_simple build tag, neither the
+// sqlite plugin nor tar/zipper archive indexing should be a reason a real
+// lite build links github.com/ncruces/go-sqlite3.
 //
-// It is deliberately NOT a bare "must not appear" assertion, because that is
-// a known false red today, for a reason unrelated to this file: as of this
-// branch's base commit, internal/plughost/manager.go's loadInternal still
-// wires plugins/sqlite in unconditionally (sqliteplugin.NewPlugin(), no
-// lite/!lite split) -- the RPC-plugin extraction that would remove it from a
-// lite build's dependency graph is done on a separate, not yet merged
-// branch (f4#1178's batch/f4/3). internal/sheet is no longer a source of
-// this dependency at all as of f4#1552 (see
-// TestLiteSheetPackageExcludesSQLiteDependency above), so this test now
-// isolates the one remaining, already-tracked cause instead of conflating
-// the two the way its previous version had to.
+// The real lite build (build-lite in .github/workflows/build.yml) always
+// passes tarindex_simple alongside lite -- see that job's own comment for
+// why tarindex_simple belongs to what "lite" means here, not to a baseline
+// the job's size comparison should share. liteBuildDeps (below) mirrors
+// that pair of tags, not "lite" alone: -tags lite by itself still leaves
+// unxed/tar's sqlite-backed index compiled in (its own sqlite_enabled.go
+// carries only a `!tarindex_simple` constraint, not a `lite` one), so it
+// would fail this check for a lite build that was never actually shipped.
 //
-// So this test checks both things it can honestly check: if go-sqlite3
-// shows up in a lite build's dependency graph at all, is plugins/sqlite
-// (still) the one importing it? If yes, this is the known,
-// already-documented, out-of-scope gap (f4#1178, tracked separately, not a
-// regression on anything f4#1552 touched), and the test records that
-// honestly with Skip rather than either a permanently red CI test or a
-// heroic fix bundled into an unrelated feature. If go-sqlite3 shows up for
-// some OTHER reason -- plugins/sqlite no longer importing it, yet
-// go-sqlite3 still present -- that is exactly the regression this guard
-// exists to catch, and it fails for real.
+// This is now the bare "must not appear" assertion the previous version of
+// this test could not honestly make while plugins/sqlite still lived inside
+// this module: with it extracted to its own module, it cannot be resolved
+// as a path inside this module's build graph, and by definition cannot be
+// the source of a dependency here either. If go-sqlite3 shows up in the
+// real lite build's dependency graph at all now, that is a regression, full
+// stop, the same as TestLiteSheetPackageExcludesSQLiteDependency already
+// asserts for internal/sheet (f4#1552).
 func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
@@ -253,36 +250,12 @@ func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 			offenders = append(offenders, imported)
 		}
 	}
-	if len(offenders) == 0 {
-		return
-	}
-
-	const sqlitePlugin = "github.com/unxed/f4/plugins/sqlite"
-	pluginDeps := packageDepsWithTags(t, "lite", sqlitePlugin)
-	pluginImportsSQLite := false
-	for _, imported := range pluginDeps {
-		if imported == sqlite || strings.HasPrefix(imported, sqlite+"/") {
-			pluginImportsSQLite = true
-			break
-		}
-	}
-	if pluginImportsSQLite {
-		t.Skipf(
-			"a -tags lite build of ./cmd/f4 still depends on:\n\t%s\n"+
-				"but this is the known, already-documented f4#1178 gap: "+
-				"internal/plughost/manager.go wires %s in unconditionally, "+
-				"and its own extraction into a downloadable RPC plugin is "+
-				"done on a separate, not yet merged branch. "+
-				"internal/sheet no longer imports %s in a lite build (see "+
-				"TestLiteSheetPackageExcludesSQLiteDependency, f4#1552).",
-			strings.Join(offenders, "\n\t"), sqlitePlugin, sqlite,
+	if len(offenders) > 0 {
+		t.Fatalf(
+			"a -tags lite,tarindex_simple build of ./cmd/f4 still depends on:\n\t%s",
+			strings.Join(offenders, "\n\t"),
 		)
 	}
-	t.Fatalf(
-		"a -tags lite build of ./cmd/f4 depends on %s for a reason other "+
-			"than %s -- this looks like a real regression:\n\t%s",
-		sqlite, sqlitePlugin, strings.Join(offenders, "\n\t"),
-	)
 }
 
 // TestRegularBuildStillIncludesSQLiteDependency is the other side of the
@@ -321,9 +294,16 @@ func regularBuildDeps(t *testing.T) []string {
 	return strings.Fields(string(out))
 }
 
+// liteBuildDeps mirrors the tag set the real lite build uses: build-lite in
+// .github/workflows/build.yml always passes tarindex_simple alongside lite
+// (see that job's own comment for why), so this does too. "-tags lite"
+// alone would leave unxed/tar's sqlite-backed archive index compiled in --
+// its own sqlite_enabled.go carries a `!tarindex_simple` constraint, not a
+// `lite` one -- which would make a dependency check here diverge from what
+// the shipped lite binary actually contains.
 func liteBuildDeps(t *testing.T) []string {
 	t.Helper()
-	command := exec.Command("go", "list", "-tags", "lite", "-deps", "./cmd/f4")
+	command := exec.Command("go", "list", "-tags", "lite,tarindex_simple", "-deps", "./cmd/f4")
 	command.Dir = testutil.ModuleRootDir(t)
 	out, err := command.Output()
 	if err != nil {
@@ -331,15 +311,16 @@ func liteBuildDeps(t *testing.T) []string {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr = string(exitErr.Stderr)
 		}
-		t.Fatalf("go list -tags lite -deps ./cmd/f4: %v\n%s", err, stderr)
+		t.Fatalf("go list -tags lite,tarindex_simple -deps ./cmd/f4: %v\n%s", err, stderr)
 	}
 	return strings.Fields(string(out))
 }
 
 // packageDepsWithTags is liteBuildDeps/regularBuildDeps generalized to an
-// arbitrary package and tag set, used by TestLiteBuildExcludesSQLiteDependency
-// to check a single package's own dependency graph (internal/sheet) rather
-// than the whole ./cmd/f4 build's.
+// arbitrary package and tag set, used by
+// TestLiteSheetPackageExcludesSQLiteDependency to check a single package's
+// own dependency graph (internal/sheet) rather than the whole ./cmd/f4
+// build's.
 func packageDepsWithTags(t *testing.T, tags, pkg string) []string {
 	t.Helper()
 	command := exec.Command("go", "list", "-tags", tags, "-deps", pkg)
