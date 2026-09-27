@@ -105,6 +105,38 @@ func TestFirstPartyPlugRingItemsIncludesIOS(t *testing.T) {
 	}
 }
 
+// TestFirstPartyPlugRingItemsIncludesSQLite is TestFirstPartyPlugRingItemsIncludesCloudfox's
+// sibling for f4#1178's SQLite extraction (part 3 of 4), with the same shape
+// as plugins/sqlite/cmd/sqlite-plugin/plugring-manifest.json.
+func TestFirstPartyPlugRingItemsIncludesSQLite(t *testing.T) {
+	items := FirstPartyPlugRingItems()
+
+	var sqlite *PlugRingItem
+	for i := range items {
+		if items[i].ID == "sqlite" {
+			sqlite = &items[i]
+		}
+	}
+	if sqlite == nil {
+		t.Fatal("sqlite is not in the first-party catalog")
+	}
+	if !sqlite.FirstParty {
+		t.Error("sqlite is not marked FirstParty")
+	}
+	if sqlite.Entrypoint != "sqlite-plugin" {
+		t.Errorf("entrypoint = %q, want sqlite-plugin", sqlite.Entrypoint)
+	}
+	if !strings.Contains(sqlite.URL, "{os}") || !strings.Contains(sqlite.URL, "{arch}") {
+		t.Errorf("url = %q, want per-platform {os}/{arch} placeholders", sqlite.URL)
+	}
+	if ok, reason := PlugRingItemRunsHere(*sqlite); !ok {
+		t.Errorf("sqlite is reported unrunnable: %s", reason)
+	}
+	if problem := PlugRingItemProblem(*sqlite); problem != "" {
+		t.Errorf("the first-party sqlite entry was rejected: %s", problem)
+	}
+}
+
 // TestFirstPartyBypassesTheCommunityPolicyThatWouldRejectIt is the point of
 // this whole file: the fields that make PlugRingItemProblem reject an
 // ordinary community entry -- a per-platform URL, an entrypoint that is not a
@@ -179,14 +211,15 @@ FirstParty: true
 // feeds the PlugRing dialog: unrelated community entries survive, and a
 // community entry that collides on id with a first-party one is shadowed by
 // the first-party entry rather than the other way around. The first-party
-// catalog has three entries today (cloudfox, android, ios); the assertions
-// below count against len(FirstPartyPlugRingItems()) rather than a hardcoded
-// 3, so a future fourth entry does not silently break this test's
-// arithmetic.
+// catalog has four entries today (cloudfox, android, ios, sqlite); most of
+// the assertions below count against len(FirstPartyPlugRingItems()) rather
+// than a hardcoded 4, so a future fifth entry does not silently break their
+// arithmetic -- this one pin, on the count itself, exists precisely so
+// adding or removing an entry is a deliberate, visible edit here too.
 func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	firstPartyCount := len(FirstPartyPlugRingItems())
-	if firstPartyCount != 3 {
-		t.Fatalf("len(FirstPartyPlugRingItems()) = %d, want 3 (cloudfox, android, ios) -- update this test's expectations alongside the catalog", firstPartyCount)
+	if firstPartyCount != 4 {
+		t.Fatalf("len(FirstPartyPlugRingItems()) = %d, want 4 (cloudfox, android, ios, sqlite) -- update this test's expectations alongside the catalog", firstPartyCount)
 	}
 
 	community := []PlugRingItem{

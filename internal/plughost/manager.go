@@ -11,7 +11,6 @@ import (
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/mediainfo"
 	"github.com/unxed/f4/plugins/proclist"
-	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/visren"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -155,22 +154,30 @@ func (pm *PluginManager) loadInternal() {
 		&id3editor.ID3EditorPlugin{},
 		envman.NewPlugin(config.GetF4ConfigDir()),
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
-		sqliteplugin.NewPlugin(),
 		proclist.NewPlugin(),
 	}
-	// cloudfox (cloud services), android (ADB device browsing) and iOS
-	// (Apple mobile devices over usbmuxd) stay excluded from both builds
-	// entirely, in either build. All three moved out to their own module
-	// and their own subprocess RPC plugin binary
-	// (plugins/cloudfox/cmd/cloudfox-plugin,
-	// plugins/android/cmd/android-plugin, plugins/ios/cmd/ios-plugin), per
-	// the owner's decision to give every plugin that is not part of f4's
-	// baseline feature set the same "download on demand" treatment
+	// cloudfox (cloud services), android (ADB device browsing), iOS (Apple
+	// mobile devices over usbmuxd) and sqlite (SQLite database browsing)
+	// stay excluded from both builds entirely, in either build. All four
+	// moved out to their own module and their own subprocess RPC plugin
+	// binary (plugins/cloudfox/cmd/cloudfox-plugin,
+	// plugins/android/cmd/android-plugin, plugins/ios/cmd/ios-plugin,
+	// plugins/sqlite/cmd/sqlite-plugin), per the owner's decision to give
+	// every plugin that is not part of f4's baseline feature set the same
+	// "download on demand" treatment
 	// (f4#1178, https://github.com/unxed/f4/issues/1178#issuecomment-5851392645)
 	// -- for android that is an architectural unification, not a binary-size
 	// win the way cloudfox's ~30 MB of cloud SDKs or iOS's go-ios/gvisor/
 	// quic-go userspace networking stack was; see
-	// plugins/android/rpc_plugin.go's package comment. Archive support comes
+	// plugins/android/rpc_plugin.go's package comment. sqlite is architectural
+	// too, and only a partial size win: extracting plugins/sqlite sheds its
+	// own code (the panel command, the mounted-database VFS, the interactive
+	// client), but internal/sheet/store.go -- the native ".f4s.sqlite"
+	// spreadsheet format, an unrelated feature -- imports the very same
+	// github.com/ncruces/go-sqlite3 driver directly and unconditionally, in
+	// both builds, so that dependency itself stays linked into f4 regardless
+	// of this extraction; see plugins/sqlite/rpc_plugin.go's package comment.
+	// Archive support comes
 	// back as plugins/multiarc, a CLI-archiver wrapper, in place of the
 	// native-library one (f4#1178, part 2), and netfox comes back cut down
 	// to FISH+ over a subprocess ssh dialer, in place of the full build's

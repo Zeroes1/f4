@@ -80,6 +80,19 @@ const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 // file, and the entry below) does not by itself make the asset exist.
 const iosPlugRingVersion = "0.0.0-part3-published-not-installable"
 
+// sqlitePlugRingVersion mirrors plugins/sqlite/cmd/sqlite-plugin/
+// plugring-manifest.json's version field by hand, for the same reason
+// cloudFoxPlugRingVersion does: that manifest lives in plugins/sqlite's own
+// go.mod (split out in f4#1178 part 1), which this package's module cannot
+// import or go:embed across the module boundary, so the two are kept in
+// sync by comment rather than by code sharing. Keep them matching when
+// either changes.
+//
+// Same "not installable yet" caveat as the three versions above: nothing
+// about landing this first-party entry makes sqlite-plugin-{os}-{arch}.tar.gz
+// actually exist on a tagged release.
+const sqlitePlugRingVersion = "0.0.0-part1-not-yet-published"
+
 // FirstPartyPlugRingItems returns f4's own first-party PlugRing catalog. It
 // is a plain function, not a package-level var, so nothing outside this file
 // can mutate the shared list a caller got back from an earlier call.
@@ -138,6 +151,24 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// this exact name.
 			URL:        "https://github.com/unxed/f4/releases/latest/download/ios-plugin-{os}-{arch}.tar.gz",
 			Entrypoint: "ios-plugin",
+			Category:   PlugRingCategoryFilesystem,
+			Runtimes:   []string{PlugRingRuntimeNative},
+			FirstParty: true,
+		},
+		{
+			ID:      "sqlite",
+			Name:    "SQLite database browser",
+			Version: sqlitePlugRingVersion,
+			Author:  "unxed",
+			Description: "Mount a local SQLite database as a read-only top-level f4 drive: browse its " +
+				"tables and read one out as CSV. Ships as a native subprocess plugin, same install " +
+				"mechanism as cloud storage/Android/iOS (f4#1178).",
+			// {os}/{arch}: same community-catalog exemption cloudfox's own
+			// entry documents above. See build-sqlite-plugin in
+			// .github/workflows/build.yml for how each platform's asset gets
+			// this exact name.
+			URL:        "https://github.com/unxed/f4/releases/latest/download/sqlite-plugin-{os}-{arch}.tar.gz",
+			Entrypoint: "sqlite-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
 			FirstParty: true,
