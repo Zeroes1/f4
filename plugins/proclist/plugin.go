@@ -2,14 +2,16 @@
 // processes shown as a panel, in the spirit of FAR Manager 3's ProcList
 // plugin (Plist.cpp/Pclass.cpp), used as a reference while scoping f4#312.
 //
-// v1 (this package, f4#312 part 1 of 4) is deliberately narrow: Linux only,
-// view-only (PID, name, memory, CPU%), refreshed a few times a second.
+// v1 (f4#312 part 1 of 4) was deliberately narrow: Linux only, view-only
+// (PID, name, memory, CPU%), refreshed a few times a second. Part 2 added
+// real collectors for Windows (collector_windows.go, Toolhelp32 +
+// GetProcessTimes, no WMI) and macOS (collector_darwin.go, sysctl
+// kern.proc.all + libproc's proc_pidinfo). The BSDs stayed on the
+// collector_other.go stub for part 2 -- see that file's comment for why.
 // FAR3's ProcList also offers process management (F8 kill, Shift-F1/F2
 // priority; f4#312 part 3) and rich metrics/handles/remote view built on
 // WMI and undocumented NT APIs that have no portable equivalent; the owner
-// confirmed (f4#312) v1 should not attempt those, and cross-platform support
-// (Windows via Toolhelp/NtQuerySystemInformation, macOS/*BSD via
-// sysctl(KERN_PROC), none of it through WMI) is part 2 of the plan.
+// confirmed (f4#312) this plugin should not attempt those at all.
 //
 // It is also f4's first consumer of vfs.PanelProvider/PanelController
 // (vfs/contributions.go, internal/plughost/panel_providers.go): a plugin
