@@ -26,6 +26,11 @@ type fakeArchiver struct {
 	tarVersion    string           // "tar --version" stdout
 	tarVersionErr string           // "tar --version" stderr
 	fail          map[string]error // "<tool> <first arg>" -> error to fail with
+	// writeArchives makes zip and 7z write too: the archive named right
+	// before "--" gets "|<tool>:<names>" appended, created if need be. Off,
+	// they only record the command, which lets a test name an archive in a
+	// directory that does not exist.
+	writeArchives bool
 	calls         []fakeCall
 }
 
@@ -68,8 +73,31 @@ func (f *fakeArchiver) run(_ context.Context, dir, name string, args ...string) 
 		return f.runTar(dir, args)
 	case "gzip", "bzip2", "xz", "zstd", "lzip":
 		return nil, nil, fakeCompressor(dir, name, args)
+	case "zip", "7z", "7za", "7zr":
+		if f.writeArchives {
+			return nil, nil, fakeZipOr7z(dir, name, args)
+		}
 	}
 	return nil, nil, nil
+}
+
+// fakeZipOr7z appends "|<tool>:<names>" to the archive argument, the one
+// right before "--".
+func fakeZipOr7z(dir, name string, args []string) error {
+	for i, a := range args {
+		if a == "--" && i > 0 {
+			return appendFile(resolveIn(dir, args[i-1]), "|"+name+":"+strings.Join(args[i+1:], ","))
+		}
+	}
+	return nil
+}
+
+// resolveIn is p as a tool running in dir would open it.
+func resolveIn(dir, p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(dir, p)
 }
 
 func (f *fakeArchiver) runTar(dir string, args []string) ([]byte, []byte, error) {
@@ -87,7 +115,7 @@ func (f *fakeArchiver) runTar(dir string, args []string) ([]byte, []byte, error)
 			break
 		}
 	}
-	target := filepath.Join(dir, archive)
+	target := resolveIn(dir, archive)
 	switch {
 	case contains(args, "-r"):
 		return nil, nil, appendFile(target, "|r:"+strings.Join(names, ","))
@@ -131,7 +159,7 @@ func contains(list []string, s string) bool {
 }
 
 func appendFile(path, text string) error {
-	f, err := os.OpenFile(filepath.Clean(path), os.O_APPEND|os.O_WRONLY, 0)
+	f, err := os.OpenFile(filepath.Clean(path), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o600)
 	if err != nil {
 		return err
 	}

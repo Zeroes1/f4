@@ -8,8 +8,10 @@
 //
 // Like far2l's multiarc it also changes archives through those same tools,
 // as far as each one can do it safely: members are added, replaced and
-// deleted in place. write.go describes how, and each backend_*_write.go
-// says what its tool can do and refuses the rest with the reason.
+// deleted in place (write.go describes how, and each backend_*_write.go
+// says what its tool can do and refuses the rest with the reason), and Add
+// to archive (Shift+F1) creates a new archive from the selected files
+// (create.go, create_command.go).
 package multiarc
 
 import (
