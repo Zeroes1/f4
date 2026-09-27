@@ -707,14 +707,50 @@ func (c *settingsCenter) restrictTo(ids ...string) {
 	c.layoutWindow()
 }
 
-// A terminal smaller than this cannot hold the settings in a window of half its
-// width: the pages, and the hotkey table above all, need every column there is.
-// The dialog then opens maximized, and its zoom button gives the ordinary size
-// back (#1239).
+// A terminal smaller than this cannot hold the settings in a window of half
+// its width: the pages need every column there is. The dialog then opens
+// maximized, and its zoom button gives the ordinary size back (#1239).
+//
+// The Hotkey Configurator needs a much wider window than this guess ever
+// gave it -- montoner0 measured 150 columns still too narrow for it -- so
+// minSettingsScreenWidth computes that page's own threshold instead, from
+// the hotkey table's own column minimums and the sidebar's width, when it is
+// the category about to be shown (#1239 follow-up). Every other page keeps
+// this guessed constant, which already reads fine for them.
 const (
 	smallSettingsScreenWidth  = 120
 	smallSettingsScreenHeight = 30
 )
+
+// minSettingsScreenWidth is the narrowest terminal width the settings window
+// can open in without maximizing.
+func (c *settingsCenter) minSettingsScreenWidth() int {
+	if c.category != "hotkeys" {
+		return smallSettingsScreenWidth
+	}
+	sizer, ok := host.(HotkeyTableSizeHost)
+	if !ok {
+		return smallSettingsScreenWidth
+	}
+	// layoutWindow gives the hotkeys page a width of w - side - 4, where side
+	// is the sidebar's width plus its divider column. Invert that at the
+	// sidebar's natural, unshrunk width: that is what the window needs to be
+	// for the sidebar to stay that size in the first place (#1239 follow-up).
+	side := c.categorySidebarNaturalWidth() + 1
+	minWindowWidth := sizer.HotkeyTableMinPageWidth() + side + 4
+	return minScreenWidthForWindow(minWindowWidth)
+}
+
+// minScreenWidthForWindow inverts ResizeConsole's own window-width formula,
+// min(w, max(72, w/2)), to find the smallest terminal width that gives the
+// settings window at least minWindowWidth columns (#1239 follow-up).
+func minScreenWidthForWindow(minWindowWidth int) int {
+	for w := minWindowWidth; ; w++ {
+		if dw := min(w, max(72, w/2)); dw >= minWindowWidth {
+			return w
+		}
+	}
+}
 
 func (c *settingsCenter) ResizeConsole(w, h int) {
 	c.screenW, c.screenH = max(1, w), max(1, h)
@@ -722,7 +758,7 @@ func (c *settingsCenter) ResizeConsole(w, h int) {
 		dw, dh := min(w, max(72, w/2)), min(h, max(22, h*3/4))
 		c.SetPosition((w-dw)/2, (h-dh)/2, (w+dw)/2-1, (h+dh)/2-1)
 		c.positioned = true
-		if w < smallSettingsScreenWidth || h < smallSettingsScreenHeight {
+		if w < c.minSettingsScreenWidth() || h < smallSettingsScreenHeight {
 			c.SavedBounds = &vtui.Rect{X1: c.X1, Y1: c.Y1, X2: c.X2, Y2: c.Y2}
 			top := vtui.FrameManager.WorkspaceTopInset()
 			c.SetPosition(0, top, w-1, max(top, h-2))
@@ -828,20 +864,28 @@ func (c *settingsCenter) Show(scr *vtui.ScreenBuf) {
 	}
 }
 
-func (c *settingsCenter) categorySidebarWidth() int {
+// categorySidebarNaturalWidth is the sidebar's width when nothing forces it
+// to shrink: the longest category label, plus room for " (99)" regardless of
+// the query, plus the scrollbar column. minSettingsScreenWidth needs this
+// figure at full size, since it is computing the window width that keeps the
+// sidebar that size in the first place (#1239 follow-up).
+func (c *settingsCenter) categorySidebarNaturalWidth() int {
 	width := 1
 	for _, category := range c.categories {
 		label := category.Label.Resolve(config.App.Language, i18n.Msg)
 		width = max(width, vtui.StringWidth(label))
 	}
+	return width + 5 + 1
+}
+
+func (c *settingsCenter) categorySidebarWidth() int {
 	// Leave room for the sidebar scrollbar and a usable content column.
 	w := c.X2 - c.X1 + 1
 	available := w - 30
 	if w >= 110 {
 		available -= max(28, w/4) + 1
 	}
-	// Reserve " (99)" regardless of the query, plus the scrollbar column.
-	return min(width+5+1, max(10, available))
+	return min(c.categorySidebarNaturalWidth(), max(10, available))
 }
 func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 	if c.category == "hotkeys" && c.GetFocusedItem() == c.page && c.hotkeyPage != nil {

@@ -765,6 +765,64 @@ func TestSettingsCenterOpensMaximizedInASmallTerminal(t *testing.T) {
 	}
 }
 
+// hotkeyTableSizeFakeHost lets a test drive minSettingsScreenWidth's own
+// threshold arithmetic with a known, fixed hotkey-table width, instead of
+// internal/app's real column-width logic (which imports this package, so
+// this package cannot import it back to use the real figure directly).
+type hotkeyTableSizeFakeHost struct {
+	testHost
+	minPageWidth int
+}
+
+func (h hotkeyTableSizeFakeHost) HotkeyTableMinPageWidth() int { return h.minPageWidth }
+
+// The Hotkey Configurator gets its own auto-maximize threshold, computed
+// from the embedded table's own minimum width plus the sidebar's width,
+// rather than the fixed guess every other page keeps: montoner0 found even
+// 150 columns still too narrow for it (#1239 follow-up).
+func TestSettingsCenterOpensMaximizedForHotkeysAtItsComputedThreshold(t *testing.T) {
+	previousHost := host
+	fake := hotkeyTableSizeFakeHost{minPageWidth: 60}
+	Configure(fake)
+	t.Cleanup(func() { Configure(previousHost) })
+
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	open := func(w, h int) *settingsCenter {
+		c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+		c.selectCategory("hotkeys")
+		c.ResizeConsole(w, h)
+		return c
+	}
+
+	side := open(200, 60).categorySidebarNaturalWidth() + 1
+	minWindowWidth := fake.minPageWidth + side + 4
+	threshold := minScreenWidthForWindow(minWindowWidth)
+	if threshold <= smallSettingsScreenWidth {
+		t.Fatalf("computed threshold %d does not exceed the old fixed guess of %d", threshold, smallSettingsScreenWidth)
+	}
+
+	if c := open(threshold-1, 40); c.SavedBounds == nil {
+		t.Fatalf("%d columns: want the hotkey page maximized (one short of its computed threshold %d)", threshold-1, threshold)
+	}
+	if c := open(threshold, 40); c.SavedBounds != nil {
+		t.Fatalf("%d columns: want the hotkey page at its ordinary size (its computed threshold)", threshold)
+	}
+
+	// A page other than the Hotkey Configurator is unaffected by the fake
+	// host: it keeps the fixed guess.
+	other := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	other.ResizeConsole(smallSettingsScreenWidth-1, 40)
+	if other.SavedBounds == nil {
+		t.Fatalf("a non-hotkeys page below %d columns should still maximize", smallSettingsScreenWidth)
+	}
+	other2 := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	other2.ResizeConsole(smallSettingsScreenWidth, 40)
+	if other2.SavedBounds != nil {
+		t.Fatalf("a non-hotkeys page at %d columns should not maximize", smallSettingsScreenWidth)
+	}
+}
+
 // A long operation says what it is doing in the status row while it runs, and
 // the row is empty again when it has finished without error (#277).
 func TestSettingsCenterShowsAnOperationsProgress(t *testing.T) {
