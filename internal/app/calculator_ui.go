@@ -19,7 +19,17 @@ import (
 // implementation of arithmetic parsing.
 
 const calcDialogWidth = 44
-const calcDialogHeight = 8
+
+// calcDialogHeight must fit all four stacked items (prompt label, expression
+// edit, result label, button row) below the title and above the bottom
+// border with the validator's usual 1-cell clearance on each side (see
+// showMkDirDialog's identically-shaped 4-item stack in actions.go, which
+// needs the same 11 rows for a 40-wide dialog): vbox starts at Y1+2, each
+// item is 1 row tall and separated by a Margins{Top: 1} gap, so the last
+// item lands 6 rows below the vbox top and needs 2 more rows of clearance
+// before the bottom border -- 2 (top border+clearance) + 6 + 2 (bottom
+// clearance+border) - 1 = 11.
+const calcDialogHeight = 11
 
 func showCalculatorDialog() {
 	dlg := vtui.NewCenteredDialog(calcDialogWidth, calcDialogHeight, i18n.Msg("Calculator.Title"))
