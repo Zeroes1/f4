@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 )
 
 // cliBackend reads and writes a database by running the sqlite3
@@ -174,10 +175,13 @@ func readRecords(out []byte) ([][]string, error) {
 }
 
 // typedValue is the select-list expression that reads one column in the
-// typeof:hex form parseTyped takes apart.
+// typeof:hex form parseTyped takes apart. A real is written out with
+// printf('%!.17g') first: seventeen significant digits bring back the exact
+// double, where hex() of the number would carry whatever text this sqlite3
+// version converts it to, which in older ones is only fifteen digits.
 func typedValue(column string) string {
 	quoted := quoteIdentifier(column)
-	return "typeof(" + quoted + ")||':'||hex(" + quoted + ")"
+	return "typeof(" + quoted + ")||':'||CASE typeof(" + quoted + ") WHEN 'real' THEN hex(printf('%!.17g', " + quoted + ")) ELSE hex(" + quoted + ") END"
 }
 
 // typedColumns is typedValue for every column, as a select list.
@@ -214,6 +218,42 @@ func parseTyped(field string) (any, error) {
 		return raw, nil
 	}
 	return nil, fmt.Errorf("sqlite3: unexpected type %q in output", kind)
+}
+
+// unistr decodes the escapes of SQLite's unistr(): \\ for a backslash and
+// \XXXX, \uXXXX, \+XXXXXX or \UXXXXXXXX for a code point in hex.
+func unistr(text string) (any, bool) {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		if text[i] != '\\' {
+			b.WriteByte(text[i])
+			continue
+		}
+		rest := text[i+1:]
+		digits := 4
+		switch {
+		case strings.HasPrefix(rest, `\`):
+			b.WriteByte('\\')
+			i++
+			continue
+		case strings.HasPrefix(rest, "u"):
+			rest, i = rest[1:], i+1
+		case strings.HasPrefix(rest, "+"):
+			rest, i, digits = rest[1:], i+1, 6
+		case strings.HasPrefix(rest, "U"):
+			rest, i, digits = rest[1:], i+1, 8
+		}
+		if len(rest) < digits {
+			return nil, false
+		}
+		code, err := strconv.ParseUint(rest[:digits], 16, 32)
+		if err != nil || code > utf8.MaxRune {
+			return nil, false
+		}
+		b.WriteRune(rune(code))
+		i += digits
+	}
+	return b.String(), true
 }
 
 // sqlText is value as an SQL string literal. A string literal stores the
@@ -312,11 +352,12 @@ func (b *cliBackend) exec(ctx context.Context, statement string) (int64, error) 
 
 // query runs a statement typed into the SQL box. It runs in quote mode,
 // where sqlite3 prints every value as an SQL literal -- NULL, 42, 1.5,
-// 'text', X'00FF' -- so NULL, numbers and blobs come back as what they are;
-// ascii mode would print a blob as text, cut at its first NUL byte. A field
-// that is not a plain literal (a sqlite3 that spells control characters as
-// unistr('...'), say) is shown as sqlite3 printed it: these values are only
-// ever displayed.
+// 'text', X'00FF', and in newer versions unistr('...') for text holding
+// control characters -- so NULL, numbers and blobs come back as what they
+// are; ascii mode would print a blob as text, cut at its first NUL byte. A
+// real comes back as the text sqlite3 printed, which some versions round.
+// A field that is none of these is shown as sqlite3 printed it: these
+// values are only ever displayed.
 func (b *cliBackend) query(ctx context.Context, statement string) (queryResult, error) {
 	out, err := b.run(ctx, ".mode quote\n.headers on\n"+statement+"\n;\n")
 	if err != nil {
@@ -409,11 +450,19 @@ func readQuoteRecords(out []byte) ([][]string, error) {
 }
 
 // parseSQLLiteral reads one plain SQL literal -- NULL, an integer, a real,
-// 'text' or X'hex' -- into the value database/sql would have scanned.
+// 'text', unistr('text') or X'hex' -- into the value database/sql would
+// have scanned.
 func parseSQLLiteral(literal string) (any, bool) {
 	switch {
 	case literal == "NULL":
 		return nil, true
+	case strings.HasPrefix(literal, "unistr(") && strings.HasSuffix(literal, ")"):
+		inner, ok := parseSQLLiteral(literal[len("unistr(") : len(literal)-1])
+		text, isText := inner.(string)
+		if !ok || !isText {
+			return nil, false
+		}
+		return unistr(text)
 	case len(literal) >= 2 && literal[0] == '\'' && literal[len(literal)-1] == '\'':
 		body := literal[1 : len(literal)-1]
 		if strings.Contains(strings.ReplaceAll(body, "''", ""), "'") {

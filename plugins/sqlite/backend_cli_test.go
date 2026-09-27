@@ -34,6 +34,7 @@ func createConformanceDB(t *testing.T) string {
 		`INSERT INTO t VALUES (NULL, 'it''s' || char(10) || 'two lines', x'00ff1e1f', -2.25)`,
 		`INSERT INTO t VALUES (3, 'sep' || char(31) || 'inside' || char(30) || 'value', x'', NULL)`,
 		`INSERT INTO t VALUES (-9007199254740993, 'тест', 'text in blob', 1e300)`,
+		`INSERT INTO t VALUES (5, 'reals', 0.1 + 0.2, 4.9e-324)`,
 		`CREATE VIEW v AS SELECT a, d FROM t WHERE a IS NOT NULL`,
 		`CREATE TABLE w (k TEXT PRIMARY KEY, n INT) WITHOUT ROWID`,
 		`INSERT INTO w VALUES ('x', 1), ('y', 2)`,
@@ -110,7 +111,10 @@ func collectConformance(t *testing.T, open func(context.Context, string) (sessio
 	var csv bytes.Buffer
 	must(session.exportTableCSV(ctx, "t", &csv))
 	c.csv = csv.String()
-	c.query, err = session.execute(ctx, "SELECT a, b, c, d, a IS NULL AS \"x, y\" FROM t ORDER BY rowid")
+	// A real typed into the SQL box comes back as the text sqlite3 prints,
+	// and some versions round 1e300 or 4.9e-324 on the way, so this leaves
+	// the reals out; f4's own reads get them exactly (printf('%!.17g')).
+	c.query, err = session.execute(ctx, "SELECT a, b, c, a IS NULL AS \"x, y\" FROM t ORDER BY rowid")
 	must(err)
 	if _, err := session.execute(ctx, "SELECT * FROM nosuch"); err != nil {
 		c.queryErr = err.Error()

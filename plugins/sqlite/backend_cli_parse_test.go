@@ -82,18 +82,21 @@ func TestReadQuoteRecords(t *testing.T) {
 		t.Fatalf("records = %#v, want %#v", records, want)
 	}
 	for field, want := range map[string]any{
-		"'x''y\nz'": "x'y\nz",
-		"X'00FF'":   []byte{0x00, 0xff},
-		"NULL":      nil,
-		"-1.5e+300": -1.5e300,
-		"1":         int64(1),
+		"'x''y\nz'":                    "x'y\nz",
+		"X'00FF'":                      []byte{0x00, 0xff},
+		"NULL":                         nil,
+		"-1.5e+300":                    -1.5e300,
+		"1":                            int64(1),
+		`unistr('p\u000aq, r')`:        "p\nq, r",
+		`unistr('a\\b\001fc''d')`:      "a\\b\x1fc'd",
+		`unistr('\+01F600\U0001F600')`: "😀😀",
 	} {
 		got, ok := parseSQLLiteral(field)
 		if !ok || !reflect.DeepEqual(got, want) {
 			t.Errorf("parseSQLLiteral(%q) = %#v, %v; want %#v", field, got, ok, want)
 		}
 	}
-	for _, field := range []string{"unistr('p\\u000aq, r')", "'a'||'b'", "X'0'"} {
+	for _, field := range []string{"'a'||'b'", "X'0'", `unistr('\u00')`, "unistr(42)", "char(10)"} {
 		if _, ok := parseSQLLiteral(field); ok {
 			t.Errorf("parseSQLLiteral(%q) took an expression for a literal", field)
 		}
