@@ -213,6 +213,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"plughost.(*rpcVUIPanel).ProcessKey": {
 		class: paletteAuditTransportHook, rationale: "RPC panel input is forwarded to the remote plugin, whose .vui document owns its semantic commands",
 	},
+	"proclist.(*procListPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
+	},
 }
 
 var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
