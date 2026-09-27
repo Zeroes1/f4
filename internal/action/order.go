@@ -66,6 +66,7 @@ var actionMenuOrder = []string{
 	"File.Find",
 	"File.FindDuplicates",
 	"Panel.CompareFolders",
+	"Panel.CompareFilesByContent",
 	"Panel.SyncDirs",
 	"File.RunRemoteCommand",
 	"Panel.BackgroundJobs",
