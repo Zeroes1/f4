@@ -63,8 +63,6 @@ func TestCompareSamplesOrdersNameLexically(t *testing.T) {
 }
 
 func TestProcListPanelWiring(t *testing.T) {
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-
 	controller, err := newProcListPanel(vfs.PanelContext{Bounds: [4]int{0, 0, 39, 19}})
 	if err != nil {
 		t.Fatal(err)

@@ -588,6 +588,11 @@ Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 ; --- ProcList ---
 Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
+ProcList.ColumnPID=PID
+ProcList.ColumnName=Name
+ProcList.ColumnMem=Mem
+ProcList.ColumnCPU=CPU%
+ProcList.PanelTitle=ProcList (%d)
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Player.Desc=Toggle the audio player panel
 Action.Settings.MacKeyboard=&Mac keyboard

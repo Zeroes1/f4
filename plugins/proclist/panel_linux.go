@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
@@ -31,10 +32,10 @@ const (
 
 func procListColumns() []vtui.TableColumn {
 	return []vtui.TableColumn{
-		{Title: "PID", Width: 8, Alignment: vtui.AlignRight},
-		{Title: "Name", MinWidth: 12},
-		{Title: "Mem", Width: 10, Alignment: vtui.AlignRight},
-		{Title: "CPU%", Width: 7, Alignment: vtui.AlignRight},
+		{Title: i18n.Msg("ProcList.ColumnPID"), Width: 8, Alignment: vtui.AlignRight},
+		{Title: i18n.Msg("ProcList.ColumnName"), MinWidth: 12},
+		{Title: i18n.Msg("ProcList.ColumnMem"), Width: 10, Alignment: vtui.AlignRight},
+		{Title: i18n.Msg("ProcList.ColumnCPU"), Width: 7, Alignment: vtui.AlignRight},
 	}
 }
 
@@ -142,7 +143,7 @@ type procListPanel struct {
 }
 
 func newProcListPanel(ctx vfs.PanelContext) (vfs.PanelController, error) {
-	frame := vtui.NewBorderedFrame(0, 0, 1, 1, vtui.SingleBox, " ProcList ")
+	frame := vtui.NewBorderedFrame(0, 0, 1, 1, vtui.SingleBox, "")
 	frame.ColorBoxIdx = theme.ColPanelBox
 	frame.ColorTitleIdx = theme.ColPanelTitle
 	frame.ColorBackgroundIdx = theme.ColPanelText
@@ -276,7 +277,7 @@ func (p *procListPanel) GetSelectedName() string {
 func (p *procListPanel) SetContext(vfs.PanelContext) {}
 
 func (p *procListPanel) Show(scr *vtui.ScreenBuf) {
-	p.frame.SetTitle(fmt.Sprintf(" ProcList (%d) ", p.table.ItemCount))
+	p.frame.SetTitle(fmt.Sprintf(i18n.Msg("ProcList.PanelTitle"), p.table.ItemCount))
 	p.frame.Show(scr)
 	p.table.Show(scr)
 }
