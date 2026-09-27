@@ -74,7 +74,7 @@ func TestLoadSubModule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
-	defer mod.Close()
+	defer func() { _ = mod.Close() }()
 
 	info, err := mod.LoadSubModule("")
 	if err != nil {
@@ -117,7 +117,7 @@ func TestOpenStorageRecognizedFile(t *testing.T) {
 	magic := []byte("F4OBSV01")
 	content := append(append([]byte{}, magic...), []byte(" payload recognized by the test stub")...)
 	ra := newMemReaderAt(content)
-	defer ra.Close() // SingleFileFS never closes it; see fsbridge.go.
+	defer func() { _ = ra.Close() }() // SingleFileFS never closes it; see fsbridge.go.
 	mount := observer.NewSingleFileFS(ctx, "target.bin", ra)
 
 	var progressCalls int
@@ -134,7 +134,7 @@ func TestOpenStorageRecognizedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
-	defer mod.Close()
+	defer func() { _ = mod.Close() }()
 
 	if _, err := mod.LoadSubModule(""); err != nil {
 		t.Fatalf("LoadSubModule: %v", err)
@@ -175,7 +175,7 @@ func TestOpenStorageRecognizedFile(t *testing.T) {
 	// StorageOpenParams.Data/DataSize marshaled correctly.
 	if n, err := mod.CallNoArgInt32("f4observer_last_data_size"); err != nil {
 		t.Errorf("f4observer_last_data_size: %v", err)
-	} else if n != int32(len(data)) {
+	} else if n != int32(len(data)) { // #nosec G115 -- data is the fixed 4-byte literal above, well inside int32.
 		t.Errorf("last_data_size = %d, want %d", n, len(data))
 	}
 	if n, err := mod.CallNoArgInt32("f4observer_last_data_first_byte"); err != nil {
@@ -207,7 +207,7 @@ func TestOpenStorageUnrecognizedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
 	}
-	defer mod.Close()
+	defer func() { _ = mod.Close() }()
 
 	if _, err := mod.LoadSubModule(""); err != nil {
 		t.Fatalf("LoadSubModule: %v", err)

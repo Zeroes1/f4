@@ -208,6 +208,8 @@ func (m *Module) alloc(size uint32) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
+	// #nosec G115 -- res[0] is malloc's i32 return value, already
+	// zero-extended into the uint64 result slot by wazero.
 	ptr := uint32(res[0])
 	if ptr == 0 {
 		return 0, fmt.Errorf("observer: module malloc(%d) returned null", size)
@@ -249,6 +251,9 @@ func (m *Module) allocWChars(s string) (uint32, error) {
 		return 0, nil
 	}
 	b := encodeWChars(s)
+	// #nosec G115 -- b is written into the guest's own wasm32 linear memory,
+	// whose whole address space is under 2^32 bytes, so its length always
+	// fits in uint32.
 	ptr, err := m.alloc(uint32(len(b)))
 	if err != nil {
 		return 0, err
@@ -264,6 +269,9 @@ func (m *Module) allocBytes(b []byte) (uint32, error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
+	// #nosec G115 -- b is written into the guest's own wasm32 linear memory,
+	// whose whole address space is under 2^32 bytes, so its length always
+	// fits in uint32.
 	ptr, err := m.alloc(uint32(len(b)))
 	if err != nil {
 		return 0, err
@@ -309,6 +317,10 @@ func (m *Module) LoadSubModule(settings string) (ModuleInfo, error) {
 	if err != nil {
 		return ModuleInfo{}, err
 	}
+	// #nosec G115 -- res[0] is LoadSubModule's i32 BOOL return value, already
+	// zero-extended into the uint64 result slot by wazero; the inner
+	// uint32(...) narrowing is exact, and the outer int32(...) reinterprets
+	// its bits as the signed BOOL the ABI specifies.
 	if int32(uint32(res[0])) == 0 {
 		return ModuleInfo{}, errors.New("observer: LoadSubModule refused to load")
 	}
@@ -359,6 +371,9 @@ func (m *Module) OpenStorage(params StorageOpenParams) (OpenResult, error) {
 	defer m.free(paramsPtr)
 
 	buf := make([]byte, storageOpenParamsSize)
+	// #nosec G115 -- params.Data was just allocated into the guest's own
+	// wasm32 linear memory above, whose whole address space is under 2^32
+	// bytes, so its length always fits in uint32.
 	encodeStorageOpenParams(buf, filePathPtr, passwordPtr, dataPtr, uint32(len(params.Data)))
 	if err := m.writeMemory(paramsPtr, buf); err != nil {
 		return OpenResult{}, err

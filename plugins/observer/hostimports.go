@@ -77,7 +77,13 @@ func newObserverHostModule(ctx context.Context, r wazero.Runtime, h *hostState) 
 	_, err := r.NewHostModuleBuilder("observer").
 		NewFunctionBuilder().
 		WithGoModuleFunction(api.GoModuleFunc(func(_ context.Context, _ api.Module, stack []uint64) {
+			// #nosec G115 -- stack[0] is the i32 param wazero itself declared
+			// for this function below, so it is already zero-extended from
+			// 32 bits.
 			signalContext := uint32(stack[0])
+			// #nosec G115 -- stack[1] is the i64 param wazero declared below;
+			// this reinterprets its bits as the signed __int64 bytesDone the
+			// ABI specifies, not a narrowing conversion.
 			bytesDone := int64(stack[1])
 			result := int32(1)
 			if h.progress != nil {

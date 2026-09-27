@@ -188,18 +188,18 @@ func encodeStorageOpenParams(b []byte, filePathPtr, passwordPtr, dataPtr, dataSi
 // itself is reserved for a later part.
 
 const (
-	storageItemNameMaxLen = 64
-	storageItemPathMaxLen = 1024
+	storageItemNameMaxLen = 64   //nolint:unused // documents the layout below; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemPathMaxLen = 1024 //nolint:unused // documents the layout below; consumed once GetItem marshaling lands in a later part of f4#1563.
 
-	storageItemInfoSizeOff             = 0
-	storageItemInfoPackedSizeOff       = storageItemInfoSizeOff + 8
-	storageItemInfoAttributesOff       = storageItemInfoPackedSizeOff + 8
-	storageItemInfoCreationTimeOff     = storageItemInfoAttributesOff + 4
-	storageItemInfoModificationTimeOff = storageItemInfoCreationTimeOff + fileTimeSize
-	storageItemInfoNumHardlinksOff     = storageItemInfoModificationTimeOff + fileTimeSize
-	storageItemInfoOwnerOff            = storageItemInfoNumHardlinksOff + 2
-	storageItemInfoPathOff             = storageItemInfoOwnerOff + storageItemNameMaxLen*wcharSize
-	storageItemInfoSize                = storageItemInfoPathOff + storageItemPathMaxLen*wcharSize
+	storageItemInfoSizeOff             = 0                                                         //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoPackedSizeOff       = storageItemInfoSizeOff + 8                                //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoAttributesOff       = storageItemInfoPackedSizeOff + 8                          //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoCreationTimeOff     = storageItemInfoAttributesOff + 4                          //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoModificationTimeOff = storageItemInfoCreationTimeOff + fileTimeSize             //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoNumHardlinksOff     = storageItemInfoModificationTimeOff + fileTimeSize         //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoOwnerOff            = storageItemInfoNumHardlinksOff + 2                        //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoPathOff             = storageItemInfoOwnerOff + storageItemNameMaxLen*wcharSize //nolint:unused // reserved offset; consumed once GetItem marshaling lands in a later part of f4#1563.
+	storageItemInfoSize                = storageItemInfoPathOff + storageItemPathMaxLen*wcharSize  //nolint:unused // reserved size; consumed once GetItem marshaling lands in a later part of f4#1563.
 )
 
 // StorageItemInfo mirrors ModuleDef.h's StorageItemInfo. Not yet produced or
@@ -219,20 +219,20 @@ type StorageItemInfo struct {
 // --- ExtractProcessCallbacks (8 bytes) ----------------------------------
 
 const (
-	extractProcessCallbacksSignalContextOff = 0
-	extractProcessCallbacksFileProgressOff  = 4
-	extractProcessCallbacksSize             = 8
+	extractProcessCallbacksSignalContextOff = 0 //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractProcessCallbacksFileProgressOff  = 4 //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractProcessCallbacksSize             = 8 //nolint:unused // reserved size; consumed once ExtractItem marshaling lands in a later part of f4#1563.
 )
 
 // --- ExtractOperationParams (24 bytes) ----------------------------------
 
 const (
-	extractOperationParamsItemIndexOff = 0
-	extractOperationParamsFlagsOff     = 4
-	extractOperationParamsDestPathOff  = 8
-	extractOperationParamsPasswordOff  = 12
-	extractOperationParamsCallbacksOff = 16
-	extractOperationParamsSize         = extractOperationParamsCallbacksOff + extractProcessCallbacksSize
+	extractOperationParamsItemIndexOff = 0                                                                //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractOperationParamsFlagsOff     = 4                                                                //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractOperationParamsDestPathOff  = 8                                                                //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractOperationParamsPasswordOff  = 12                                                               //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractOperationParamsCallbacksOff = 16                                                               //nolint:unused // reserved offset; consumed once ExtractItem marshaling lands in a later part of f4#1563.
+	extractOperationParamsSize         = extractOperationParamsCallbacksOff + extractProcessCallbacksSize //nolint:unused // reserved size; consumed once ExtractItem marshaling lands in a later part of f4#1563.
 )
 
 // ExtractOperationParams mirrors ModuleDef.h's ExtractOperationParams. Not

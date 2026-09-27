@@ -25,6 +25,10 @@ func decodeWCharField(b []byte) string {
 		if v == 0 {
 			break
 		}
+		// #nosec G115 -- v is a wchar_t code point out of guest memory and
+		// may be anything a buggy or malicious module wrote; string() below
+		// replaces a rune outside the Unicode range with U+FFFD, so an
+		// out-of-range v only garbles the decoded text, it cannot misbehave.
 		runes = append(runes, rune(v))
 	}
 	return string(runes)
