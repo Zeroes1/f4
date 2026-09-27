@@ -945,11 +945,13 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: plugins/android/go.sum
 
-    # -tags lite here (unlike build-cloudfox-plugin's untagged tidy) is what
-    # keeps go.mod/go.sum down to plugins/netfox's FISH+-only file set --
-    # see this job's own comment above for why plugins/android needs it.
+    # go.sum entries don't affect the compiled binary -- that's controlled
+    # by `-tags lite` on the actual build step below -- so a plain tidy
+    # here is fine even though it resolves plugins/netfox's full (non-lite)
+    # file set too; `go mod tidy` has no `-tags` flag to scope that (it
+    # fails outright: "flag provided but not defined: -tags").
     - name: go mod tidy
-      run: go mod tidy -tags lite
+      run: go mod tidy
 
     - name: Build android-plugin
       run: go build -trimpath -tags lite -o android-plugin ./cmd/android-plugin
