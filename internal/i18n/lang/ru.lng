@@ -589,6 +589,7 @@ Action.App.SQLite.Desc=Открыть клиент SQLite для базы дан
 Action.App.ProcList=Список процессов
 Action.App.ProcList.Desc=Открыть живой список процессов в активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
+Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
 Action.Panel.Player.Desc=Показать или скрыть панель аудиоплеера
 Action.Settings.MacKeyboard=Клавиатура &Mac
 Action.Settings.MacKeyboard.Desc=Раскладка macOS для правки текста: Cmd — начало и конец строки и файла, Opt — переходы по словам
@@ -730,6 +731,12 @@ Search.AllEditorTitle=Найдено: %s
 Search.Title= Поиск
 Search.NotFound=Строка поиска не найдена.
 
+Calculator.Title=Калькулятор
+Calculator.Prompt=Выражение:
+Calculator.ResultEmpty=(нажмите Enter для вычисления)
+Calculator.ResultError=Некорректное выражение
+Calculator.BtnInsert=&Вставить
+
 Select.Title= Пометка
 Select.Mask=&Введите маску для пометки:
 
@@ -774,6 +781,7 @@ Menu.Commands.BackgroundJobs=Фоновые задания
 Menu.Commands.RunRemote=Выполнить команду на сервере
 Menu.Commands.Bookmarks=Закладки
 Menu.Commands.TempPanel=Временная панель
+Menu.Commands.Calculator=Калькулятор
 Menu.SortName=Имя
 Menu.SortExt=Расширение
 Menu.SortTime=Время

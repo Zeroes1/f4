@@ -589,6 +589,7 @@ Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
+Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Player.Desc=Toggle the audio player panel
 Action.Settings.MacKeyboard=&Mac keyboard
 Action.Settings.MacKeyboard.Desc=Use the macOS editing chords: Cmd for line and document edges, Opt for word navigation
@@ -730,6 +731,12 @@ Search.AllEditorTitle=Found: %s
 Search.Title= Search
 Search.NotFound=Pattern not found.
 
+Calculator.Title=Calculator
+Calculator.Prompt=Expression:
+Calculator.ResultEmpty=(press Enter to calculate)
+Calculator.ResultError=Invalid expression
+Calculator.BtnInsert=&Insert
+
 Select.Title= Select
 Select.Mask=&Enter selection mask:
 
@@ -774,6 +781,7 @@ Menu.Commands.BackgroundJobs=Background Jobs
 Menu.Commands.RunRemote=Run Command Remotely
 Menu.Commands.Bookmarks=Bookmarks
 Menu.Commands.TempPanel=Temporary panel
+Menu.Commands.Calculator=Calculator
 Menu.SortName=Name
 Menu.SortExt=Extension
 Menu.SortTime=Time
