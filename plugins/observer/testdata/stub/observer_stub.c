@@ -27,11 +27,9 @@
 // UnloadSubModule, the two f4observer_* trampolines, the four
 // f4observer_last_*/close_count accessors below, and libc's malloc/free).
 
-#include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -158,11 +156,9 @@ int32_t f4observer_open_storage(uint32_t params_ptr, uint32_t storage_out_ptr, u
 	int matched = 0;
 	if (path[0] != 0) {
 		int fd = open(path, O_RDONLY);
-		fprintf(stderr, "f4observer_open_storage: open(\"%s\") = %d (errno=%d)\n", path, fd, fd < 0 ? errno : 0);
 		if (fd >= 0) {
 			unsigned char head[sizeof(kMagic)];
 			ssize_t n = read(fd, head, sizeof(head));
-			fprintf(stderr, "f4observer_open_storage: read = %ld (errno=%d)\n", (long)n, n < 0 ? errno : 0);
 			if (n == (ssize_t)sizeof(kMagic) && memcmp(head, kMagic, sizeof(kMagic)) == 0) {
 				matched = 1;
 			}
