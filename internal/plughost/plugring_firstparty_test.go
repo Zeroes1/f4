@@ -105,6 +105,38 @@ func TestFirstPartyPlugRingItemsIncludesIOS(t *testing.T) {
 	}
 }
 
+// TestFirstPartyPlugRingItemsIncludesSQLite is TestFirstPartyPlugRingItemsIncludesCloudfox's
+// sibling for f4#1178's SQLite extraction (part 3 of 4), with the same shape
+// as plugins/sqlite/cmd/sqlite-plugin/plugring-manifest.json.
+func TestFirstPartyPlugRingItemsIncludesSQLite(t *testing.T) {
+	items := FirstPartyPlugRingItems()
+
+	var sqlite *PlugRingItem
+	for i := range items {
+		if items[i].ID == "sqlite" {
+			sqlite = &items[i]
+		}
+	}
+	if sqlite == nil {
+		t.Fatal("sqlite is not in the first-party catalog")
+	}
+	if !sqlite.FirstParty {
+		t.Error("sqlite is not marked FirstParty")
+	}
+	if sqlite.Entrypoint != "sqlite-plugin" {
+		t.Errorf("entrypoint = %q, want sqlite-plugin", sqlite.Entrypoint)
+	}
+	if !strings.Contains(sqlite.URL, "{os}") || !strings.Contains(sqlite.URL, "{arch}") {
+		t.Errorf("url = %q, want per-platform {os}/{arch} placeholders", sqlite.URL)
+	}
+	if ok, reason := PlugRingItemRunsHere(*sqlite); !ok {
+		t.Errorf("sqlite is reported unrunnable: %s", reason)
+	}
+	if problem := PlugRingItemProblem(*sqlite); problem != "" {
+		t.Errorf("the first-party sqlite entry was rejected: %s", problem)
+	}
+}
+
 // TestFirstPartyBypassesTheCommunityPolicyThatWouldRejectIt is the point of
 // this whole file: the fields that make PlugRingItemProblem reject an
 // ordinary community entry -- a per-platform URL, an entrypoint that is not a
