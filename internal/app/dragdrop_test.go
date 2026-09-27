@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	androidfs "github.com/unxed/f4/plugins/android"
 	"github.com/unxed/f4/plugins/netfox"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
@@ -93,10 +92,12 @@ func TestVFSAcceptsDrop(t *testing.T) {
 	if panel.VfsAcceptsDrop(readOnlyTestVFS{local}) {
 		t.Fatal("a read-only file system must refuse before the drop")
 	}
-	androidManager := &androidfs.ManagerVFS{}
-	if panel.VfsAcceptsDrop(androidManager) {
-		t.Fatal("android manager must be read-only")
-	}
+	// plugins/android's ManagerVFS used to be checked here too, before it
+	// moved out to its own module and its own subprocess RPC plugin binary
+	// (f4#1178, plugins/android/cmd/android-plugin); this module can no
+	// longer import it. Its IsReadOnly()==true is exercised directly in
+	// plugins/android's own package tests, and the read-only-refuses-drop
+	// mechanism itself is still covered above via readOnlyTestVFS.
 	netfoxVFS := &netfox.NetFoxVFS{}
 	if panel.VfsAcceptsDrop(netfoxVFS) {
 		t.Fatal("netfox VFS must be read-only")

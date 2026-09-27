@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"github.com/unxed/f4/internal/config"
-	androidfs "github.com/unxed/f4/plugins/android"
 	"github.com/unxed/f4/plugins/chroma"
 	"github.com/unxed/f4/plugins/dummy_internal"
 	"github.com/unxed/f4/plugins/envman"
@@ -152,7 +151,6 @@ func (pm *PluginManager) loadInternal() {
 	plugins := []Plugin{
 		&chroma.Plugin{},
 		&dummy_internal.InternalDummyPlugin{},
-		androidfs.NewPlugin(),
 		iosfs.NewPlugin(),
 		&visren.Plugin{},
 		&id3editor.ID3EditorPlugin{},
@@ -160,14 +158,22 @@ func (pm *PluginManager) loadInternal() {
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
 		sqliteplugin.NewPlugin(),
 	}
-	// cloudfox (cloud services) stays excluded from a lite build entirely.
-	// Archive support comes back as plugins/multiarc, a CLI-archiver
-	// wrapper, in place of the native-library one (f4#1178, part 2), and
-	// netfox comes back cut down to FISH+ over a subprocess ssh dialer, in
-	// place of the full build's FTP/SFTP/FISH+ trio (part 3) -- no ftp/sftp/
-	// scp VFS provider. See plugins_lite.go/plugins_full.go, the single
-	// point of truth for which build tag gets which set, for the full
-	// accounting.
+	// cloudfox (cloud services) and android (ADB device browsing) stay
+	// excluded from both builds entirely, in either build. Both moved out
+	// to their own module and their own subprocess RPC plugin binary
+	// (plugins/cloudfox/cmd/cloudfox-plugin, plugins/android/cmd/android-plugin),
+	// per the owner's decision to give every plugin that is not part of f4's
+	// baseline feature set the same "download on demand" treatment
+	// (f4#1178, https://github.com/unxed/f4/issues/1178#issuecomment-5851392645)
+	// -- for android that is an architectural unification, not a binary-size
+	// win the way cloudfox's ~30 MB of cloud SDKs was; see
+	// plugins/android/rpc_plugin.go's package comment. Archive support comes
+	// back as plugins/multiarc, a CLI-archiver wrapper, in place of the
+	// native-library one (f4#1178, part 2), and netfox comes back cut down
+	// to FISH+ over a subprocess ssh dialer, in place of the full build's
+	// FTP/SFTP/FISH+ trio (part 3) -- no ftp/sftp/scp VFS provider. See
+	// plugins_lite.go/plugins_full.go, the single point of truth for which
+	// build tag gets which set, for the full accounting.
 	plugins = append(plugins, optionalVFSPlugins()...)
 
 	for _, p := range plugins {

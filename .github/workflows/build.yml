@@ -875,6 +875,92 @@ jobs:
         path: plugins/cloudfox/cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
         retention-days: 7
 
+  # f4#1178 Android plugin, part 1 of 4 (mirrors build-cloudfox-plugin above,
+  # per the owner's decision at
+  # https://github.com/unxed/f4/issues/1178#issuecomment-5851392645 to give
+  # Android the same "download this plugin on demand" treatment as cloud
+  # storage/iOS). plugins/android (ADB device browsing over shell-v2/FISH+
+  # or ADB Sync) no longer links into f4 at all, in either the full or the
+  # lite build; this job builds its own extracted module as its own binary
+  # to prove the extraction compiles, on the same desktop matrix
+  # build-cloudfox-plugin uses (native plugins are not distributed through
+  # the community PlugRing catalog per PLUGRING.md, so the exotic
+  # build-batch tier does not apply here either).
+  #
+  # Unlike CloudFox, plugins/android has no unique heavy dependency of its
+  # own to shed -- see plugins/android/rpc_plugin.go's package comment for
+  # why this job still passes -tags lite: plugins/netfox (which
+  # plugins/android reuses for FISH+) gates its FTP/SFTP/SSH-dialer/Pageant
+  # files with //go:build lite/!lite rather than splitting them into a
+  # separate module, so a plain `go build` here would otherwise link all of
+  # that in even though plugins/android's own code never references it.
+  #
+  # go.mod here was written by hand, for the same reason
+  # plugins/cloudfox/go.mod's own comment gives (this repo's policy is
+  # CI-only builds/toolchain runs, never local): the `go mod tidy` step
+  # below is the actual source of truth for it and go.sum.
+  #
+  # This is part 1 of 4 only: publishing release binaries (part 2), an
+  # install path through PlugRing (part 3) and a lite-build menu entry
+  # (part 4) are follow-up, exactly as they were for CloudFox.
+  build-android-plugin:
+    name: Build android-plugin (${{ matrix.name }})
+    needs: [should-run-full]
+    if: needs.should-run-full.outputs.run-full == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux/amd64
+            goos: linux
+            goarch: amd64
+          - name: linux/arm64
+            goos: linux
+            goarch: arm64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+          - name: darwin/amd64
+            goos: darwin
+            goarch: amd64
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    defaults:
+      run:
+        working-directory: plugins/android
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: plugins/android/go.sum
+
+    # -tags lite here (unlike build-cloudfox-plugin's untagged tidy) is what
+    # keeps go.mod/go.sum down to plugins/netfox's FISH+-only file set --
+    # see this job's own comment above for why plugins/android needs it.
+    - name: go mod tidy
+      run: go mod tidy -tags lite
+
+    - name: Build android-plugin
+      run: go build -trimpath -tags lite -o android-plugin ./cmd/android-plugin
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go vet -tags lite ./...
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: plugins/android/android-plugin
+        retention-days: 7
+
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
   # starts from a shell but dies the moment it re-execs itself for the
   # daemon: untrusted_app on current Android refuses to exec such a file,
