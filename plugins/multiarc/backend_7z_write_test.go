@@ -8,7 +8,8 @@ import (
 )
 
 // 7z a runs in the staging directory, so the member keeps the relative path
-// it was staged at; "--" keeps a name like "-x" or "@list" a name.
+// it was staged at; "--" keeps a name like "-x" a name (an "@" name needs
+// more than "--", see TestSevenZipAtNameGetsDotSlash).
 func TestSevenZipAddRunsInStageDir(t *testing.T) {
 	f := &fakeArchiver{tools: map[string]bool{"7zr": true}}
 	f.install(t)
@@ -37,6 +38,28 @@ func TestSevenZipWildcardNamesGetSpd(t *testing.T) {
 	want := []string{
 		"7z a -t7z -y -spd /x.7z -- w*ld",
 		"7z d -y -spd /x.7z -- a?",
+	}
+	if got := f.commands(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %q, want %q", got, want)
+	}
+}
+
+// 7-Zip reads an "@" argument as a listfile to read further names from, on
+// "a" and "d" alike, wherever it falls among the file names -- "--" only
+// stops switch parsing, not this -- so a member actually called "@odd.txt"
+// goes in as "./@odd.txt" instead.
+func TestSevenZipAtNameGetsDotSlash(t *testing.T) {
+	f := &fakeArchiver{tools: map[string]bool{"7z": true}}
+	f.install(t)
+	if err := (sevenZipBackend{bin: "7z"}).add(context.Background(), "/x.7z", "/s", []string{"@odd.txt"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := (sevenZipBackend{bin: "7z"}).remove(context.Background(), "/x.7z", []string{"@odd.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"7z a -t7z -y /x.7z -- ./@odd.txt",
+		"7z d -y /x.7z -- ./@odd.txt",
 	}
 	if got := f.commands(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)

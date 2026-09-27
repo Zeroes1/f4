@@ -54,8 +54,8 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "zip with 7za", target: "out.jar", tools: []string{"7za"},
-			want: []string{"7za a -tzip -y <work>" + sep + "out.jar -- a.txt @x"}, dirs: []string{"src"},
-			content: "|7za:a.txt,@x",
+			want: []string{"7za a -tzip -y <work>" + sep + "out.jar -- a.txt ./@x"}, dirs: []string{"src"},
+			content: "|7za:a.txt,./@x",
 		},
 		{
 			name: "zip with bsdtar, as on stock Windows", target: "out.zip", tools: []string{"tar"}, version: winTarVersion,
@@ -64,27 +64,27 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "7z with 7zr", target: "out.7z", tools: []string{"7zr"},
-			want: []string{"7zr a -t7z -y <work>" + sep + "out.7z -- a.txt @x"}, dirs: []string{"src"},
-			content: "|7zr:a.txt,@x",
+			want: []string{"7zr a -t7z -y <work>" + sep + "out.7z -- a.txt ./@x"}, dirs: []string{"src"},
+			content: "|7zr:a.txt,./@x",
 		},
 		{
 			name: "plain tar with GNU tar", target: "out.tar", tools: []string{"tar"}, version: gnuTarVersion,
-			want: []string{"tar -c -f <work>" + sep + "out.tar -C <src> -- a.txt @x"}, dirs: []string{"work"},
+			want: []string{"tar -c --force-local -f <work>" + sep + "out.tar -- a.txt @x"}, dirs: []string{"src"},
 			content: "|c:a.txt,@x",
 		},
 		{
 			name: "tar.gz with bsdtar's own zlib", target: "out.tar.gz", tools: []string{"tar"}, version: winTarVersion,
-			want: []string{"tar -c -z -f <work>" + sep + "out.tar.gz -C <src> -- a.txt ./@x"}, dirs: []string{"work"},
+			want: []string{"tar -c -z -f <work>" + sep + "out.tar.gz -- a.txt ./@x"}, dirs: []string{"src"},
 			content: "|c:a.txt,./@x",
 		},
 		{
 			name: "tar.xz with GNU tar and xz", target: "out.tar.xz", tools: []string{"tar", "xz"}, version: gnuTarVersion,
-			want: []string{"tar -c -f <work>" + sep + "work.tar -C <src> -- a.txt @x", "xz -f work.tar"}, dirs: []string{"work", "work"},
+			want: []string{"tar -c --force-local -f <work>" + sep + "work.tar -- a.txt @x", "xz -f work.tar"}, dirs: []string{"src", "work"},
 			content: "|c:a.txt,@x",
 		},
 		{
 			name: "tgz with BusyBox tar and gzip", target: "out.tgz", tools: []string{"tar", "gzip"}, stderr: busyBoxTarVersion,
-			want: []string{"tar -c -f <work>" + sep + "work.tar -C <src> -- a.txt @x", "gzip -f work.tar"}, dirs: []string{"work", "work"},
+			want: []string{"tar -c -f <work>" + sep + "work.tar -- a.txt @x", "gzip -f work.tar"}, dirs: []string{"src", "work"},
 			content: "|c:a.txt,@x",
 		},
 	}

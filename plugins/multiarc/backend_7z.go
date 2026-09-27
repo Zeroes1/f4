@@ -89,6 +89,11 @@ func parseSevenZipListing(out []byte) []entry {
 
 func sevenZipEntry(block map[string]string, raw string) entry {
 	p := strings.ReplaceAll(strings.Trim(raw, "/"), "\\", "/")
+	// A member added as "./@name" (see sevenZipMemberArgs) keeps that
+	// leading "./" in the listing; stripped here the same way
+	// parseBareNameListing strips it for tar and zip, so the VFS path is
+	// just "@name" whichever way 7-Zip reports it.
+	p = strings.TrimPrefix(p, "./")
 	e := entry{Path: p, Raw: raw}
 	attr := block["Attributes"]
 	e.IsDir = block["Folder"] == "+" || strings.HasPrefix(attr, "D")
@@ -122,9 +127,31 @@ func (b sevenZipBackend) extractOne(ctx context.Context, localPath, destDir, mem
 	if !ok {
 		return errors.New("multiarc: no 7z/7za/7zr on PATH")
 	}
-	// "--" (and -spd for a name holding "*" or "?", see
-	// sevenZipNameSwitches) keeps a member called "-x" from being read as a
-	// switch and one called "@list" as a list file.
+	// extract asks for a name the listing already gave us verbatim (member
+	// came from the archive's own raw name, via rawName/Raw), which rules
+	// out sevenZipMemberArgs' "./" rewrite here: 7-Zip normalizes away the
+	// "./" an add was given before deciding the stored name, so asking to
+	// extract "./name" for one actually stored as "name" silently extracts
+	// nothing -- this function tried that once and it broke every
+	// platform's reading back of a member added through this same package.
+	//
+	// "@name" still needs its own answer, though: 7-Zip reads an "@"
+	// filename argument as a listfile wherever it falls, "--" or not, on
+	// "x" the same as "a" (confirmed on macOS's p7zip: extracting a real
+	// "@at.txt" this way failed with "Cannot find listfile"). "-i!name"
+	// names it as an include pattern instead, which is not that argument
+	// position and so is never read as one, without changing what name is
+	// asked for the way "./name" would.
+	if strings.HasPrefix(member, "@") {
+		args := []string{"x", "-y", "-o" + destDir, "-i!" + member, localPath}
+		_, errOut, err := runTool(ctx, bin, args...)
+		if err != nil {
+			return toolFailure(bin, args, err, errOut)
+		}
+		return nil
+	}
+	// "--" keeps a member called "-x" from being read as a switch; -spd
+	// (see sevenZipNameSwitches) keeps one holding "*" or "?" literal.
 	args := append([]string{"x"}, sevenZipNameSwitches([]string{member}, "-y", "-o"+destDir)...)
 	args = append(args, localPath, "--", member)
 	_, errOut, err := runTool(ctx, bin, args...)
