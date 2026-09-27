@@ -353,14 +353,21 @@ Every file tracked in the repository. Regenerate with
     │   └── README.md
     ├── cmd
     │   └── f4
+    │       ├── android_deps_test.go
     │       ├── architecture_test.go
+    │       ├── cloudfox_deps_test.go
     │       ├── command_palette_coverage_test.go
     │       ├── frame_manager_capture_test.go
+    │       ├── go2xp_shim.go
     │       ├── hardcoded_strings_test.go
+    │       ├── ios_deps_test.go
+    │       ├── lite_deps_test.go
     │       ├── main.go
     │       ├── rsrc_windows_amd64.syso
-    │       └── rsrc_windows_arm64.syso
+    │       ├── rsrc_windows_arm64.syso
+    │       └── winescape_gate_test.go
     ├── docs
+    │   ├── ARCHIVE_DEPENDENCIES.md
     │   ├── COLORS.md
     │   ├── CONPTY_FUTURE_IDEAS.md
     │   ├── CONPTY_GATE_REQUIREMENTS.md
@@ -384,58 +391,21 @@ Every file tracked in the repository. Regenerate with
     │   ├── IMAGES_PLAN.md
     │   ├── issue-561-solutions.md
     │   ├── ISSUES
-    │   │   ├── ISSUE_1179_7Z_SFX_DETECTION_AND_TESTING.md
     │   │   ├── ISSUE_1400_PANEL_MODES.md
-    │   │   ├── ISSUE_165_CONPTY_SYNC_MARKER.md
-    │   │   ├── ISSUE_215_WINDOWS_UPDATE_ELEVATION.md
-    │   │   ├── ISSUE_247_QUEUE_PROGRESS_THROTTLE.md
-    │   │   ├── ISSUE_248_PTY_REDRAW_COALESCING.md
-    │   │   ├── ISSUE_260_SUDO_ARGUMENT_INHERITANCE.md
-    │   │   ├── ISSUE_261_COLOR_AREAS.md
-    │   │   ├── ISSUE_262_REMOTE_VFS_PATHS.md
-    │   │   ├── ISSUE_264_UPDATE_CHECK_VERSIONS.md
-    │   │   ├── ISSUE_266_MULTI_SELECTION_ATTRIBUTES.md
-    │   │   ├── ISSUE_277_COLORER_FEATURES.md
-    │   │   ├── ISSUE_278_SORT_ORDER_COLLATION.md
-    │   │   ├── ISSUE_309_PLUGRING_ASSET_URLS.md
-    │   │   ├── ISSUE_397_WINDOWS_CONSOLE_LAYOUT_CRASH.md
-    │   │   ├── ISSUE_411_HOTKEY_DIALOG_COMMIT.md
-    │   │   ├── ISSUE_453_OVERWRITE_DIALOG_LOCALIZATION.md
-    │   │   ├── ISSUE_492_RIGHT_CTRL_BINDINGS.md
-    │   │   ├── ISSUE_493_HOTKEY_LIST_SELECTION.md
-    │   │   ├── ISSUE_511_MULTIPLEXER_CHORDS.md
-    │   │   ├── ISSUE_523_GZIP_LOGICAL_FILE.md
-    │   │   ├── ISSUE_526_COMMAND_LINE_QUOTING.md
-    │   │   ├── ISSUE_546_VIEWER_GRAPHEME_CLUSTERS_FOLLOWUP.md
-    │   │   ├── ISSUE_546_VIEWER_GRAPHEME_CLUSTERS.md
-    │   │   ├── ISSUE_601_STARTUP_BACKEND_SELECTION.md
-    │   │   ├── ISSUE_606_FUSE_LOCK_GRANULARITY.md
-    │   │   ├── ISSUE_608_COPY_DIALOG_LAYOUT.md
-    │   │   ├── ISSUE_651_MENU_OVERFLOW_CHECKLIST.md
-    │   │   ├── ISSUE_677_ATOMIC_CONFIG_WRITES.md
-    │   │   ├── ISSUE_689_EDITOR_SYNTAX_FADE.md
-    │   │   ├── ISSUE_693_STATIC_LINUX_FFI.md
-    │   │   ├── ISSUE_703_COPY_WINDOW_TITLE_FOLLOWUP.md
-    │   │   ├── ISSUE_703_COPY_WINDOW_TITLE.md
     │   │   ├── ISSUE_722_COPY_ACCESS_RIGHTS.md
-    │   │   ├── ISSUE_722_COPY_OPTIONS.md
-    │   │   ├── ISSUE_724_SSH_HOST_KEY_VERIFICATION.md
-    │   │   ├── ISSUE_725_SSH_AGENT_FORWARDING.md
-    │   │   ├── ISSUE_727_S3_UPLOAD_API.md
-    │   │   ├── ISSUE_744_CI_MERGED_RUN_FAILURES.md
-    │   │   ├── ISSUE_793_MENU_COMMAND_PALETTE_ITEM.md
-    │   │   ├── ISSUE_807_BOOKMARKS_HOTKEY.md
-    │   │   ├── ISSUE_816_ARCHIVE_PASSWORD_DIALOG_FOLLOWUP.md
-    │   │   ├── ISSUE_833_CODEPAGE_AUTODETECTION.md
-    │   │   ├── ISSUE_834_FILE_TITLE_DISAMBIGUATION.md
-    │   │   ├── ISSUE_87_NESTED_TERMINAL_INPUT.md
-    │   │   ├── ISSUE_915_ARCHIVE_TEST_TOTAL_PROGRESS.md
-    │   │   ├── ISSUE_91_FREEBSD_CONSOLE_DIAGNOSIS.md
-    │   │   ├── ISSUE_95_TERMINAL_TAB_COMPLETION_FOLLOWUP.md
-    │   │   └── ISSUE_95_TERMINAL_TAB_COMPLETION.md
+    │   │   └── ISSUE_722_COPY_OPTIONS.md
     │   ├── KEYMAP.md
     │   ├── L10N_REPORT_GUIDE.md
     │   ├── LUA.md
+    │   ├── LUNOBOT
+    │   │   ├── 1187.md
+    │   │   ├── 1196.md
+    │   │   ├── 1218.md
+    │   │   ├── 1258.md
+    │   │   ├── 1288.md
+    │   │   ├── 1289.md
+    │   │   ├── 1291.md
+    │   │   └── 731.md
     │   ├── MACKEYS.md
     │   ├── MACROS.md
     │   ├── PINNED_CONSOLE.md
@@ -454,6 +424,7 @@ Every file tracked in the repository. Regenerate with
     │   ├── TERMINAL.md
     │   ├── TEST_OPTIMIZATION_PLAN.md
     │   ├── TTYX.md
+    │   ├── UPSTREAM.md
     │   ├── USER_MENU.md
     │   ├── UX_GUIDELINES.md
     │   ├── VFS.md
@@ -465,6 +436,8 @@ Every file tracked in the repository. Regenerate with
     │   └── WINE.md
     ├── embedded.go
     ├── f4.example.ini
+    ├── flake.lock
+    ├── flake.nix
     ├── .gitattributes
     ├── .github
     │   ├── actions
@@ -478,7 +451,9 @@ Every file tracked in the repository. Regenerate with
     │   └── workflows
     │       ├── build.yml
     │       ├── go-cache-salt
-    │       └── quick.yml
+    │       ├── nix.yml
+    │       ├── quick.yml
+    │       └── sandbox.yml
     ├── .gitignore
     ├── .golangci-strict.yml
     ├── .golangci.yml
@@ -493,23 +468,34 @@ Every file tracked in the repository. Regenerate with
     │   ├── app
     │   │   ├── action_copyname_parent_test.go
     │   │   ├── action_copy_window_title_test.go
+    │   │   ├── action_delete_cursor_test.go
+    │   │   ├── action_labelkeys_test.go
     │   │   ├── action_marked_clipboard_test.go
     │   │   ├── action_menu.go
     │   │   ├── action_menu_test.go
     │   │   ├── action_menu_visibility_test.go
     │   │   ├── action_registry_test.go
     │   │   ├── action_restore_selection_test.go
+    │   │   ├── actions_coverage_batch15_test.go
+    │   │   ├── actions_coverage_batch17_test.go
+    │   │   ├── actions_coverage_batch19_test.go
+    │   │   ├── actions_coverage_batch24_test.go
+    │   │   ├── actions_coverage_batch26_test.go
     │   │   ├── actions_coverage_helpers_test.go
     │   │   ├── actions_framework.go
     │   │   ├── actions_framework_test.go
     │   │   ├── actions.go
     │   │   ├── action_shortcut_conflict_test.go
+    │   │   ├── actions_low_coverage_extra_test.go
     │   │   ├── actions_table.go
     │   │   ├── actions_table_order_test.go
     │   │   ├── actions_test.go
     │   │   ├── actions_view_by_type_test.go
+    │   │   ├── ai_chat_panel_coverage_test.go
     │   │   ├── ai_chat_panel.go
     │   │   ├── ai_chat_panel_test.go
+    │   │   ├── android_plugin_menu.go
+    │   │   ├── android_plugin_menu_test.go
     │   │   ├── api.go
     │   │   ├── api_test.go
     │   │   ├── apply_command_test.go
@@ -525,6 +511,14 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bookmarks_test.go
     │   │   ├── bootstrap_backend.go
     │   │   ├── bootstrap_backend_test.go
+    │   │   ├── bootstrap_coverage_batch34_test.go
+    │   │   ├── bootstrap_coverage_batch37_test.go
+    │   │   ├── bootstrap_coverage_batch42_test.go
+    │   │   ├── bootstrap_coverage_batch43_test.go
+    │   │   ├── bootstrap_coverage_batch45_test.go
+    │   │   ├── bootstrap_coverage_batch46_test.go
+    │   │   ├── bootstrap_coverage_batch47_test.go
+    │   │   ├── bootstrap_coverage_extra_test.go
     │   │   ├── bootstrap_coverage_test.go
     │   │   ├── bootstrap_ctrlhandler_other.go
     │   │   ├── bootstrap_ctrlhandler_windows.go
@@ -549,16 +543,18 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bootstrap_unicode_test.go
     │   │   ├── child_env_test.go
     │   │   ├── child_env_universal_linux_test.go
-    │   │   ├── cloudfox_real_archive_test.go
-    │   │   ├── cloudfox_real_cross_cloud_test.go
-    │   │   ├── cloudfox_real_large_f5_test.go
-    │   │   ├── cloudfox_real_ui_test.go
+    │   │   ├── cloud_storage_lite.go
+    │   │   ├── cloud_storage_lite_test.go
     │   │   ├── codepage_issue875_sticky_test.go
     │   │   ├── codepage_issue875_test.go
+    │   │   ├── colorer_coverage_more_test.go
     │   │   ├── colorer_download_test.go
     │   │   ├── colorer_settings.go
     │   │   ├── colorer_settings_test.go
+    │   │   ├── colorer_type_settings_coverage_test.go
     │   │   ├── colorer_type_settings.go
+    │   │   ├── colorstyle_firstrun.go
+    │   │   ├── colorstyle_firstrun_test.go
     │   │   ├── command_history_paths_test.go
     │   │   ├── command_palette_direct_frames.go
     │   │   ├── command_palette_direct_frames_test.go
@@ -589,16 +585,24 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── compare_folders_ui.go
     │   │   ├── config_test.go
     │   │   ├── console_passthrough_test.go
+    │   │   ├── copy_dialog_options_coverage_test.go
     │   │   ├── copy_dialog_options.go
+    │   │   ├── copy_dialog_options_more_coverage_test.go
+    │   │   ├── coverage_batch35_test.go
     │   │   ├── coverage_helpers_test.go
+    │   │   ├── ctrl_row_labelkeys_test.go
     │   │   ├── debug.go
     │   │   ├── debug_hangdump_unix.go
     │   │   ├── debug_hangdump_windows.go
     │   │   ├── debug_log_test.go
     │   │   ├── delete_trash_test.go
+    │   │   ├── diagnostics.go
+    │   │   ├── diagnostics_test.go
     │   │   ├── dialog_copy_resize_test.go
     │   │   ├── dialog_layout_languages_test.go
     │   │   ├── dialog_layouts_test.go
+    │   │   ├── dialog_outer_border.go
+    │   │   ├── dialog_outer_border_test.go
     │   │   ├── disasm_editor_test.go
     │   │   ├── dragdrop_test.go
     │   │   ├── drive_bookmarks_test.go
@@ -624,6 +628,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── folder_history_actions_test.go
     │   │   ├── folder_history_navigation_test.go
     │   │   ├── folder_history_panel_test.go
+    │   │   ├── framewatch.go
+    │   │   ├── framewatch_vtui.go
     │   │   ├── grabber.go
     │   │   ├── grabber_mouse_test.go
     │   │   ├── grabber_test.go
@@ -644,6 +650,16 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── hotkeys_ui_test.go
     │   │   ├── image_gallery_panel_test.go
     │   │   ├── image_view_panel_test.go
+    │   │   ├── ios_plugin_menu.go
+    │   │   ├── ios_plugin_menu_test.go
+    │   │   ├── issue1218_keybar_test.go
+    │   │   ├── issue1229_test.go
+    │   │   ├── issue1233_test.go
+    │   │   ├── issue1237_test.go
+    │   │   ├── issue1239_test.go
+    │   │   ├── issue1268_test.go
+    │   │   ├── issue408_reveal_test.go
+    │   │   ├── issue413_test.go
     │   │   ├── issue54_test.go
     │   │   ├── issue561_test.go
     │   │   ├── issue631_test.go
@@ -655,6 +671,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── keymap_suspend.go
     │   │   ├── lang.go
     │   │   ├── lang_host_test.go
+    │   │   ├── lite_build.go
+    │   │   ├── lite_build_lite.go
     │   │   ├── local_language_files_test.go
     │   │   ├── macro_ctrlletter_test.go
     │   │   ├── macro_dispatch.go
@@ -670,6 +688,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── media_app.go
     │   │   ├── menu_history_action.go
     │   │   ├── menu_history_test.go
+    │   │   ├── menu_hotkeys_test.go
     │   │   ├── mock_failing_vfs_test.go
     │   │   ├── navigation_mode_test.go
     │   │   ├── panel_actions_test.go
@@ -681,6 +700,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── panels_frame_drivecursor_windows_test.go
     │   │   ├── path_hints_test.go
     │   │   ├── path_identity_history_test.go
+    │   │   ├── player_panel_actions_test.go
     │   │   ├── plughost_app.go
     │   │   ├── plugin_contributions.go
     │   │   ├── plugin_contributions_test.go
@@ -694,26 +714,37 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── portable_test.go
     │   │   ├── process_environment_host.go
     │   │   ├── process_environment_host_test.go
+    │   │   ├── proclist_actions.go
+    │   │   ├── procname_linux.go
+    │   │   ├── procname_linux_test.go
+    │   │   ├── procname_other.go
     │   │   ├── pty_windows_panel_test.go
     │   │   ├── quickview_api.go
+    │   │   ├── release_version_symbol_test.go
     │   │   ├── rpc_commands_test.go
     │   │   ├── runner_unix_panel_test.go
     │   │   ├── search_history_test.go
     │   │   ├── semantic_actions_test.go
     │   │   ├── semantic.go
     │   │   ├── semantic_test.go
+    │   │   ├── settings_coverage_batch16_test.go
+    │   │   ├── settings_host_coverage_batch49_test.go
+    │   │   ├── settings_host_coverage_test.go
     │   │   ├── settings_host.go
     │   │   ├── settings_routes.go
+    │   │   ├── settings_save_coverage_batch48_test.go
     │   │   ├── settings_save.go
     │   │   ├── settings_save_route_test.go
     │   │   ├── share_dialog_coverage_test.go
     │   │   ├── share_dialog.go
     │   │   ├── share_dialog_test.go
+    │   │   ├── sheet_actions_coverage_test.go
     │   │   ├── sheet_actions.go
     │   │   ├── sheet_actions_test.go
     │   │   ├── sheet_compare_coverage_test.go
     │   │   ├── sheet_dialogs_coverage_test.go
     │   │   ├── sheet_dialogs.go
+    │   │   ├── sheet_frame_coverage_extra_test.go
     │   │   ├── sheet_frame.go
     │   │   ├── sheet_frame_test.go
     │   │   ├── sheet_palette.go
@@ -724,10 +755,13 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── sort_groups_test.go
     │   │   ├── sqlite_actions.go
     │   │   ├── sqlite_actions_test.go
+    │   │   ├── startup_coverage_batch18_test.go
     │   │   ├── static_direct_actions.go
     │   │   ├── static_direct_actions_test.go
+    │   │   ├── sync_dirs_coverage_test.go
     │   │   ├── sync_dirs_ui.go
     │   │   ├── temp_panel_test.go
+    │   │   ├── term_app_coverage_batch32_test.go
     │   │   ├── term_app.go
     │   │   ├── term_app_other.go
     │   │   ├── term_app_windows.go
@@ -756,11 +790,17 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── vtvibe_ap.go
     │   │   ├── vtvibe_ap_test.go
     │   │   ├── vtvibe_host_coverage_test.go
+    │   │   ├── vtvibe_host_extra_coverage_test.go
     │   │   ├── vtvibe_host.go
     │   │   ├── vtvibe_host_test.go
     │   │   ├── win32_backend_test.go
+    │   │   ├── window_toggle.go
+    │   │   ├── window_toggle_other.go
+    │   │   ├── window_toggle_test.go
+    │   │   ├── window_toggle_windows.go
     │   │   ├── workspace_routing_test.go
     │   │   ├── workspace_session_test.go
+    │   │   ├── worktree_identity_coverage_test.go
     │   │   ├── worktree_identity.go
     │   │   └── worktree_identity_test.go
     │   ├── appcmd
@@ -804,10 +844,13 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── appearance_settings_test.go
     │   │   ├── atomic.go
     │   │   ├── atomic_test.go
+    │   │   ├── colorstyle_configured_test.go
     │   │   ├── config.go
     │   │   ├── config_test.go
     │   │   ├── cursor_style_test.go
     │   │   ├── fallback_language_test.go
+    │   │   ├── grouping.go
+    │   │   ├── grouping_test.go
     │   │   ├── options.go
     │   │   ├── options_test.go
     │   │   ├── overlay.go
@@ -822,12 +865,16 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── about_os_unix.go
     │   │   ├── about_os_windows.go
     │   │   ├── about_test.go
+    │   │   ├── attributes_created_time_test.go
     │   │   ├── attributes.go
     │   │   ├── attributes_mixed_test.go
+    │   │   ├── attributes_mtime_validation_test.go
+    │   │   ├── attributes_recursive_test.go
     │   │   ├── attributes_unix.go
     │   │   ├── attributes_windows.go
     │   │   ├── attributes_windows_test.go
     │   │   ├── caption.go
+    │   │   ├── config_editor_coverage_batch36_test.go
     │   │   ├── config_editor.go
     │   │   ├── config_editor_test.go
     │   │   ├── envman_help_test.go
@@ -866,6 +913,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── help_search.go
     │   │   ├── help_search_test.go
     │   │   ├── help_test.go
+    │   │   ├── help_zoom_rewrap_test.go
     │   │   ├── hotkey_capture.go
     │   │   ├── label.go
     │   │   ├── main_test.go
@@ -884,6 +932,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── buffer_mapped.go
     │   │   ├── buffer_mapped_unix.go
     │   │   ├── buffer_mapped_windows.go
+    │   │   ├── calculator.go
     │   │   ├── colorer_async.go
     │   │   ├── colorer_check.go
     │   │   ├── colorer_check_test.go
@@ -895,6 +944,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_diagnostics_test.go
     │   │   ├── colorer_downloader.go
     │   │   ├── colorer.go
+    │   │   ├── colorer_lite.go
     │   │   ├── colorer_outline_frame.go
     │   │   ├── colorer_outline_frame_test.go
     │   │   ├── colorer_outline.go
@@ -906,21 +956,30 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── colorer_params_test.go
     │   │   ├── colorer_plugin_test.go
     │   │   ├── colorer_reload.go
+    │   │   ├── colorer_setups.go
     │   │   ├── colorer_text.go
+    │   │   ├── colorer_types_coverage_test.go
     │   │   ├── colorer_type_settings.go
     │   │   ├── colorer_type_settings_test.go
     │   │   ├── colorer_types.go
     │   │   ├── colorer_types_test.go
+    │   │   ├── colorer_userhrd_location_test.go
+    │   │   ├── colorer_userpath_test.go
     │   │   ├── colorer_window.go
     │   │   ├── editor_base64_test.go
+    │   │   ├── editor_calculator_test.go
     │   │   ├── editor_codepage_test.go
+    │   │   ├── editor_coverage_batch27_test.go
+    │   │   ├── editor_coverage_batch28_test.go
     │   │   ├── editor_delta_test.go
     │   │   ├── editor_duplicate_line_test.go
     │   │   ├── editor_fade_test.go
     │   │   ├── editor_features_test.go
     │   │   ├── editor_find_all_test.go
+    │   │   ├── editor_hex_colors_test.go
     │   │   ├── editor_highlight_budget_test.go
     │   │   ├── editor_index_status_test.go
+    │   │   ├── editor_long_line_render_test.go
     │   │   ├── editor_mmap_test.go
     │   │   ├── editor_move_line_test.go
     │   │   ├── editor_multicursor_edit_test.go
@@ -956,6 +1015,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── grapheme.go
     │   │   ├── host.go
     │   │   ├── index_status.go
+    │   │   ├── issue1230_flicker_test.go
+    │   │   ├── issue1230_test.go
     │   │   ├── main_test.go
     │   │   ├── mapped_file_test.go
     │   │   ├── menubar_test.go
@@ -964,11 +1025,20 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── save_as.go
     │   │   ├── search_remote.go
     │   │   ├── sort.go
+    │   │   ├── status_coverage_test.go
     │   │   ├── status.go
     │   │   ├── url_links_hover_test.go
+    │   │   ├── view_coverage_batch23_test.go
+    │   │   ├── view_coverage_contract_test.go
     │   │   ├── view.go
+    │   │   ├── view_helpers_coverage_batch21_test.go
+    │   │   ├── view_lowlevel_coverage_test.go
+    │   │   ├── view_semantic_coverage_test.go
     │   │   ├── view_semantic.go
     │   │   └── wrap_safety.go
+    │   ├── filemask
+    │   │   ├── mask.go
+    │   │   └── mask_test.go
     │   ├── fileops
     │   │   ├── access_rights.go
     │   │   ├── access_rights_test.go
@@ -999,12 +1069,14 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── local.go
     │   │   ├── main_test.go
     │   │   ├── mask.go
+    │   │   ├── ops_case_test.go
     │   │   ├── ops_dialog.go
     │   │   ├── ops.go
     │   │   ├── path_identity_test.go
     │   │   ├── pump.go
     │   │   ├── queue.go
     │   │   ├── queue_manager_test.go
+    │   │   ├── report_contract_test.go
     │   │   ├── report.go
     │   │   ├── rights_extra.go
     │   │   ├── security_other.go
@@ -1013,6 +1085,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── state.go
     │   │   ├── state_key_test.go
     │   │   ├── state_test.go
+    │   │   ├── symlink_coverage_test.go
     │   │   ├── symlink.go
     │   │   ├── sync.go
     │   │   ├── sync_test.go
@@ -1023,6 +1096,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bench.sh
     │   │   ├── bridge.go
     │   │   ├── bridge_test.go
+    │   │   ├── cli_coverage_signal_test.go
+    │   │   ├── cli_coverage_test.go
     │   │   ├── cli.go
     │   │   ├── cli_test.go
     │   │   ├── fusefs.go
@@ -1066,6 +1141,10 @@ Every file tracked in the repository. Regenerate with
     │   │   │       └── README.md
     │   │   ├── backend_ffi.go
     │   │   ├── backend.go
+    │   │   ├── backends.go
+    │   │   ├── backends_lite.go
+    │   │   ├── backends_lite_test.go
+    │   │   ├── backends_test.go
     │   │   ├── backend_stub.go
     │   │   ├── backend_test.go
     │   │   ├── font_catalog.go
@@ -1081,9 +1160,12 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── icon_darwin.go
     │   │   ├── icon_darwin_test.go
     │   │   ├── icon_unix.go
+    │   │   ├── icon_windows_coverage_test.go
     │   │   ├── icon_windows.go
     │   │   ├── icon_windows_test.go
+    │   │   ├── liteguard.go
     │   │   ├── runtime_mode.go
+    │   │   ├── runtime_mode_test.go
     │   │   ├── run_unix.go
     │   │   ├── run_unix_test.go
     │   │   ├── run_windows.go
@@ -1096,11 +1178,15 @@ Every file tracked in the repository. Regenerate with
     │   │   └── hideconsole.go
     │   ├── history
     │   │   ├── edit.go
+    │   │   ├── edit_test.go
     │   │   ├── far2l.go
+    │   │   ├── history_coverage_test.go
     │   │   ├── menu.go
     │   │   ├── paths.go
     │   │   ├── pins.go
-    │   │   └── provider.go
+    │   │   ├── provider.go
+    │   │   ├── shell.go
+    │   │   └── shell_test.go
     │   ├── i18n
     │   │   ├── lang
     │   │   │   ├── ar.lng
@@ -1135,6 +1221,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── lang.go
     │   │   ├── lang_homoglyphs_test.go
     │   │   ├── lang_packs_test.go
+    │   │   ├── lang_ru_complete_test.go
     │   │   ├── lang_scripts_test.go
     │   │   ├── lang_test.go
     │   │   ├── language_list_test.go
@@ -1145,12 +1232,20 @@ Every file tracked in the repository. Regenerate with
     │   ├── ini
     │   │   ├── ini.go
     │   │   └── ini_test.go
+    │   ├── install
+    │   │   ├── cli.go
+    │   │   ├── cli_test.go
+    │   │   ├── install.go
+    │   │   └── install_test.go
     │   ├── keymap
     │   │   ├── farkeys.go
+    │   │   ├── farkeys_selection_test.go
     │   │   ├── hotkeys.go
     │   │   ├── input.go
     │   │   ├── input_translation_test.go
     │   │   ├── keymap_test.go
+    │   │   ├── kitty_coverage_batch39_test.go
+    │   │   ├── kitty_coverage_extra_test.go
     │   │   ├── kitty.go
     │   │   ├── mackeys.go
     │   │   ├── mackeys_test.go
@@ -1174,6 +1269,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── engine.go
     │   │   ├── export.go
     │   │   ├── export_test.go
+    │   │   ├── lua_api_coverage_batch19_test.go
     │   │   ├── lua_api.go
     │   │   ├── lua.go
     │   │   ├── lua_test.go
@@ -1183,8 +1279,15 @@ Every file tracked in the repository. Regenerate with
     │   │   └── reload_test.go
     │   ├── media
     │   │   ├── application.go
+    │   │   ├── audio_context_reuse_test.go
+    │   │   ├── audio_decode_contract_test.go
+    │   │   ├── audio_decode_coverage_extra_test.go
+    │   │   ├── audio_decode_coverage_test.go
     │   │   ├── audio_decode.go
     │   │   ├── audio_decode_test.go
+    │   │   ├── audio_engine_contract_test.go
+    │   │   ├── audio_format.go
+    │   │   ├── audio_format_test.go
     │   │   ├── audio.go
     │   │   ├── audio_oto.go
     │   │   ├── audio_stub.go
@@ -1202,14 +1305,20 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── image.go
     │   │   ├── image_native_darwin.go
     │   │   ├── image_native_darwin_test.go
+    │   │   ├── image_preview_coverage_test.go
     │   │   ├── image_preview.go
+    │   │   ├── image_preview_parsing_coverage_test.go
+    │   │   ├── image_preview_success_coverage_test.go
     │   │   ├── image_preview_test.go
+    │   │   ├── image_qoi_coverage_test.go
     │   │   ├── image_qoi.go
+    │   │   ├── image_quick_preview_coverage_test.go
     │   │   ├── image_slideshow.go
     │   │   ├── image_slideshow_test.go
     │   │   ├── image_test.go
     │   │   ├── image_transform.go
     │   │   ├── image_transform_test.go
+    │   │   ├── image_view_coverage_extra_test.go
     │   │   ├── image_view.go
     │   │   ├── image_view_orient_test.go
     │   │   ├── image_view_overlay_test.go
@@ -1224,9 +1333,13 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── video_test.go
     │   │   ├── video_view_coverage_test.go
     │   │   └── video_view.go
+    │   ├── menuhotkeys
+    │   │   ├── menuhotkeys.go
+    │   │   └── menuhotkeys_test.go
     │   ├── netproxy
     │   │   ├── coverage_test.go
     │   │   ├── keepalive_linux_test.go
+    │   │   ├── netproxy_gap_test.go
     │   │   ├── netproxy.go
     │   │   └── netproxy_test.go
     │   ├── numeric
@@ -1235,14 +1348,21 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── numeric_test.go
     │   │   └── size.go
     │   ├── panel
+    │   │   ├── actions_coverage_test.go
     │   │   ├── actions.go
+    │   │   ├── apply_coverage_batch29_test.go
+    │   │   ├── apply_coverage_extra_test.go
     │   │   ├── apply.go
     │   │   ├── apply_shutdown.go
     │   │   ├── associations_editor.go
     │   │   ├── associations.go
     │   │   ├── associations_ui.go
     │   │   ├── audio_decode_panel_test.go
+    │   │   ├── autofilter.go
     │   │   ├── background_jobs_session_test.go
+    │   │   ├── base64_file_coverage_test.go
+    │   │   ├── base64_file.go
+    │   │   ├── base64_file_test.go
     │   │   ├── bookmarks_dialog.go
     │   │   ├── bookmarks_dialog_test.go
     │   │   ├── bookmarks.go
@@ -1251,20 +1371,27 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── bridge_visren.go
     │   │   ├── cmd_session_test.go
     │   │   ├── console.go
+    │   │   ├── console_rows_test.go
     │   │   ├── context_editors_test.go
     │   │   ├── coverage_player_helpers_test.go
+    │   │   ├── custom_column_modes_test.go
     │   │   ├── drives_bookmarks.go
     │   │   ├── drives_bookmarks_ui.go
+    │   │   ├── drives_bookmarks_ui_test.go
     │   │   ├── drives_menu.go
     │   │   ├── drives_menu_unix.go
     │   │   ├── drives_menu_windows.go
     │   │   ├── edit_command_test.go
     │   │   ├── exec.go
     │   │   ├── file_panel_test.go
+    │   │   ├── frame_coverage_batch22_test.go
+    │   │   ├── frame_coverage_batch25_test.go
     │   │   ├── frame_coverage_test.go
     │   │   ├── frame_dragdrop.go
     │   │   ├── frame_externalui.go
     │   │   ├── frame.go
+    │   │   ├── frame_helpers_coverage_test.go
+    │   │   ├── frame_history_coverage_test.go
     │   │   ├── frame_manager_test_helpers_test.go
     │   │   ├── frame_procenv.go
     │   │   ├── frame_semantic.go
@@ -1276,7 +1403,15 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── fuse_list.go
     │   │   ├── fuse_mount_coverage_test.go
     │   │   ├── fuse_mount.go
+    │   │   ├── grouping.go
+    │   │   ├── grouping_menu_coverage_test.go
+    │   │   ├── grouping_menu.go
+    │   │   ├── grouping_test.go
+    │   │   ├── grouping_view.go
     │   │   ├── hints.go
+    │   │   ├── host_console_replies.go
+    │   │   ├── host_console_replies_test.go
+    │   │   ├── host_coverage_test.go
     │   │   ├── host.go
     │   │   ├── host_input_modes.go
     │   │   ├── host_input_modes_other.go
@@ -1286,8 +1421,20 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── info.go
     │   │   ├── info_panel_test.go
     │   │   ├── info_usage.go
+    │   │   ├── issue1131_test.go
+    │   │   ├── issue1184_test.go
+    │   │   ├── issue1218_keybar_test.go
+    │   │   ├── issue1234_test.go
+    │   │   ├── issue1320_keybar_test.go
     │   │   ├── issue863_terminal_test.go
     │   │   ├── issue915_keybar_test.go
+    │   │   ├── kitty_passthrough.go
+    │   │   ├── kitty_passthrough_test.go
+    │   │   ├── layout_selection_coverage_test.go
+    │   │   ├── list_access.go
+    │   │   ├── list_access_other_test.go
+    │   │   ├── list_access_test.go
+    │   │   ├── list_access_windows_test.go
     │   │   ├── list.go
     │   │   ├── list_reconnect.go
     │   │   ├── list_size.go
@@ -1295,10 +1442,19 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── lookup.go
     │   │   ├── main_test.go
     │   │   ├── menubar_dropdown_test.go
+    │   │   ├── menu_cache_test.go
+    │   │   ├── menukeys.go
+    │   │   ├── menukeys_test.go
     │   │   ├── mock_pty_test.go
+    │   │   ├── navigate_elevated_async_test.go
+    │   │   ├── navigation_guards_coverage_test.go
+    │   │   ├── navigation_vfs_coverage_test.go
     │   │   ├── panels_frame_pty_test.go
     │   │   ├── panels_frame_test.go
+    │   │   ├── pins_coverage_test.go
     │   │   ├── pins.go
+    │   │   ├── player_coverage_extra_test.go
+    │   │   ├── player_coverage_test.go
     │   │   ├── player.go
     │   │   ├── player_test.go
     │   │   ├── plugin_hotkeys.go
@@ -1307,23 +1463,35 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── prefixes_registry_windows_test.go
     │   │   ├── prefixes_test.go
     │   │   ├── press_key_test.go
+    │   │   ├── proactive_kitty_protocol_test.go
     │   │   ├── process_environment_panel_test.go
+    │   │   ├── progress_overlay_test.go
+    │   │   ├── prompt_coverage_extra_test.go
     │   │   ├── prompt.go
     │   │   ├── quickview_colors_test.go
+    │   │   ├── quickview_coverage_test.go
     │   │   ├── quickview.go
     │   │   ├── quick_view_panel_test.go
     │   │   ├── quick_view_provider_test.go
+    │   │   ├── quick_view_refused_test.go
     │   │   ├── reconnect_test.go
     │   │   ├── remote.go
+    │   │   ├── selection_extension.go
+    │   │   ├── selection_extension_test.go
     │   │   ├── selection_panel_test.go
     │   │   ├── session_cmd.go
     │   │   ├── settings.go
+    │   │   ├── settings_test.go
     │   │   ├── shell_session_test.go
     │   │   ├── sort.go
     │   │   ├── sort_groups_test.go
+    │   │   ├── sort_natural.go
+    │   │   ├── sort_natural_test.go
     │   │   ├── state.go
+    │   │   ├── strict_autofilter_test.go
     │   │   ├── temp_coverage_test.go
     │   │   ├── temp.go
+    │   │   ├── terminal_redraw_target_test.go
     │   │   ├── uri_navigation_test.go
     │   │   ├── usermenu_coverage_test.go
     │   │   ├── usermenu_farfile.go
@@ -1332,11 +1500,14 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── usermenu_script_coverage_test.go
     │   │   ├── usermenu_script.go
     │   │   ├── usermenu_subst.go
+    │   │   ├── usermenu_subst_test.go
+    │   │   ├── usermenu_ui_coverage_extra_test.go
     │   │   ├── usermenu_ui.go
     │   │   ├── user_menu_ui_test.go
-    │   │   ├── viewmodes.go
     │   │   ├── viewmodes_dialog.go
+    │   │   ├── viewmodes.go
     │   │   ├── viewmodes_test.go
+    │   │   ├── workspace_coverage_batch38_test.go
     │   │   ├── workspace.go
     │   │   └── workspace_startup_test.go
     │   ├── paneltest
@@ -1372,6 +1543,10 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── permissions_test.go
     │   │   ├── permissions_ui.go
     │   │   ├── permissions_ui_test.go
+    │   │   ├── plugins_full.go
+    │   │   ├── plugins_lite.go
+    │   │   ├── plugring_firstparty.go
+    │   │   ├── plugring_firstparty_test.go
     │   │   ├── plugring.go
     │   │   ├── plugring_meta.go
     │   │   ├── plugring_meta_test.go
@@ -1403,23 +1578,30 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── choice_help.go
     │   │   ├── choice_help_test.go
     │   │   ├── choice_help.tsv
+    │   │   ├── chord_coverage_test.go
     │   │   ├── chord.go
     │   │   ├── collection_palette_test.go
     │   │   ├── collection_ui.go
+    │   │   ├── config_docs.go
+    │   │   ├── config_docs_test.go
     │   │   ├── core.go
     │   │   ├── edit.go
     │   │   ├── edit_test.go
     │   │   ├── enter_test.go
     │   │   ├── extra.go
+    │   │   ├── grouping_test.go
     │   │   ├── help.go
     │   │   ├── host.go
     │   │   ├── hotkeys_persistence_test.go
     │   │   ├── inventory_test.go
+    │   │   ├── issue320_test.go
     │   │   ├── main_test.go
     │   │   ├── manual_save_test.go
     │   │   ├── mouse_test.go
+    │   │   ├── operations_coverage_test.go
     │   │   ├── operations.go
     │   │   ├── plugin_catalog.go
+    │   │   ├── plugin_providers_coverage_test.go
     │   │   ├── plugins.go
     │   │   ├── providers.go
     │   │   ├── radios.go
@@ -1438,35 +1620,52 @@ Every file tracked in the repository. Regenerate with
     │   │   └── russian.go
     │   ├── sheet
     │   │   ├── cell.go
+    │   │   ├── coverage_contract_test.go
     │   │   ├── expr.go
     │   │   ├── sheet.go
     │   │   ├── sheet_test.go
     │   │   ├── store.go
+    │   │   ├── store_lite.go
+    │   │   ├── store_lite_test.go
     │   │   └── xlsx.go
+    │   ├── stallwatch
+    │   │   ├── stallwatch.go
+    │   │   └── stallwatch_test.go
     │   ├── sysinfo
     │   │   ├── cpu_darwin.go
     │   │   ├── cpu.go
     │   │   ├── cpu_linux.go
+    │   │   ├── cpu_linux_test.go
     │   │   ├── cpu_other.go
     │   │   ├── cpu_windows.go
     │   │   ├── drives.go
     │   │   ├── drives_unix.go
+    │   │   ├── drives_unix_test.go
     │   │   ├── drives_windows.go
     │   │   ├── fs_darwin.go
     │   │   ├── fs.go
     │   │   ├── fs_linux.go
+    │   │   ├── fs_linux_test.go
     │   │   ├── fs_other.go
     │   │   ├── fs_windows.go
     │   │   ├── fs_windows_test.go
     │   │   ├── gpu_darwin.go
     │   │   ├── gpu.go
     │   │   ├── gpu_linux.go
+    │   │   ├── gpu_linux_test.go
     │   │   ├── gpu_other.go
     │   │   ├── gpu_windows.go
     │   │   ├── mem.go
     │   │   ├── mem_linux.go
+    │   │   ├── mem_linux_test.go
     │   │   ├── mem_other.go
-    │   │   └── mem_windows.go
+    │   │   ├── mem_windows.go
+    │   │   ├── mounts_linux.go
+    │   │   ├── mounts_linux_test.go
+    │   │   └── mounts_other.go
+    │   ├── tarindexcache
+    │   │   ├── tarindexcache.go
+    │   │   └── tarindexcache_test.go
     │   ├── terminal
     │   │   ├── ansi.go
     │   │   ├── ansi_sync_test.go
@@ -1479,12 +1678,24 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── clipboard_async.go
     │   │   ├── clipboard.go
     │   │   ├── clipboard_test.go
+    │   │   ├── conpty_package.go
+    │   │   ├── conpty_package_test.go
     │   │   ├── console_buffer_other.go
     │   │   ├── console_buffer_windows.go
+    │   │   ├── console_cmdline.go
+    │   │   ├── console_cmdline_test.go
     │   │   ├── console_host_windows.go
     │   │   ├── console_overlay_other.go
     │   │   ├── console_overlay_windows.go
     │   │   ├── console_overlay_windows_test.go
+    │   │   ├── console_palette_windows.go
+    │   │   ├── console_palette_windows_test.go
+    │   │   ├── console_scroll.go
+    │   │   ├── console_scroll_other.go
+    │   │   ├── console_scroll_test.go
+    │   │   ├── console_scroll_windows.go
+    │   │   ├── console_spawn_other.go
+    │   │   ├── console_spawn_windows.go
     │   │   ├── far2l_auth.go
     │   │   ├── far2l_auth_test.go
     │   │   ├── far2l_image.go
@@ -1502,11 +1713,18 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── kitty_placements.go
     │   │   ├── kitty_placements_test.go
     │   │   ├── kitty_test.go
+    │   │   ├── local_command_capture.go
+    │   │   ├── local_command_capture_test.go
+    │   │   ├── local_command_inline_other.go
+    │   │   ├── local_command_inline_windows.go
     │   │   ├── log_console_other.go
     │   │   ├── log_console_windows.go
+    │   │   ├── log_vfs_coverage_test.go
     │   │   ├── log_vfs.go
     │   │   ├── log_vfs_test.go
     │   │   ├── main_test.go
+    │   │   ├── native_command_other.go
+    │   │   ├── native_command_windows.go
     │   │   ├── overlay.go
     │   │   ├── pe_subsystem.go
     │   │   ├── pe_subsystem_test.go
@@ -1525,6 +1743,9 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── pty_diag_windows.go
     │   │   ├── pty.go
     │   │   ├── pty_linux.go
+    │   │   ├── pty_logical_lines.go
+    │   │   ├── pty_logical_lines_solaris.go
+    │   │   ├── pty_logical_lines_unix.go
     │   │   ├── pty_pollable_test.go
     │   │   ├── pty_ptm.go
     │   │   ├── pty_ptm_netbsd.go
@@ -1533,7 +1754,12 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── pty_test.go
     │   │   ├── pty_windows.go
     │   │   ├── pty_windows_test.go
+    │   │   ├── pty_wine_other.go
+    │   │   ├── pty_wine_shell.go
+    │   │   ├── pty_wine_shell_test.go
+    │   │   ├── pty_wine_windows.go
     │   │   ├── redraw.go
+    │   │   ├── redraw_stop_test.go
     │   │   ├── runner.go
     │   │   ├── runner_test.go
     │   │   ├── runner_unix.go
@@ -1541,9 +1767,11 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── runner_windows.go
     │   │   ├── runner_windows_test.go
     │   │   ├── selection_test.go
+    │   │   ├── server_diagnostics.go
     │   │   ├── session_attach_identity_test.go
     │   │   ├── session_attach_payload_test.go
     │   │   ├── session_daemon_test.go
+    │   │   ├── session_unix_coverage_extra_test.go
     │   │   ├── session_unix_coverage_test.go
     │   │   ├── session_unix.go
     │   │   ├── session_unix_test.go
@@ -1571,9 +1799,13 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── ttyx_probe_windows.go
     │   │   ├── ttyx_session.go
     │   │   ├── view.go
+    │   │   ├── view_reflow.go
+    │   │   ├── view_reflow_test.go
     │   │   ├── view_semantic.go
     │   │   ├── view_semantic_test.go
     │   │   ├── view_test.go
+    │   │   ├── wineprobe_escape_other.go
+    │   │   ├── wineprobe_escape_windows.go
     │   │   ├── wineprobe.go
     │   │   ├── wineprobe_other.go
     │   │   ├── wineprobe_test.go
@@ -1599,13 +1831,18 @@ Every file tracked in the repository. Regenerate with
     │   ├── textsearch
     │   │   └── search.go
     │   ├── theme
+    │   │   ├── colors_background_inheritance_test.go
+    │   │   ├── colors_background_test.go
     │   │   ├── colors_cursor_test.go
     │   │   ├── colors.go
     │   │   ├── colorspace.go
     │   │   ├── colorspace_test.go
     │   │   ├── colors_test.go
+    │   │   ├── color_validate.go
+    │   │   ├── color_validate_test.go
     │   │   ├── farcolor.go
     │   │   ├── farcolor_test.go
+    │   │   ├── highlight_cache_test.go
     │   │   ├── highlight_files_test.go
     │   │   ├── highlight.go
     │   │   ├── style_combo_colors_test.go
@@ -1614,6 +1851,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── style_default_dark_test.go
     │   │   ├── style.go
     │   │   ├── style_indicator_test.go
+    │   │   ├── style_missing_section_test.go
     │   │   ├── style_overrides_test.go
     │   │   ├── styles
     │   │   │   ├── classic.ini
@@ -1631,6 +1869,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── keys_coverage_test.go
     │   │   ├── keys.go
     │   │   ├── openfor_test.go
+    │   │   ├── overlay_coverage_extra_test.go
     │   │   ├── overlay.go
     │   │   ├── overlay_lifecycle_test.go
     │   │   ├── session.go
@@ -1642,13 +1881,21 @@ Every file tracked in the repository. Regenerate with
     │   │   └── watch.go
     │   ├── unpack
     │   │   ├── coverage_test.go
+    │   │   ├── formats.go
+    │   │   ├── formats_lite.go
+    │   │   ├── formats_lite_test.go
     │   │   ├── unpack.go
+    │   │   ├── unpack_sevenzip_test.go
     │   │   └── unpack_test.go
     │   ├── update
     │   │   ├── assets_test.go
+    │   │   ├── backup.go
+    │   │   ├── backup_test.go
     │   │   ├── cli.go
     │   │   ├── cli_test.go
     │   │   ├── coverage_test.go
+    │   │   ├── edition.go
+    │   │   ├── edition_lite.go
     │   │   ├── elevation_manual_windows_test.go
     │   │   ├── elevation_other.go
     │   │   ├── elevation_windows.go
@@ -1679,6 +1926,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── links_test.go
     │   │   ├── main_test.go
     │   │   ├── menubar_test.go
+    │   │   ├── search_coverage_test.go
     │   │   ├── search.go
     │   │   ├── tail_test.go
     │   │   ├── text.go
@@ -1686,7 +1934,9 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── title.go
     │   │   ├── topbar.go
     │   │   ├── topbar_test.go
+    │   │   ├── view_coverage_extra_test.go
     │   │   ├── view.go
+    │   │   ├── view_semantic_contract_test.go
     │   │   ├── view_semantic.go
     │   │   ├── view_test.go
     │   │   ├── wordnav.go
@@ -1705,20 +1955,33 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── session_test.go
     │   │   ├── vfs_coverage_test.go
     │   │   └── vfs.go
-    │   └── wincon
-    │       ├── blit_test.go
-    │       ├── coverage_test.go
-    │       ├── geometry.go
-    │       ├── layered.go
-    │       ├── layered_test.go
-    │       ├── overlay_other.go
-    │       ├── overlay_state.go
-    │       ├── overlay_state_test.go
-    │       ├── overlay_windows.go
-    │       ├── overlay_windows_test.go
-    │       ├── stats.go
-    │       ├── stats_windows.go
-    │       └── wincon_test.go
+    │   ├── wincon
+    │   │   ├── blit_test.go
+    │   │   ├── coverage_test.go
+    │   │   ├── geometry.go
+    │   │   ├── layered.go
+    │   │   ├── layered_test.go
+    │   │   ├── overlay_other.go
+    │   │   ├── overlay_state.go
+    │   │   ├── overlay_state_test.go
+    │   │   ├── overlay_windows.go
+    │   │   ├── overlay_windows_test.go
+    │   │   ├── stats.go
+    │   │   ├── stats_windows.go
+    │   │   ├── wincon_test.go
+    │   │   ├── windowlongptr_32.go
+    │   │   └── windowlongptr_64.go
+    │   └── winex11drag
+    │       ├── display.go
+    │       ├── display_test.go
+    │       ├── doc.go
+    │       ├── wineconn.go
+    │       ├── wineconn_test.go
+    │       ├── x11window.go
+    │       ├── x11window_test.go
+    │       ├── x11window_windows.go
+    │       ├── xauthority.go
+    │       └── xauthority_test.go
     ├── LICENSE
     ├── .mcp.json
     ├── packaging
@@ -1733,11 +1996,17 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── adb_sync_test.go
     │   │   ├── adb_transport.go
     │   │   ├── adb_transport_test.go
+    │   │   ├── cmd
+    │   │   │   └── android-plugin
+    │   │   │       ├── main.go
+    │   │   │       └── plugring-manifest.json
     │   │   ├── command_runner_info_test.go
+    │   │   ├── coverage_contract_test.go
     │   │   ├── device.go
     │   │   ├── device_test.go
     │   │   ├── fish_pool.go
     │   │   ├── fish_pool_test.go
+    │   │   ├── go.mod
     │   │   ├── info.go
     │   │   ├── info_test.go
     │   │   ├── manager.go
@@ -1745,6 +2014,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── pathutil.go
     │   │   ├── pathutil_test.go
     │   │   ├── README.md
+    │   │   ├── rpc_plugin.go
     │   │   ├── sync_vfs.go
     │   │   └── sync_vfs_test.go
     │   ├── archive
@@ -1758,12 +2028,26 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── extraction_security_test.go
     │   │   ├── issue1179_sfx_test.go
     │   │   ├── issue1179_volumes_test.go
+    │   │   ├── issue1184_test.go
+    │   │   ├── issue1186_sfx_zip_test.go
+    │   │   ├── issue1186_split_zip_test.go
+    │   │   ├── issue1186_winrar_aes_test.go
+    │   │   ├── issue1187_test.go
+    │   │   ├── issue1243_test.go
+    │   │   ├── issue1250_marked_test.go
+    │   │   ├── issue1250_prompt_test.go
+    │   │   ├── issue1250_rar_test.go
+    │   │   ├── issue1250_test.go
+    │   │   ├── issue1272_test.go
+    │   │   ├── issue1383_test.go
+    │   │   ├── issue1504_test.go
     │   │   ├── issue815_f3_test.go
     │   │   ├── issue816_multivolume_test.go
     │   │   ├── issue816_password_retry_test.go
     │   │   ├── issue915_total_progress_test.go
     │   │   ├── materialize.go
     │   │   ├── multivolume_rar.go
+    │   │   ├── nested_detection_test.go
     │   │   ├── password_coverage_test.go
     │   │   ├── password.go
     │   │   ├── password_test.go
@@ -1771,9 +2055,17 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── provider.go
     │   │   ├── provider_special_unix_test.go
     │   │   ├── provider_test.go
+    │   │   ├── rar_password.go
     │   │   ├── repro_test.go
     │   │   ├── sfx.go
     │   │   ├── sfx_test.go
+    │   │   ├── tar_index_cache_option_test.go
+    │   │   ├── tar_index.go
+    │   │   ├── testdata
+    │   │   │   └── issue1186_winrar_aes_sfx.exe
+    │   │   ├── title.go
+    │   │   ├── vfs_coverage_batch44_test.go
+    │   │   ├── vfs_coverage_extra_test.go
     │   │   ├── vfs.go
     │   │   ├── vfs_nested_test.go
     │   │   ├── vfs_test.go
@@ -1784,15 +2076,23 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── chroma.go
     │   │   └── chroma_test.go
     │   ├── cloudfox
+    │   │   ├── cloud_vfs_coverage_test.go
     │   │   ├── cloud_vfs.go
     │   │   ├── cloud_vfs_share_test.go
     │   │   ├── cloud_vfs_test.go
+    │   │   ├── cmd
+    │   │   │   └── cloudfox-plugin
+    │   │   │       ├── main.go
+    │   │   │       └── plugring-manifest.json
     │   │   ├── context_editor_test.go
     │   │   ├── credential_scope.go
     │   │   ├── credential_scope_test.go
+    │   │   ├── dialog_coverage_extra_test.go
     │   │   ├── dialog.go
     │   │   ├── dialog_google_test.go
     │   │   ├── dialog_s3_test.go
+    │   │   ├── go.mod
+    │   │   ├── manager_coverage_extra_test.go
     │   │   ├── manager.go
     │   │   ├── oauth.go
     │   │   ├── password_prompt.go
@@ -1835,6 +2135,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── provider_yandex_share.go
     │   │   ├── provider_yandex_share_test.go
     │   │   ├── provider_yandex_test.go
+    │   │   ├── rpc_plugin.go
     │   │   ├── secrets.go
     │   │   ├── secrets_test.go
     │   │   ├── session.go
@@ -1850,6 +2151,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── uri.go
     │   │   ├── uri_test.go
     │   │   ├── vault.go
+    │   │   ├── yandex_code_prompt_coverage_test.go
     │   │   └── yandex_code_prompt.go
     │   ├── dummy_internal
     │   │   ├── dummy_internal.go
@@ -1882,6 +2184,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── plugin.go
     │   │   ├── plugin_test.go
     │   │   ├── README.md
+    │   │   ├── settings_center_coverage_test.go
     │   │   ├── settings_center.go
     │   │   ├── settings.go
     │   │   ├── settings_russian_test.go
@@ -1896,9 +2199,15 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── plugin_paths_test.go
     │   │   └── plugin_test.go
     │   ├── ios
+    │   │   ├── afc_vfs_contract_test.go
     │   │   ├── afc_vfs.go
     │   │   ├── afc_vfs_test.go
     │   │   ├── apps.go
+    │   │   ├── cmd
+    │   │   │   └── ios-plugin
+    │   │   │       ├── main.go
+    │   │   │       └── plugring-manifest.json
+    │   │   ├── core_access_coverage_test.go
     │   │   ├── core_access.go
     │   │   ├── core_access_stub.go
     │   │   ├── core_access_supported.go
@@ -1909,6 +2218,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── coverage_edges_test.go
     │   │   ├── coverage_plugins_test.go
     │   │   ├── coverage_test.go
+    │   │   ├── go.mod
     │   │   ├── internal
     │   │   │   ├── afcproto
     │   │   │   │   ├── client.go
@@ -1932,6 +2242,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── plugin.go
     │   │   ├── plugin_test.go
     │   │   ├── README.md
+    │   │   ├── rpc_plugin.go
     │   │   ├── selectors.go
     │   │   ├── selectors_test.go
     │   │   ├── services.go
@@ -1943,9 +2254,11 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── cache_test.go
     │   │   ├── config_dialog.go
     │   │   ├── config_dialog_test.go
+    │   │   ├── coverage_contract_more_test.go
     │   │   ├── coverage_test.go
     │   │   ├── dialog.go
     │   │   ├── dialog_theme_test.go
+    │   │   ├── dialog_util_coverage_test.go
     │   │   ├── exif_report_test.go
     │   │   ├── format_gaps_test.go
     │   │   ├── locale.go
@@ -1953,8 +2266,10 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── macro_test.go
     │   │   ├── matroska_bounds_test.go
     │   │   ├── model.go
+    │   │   ├── open_coverage_test.go
     │   │   ├── open.go
     │   │   ├── open_test.go
+    │   │   ├── parse_audio_coverage_batch20_test.go
     │   │   ├── parse_audio.go
     │   │   ├── parse_ebu_stl.go
     │   │   ├── parse_heif.go
@@ -1967,6 +2282,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── parse_tiff.go
     │   │   ├── parse_tiff_limits_test.go
     │   │   ├── plugin.go
+    │   │   ├── plugin_language_switch_test.go
     │   │   ├── plugin_test.go
     │   │   ├── quickview_provider.go
     │   │   ├── quickview_provider_test.go
@@ -1982,6 +2298,50 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── source.go
     │   │   ├── subtitle_limits_test.go
     │   │   └── util.go
+    │   ├── multiarc
+    │   │   ├── backend_7z.go
+    │   │   ├── backend_7z_realexec_test.go
+    │   │   ├── backend_7z_test.go
+    │   │   ├── backend_7z_write.go
+    │   │   ├── backend_7z_write_test.go
+    │   │   ├── backend_gzip.go
+    │   │   ├── backend_gzip_realexec_test.go
+    │   │   ├── backend_gzip_test.go
+    │   │   ├── backend_gzip_write.go
+    │   │   ├── backend_gzip_write_test.go
+    │   │   ├── backend_tar.go
+    │   │   ├── backend_tar_realexec_test.go
+    │   │   ├── backend_tar_test.go
+    │   │   ├── backend_tar_write.go
+    │   │   ├── backend_tar_write_test.go
+    │   │   ├── backend_zip.go
+    │   │   ├── backend_zip_realexec_test.go
+    │   │   ├── backend_zip_test.go
+    │   │   ├── backend_zip_write.go
+    │   │   ├── backend_zip_write_test.go
+    │   │   ├── create_command.go
+    │   │   ├── create_command_test.go
+    │   │   ├── create.go
+    │   │   ├── create_realexec_test.go
+    │   │   ├── create_test.go
+    │   │   ├── fake_archiver_test.go
+    │   │   ├── format.go
+    │   │   ├── format_test.go
+    │   │   ├── multiarc.go
+    │   │   ├── provider_gap_test.go
+    │   │   ├── provider.go
+    │   │   ├── provider_test.go
+    │   │   ├── realexec_test.go
+    │   │   ├── tools.go
+    │   │   ├── tools_realexec_test.go
+    │   │   ├── tools_test.go
+    │   │   ├── vfs_gap_test.go
+    │   │   ├── vfs.go
+    │   │   ├── vfs_test.go
+    │   │   ├── vfs_write.go
+    │   │   ├── vfs_write_test.go
+    │   │   ├── write.go
+    │   │   └── write_test.go
     │   ├── netfox
     │   │   ├── context_editor_test.go
     │   │   ├── coverage_test.go
@@ -1993,6 +2353,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── dialog.go
     │   │   ├── dialog_test.go
     │   │   ├── fish_clone_session_test.go
+    │   │   ├── fish_dialer_lite.go
+    │   │   ├── fish_dialer_lite_test.go
     │   │   ├── fish_dialer_test.go
     │   │   ├── fishplus
     │   │   │   ├── cancel_test.go
@@ -2032,25 +2394,42 @@ Every file tracked in the repository. Regenerate with
     │   │   │   ├── WINDOWS_PORT.md
     │   │   │   ├── write.go
     │   │   │   └── write_test.go
+    │   │   ├── fish_pool_coverage_test.go
     │   │   ├── fish_pool.go
     │   │   ├── fish_reconnect_entry_test.go
     │   │   ├── fish_reconnect_test.go
     │   │   ├── fish_vfs.go
     │   │   ├── fish_vfs_test.go
     │   │   ├── ftp_clone_test.go
+    │   │   ├── ftp_coverage_batch41_test.go
+    │   │   ├── ftp_vfs_contract_test.go
     │   │   ├── ftp_vfs.go
+    │   │   ├── history.go
+    │   │   ├── history_test.go
+    │   │   ├── issue419_test.go
     │   │   ├── lang_test.go
     │   │   ├── netfox.go
     │   │   ├── netfox_test.go
+    │   │   ├── netfox_uri_full.go
+    │   │   ├── netfox_uri_lite.go
     │   │   ├── plugin_contributions_test.go
+    │   │   ├── proxy_dialog_coverage_test.go
     │   │   ├── proxy_dialog.go
     │   │   ├── registry.go
+    │   │   ├── s2s_password.go
+    │   │   ├── s2s_password_test.go
     │   │   ├── settings_center.go
     │   │   ├── settings_center_test.go
     │   │   ├── settings_russian_test.go
+    │   │   ├── sftp_command_coverage_batch40_test.go
     │   │   ├── sftp_command_test.go
+    │   │   ├── sftp_coverage_batch30_test.go
     │   │   ├── sftp_dial_test.go
+    │   │   ├── sftp_readat_test.go
+    │   │   ├── sftp_uri_coverage_batch33_test.go
     │   │   ├── sftp_uri.go
+    │   │   ├── sftp_vfs_coverage_batch31_test.go
+    │   │   ├── sftp_vfs_coverage_extra_test.go
     │   │   ├── sftp_vfs.go
     │   │   ├── ssh_agent_forwarding_test.go
     │   │   ├── ssh_agent_unix.go
@@ -2058,23 +2437,55 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── ssh_agent_windows_test.go
     │   │   ├── ssh_dial.go
     │   │   ├── ssh_dial_test.go
+    │   │   ├── ssh_fish_dialer.go
     │   │   ├── ssh_keepalive_test.go
+    │   │   ├── ssh_known_hosts_coverage_test.go
     │   │   ├── ssh_known_hosts.go
     │   │   ├── ssh_known_hosts_test.go
     │   │   ├── ssh_pty.go
     │   │   ├── vfs_abs_test.go
-    │   │   └── vfs.go
+    │   │   ├── vfs.go
+    │   │   ├── wsl_dialer_windows.go
+    │   │   ├── wsl_dialer_windows_test.go
+    │   │   ├── wsl_vfs_windows.go
+    │   │   └── wsl_vfs_windows_test.go
+    │   ├── proclist
+    │   │   ├── collector_darwin.go
+    │   │   ├── collector_darwin_test.go
+    │   │   ├── collector.go
+    │   │   ├── collector_linux.go
+    │   │   ├── collector_linux_test.go
+    │   │   ├── collector_other.go
+    │   │   ├── collector_windows.go
+    │   │   ├── collector_windows_test.go
+    │   │   ├── main_test.go
+    │   │   ├── panel.go
+    │   │   ├── panel_test.go
+    │   │   ├── plugin.go
+    │   │   ├── plugin_test.go
+    │   │   └── README.md
     │   ├── sqlite
+    │   │   ├── backend_cli.go
+    │   │   ├── backend_cli_parse_test.go
+    │   │   ├── backend_cli_test.go
+    │   │   ├── backend_default_lite.go
+    │   │   ├── backend_driver.go
     │   │   ├── coverage_test.go
+    │   │   ├── export.go
     │   │   ├── locale.go
     │   │   ├── plugin.go
     │   │   ├── plugin_test.go
+    │   │   ├── provider.go
     │   │   ├── ui.go
-    │   │   └── ui_test.go
+    │   │   ├── ui_test.go
+    │   │   ├── vfs.go
+    │   │   └── vfs_test.go
     │   └── visren
     │       ├── config.go
     │       ├── config_test.go
+    │       ├── coverage_contract_test.go
     │       ├── coverage_test.go
+    │       ├── dialog_coverage_extra_test.go
     │       ├── dialog.go
     │       ├── dialog_test.go
     │       ├── editor.go
@@ -2086,6 +2497,7 @@ Every file tracked in the repository. Regenerate with
     │       ├── metadata_test.go
     │       ├── model.go
     │       ├── plugin.go
+    │       ├── plugin_language_switch_test.go
     │       ├── plugin_test.go
     │       ├── rename.go
     │       ├── rename_test.go
@@ -2100,6 +2512,8 @@ Every file tracked in the repository. Regenerate with
     │   └── index.yaml
     ├── README.md
     ├── scripts
+    │   ├── check_archive_deps.sh
+    │   ├── check_release_version.sh
     │   ├── filelist_update.sh
     │   ├── test_plugins.sh
     │   └── test_resurrect.sh
@@ -2109,6 +2523,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── model.go
     │   │   └── model_test.go
     │   ├── f4plugin
+    │   │   ├── metadata.go
     │   │   ├── plugin.go
     │   │   └── plugin_test.go
     │   ├── f4rpc
@@ -2174,7 +2589,9 @@ Every file tracked in the repository. Regenerate with
     │   │   └── semantic_probe_windows.go
     │   ├── f4imgprobe
     │   │   ├── main.go
-    │   │   └── README.txt
+    │   │   ├── README.txt
+    │   │   ├── windowlongptr_32.go
+    │   │   └── windowlongptr_64.go
     │   ├── find_hardcoded.go
     │   ├── fishplus_probe.sh
     │   ├── fishplus_testlab
@@ -2241,12 +2658,17 @@ Every file tracked in the repository. Regenerate with
         ├── contributions.go
         ├── destination_overwrite_test.go
         ├── device_size_test.go
+        ├── disks_unix_gap_test.go
         ├── disks_unix.go
         ├── disks_unix_test.go
+        ├── disks_vfs_coverage_test.go
         ├── disks_vfs.go
         ├── disks_vfs_test.go
         ├── disks_windows.go
         ├── disks_windows_test.go
+        ├── file_mask.go
+        ├── hidden_rule.go
+        ├── hidden_rule_test.go
         ├── hidden_unix.go
         ├── hidden_windows.go
         ├── hostfs
@@ -2259,20 +2681,35 @@ Every file tracked in the repository. Regenerate with
         │   └── hostfs_winescape.go
         ├── hostmode
         │   ├── hostmode.go
+        │   ├── hostmode_lite.go
         │   └── hostmode_test.go
         ├── hostpath
         │   ├── hostpath_posix.go
         │   └── hostpath_windows.go
         ├── isabs_test.go
         ├── lock_manager_test.go
+        ├── metadata.go
+        ├── metadata_test.go
+        ├── mount_linux.go
+        ├── mount_linux_test.go
+        ├── mount_other.go
         ├── null_vfs.go
         ├── null_vfs_test.go
+        ├── os_vfs_birthtime_bsd_test.go
+        ├── os_vfs_birthtime_linux_test.go
+        ├── os_vfs_birthtime_windows_test.go
         ├── os_vfs_contract_coverage_test.go
         ├── os_vfs_dot_test.go
+        ├── os_vfs_elevation_test.go
         ├── os_vfs.go
         ├── os_vfs_junction_stub.go
         ├── os_vfs_junction_test.go
+        ├── os_vfs_listing.go
+        ├── os_vfs_listing_other_test.go
+        ├── os_vfs_listing_test.go
+        ├── os_vfs_listing_windows_test.go
         ├── os_vfs_noreplace_test.go
+        ├── os_vfs_open_readonly_test.go
         ├── os_vfs_physical_other.go
         ├── os_vfs_physical_test.go
         ├── os_vfs_physical_unix.go
@@ -2286,15 +2723,19 @@ Every file tracked in the repository. Regenerate with
         ├── os_vfs_reparse_windows_test.go
         ├── os_vfs_search.go
         ├── os_vfs_search_test.go
+        ├── os_vfs_share_windows_test.go
         ├── os_vfs_symlink_test.go
         ├── os_vfs_test.go
         ├── os_vfs_unix_test.go
         ├── os_vfs_windows.go
         ├── os_vfs_windows_test.go
         ├── patch_inplace_test.go
+        ├── personality.go
         ├── privileges_windows.go
         ├── prompt_hold.go
         ├── prompt_hold_test.go
+        ├── pua.go
+        ├── pua_test.go
         ├── quick_view.go
         ├── quick_view_test.go
         ├── registry_vfs_windows.go
@@ -2302,6 +2743,7 @@ Every file tracked in the repository. Regenerate with
         ├── rename_noreplace_darwin.go
         ├── rename_noreplace.go
         ├── rename_noreplace_linux.go
+        ├── rename_noreplace_linux_test.go
         ├── rename_noreplace_test.go
         ├── rename_noreplace_unix.go
         ├── rename_noreplace_windows.go
@@ -2316,6 +2758,8 @@ Every file tracked in the repository. Regenerate with
         ├── sudo_askpass_test.go
         ├── sudo_askpass_unix.go
         ├── sudo_askpass_windows.go
+        ├── sudo_child_env.go
+        ├── sudo_child_env_test.go
         ├── sudo_client.go
         ├── sudo_client_platform_unix.go
         ├── sudo_client_platform_windows.go
@@ -2326,7 +2770,11 @@ Every file tracked in the repository. Regenerate with
         ├── sudo_ipc_unix.go
         ├── sudo_ipc_windows.go
         ├── sudo_msg.go
+        ├── sudo_notexist_test.go
         ├── sudo_test.go
+        ├── sudo_unmount_bsd.go
+        ├── sudo_unmount_other.go
+        ├── sudo_without_elevation_test.go
         ├── trash_darwin.go
         ├── trash_darwin_test.go
         ├── trash_freedesktop.go
@@ -2334,10 +2782,12 @@ Every file tracked in the repository. Regenerate with
         ├── trash.go
         ├── trash_test.go
         ├── trash_windows.go
+        ├── trash_windows_posix_test.go
+        ├── trash_xdg.go
         ├── uri_provider.go
         ├── uri_provider_test.go
         ├── utils.go
         ├── utils_test.go
         └── vfs.go
     
-    210 directories, 2118 files
+    226 directories, 2560 files
