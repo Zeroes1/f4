@@ -69,7 +69,7 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "plain tar with GNU tar", target: "out.tar", tools: []string{"tar"}, version: gnuTarVersion,
-			want: []string{"tar -c -f <work>" + sep + "out.tar -C <src> -- a.txt @x"}, dirs: []string{"work"},
+			want: []string{"tar -c --force-local -f <work>" + sep + "out.tar -C <src> -- a.txt @x"}, dirs: []string{"work"},
 			content: "|c:a.txt,@x",
 		},
 		{
@@ -79,7 +79,7 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "tar.xz with GNU tar and xz", target: "out.tar.xz", tools: []string{"tar", "xz"}, version: gnuTarVersion,
-			want: []string{"tar -c -f <work>" + sep + "work.tar -C <src> -- a.txt @x", "xz -f work.tar"}, dirs: []string{"work", "work"},
+			want: []string{"tar -c --force-local -f <work>" + sep + "work.tar -C <src> -- a.txt @x", "xz -f work.tar"}, dirs: []string{"work", "work"},
 			content: "|c:a.txt,@x",
 		},
 		{

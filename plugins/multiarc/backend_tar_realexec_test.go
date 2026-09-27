@@ -34,10 +34,13 @@ func TestTarRealWriteGNU(t *testing.T) {
 			ctx := context.Background()
 			src := tarRealFixture(t)
 			arc := filepath.Join(t.TempDir(), name)
+			// --force-local: arc's own absolute path, a Windows temp
+			// directory when this runs there, would otherwise be read by
+			// GNU tar as a "host:path" remote-archive spec.
 			if strings.HasSuffix(name, ".gz") {
-				runReal(t, src, "tar", "-czf", arc, ".")
+				runReal(t, src, "tar", "--force-local", "-czf", arc, ".")
 			} else {
-				runReal(t, src, "tar", "-cf", arc, ".")
+				runReal(t, src, "tar", "--force-local", "-cf", arc, ".")
 			}
 			t.Cleanup(closeSharedMultiArcTempDirs)
 			v := openReal(t, arc)
@@ -127,7 +130,12 @@ func TestTarRealOpensDotSlashMember(t *testing.T) {
 	src := t.TempDir()
 	writeTree(t, src, map[string]string{"dir/file.txt": "hello"})
 	arc := filepath.Join(t.TempDir(), "dot.tar")
-	runReal(t, src, "tar", "-cf", arc, ".")
+	args := []string{"-cf", arc, "."}
+	// --force-local: see TestTarRealWriteGNU.
+	if realTarFlavor(t) == tarGNU {
+		args = append([]string{"--force-local"}, args...)
+	}
+	runReal(t, src, "tar", args...)
 	t.Cleanup(closeSharedMultiArcTempDirs)
 
 	v := openReal(t, arc)
