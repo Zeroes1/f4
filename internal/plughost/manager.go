@@ -159,7 +159,7 @@ func (pm *PluginManager) loadInternal() {
 		// sqlite3 tool instead of linking the engine (plugins/sqlite's
 		// backend_default_lite.go).
 		sqliteplugin.NewPlugin(),
-		proclist.NewPlugin(),
+		proclist.NewPlugin(config.GetF4ConfigDir()),
 	}
 	// cloudfox (cloud services), android (ADB device browsing) and iOS
 	// (Apple mobile devices over usbmuxd) stay excluded from both builds
