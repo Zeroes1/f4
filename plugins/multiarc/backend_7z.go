@@ -87,9 +87,9 @@ func parseSevenZipListing(out []byte) []entry {
 	return entries
 }
 
-func sevenZipEntry(block map[string]string, p string) entry {
-	p = strings.ReplaceAll(strings.Trim(p, "/"), "\\", "/")
-	e := entry{Path: p}
+func sevenZipEntry(block map[string]string, raw string) entry {
+	p := strings.ReplaceAll(strings.Trim(raw, "/"), "\\", "/")
+	e := entry{Path: p, Raw: raw}
 	attr := block["Attributes"]
 	e.IsDir = block["Folder"] == "+" || strings.HasPrefix(attr, "D")
 	if size, err := strconv.ParseInt(block["Size"], 10, 64); err == nil {

@@ -32,6 +32,10 @@ type multiArcState struct {
 	mu       sync.Mutex
 	entries  map[string]entry           // full member path -> entry, no leading slash
 	children map[string]map[string]bool // dir path ("" = root) -> immediate child names
+	// raws maps a member path to every name the listing gave it, in listing
+	// order: usually one, but "dir/" and "./dir/" are two tar members that
+	// both show up as "dir", and a command must name each to reach both.
+	raws map[string][]string
 }
 
 func (st *multiArcState) ensureListed(ctx context.Context, b backend, localPath string) error {
@@ -49,6 +53,18 @@ func (st *multiArcState) ensureListed(ctx context.Context, b backend, localPath 
 func (st *multiArcState) build(raw []entry) {
 	entries := map[string]entry{}
 	children := map[string]map[string]bool{"": {}}
+	raws := map[string][]string{}
+	addRaw := func(p, raw string) {
+		if raw == "" {
+			raw = p
+		}
+		for _, known := range raws[p] {
+			if known == raw {
+				return
+			}
+		}
+		raws[p] = append(raws[p], raw)
+	}
 	ensureDir := func(p string) {
 		if _, ok := children[p]; !ok {
 			children[p] = map[string]bool{}
@@ -74,12 +90,24 @@ func (st *multiArcState) build(raw []entry) {
 		if e.IsDir {
 			ensureDir(p)
 		}
-		entries[p] = entry{Path: p, IsDir: e.IsDir, Size: e.Size, SizeKnown: e.SizeKnown, MTime: e.MTime}
+		entries[p] = entry{Path: p, Raw: e.Raw, IsDir: e.IsDir, Size: e.Size, SizeKnown: e.SizeKnown, MTime: e.MTime}
+		addRaw(p, e.Raw)
 	}
 	st.mu.Lock()
 	st.entries = entries
 	st.children = children
+	st.raws = raws
 	st.mu.Unlock()
+}
+
+// rawName is the name a command must use to reach the member at key: the
+// first one the listing gave it, or key itself for a path the listing never
+// named on its own. The caller holds st.mu.
+func (st *multiArcState) rawName(key string) string {
+	if names := st.raws[key]; len(names) > 0 {
+		return names[0]
+	}
+	return key
 }
 
 // MultiArcVFS is a read-only vfs.VFS over one archive, browsed and
@@ -283,6 +311,7 @@ func (v *MultiArcVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 	key := v.key(p)
 	v.state.mu.Lock()
 	info, known := v.state.entries[key]
+	member := v.state.rawName(key)
 	v.state.mu.Unlock()
 	if !known || info.IsDir {
 		return nil, fmt.Errorf("multiarc: %q is not a file in this archive", p)
@@ -292,7 +321,9 @@ func (v *MultiArcVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 		return nil, err
 	}
 	registerTempDir(dir)
-	if err := v.backend.extractOne(ctx, v.localPath, dir, key); err != nil {
+	// The member is asked for by its raw name, but lands where key says: a
+	// "./dir/f" member extracts to <dir>/./dir/f, which is <dir>/dir/f.
+	if err := v.backend.extractOne(ctx, v.localPath, dir, member); err != nil {
 		return nil, err
 	}
 	extractedPath := filepath.Join(dir, filepath.FromSlash(key))

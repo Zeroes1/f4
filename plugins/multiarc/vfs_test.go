@@ -169,6 +169,38 @@ func TestMultiArcVFSOpenExtractsAndReads(t *testing.T) {
 	}
 }
 
+// A tar built with "tar -cf x.tar -C dir ." stores "./dir/file.txt", and
+// GNU tar does not find that member when asked for "dir/file.txt". Open has
+// to ask for the name the listing gave, and still find the file where the
+// clean path says it lands.
+func TestMultiArcVFSOpenExtractsByRawName(t *testing.T) {
+	b := fakeBackend{
+		entries: []entry{{Path: "dir/file.txt", Raw: "./dir/file.txt"}},
+		extractOneFunc: func(ctx context.Context, localPath, destDir, member string) error {
+			if member != "./dir/file.txt" {
+				t.Errorf("extractOne member = %q, want the raw ./dir/file.txt", member)
+			}
+			full := filepath.Join(destDir, filepath.FromSlash(member))
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(full, []byte("dot"), 0o600)
+		},
+	}
+	v := newTestVFS(t, b)
+	t.Cleanup(closeSharedMultiArcTempDirs)
+
+	f, err := v.Open(context.Background(), "/dir/file.txt")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	buf := make([]byte, 3)
+	if n, err := f.ReadAt(context.Background(), buf, 0); err != nil || string(buf[:n]) != "dot" {
+		t.Fatalf("ReadAt = (%q, %v), want dot", buf[:n], err)
+	}
+}
+
 func TestMultiArcVFSOpenRejectsDirectory(t *testing.T) {
 	v := newTestVFS(t, fakeBackend{entries: []entry{{Path: "dir", IsDir: true}}})
 	if _, err := v.Open(context.Background(), "/dir"); err == nil {

@@ -2,6 +2,7 @@ package multiarc
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -20,9 +21,9 @@ func TestZipBackendList(t *testing.T) {
 		t.Fatalf("args = %v", gotArgs)
 	}
 	want := []entry{
-		{Path: "readme.txt"},
-		{Path: "sub", IsDir: true},
-		{Path: "sub/data.bin"},
+		{Path: "readme.txt", Raw: "readme.txt"},
+		{Path: "sub", Raw: "sub/", IsDir: true},
+		{Path: "sub/data.bin", Raw: "sub/data.bin"},
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("entries = %#v, want %#v", entries, want)
@@ -56,5 +57,30 @@ func TestZipBackendExtractAll(t *testing.T) {
 	want := []string{"-o", "-q", "/a.zip", "-d", "/dest"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %v, want %v", gotArgs, want)
+	}
+}
+
+// A zip with no members at all -- what "zip -d" leaves behind once the last
+// member is gone -- makes unzip -Z1 exit 1 with "Empty zipfile." on stdout.
+// That is an empty listing, not a broken archive.
+func TestZipBackendListEmptyZipfile(t *testing.T) {
+	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		return []byte("Empty zipfile.\n"), nil, errors.New("exit status 1")
+	})
+	entries, err := zipBackend{}.list(context.Background(), "/empty.zip")
+	if err != nil {
+		t.Fatalf("list of an empty zip: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries = %#v, want none", entries)
+	}
+}
+
+func TestZipBackendListDamagedZipStillFails(t *testing.T) {
+	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		return []byte("Empty zipfile.\n"), []byte("unzip: cannot find zipfile directory"), errors.New("exit status 9")
+	})
+	if _, err := (zipBackend{}).list(context.Background(), "/bad.zip"); err == nil {
+		t.Fatal("expected an error when unzip explains a failure on stderr")
 	}
 }

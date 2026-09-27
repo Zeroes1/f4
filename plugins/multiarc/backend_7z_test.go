@@ -120,6 +120,20 @@ func TestSevenZipBackendExtractOne(t *testing.T) {
 	}
 }
 
+// 7-Zip on Windows prints member paths with backslashes. Path is normalized
+// for the tree, but Raw keeps the name as printed: that is the spelling a
+// later 7z command is handed back.
+func TestParseSevenZipListingKeepsRawName(t *testing.T) {
+	listing := "Path = a.7z\nType = 7z\n\nPath = sub\\data.bin\nFolder = -\nSize = 1\n"
+	entries := parseSevenZipListing([]byte(listing))
+	if len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one", entries)
+	}
+	if entries[0].Path != "sub/data.bin" || entries[0].Raw != "sub\\data.bin" {
+		t.Fatalf("entry = %#v, want Path sub/data.bin and Raw sub\\data.bin", entries[0])
+	}
+}
+
 func TestSevenZipBackendUnavailable(t *testing.T) {
 	withFakeTools(t, func(string) (string, error) { return "", errNotFoundStub }, nil)
 	if _, err := (sevenZipBackend{}).list(context.Background(), "/a.7z"); err == nil {

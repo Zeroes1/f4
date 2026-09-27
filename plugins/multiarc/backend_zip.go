@@ -21,9 +21,21 @@ func zipAvailable() bool { return toolAvailable("unzip") }
 func (zipBackend) list(ctx context.Context, localPath string) ([]entry, error) {
 	out, errOut, err := runTool(ctx, "unzip", "-Z1", localPath)
 	if err != nil {
+		if isEmptyZipListing(out, errOut) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("multiarc: unzip -Z1 %s: %w (%s)", localPath, err, strings.TrimSpace(string(errOut)))
 	}
 	return parseBareNameListing(out), nil
+}
+
+// isEmptyZipListing recognizes how unzip answers for a zip with no members
+// at all: exit status 1 and the one line "Empty zipfile." on stdout, where a
+// damaged archive would have explained itself on stderr instead. Such a zip
+// is also what "zip -d" leaves behind once its last member is deleted, so it
+// has to list as empty rather than fail.
+func isEmptyZipListing(stdout, stderr []byte) bool {
+	return strings.TrimSpace(string(stdout)) == "Empty zipfile." && strings.TrimSpace(string(stderr)) == ""
 }
 
 func (zipBackend) extractAll(ctx context.Context, localPath, destDir string) error {
