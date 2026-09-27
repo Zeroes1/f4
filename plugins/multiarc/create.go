@@ -98,7 +98,7 @@ func planCreateZip(ctx context.Context) (createBuild, error) {
 func sevenZipCreate(bin, typeSwitch string) createBuild {
 	return func(ctx context.Context, srcDir string, names []string, workDir, outName string) (string, error) {
 		args := append([]string{"a"}, sevenZipNameSwitches(names, typeSwitch, "-y")...)
-		args = append(append(args, filepath.Join(workDir, outName), "--"), names...)
+		args = append(append(args, filepath.Join(workDir, outName), "--"), sevenZipMemberArgs(names)...)
 		return outName, runToolChecked(ctx, srcDir, bin, args...)
 	}
 }

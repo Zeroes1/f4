@@ -89,6 +89,11 @@ func parseSevenZipListing(out []byte) []entry {
 
 func sevenZipEntry(block map[string]string, raw string) entry {
 	p := strings.ReplaceAll(strings.Trim(raw, "/"), "\\", "/")
+	// A member added as "./@name" (see sevenZipMemberArgs) keeps that
+	// leading "./" in the listing; stripped here the same way
+	// parseBareNameListing strips it for tar and zip, so the VFS path is
+	// just "@name" whichever way 7-Zip reports it.
+	p = strings.TrimPrefix(p, "./")
 	e := entry{Path: p, Raw: raw}
 	attr := block["Attributes"]
 	e.IsDir = block["Folder"] == "+" || strings.HasPrefix(attr, "D")
@@ -124,9 +129,11 @@ func (b sevenZipBackend) extractOne(ctx context.Context, localPath, destDir, mem
 	}
 	// "--" (and -spd for a name holding "*" or "?", see
 	// sevenZipNameSwitches) keeps a member called "-x" from being read as a
-	// switch and one called "@list" as a list file.
+	// switch; sevenZipMemberArgs keeps one called "@list" from being read
+	// as a list file, which "--" does not prevent.
 	args := append([]string{"x"}, sevenZipNameSwitches([]string{member}, "-y", "-o"+destDir)...)
-	args = append(args, localPath, "--", member)
+	args = append(args, localPath, "--")
+	args = append(args, sevenZipMemberArgs([]string{member})...)
 	_, errOut, err := runTool(ctx, bin, args...)
 	if err != nil {
 		return toolFailure(bin, args, err, errOut)

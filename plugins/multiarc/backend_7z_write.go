@@ -3,6 +3,7 @@ package multiarc
 import (
 	"context"
 	"errors"
+	"strings"
 )
 
 // errNoSevenZip is what every 7z write answers when no 7z, 7za or 7zr is on
@@ -23,13 +24,33 @@ func (b sevenZipBackend) checkWrite(context.Context, string, writeOp, string) er
 // command naming members: -spd turns off wildcard matching, needed only for
 // a name that holds "*" or "?" and left out otherwise so that an old p7zip
 // without that switch still takes every ordinary name. "--" after it stops
-// 7-Zip's parsing of switches and of @listfile names both, so a member
-// called "-x" or "@list" is just a name.
+// 7-Zip's parsing of switches, so a member called "-x" is just a name; it
+// does not stop 7-Zip reading an "@" name as a listfile (see
+// sevenZipMemberArgs, which is what actually protects those).
 func sevenZipNameSwitches(names []string, switches ...string) []string {
 	if hasWildcard(names) {
 		switches = append(switches, "-spd")
 	}
 	return switches
+}
+
+// sevenZipMemberArgs rewrites a member name starting with "@" to "./name".
+// 7-Zip reads an "@" argument as the name of a listfile to read further
+// names from -- on the a, d and x commands alike, and "--" does not turn
+// this off the way it does switch parsing -- so a member actually called
+// "@name" would otherwise make 7-Zip fail with "Cannot find listfile" (or
+// worse, read some unrelated file as one). Naming it "./@name" instead
+// reaches the same file without the argument starting with "@"; the
+// listing then has the "./" stripped back off (see sevenZipEntry).
+func sevenZipMemberArgs(names []string) []string {
+	out := make([]string, len(names))
+	for i, m := range names {
+		if strings.HasPrefix(m, "@") {
+			m = "./" + m
+		}
+		out[i] = m
+	}
+	return out
 }
 
 // add runs "7z a" in stageDir, so each member is stored under the relative
@@ -44,7 +65,7 @@ func (b sevenZipBackend) add(ctx context.Context, localPath, stageDir string, me
 	}
 	head := append([]string{"a"}, sevenZipNameSwitches(members, "-t7z", "-y")...)
 	head = append(head, localPath)
-	return runChunked(ctx, stageDir, bin, head, members)
+	return runChunked(ctx, stageDir, bin, head, sevenZipMemberArgs(members))
 }
 
 // remove runs "7z d". Naming a directory deletes everything under it too,
@@ -57,5 +78,5 @@ func (b sevenZipBackend) remove(ctx context.Context, localPath string, raws []st
 	names := coveringNames(raws)
 	head := append([]string{"d"}, sevenZipNameSwitches(names, "-y")...)
 	head = append(head, localPath)
-	return runChunked(ctx, "", bin, head, names)
+	return runChunked(ctx, "", bin, head, sevenZipMemberArgs(names))
 }

@@ -54,8 +54,8 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "zip with 7za", target: "out.jar", tools: []string{"7za"},
-			want: []string{"7za a -tzip -y <work>" + sep + "out.jar -- a.txt @x"}, dirs: []string{"src"},
-			content: "|7za:a.txt,@x",
+			want: []string{"7za a -tzip -y <work>" + sep + "out.jar -- a.txt ./@x"}, dirs: []string{"src"},
+			content: "|7za:a.txt,./@x",
 		},
 		{
 			name: "zip with bsdtar, as on stock Windows", target: "out.zip", tools: []string{"tar"}, version: winTarVersion,
@@ -64,8 +64,8 @@ func TestCreateArchivePicksTheTool(t *testing.T) {
 		},
 		{
 			name: "7z with 7zr", target: "out.7z", tools: []string{"7zr"},
-			want: []string{"7zr a -t7z -y <work>" + sep + "out.7z -- a.txt @x"}, dirs: []string{"src"},
-			content: "|7zr:a.txt,@x",
+			want: []string{"7zr a -t7z -y <work>" + sep + "out.7z -- a.txt ./@x"}, dirs: []string{"src"},
+			content: "|7zr:a.txt,./@x",
 		},
 		{
 			name: "plain tar with GNU tar", target: "out.tar", tools: []string{"tar"}, version: gnuTarVersion,
