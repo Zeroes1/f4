@@ -74,7 +74,7 @@ func TestInitRegistersPanelProviderWhenSupported(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open returned an error: %v", err)
 	}
-	defer controller.Close()
+	defer func() { _ = controller.Close() }()
 
 	if err := plugin.Close(); err != nil {
 		t.Fatal(err)

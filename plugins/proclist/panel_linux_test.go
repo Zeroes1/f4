@@ -67,7 +67,7 @@ func TestProcListPanelWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer controller.Close()
+	defer func() { _ = controller.Close() }()
 
 	x1, y1, x2, y2 := controller.GetPosition()
 	if x1 != 0 || y1 != 0 || x2 != 39 || y2 != 19 {
