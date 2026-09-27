@@ -203,7 +203,18 @@ func (tarBackend) add(ctx context.Context, localPath, stageDir string, members, 
 				return err
 			}
 		}
-		return runChunked(ctx, workDir, "tar", []string{"-r", "-f", tarName, "-C", stageDir}, names)
+		// Runs in stageDir rather than naming it with "-C stageDir" (see
+		// backend_tar.go's extractAll for why: GNU tar fails to open a
+		// Windows drive-letter "-C" directory), so the archive itself,
+		// relative to workDir otherwise, is named by its absolute path
+		// instead -- bsdtar takes that plainly, GNU tar needs
+		// --force-local for it, the same as everywhere else one is built.
+		head := []string{"-r"}
+		if plan.info.flavor == tarGNU {
+			head = append(head, "--force-local")
+		}
+		head = append(head, "-f", filepath.Join(workDir, tarName))
+		return runChunked(ctx, stageDir, "tar", head, names)
 	})
 }
 

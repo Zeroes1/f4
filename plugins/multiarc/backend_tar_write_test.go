@@ -3,10 +3,22 @@ package multiarc
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+// normalizeWorkDir replaces the random work directory a command's absolute
+// -f path was built from with "<work>", the way placeholders does for
+// create_test.go's own commands.
+func normalizeWorkDir(cmds []string) []string {
+	out := make([]string, len(cmds))
+	for i, c := range cmds {
+		out[i] = workDirPattern.ReplaceAllString(c, "<work>")
+	}
+	return out
+}
 
 const (
 	gnuTarVersion     = "tar (GNU tar) 1.35\nCopyright (C) 2023 Free Software Foundation, Inc.\n"
@@ -132,15 +144,20 @@ func TestTarAddGNUCompressedEditsPrivateCopy(t *testing.T) {
 	if err := (tarBackend{}).add(context.Background(), arc, "/stage", []string{"dir/new.txt"}, nil); err != nil {
 		t.Fatalf("add: %v", err)
 	}
+	// The "-r" itself runs in stageDir, not workDir (see the comment on
+	// add), so the archive it appends to is named by its absolute path.
 	want := []string{
 		"gzip -d -f work.tar.gz",
-		"tar -r -f work.tar -C /stage -- dir/new.txt",
+		"tar -r --force-local -f <work>" + string(filepath.Separator) + "work.tar -- dir/new.txt",
 		"gzip -f work.tar",
 	}
-	if got := f.commands(); !reflect.DeepEqual(got, want) {
+	if got := normalizeWorkDir(f.commands()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)
 	}
-	for _, c := range f.calls[1:] {
+	if f.calls[1].dir != "/stage" {
+		t.Errorf("tar -r ran in %q, want /stage", f.calls[1].dir)
+	}
+	for _, c := range []fakeCall{f.calls[0], f.calls[2]} {
 		if c.dir == "" || !strings.HasPrefix(c.dir, strings.TrimSuffix(arc, "a.tar.gz")) {
 			t.Errorf("%s ran in %q, want the work directory next to the archive", c.name, c.dir)
 		}
@@ -163,9 +180,9 @@ func TestTarReplaceGNUDeletesOldMemberFirst(t *testing.T) {
 	}
 	want := []string{
 		"tar --delete --no-wildcards -f work.tar -- ./dir/f.txt",
-		"tar -r -f work.tar -C /stage -- dir/f.txt",
+		"tar -r --force-local -f <work>" + string(filepath.Separator) + "work.tar -- dir/f.txt",
 	}
-	if got := f.commands(); !reflect.DeepEqual(got, want) {
+	if got := normalizeWorkDir(f.commands()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)
 	}
 	if got := readArchive(t, arc); got != "ORIG|d:./dir/f.txt|r:dir/f.txt" {
@@ -224,8 +241,12 @@ func TestTarAddBSDPlainAppends(t *testing.T) {
 	if err := (tarBackend{}).add(context.Background(), arc, "/stage", []string{"new"}, nil); err != nil {
 		t.Fatalf("add: %v", err)
 	}
-	if got := f.commands(); !reflect.DeepEqual(got, []string{"tar -r -f work.tar -C /stage -- new"}) {
-		t.Fatalf("commands = %q", got)
+	want := []string{"tar -r -f <work>" + string(filepath.Separator) + "work.tar -- new"}
+	if got := normalizeWorkDir(f.commands()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %q, want %q", got, want)
+	}
+	if f.calls[0].dir != "/stage" {
+		t.Errorf("tar -r ran in %q, want /stage", f.calls[0].dir)
 	}
 	if got := readArchive(t, arc); got != "ORIG|r:new" {
 		t.Fatalf("archive = %q", got)

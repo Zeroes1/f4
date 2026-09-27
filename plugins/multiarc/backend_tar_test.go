@@ -41,31 +41,42 @@ func TestTarBackendListError(t *testing.T) {
 	}
 }
 
+// extractAll runs in destDir instead of naming it with "-C" (see the
+// comment on extractAll), so this checks the directory the fake tool ran
+// in, not just the args.
 func TestTarBackendExtractAll(t *testing.T) {
+	var gotDir string
 	var gotArgs []string
-	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		gotArgs = args
+	withFakeRunner(t, nil, func(ctx context.Context, dir, name string, args ...string) ([]byte, []byte, error) {
+		gotDir, gotArgs = dir, args
 		return nil, nil, nil
 	})
 	if err := (tarBackend{}).extractAll(context.Background(), "/a.tar", "/dest"); err != nil {
 		t.Fatalf("extractAll: %v", err)
 	}
-	want := []string{"-xf", "/a.tar", "-C", "/dest"}
+	if gotDir != "/dest" {
+		t.Fatalf("ran in %q, want /dest", gotDir)
+	}
+	want := []string{"-xf", "/a.tar"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %v, want %v", gotArgs, want)
 	}
 }
 
 func TestTarBackendExtractOne(t *testing.T) {
+	var gotDir string
 	var gotArgs []string
-	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
-		gotArgs = args
+	withFakeRunner(t, nil, func(ctx context.Context, dir, name string, args ...string) ([]byte, []byte, error) {
+		gotDir, gotArgs = dir, args
 		return nil, nil, nil
 	})
 	if err := (tarBackend{}).extractOne(context.Background(), "/a.tar", "/dest", "dir/file.txt"); err != nil {
 		t.Fatalf("extractOne: %v", err)
 	}
-	want := []string{"-xf", "/a.tar", "-C", "/dest", "--", "dir/file.txt"}
+	if gotDir != "/dest" {
+		t.Fatalf("ran in %q, want /dest", gotDir)
+	}
+	want := []string{"-xf", "/a.tar", "--", "dir/file.txt"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %v, want %v", gotArgs, want)
 	}

@@ -103,11 +103,15 @@ func sevenZipCreate(bin, typeSwitch string) createBuild {
 	}
 }
 
-// tarCreate runs "tar -c" with an optional compression option. --force-local
-// goes in for GNU tar: its own heuristics otherwise read the target's
+// tarCreate runs "tar -c" with an optional compression option, in srcDir
+// rather than passing it as "-C srcDir": on the Windows CI runners GNU
+// tar's own "-C <drive-letter path>" fails to open the directory, so
+// running there instead never hands it that argument at all (the archive
+// itself is still named by the absolute -f path, workDir's own, which
+// --force-local is for: GNU tar's heuristics otherwise read the target's
 // leading "C:\" on Windows as a "host:path" remote-archive spec and fail
 // with "Cannot connect to C: resolve failed" rather than write a local
-// file; bsdtar and BusyBox tar have no such heuristic (and no such flag).
+// file; bsdtar and BusyBox tar have no such heuristic, and no such flag).
 func tarCreate(info tarInfo, flag string) createBuild {
 	return func(ctx context.Context, srcDir string, names []string, workDir, outName string) (string, error) {
 		args := []string{"-c"}
@@ -117,8 +121,8 @@ func tarCreate(info tarInfo, flag string) createBuild {
 		if flag != "" {
 			args = append(args, flag)
 		}
-		args = append(args, "-f", filepath.Join(workDir, outName), "-C", srcDir, "--")
-		return outName, runToolChecked(ctx, workDir, "tar", append(args, tarMemberArgs(info, names)...)...)
+		args = append(args, "-f", filepath.Join(workDir, outName), "--")
+		return outName, runToolChecked(ctx, srcDir, "tar", append(args, tarMemberArgs(info, names)...)...)
 	}
 }
 
