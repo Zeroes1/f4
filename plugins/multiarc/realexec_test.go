@@ -183,8 +183,17 @@ func writeMember(t *testing.T, v *MultiArcVFS, p, content string) {
 // pathOnly replaces PATH, for the rest of the test, with a directory
 // holding just the named tools, each a symlink to the real binary found on
 // the current PATH under the target name (so "tar": "bsdtar" puts bsdtar on
-// PATH as tar). It skips the test when a tool is missing, cannot start, or
-// symlinks cannot be made (Windows without the privilege).
+// PATH as tar). It skips the test when a tool is missing, cannot start
+// through the symlink, or the symlink cannot be made (Windows without the
+// privilege).
+//
+// The cannot-start check runs after PATH is switched, through the symlink
+// itself rather than the original path LookPath found target at: on
+// Windows, CreateProcess resolves the DLL search directory from the path
+// it was actually asked to run, not from wherever a symlink points, so a
+// tool needing a DLL that sits next to its own real binary can start fine
+// run directly and still fail once it is only reachable through a symlink
+// in an otherwise-empty directory (unzip.exe was one, on the CI runners).
 func pathOnly(t *testing.T, tools map[string]string) {
 	t.Helper()
 	bin := t.TempDir()
@@ -193,15 +202,24 @@ func pathOnly(t *testing.T, tools map[string]string) {
 		if err != nil {
 			t.Skipf("%s is not on PATH", target)
 		}
-		if toolCannotStart(target, real) {
-			t.Skipf("%s is on PATH but does not start", target)
-		}
 		link := filepath.Join(bin, name+filepath.Ext(real))
 		if err := os.Symlink(real, link); err != nil {
 			t.Skipf("cannot symlink %s: %v", real, err)
 		}
 	}
 	t.Setenv("PATH", bin)
+	for name := range tools {
+		p, err := exec.LookPath(name)
+		if err != nil {
+			t.Skipf("%s is not on the replaced PATH", name)
+		}
+		// name, not target: a caller giving target as an already-resolved
+		// path (realToolPath's callers do) rather than a bare tool name
+		// would otherwise never match unzipCannotStart's dispatch.
+		if toolCannotStart(name, p) {
+			t.Skipf("%s does not start through its symlink", name)
+		}
+	}
 }
 
 // realTarFlavor is what the tar on the real PATH is.
