@@ -1680,6 +1680,8 @@ Compare.Moved=The panels no longer show the compared folders.
 Compare.Failed=The comparison failed:\n%s
 Compare.ReadFailed=Some files could not be read and count as different:\n%s
 
+DiffView.Close=Close
+
 Sync.Title= Synchronize dirs
 Sync.Left=Left:
 Sync.Right=Right:

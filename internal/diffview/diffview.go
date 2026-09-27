@@ -7,6 +7,7 @@
 package diffview
 
 import (
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/textdiff"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtinput"
@@ -109,7 +110,7 @@ func (dv *DiffView) ResizeConsole(w, h int) {
 
 func (dv *DiffView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
-		Normal: vtui.KeyBarLabels{"", "", "", "", "", "", "", "", "", "Close"},
+		Normal: vtui.KeyBarLabels{"", "", "", "", "", "", "", "", "", i18n.Msg("DiffView.Close")},
 	}
 }
 
