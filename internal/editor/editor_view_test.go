@@ -5906,7 +5906,8 @@ func TestWrapMarkNeedsOverlay(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := wrapMarkNeedsOverlay(tc.fIdx, tc.fragCount, tc.startX, tc.maxX); got != tc.want {
+			got := wrapMarkNeedsOverlay(tc.fIdx, tc.fragCount, tc.startX, tc.maxX)
+			if got != tc.want {
 				t.Errorf("wrapMarkNeedsOverlay(%d, %d, %d, %d) = %v, want %v", tc.fIdx, tc.fragCount, tc.startX, tc.maxX, got, tc.want)
 			}
 			// The two helpers must never both fire for the same row.
