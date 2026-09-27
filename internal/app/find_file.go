@@ -560,7 +560,7 @@ func (srw *SearchResultsWindow) HandleCommand(cmd int, args any) bool {
 func (srw *SearchResultsWindow) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
-			"", "", "View", "Edit", i18n.Msg("FindFile.BtnPanel"), "", "", "", "", "Quit", "", "",
+			"", "", i18n.Msg("KeyBar.F3"), i18n.Msg("KeyBar.F4"), i18n.Msg("FindFile.BtnPanel"), "", "", "", "", i18n.Msg("KeyBar.F10"), "", "",
 		},
 	}
 }

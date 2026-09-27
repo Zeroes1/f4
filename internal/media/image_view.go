@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mattn/go-runewidth"
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
@@ -973,7 +974,7 @@ func (iv *ImageView) Close() {
 func (iv *ImageView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
-			"", "", "", "", "", "", "", "", "", "Quit",
+			"", "", "", "", "", "", "", "", "", i18n.Msg("KeyBar.F10"),
 		},
 	}
 }
