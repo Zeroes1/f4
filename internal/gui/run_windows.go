@@ -1,4 +1,4 @@
-//go:build windows && !lite
+//go:build windows
 
 package gui
 

@@ -636,31 +636,26 @@ jobs:
         retention-days: 7
 
   # f4#1178: a "lite" build for routers and other embedded/old-weak-hardware
-  # targets, where GUI/Colorer/MP3/FUSE/cloud/archive/network weight is a
-  # real problem and a display is never attached in the first place. The
-  # -tags lite build tag is the single point of truth for what gets left
-  # out (see internal/plughost/manager.go, internal/gui/run_lite.go,
-  # internal/editor/colorer_lite.go, vfs/hostmode/hostmode_lite.go,
-  # internal/media/audio_stub.go and internal/fusefs/node_unsupported.go);
-  # this job just builds it for a couple of the most router-relevant
-  # cross targets, the same way build-batch above builds the exotic
-  # architectures' regular binaries.
+  # targets, where Colorer/MP3/FUSE/cloud/archive/network weight is a real
+  # problem. The -tags lite build tag is the single point of truth for what
+  # gets left out (see internal/plughost/plugins_lite.go,
+  # internal/gui/backends_lite.go, internal/editor/colorer_lite.go,
+  # vfs/hostmode/hostmode_lite.go, internal/media/audio_stub.go and
+  # internal/fusefs/node_unsupported.go). vtui_noebiten and vtui_nogogpu
+  # always go with it: they leave vtui's Ebitengine and gogpu backends, and
+  # the GPU stack behind them, out of the binary, which keeps X11 and
+  # Wayland (Win32 on Windows) as the only GUI backends.
+  # internal/gui/liteguard.go refuses to compile a lite build without them.
   #
-  # goffi_static keeps every cell free of FFI/dlopen entirely, matching a
-  # lite build's own goal (it never calls into an FFI-backed GUI or audio
-  # backend anyway, see the tags above) and, for linux/arm and linux/mipsle,
-  # matching what build-batch already uses for the identical regular cells.
-  # linux/mipsle also keeps noffi, again matching its regular cell above:
-  # vtui has no FFI-backed backend for it regardless of the lite tag, and
-  # -tags lite alone already forces the same audio_stub.go choice noffi
-  # does, but carrying both here keeps this cell's tag set visibly the same
-  # shape as build-batch's.
+  # linux/amd64 is a universal build (goffi_universal, like the regular
+  # release): Wayland needs FFI to load libxkbcommon. linux/arm and
+  # linux/mipsle stay static (goffi_static), matching build-batch's regular
+  # cells for them; vtui has no Wayland backend there and draws with X11.
+  # linux/mipsle also keeps noffi, again matching its regular cell above.
   #
   # A control binary is built alongside each lite one, with the same tags
-  # minus "lite" (so still goffi_static/noffi, an apples-to-apples
-  # comparison rather than against the main matrix's goffi_universal
-  # linux/amd64), purely to print the size comparison f4#1178 asks for in
-  # this job's own log; it is not packaged or uploaded.
+  # minus the lite ones, purely to print the size comparison f4#1178 asks
+  # for in this job's own log; it is not packaged or uploaded.
   #
   # A lite build links no archive library and no SQLite engine: archives
   # go through plugins/multiarc's console-tool wrapper, internal/unpack reads
@@ -679,8 +674,13 @@ jobs:
           - name: linux/amd64
             goos: linux
             goarch: amd64
-            tags: goffi_static
+            tags: goffi_universal
             asset: f4-lite-linux-amd64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+            tags: ''
+            asset: f4-lite-windows-amd64
           - name: linux/arm
             goos: linux
             goarch: arm
@@ -696,6 +696,7 @@ jobs:
       GOOS: ${{ matrix.goos }}
       GOARCH: ${{ matrix.goarch }}
       ASSET: ${{ matrix.asset }}
+      MATRIX_TAGS: ${{ matrix.tags }}
 
     steps:
     - name: Checkout code
@@ -730,22 +731,34 @@ jobs:
           APP_LDFLAGS="$APP_LDFLAGS -X $VERSION_SYMBOL=$GITHUB_REF_NAME"
         fi
 
-        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
-          -ldflags="$APP_LDFLAGS" -o build/f4 ./cmd/f4
-        go build -tags "${{ matrix.tags }}" -trimpath $GCFLAGS \
-          -ldflags="$APP_LDFLAGS" -o build-control/f4 ./cmd/f4
+        EXT=""
+        if [ "$GOOS" = "windows" ]; then
+          EXT=".exe"
+        fi
+        LITE_TAGS="lite,vtui_noebiten,vtui_nogogpu${MATRIX_TAGS:+,$MATRIX_TAGS}"
 
-        echo "### f4#1178 size comparison: lite vs. regular (${{ matrix.name }}, -tags ${{ matrix.tags }}, stripped)" | tee -a "$GITHUB_STEP_SUMMARY"
-        LITE_SIZE=$(stat -c%s build/f4)
-        CONTROL_SIZE=$(stat -c%s build-control/f4)
+        go build -tags "$LITE_TAGS" -trimpath $GCFLAGS \
+          -ldflags="$APP_LDFLAGS" -o build/f4$EXT ./cmd/f4
+        # Same as the regular build: the GUI-only binary for Windows, so a
+        # launch from Explorer opens no console window.
+        if [ "$GOOS" = "windows" ]; then
+          go build -tags "$LITE_TAGS" -trimpath $GCFLAGS \
+            -ldflags="$APP_LDFLAGS -H windowsgui" -o build/f4-gui$EXT ./cmd/f4
+        fi
+        go build -tags "$MATRIX_TAGS" -trimpath $GCFLAGS \
+          -ldflags="$APP_LDFLAGS" -o build-control/f4$EXT ./cmd/f4
+
+        echo "### f4#1178 size comparison: lite vs. regular (${{ matrix.name }}, -tags ${MATRIX_TAGS:-none}, stripped)" | tee -a "$GITHUB_STEP_SUMMARY"
+        LITE_SIZE=$(stat -c%s build/f4$EXT)
+        CONTROL_SIZE=$(stat -c%s build-control/f4$EXT)
         printf 'lite:    %10d bytes\nregular: %10d bytes\ndelta:   %10d bytes (%.1f%% smaller)\n' \
           "$LITE_SIZE" "$CONTROL_SIZE" "$((CONTROL_SIZE - LITE_SIZE))" \
           "$(awk "BEGIN { print ($CONTROL_SIZE-$LITE_SIZE)/$CONTROL_SIZE*100 }")" \
           | tee -a "$GITHUB_STEP_SUMMARY"
         rm -rf build-control
 
-        go build -tags "lite,${{ matrix.tags }}" -trimpath $GCFLAGS \
-          -ldflags="$LDFLAGS" -o build/plugins/dummy_internal/f4-internal-dummy-plugin \
+        go build -tags "$LITE_TAGS" -trimpath $GCFLAGS \
+          -ldflags="$LDFLAGS" -o build/plugins/dummy_internal/f4-internal-dummy-plugin$EXT \
           ./plugins/dummy_internal
 
         cp -r internal/i18n/lang internal/dialog/help build/
@@ -756,6 +769,8 @@ jobs:
     - name: Smoke test the binary
       # Same mechanism as build-batch above: qemu-user-static's binaries run a
       # foreign-architecture static executable directly, no container needed.
+      # The Windows binary cannot run on this Linux runner.
+      if: matrix.goos != 'windows'
       run: |
         set -euo pipefail
         if [ "${{ matrix.goarch }}" = "amd64" ]; then
@@ -772,13 +787,18 @@ jobs:
         bash scripts/check_release_version.sh "qemu-$QEMU-static" ./build/f4 --version </dev/null
 
     - name: Package
-      run: tar -czvf "$ASSET.tar.gz" -C build .
+      run: |
+        if [ "$GOOS" = "windows" ]; then
+          (cd build && zip -r "../$ASSET.zip" .)
+        else
+          tar -czvf "$ASSET.tar.gz" -C build .
+        fi
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: ${{ env.ASSET }}
-        path: ${{ env.ASSET }}.tar.gz
+        path: ${{ env.ASSET }}.*
         retention-days: 7
 
   # f4#1178 part 1 of 4 (plan: issuecomment-5851218447 on #1178): CloudFox

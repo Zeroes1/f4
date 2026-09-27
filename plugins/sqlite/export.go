@@ -52,38 +52,20 @@ func exportTableToTemp(ctx context.Context, session *databaseSession, table stri
 // per row, quoted as RFC 4180 has it, so that a value with a comma, a quote or
 // a line break in it survives the trip.
 func (s *databaseSession) exportTableCSV(ctx context.Context, table string, w io.Writer) error {
-	// #nosec G202 -- SQLite cannot bind identifiers; quoteIdentifier escapes every embedded quote.
-	rows, err := s.db.QueryContext(ctx, "SELECT * FROM "+quoteIdentifier(table))
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	columns, err := rows.Columns()
-	if err != nil {
-		return err
-	}
 	out := csv.NewWriter(w)
-	if err := out.Write(columns); err != nil {
-		return err
-	}
-	values := make([]any, len(columns))
-	destinations := make([]any, len(columns))
-	for i := range values {
-		destinations[i] = &values[i]
-	}
-	record := make([]string, len(columns))
-	for rows.Next() {
-		if err := rows.Scan(destinations...); err != nil {
-			return err
-		}
-		for i, value := range values {
-			record[i] = csvValue(value)
-		}
-		if err := out.Write(record); err != nil {
-			return err
-		}
-	}
-	if err := rows.Err(); err != nil {
+	var record []string
+	err := s.backend.scanTable(ctx, table,
+		func(columns []string) error {
+			record = make([]string, len(columns))
+			return out.Write(columns)
+		},
+		func(values []any) error {
+			for i, value := range values {
+				record[i] = csvValue(value)
+			}
+			return out.Write(record)
+		})
+	if err != nil {
 		return err
 	}
 	out.Flush()

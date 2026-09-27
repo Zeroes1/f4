@@ -865,12 +865,6 @@ func runGuiBackend(backend string, fromConfig bool) error {
 }
 
 func shouldTryGui() bool {
-	if liteBuild {
-		// A lite build has no GUI backend to try (internal/gui/run_lite.go
-		// makes gui.RunGui always fail); go straight to console mode instead
-		// of attempting one and hard-failing when a display happens to be set.
-		return false
-	}
 	if runtime.GOOS == "windows" {
 		// Windows ships separate binaries for console (f4.exe) and GUI
 		// (f4-gui.exe). GUI mode is not auto-detected; it must be requested
@@ -915,20 +909,27 @@ func tryRunDefaultGui() error {
 				errs = append(errs, fmt.Sprintf("win32: %v", err))
 			}
 
-			vtui.DebugLog("GUI_AUTO: Trying ebiten...")
-			if err := gui.RunGui("ebiten", setupGuiUI); err == nil {
-				return nil
-			} else {
-				errs = append(errs, fmt.Sprintf("ebiten: %v", err))
+			// A lite build carries neither ebiten nor gogpu (gui.BackendBuilt),
+			// so it goes straight from win32 to x11 instead of collecting two
+			// "not built" errors on the way.
+			if gui.BackendBuilt("ebiten") {
+				vtui.DebugLog("GUI_AUTO: Trying ebiten...")
+				if err := gui.RunGui("ebiten", setupGuiUI); err == nil {
+					return nil
+				} else {
+					errs = append(errs, fmt.Sprintf("ebiten: %v", err))
+				}
 			}
 		}
 
 		// Try gogpu (macOS default; Windows fallback)
-		vtui.DebugLog("GUI_AUTO: Trying gogpu...")
-		if err := gui.RunGui("gogpu", setupGuiUI); err == nil {
-			return nil
-		} else {
-			errs = append(errs, fmt.Sprintf("gogpu: %v", err))
+		if gui.BackendBuilt("gogpu") {
+			vtui.DebugLog("GUI_AUTO: Trying gogpu...")
+			if err := gui.RunGui("gogpu", setupGuiUI); err == nil {
+				return nil
+			} else {
+				errs = append(errs, fmt.Sprintf("gogpu: %v", err))
+			}
 		}
 
 		// Fallback to X11 if DISPLAY environment variable is set

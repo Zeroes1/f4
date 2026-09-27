@@ -33,12 +33,6 @@ func actionSQLiteClient() bool {
 	return plughost.ExecutePluginCommand(vfs.PluginCommandPanel, sqlitePluginCommandID, pf)
 }
 
-// sqliteClientAvailable reports whether this build carries the SQLite plugin
-// at all. A lite build leaves it out, so that it links no SQLite engine.
-func sqliteClientAvailable() bool {
-	return !liteBuild
-}
-
 func init() {
 	registerAction(action.Action{
 		Name:        "App.SQLite",
@@ -56,12 +50,9 @@ func init() {
 		// the answer there.
 		DefaultKeys: []string{"CtrlAltD"},
 		MenuPath:    "Commands",
-		// The predicate does not look at the panel cursor. It is asked every
-		// time the menu is built, and a row that comes and goes with the
-		// cursor is what made this command impossible to find. It only
-		// hides the row from a lite build, which has no SQLite plugin to
-		// run (internal/plughost/plugins_lite.go).
-		Visible: sqliteClientAvailable,
+		// Deliberately no Visible predicate. It is asked every time the menu
+		// is built, and a row that comes and goes with the panel cursor is
+		// what made this command impossible to find.
 		Handler: actionSQLiteClient,
 	})
 }

@@ -5,18 +5,14 @@ package plughost
 import (
 	"github.com/unxed/f4/plugins/archive"
 	"github.com/unxed/f4/plugins/netfox"
-	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 )
 
 // optionalVFSPlugins are the VFS providers a lite build cuts down or drops
-// (f4#1178): the native-library archive plugin goes entirely, netfox keeps
-// only FISH+ (over a subprocess ssh dialer instead of this build's
-// golang.org/x/crypto/ssh one) in place of the FTP/SFTP/FISH+ trio here,
-// and the SQLite client goes entirely. The SQLite client is the last thing
-// that would link github.com/ncruces/go-sqlite3 into a lite build once
-// internal/sheet saves as JSON there (store_lite.go) and the archive
-// libraries are gone, and that engine alone is about 7 MB of the binary. See plugins_lite.go for the other half of this
-// build tag's single point of truth.
+// (f4#1178): the native-library archive plugin goes entirely, and netfox
+// keeps only FISH+ (over a subprocess ssh dialer instead of this build's
+// golang.org/x/crypto/ssh one) in place of the FTP/SFTP/FISH+ trio here.
+// See plugins_lite.go for the other half of this build tag's single point
+// of truth.
 //
 // Cloud storage (plugins/cloudfox: S3, Google Drive, Yandex Disk, WebDAV)
 // no longer lives here at all, in either build. It moved out to its own
@@ -33,6 +29,5 @@ func optionalVFSPlugins() []Plugin {
 	return []Plugin{
 		&archive.ArchivePlugin{},
 		&netfox.NetFoxPlugin{},
-		sqliteplugin.NewPlugin(),
 	}
 }

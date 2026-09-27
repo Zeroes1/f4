@@ -20,6 +20,7 @@
 | **Illumos** (experimental) | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-illumos-amd64.tar.gz) |
 | **Solaris** (experimental) | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-solaris-amd64.tar.gz) |
 | **Linux (lite)** ([details](#-lite-build)) | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-amd64.tar.gz) / [armv7l](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-arm.tar.gz) / [mipsle](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-mipsle.tar.gz) |
+| **Windows (lite)** ([details](#-lite-build)) | .zip | [x64](https://github.com/unxed/f4/releases/download/nightly/f4-lite-windows-amd64.zip) |
 
 *These builds are automated and represent the current state of the `main` branch.*
 
@@ -85,14 +86,21 @@ XP lacks a few functions ReactOS has.
 
 ### 🛜 Lite build
 
-The lite build targets routers and other embedded/old-weak-hardware devices:
-console/terminal only, no Colorer (Chroma-based syntax highlighting only), no
+The lite build targets routers and other embedded/old-weak-hardware devices.
+Its GUI backends are the ones that draw with the display server's own
+protocol: X11 and Wayland (`--gui=x11`, `--gui=wayland`), and Win32 GDI on
+Windows (`--gui=win32`); the GPU-accelerated `gogpu` and `ebiten` backends,
+and the graphics stack behind them, are left out. Wayland needs a loader to
+reach `libxkbcommon`, so it is available on the amd64 build, which is
+universal like the regular one; the static arm and mipsle builds draw with
+X11. There is no Colorer (Chroma-based syntax highlighting only), no
 Wine-specific code or `libwinescape` dependency, no MP3 player, no
 FUSE-based VFS mounting, and no cloud VFS provider. Archives come back
 through `plugins/multiarc`, which wraps whichever of `tar`, `unzip`,
 `7z`/`7za`/`7zr` and `gzip` the host already has on `PATH` instead of linking
-the regular build's native archive libraries (list and extract only,
-matching far2l's own multiarc plugin's scope) (f4#1178, part 2). Network
+the regular build's native archive libraries (f4#1178, part 2). It lists
+and extracts; unlike far2l's multiarc it does not yet create archives or
+change them. Network
 access comes back too, but only as FISH+: `plugins/netfox` keeps its
 connection storage and its "Add/Edit connection" dialog, wired to a dialer
 that shells out to the console `ssh` binary instead of linking
@@ -105,16 +113,20 @@ supported (its own comment in `plugins/netfox/fish_dialer_lite.go` has the
 detail on why). The build links none of the archive libraries either: the
 updater and PlugRing unpack f4's own `.tar.gz` and `.zip` downloads with Go's
 standard library. The build links no SQLite engine (`ncruces/go-sqlite3`,
-about 7 MB): the SQLite client (`Ctrl+Alt+D`) is not included. The built-in
-spreadsheet (`Ctrl+Alt+S`)
-keeps working, but saves its native `.f4s` files as plain JSON instead of a
-SQLite database (f4#1552). The two on-disk formats are not interchangeable —
-see the "Files" section of [docs/SPREADSHEET.md](docs/SPREADSHEET.md) for the
-trade-off. Everything else — panels, editor, viewer, Lua and wasm plugins —
-works the same as the regular build. Built with `go build -tags lite`; see
-`internal/plughost`, `internal/gui`, `internal/editor`, `vfs/hostmode`,
-`internal/media`, `internal/fusefs` and `internal/sheet` for where each
-exclusion is implemented.
+about 7 MB): the SQLite client (`Ctrl+Alt+D`, and Enter on a database file)
+runs the host's `sqlite3` command-line tool instead (`opkg install
+sqlite3-cli`, `apt install sqlite3`), one process per statement, so a
+transaction begun in its SQL box ends with that statement. The built-in
+spreadsheet (`Ctrl+Alt+S`) keeps working, but saves its native `.f4s` files as
+plain JSON instead of a SQLite database (f4#1552). The two on-disk formats
+are not interchangeable — see the "Files" section of
+[docs/SPREADSHEET.md](docs/SPREADSHEET.md) for the trade-off. Everything else
+— panels, editor, viewer, Lua and wasm plugins — works the same as the regular
+build. Built with `go build -tags lite,vtui_noebiten,vtui_nogogpu`; the two
+vtui tags drop its Ebitengine and gogpu backends, and a lite build without
+them does not compile. See `internal/plughost`, `internal/gui`,
+`internal/editor`, `vfs/hostmode`, `internal/media`, `internal/fusefs` and
+`internal/sheet` for where each exclusion is implemented.
 
 **The Core:** Creating an experimental, cross-platform TUI (Terminal User Interface) file manager that aims to fully replicate the features, UX, data structures, and rendering logic of `far2l` and Far Manager, but implemented entirely in Go.
 

@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/mediainfo"
 	"github.com/unxed/f4/plugins/proclist"
+	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/visren"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -154,6 +155,10 @@ func (pm *PluginManager) loadInternal() {
 		&id3editor.ID3EditorPlugin{},
 		envman.NewPlugin(config.GetF4ConfigDir()),
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
+		// Both builds: the lite build's SQLite client runs the host's
+		// sqlite3 tool instead of linking the engine (plugins/sqlite's
+		// backend_default_lite.go).
+		sqliteplugin.NewPlugin(),
 		proclist.NewPlugin(),
 	}
 	// cloudfox (cloud services), android (ADB device browsing) and iOS
@@ -172,9 +177,7 @@ func (pm *PluginManager) loadInternal() {
 	// back as plugins/multiarc, a CLI-archiver wrapper, in place of the
 	// native-library one (f4#1178, part 2), and netfox comes back cut down
 	// to FISH+ over a subprocess ssh dialer, in place of the full build's
-	// FTP/SFTP/FISH+ trio (part 3) -- no ftp/sftp/scp VFS provider. The
-	// SQLite client stays in-process in the regular build and is left out
-	// of the lite one, which links no SQLite engine at all. See
+	// FTP/SFTP/FISH+ trio (part 3) -- no ftp/sftp/scp VFS provider. See
 	// plugins_lite.go/plugins_full.go, the single point of truth for which
 	// build tag gets which set, for the full accounting.
 	plugins = append(plugins, optionalVFSPlugins()...)
