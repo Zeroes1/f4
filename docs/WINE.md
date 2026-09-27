@@ -5313,7 +5313,9 @@ go2xp SPEC 7.1), и запуск этого же артефакта на ReactOS
   в `unxed/libwinescape`.
 - **Прогон с `UseWinescape=0` под живым Wine** — закрыт 8-коммитным заходом
   (§19): `ci: run f4 under real Wine` (`61ac2418`) добавляет ровно этот
-  прогон (`F4_WINE_POSIX=0` под настоящим `wine64` в `.github/workflows/wine.yml`),
+  прогон (`F4_WINE_POSIX=0` под настоящим `wine64` в джобе `wine` файла
+  `.github/workflows/build.yml`, туда же перенесённой из отдельного файла
+  `wine.yml`),
   и в нём подтверждено и отключение `hostmode.Posix`, и то, что нативный pty
   вместе с ним выключается.
 - **Апстрим:** WineHQ 60193 (русские буквы в wineconsole на Mint), gogpu#465 и
@@ -5472,7 +5474,8 @@ f4 windows/386 с go2xp по профилю reactos; клавиши — чере
    `inheritMovedTree` (`fileops/rights_extra.go`) наследует права при
    перемещении дерева и под Wine, не только на голом Unix.
 8. **`61ac2418` — ci: run f4 under real Wine.** §14.7/§18.6: новый workflow
-   `.github/workflows/wine.yml` собирает `f4.exe` и реально запускает его под
+   `wine.yml` (позже, при работе над f4#1178, перенесённый в джобу `wine`
+   файла `.github/workflows/build.yml`) собирает `f4.exe` и реально запускает его под
    `wine64` на раннере — `--wine-probe` с posix auto-detect и с
    `F4_WINE_POSIX=0` (тем самым закрывая и «прогон с `UseWinescape=0` под
    живым Wine» из §18.6), плюс дымовые тесты рендера в консольном и GUI
