@@ -41,41 +41,14 @@ env:
   VERSION_SYMBOL: github.com/unxed/f4/internal/app.buildVersion
 
 jobs:
-  # Batch PRs (lunobot/batch/<project>/<counter>, LUNOBOT.md §7.2 in
-  # unxed/lunobot) collect several tickets' worth of small changes behind one
-  # open PR before it is merged; only the last push before that merge
-  # decides anything, so every intermediate push into an already-open batch
-  # PR paying for the full ~30-40 job matrix below is wasted runner time. The
-  # concurrency block above already cancels the PREVIOUS run of the same ref
-  # on a new push, but only after that previous run has started (or queued)
-  # -- the queueing/startup cost still happens on every push regardless. This
-  # job decides, cheaply and before anything else starts, whether the full
-  # matrix is worth running on THIS push; every heavy job below reads its
-  # output via `needs`/`if` instead of repeating the condition (the same
-  # pattern those jobs already use for `steps.affected.outputs.build`, one
-  # level up).
-  #
-  # The full matrix is skipped only when ALL of the following hold; any one
-  # of them forces it back on:
-  #   - the event is pull_request (push/workflow_dispatch/tag runs are
-  #     untouched -- see the last bullet below);
-  #   - the PR's source branch starts with `lunobot/batch/` (an ordinary,
-  #     non-batched PR always gets the full matrix, exactly as today);
-  #   - this push did NOT open the PR (github.event.action == 'opened' always
-  #     runs the full matrix at least once, so a batch starts with some
-  #     baseline coverage from its very first commit);
-  #   - the PR has not yet reached 5 commits
-  #     (github.event.pull_request.commits, available on pull_request
-  #     events) -- half of the 10-commit "batch is full" threshold from
-  #     DISPATCH.md (LUNOBOT.md §7.2): frequent enough that a batch never
-  #     carries more than ~5 unverified commits at once, rare enough that
-  #     most small intermediate pushes still skip the matrix;
-  #   - the latest commit's message does not carry the literal marker
-  #     `[ci-full]`, which anyone -- human or bot -- can add to a commit to
-  #     force full coverage early, e.g. once a batch looks close to done.
-  #
-  # push, workflow_dispatch and tag runs always get run-full=true: none of
-  # the pull_request-only checks above apply to them.
+  # Lunobot bots never open their own pull requests for routine work: it
+  # lands in lunobot/staging and reaches main in trains (LUNOBOT.md § 7.2 in
+  # unxed/lunobot), one full-matrix run per train instead of one per ticket.
+  # Only lunobot/train/* and lunobot/urgent/* may be PR heads; any other
+  # lunobot/* PR fails this job at once and every heavy job below, which
+  # needs it, is skipped -- the drift shows up red without spending the
+  # matrix. `[ci-full]`/batch skipping is gone with the batches themselves:
+  # a train is pushed once, so every run it gets is the one that decides.
   should-run-full:
     name: Should run full matrix
     runs-on: ubuntu-latest
@@ -85,35 +58,22 @@ jobs:
     - name: Decide whether to run the full matrix
       id: decide
       env:
-        GH_TOKEN: ${{ github.token }}
         EVENT_NAME: ${{ github.event_name }}
         HEAD_REF: ${{ github.head_ref }}
-        PR_ACTION: ${{ github.event.action }}
-        PR_COMMITS: ${{ github.event.pull_request.commits }}
-        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        REPO: ${{ github.repository }}
       run: |
         set -euo pipefail
         run_full=true
 
-        if [ "$EVENT_NAME" = "pull_request" ] && [[ "$HEAD_REF" == lunobot/batch/* ]]; then
-          run_full=false
-
-          if [ "$PR_ACTION" = "opened" ]; then
-            run_full=true
-          elif [ "${PR_COMMITS:-0}" -ge 5 ]; then
-            run_full=true
-          else
-            # One API call for the latest commit's message; cheaper than a
-            # full checkout just to run `git log -1`.
-            msg=$(gh api "repos/$REPO/commits/$HEAD_SHA" --jq '.commit.message' || true)
-            case "$msg" in
-              *'[ci-full]'*) run_full=true ;;
-            esac
-          fi
+        if [ "$EVENT_NAME" = "pull_request" ]; then
+          case "$HEAD_REF" in
+            lunobot/train/*|lunobot/urgent/*) ;;
+            lunobot/*)
+              echo "::error::$HEAD_REF: routine bot work lands in lunobot/staging via train.py land, not in its own PR (LUNOBOT.md § 7.2)"
+              exit 1 ;;
+          esac
         fi
 
-        echo "event=$EVENT_NAME head_ref=$HEAD_REF action=$PR_ACTION commits=$PR_COMMITS run_full=$run_full" >&2
+        echo "event=$EVENT_NAME head_ref=$HEAD_REF run_full=$run_full" >&2
         echo "run-full=$run_full" >> "$GITHUB_OUTPUT"
 
   # The build matrix is deliberately inline data. Pull requests build all
