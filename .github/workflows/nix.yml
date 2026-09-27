@@ -1,0 +1,104 @@
+# Keeps flake.nix's vendorHash in sync with go.mod/go.sum.
+#
+# buildGoModule fetches the module set into a fixed-output derivation whose
+# hash is pinned in flake.nix as vendorHash. Every dependency change
+# invalidates that hash and breaks `nix build` / `nix run github:unxed/f4`,
+# which is easy to miss because plain `go build` keeps working. This workflow
+# makes that failure impossible to miss, and repairs it:
+#
+#   - on pull requests touching go.mod/go.sum/flake.nix it builds the vendor
+#     derivation against the pull request's merge commit, so a dependency
+#     change without a hash bump fails the PR and reports the exact value to
+#     paste;
+#   - on pushes to main it commits the corrected hash back, so main's flake
+#     cannot sit broken in the window between a dependency change landing and
+#     someone noticing (this is what happened to #1530).
+#
+# Only the fixed-output vendor derivation is built (f4.goModules), not f4
+# itself: the hash is what this workflow is about, and the check stays fast.
+name: Nix
+
+on:
+  pull_request:
+    branches: [ "main" ]
+    # Docs-only pull requests do not touch the module set or the flake and
+    # skip this workflow; same rationale as build.yml's paths filter.
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'flake.nix'
+      - '.github/workflows/nix.yml'
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - 'flake.nix'
+      - '.github/workflows/nix.yml'
+  workflow_dispatch:
+
+# Read everywhere by default; the repair job below overrides this to push
+# its one-line fix.
+permissions:
+  contents: read
+
+jobs:
+  vendor-hash:
+    name: vendorHash matches go.mod/go.sum
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Nix
+      uses: cachix/install-nix-action@v31
+
+    - name: Verify vendorHash
+      id: verify
+      # --rebuild makes the check honest regardless of store state: a
+      # fixed-output derivation's store path is a function of its name and
+      # declared hash only, so an output left by an earlier tree with the
+      # same name and hash would otherwise satisfy the build without
+      # anything being verified. On a fresh runner this is belt and braces;
+      # locally it is the difference between a check and a no-op.
+      #
+      # A vendorHash mismatch is deliberately not a failure here: the two
+      # steps below decide what happens to it (fail a PR with the value to
+      # paste, or repair main). Any other build failure is a real failure.
+      run: |
+        set -euo pipefail
+        if nix build --no-link --rebuild .#f4.goModules 2> nix-build.log; then
+          echo "vendorHash in flake.nix matches go.mod/go.sum"
+          exit 0
+        fi
+        cat nix-build.log
+        got="$(sed -n 's/^ *got: *\(sha256-[A-Za-z0-9+\/=]*\)$/\1/p' nix-build.log | tail -n1)"
+        if [ -z "$got" ]; then
+          echo "::error::nix build failed for a reason other than a vendorHash mismatch"
+          exit 1
+        fi
+        echo "vendorHash mismatch: go.mod/go.sum changed without a hash bump"
+        echo "got=$got" >> "$GITHUB_OUTPUT"
+
+    - name: Report the hash to paste
+      if: github.event_name != 'push' && steps.verify.outputs.got != ''
+      run: |
+        echo "::error::vendorHash is stale. Set vendorHash = \"${{ steps.verify.outputs.got }}\" in flake.nix (see the comment above vendorHash) and push."
+        exit 1
+
+    - name: Update vendorHash
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.verify.outputs.got != ''
+      run: |
+        set -euo pipefail
+        got="${{ steps.verify.outputs.got }}"
+        sed -i "s|vendorHash = \"[^\"]*\"|vendorHash = \"$got\"|" flake.nix
+        grep -F "vendorHash = \"$got\"" flake.nix
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add flake.nix
+        git commit -m "build(nix): update vendorHash [ci]"
+        # Pushes authenticated with GITHUB_TOKEN do not trigger further
+        # workflow runs, so this cannot recurse.
+        git push
