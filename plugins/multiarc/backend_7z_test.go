@@ -114,9 +114,43 @@ func TestSevenZipBackendExtractOne(t *testing.T) {
 	if gotBin != "7z" {
 		t.Fatalf("bin = %q, want 7z", gotBin)
 	}
-	want := []string{"x", "-y", "-o/dest", "/a.7z", "sub/data.bin"}
+	want := []string{"x", "-y", "-o/dest", "/a.7z", "--", "sub/data.bin"}
 	if !reflect.DeepEqual(gotArgs, want) {
 		t.Fatalf("args = %v, want %v", gotArgs, want)
+	}
+}
+
+// A member named "@list" is a list file to 7-Zip and "-x" a switch, unless
+// "--" comes first; a "*" or "?" in a name needs -spd to stay literal.
+func TestSevenZipBackendExtractOneOddNames(t *testing.T) {
+	f := &fakeArchiver{tools: map[string]bool{"7z": true}}
+	f.install(t)
+	for _, member := range []string{"@list.txt", "-x", "w*ld"} {
+		if err := (sevenZipBackend{bin: "7z"}).extractOne(context.Background(), "/a.7z", "/dest", member); err != nil {
+			t.Fatalf("extractOne %s: %v", member, err)
+		}
+	}
+	want := []string{
+		"7z x -y -o/dest /a.7z -- @list.txt",
+		"7z x -y -o/dest /a.7z -- -x",
+		"7z x -y -o/dest -spd /a.7z -- w*ld",
+	}
+	if got := f.commands(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %q, want %q", got, want)
+	}
+}
+
+// 7-Zip on Windows prints member paths with backslashes. Path is normalized
+// for the tree, but Raw keeps the name as printed: that is the spelling a
+// later 7z command is handed back.
+func TestParseSevenZipListingKeepsRawName(t *testing.T) {
+	listing := "Path = a.7z\nType = 7z\n\nPath = sub\\data.bin\nFolder = -\nSize = 1\n"
+	entries := parseSevenZipListing([]byte(listing))
+	if len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one", entries)
+	}
+	if entries[0].Path != "sub/data.bin" || entries[0].Raw != "sub\\data.bin" {
+		t.Fatalf("entry = %#v, want Path sub/data.bin and Raw sub\\data.bin", entries[0])
 	}
 }
 

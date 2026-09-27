@@ -13,8 +13,15 @@ import (
 // best-effort: several backends are deliberately chosen for how robustly
 // they parse rather than for how much they report (see backend_tar.go),
 // and leave SizeKnown false and MTime zero rather than guess.
+//
+// Raw is the member's name exactly as the tool printed it, "./" prefix,
+// trailing slash and all, and it is what a command naming this member must
+// hand back: GNU tar does not match "dir/f" against a member stored as
+// "./dir/f", and Info-ZIP's zip -d does not match "dir" against the entry
+// "dir/". Empty means the same as Path.
 type entry struct {
 	Path      string
+	Raw       string
 	IsDir     bool
 	Size      int64
 	SizeKnown bool
@@ -117,7 +124,7 @@ func parseBareNameListing(out []byte) []entry {
 		if clean == "" || clean == "." {
 			continue
 		}
-		entries = append(entries, entry{Path: clean, IsDir: isDir})
+		entries = append(entries, entry{Path: clean, Raw: line, IsDir: isDir})
 	}
 	return entries
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
@@ -117,20 +118,22 @@ func TestMultiArcVFSSetPath(t *testing.T) {
 	}
 }
 
-func TestMultiArcVFSMutationsAreReadOnly(t *testing.T) {
-	v := newTestVFS(t, fakeBackend{})
+// A backend without the archiveWriter half cannot be changed at all, and
+// says so; vfs_write_test.go covers the ones that can.
+func TestMultiArcVFSMutationsNeedAWriter(t *testing.T) {
+	v := newTestVFS(t, fakeBackend{entries: []entry{{Path: "x"}}})
 	ctx := context.Background()
-	if err := v.MkDir(ctx, "/x"); err == nil {
-		t.Error("MkDir should fail")
+	if err := v.MkDir(ctx, "/y"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("MkDir = %v, want a cannot-be-changed refusal", err)
 	}
-	if err := v.Remove(ctx, "/x"); err == nil {
-		t.Error("Remove should fail")
+	if err := v.Remove(ctx, "/x"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("Remove = %v, want a cannot-be-changed refusal", err)
 	}
 	if err := v.Rename(ctx, "/x", "/y"); err == nil {
 		t.Error("Rename should fail")
 	}
-	if _, err := v.Create(ctx, "/x"); err == nil {
-		t.Error("Create should fail")
+	if _, err := v.Create(ctx, "/y"); err == nil || !strings.Contains(err.Error(), "cannot be changed") {
+		t.Errorf("Create = %v, want a cannot-be-changed refusal", err)
 	}
 }
 
@@ -166,6 +169,38 @@ func TestMultiArcVFSOpenExtractsAndReads(t *testing.T) {
 	}
 	if string(buf[:n]) != "content" {
 		t.Fatalf("content = %q", buf[:n])
+	}
+}
+
+// A tar built with "tar -cf x.tar -C dir ." stores "./dir/file.txt", and
+// GNU tar does not find that member when asked for "dir/file.txt". Open has
+// to ask for the name the listing gave, and still find the file where the
+// clean path says it lands.
+func TestMultiArcVFSOpenExtractsByRawName(t *testing.T) {
+	b := fakeBackend{
+		entries: []entry{{Path: "dir/file.txt", Raw: "./dir/file.txt"}},
+		extractOneFunc: func(ctx context.Context, localPath, destDir, member string) error {
+			if member != "./dir/file.txt" {
+				t.Errorf("extractOne member = %q, want the raw ./dir/file.txt", member)
+			}
+			full := filepath.Join(destDir, filepath.FromSlash(member))
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(full, []byte("dot"), 0o600)
+		},
+	}
+	v := newTestVFS(t, b)
+	t.Cleanup(closeSharedMultiArcTempDirs)
+
+	f, err := v.Open(context.Background(), "/dir/file.txt")
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+	buf := make([]byte, 3)
+	if n, err := f.ReadAt(context.Background(), buf, 0); err != nil || string(buf[:n]) != "dot" {
+		t.Fatalf("ReadAt = (%q, %v), want dot", buf[:n], err)
 	}
 }
 

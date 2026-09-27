@@ -157,10 +157,10 @@ func TestParseBareNameListing(t *testing.T) {
 	raw := "./readme.txt\r\ndir/\r\ndir/file.txt\r\n\r\nback\\slash.txt\r\n.\r\n./\r\n"
 	got := parseBareNameListing([]byte(raw))
 	want := []entry{
-		{Path: "readme.txt"},
-		{Path: "dir", IsDir: true},
-		{Path: "dir/file.txt"},
-		{Path: "back/slash.txt"},
+		{Path: "readme.txt", Raw: "./readme.txt"},
+		{Path: "dir", Raw: "dir/", IsDir: true},
+		{Path: "dir/file.txt", Raw: "dir/file.txt"},
+		{Path: "back/slash.txt", Raw: "back\\slash.txt"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parseBareNameListing = %#v, want %#v", got, want)

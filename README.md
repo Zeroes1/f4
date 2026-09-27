@@ -96,11 +96,19 @@ universal like the regular one; the static arm and mipsle builds draw with
 X11. There is no Colorer (Chroma-based syntax highlighting only), no
 Wine-specific code or `libwinescape` dependency, no MP3 player, no
 FUSE-based VFS mounting, and no cloud VFS provider. Archives come back
-through `plugins/multiarc`, which wraps whichever of `tar`, `unzip`,
+through `plugins/multiarc`, which wraps whichever of `tar`, `unzip`/`zip`,
 `7z`/`7za`/`7zr` and `gzip` the host already has on `PATH` instead of linking
-the regular build's native archive libraries (f4#1178, part 2). It lists
-and extracts; unlike far2l's multiarc it does not yet create archives or
-change them. Network
+the regular build's native archive libraries (f4#1178, part 2). Like far2l's
+multiarc it lists, extracts and, as far as each tool can do it safely,
+changes archives: copying onto an opened archive, `F7` and `F8` add, replace
+and delete members through `7z`, `zip` (or `7z`/`7za`) for zips, and GNU tar
+for tarballs (a compressed one via its stand-alone compressor); bsdtar
+(macOS, Windows' `tar.exe`) only adds members, BusyBox tar cannot change an
+existing tarball, and a lone `.gz` can only have its one file replaced. Add
+to archive (`Shift+F1`) creates a `.zip`, `.7z`, `.tar` or compressed tarball
+with whichever of those tools is present — bsdtar makes zips too. Whatever
+the tools on `PATH` cannot do is refused with a message saying what is
+missing. Network
 access comes back too, but only as FISH+: `plugins/netfox` keeps its
 connection storage and its "Add/Edit connection" dialog, wired to a dialer
 that shells out to the console `ssh` binary instead of linking

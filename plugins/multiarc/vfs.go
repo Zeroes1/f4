@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,41 +13,79 @@ import (
 	"github.com/unxed/f4/vfs"
 )
 
-// errReadOnly is what every mutation answers with: multiarc only lists and
-// extracts, the same scope far2l's multiarc plugin has, so there is nothing
-// backing a write.
+// errReadOnly is what the mutations no archiver offers answer with:
+// SetAttributes, which none of the wrapped tools can do to a member in
+// place. Adding, replacing and deleting members go through the backend's
+// archiveWriter instead (vfs_write.go).
 var errReadOnly = errors.New("multiarc: read-only archive")
 
-// multiArcState is the archive's listing, built once and shared by every
-// clone of the MultiArcVFS that opened it (Clone is what a second panel or
-// a background copy gets), and the registry of temp directories Open
-// extracted into. The directories are not removed until the plugin itself
-// closes (see multiarc.go): a clone or a viewer/editor session can still be
-// reading an extracted file when another clone's ReadDir runs, and nothing
-// here tracks reference counts to make an earlier cleanup safe.
+// multiArcState is the archive's listing, built on first use and shared by
+// every clone of the MultiArcVFS that opened it (Clone is what a second
+// panel or a background copy gets), and the registry of temp directories
+// Open extracted into. The directories are not removed until the plugin
+// itself closes (see multiarc.go): a clone or a viewer/editor session can
+// still be reading an extracted file when another clone's ReadDir runs, and
+// nothing here tracks reference counts to make an earlier cleanup safe.
 type multiArcState struct {
-	once     sync.Once
+	// listMu serializes listing: the first ensureListed lists, every later
+	// one gets its result (a failure included), and relist, after a write,
+	// replaces it.
+	listMu   sync.Mutex
+	listed   bool
 	listErr  error
 	mu       sync.Mutex
 	entries  map[string]entry           // full member path -> entry, no leading slash
 	children map[string]map[string]bool // dir path ("" = root) -> immediate child names
+	// raws maps a member path to every name the listing gave it, in listing
+	// order: usually one, but "dir/" and "./dir/" are two tar members that
+	// both show up as "dir", and a command must name each to reach both.
+	raws map[string][]string
 }
 
 func (st *multiArcState) ensureListed(ctx context.Context, b backend, localPath string) error {
-	st.once.Do(func() {
-		raw, err := b.list(ctx, localPath)
-		if err != nil {
-			st.listErr = err
-			return
-		}
-		st.build(raw)
-	})
+	st.listMu.Lock()
+	defer st.listMu.Unlock()
+	if !st.listed {
+		st.listed = true
+		st.listErr = st.load(ctx, b, localPath)
+	}
 	return st.listErr
+}
+
+// relist reads the archive again after a write changed it. Every clone
+// sees the new listing, since they share this state.
+func (st *multiArcState) relist(ctx context.Context, b backend, localPath string) error {
+	st.listMu.Lock()
+	defer st.listMu.Unlock()
+	st.listed = true
+	st.listErr = st.load(ctx, b, localPath)
+	return st.listErr
+}
+
+func (st *multiArcState) load(ctx context.Context, b backend, localPath string) error {
+	raw, err := b.list(ctx, localPath)
+	if err != nil {
+		return err
+	}
+	st.build(raw)
+	return nil
 }
 
 func (st *multiArcState) build(raw []entry) {
 	entries := map[string]entry{}
 	children := map[string]map[string]bool{"": {}}
+	raws := map[string][]string{}
+	addRaw := func(p, raw string) {
+		if raw == "" {
+			raw = p
+		}
+		for _, known := range raws[p] {
+			if known == raw {
+				return
+			}
+		}
+		raws[p] = append(raws[p], raw)
+	}
 	ensureDir := func(p string) {
 		if _, ok := children[p]; !ok {
 			children[p] = map[string]bool{}
@@ -74,17 +111,30 @@ func (st *multiArcState) build(raw []entry) {
 		if e.IsDir {
 			ensureDir(p)
 		}
-		entries[p] = entry{Path: p, IsDir: e.IsDir, Size: e.Size, SizeKnown: e.SizeKnown, MTime: e.MTime}
+		entries[p] = entry{Path: p, Raw: e.Raw, IsDir: e.IsDir, Size: e.Size, SizeKnown: e.SizeKnown, MTime: e.MTime}
+		addRaw(p, e.Raw)
 	}
 	st.mu.Lock()
 	st.entries = entries
 	st.children = children
+	st.raws = raws
 	st.mu.Unlock()
 }
 
-// MultiArcVFS is a read-only vfs.VFS over one archive, browsed and
-// extracted through backend rather than a native decoder. It is the lite
-// build's stand-in for plugins/archive's ArchiveVFS (f4#1178, part 2).
+// rawName is the name a command must use to reach the member at key: the
+// first one the listing gave it, or key itself for a path the listing never
+// named on its own. The caller holds st.mu.
+func (st *multiArcState) rawName(key string) string {
+	if names := st.raws[key]; len(names) > 0 {
+		return names[0]
+	}
+	return key
+}
+
+// MultiArcVFS is a vfs.VFS over one archive, browsed, extracted and --
+// where the backend's tool can do it -- changed through backend rather
+// than a native codec. It is the lite build's stand-in for plugins/archive's
+// ArchiveVFS (f4#1178, part 2); vfs_write.go has its mutations.
 type MultiArcVFS struct {
 	parent      vfs.VFS
 	localPath   string // absolute path of the archive on the local disk
@@ -237,9 +287,6 @@ func (v *MultiArcVFS) Stat(ctx context.Context, p string) (vfs.VFSItem, error) {
 	return vfs.VFSItem{}, os.ErrNotExist
 }
 
-func (v *MultiArcVFS) MkDir(context.Context, string) error                      { return errReadOnly }
-func (v *MultiArcVFS) Remove(context.Context, string) error                     { return errReadOnly }
-func (v *MultiArcVFS) Rename(context.Context, string, string) error             { return errReadOnly }
 func (v *MultiArcVFS) SetAttributes(context.Context, string, vfs.VFSItem) error { return errReadOnly }
 
 func (v *MultiArcVFS) GetCapabilities() vfs.VFSCapabilities {
@@ -283,6 +330,7 @@ func (v *MultiArcVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 	key := v.key(p)
 	v.state.mu.Lock()
 	info, known := v.state.entries[key]
+	member := v.state.rawName(key)
 	v.state.mu.Unlock()
 	if !known || info.IsDir {
 		return nil, fmt.Errorf("multiarc: %q is not a file in this archive", p)
@@ -292,7 +340,9 @@ func (v *MultiArcVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 		return nil, err
 	}
 	registerTempDir(dir)
-	if err := v.backend.extractOne(ctx, v.localPath, dir, key); err != nil {
+	// The member is asked for by its raw name, but lands where key says: a
+	// "./dir/f" member extracts to <dir>/./dir/f, which is <dir>/dir/f.
+	if err := v.backend.extractOne(ctx, v.localPath, dir, member); err != nil {
 		return nil, err
 	}
 	extractedPath := filepath.Join(dir, filepath.FromSlash(key))
@@ -305,10 +355,6 @@ func (v *MultiArcVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 		size = fi.Size()
 	}
 	return &extractedFile{f: f, size: size}, nil
-}
-
-func (v *MultiArcVFS) Create(context.Context, string) (io.WriteCloser, error) {
-	return nil, errReadOnly
 }
 
 func (v *MultiArcVFS) ParentVFS() vfs.VFS { return v.parent }

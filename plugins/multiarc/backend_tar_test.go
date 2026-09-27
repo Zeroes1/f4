@@ -23,9 +23,9 @@ func TestTarBackendList(t *testing.T) {
 		t.Fatalf("unexpected command: %s %v", gotName, gotArgs)
 	}
 	want := []entry{
-		{Path: "dir", IsDir: true},
-		{Path: "dir/file.txt"},
-		{Path: "top.txt"},
+		{Path: "dir", Raw: "dir/", IsDir: true},
+		{Path: "dir/file.txt", Raw: "dir/file.txt"},
+		{Path: "top.txt", Raw: "top.txt"},
 	}
 	if !reflect.DeepEqual(entries, want) {
 		t.Fatalf("entries = %#v, want %#v", entries, want)

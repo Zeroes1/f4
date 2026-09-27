@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -38,7 +39,9 @@ func (b gzipBackend) tool() (string, bool) {
 }
 
 func (gzipBackend) innerName(localPath string) string {
-	name := strings.TrimSuffix(path.Base(localPath), ".gz")
+	// filepath, not path: localPath is an OS path, and path.Base leaves a
+	// Windows "C:\logs\x.log.gz" whole.
+	name := strings.TrimSuffix(filepath.Base(localPath), ".gz")
 	if name == "" {
 		name = "data"
 	}
