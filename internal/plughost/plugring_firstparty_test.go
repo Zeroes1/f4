@@ -40,35 +40,70 @@ func TestFirstPartyPlugRingItemsIncludesCloudfox(t *testing.T) {
 	}
 }
 
+// TestFirstPartyPlugRingItemsIncludesIOS is TestFirstPartyPlugRingItemsIncludesCloudfox's
+// sibling for f4#1178's second first-party entry: ios-plugin, added once iOS
+// got the same downloadable-plugin treatment as cloud storage, with the same
+// shape as plugins/ios/cmd/ios-plugin/plugring-manifest.json.
+func TestFirstPartyPlugRingItemsIncludesIOS(t *testing.T) {
+	items := FirstPartyPlugRingItems()
+
+	var ios *PlugRingItem
+	for i := range items {
+		if items[i].ID == "ios" {
+			ios = &items[i]
+		}
+	}
+	if ios == nil {
+		t.Fatal("ios is not in the first-party catalog")
+	}
+	if !ios.FirstParty {
+		t.Error("ios is not marked FirstParty")
+	}
+	if ios.Entrypoint != "ios-plugin" {
+		t.Errorf("entrypoint = %q, want ios-plugin", ios.Entrypoint)
+	}
+	if !strings.Contains(ios.URL, "{os}") || !strings.Contains(ios.URL, "{arch}") {
+		t.Errorf("url = %q, want per-platform {os}/{arch} placeholders", ios.URL)
+	}
+	if ok, reason := PlugRingItemRunsHere(*ios); !ok {
+		t.Errorf("ios is reported unrunnable: %s", reason)
+	}
+}
+
 // TestFirstPartyBypassesTheCommunityPolicyThatWouldRejectIt is the point of
 // this whole file: the fields that make PlugRingItemProblem reject an
 // ordinary community entry -- a per-platform URL, an entrypoint that is not a
 // bare .lua or .wasm file -- are accepted precisely because, and only
-// because, FirstParty is set.
+// because, FirstParty is set. It runs the check against every entry in the
+// catalog (cloudfox and ios today), not just the first one, so a future
+// first-party addition stays covered automatically.
 func TestFirstPartyBypassesTheCommunityPolicyThatWouldRejectIt(t *testing.T) {
-	cloudfox := FirstPartyPlugRingItems()[0]
+	for _, entry := range FirstPartyPlugRingItems() {
+		entry := entry
+		t.Run(entry.ID, func(t *testing.T) {
+			if problem := PlugRingItemProblem(entry); problem != "" {
+				t.Errorf("the first-party %s entry was rejected: %s", entry.ID, problem)
+			}
 
-	if problem := PlugRingItemProblem(cloudfox); problem != "" {
-		t.Errorf("the first-party cloudfox entry was rejected: %s", problem)
-	}
+			// The exact same fields, submitted the way a third party would have
+			// to, without FirstParty: the community distribution policy still
+			// applies in full. If this ever starts passing, PlugRingItemProblem
+			// has stopped enforcing PLUGRING.md for everybody else.
+			asCommunitySubmission := entry
+			asCommunitySubmission.FirstParty = false
+			if problem := PlugRingItemProblem(asCommunitySubmission); problem == "" {
+				t.Fatal("the same entry without FirstParty was accepted; the community policy is not being enforced")
+			}
 
-	// The exact same fields, submitted the way a third party would have to,
-	// without FirstParty: the community distribution policy still applies in
-	// full. If this ever starts passing, PlugRingItemProblem has stopped
-	// enforcing PLUGRING.md for everybody else.
-	asCommunitySubmission := cloudfox
-	asCommunitySubmission.FirstParty = false
-	if problem := PlugRingItemProblem(asCommunitySubmission); problem == "" {
-		t.Fatal("the same entry without FirstParty was accepted; the community policy is not being enforced")
-	}
-
-	// setup_cmd stays refused for everybody, first-party included: nothing
-	// about being first-party should turn on running an arbitrary command at
-	// install time.
-	withSetupCmd := cloudfox
-	withSetupCmd.SetupCmd = "curl example.com | sh"
-	if problem := PlugRingItemProblem(withSetupCmd); problem == "" {
-		t.Fatal("a first-party entry with setup_cmd was accepted")
+			// setup_cmd stays refused for everybody, first-party included:
+			// nothing about being first-party should turn on running an
+			// arbitrary command at install time.
+			withSetupCmd := entry
+			withSetupCmd.SetupCmd = "curl example.com | sh"
+			if problem := PlugRingItemProblem(withSetupCmd); problem == "" {
+				t.Fatal("a first-party entry with setup_cmd was accepted")
+			}
+		})
 	}
 }
 
@@ -108,8 +143,16 @@ FirstParty: true
 // TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID checks the merge that
 // feeds the PlugRing dialog: unrelated community entries survive, and a
 // community entry that collides on id with a first-party one is shadowed by
-// the first-party entry rather than the other way around.
+// the first-party entry rather than the other way around. The first-party
+// catalog has two entries today (cloudfox, ios); the assertions below count
+// against len(FirstPartyPlugRingItems()) rather than a hardcoded 2, so a
+// future third entry does not silently break this test's arithmetic.
 func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
+	firstPartyCount := len(FirstPartyPlugRingItems())
+	if firstPartyCount != 2 {
+		t.Fatalf("len(FirstPartyPlugRingItems()) = %d, want 2 (cloudfox, ios) -- update this test's expectations alongside the catalog", firstPartyCount)
+	}
+
 	community := []PlugRingItem{
 		{ID: "hello-plugring", Name: "Hello", Entrypoint: "hello.lua"},
 		{
@@ -140,8 +183,21 @@ func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	if !cloudfox.FirstParty || cloudfox.Name != "Cloud storage (CloudFox)" {
 		t.Errorf("a community entry with a colliding id shadowed the first-party one: %+v", cloudfox)
 	}
-	if len(merged) != 2 {
-		t.Errorf("len(merged) = %d, want 2 (no duplicate cloudfox entry)", len(merged))
+
+	ios, ok := byID["ios"]
+	if !ok {
+		t.Fatal("ios is missing from the merged catalog")
+	}
+	if !ios.FirstParty || ios.Name != "Apple mobile devices (iOS)" {
+		t.Errorf("ios entry has the wrong shape: %+v", ios)
+	}
+
+	// hello-plugring (no collision) + cloudfox (shadowed impostor) + ios (no
+	// collision, appended fresh) -- one row per distinct id, never a
+	// duplicate cloudfox.
+	wantLen := 1 + firstPartyCount
+	if len(merged) != wantLen {
+		t.Errorf("len(merged) = %d, want %d (no duplicate cloudfox entry)", len(merged), wantLen)
 	}
 
 	// A community catalog with no collision keeps its own entries and gains
@@ -149,7 +205,7 @@ func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 	noCollision := MergeFirstPartyPlugRingItems([]PlugRingItem{
 		{ID: "hello-plugring", Name: "Hello", Entrypoint: "hello.lua"},
 	})
-	if len(noCollision) != 2 {
-		t.Fatalf("len(noCollision) = %d, want 2", len(noCollision))
+	if want := 1 + firstPartyCount; len(noCollision) != want {
+		t.Fatalf("len(noCollision) = %d, want %d", len(noCollision), want)
 	}
 }
