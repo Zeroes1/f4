@@ -56,50 +56,10 @@ func TestWaitOrSignalReturnsWhenWaitCompletes(t *testing.T) {
 	}
 }
 
-// Ctrl+C (or a plain SIGTERM, e.g. from a supervisor) on a foreground mount
-// has to unmount it: otherwise the mount point outlives the process that
-// owned it, and every program that walks into it after that hangs.
-func TestWaitOrSignalUnmountsOnSIGTERM(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX signals")
-	}
-
-	oldUnmount := unmountOwn
-	release := make(chan struct{})
-	var unmountCalled atomic.Bool
-	unmountOwn = func(string) error {
-		unmountCalled.Store(true)
-		close(release) // let the fake wait() return, so waitOrSignal need not sit through its 5s grace period
-		return nil
-	}
-	t.Cleanup(func() { unmountOwn = oldUnmount })
-
-	wait := func() { <-release }
-
-	finished := make(chan struct{})
-	go func() {
-		waitOrSignal(wait, "/mnt/does-not-matter")
-		close(finished)
-	}()
-
-	// signal.Notify inside waitOrSignal runs synchronously right after the
-	// goroutine starts; there is nothing external to poll for, so a short,
-	// generous sleep is the pragmatic wait (the same tradeoff pty_test.go
-	// makes for "give the OS a moment").
-	time.Sleep(100 * time.Millisecond)
-	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
-		t.Fatal(err)
-	}
-
-	select {
-	case <-finished:
-	case <-time.After(2 * time.Second):
-		t.Fatal("waitOrSignal did not return after SIGTERM")
-	}
-	if !unmountCalled.Load() {
-		t.Fatal("SIGTERM must unmount a foreground mount")
-	}
-}
+// TestWaitOrSignalUnmountsOnSIGTERM lives in cli_coverage_signal_test.go:
+// syscall.Kill, which it uses to deliver a real SIGTERM to this process, does
+// not exist on windows (nor on plan9 or js), so that file carries the same
+// build tag as platform_unix.go to keep this one buildable everywhere.
 
 // runUmount has two ways to bring a mount down: through this process's own
 // unmountOwn when the record says this process owns it, and through
