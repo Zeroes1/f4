@@ -2,6 +2,7 @@ package multiarc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/vfs"
 )
@@ -20,12 +22,34 @@ import (
 // and unzip, a macOS runner has bsdtar, and a Windows runner has bsdtar as
 // tar.exe and usually nothing else. The helpers below are shared by them.
 
-// requireRealTool skips the test unless every one of names is on PATH.
+// toolCannotStart reports whether the executable at path is on PATH but
+// fails even to start. A CI runner's own copy of a tool can be present yet
+// broken -- missing a DLL it needs, say -- in which case Windows exits the
+// process with the loader's own NTSTATUS error code (0xC0000135 for
+// STATUS_DLL_NOT_FOUND, and the rest of that range for the loader's other
+// failures) instead of ever running it, which exec.LookPath cannot see.
+// Every real-exec test that needs a working tool, not just one that
+// resolves on PATH, treats that exactly like the tool being absent.
+func toolCannotStart(path string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, path) // #nosec G204 -- path came from exec.LookPath for a tool name the test itself chose; run with no arguments only to probe that it starts.
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && uint32(exitErr.ExitCode()) >= 0xC0000000
+}
+
+// requireRealTool skips the test unless every one of names is on PATH and
+// actually runs.
 func requireRealTool(t *testing.T, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		if _, err := exec.LookPath(name); err != nil {
+		path, err := exec.LookPath(name)
+		if err != nil {
 			t.Skipf("%s is not on PATH", name)
+		}
+		if toolCannotStart(path) {
+			t.Skipf("%s is on PATH but does not start", name)
 		}
 	}
 }
@@ -119,8 +143,8 @@ func writeMember(t *testing.T, v *MultiArcVFS, p, content string) {
 // pathOnly replaces PATH, for the rest of the test, with a directory
 // holding just the named tools, each a symlink to the real binary found on
 // the current PATH under the target name (so "tar": "bsdtar" puts bsdtar on
-// PATH as tar). It skips the test when a tool is missing or symlinks cannot
-// be made (Windows without the privilege).
+// PATH as tar). It skips the test when a tool is missing, cannot start, or
+// symlinks cannot be made (Windows without the privilege).
 func pathOnly(t *testing.T, tools map[string]string) {
 	t.Helper()
 	bin := t.TempDir()
@@ -128,6 +152,9 @@ func pathOnly(t *testing.T, tools map[string]string) {
 		real, err := exec.LookPath(target)
 		if err != nil {
 			t.Skipf("%s is not on PATH", target)
+		}
+		if toolCannotStart(real) {
+			t.Skipf("%s is on PATH but does not start", target)
 		}
 		link := filepath.Join(bin, name+filepath.Ext(real))
 		if err := os.Symlink(real, link); err != nil {
