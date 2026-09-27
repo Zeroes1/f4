@@ -1638,6 +1638,8 @@ Attributes.ReadOnly=&Только для чтения
 Attributes.Hidden=&Скрытый
 Attributes.System=&Системный
 Attributes.Archive=&Архивный
+Attributes.Recursive=&Подпапки
+Attributes.RecursiveApplied=Обновлено объектов: %d
 
 Compare.Title= Расширенное сравнение
 Compare.Process= Обрабатывать
