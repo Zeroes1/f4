@@ -78,7 +78,7 @@ plugins/         # one package per plugin: archive, cloudfox, netfox, mediainfo,
 sdk/             # plugin API: f4plugin, f4rpc, lua, extui
 tools/           # developer tooling, incl. the ttytest terminal harness
 docs/            # 53 subsystem documents — read the relevant one before editing
-packaging/       # distribution packaging
+packaging/       # distribution packaging and the Nix Home Manager module
 artifacts/       # build artifacts
 .ai-factory/     # AI Factory context: config, description, rules, plans
 ```
@@ -93,7 +93,7 @@ artifacts/       # build artifacts
 | `internal/app/actions_table.go`, `internal/action/registry.go` | Action definitions and dispatch |
 | `embedded.go` | Assets embedded into the binary |
 | `go.mod` | Module `github.com/unxed/f4`, Go 1.26.6, dependency set |
-| `flake.nix`, `flake.lock` | Nix package, overlay and dev shell |
+| `flake.nix`, `flake.lock`, `packaging/nix/` | Nix package, overlay, dev shell and Home Manager module |
 | `f4.example.ini` | Reference configuration file |
 | `highlight.ini` | Syntax highlighting configuration |
 | `.golangci.yml`, `.golangci-strict.yml` | Lint configuration |

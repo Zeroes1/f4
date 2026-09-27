@@ -46,6 +46,50 @@ To upgrade later: `brew upgrade f4`. Both Apple Silicon (arm64) and Intel (amd64
 
 The tap carries tagged releases only, so a nightly build has to come from f4 itself: `f4 --update nightly` writes it into the Cellar directory brew installed to. That works, and `brew upgrade` or `brew reinstall` puts the tagged release back whenever you want it.
 
+### ❄️ Install via Nix
+
+The repository is a flake. Run f4 without installing it:
+
+```sh
+nix run github:unxed/f4
+```
+
+For a persistent install, add `overlays.default` to your configuration and
+use `pkgs.f4`; `nix develop github:unxed/f4` opens a Go development shell.
+
+#### Home Manager
+
+The flake also exports `homeManagerModules.default`, a module managing f4
+as `programs.f4`:
+
+```nix
+{ inputs, ... }:
+{
+  imports = [ inputs.f4.homeManagerModules.default ];
+
+  programs.f4 = {
+    enable = true;
+    settings = {
+      Interface.ColorStyle = "Radiola";
+      Panel.ShowHiddenFiles = false;
+    };
+  };
+}
+```
+
+`programs.f4.package` defaults to `pkgs.f4`, so the overlay above (or an
+explicit `package`) is needed. Besides `settings` (`settings.ini`), the
+module declares `keymap` (`keymap.ini`), `hotkeys` (`hotkeys.ini`) and
+`highlight` (`highlight.ini`); each option's description documents the
+file's format.
+
+f4 keeps settings and state in the same files and rewrites them at
+runtime, so Home Manager does not take those files over. Every
+`home-manager switch` writes the keys you declare into the live files and
+touches nothing else in them: values changed through f4's own UI revert to
+the declared ones on the next switch, and keys removed from the
+configuration stay in the files until deleted there by hand.
+
 ### 📱 Install on Android via Termux
 
 The Android build targets **Termux** on **arm64** and on 32-bit **armv7**
