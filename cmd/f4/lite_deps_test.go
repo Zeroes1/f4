@@ -67,6 +67,127 @@ func TestLiteBuildStillIncludesFishPlus(t *testing.T) {
 	t.Fatalf("a -tags lite build of ./cmd/f4 no longer depends on %s", fishplus)
 }
 
+// TestLiteBuildExcludesWasmRuntime is the mechanical half of f4#1178's
+// wasm-plugin removal: internal/plughost/transport_wazero.go, the transport
+// that runs a .wasm plugin inside f4 via wazero, moved behind //go:build
+// !lite (see internal/plughost/transport_wazero_lite.go for the stand-in a
+// lite build gets instead). This is what catches wazero -- its runtime, the
+// wazevo JIT backends, wasi_snapshot_preview1 -- quietly coming back in
+// through a different, untagged file.
+func TestLiteBuildExcludesWasmRuntime(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const wazero = "github.com/tetratelabs/wazero"
+	deps := liteBuildDeps(t)
+	for _, imported := range deps {
+		if imported == wazero || strings.HasPrefix(imported, wazero+"/") {
+			t.Fatalf("a -tags lite build of ./cmd/f4 still depends on %s", imported)
+		}
+	}
+}
+
+// TestLiteBuildExcludesAudioPlayerDependencies is the mechanical half of
+// f4#1178 part 5: the mp3/wav/flac/vorbis player was already kept out of a
+// lite build by the `lite` tag on internal/media/audio_oto.go (part 1,
+// PR #1469), but internal/media/audio_decode.go -- which does the actual
+// decoding and is the file that imports github.com/ebitengine/oto/v3,
+// github.com/hajimehoshi/go-mp3, github.com/jfreymuth/oggvorbis and
+// github.com/mewkiz/flac -- carried no build tag of its own. All four
+// libraries therefore kept linking into a lite build regardless of the
+// player itself being unreachable there.
+func TestLiteBuildExcludesAudioPlayerDependencies(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	forbidden := []string{
+		"github.com/ebitengine/oto/v3",
+		"github.com/hajimehoshi/go-mp3",
+		"github.com/jfreymuth/oggvorbis",
+		"github.com/mewkiz/flac",
+	}
+
+	deps := liteBuildDeps(t)
+
+	var offenders []string
+	for _, imported := range deps {
+		for _, bad := range forbidden {
+			if imported == bad || strings.HasPrefix(imported, bad+"/") {
+				offenders = append(offenders, imported)
+			}
+		}
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("a -tags lite build of ./cmd/f4 still depends on:\n\t%s", strings.Join(offenders, "\n\t"))
+	}
+}
+
+// TestRegularBuildStillIncludesAudioPlayerDependencies is the other side of
+// the same check: an overzealous build tag that dropped the audio decoders
+// out of a regular build too would pass the test above for the wrong
+// reason. IsAudioFile/audioFormatFor (internal/media/audio_format.go) stay
+// available in every build, but the decoders themselves are only reachable
+// where audio_oto.go builds the real AudioEngine.
+func TestRegularBuildStillIncludesAudioPlayerDependencies(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	deps := regularBuildDeps(t)
+	want := []string{
+		"github.com/ebitengine/oto/v3",
+		"github.com/hajimehoshi/go-mp3",
+		"github.com/jfreymuth/oggvorbis",
+		"github.com/mewkiz/flac",
+	}
+	for _, lib := range want {
+		found := false
+		for _, imported := range deps {
+			if imported == lib {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("a regular build of ./cmd/f4 no longer depends on %s", lib)
+		}
+	}
+}
+
+// TestRegularBuildStillIncludesWasmRuntime is the other side of the same
+// check: an overzealous build tag that dropped the wasm transport out of a
+// regular build too would pass the test above for the wrong reason.
+func TestRegularBuildStillIncludesWasmRuntime(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const wazero = "github.com/tetratelabs/wazero"
+	for _, imported := range regularBuildDeps(t) {
+		if imported == wazero {
+			return
+		}
+	}
+	t.Fatalf("a regular build of ./cmd/f4 no longer depends on %s", wazero)
+}
+
+func regularBuildDeps(t *testing.T) []string {
+	t.Helper()
+	command := exec.Command("go", "list", "-deps", "./cmd/f4")
+	command.Dir = testutil.ModuleRootDir(t)
+	out, err := command.Output()
+	if err != nil {
+		stderr := ""
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr = string(exitErr.Stderr)
+		}
+		t.Fatalf("go list -deps ./cmd/f4: %v\n%s", err, stderr)
+	}
+	return strings.Fields(string(out))
+}
+
 func liteBuildDeps(t *testing.T) []string {
 	t.Helper()
 	command := exec.Command("go", "list", "-tags", "lite", "-deps", "./cmd/f4")

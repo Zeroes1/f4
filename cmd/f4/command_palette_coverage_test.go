@@ -167,6 +167,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"dummy_rpc.(*DummyPlugin).ProcessKey": {
 		class: paletteAuditTransportHook, rationale: "this is the RPC plugin ProcessKey protocol hook, not an in-process frame",
 	},
+	"cloudfox.(*RPCPlugin).ProcessKey": {
+		class: paletteAuditTransportHook, rationale: "CloudFox moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc, not an in-process frame",
+	},
 	"envman.(*managerWindow).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "Environment Manager owns these keys inside its plugin window, reached through its rich command",
 	},

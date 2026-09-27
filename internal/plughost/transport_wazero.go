@@ -1,7 +1,16 @@
+//go:build !lite
+
 // Do not rename this file to *_wasm.go. Go reads the _wasm suffix as an
 // implicit GOARCH constraint, so the file would silently drop out of the build
 // on every other architecture — the package still compiles, the WASM transport
 // just stops existing.
+//
+// The //go:build !lite tag above is the other half of f4#1178's wasm-plugin
+// removal: it is what keeps github.com/tetratelabs/wazero -- runtime,
+// wazevo JIT backends and all -- out of a lite build's dependency graph and
+// binary. See transport_wazero_lite.go for the stand-in this build tag
+// switches to and cmd/f4/lite_deps_test.go's
+// TestLiteBuildExcludesWasmRuntime for the mechanical check.
 package plughost
 
 import (

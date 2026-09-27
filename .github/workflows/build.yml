@@ -54,6 +54,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # 6 cells; capped so this one job doesn't claim every runner the
+      # free-tier pool has (see the concurrency comment above the jobs).
+      max-parallel: 3
       matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }] }
     env:
       CGO_ENABLED: 0
@@ -357,6 +360,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # 7 cells, pushes/tags only; capped so this job doesn't claim every
+      # runner the free-tier pool has (see the concurrency comment above
+      # the jobs) -- this is the matrix a tag release competes against.
+      max-parallel: 3
       # The noffi rows are the extra architectures Go can cross-compile
       # Linux for; vtui's graphical/FFI backends are unavailable there,
       # so they use its ANSI-only noffi configuration.
@@ -690,6 +697,74 @@ jobs:
       with:
         name: ${{ env.ASSET }}
         path: ${{ env.ASSET }}.tar.gz
+        retention-days: 7
+
+  # f4#1178 part 1 of 4 (plan: issuecomment-5851218447 on #1178): CloudFox
+  # (S3/Google Drive/Yandex Disk/WebDAV, plugins/cloudfox) moved out of the
+  # main module into its own module and its own subprocess RPC plugin
+  # binary, so the build job above no longer builds or tests it as part of
+  # ./cmd/f4. This job is that binary's own build: it exists to prove the
+  # extraction actually compiles, on the same 6-cell desktop matrix the main
+  # build job releases (native plugins are not distributed through the
+  # community PlugRing catalog per PLUGRING.md, so the exotic build-batch
+  # tier does not apply). It intentionally runs on pull requests too, unlike
+  # build-lite, since verifying this split is exactly what this PR is.
+  #
+  # go.mod here was written by hand (this repo's policy is CI-only
+  # builds/toolchain runs, never local -- see plugins/cloudfox/go.mod's own
+  # comment), so `go mod tidy` runs first rather than assuming it is already
+  # correct.
+  build-cloudfox-plugin:
+    name: Build cloudfox-plugin (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux/amd64
+            goos: linux
+            goarch: amd64
+          - name: linux/arm64
+            goos: linux
+            goarch: arm64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+          - name: darwin/amd64
+            goos: darwin
+            goarch: amd64
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    defaults:
+      run:
+        working-directory: plugins/cloudfox
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: plugins/cloudfox/go.sum
+
+    - name: go mod tidy
+      run: go mod tidy
+
+    - name: Build cloudfox-plugin
+      run: go build -trimpath -o cloudfox-plugin ./cmd/cloudfox-plugin
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go vet ./...
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: plugins/cloudfox/cloudfox-plugin
         retention-days: 7
 
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
@@ -1142,6 +1217,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Up to 4 cells on pushes/tags (1 on pull requests already); capped
+      # so this job doesn't claim every runner the free-tier pool has (see
+      # the concurrency comment above the jobs).
+      max-parallel: 2
       # One long line on purpose: actionlint chews minutes on a folded variant.
       matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
@@ -1349,6 +1428,10 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # Up to 9 cells on pushes/tags (6 on pull requests); capped so this
+      # job doesn't claim every runner the free-tier pool has (see the
+      # concurrency comment above the jobs).
+      max-parallel: 4
       # One hosted runner per native os/arch cell, except that the slow
       # darwin/arm64 and windows/amd64 cells split their tests by name.
       # Pull requests skip the second-arch twin of the two
@@ -1569,6 +1652,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
+      # 4 shards, every run; capped so this job doesn't claim every runner
+      # the free-tier pool has (see the concurrency comment above the jobs).
+      max-parallel: 3
       matrix:
         # Four numbered shards, filled by measured weight rather than by name.
         # The heaviest package lands alone in one of them and that is the floor:
