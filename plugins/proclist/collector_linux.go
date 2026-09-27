@@ -7,7 +7,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -21,33 +20,6 @@ func Supported() bool { return true }
 // without calling sysconf either. Hardcoding it avoids a cgo dependency for
 // a value that in practice never varies.
 const clockTicksPerSec = 100
-
-// sample is one process's data for one collection pass.
-type sample struct {
-	pid        int
-	name       string
-	rssKiB     uint64
-	cpuPercent float64
-}
-
-// tickSample is what collector remembers about a process between two
-// collect calls, so the next one can turn /proc/[pid]/stat's cumulative
-// utime+stime counters into a CPU% for the interval between them.
-type tickSample struct {
-	ticks uint64
-	at    time.Time
-}
-
-// collector accumulates the CPU-tick deltas collect needs across calls. Its
-// zero value is not usable; construct one with newCollector.
-type collector struct {
-	mu   sync.Mutex
-	prev map[int]tickSample
-}
-
-func newCollector() *collector {
-	return &collector{prev: make(map[int]tickSample)}
-}
 
 // collect reads every /proc/[pid] entry currently present and returns one
 // sample per process it could read. A process that exits between the
