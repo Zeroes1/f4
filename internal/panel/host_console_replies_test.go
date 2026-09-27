@@ -2,6 +2,7 @@ package panel
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -266,7 +267,7 @@ func TestHostConsoleQueryAt(t *testing.T) {
 	}
 	for _, c := range cases {
 		kinds, length, incomplete := hostConsoleQueryAt([]byte(c.data))
-		if fmt.Sprint(kinds) != fmt.Sprint(c.kinds) || length != c.length || incomplete != c.incomplete {
+		if !slices.Equal(kinds, c.kinds) || length != c.length || incomplete != c.incomplete {
 			t.Errorf("hostConsoleQueryAt(%q) = %v, %d, %v; want %v, %d, %v",
 				c.data, kinds, length, incomplete, c.kinds, c.length, c.incomplete)
 		}
