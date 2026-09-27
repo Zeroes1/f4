@@ -173,38 +173,70 @@ func TestRegularBuildStillIncludesWasmRuntime(t *testing.T) {
 	t.Fatalf("a regular build of ./cmd/f4 no longer depends on %s", wazero)
 }
 
+// TestLiteSheetPackageExcludesSQLiteDependency is the mechanical half of
+// f4#1552: internal/sheet/store.go (the native ".f4s.sqlite" spreadsheet
+// format) used to import github.com/ncruces/go-sqlite3/driver directly and
+// unconditionally, in both builds -- a feature with nothing to do with
+// either the sqlite plugin or tar/zipper archive indexing, and the reason
+// f4#1178's own TestLiteBuildExcludesSQLiteDependency (below) had to Skip
+// instead of asserting for real.
+//
+// f4#1552 closed that gap: store.go is now //go:build !lite, and
+// store_lite.go (//go:build lite) implements the same Save/Load/IsSheetFile
+// API on top of encoding/json instead. So this is now the bare "must not
+// appear" assertion for internal/sheet specifically: if go-sqlite3 shows up
+// in a lite build of that one package, it is a real regression, full stop.
+func TestLiteSheetPackageExcludesSQLiteDependency(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not available")
+	}
+
+	const sqlite = "github.com/ncruces/go-sqlite3"
+
+	sheetDeps := packageDepsWithTags(t, "lite", "./internal/sheet")
+	var offenders []string
+	for _, imported := range sheetDeps {
+		if imported == sqlite || strings.HasPrefix(imported, sqlite+"/") {
+			offenders = append(offenders, imported)
+		}
+	}
+	if len(offenders) > 0 {
+		t.Fatalf(
+			"a -tags lite build of ./internal/sheet still depends on:\n\t%s",
+			strings.Join(offenders, "\n\t"),
+		)
+	}
+}
+
 // TestLiteBuildExcludesSQLiteDependency is the mechanical half of f4#1178's
 // last step (10 of 11, sqlite-free lite build): plugins/sqlite (the SQL
-// editor) moved out into its own RPC-plugin module (part 1/4, dc3e1993 --
-// go list confirms it: "github.com/unxed/f4/plugins/sqlite" no longer
-// resolves inside this module at all, the same way cloudfox/android/iOS
-// don't), and unxed/tar's own sqlite-backed archive index now has a
-// FlatBuffers-backed replacement, ArcidxIndex, selected via the
-// tarindex_simple build tag that build.yml's build-lite job threads through
-// (b713554d) instead of tar's default sqlite_enabled.go. Between those two,
-// neither the sqlite plugin nor tar/zipper archive indexing should still be
-// the reason a lite build links github.com/ncruces/go-sqlite3.
+// editor) is meant to move out into its own RPC-plugin module the same way
+// cloudfox/android/iOS did, and unxed/tar's own sqlite-backed archive index
+// has a FlatBuffers-backed replacement, ArcidxIndex, selected via the
+// tarindex_simple build tag. Between those two, neither the sqlite plugin
+// nor tar/zipper archive indexing should be the reason a lite build links
+// github.com/ncruces/go-sqlite3.
 //
-// It is deliberately NOT a bare "must not appear" assertion, because that
-// would currently be a false red for a third, unrelated reason: this same
-// batch already documents, in internal/plughost/manager.go's own comment
-// above its plugins slice and in plugins/sqlite/rpc_plugin.go's package
-// comment, that internal/sheet/store.go -- the native ".f4s.sqlite"
-// spreadsheet format, a feature with nothing to do with either the sqlite
-// plugin or tar/zipper indexing -- imports github.com/ncruces/go-sqlite3/
-// driver directly and unconditionally, in both builds. That import alone
-// keeps the whole go-sqlite3 dependency tree linked into a lite build
-// regardless of this test's own two axes being clean.
+// It is deliberately NOT a bare "must not appear" assertion, because that is
+// a known false red today, for a reason unrelated to this file: as of this
+// branch's base commit, internal/plughost/manager.go's loadInternal still
+// wires plugins/sqlite in unconditionally (sqliteplugin.NewPlugin(), no
+// lite/!lite split) -- the RPC-plugin extraction that would remove it from a
+// lite build's dependency graph is done on a separate, not yet merged
+// branch (f4#1178's batch/f4/3). internal/sheet is no longer a source of
+// this dependency at all as of f4#1552 (see
+// TestLiteSheetPackageExcludesSQLiteDependency above), so this test now
+// isolates the one remaining, already-tracked cause instead of conflating
+// the two the way its previous version had to.
 //
 // So this test checks both things it can honestly check: if go-sqlite3
-// shows up in a lite build's dependency graph at all, is internal/sheet
-// (still) importing it under the same tags? If yes, this is the known,
-// already-documented, out-of-scope gap (a separate, future ticket -- an
-// internal/sheet-native or tag-gated store for lite builds -- not a
-// regression on anything f4#1178 actually touched), and the test records
-// that honestly with Skip rather than either a permanently red CI test or a
+// shows up in a lite build's dependency graph at all, is plugins/sqlite
+// (still) the one importing it? If yes, this is the known,
+// already-documented, out-of-scope gap (f4#1178, tracked separately, not a
+// regression on anything f4#1552 touched), and the test records that
+// honestly with Skip rather than either a permanently red CI test or a
 // heroic fix bundled into an unrelated feature. If go-sqlite3 shows up for
-// some OTHER reason -- internal/sheet no longer importing it, yet
+// some OTHER reason -- plugins/sqlite no longer importing it, yet
 // go-sqlite3 still present -- that is exactly the regression this guard
 // exists to catch, and it fails for real.
 func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
@@ -225,36 +257,31 @@ func TestLiteBuildExcludesSQLiteDependency(t *testing.T) {
 		return
 	}
 
-	sheetDeps := packageDepsWithTags(t, "lite", "./internal/sheet")
-	sheetImportsSQLite := false
-	for _, imported := range sheetDeps {
+	const sqlitePlugin = "github.com/unxed/f4/plugins/sqlite"
+	pluginDeps := packageDepsWithTags(t, "lite", sqlitePlugin)
+	pluginImportsSQLite := false
+	for _, imported := range pluginDeps {
 		if imported == sqlite || strings.HasPrefix(imported, sqlite+"/") {
-			sheetImportsSQLite = true
+			pluginImportsSQLite = true
 			break
 		}
 	}
-	if sheetImportsSQLite {
+	if pluginImportsSQLite {
 		t.Skipf(
 			"a -tags lite build of ./cmd/f4 still depends on:\n\t%s\n"+
 				"but this is the known, already-documented f4#1178 gap: "+
-				"internal/sheet/store.go (the native .f4s.sqlite spreadsheet "+
-				"format, unrelated to the sqlite plugin or tar/zipper "+
-				"indexing) imports %s directly and unconditionally, in both "+
-				"builds -- see internal/plughost/manager.go's comment above "+
-				"its plugins slice and plugins/sqlite/rpc_plugin.go's package "+
-				"comment. Making internal/sheet's own dependency "+
-				"lite-excludable is a separate, future ticket, not a "+
-				"regression on the sqlite-plugin extraction or the "+
-				"tarindex_simple/arcidx wiring this test otherwise guards.",
-			strings.Join(offenders, "\n\t"), sqlite,
+				"internal/plughost/manager.go wires %s in unconditionally, "+
+				"and its own extraction into a downloadable RPC plugin is "+
+				"done on a separate, not yet merged branch. "+
+				"internal/sheet no longer imports %s in a lite build (see "+
+				"TestLiteSheetPackageExcludesSQLiteDependency, f4#1552).",
+			strings.Join(offenders, "\n\t"), sqlitePlugin, sqlite,
 		)
 	}
 	t.Fatalf(
 		"a -tags lite build of ./cmd/f4 depends on %s for a reason other "+
-			"than internal/sheet -- this looks like a real regression on "+
-			"f4#1178's sqlite-plugin extraction or tarindex_simple/arcidx "+
-			"wiring:\n\t%s",
-		sqlite, strings.Join(offenders, "\n\t"),
+			"than %s -- this looks like a real regression:\n\t%s",
+		sqlite, sqlitePlugin, strings.Join(offenders, "\n\t"),
 	)
 }
 
