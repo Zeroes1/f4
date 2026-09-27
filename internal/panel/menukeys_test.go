@@ -128,3 +128,132 @@ func TestDriveMenu_CtrlNOpensBookmarkEditor(t *testing.T) {
 	dlg.ProcessKey(keyEvent(vtinput.VK_ESCAPE, 0))
 	settleFrames(t)
 }
+
+// dispatchKeyThroughFrameManager sends e through vtui.FrameManager's real
+// input queue instead of calling a frame's ProcessKey directly. The three
+// tests below need that: vtui's own Ctrl+N fallback (fork the panels into a
+// new workspace, framemanager.go's dispatchEvent) only runs when the top
+// frame's ProcessKey leaves the key unhandled, and a direct ProcessKey call
+// -- what every other test in this file does -- never exercises that race
+// at all. issue#144 reported exactly this fallback firing (a new workspace
+// opening, the menu left untouched underneath) instead of the add-item
+// handling below reaching the menu, so a regression that stops one of these
+// menus from consuming the key must show up here.
+func dispatchKeyThroughFrameManager(t *testing.T, e *vtinput.InputEvent) {
+	t.Helper()
+	if vtui.FrameManager.EventChan == nil {
+		vtui.FrameManager.EventChan = make(chan *vtinput.InputEvent, 4)
+	}
+	vtui.FrameManager.EventChan <- e
+	for i := 0; len(vtui.FrameManager.EventChan) > 0; i++ {
+		if i == 100 {
+			t.Fatalf("key was never dispatched")
+		}
+		vtui.FrameManager.Step(0)
+	}
+}
+
+// TestDriveMenu_CtrlNThroughFrameManagerDoesNotForkWorkspace covers f4#144:
+// routed through the real dispatcher instead of a direct ProcessKey call,
+// Ctrl+N must still reach the drive menu's own handling instead of vtui's
+// native Ctrl+N-forks-a-workspace fallback.
+func TestDriveMenu_CtrlNThroughFrameManagerDoesNotForkWorkspace(t *testing.T) {
+	cfg := t.TempDir()
+	oldUserConfigDir := config.UserConfigDir
+	config.UserConfigDir = func() (string, error) { return cfg, nil }
+	t.Cleanup(func() { config.UserConfigDir = oldUserConfigDir })
+	if err := os.MkdirAll(filepath.Join(cfg, "f4", "settings"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+	wantScreens := len(vtui.FrameManager.Screens)
+
+	pf.ShowDriveMenu(1)
+	menu := findDriveMenu(t)
+	menu.SetSelectPos(0)
+
+	dispatchKeyThroughFrameManager(t, keyEvent(vtinput.VK_N, vtinput.LeftCtrlPressed))
+	settleFrames(t)
+
+	if got := len(vtui.FrameManager.Screens); got != wantScreens {
+		t.Fatalf("Ctrl+N forked a new workspace (screens %d -> %d) instead of opening the drive bookmark editor", wantScreens, got)
+	}
+	dlg, ok := vtui.FrameManager.GetTopFrame().(*driveBookmarkEditDialog)
+	if !ok {
+		t.Fatalf("Ctrl+N did not open drive bookmark editor: %T", vtui.FrameManager.GetTopFrame())
+	}
+	dlg.ProcessKey(keyEvent(vtinput.VK_ESCAPE, 0))
+	settleFrames(t)
+}
+
+// TestBookmarksDialog_CtrlNThroughFrameManagerDoesNotForkWorkspace covers
+// f4#144 for the bookmarks dialog: see
+// TestDriveMenu_CtrlNThroughFrameManagerDoesNotForkWorkspace above.
+func TestBookmarksDialog_CtrlNThroughFrameManagerDoesNotForkWorkspace(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+	wantScreens := len(vtui.FrameManager.Screens)
+	wantPath := pf.Panels[0].(*FileSystemPanel).Vfs.GetPath()
+
+	d := &BookmarksDialog{
+		Pf:   pf,
+		File: filepath.Join(t.TempDir(), "bookmarks.ini"),
+		Set:  BookmarkSet{},
+	}
+	d.open(3, nil)
+
+	dispatchKeyThroughFrameManager(t, keyEvent(vtinput.VK_N, vtinput.LeftCtrlPressed))
+	settleFrames(t)
+
+	if got := len(vtui.FrameManager.Screens); got != wantScreens {
+		t.Fatalf("Ctrl+N forked a new workspace (screens %d -> %d) instead of saving the bookmark slot", wantScreens, got)
+	}
+	if got := d.Set[3]; got != (Bookmark{Path: wantPath}) {
+		t.Fatalf("Ctrl+N stored %#v in slot 3, want %q", got, wantPath)
+	}
+}
+
+// TestAssociationsEditor_CtrlNThroughFrameManagerDoesNotForkWorkspace covers
+// f4#144 for the file associations editor: see
+// TestDriveMenu_CtrlNThroughFrameManagerDoesNotForkWorkspace above.
+func TestAssociationsEditor_CtrlNThroughFrameManagerDoesNotForkWorkspace(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+	wantScreens := len(vtui.FrameManager.Screens)
+
+	s := &AssocEditorState{
+		Pf:         pf,
+		SourcePath: filepath.Join(t.TempDir(), "associations.ini"),
+		Items:      []FileAssoc{{Mask: "*.txt", Description: "Text"}},
+	}
+	s.openList(0)
+
+	dispatchKeyThroughFrameManager(t, keyEvent(vtinput.VK_N, vtinput.LeftCtrlPressed))
+	settleFrames(t)
+
+	if got := len(vtui.FrameManager.Screens); got != wantScreens {
+		t.Fatalf("Ctrl+N forked a new workspace (screens %d -> %d) instead of opening the new-association dialog", wantScreens, got)
+	}
+	top, ok := vtui.FrameManager.GetTopFrame().(interface{ GetTitle() string })
+	if !ok {
+		t.Fatalf("Ctrl+N did not open a dialog: %T", vtui.FrameManager.GetTopFrame())
+	}
+	if want := " " + i18n.Msg("FileAssoc.NewTitle") + " "; top.GetTitle() != want {
+		t.Fatalf("Ctrl+N opened %q, want %q", top.GetTitle(), want)
+	}
+}
