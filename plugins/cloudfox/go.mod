@@ -40,3 +40,14 @@ require (
 )
 
 replace github.com/unxed/f4 => ../..
+
+// Same forks the root module uses (see ../../go.mod) -- vtui transitively
+// needs ffi.Available, which only exists in unxed/pureffi, not upstream
+// ebitengine/purego. Without these, `go mod tidy` here resolves the
+// vanilla upstream modules instead and the build fails with
+// "undefined: ffi.Available".
+replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.20
+
+replace github.com/ebitengine/hideconsole => ../../internal/hideconsole
+
+replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
