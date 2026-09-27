@@ -131,7 +131,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 6 cells.
+      # 6 cells; capped so this one job doesn't claim every runner the
+      # free-tier pool has (see the concurrency comment above the jobs).
+      max-parallel: 3
       matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }] }
     env:
       CGO_ENABLED: 0
@@ -435,8 +437,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 7 cells, pushes/tags only -- this is the matrix a tag release
-      # competes against.
+      # 7 cells, pushes/tags only; capped so this job doesn't claim every
+      # runner the free-tier pool has (see the concurrency comment above
+      # the jobs) -- this is the matrix a tag release competes against.
+      max-parallel: 3
       # The noffi rows are the extra architectures Go can cross-compile
       # Linux for; vtui's graphical/FFI backends are unavailable there,
       # so they use its ANSI-only noffi configuration.
@@ -1522,7 +1526,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # Up to 4 cells on pushes/tags (1 on pull requests already).
+      # Up to 4 cells on pushes/tags (1 on pull requests already); capped
+      # so this job doesn't claim every runner the free-tier pool has (see
+      # the concurrency comment above the jobs).
+      max-parallel: 2
       # One long line on purpose: actionlint chews minutes on a folded variant.
       matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
@@ -1736,7 +1743,10 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      # Up to 9 cells on pushes/tags (6 on pull requests).
+      # Up to 9 cells on pushes/tags (6 on pull requests); capped so this
+      # job doesn't claim every runner the free-tier pool has (see the
+      # concurrency comment above the jobs).
+      max-parallel: 4
       # One hosted runner per native os/arch cell, except that the slow
       # darwin/arm64 and windows/amd64 cells split their tests by name.
       # Pull requests skip the second-arch twin of the two
@@ -1959,7 +1969,9 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      # 4 shards, every run.
+      # 4 shards, every run; capped so this job doesn't claim every runner
+      # the free-tier pool has (see the concurrency comment above the jobs).
+      max-parallel: 3
       matrix:
         # Four numbered shards, filled by measured weight rather than by name.
         # The heaviest package lands alone in one of them and that is the floor:
@@ -2260,6 +2272,16 @@ jobs:
       with:
         path: dist
         merge-multiple: true
+    # wine-logs (and any future artifact whose own upload path had more
+    # than one root, e.g. build/probe-*.txt alongside wine-logs/**) keeps
+    # that nested structure through merge-multiple, landing as a real
+    # subdirectory here -- dist/build/ -- rather than a flat file. Every
+    # actual release binary is a flat file at dist/'s top level, so any
+    # top-level directory here is debug/log ballast, never a release
+    # asset; a directory in this glob makes the upload step below fail
+    # outright (you cannot POST a directory as a single asset).
+    - name: Prune non-file artifacts (e.g. wine-logs) before publishing
+      run: find dist -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
     - name: Publish Release
       uses: softprops/action-gh-release@v3
       with:
@@ -2382,6 +2404,17 @@ jobs:
       with:
         path: dist
         merge-multiple: true
+
+    # wine-logs (and any future artifact whose own upload path had more
+    # than one root, e.g. build/probe-*.txt alongside wine-logs/**) keeps
+    # that nested structure through merge-multiple, landing as a real
+    # subdirectory here -- dist/build/ -- rather than a flat file. Every
+    # actual release binary is a flat file at dist/'s top level, so any
+    # top-level directory here is debug/log ballast, never a release
+    # asset; a directory in this glob makes `gh release create`'s upload
+    # fail outright (you cannot POST a directory as a single asset).
+    - name: Prune non-file artifacts (e.g. wine-logs) before publishing
+      run: find dist -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 
     # The Releases page is sorted by each release's created_at, and GitHub
     # sets that to the date of the tagged commit, not to the moment the
