@@ -130,6 +130,20 @@ func BuildPlugRingRows(items []plughost.PlugRingItem, installed map[string]plugh
 var plugRingCatalog = plughost.FetchPlugRingCatalog
 
 func actionPlugRing(pf *panel.PanelsFrame) {
+	actionPlugRingFocused(pf, "")
+}
+
+// actionPlugRingFocused is actionPlugRing plus one thing: once the catalog
+// (community + first-party, f4#1178 part 3) has loaded, it selects and
+// scrolls to the row whose PlugRingItem.ID equals focusItemID, instead of
+// leaving the table wherever SetRows put it (row 0). An empty focusItemID
+// behaves exactly like actionPlugRing.
+//
+// This is f4#1178, part 4 of 4: a lite build's "CloudFox" drive entry
+// (cloud_storage_lite.go) opens PlugRing landed directly on the "cloudfox"
+// row it now carries, rather than a generic browse-everything dialog the
+// user has to search through themselves.
+func actionPlugRingFocused(pf *panel.PanelsFrame, focusItemID string) {
 	w, h := 76, 22
 
 	btnInstall := vtui.NewButton(0, 0, i18n.Msg("PlugRing.BtnInstall"))
@@ -187,6 +201,15 @@ func actionPlugRing(pf *panel.PanelsFrame) {
 				var rows []vtui.TableRow
 				rows, shown = BuildPlugRingRows(items, plughost.GetInstalledPlugRingItems())
 				table.SetRows(rows)
+				if focusItemID != "" {
+					for i, entry := range shown {
+						if entry != nil && entry.ID == focusItemID {
+							table.SelectPos = i
+							table.EnsureVisible()
+							break
+						}
+					}
+				}
 				vtui.FrameManager.Redraw()
 			})
 		})
