@@ -2177,11 +2177,34 @@ func (fp *FileSystemPanel) SetKnownDirectoryPath(target string) error {
 // slow) resolution runs on a background goroutine, and only the actual path
 // change — an instant field write — happens back on the UI goroutine, which
 // is the only place mutating fp.Vfs is safe.
+//
+// The fix for the freeze (this function existing at all) left a follow-up
+// reported live on f4#1411: once the UI goroutine stops blocking, a slow PAM
+// prompt (e.g. a fingerprint reader retrying) is silent — nothing on screen
+// says an elevation attempt is even happening until it finally resolves. This
+// reuses the panel's existing loading pulse (the same title spinner
+// readDirectoryEx shows for a slow listing) as the indicator: it appears in
+// the panel title after panelLoadingShowDelay so a fast, no-prompt sudo check
+// never flashes it, and it is cleared the moment the result comes back,
+// whichever way it went.
 func (fp *FileSystemPanel) navigateElevatedDirectoryAsync(osfs *vfs.OSVFS, newPath, oldPath, selectedName string) {
 	sourceVFS := fp.Vfs
+	fp.IsLoading = true
+	fp.startLoadingAnimation()
+	generation := fp.LoadingGeneration
 	vtui.RunAsync(func(task *vtui.TaskContext) {
 		abs, err := osfs.ResolveElevated(newPath)
 		task.RunOnUI(func() {
+			if fp.LoadingGeneration == generation {
+				// Nothing newer (e.g. a fresh ReadDirectory, which bumps the
+				// generation itself) has claimed the spinner since we started
+				// it, so it is still ours to clear here — on every outcome,
+				// including the stale-navigation and error returns below.
+				fp.IsLoading = false
+				fp.StopLoadingAnimation()
+				fp.updateTitle(nil)
+				vtui.FrameManager.Redraw()
+			}
 			if !fileops.SameVFSInstance(fp.Vfs, sourceVFS) || fp.Vfs.GetPath() != oldPath {
 				// The panel navigated elsewhere while the sudo prompt was up;
 				// applying this result now would clobber wherever it is now.
