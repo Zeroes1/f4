@@ -5714,6 +5714,15 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		// binds Del to unmounting on its own mount-point rows; f4#415 adds
 		// that here too, for the live mount-point rows GetPlatformDrives
 		// appends on Linux (drives_unix.go).
+		if isAddItemKey(e) {
+			// Ins or Ctrl+N adds a named drive-menu link from any row. The
+			// path defaults to the panel directory, while the user chooses
+			// the name and optional shortcut in the dialog.
+			pos := menu.SelectPos
+			reopen := func() { pf.showDriveMenuAt(panelIdx, pos) }
+			pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
+			return true
+		}
 		if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
 			vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			pos := menu.SelectPos
@@ -5727,12 +5736,6 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				// Far uses F9 for the drive-menu options dialog. Consume it
 				// here so the global F9 main-menu action never sees it.
 				pf.openDriveMenuOptions(panelIdx, menu)
-				return true
-			case vtinput.VK_INSERT:
-				// Ins adds a named drive-menu link from any row. The path
-				// defaults to the panel directory, while the user chooses
-				// the name and optional shortcut in the dialog.
-				pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
 				return true
 			case vtinput.VK_F4:
 				if onDriveBookmark {

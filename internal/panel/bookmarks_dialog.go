@@ -127,14 +127,15 @@ func (d *BookmarksDialog) open(slot int, onClose func()) {
 
 		slot := d.SlotAt(d.menu.SelectPos)
 
-		// Ins stores the panel's directory, Del clears the slot, F4 edits
-		// the path by hand. All three overwrite without asking, as far2l
-		// does, and each one hits the disk immediately.
+		// Ins (or Ctrl+N) stores the panel's directory, Del clears the slot,
+		// F4 edits the path by hand. All three overwrite without asking, as
+		// far2l does, and each one hits the disk immediately.
+		if isAddItemKey(e) {
+			d.saveCurrentDir(slot)
+			return true
+		}
 		if !ctrl && !shift && !alt {
 			switch e.VirtualKeyCode {
-			case vtinput.VK_INSERT:
-				d.saveCurrentDir(slot)
-				return true
 			case vtinput.VK_DELETE:
 				d.clearSlot(slot)
 				return true
