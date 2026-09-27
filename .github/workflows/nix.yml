@@ -57,19 +57,22 @@ jobs:
 
     - name: Verify vendorHash
       id: verify
-      # --rebuild makes the check honest regardless of store state: a
-      # fixed-output derivation's store path is a function of its name and
-      # declared hash only, so an output left by an earlier tree with the
-      # same name and hash would otherwise satisfy the build without
-      # anything being verified. On a fresh runner this is belt and braces;
-      # locally it is the difference between a check and a no-op.
+      # A fixed-output derivation re-fetches and re-hashes its content
+      # whenever the store doesn't already have a path for it, and these
+      # runners start with an empty Nix store on every job - so a plain
+      # build here already re-verifies vendorHash from scratch every time.
+      # (--rebuild looks tempting for extra rigor, but it only works when
+      # the output is already valid/substitutable; on a fresh runner there
+      # is nothing to rebuild against, so it fails unconditionally with
+      # "are not valid, so checking is not possible" - which is exactly
+      # what happened in CI here.)
       #
       # A vendorHash mismatch is deliberately not a failure here: the two
       # steps below decide what happens to it (fail a PR with the value to
       # paste, or repair main). Any other build failure is a real failure.
       run: |
         set -euo pipefail
-        if nix build --no-link --rebuild .#f4.goModules 2> nix-build.log; then
+        if nix build --no-link .#f4.goModules 2> nix-build.log; then
           echo "vendorHash in flake.nix matches go.mod/go.sum"
           exit 0
         fi
