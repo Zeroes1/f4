@@ -3671,7 +3671,7 @@ drain:
 	fp.EnqueueDirectoryLoad(func() {})
 	done := make(chan struct{})
 	go func() {
-		fp.LoadWorkerWG.Wait()
+		fp.WaitForIdle()
 		close(done)
 	}()
 	waitForPanelSignal(t, done, "directory worker to stop")
