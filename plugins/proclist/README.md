@@ -48,11 +48,11 @@ Linux, part 2 (this update) added Windows and macOS. View-only throughout.
   `kinfo_proc`'s own memory/CPU fields are widely known to be stale
   BSD-compatibility leftovers on modern XNU (`x/sys/unix`'s own `KinfoProc`
   even names the relevant embedded fields `Dummy`) -- so CPU% and memory
-  instead come from libproc's `proc_pidinfo(PROC_PIDTASKINFO)`, loaded via
-  `github.com/ebitengine/purego` the same way `cpu_windows.go` loads
-  `pdh.dll`'s counters: no cgo, with `readDarwinTaskInfo` refusing to trust
-  the result unless `proc_pidinfo` reports back exactly `sizeof(proc_taskinfo)`
-  bytes filled.
+  instead come from `proc_pidinfo(PROC_PIDTASKINFO)`, made as the
+  `__proc_info` system call it wraps (`unix.Syscall6`, no cgo and no FFI:
+  the earlier purego call into libproc crashed the darwin/amd64 test run
+  intermittently), with `readDarwinTaskInfo` refusing to trust the result
+  unless the call reports back exactly `sizeof(proc_taskinfo)` bytes filled.
 - **FreeBSD/NetBSD/OpenBSD**: still the `collector_other.go` stub
   (`Supported() == false`) after part 2. Each exposes its own, differently
   laid out `kinfo_proc`/`kinfo_proc2`, `golang.org/x/sys/unix` defines none

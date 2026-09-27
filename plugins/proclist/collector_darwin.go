@@ -5,11 +5,9 @@ package proclist
 import (
 	"bytes"
 	"fmt"
-	"sync"
 	"time"
 	"unsafe"
 
-	"github.com/ebitengine/purego"
 	"golang.org/x/sys/unix"
 )
 
@@ -105,47 +103,32 @@ type procTaskInfo struct {
 // procPidTaskInfo is PROC_PIDTASKINFO from <sys/proc_info.h>.
 const procPidTaskInfo = 4
 
-var (
-	libprocOnce sync.Once
-	libprocOK   bool
-	procPidinfo func(pid int32, flavor int32, arg uint64, buffer *procTaskInfo, buffersize int32) int32
-)
+// procInfoCallPidinfo is PROC_INFO_CALL_PIDINFO, the __proc_info call
+// number libproc's proc_pidinfo wraps.
+const procInfoCallPidinfo = 2
 
-// initLibproc loads libproc's proc_pidinfo lazily. Failure is silent and
-// leaves libprocOK false: readDarwinTaskInfo then reports every process as
-// having no task info, and collect still lists PID and name for all of
-// them, the same graceful degradation cpu_windows.go uses for its optional
-// PDH counters.
-func initLibproc() {
-	libprocOnce.Do(func() {
-		defer func() {
-			if r := recover(); r != nil {
-				libprocOK = false
-			}
-		}()
-		// libproc.dylib has had no on-disk file of its own since the dyld
-		// shared cache (macOS 11+); dlopen still resolves this and every
-		// other historical system library path through the cache, which is
-		// exactly what cpu_windows.go's initPDH relies on for pdh.dll.
-		h, err := purego.Dlopen("/usr/lib/libproc.dylib", purego.RTLD_LAZY)
-		if err != nil || h == 0 {
-			return
-		}
-		purego.RegisterLibFunc(&procPidinfo, h, "proc_pidinfo")
-		libprocOK = true
-	})
-}
+// sysProcInfo is SYS_proc_info from <sys/syscall.h>, 336 on both amd64 and
+// arm64 and unchanged since the call appeared in 10.5. x/sys/unix carries it
+// too, but marks every darwin syscall number deprecated in favour of
+// libSystem wrappers, and the libSystem wrapper is exactly the call this
+// file stopped making (see readDarwinTaskInfo).
+const sysProcInfo = 336
 
+// readDarwinTaskInfo is libproc's proc_pidinfo(pid, PROC_PIDTASKINFO, 0,
+// &info, sizeof info), made as the __proc_info system call it wraps rather
+// than through a dlopen'ed libproc. Package syscall's Syscall6 traps straight
+// into the kernel on darwin, so nothing foreign runs on the Go stack: the
+// earlier FFI call into libproc crashed the darwin/amd64 test run
+// intermittently with a nil dereference inside this function. A process
+// this one lacks the entitlement to query fails with EPERM and is reported
+// as having no task info.
 func readDarwinTaskInfo(pid int) (procTaskInfo, bool) {
-	initLibproc()
-	if !libprocOK {
-		return procTaskInfo{}, false
-	}
 	var info procTaskInfo
-	size := int32(unsafe.Sizeof(info))
-	// #nosec G115 -- pid comes from kinfo_proc's own P_pid (int32) and is bounds-checked non-negative by the caller.
-	n := procPidinfo(int32(pid), procPidTaskInfo, 0, &info, size)
-	if n != size {
+	size := unsafe.Sizeof(info)
+	// #nosec G103 G115 -- the pointer is passed in the call expression itself, as package syscall requires; pid comes from kinfo_proc's own P_pid (int32) and is bounds-checked non-negative by the caller.
+	n, _, errno := unix.Syscall6(sysProcInfo, procInfoCallPidinfo, uintptr(pid), procPidTaskInfo, 0,
+		uintptr(unsafe.Pointer(&info)), size)
+	if errno != 0 || n != size {
 		return procTaskInfo{}, false
 	}
 	return info, true
