@@ -464,35 +464,7 @@ func NewPanelsFrame() *PanelsFrame {
 			vtui.WritePassthrough(seq)
 		}
 	}
-	pf.TermView.OnBusyChange = func(busy bool) {
-		localShell := pf.localShellIsActive()
-		if localShell {
-			pf.noteLocalShellBusy(busy)
-		}
-		// Use PostTask to ensure state changes happen on the UI thread
-		vtui.FrameManager.PostTask(func() {
-			if busy {
-				pf.Executing = true
-			} else {
-				pf.ShellPromptReady = true
-				ignoredPrompt := pf.Executing && pf.ignoreNextPrompt
-				if ignoredPrompt {
-					// A command can be entered before the initial prompt has
-					// finished crossing ConPTY. That prompt belongs to shell
-					// startup, not to the command just sent; consuming it as
-					// completion would return to panels while a batch file is
-					// still running.
-					pf.ignoreNextPrompt = false
-				}
-				if pf.Executing && !ignoredPrompt {
-					pf.endExecution()
-				}
-			}
-			if localShell && !busy {
-				pf.catchUpProcessEnvironment(true)
-			}
-		})
-	}
+	pf.TermView.OnBusyChange = pf.shellBusyChanged
 	if terminal.WindowsShellSyntax() {
 		pf.CmdSession = newCmdShellSession(pf)
 		pf.TermView.OnShellMark = func(mark string, snap terminal.PromptSnapshot) {
@@ -1983,6 +1955,41 @@ func (pf *PanelsFrame) IsPtyBusy() bool {
 	}
 	// Managed execution signal from OSC 133
 	return pf.Executing
+}
+
+// shellBusyChanged receives the terminal view's OSC 133 C (busy) and D
+// (idle) marks. It runs on the goroutine that parses the terminal output.
+func (pf *PanelsFrame) shellBusyChanged(busy bool) {
+	localShell := pf.localShellIsActive()
+	if localShell && pf.CmdSession.childOwnsCommandMarks() {
+		return
+	}
+	if localShell {
+		pf.noteLocalShellBusy(busy)
+	}
+	// Use PostTask to ensure state changes happen on the UI thread
+	vtui.FrameManager.PostTask(func() {
+		if busy {
+			pf.Executing = true
+		} else {
+			pf.ShellPromptReady = true
+			ignoredPrompt := pf.Executing && pf.ignoreNextPrompt
+			if ignoredPrompt {
+				// A command can be entered before the initial prompt has
+				// finished crossing ConPTY. That prompt belongs to shell
+				// startup, not to the command just sent; consuming it as
+				// completion would return to panels while a batch file is
+				// still running.
+				pf.ignoreNextPrompt = false
+			}
+			if pf.Executing && !ignoredPrompt {
+				pf.endExecution()
+			}
+		}
+		if localShell && !busy {
+			pf.catchUpProcessEnvironment(true)
+		}
+	})
 }
 
 // beginManagedExecution marks a command that carries its own OSC 133 C/D

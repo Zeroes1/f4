@@ -208,6 +208,39 @@ func (s *cmdShellSession) close() {
 	s.mu.Unlock()
 }
 
+// childOwnsCommandMarks reports whether an OSC 133 C or D that just crossed
+// the local shell's output belongs to a console program running inside the
+// shell rather than to the shell. cmd.exe under the PROMPT f4 gives it prints
+// A and B only, and completion of a typed line is this session's to decide
+// from B. A console child that speaks shell integration itself prints its own
+// C and D, though: Far Manager 3 wraps every command run from its command
+// line in D, A, B, C ... D (#1376). Taken for cmd's, Far's first D ended the
+// line that started Far, and f4's panels and hotkeys came back over a Far
+// that was still running.
+//
+// It runs on the goroutine that parses the terminal output.
+func (s *cmdShellSession) childOwnsCommandMarks() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	closed, inBatch := s.Closed, s.inBatch
+	s.mu.Unlock()
+	if closed {
+		return false
+	}
+	inspector, ok := s.Pf.localPTY().(childInspector)
+	if !ok {
+		return false
+	}
+	children := inspector.ChildProcesses()
+	if !heldByChild(children, inBatch) {
+		return false
+	}
+	vtui.DebugLog("CMD_SESSION: OSC 133 C/D printed by child %v, not by the shell; ignored", children)
+	return true
+}
+
 // handleMark runs on the terminal.PTY goroutine for every OSC 133 mark of the local
 // shell.
 func (s *cmdShellSession) handleMark(mark string, snap terminal.PromptSnapshot) {

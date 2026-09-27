@@ -46,6 +46,7 @@ var (
 	childTimeout   = terminal.ChildProcess{Name: "timeout.exe", GUI: false}
 	childNestedCmd = terminal.ChildProcess{Name: "cmd.exe", GUI: false}
 	childNotepad   = terminal.ChildProcess{Name: "notepad.exe", GUI: true}
+	childFar       = terminal.ChildProcess{Name: "Far.exe", GUI: false}
 )
 
 const promptText = `C:\work>`
@@ -93,6 +94,7 @@ func newCmdShellSim(t *testing.T, build windowsBuild) *cmdShellSim {
 	pf.Pty = pty
 	pf.CmdSession = newCmdShellSession(pf)
 	pf.TermView.OnShellMark = func(mark string, snap terminal.PromptSnapshot) { pf.CmdSession.handleMark(mark, snap) }
+	pf.TermView.OnBusyChange = pf.shellBusyChanged
 	pf.Parser = terminal.NewAnsiParser(pf.TermView, nil)
 	return &cmdShellSim{t: t, pf: pf, pty: pty, build: build}
 }
@@ -553,6 +555,72 @@ func TestCmdSessionBatchWithNestedCmdDoesNotRelease(t *testing.T) {
 		sim.expectExecuting(false, "after the batch's final prompt")
 		if !sim.pf.ShowPanels {
 			t.Error("panels did not come back after batch finished")
+		}
+	})
+}
+
+// farRunsCommand sends what Far Manager 3 prints when a command is run from
+// its own command line (far/cmdline.cpp, far/console.cpp): DrawFakeCommand
+// echoes the prompt and the command between console::start_prompt (D, then
+// A) and console::start_command (B), console::start_output prints C before
+// the command runs, and console::command_finished prints D with the exit
+// code after it. Far then repaints its own screen, command line included.
+func (s *cmdShellSim) farRunsCommand(command, output string) {
+	s.feed("\x1b]133;D\x1b\\\x1b]133;A\x1b\\" + promptText + "\x1b]133;B\x1b\\" + command + "\r\n")
+	s.feed("\x1b]133;C\x1b\\" + output)
+	s.feed("\x1b]133;D;0\x1b\\")
+	s.feed("\x1b[H\x1b[2J Far panels\x1b[24;1H" + promptText)
+}
+
+// Far Manager runs as a console child of the local cmd and speaks shell
+// integration itself: every command run from its own command line comes
+// wrapped in OSC 133 D, A, B, C ... D (#1376). None of those marks is cmd's.
+// Far's first D was taken for the end of the line that started Far, so the
+// first `dir` or `cls` typed into Far brought f4's panels -- and f4's hotkeys
+// -- back over a Far that was still running. f4 must wait for cmd's own
+// prompt after Far exits, and bring the panels back then.
+func TestCmdSessionFarShellIntegrationMarksDoNotEndExecution(t *testing.T) {
+	forEachBuild(t, func(t *testing.T, sim *cmdShellSim) {
+		sim.start()
+		sim.run("far")
+		sim.pty.setChildren(childFar)
+		sim.feed("\x1b[H\x1b[2J Far panels\x1b[24;1H" + promptText)
+		sim.wait(settledWithin)
+		sim.expectExecuting(true, "with Far started")
+
+		for _, command := range []string{"dir", "cls", "rar"} {
+			sim.farRunsCommand(command, "output of "+command+"\r\n")
+			sim.wait(settledWithin + 4*cmdPromptRecheckDelay)
+			sim.expectExecuting(true, "after Far ran "+command)
+			if sim.pf.ShowPanels {
+				t.Fatalf("[%s] f4's panels came back over Far after %s", sim.build.name, command)
+			}
+		}
+
+		// F10: Far exits and cmd prints its own prompt.
+		sim.pty.setChildren()
+		sim.feed("\r\n")
+		sim.prompt("")
+		sim.wait(settledWithin)
+		sim.expectExecuting(false, "after Far exited")
+		if !sim.pf.ShowPanels {
+			t.Errorf("[%s] panels did not come back after Far exited", sim.build.name)
+		}
+	})
+}
+
+// Only a console child owns the C and D marks. Without one, a D that reaches
+// the local shell ends the execution as it always has: a cmd with shell
+// integration of its own (Clink) prints D at its real prompt.
+func TestCmdSessionCommandMarksWithoutChildStillEndExecution(t *testing.T) {
+	forEachBuild(t, func(t *testing.T, sim *cmdShellSim) {
+		sim.start()
+		sim.run("dir")
+		sim.feed("\x1b]133;C\x1b\\file.txt\r\n\x1b]133;D;0\x1b\\")
+		sim.wait(settledWithin)
+		sim.expectExecuting(false, "after a D printed with no console child")
+		if !sim.pf.ShowPanels {
+			t.Errorf("[%s] panels did not come back", sim.build.name)
 		}
 	})
 }
