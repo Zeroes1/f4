@@ -132,10 +132,12 @@ func TestAttributesDialog_RecursiveWalksWholeTreeButNotThroughSymlinks(t *testin
 
 	// leaked.txt is reachable only by following link_to_external. If the
 	// walk ever descended into a symlinked directory, this would be 0700 too.
+	// It was created at 0o600 by buildRecursiveAttributesTree, so that's the
+	// mode it must still have.
 	if st, err := os.Stat(leakedFile); err != nil {
 		t.Fatalf("stat %s: %v", leakedFile, err)
-	} else if got := st.Mode().Perm(); got != 0644 {
-		t.Errorf("%s: mode = %04o, want untouched 0644 (recursion must not follow the symlink)", leakedFile, got)
+	} else if got := st.Mode().Perm(); got != 0o600 {
+		t.Errorf("%s: mode = %04o, want untouched 0600 (recursion must not follow the symlink)", leakedFile, got)
 	}
 
 	// A recursive Set gets a completion summary (dirSel, top.txt, real_sub,
