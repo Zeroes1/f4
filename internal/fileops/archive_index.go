@@ -1,4 +1,4 @@
-//go:build !dragonfly && !netbsd && !solaris && !illumos
+//go:build !dragonfly && !netbsd && !solaris && !illumos && !lite
 
 package fileops
 

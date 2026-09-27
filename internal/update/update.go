@@ -166,7 +166,7 @@ func Check(ctx context.Context, cfg Settings, b Build) (Candidate, error) {
 		return Candidate{}, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
-	downloadURL, assetUpdated, archiveKind := pickAsset(release.Assets, assetSuffixes(CurrentOS, CurrentArch, currentLibc))
+	downloadURL, assetUpdated, archiveKind := pickAsset(release.Assets, editionAssetSuffixes(liteEdition, CurrentOS, CurrentArch, currentLibc))
 	if downloadURL == "" {
 		return Candidate{}, fmt.Errorf("no suitable build found for your OS/Arch")
 	}
@@ -418,8 +418,6 @@ func extract(data []byte, archiveKind, destDir string) error {
 	}
 }
 
-// pickAsset returns the first release asset whose name ends with one of the
-// suffixes, trying suffixes in order. Returns an empty url when nothing matches.
 // assetSuffixes returns the release asset suffixes to look for, most
 // preferred first.
 //
@@ -458,10 +456,31 @@ func assetSuffixes(goos, goarch, libc string) []string {
 	return []string{generic}
 }
 
+// editionAssetSuffixes is assetSuffixes for the edition this binary is.
+// A lite build updates to the lite asset only: f4-lite-linux-amd64.tar.gz
+// ends with "-linux-amd64.tar.gz" as well, and the regular asset the plain
+// suffix would also match is a different program. There is no musl lite
+// flavor, and no .7z, which a lite build cannot unpack.
+func editionAssetSuffixes(lite bool, goos, goarch, libc string) []string {
+	if !lite {
+		return assetSuffixes(goos, goarch, libc)
+	}
+	if goos == "windows" {
+		return []string{fmt.Sprintf("-lite-%s-%s.zip", goos, goarch)}
+	}
+	return []string{fmt.Sprintf("-lite-%s-%s.tar.gz", goos, goarch)}
+}
+
+// pickAsset returns the first release asset whose name ends with one of the
+// suffixes, trying suffixes in order. Returns an empty url when nothing matches.
+//
+// It skips a lite asset when matching a suffix that is not itself a lite
+// one: "-linux-amd64.tar.gz" matches f4-lite-linux-amd64.tar.gz too,
+// and a regular build must not update itself into the lite edition.
 func pickAsset(assets []Asset, suffixes []string) (url, updatedAt, kind string) {
 	for _, suffix := range suffixes {
 		for _, a := range assets {
-			if strings.HasSuffix(a.Name, suffix) {
+			if strings.HasSuffix(a.Name, suffix) && !strings.HasSuffix(a.Name, "-lite"+suffix) {
 				return a.BrowserDownloadURL, a.UpdatedAt, archiveKindForSuffix(suffix)
 			}
 		}

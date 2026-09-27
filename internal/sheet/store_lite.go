@@ -47,9 +47,9 @@ type jsonCell struct {
 // file held before.
 //
 // This is the lite-build store: it exists so "-tags lite" avoids linking
-// github.com/ncruces/go-sqlite3 (and its embedded wazero runtime) for a
-// single feature that has nothing to do with either the SQLite plugin or
-// archive indexing (f4#1552). A regular build keeps using store.go's
+// github.com/ncruces/go-sqlite3 (the whole SQLite engine, translated to
+// Go) for a single feature that has nothing to do with either the SQLite
+// plugin or archive indexing (f4#1552). A regular build keeps using store.go's
 // SQLite-backed format instead, behind the same Save/Load/IsSheetFile API
 // but writing a physically different, incompatible file (see the package
 // doc comment in cell.go): a file saved by one build is not recognised as a
