@@ -3,7 +3,6 @@ package sqlite
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ncruces/go-sqlite3/driver"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -133,24 +131,55 @@ func isSQLiteFilename(name string) bool {
 	}
 }
 
+// databaseSession is one open database. What it reads and writes goes
+// through a sessionBackend: the regular build links the SQLite engine
+// (backend_driver.go), the lite build runs the sqlite3 command-line tool
+// (backend_cli.go), and everything above the backend -- the client, the
+// mounted-database panel, the CSV export -- is the same in both.
 type databaseSession struct {
-	db        *sql.DB
+	backend   sessionBackend
 	path      string
 	closeOnce sync.Once
 }
 
+// sessionBackend is what a databaseSession needs from a database. Values
+// come back typed the way database/sql scans them: nil, int64, float64,
+// string or []byte.
+type sessionBackend interface {
+	close()
+	listTables(ctx context.Context) ([]string, error)
+	// exec runs a statement that returns no rows and reports how many rows
+	// it changed.
+	exec(ctx context.Context, statement string) (int64, error)
+	// query runs a statement that returns rows, with the values as the grid
+	// shows them.
+	query(ctx context.Context, statement string) (queryResult, error)
+	countRows(ctx context.Context, table string) (int64, error)
+	insertRow(ctx context.Context, table string) (int64, error)
+	// browseWithRowIDs reads one page of a table together with the rowid of
+	// every row, and fails for a table that has no rowid.
+	browseWithRowIDs(ctx context.Context, table string, offset int64) (queryResult, []int64, error)
+	// browse reads one page of a table that has no rowid: a view, or a
+	// WITHOUT ROWID table.
+	browse(ctx context.Context, table string, offset int64) (queryResult, error)
+	cellValue(ctx context.Context, table, column string, rowID int64) (any, error)
+	updateCell(ctx context.Context, table, column string, rowID int64, value string) (int64, error)
+	deleteRow(ctx context.Context, table string, rowID int64) (int64, error)
+	columnDeclaredType(ctx context.Context, table, column string) (string, error)
+	// scanTable reads a whole table: columns once, then row for every row.
+	scanTable(ctx context.Context, table string, columns func([]string) error, row func([]any) error) error
+}
+
+// openSessionBackend opens the backend this build uses; tests replace it to
+// run the same checks against the other one.
+var openSessionBackend = openDefaultBackend
+
 func openDatabase(ctx context.Context, path string) (*databaseSession, []string, error) {
-	db, err := driver.Open(path)
+	backend, err := openSessionBackend(ctx, path)
 	if err != nil {
 		return nil, nil, err
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	session := &databaseSession{db: db, path: path}
-	if err := db.PingContext(ctx); err != nil {
-		session.Close()
-		return nil, nil, err
-	}
+	session := &databaseSession{backend: backend, path: path}
 	tables, err := session.listTables(ctx)
 	if err != nil {
 		session.Close()
@@ -164,34 +193,14 @@ func (s *databaseSession) Close() {
 		return
 	}
 	s.closeOnce.Do(func() {
-		if s.db != nil {
-			_ = s.db.Close()
+		if s.backend != nil {
+			s.backend.close()
 		}
 	})
 }
 
 func (s *databaseSession) listTables(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT name
-		FROM sqlite_master
-		WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'
-		ORDER BY name`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return names, nil
+	return s.backend.listTables(ctx)
 }
 
 type queryResult struct {
@@ -207,47 +216,22 @@ func (s *databaseSession) execute(ctx context.Context, statement string) (queryR
 		return queryResult{}, errors.New("SQL statement is empty")
 	}
 	if !statementReturnsRows(statement) {
-		result, err := s.db.ExecContext(ctx, statement)
-		if err != nil {
-			return queryResult{}, err
-		}
-		rowsAffected, err := result.RowsAffected()
+		rowsAffected, err := s.backend.exec(ctx, statement)
 		if err != nil {
 			return queryResult{}, err
 		}
 		return queryResult{RowsAffected: rowsAffected}, nil
 	}
-
-	rows, err := s.db.QueryContext(ctx, statement)
-	if err != nil {
-		return queryResult{}, err
-	}
-	defer func() { _ = rows.Close() }()
-	columns, err := rows.Columns()
-	if err != nil {
-		return queryResult{}, err
-	}
-	result := queryResult{Columns: columns, ReturnsRows: true}
-	for rows.Next() {
-		values := make([]any, len(columns))
-		destinations := make([]any, len(values))
-		for i := range values {
-			destinations[i] = &values[i]
-		}
-		if err := rows.Scan(destinations...); err != nil {
-			return queryResult{}, err
-		}
-		cells := make([]string, len(values))
-		for i, value := range values {
-			cells[i] = displayValue(value)
-		}
-		result.Rows = append(result.Rows, cells)
-	}
-	if err := rows.Err(); err != nil {
-		return queryResult{}, err
-	}
-	return result, nil
+	return s.backend.query(ctx, statement)
 }
+
+// listTablesSQL lists what the client and the database panel show: tables
+// and views, without SQLite's own.
+const listTablesSQL = `
+		SELECT name
+		FROM sqlite_master
+		WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%'
+		ORDER BY name`
 
 // rowIDColumn is the alias a table browse gives sqlite's rowid. It is dropped
 // before the result is shown: the user sees the table's own columns, while the
@@ -274,18 +258,14 @@ func (s *databaseSession) browseTable(ctx context.Context, table string, offset 
 		// most likely to be wanted.
 		return tableBrowse{result: result, rowIDs: rowIDs, writable: true, offset: offset, total: total}, nil
 	}
-	result, err = s.execute(ctx, tableSelect(table, offset))
+	result, err = s.backend.browse(ctx, table, offset)
 	return tableBrowse{result: result, offset: offset, total: total}, err
 }
 
 // countRows is what makes paging possible: the page to show has to be chosen
 // against the number of rows there actually are.
 func (s *databaseSession) countRows(ctx context.Context, table string) (int64, error) {
-	var total int64
-	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quoteIdentifier(table)).Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
+	return s.backend.countRows(ctx, table)
 }
 
 // lastPageOffset is where a row appended to the end of a table can be found.
@@ -317,122 +297,35 @@ type tableBrowse struct {
 // SQLite names the column that refused; that message is worth showing rather
 // than guessing at values on the user's behalf.
 func (s *databaseSession) insertRow(ctx context.Context, table string) (int64, error) {
-	// #nosec G202 -- SQLite cannot bind identifiers; quoteIdentifier escapes every embedded quote.
-	result, err := s.db.ExecContext(ctx, "INSERT INTO "+quoteIdentifier(table)+" DEFAULT VALUES")
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
+	return s.backend.insertRow(ctx, table)
 }
 
 func (s *databaseSession) browseWithRowIDs(ctx context.Context, table string, offset int64) (queryResult, []int64, error) {
-	// Ordered by rowid so that paging is stable: without an order, two pages
-	// of the same table are not guaranteed to be two different halves of it.
-	// #nosec G202 -- the table name is identifier-quoted and both numeric clauses are generated from typed integers.
-	statement := "SELECT rowid AS " + quoteIdentifier(rowIDColumn) + ", * FROM " + quoteIdentifier(table) +
-		" ORDER BY rowid LIMIT " + strconv.Itoa(browsePageSize) + " OFFSET " + strconv.FormatInt(offset, 10)
-	rows, err := s.db.QueryContext(ctx, statement)
-	if err != nil {
-		return queryResult{}, nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	columns, err := rows.Columns()
-	if err != nil {
-		return queryResult{}, nil, err
-	}
-	if len(columns) < 2 {
-		return queryResult{}, nil, errors.New("SQLite: table has no columns of its own")
-	}
-
-	result := queryResult{Columns: columns[1:], ReturnsRows: true}
-	var rowIDs []int64
-	for rows.Next() {
-		values := make([]any, len(columns))
-		destinations := make([]any, len(values))
-		for i := range values {
-			destinations[i] = &values[i]
-		}
-		if err := rows.Scan(destinations...); err != nil {
-			return queryResult{}, nil, err
-		}
-		rowID, ok := values[0].(int64)
-		if !ok {
-			return queryResult{}, nil, errors.New("SQLite: rows have no usable rowid")
-		}
-		cells := make([]string, len(columns)-1)
-		for i, value := range values[1:] {
-			cells[i] = displayValue(value)
-		}
-		rowIDs = append(rowIDs, rowID)
-		result.Rows = append(result.Rows, cells)
-	}
-	if err := rows.Err(); err != nil {
-		return queryResult{}, nil, err
-	}
-	return result, rowIDs, nil
+	return s.backend.browseWithRowIDs(ctx, table, offset)
 }
 
 // cellValue reads one cell as it is stored, not as it is displayed: the shown
 // text is escaped and cut at 512 characters, and writing that back would
 // truncate the value it came from.
 func (s *databaseSession) cellValue(ctx context.Context, table, column string, rowID int64) (any, error) {
-	statement := "SELECT " + quoteIdentifier(column) + " FROM " + quoteIdentifier(table) + " WHERE rowid = ?"
-	var value any
-	if err := s.db.QueryRowContext(ctx, statement, rowID).Scan(&value); err != nil {
-		return nil, err
-	}
-	return value, nil
+	return s.backend.cellValue(ctx, table, column, rowID)
 }
 
-// updateCell writes one cell. The value travels as a parameter, so nothing the
-// user types is ever parsed as SQL, and column affinity turns "42" back into a
-// number in a column that stores numbers.
+// updateCell writes one cell. The value is never parsed as SQL, and column
+// affinity turns "42" back into a number in a column that stores numbers.
 func (s *databaseSession) updateCell(ctx context.Context, table, column string, rowID int64, value string) (int64, error) {
-	// #nosec G202 -- SQLite cannot bind identifiers; both identifiers are escaped, while values remain bound parameters.
-	statement := "UPDATE " + quoteIdentifier(table) + " SET " + quoteIdentifier(column) + " = ? WHERE rowid = ?"
-	result, err := s.db.ExecContext(ctx, statement, value, rowID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	return s.backend.updateCell(ctx, table, column, rowID, value)
 }
 
 // deleteRow removes one row by rowid.
 func (s *databaseSession) deleteRow(ctx context.Context, table string, rowID int64) (int64, error) {
-	// #nosec G202 -- SQLite cannot bind identifiers; quoteIdentifier escapes the table name and rowID is a bound parameter.
-	statement := "DELETE FROM " + quoteIdentifier(table) + " WHERE rowid = ?"
-	result, err := s.db.ExecContext(ctx, statement, rowID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+	return s.backend.deleteRow(ctx, table, rowID)
 }
 
 // columnDeclaredType is the type a column was declared with, empty when the
 // column was declared without one.
 func (s *databaseSession) columnDeclaredType(ctx context.Context, table, column string) (string, error) {
-	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info("+quoteIdentifier(table)+")")
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var (
-			cid       int
-			name      string
-			declared  string
-			notNull   int
-			dfltValue any
-			pk        int
-		)
-		if err := rows.Scan(&cid, &name, &declared, &notNull, &dfltValue, &pk); err != nil {
-			return "", err
-		}
-		if strings.EqualFold(name, column) {
-			return declared, nil
-		}
-	}
-	return "", rows.Err()
+	return s.backend.columnDeclaredType(ctx, table, column)
 }
 
 // typeAffinity is the affinity SQLite derives from a declared type, by the

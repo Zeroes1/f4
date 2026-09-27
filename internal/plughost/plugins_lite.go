@@ -11,14 +11,16 @@ import (
 // a CLI-tool-wrapper archive provider (tar/unzip/7z/gzip, whichever the host
 // has) in place of the full build's native-library one (part 2), and NetFox
 // cut down to FISH+ over a subprocess ssh dialer in place of the full
-// build's FTP/SFTP/FISH+ trio (part 3) -- no cloud VFS provider and no
-// SQLite client at all. None of the cloud SDKs jlaffaye/ftp, pkg/sftp,
-// kbolino/pageant or golang.org/x/crypto/ssh, nor the archive libraries
-// multiarc's tool-wrapper replaces, nor github.com/ncruces/go-sqlite3, are
-// even imported; cmd/f4's TestLiteBuildExcludesHeavyNetworkDependencies and
-// TestLiteBuildExcludesSQLiteDependency check this mechanically, from
-// `go list -deps`, rather than trusting this comment to stay accurate. See plugins_full.go for the full list and
-// manager.go for where this is called.
+// build's FTP/SFTP/FISH+ trio (part 3) -- no cloud VFS provider at all. None
+// of the cloud SDKs jlaffaye/ftp, pkg/sftp, kbolino/pageant or
+// golang.org/x/crypto/ssh, nor the archive libraries multiarc's
+// tool-wrapper replaces, are even imported; cmd/f4's
+// TestLiteBuildExcludesHeavyNetworkDependencies and
+// TestLiteBuildExcludesArchiveLibraries check this mechanically, from
+// `go list -deps`, rather than trusting this comment to stay accurate. See
+// plugins_full.go for the full list and manager.go for where this is
+// called. The SQLite client is in both builds (manager.go); in this one it
+// runs the host's sqlite3 tool instead of linking the engine.
 //
 // netfox.NetFoxPlugin (netfox.go) is the same plugin type the full build
 // registers: it stores connections and offers the same "Add/Edit

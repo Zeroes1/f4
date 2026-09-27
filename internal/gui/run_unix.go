@@ -1,4 +1,4 @@
-//go:build (linux || darwin || openbsd || netbsd || dragonfly || freebsd || illumos || solaris) && !lite
+//go:build linux || darwin || openbsd || netbsd || dragonfly || freebsd || illumos || solaris
 
 package gui
 
