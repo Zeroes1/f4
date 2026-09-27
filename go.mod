@@ -6,13 +6,6 @@ require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/alecthomas/chroma/v2 v2.15.0
-	github.com/aws/aws-sdk-go-v2 v1.43.7
-	github.com/aws/aws-sdk-go-v2/config v1.32.38
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.37
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.42
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.15
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3
-	github.com/aws/smithy-go v1.27.8
 	github.com/charlievieth/strcase v0.0.6
 	github.com/coregx/coregex v0.12.19
 	github.com/danielpaulus/go-ios v1.2.2-0.20260805152531-ebec9a0b076c
@@ -47,19 +40,28 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
-	github.com/zalando/go-keyring v0.2.8
 	github.com/zzl/go-win32api/v2 v2.1.0
 	golang.org/x/arch v0.30.0
 	golang.org/x/crypto v0.56.0
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.58.0
-	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
 	golang.org/x/text v0.41.0
-	google.golang.org/api v0.264.0
 	gopkg.in/yaml.v3 v3.0.1
 )
+
+// f4#1178 part 1: aws-sdk-go-v2 (+ its config/credentials/feature/service
+// submodules), aws/smithy-go, zalando/go-keyring, google.golang.org/api and
+// golang.org/x/oauth2 were direct requires only for plugins/cloudfox, which
+// is now its own module (plugins/cloudfox/go.mod) and no longer part of
+// this build. The indirect require block below still lists some of their
+// own transitive dependencies (cloud.google.com/go/auth, the
+// go.opentelemetry.io/* set, google.golang.org/grpc, ...); nothing in this
+// module imports them any more, so they compile into nothing, but a
+// `go mod tidy` pass (in CI, not locally -- see build-cloudfox-plugin in
+// .github/workflows/build.yml) is expected follow-up to prune the now-stale
+// entries rather than something this PR hand-edited blind.
 
 require (
 	cloud.google.com/go/auth v0.18.2 // indirect

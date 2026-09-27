@@ -692,6 +692,74 @@ jobs:
         path: ${{ env.ASSET }}.tar.gz
         retention-days: 7
 
+  # f4#1178 part 1 of 4 (plan: issuecomment-5851218447 on #1178): CloudFox
+  # (S3/Google Drive/Yandex Disk/WebDAV, plugins/cloudfox) moved out of the
+  # main module into its own module and its own subprocess RPC plugin
+  # binary, so the build job above no longer builds or tests it as part of
+  # ./cmd/f4. This job is that binary's own build: it exists to prove the
+  # extraction actually compiles, on the same 6-cell desktop matrix the main
+  # build job releases (native plugins are not distributed through the
+  # community PlugRing catalog per PLUGRING.md, so the exotic build-batch
+  # tier does not apply). It intentionally runs on pull requests too, unlike
+  # build-lite, since verifying this split is exactly what this PR is.
+  #
+  # go.mod here was written by hand (this repo's policy is CI-only
+  # builds/toolchain runs, never local -- see plugins/cloudfox/go.mod's own
+  # comment), so `go mod tidy` runs first rather than assuming it is already
+  # correct.
+  build-cloudfox-plugin:
+    name: Build cloudfox-plugin (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux/amd64
+            goos: linux
+            goarch: amd64
+          - name: linux/arm64
+            goos: linux
+            goarch: arm64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+          - name: darwin/amd64
+            goos: darwin
+            goarch: amd64
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    defaults:
+      run:
+        working-directory: plugins/cloudfox
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: plugins/cloudfox/go.sum
+
+    - name: go mod tidy
+      run: go mod tidy
+
+    - name: Build cloudfox-plugin
+      run: go build -trimpath -o cloudfox-plugin ./cmd/cloudfox-plugin
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go vet ./...
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: plugins/cloudfox/cloudfox-plugin
+        retention-days: 7
+
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
   # starts from a shell but dies the moment it re-execs itself for the
   # daemon: untrusted_app on current Android refuses to exec such a file,
