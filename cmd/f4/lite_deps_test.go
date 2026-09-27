@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -163,13 +164,15 @@ func TestLiteBuildExcludesGPUBackends(t *testing.T) {
 }
 
 // TestLiteBuildStillIncludesX11AndWayland is the other side of the same
-// check: the lite build draws a window with X11 or Wayland.
+// check: the lite build draws a window with X11 or Wayland. It asks about
+// linux/amd64, the lite target that has both; vtui builds no Wayland
+// backend on the host this may run on (macOS, Windows).
 func TestLiteBuildStillIncludesX11AndWayland(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available")
 	}
 
-	deps := liteBuildDeps(t)
+	deps := liteBuildDepsFor(t, "linux", "amd64")
 	for _, want := range []string{"github.com/jezek/xgb", "github.com/neurlang/wayland/window"} {
 		found := false
 		for _, imported := range deps {
@@ -425,8 +428,19 @@ const liteBuildTags = "lite,vtui_noebiten,vtui_nogogpu"
 // liteBuildDeps lists the packages a lite build of ./cmd/f4 links.
 func liteBuildDeps(t *testing.T) []string {
 	t.Helper()
+	return liteBuildDepsFor(t, "", "")
+}
+
+// liteBuildDepsFor is liteBuildDeps for a given GOOS/GOARCH; empty means
+// the host's.
+func liteBuildDepsFor(t *testing.T, goos, goarch string) []string {
+	t.Helper()
 	command := exec.Command("go", "list", "-tags", liteBuildTags, "-deps", "./cmd/f4")
 	command.Dir = testutil.ModuleRootDir(t)
+	command.Env = os.Environ()
+	if goos != "" {
+		command.Env = append(command.Env, "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	}
 	out, err := command.Output()
 	if err != nil {
 		stderr := ""
