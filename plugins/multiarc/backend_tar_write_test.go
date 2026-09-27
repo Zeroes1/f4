@@ -154,10 +154,13 @@ func TestTarAddGNUCompressedEditsPrivateCopy(t *testing.T) {
 	if got := normalizeWorkDir(f.commands()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)
 	}
-	if f.calls[1].dir != "/stage" {
-		t.Errorf("tar -r ran in %q, want /stage", f.calls[1].dir)
+	// calls[0] is planTarEdit's own "tar --version" probe, in f4's own
+	// directory; calls[1] is "gzip -d", calls[2] the "-r" and calls[3]
+	// "gzip -f".
+	if f.calls[2].dir != "/stage" {
+		t.Errorf("tar -r ran in %q, want /stage", f.calls[2].dir)
 	}
-	for _, c := range []fakeCall{f.calls[0], f.calls[2]} {
+	for _, c := range []fakeCall{f.calls[1], f.calls[3]} {
 		if c.dir == "" || !strings.HasPrefix(c.dir, strings.TrimSuffix(arc, "a.tar.gz")) {
 			t.Errorf("%s ran in %q, want the work directory next to the archive", c.name, c.dir)
 		}
@@ -245,8 +248,10 @@ func TestTarAddBSDPlainAppends(t *testing.T) {
 	if got := normalizeWorkDir(f.commands()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %q, want %q", got, want)
 	}
-	if f.calls[0].dir != "/stage" {
-		t.Errorf("tar -r ran in %q, want /stage", f.calls[0].dir)
+	// calls[0] is planTarEdit's own "tar --version" probe; calls[1] is the
+	// "-r" itself.
+	if f.calls[1].dir != "/stage" {
+		t.Errorf("tar -r ran in %q, want /stage", f.calls[1].dir)
 	}
 	if got := readArchive(t, arc); got != "ORIG|r:new" {
 		t.Fatalf("archive = %q", got)
