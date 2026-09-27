@@ -451,7 +451,6 @@ Every file tracked in the repository. Regenerate with
     │   └── workflows
     │       ├── build.yml
     │       ├── go-cache-salt
-    │       ├── nix.yml
     │       ├── quick.yml
     │       └── sandbox.yml
     ├── .gitignore
@@ -469,6 +468,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── action_copyname_parent_test.go
     │   │   ├── action_copy_window_title_test.go
     │   │   ├── action_delete_cursor_test.go
+    │   │   ├── action_enabled_test.go
     │   │   ├── action_labelkeys_test.go
     │   │   ├── action_marked_clipboard_test.go
     │   │   ├── action_menu.go
@@ -1243,6 +1243,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── hotkeys.go
     │   │   ├── input.go
     │   │   ├── input_translation_test.go
+    │   │   ├── keybar_labels_enabled_test.go
     │   │   ├── keymap_test.go
     │   │   ├── kitty_coverage_batch39_test.go
     │   │   ├── kitty_coverage_extra_test.go
@@ -2803,4 +2804,4 @@ Every file tracked in the repository. Regenerate with
         ├── utils_test.go
         └── vfs.go
     
-    229 directories, 2570 files
+    229 directories, 2571 files
