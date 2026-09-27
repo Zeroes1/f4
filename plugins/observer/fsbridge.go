@@ -50,12 +50,44 @@ func NewSingleFileFS(ctx context.Context, name string, ra ReaderAt) SingleFileFS
 }
 
 // Open implements fs.FS.
+//
+// It also answers Open(".") with a virtual, empty root directory. wazero
+// v1.12.0 lazily opens "." on a mount's own preopen to confirm it really is
+// a directory, both when the guest's libc first enumerates its preopens
+// (fd_prestat_get, internal/sys/lazy.go's lazyDir.file, called from
+// preopenPath in imports/wasi_snapshot_preview1/fs.go) and again on every
+// later path_open against it (atPath, same file). A mount with no answer for
+// "." fails that check, wasi-libc treats the resulting EBADF as "there is no
+// preopen at all", and every absolute path -- including the one file this
+// type actually serves -- then fails with ENOENT before path_open is ever
+// reached, no matter how the requested name compares to s.name.
 func (s SingleFileFS) Open(name string) (fs.File, error) {
+	if name == "." {
+		return &dirFile{}, nil
+	}
 	if name != s.name {
 		return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 	}
 	return &mountFile{ctx: s.ctx, name: s.name, ra: s.ra, modTime: s.modTime}, nil
 }
+
+// dirFile is the virtual root directory Open(".") returns. It carries no
+// real entries -- SingleFileFS never has to answer a directory listing, only
+// prove to wazero's preopen check that "." is a directory at all.
+type dirFile struct{}
+
+func (d *dirFile) Stat() (fs.FileInfo, error) { return dirFileInfo{}, nil }
+func (d *dirFile) Read([]byte) (int, error)   { return 0, io.EOF }
+func (d *dirFile) Close() error               { return nil }
+
+type dirFileInfo struct{}
+
+func (dirFileInfo) Name() string       { return "." }
+func (dirFileInfo) Size() int64        { return 0 }
+func (dirFileInfo) Mode() fs.FileMode  { return fs.ModeDir | 0o555 }
+func (dirFileInfo) ModTime() time.Time { return time.Time{} }
+func (dirFileInfo) IsDir() bool        { return true }
+func (dirFileInfo) Sys() any           { return nil }
 
 // mountFile adapts a ReaderAt into an fs.File that also implements
 // io.ReaderAt and io.Seeker, which is what lets wazero's WASI implementation

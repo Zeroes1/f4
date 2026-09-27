@@ -38,10 +38,19 @@ OBSERVER_DIR="$REPO_ROOT/plugins/observer"
 SRC="$OBSERVER_DIR/testdata/stub/observer_stub.c"
 OUT="$OBSERVER_DIR/testdata/observer_stub.wasm"
 
+SYSROOT="$WASI_SDK_PATH/share/wasi-sysroot"
+
 echo "Using WASI SDK: $WASI_SDK_PATH"
 echo "Building: $SRC -> $OUT"
 
+# wazero's wasi_snapshot_preview1 package implements the classic WASI
+# "preview 1" flat syscall ABI (fd_prestat_get, path_open, ...), not the
+# newer component-model preview 2/3. --target/--sysroot are given explicitly
+# rather than trusting clang's own default, which some wasi-sdk releases
+# point at a newer preview by default.
 "$CLANG" \
+    --target=wasm32-wasip1 \
+    --sysroot="$SYSROOT" \
     -O2 \
     -mexec-model=reactor \
     -Wl,--export=LoadSubModule \
