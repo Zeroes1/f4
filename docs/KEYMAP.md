@@ -158,6 +158,38 @@ one is built in and does not have to be written out by hand — see
 [Mac keyboard mode](MACKEYS.md). A rule here still wins over it, so a key you
 have remapped yourself keeps what you gave it.
 
+## Example: matching keys from another file manager
+
+`keymap.ini` swaps *keys*, not commands, so giving f4 a layout that matches
+muscle memory from Total Commander, an older Far build, or anything else is
+the same recipe regardless of where the habit comes from: for every command
+whose old key differs from f4's, find the key f4 already has it on and add
+one line teaching the old key to reach it too.
+
+`Ctrl+Shift+P` is the fastest way to find that key: it looks commands up by
+name and shows the chord currently bound to each one. Say your fingers
+expect a chord for some command — open the palette, find that command by
+name, note the key it already answers to in f4, and add a line teaching your
+old chord to reach it too:
+
+```ini
+[Shell]
+<your old chord>=<the key the palette showed>
+```
+
+For "Swap Panels", for instance, f4's own default already happens to be
+`Ctrl+U`, so nothing would be needed there — but the same one-line recipe
+covers whichever commands your particular habit does expect somewhere else.
+
+Repeat for every other command your muscle memory expects on a different
+key. There is no separate "Total Commander preset" to keep in sync here:
+each command keeps working under its own key exactly as before, and this
+file only teaches the old chord to reach it too — the same mechanism as the
+multiplexer and F-row workarounds earlier in this document, just aimed at a
+different habit. See also `Options > Hotkey Configuration` in the next
+section if what you actually want is to give a command a *new* key rather
+than have an old one reach its current one.
+
 ## Choosing between the two files
 
 Rebinding a command is still the better tool when a command is what you want
