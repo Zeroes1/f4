@@ -59,6 +59,24 @@ func zipRealFixture(t *testing.T) string {
 	return src
 }
 
+// Viewing "dir/[ab].txt" used to extract dir/a.txt instead (unzip read the
+// name as a pattern), and viewing "-dash.txt" failed outright.
+func TestZipRealOpensLiteralNames(t *testing.T) {
+	requireRealTool(t, "zip", "unzip")
+	src := t.TempDir()
+	writeTree(t, src, map[string]string{"dir/[ab].txt": "brackets", "dir/a.txt": "a", "-dash.txt": "dash"})
+	arc := filepath.Join(t.TempDir(), "x.zip")
+	runReal(t, src, "zip", "-q", "-r", "-nw", arc, "--", "dir", "-dash.txt")
+	t.Cleanup(closeSharedMultiArcTempDirs)
+	v := openReal(t, arc)
+	if got := readMember(t, v, "/dir/[ab].txt"); got != "brackets" {
+		t.Errorf("dir/[ab].txt = %q, want brackets", got)
+	}
+	if got := readMember(t, v, "/-dash.txt"); got != "dash" {
+		t.Errorf("-dash.txt = %q, want dash", got)
+	}
+}
+
 func TestZipRealWriteWithInfoZip(t *testing.T) {
 	requireRealTool(t, "zip", "unzip")
 	src := zipRealFixture(t)

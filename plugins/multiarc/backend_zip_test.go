@@ -45,6 +45,39 @@ func TestZipBackendExtractOne(t *testing.T) {
 	}
 }
 
+func TestUnzipLiteral(t *testing.T) {
+	cases := map[string]string{
+		"plain/name.txt": "plain/name.txt",
+		"dir/[ab].txt":   "dir/[[]ab].txt",
+		"w*ld?.txt":      "w[*]ld[?].txt",
+		"-dash.txt":      "[-]dash.txt",
+		"a-b/-c":         "a-b/-c",
+		`back\slash`:     `back\\slash`,
+	}
+	for in, want := range cases {
+		if got := unzipLiteral(in); got != want {
+			t.Errorf("unzipLiteral(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// unzip matches member arguments as wildcard patterns, so a member called
+// "dir/[ab].txt" or "-dash.txt" is asked for through unzipLiteral.
+func TestZipBackendExtractOneLiteralName(t *testing.T) {
+	var gotArgs []string
+	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {
+		gotArgs = args
+		return nil, nil, nil
+	})
+	if err := (zipBackend{}).extractOne(context.Background(), "/a.zip", "/dest", "-dir/[ab].txt"); err != nil {
+		t.Fatalf("extractOne: %v", err)
+	}
+	want := []string{"-o", "-q", "/a.zip", "[-]dir/[[]ab].txt", "-d", "/dest"}
+	if !reflect.DeepEqual(gotArgs, want) {
+		t.Fatalf("args = %v, want %v", gotArgs, want)
+	}
+}
+
 func TestZipBackendExtractAll(t *testing.T) {
 	var gotArgs []string
 	withFakeTools(t, nil, func(ctx context.Context, name string, args ...string) ([]byte, []byte, error) {

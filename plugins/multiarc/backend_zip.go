@@ -50,9 +50,34 @@ func (zipBackend) extractOne(ctx context.Context, localPath, destDir, member str
 	if member == "" {
 		return errors.New("multiarc: extractOne needs a member path")
 	}
-	_, errOut, err := runTool(ctx, "unzip", "-o", "-q", localPath, member, "-d", destDir)
+	pattern := unzipLiteral(member)
+	_, errOut, err := runTool(ctx, "unzip", "-o", "-q", localPath, pattern, "-d", destDir)
 	if err != nil {
-		return fmt.Errorf("multiarc: unzip -o -q %s %s -d %s: %w (%s)", localPath, member, destDir, err, strings.TrimSpace(string(errOut)))
+		return fmt.Errorf("multiarc: unzip -o -q %s %s -d %s: %w (%s)", localPath, pattern, destDir, err, strings.TrimSpace(string(errOut)))
 	}
 	return nil
+}
+
+// unzipLiteral turns a member name into an unzip pattern matching exactly
+// that name. unzip reads every member argument as a wildcard pattern and
+// has no "--" and no switch to turn that off, so "dir/[ab].txt" would
+// extract dir/a.txt and dir/b.txt instead, and "-x.txt" would be taken for
+// options. Each special character goes in a one-character class of its
+// own -- "[*]", "[?]", "[[]", and "[-]" for a leading dash -- and a
+// backslash, unzip's escape character, is doubled.
+func unzipLiteral(member string) string {
+	var b strings.Builder
+	for i, r := range member {
+		switch {
+		case r == '*' || r == '?' || r == '[' || (r == '-' && i == 0):
+			b.WriteByte('[')
+			b.WriteRune(r)
+			b.WriteByte(']')
+		case r == '\\':
+			b.WriteString(`\\`)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
