@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"regexp"
@@ -175,16 +176,32 @@ func readRecords(out []byte) ([][]string, error) {
 }
 
 // typedValue is the select-list expression that reads one column in the
-// typeof:hex form parseTyped takes apart. A real is written out with
-// printf('%!.17g') first: seventeen significant digits bring back the exact
-// double, where hex() of the number would carry whatever text this sqlite3
-// version converts it to, which in older ones is only fifteen digits. The
-// digits are only as good as the SQLite doing the printing, though: macOS's
-// system SQLite formats with plain double arithmetic and hands an extreme
-// value such as 1e300 back one unit in the last place off.
+// typeof:hex form parseTyped takes apart. A finite non-zero real is written
+// out as its exact binary value, mantissa "p" exponent (realBitsSQL): no
+// decimal text survives every sqlite3 build, since the conversion both ways
+// is sqlite3's own and some builds are an ulp off -- macOS's sqlite3 prints
+// 1e300 as 9.999999999999999e+299 even with printf('%!.17g'). Zero and the
+// infinities keep printf's text.
 func typedValue(column string) string {
 	quoted := quoteIdentifier(column)
-	return "typeof(" + quoted + ")||':'||CASE typeof(" + quoted + ") WHEN 'real' THEN hex(printf('%!.17g', " + quoted + ")) ELSE hex(" + quoted + ") END"
+	return "typeof(" + quoted + ")||':'||CASE typeof(" + quoted + ") WHEN 'real' THEN hex(" + realBitsSQL(quoted) + ") ELSE hex(" + quoted + ") END"
+}
+
+// realBitsSQL is the SQL expression that writes the real x as m||'p'||e, an
+// integer m and a power of two e with x = m * 2^e exactly. A recursive CTE
+// scales |x| into [1, 2) by powers of two -- 2^64 at a time, then 2 -- which
+// is exact for every double, subnormals included, and then 2^52 times that
+// is the 53-bit integer mantissa. The powers are built from integers, so no
+// decimal literal is converted on the way. x - x = 0 is false for the
+// infinities (NULL), which printf spells Inf and -Inf.
+func realBitsSQL(x string) string {
+	const big = "(CAST(4294967296 AS REAL) * 4294967296)"
+	return "CASE WHEN " + x + " - " + x + " = 0 AND " + x + " <> 0 THEN (WITH RECURSIVE s(y, e) AS (SELECT abs(" + x + "), 0" +
+		" UNION ALL SELECT CASE WHEN y >= " + big + " THEN y / " + big + " WHEN y >= 2 THEN y / 2 WHEN y * " + big + " < 1 THEN y * " + big + " ELSE y * 2 END," +
+		" CASE WHEN y >= " + big + " THEN e + 64 WHEN y >= 2 THEN e + 1 WHEN y * " + big + " < 1 THEN e - 64 ELSE e - 1 END" +
+		" FROM s WHERE y >= 2 OR y < 1)" +
+		" SELECT CASE WHEN " + x + " < 0 THEN '-' ELSE '' END || CAST(y * 4503599627370496 AS INTEGER) || 'p' || (e - 52) FROM s WHERE y >= 1 AND y < 2)" +
+		" ELSE printf('%!.17g', " + x + ") END"
 }
 
 // typedColumns is typedValue for every column, as a select list.
@@ -214,13 +231,33 @@ func parseTyped(field string) (any, error) {
 	case "integer":
 		return strconv.ParseInt(string(raw), 10, 64)
 	case "real":
-		return strconv.ParseFloat(string(raw), 64)
+		return parseReal(string(raw))
 	case "text":
 		return string(raw), nil
 	case "blob":
 		return raw, nil
 	}
 	return nil, fmt.Errorf("sqlite3: unexpected type %q in output", kind)
+}
+
+// parseReal reads what realBitsSQL wrote: m||'p'||e, or printf's text for
+// zero and the infinities.
+func parseReal(text string) (float64, error) {
+	mantissa, exponent, found := strings.Cut(text, "p")
+	if !found {
+		return strconv.ParseFloat(text, 64)
+	}
+	m, err := strconv.ParseInt(mantissa, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	e, err := strconv.Atoi(exponent)
+	if err != nil {
+		return 0, err
+	}
+	// m has at most 53 bits, so float64(m) is exact, and so is scaling it
+	// back by a power of two to the double it came from.
+	return math.Ldexp(float64(m), e), nil
 }
 
 // unistr decodes the escapes of SQLite's unistr(): \\ for a backslash and

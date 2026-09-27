@@ -33,10 +33,11 @@ func createConformanceDB(t *testing.T) string {
 		`INSERT INTO t VALUES (1, 'plain', NULL, 1.5)`,
 		`INSERT INTO t VALUES (NULL, 'it''s' || char(10) || 'two lines', x'00ff1e1f', -2.25)`,
 		`INSERT INTO t VALUES (3, 'sep' || char(31) || 'inside' || char(30) || 'value', x'', NULL)`,
-		// Not 1e300: macOS's own SQLite formats reals with plain double
-		// arithmetic and hands 1e300 back one unit in the last place off
-		// (typedValue's comment has the detail).
-		`INSERT INTO t VALUES (-9007199254740993, 'тест', 'text in blob', 123456789.125)`,
+		// 1e300 is the value macOS's own sqlite3 prints one ulp off, even
+		// with printf('%!.17g'); typedValue reads it as mantissa and power
+		// of two, so the CLI backend still gets it exactly.
+		`INSERT INTO t VALUES (-9007199254740993, 'тест', 'text in blob', 1e300)`,
+		`INSERT INTO t VALUES (6, 'more reals', 123456789.125, -1.7976931348623157e308)`,
 		`INSERT INTO t VALUES (5, 'reals', 0.1 + 0.2, 4.9e-324)`,
 		`CREATE VIEW v AS SELECT a, d FROM t WHERE a IS NOT NULL`,
 		`CREATE TABLE w (k TEXT PRIMARY KEY, n INT) WITHOUT ROWID`,
@@ -116,7 +117,7 @@ func collectConformance(t *testing.T, open func(context.Context, string) (sessio
 	c.csv = csv.String()
 	// A real typed into the SQL box comes back as the text sqlite3 prints,
 	// and some versions round the last digit on the way, so this leaves
-	// the reals out; f4's own reads get them exactly (printf('%!.17g')).
+	// the reals out; f4's own reads get them exactly (realBitsSQL).
 	c.query, err = session.execute(ctx, "SELECT a, b, c, a IS NULL AS \"x, y\" FROM t ORDER BY rowid")
 	must(err)
 	if _, err := session.execute(ctx, "SELECT * FROM nosuch"); err != nil {

@@ -1,10 +1,14 @@
 package sqlite
 
 import (
+	"encoding/hex"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 )
+
+func hexText(s string) string { return hex.EncodeToString([]byte(s)) }
 
 func TestParseTyped(t *testing.T) {
 	for _, tt := range []struct {
@@ -14,6 +18,11 @@ func TestParseTyped(t *testing.T) {
 		{"null:", nil},
 		{"integer:2D39303037313939323534373430393933", int64(-9007199254740993)},
 		{"real:312E30652B333030", 1e300},
+		{"real:" + hexText("6724873095247260p944"), 1e300},
+		{"real:" + hexText("4503599627370496p-1126"), 5e-324},
+		{"real:" + hexText("-5066549580791808p-51"), -2.25},
+		{"real:" + hexText("5404319552844596p-54"), 0.30000000000000004},
+		{"real:" + hexText("Inf"), math.Inf(1)},
 		{"text:D182D0B5D181D1820A1F1E", "тест\n\x1f\x1e"},
 		{"text:", ""},
 		{"blob:00FF1E1F", []byte{0x00, 0xff, 0x1e, 0x1f}},
