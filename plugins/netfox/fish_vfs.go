@@ -409,9 +409,13 @@ func NewFishVFS(parent vfs.VFS, host, port, user, pass, keyPath string, timeout 
 	return v, nil
 }
 
-// ConnectionInfo implements vfs.ConnectionInfoProvider.
+// ConnectionInfo implements vfs.ConnectionInfoProvider. A session with no
+// host of its own -- the WSL "wsl" site type (wsl_vfs_windows.go) reaches
+// its distribution through a locally spawned wsl.exe, not a network
+// address -- reports ok=false: it is not a second hop any scp-based
+// server-to-server transfer (internal/fileops/ops.go) could ever reach.
 func (v *FishVFS) ConnectionInfo() (host, port, user string, ok bool) {
-	return v.host, v.port, v.user, true
+	return v.host, v.port, v.user, v.host != ""
 }
 
 // client is how every request reaches the session. It asks the connection
