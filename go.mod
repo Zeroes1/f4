@@ -3,16 +3,13 @@ module github.com/unxed/f4
 go 1.26.6
 
 require (
-	github.com/Masterminds/semver v1.5.0
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/alecthomas/chroma/v2 v2.15.0
 	github.com/charlievieth/strcase v0.0.6
 	github.com/coregx/coregex v0.12.19
-	github.com/danielpaulus/go-ios v1.2.2-0.20260805152531-ebec9a0b076c
 	github.com/ebitengine/oto/v3 v3.5.0-alpha.9.0.20260810052149-c311bfa6e535
 	github.com/ebitengine/purego v0.11.0-alpha.8
 	github.com/go-webgpu/goffi v0.6.3
-	github.com/google/uuid v1.6.0
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/jezek/xgb v1.3.1
@@ -62,6 +59,21 @@ require (
 // `go mod tidy` pass (in CI, not locally -- see build-cloudfox-plugin in
 // .github/workflows/build.yml) is expected follow-up to prune the now-stale
 // entries rather than something this PR hand-edited blind.
+
+// f4#1178 iOS plugin, part 1 of 4: github.com/danielpaulus/go-ios,
+// github.com/Masterminds/semver (a go-ios dependency) and github.com/google/uuid
+// (used by plugins/ios/internal/corefileservice) were direct requires only
+// for plugins/ios, which is now its own module (plugins/ios/go.mod) and no
+// longer part of this build, in either the full or the lite build. go-ios's
+// own, fully separate dependency chain -- gvisor.dev/gvisor, quic-go,
+// vishvananda/netlink+netns, songgao/water, miekg/dns, grandcat/zeroconf,
+// howett.net/plist, go.mozilla.org/pkcs7, software.sslmate.com/src/go-pkcs12,
+// golang.zx2c4.com/wintun -- is still listed below as (now stale) indirect
+// version pins for the same reason the cloudfox-era entries above are: a
+// `go mod tidy` pass (in CI, not locally -- see build-ios-plugin in
+// .github/workflows/build.yml) is expected follow-up to prune them, and
+// cmd/f4/ios_deps_test.go is the mechanical proof that nothing in this
+// module imports them any more.
 
 require (
 	cloud.google.com/go/auth v0.18.2 // indirect

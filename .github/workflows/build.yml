@@ -282,7 +282,6 @@ jobs:
         cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
-        cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
 
         # Add freedesktop launch metadata and the application icon to Linux archives.
         if [ "$GOOS" = "linux" ]; then
@@ -524,7 +523,6 @@ jobs:
           cp f4.example.ini "$BUILD_DIR/"
           mkdir -p "$BUILD_DIR/licenses"
           cp plugins/visren/LICENSE.upstream "$BUILD_DIR/licenses/VisRen-BSD-3-Clause.txt"
-          cp plugins/ios/LICENSE.go-ios "$BUILD_DIR/licenses/go-ios-MIT.txt"
 
           if [ "$GOOS" = "linux" ]; then
             mkdir -p "$BUILD_DIR/share/applications"
@@ -748,7 +746,6 @@ jobs:
         cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
-        cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
 
     - name: Smoke test the binary
       # Same mechanism as build-batch above: qemu-user-static's binaries run a
@@ -783,16 +780,33 @@ jobs:
   # main module into its own module and its own subprocess RPC plugin
   # binary, so the build job above no longer builds or tests it as part of
   # ./cmd/f4. This job is that binary's own build: it exists to prove the
-  # extraction actually compiles, on the same 6-cell desktop matrix the main
-  # build job releases (native plugins are not distributed through the
-  # community PlugRing catalog per PLUGRING.md, so the exotic build-batch
-  # tier does not apply). It intentionally runs on pull requests too, unlike
-  # build-lite, since verifying this split is exactly what this PR is.
+  # extraction actually compiles, on a desktop matrix (native plugins are not
+  # distributed through the community PlugRing catalog per PLUGRING.md, so
+  # the exotic build-batch tier does not apply). It intentionally runs on
+  # pull requests too, unlike build-lite, since verifying this split is
+  # exactly what this PR is.
   #
   # go.mod here was written by hand (this repo's policy is CI-only
   # builds/toolchain runs, never local -- see plugins/cloudfox/go.mod's own
   # comment), so `go mod tidy` runs first rather than assuming it is already
   # correct.
+  #
+  # f4#1178 part 2 of 4: the release job below now publishes these builds as
+  # GitHub Release assets, at the path plugring-manifest.json's URL template
+  # expects. NOTE: this matrix only has 4 cells (windows/arm64 and
+  # darwin/arm64 are missing) while the main `build` job above targets 6; a
+  # user on either missing platform gets a 404 from the manifest URL today.
+  # Widening this matrix is left to a later part -- it changes CI job budget
+  # (see LUNOBOT.md), which this part deliberately did not touch.
+  #
+  # f4#1178 part 3 of 4: "not distributed through the community PlugRing
+  # catalog" above is still true of plugring/index.yaml specifically -- that
+  # is the file PLUGRING.md's policy governs, and a native per-platform
+  # binary still does not belong in it. It is no longer the whole story:
+  # internal/plughost/plugring_firstparty.go now offers this same binary
+  # through a separate, explicitly first-party PlugRing entry that the
+  # community distribution policy does not apply to (same repository, same
+  # review, same CI -- not a third party's unreviewable binary).
   build-cloudfox-plugin:
     name: Build cloudfox-plugin (${{ matrix.name }})
     needs: [should-run-full]
@@ -841,11 +855,221 @@ jobs:
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: go vet ./...
 
+    # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
+    # plugring-manifest.json's URL template expects, for two reasons. First,
+    # the `release` job below downloads every artifact from this run with
+    # `merge-multiple: true`; four matrix cells all producing a file literally
+    # named `cloudfox-plugin` would collide into one arbitrary binary instead
+    # of publishing four platform assets. Second, the release asset name has
+    # to be predictable for the manifest URL to resolve at all.
+    - name: Package cloudfox-plugin
+      run: tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tar.gz" cloudfox-plugin
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/cloudfox/cloudfox-plugin
+        path: plugins/cloudfox/cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        retention-days: 7
+
+  # f4#1178 Android plugin, part 1 of 4 (mirrors build-cloudfox-plugin above,
+  # per the owner's decision at
+  # https://github.com/unxed/f4/issues/1178#issuecomment-5851392645 to give
+  # Android the same "download this plugin on demand" treatment as cloud
+  # storage/iOS). plugins/android (ADB device browsing over shell-v2/FISH+
+  # or ADB Sync) no longer links into f4 at all, in either the full or the
+  # lite build; this job builds its own extracted module as its own binary
+  # to prove the extraction compiles, on the same desktop matrix
+  # build-cloudfox-plugin uses (native plugins are not distributed through
+  # the community PlugRing catalog per PLUGRING.md, so the exotic
+  # build-batch tier does not apply here either).
+  #
+  # Unlike CloudFox, plugins/android has no unique heavy dependency of its
+  # own to shed -- see plugins/android/rpc_plugin.go's package comment for
+  # why this job still passes -tags lite: plugins/netfox (which
+  # plugins/android reuses for FISH+) gates its FTP/SFTP/SSH-dialer/Pageant
+  # files with //go:build lite/!lite rather than splitting them into a
+  # separate module, so a plain `go build` here would otherwise link all of
+  # that in even though plugins/android's own code never references it.
+  #
+  # go.mod here was written by hand, for the same reason
+  # plugins/cloudfox/go.mod's own comment gives (this repo's policy is
+  # CI-only builds/toolchain runs, never local): the `go mod tidy` step
+  # below is the actual source of truth for it and go.sum.
+  #
+  # f4#1178 part 2 of 4: the release job below now publishes these builds as
+  # GitHub Release assets too, at the path plugring-manifest.json's URL
+  # template expects (mirrors build-cloudfox-plugin's own part 2). Same
+  # caveat as that job: this matrix only has 4 of the 6 desktop cells (no
+  # windows/arm64, darwin/arm64), so those two platforms still 404 on the
+  # manifest URL; widening it is left to a later part, same reasoning as
+  # cloudfox's own part 2 (CI job budget, see LUNOBOT.md).
+  #
+  # An install path through PlugRing (part 3) and a lite/full-build menu
+  # entry (part 4) are still follow-up, exactly as they were for CloudFox.
+  build-android-plugin:
+    name: Build android-plugin (${{ matrix.name }})
+    needs: [should-run-full]
+    if: needs.should-run-full.outputs.run-full == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux/amd64
+            goos: linux
+            goarch: amd64
+          - name: linux/arm64
+            goos: linux
+            goarch: arm64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+          - name: darwin/amd64
+            goos: darwin
+            goarch: amd64
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    defaults:
+      run:
+        working-directory: plugins/android
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: plugins/android/go.sum
+
+    # go.sum entries don't affect the compiled binary -- that's controlled
+    # by `-tags lite` on the actual build step below -- so a plain tidy
+    # here is fine even though it resolves plugins/netfox's full (non-lite)
+    # file set too; `go mod tidy` has no `-tags` flag to scope that (it
+    # fails outright: "flag provided but not defined: -tags").
+    - name: go mod tidy
+      run: go mod tidy
+
+    - name: Build android-plugin
+      run: go build -trimpath -tags lite -o android-plugin ./cmd/android-plugin
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go vet -tags lite ./...
+
+    # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
+    # plugring-manifest.json's URL template expects, for the same two reasons
+    # as build-cloudfox-plugin's own Package step: the `release`/`nightly`
+    # jobs below sweep every workflow artifact into one directory with
+    # `merge-multiple: true`, so four matrix cells all producing a file
+    # literally named `android-plugin` would collide into one arbitrary
+    # binary instead of publishing four platform assets; and the release
+    # asset name has to be predictable for the manifest URL to resolve.
+    - name: Package android-plugin
+      run: tar -czvf "android-plugin-$GOOS-$GOARCH.tar.gz" android-plugin
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: plugins/android/android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        retention-days: 7
+
+  # f4#1178 iOS plugin, part 1 of 4 (plan: issuecomment-5851326218 on #1178,
+  # decided at issuecomment-5851392645): plugins/ios (go-ios and its fully
+  # separate userspace networking dependency chain -- gvisor.dev/gvisor,
+  # quic-go, vishvananda/netlink+netns, songgao/water, miekg/dns,
+  # grandcat/zeroconf, howett.net/plist, go.mozilla.org/pkcs7,
+  # software.sslmate.com/src/go-pkcs12, golang.zx2c4.com/wintun) moved out of
+  # the main module into its own module and its own subprocess RPC plugin
+  # binary, so the build job above no longer builds or tests it as part of
+  # ./cmd/f4. This job is that binary's own build: it exists to prove the
+  # extraction actually compiles, on the same desktop matrix
+  # build-cloudfox-plugin/build-android-plugin use (native plugins are not
+  # distributed through the community PlugRing catalog per PLUGRING.md, so
+  # the exotic build-batch tier does not apply). USB/usbmuxd access is a
+  # desktop-only concern anyway (see plugins/ios/README.md's Requirements
+  # section), so there is no separate mobile/embedded cell to add here.
+  #
+  # Like plugins/cloudfox/go.mod, plugins/ios/go.mod was written by hand
+  # (this repo's policy is CI-only builds/toolchain runs, never local), so
+  # `go mod tidy` runs first rather than assuming it is already correct.
+  #
+  # f4#1178 part 2 of 4: the release job below now publishes these builds as
+  # GitHub Release assets, at the path plugring-manifest.json's URL template
+  # expects. NOTE: this matrix only has 4 cells (windows/arm64 and
+  # darwin/arm64 are missing) while the main `build` job above targets 6; a
+  # user on either missing platform gets a 404 from the manifest URL today.
+  # Widening this matrix is left to a later part -- it changes CI job budget
+  # (see LUNOBOT.md), which this part deliberately did not touch. This
+  # mirrors build-cloudfox-plugin's own part 2 change exactly, including its
+  # 4-cell gap.
+  build-ios-plugin:
+    name: Build ios-plugin (${{ matrix.name }})
+    needs: [should-run-full]
+    if: needs.should-run-full.outputs.run-full == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux/amd64
+            goos: linux
+            goarch: amd64
+          - name: linux/arm64
+            goos: linux
+            goarch: arm64
+          - name: windows/amd64
+            goos: windows
+            goarch: amd64
+          - name: darwin/amd64
+            goos: darwin
+            goarch: amd64
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+    defaults:
+      run:
+        working-directory: plugins/ios
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+
+    - name: Set up Go
+      uses: actions/setup-go@v7
+      with:
+        go-version: '1.26.6'
+        cache-dependency-path: plugins/ios/go.sum
+
+    - name: go mod tidy
+      run: go mod tidy
+
+    - name: Build ios-plugin
+      run: go build -trimpath -o ios-plugin ./cmd/ios-plugin
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: go vet ./...
+
+    # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
+    # plugring-manifest.json's URL template expects, for two reasons. First,
+    # the `release` job below downloads every artifact from this run with
+    # `merge-multiple: true`; four matrix cells all producing a file literally
+    # named `ios-plugin` would collide into one arbitrary binary instead of
+    # publishing four platform assets. Second, the release asset name has to
+    # be predictable for the manifest URL to resolve at all.
+    - name: Package ios-plugin
+      run: tar -czvf "ios-plugin-$GOOS-$GOARCH.tar.gz" ios-plugin
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: plugins/ios/ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
         retention-days: 7
 
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
@@ -927,7 +1151,6 @@ jobs:
         cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
-        cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
 
     # The binary cannot run here (it needs Bionic's loader), so assert the
     # two things that separate it from the useless pure-Go build instead:
@@ -1069,7 +1292,6 @@ jobs:
         cp f4.example.ini build/
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
-        cp plugins/ios/LICENSE.go-ios build/licenses/go-ios-MIT.txt
 
         cd plugins/dummy_internal
         go build -trimpath -ldflags="$LDFLAGS" -o ../../build/plugins/dummy_internal/f4-internal-dummy-plugin.exe .
@@ -2036,7 +2258,7 @@ jobs:
   release:
     name: Release
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -2155,7 +2377,7 @@ jobs:
   nightly:
     name: Nightly
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

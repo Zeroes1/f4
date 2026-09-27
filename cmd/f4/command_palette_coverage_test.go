@@ -170,6 +170,22 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"cloudfox.(*RPCPlugin).ProcessKey": {
 		class: paletteAuditTransportHook, rationale: "CloudFox moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc, not an in-process frame",
 	},
+	// Keyed by directory, not by the file's own `package` clause --
+	// commandPalettePackageOf derives source.pkg from path.Base(directory)
+	// (plugins/ios -> "ios", plugins/android -> "android"), even though the
+	// actual Go package names are iosfs/androidfs. Using the package-clause
+	// name here instead (as an earlier pass of this change did) makes this
+	// audit map silently fail to match the real discovered key, which
+	// surfaces as both "unexpected production surfaces" (the real ios./
+	// android.-prefixed key) and "stale allowlist entries" (the wrong
+	// iosfs./androidfs.-prefixed key sitting unused) in this test's own
+	// failure output -- not two different problems, one typo caught twice.
+	"ios.(*RPCPlugin).ProcessKey": {
+		class: paletteAuditTransportHook, rationale: "iOS moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc/cloudfox, not an in-process frame",
+	},
+	"android.(*RPCPlugin).ProcessKey": {
+		class: paletteAuditTransportHook, rationale: "Android moved out-of-process (f4#1178 part 1); this is the same RPC plugin ProcessKey protocol hook as dummy_rpc/cloudfox/iOS, not an in-process frame",
+	},
 	"envman.(*managerWindow).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "Environment Manager owns these keys inside its plugin window, reached through its rich command",
 	},

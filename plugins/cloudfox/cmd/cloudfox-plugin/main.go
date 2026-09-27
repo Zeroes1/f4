@@ -15,11 +15,15 @@
 // reference example this mirrors).
 //
 // See plugring-manifest.json in this directory for the declarative
-// manifest PlugRing needs to offer this as an installable plugin -- wiring
-// that manifest into an actual download/install flow (building and
-// publishing release binaries per platform, adding a catalog or
-// first-party "Install cloud storage support" entry) is part 2/3 of the
-// plan above, not part 1.
+// manifest PlugRing needs to offer this as an installable plugin. Building
+// and publishing release binaries per platform is part 2 of the plan above;
+// internal/plughost/plugring_firstparty.go's FirstPartyPlugRingItems (part 3)
+// mirrors this same manifest by hand into a first-party PlugRing entry, so
+// the PlugRing UI's "download and install in one click" offers cloudfox
+// without a community plugring/index.yaml entry, which PLUGRING.md's
+// distribution policy would refuse for a native, per-platform binary like
+// this one. Keep the two in sync when either changes; they cannot share code
+// across the module boundary plugins/cloudfox's own go.mod draws (part 1).
 package main
 
 import (
