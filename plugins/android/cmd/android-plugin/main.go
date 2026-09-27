@@ -23,10 +23,18 @@
 // extraction this one repeats).
 //
 // See plugring-manifest.json in this directory for the declarative
-// manifest a later part of the plan needs to offer this as an installable
-// plugin. Publishing release binaries per platform, and wiring an actual
-// install path through PlugRing or a lite-build menu entry, are parts 2-4
-// of the plan and not done here.
+// manifest PlugRing needs to offer this as an installable plugin. Building
+// and publishing release binaries per platform is part 2 of the plan above
+// (done: build-android-plugin in .github/workflows/build.yml archives and
+// publishes them); internal/plughost/plugring_firstparty.go's
+// FirstPartyPlugRingItems (part 3) mirrors this same manifest by hand into a
+// first-party PlugRing entry, so the PlugRing UI's "download and install in
+// one click" offers android without a community plugring/index.yaml entry,
+// which PLUGRING.md's distribution policy would refuse for a native,
+// per-platform binary like this one. Keep the two in sync when either
+// changes; they cannot share code across the module boundary
+// plugins/android's own go.mod draws (part 1). A menu entry that points a
+// lite/full build's "Android" drive at this install path is part 4.
 package main
 
 import (

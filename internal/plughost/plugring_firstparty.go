@@ -10,14 +10,15 @@ package plughost
 // an entrypoint that is not a bare .lua or .wasm file, because a platform
 // binary submitted to a community catalog is a binary no distribution will
 // mirror, no reviewer can audit, and no user can check. That is a real threat
-// -- but it is a threat about a stranger's binary. cloudfox-plugin is not a
-// stranger's binary: it is built by this repository's own CI
-// (.github/workflows/build.yml's build-cloudfox-plugin job) from code that
-// went through this repository's own PR review, and published as this
-// repository's own GitHub Release asset (f4#1178 part 2 of 4). Treating it
-// exactly like an unreviewed third-party submission would not add any safety;
-// it would only stop f4 from offering "install cloudfox" through the UI it
-// already has for everything else.
+// -- but it is a threat about a stranger's binary. cloudfox-plugin and
+// android-plugin are not a stranger's binary: each is built by this
+// repository's own CI (.github/workflows/build.yml's build-cloudfox-plugin
+// and build-android-plugin jobs) from code that went through this
+// repository's own PR review, and published as this repository's own GitHub
+// Release asset (f4#1178 part 2 of 4, for both). Treating either exactly
+// like an unreviewed third-party submission would not add any safety; it
+// would only stop f4 from offering "install cloudfox"/"install android"
+// through the UI it already has for everything else.
 //
 // So this file is the one and only place a PlugRingItem gets FirstParty:
 // true. PlugRingItem.FirstParty is tagged json:"-" and yaml:"-", so nothing
@@ -26,7 +27,8 @@ package plughost
 // distribution policy in PlugRingItemProblem keeps applying in full to every
 // entry that does not come from here.
 //
-// f4#1178 part 3 of 4 (plan: issuecomment-5851218447 on #1178).
+// f4#1178 part 3 of 4 (plan: issuecomment-5851218447 on #1178 for cloudfox;
+// issuecomment-5851392645 for android's own equivalent part 3).
 
 // cloudFoxPlugRingVersion mirrors plugins/cloudfox/cmd/cloudfox-plugin/
 // plugring-manifest.json's version field by hand: that manifest lives in
@@ -43,6 +45,18 @@ package plughost
 // (this file, and the PlugRingItemProblem/UI changes alongside it) does not
 // by itself make the asset exist -- see f4#1178 part 4 and later.
 const cloudFoxPlugRingVersion = "0.0.0-part3-published-not-installable"
+
+// androidPlugRingVersion mirrors plugins/android/cmd/android-plugin/
+// plugring-manifest.json's version field by hand, for the same
+// module-boundary reason cloudFoxPlugRingVersion's own comment gives: this
+// package's module cannot import or go:embed across plugins/android's own
+// go.mod (split out in the Android plugin's part 1). Keep the two matching
+// when either changes.
+//
+// Same "not installable yet" caveat as cloudFoxPlugRingVersion: nothing
+// about landing this first-party entry makes
+// android-plugin-{os}-{arch}.tar.gz actually exist on a tagged release.
+const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 
 // FirstPartyPlugRingItems returns f4's own first-party PlugRing catalog. It
 // is a plain function, not a package-level var, so nothing outside this file
@@ -64,6 +78,24 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// this exact name.
 			URL:        "https://github.com/unxed/f4/releases/latest/download/cloudfox-plugin-{os}-{arch}.tar.gz",
 			Entrypoint: "cloudfox-plugin",
+			Category:   PlugRingCategoryFilesystem,
+			Runtimes:   []string{PlugRingRuntimeNative},
+			FirstParty: true,
+		},
+		{
+			ID:      "android",
+			Name:    "Android devices (ADB)",
+			Version: androidPlugRingVersion,
+			Author:  "unxed",
+			Description: "Browse Android devices known to the local ADB server as a top-level f4 " +
+				"drive (shell-v2/FISH+ or ADB Sync). Ships as a native subprocess plugin, same " +
+				"install mechanism as cloud storage/iOS (f4#1178).",
+			// {os}/{arch}: same community-catalog exemption cloudfox's own
+			// entry documents above. See build-android-plugin in
+			// .github/workflows/build.yml for how each platform's asset gets
+			// this exact name.
+			URL:        "https://github.com/unxed/f4/releases/latest/download/android-plugin-{os}-{arch}.tar.gz",
+			Entrypoint: "android-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
 			FirstParty: true,
