@@ -46,12 +46,12 @@ require (
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/go-webgpu/goffi v0.6.3 // indirect
 	github.com/go-webgpu/webgpu v0.5.5 // indirect
-	github.com/gogpu/gg v0.52.3 // indirect
+	github.com/gogpu/gg v0.52.5 // indirect
 	github.com/gogpu/gogpu v0.53.0 // indirect
 	github.com/gogpu/gpucontext v0.28.0 // indirect
 	github.com/gogpu/gputypes v0.5.2 // indirect
 	github.com/gogpu/naga v0.18.0 // indirect
-	github.com/gogpu/wgpu v0.31.4 // indirect
+	github.com/gogpu/wgpu v0.31.6 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/grandcat/zeroconf v1.0.0 // indirect
@@ -72,7 +72,7 @@ require (
 	github.com/unxed/kiwi-go v0.1.0 // indirect
 	github.com/unxed/libwinescape v0.2.1 // indirect
 	github.com/unxed/localecp v0.1.6 // indirect
-	github.com/unxed/vtui v0.1.369 // indirect
+	github.com/unxed/vtui v0.1.370 // indirect
 	github.com/unxed/winkeys v0.1.1 // indirect
 	github.com/unxed/xkb-go v0.1.8 // indirect
 	github.com/vishvananda/netlink v1.3.1 // indirect
@@ -114,3 +114,5 @@ replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.21
 replace github.com/ebitengine/hideconsole => ../../internal/hideconsole
 
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
+
+replace github.com/neurlang/wayland => github.com/unxed/wayland v0.4.5-0.20260924170549-04f3e691fadc

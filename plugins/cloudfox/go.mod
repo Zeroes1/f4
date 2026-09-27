@@ -30,7 +30,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/unxed/f4 v0.0.0
 	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.369
+	github.com/unxed/vtui v0.1.370
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/crypto v0.56.0
@@ -75,12 +75,12 @@ require (
 	github.com/go-webgpu/goffi v0.6.3 // indirect
 	github.com/go-webgpu/webgpu v0.5.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
-	github.com/gogpu/gg v0.52.3 // indirect
+	github.com/gogpu/gg v0.52.5 // indirect
 	github.com/gogpu/gogpu v0.53.0 // indirect
 	github.com/gogpu/gpucontext v0.28.0 // indirect
 	github.com/gogpu/gputypes v0.5.2 // indirect
 	github.com/gogpu/naga v0.18.0 // indirect
-	github.com/gogpu/wgpu v0.31.4 // indirect
+	github.com/gogpu/wgpu v0.31.6 // indirect
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
@@ -132,3 +132,5 @@ replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.21
 replace github.com/ebitengine/hideconsole => ../../internal/hideconsole
 
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
+
+replace github.com/neurlang/wayland => github.com/unxed/wayland v0.4.5-0.20260924170549-04f3e691fadc
