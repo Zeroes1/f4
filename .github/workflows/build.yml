@@ -897,9 +897,16 @@ jobs:
   # CI-only builds/toolchain runs, never local): the `go mod tidy` step
   # below is the actual source of truth for it and go.sum.
   #
-  # This is part 1 of 4 only: publishing release binaries (part 2), an
-  # install path through PlugRing (part 3) and a lite-build menu entry
-  # (part 4) are follow-up, exactly as they were for CloudFox.
+  # f4#1178 part 2 of 4: the release job below now publishes these builds as
+  # GitHub Release assets too, at the path plugring-manifest.json's URL
+  # template expects (mirrors build-cloudfox-plugin's own part 2). Same
+  # caveat as that job: this matrix only has 4 of the 6 desktop cells (no
+  # windows/arm64, darwin/arm64), so those two platforms still 404 on the
+  # manifest URL; widening it is left to a later part, same reasoning as
+  # cloudfox's own part 2 (CI job budget, see LUNOBOT.md).
+  #
+  # An install path through PlugRing (part 3) and a lite/full-build menu
+  # entry (part 4) are still follow-up, exactly as they were for CloudFox.
   build-android-plugin:
     name: Build android-plugin (${{ matrix.name }})
     needs: [should-run-full]
@@ -951,11 +958,22 @@ jobs:
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: go vet -tags lite ./...
 
+    # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
+    # plugring-manifest.json's URL template expects, for the same two reasons
+    # as build-cloudfox-plugin's own Package step: the `release`/`nightly`
+    # jobs below sweep every workflow artifact into one directory with
+    # `merge-multiple: true`, so four matrix cells all producing a file
+    # literally named `android-plugin` would collide into one arbitrary
+    # binary instead of publishing four platform assets; and the release
+    # asset name has to be predictable for the manifest URL to resolve.
+    - name: Package android-plugin
+      run: tar -czvf "android-plugin-$GOOS-$GOARCH.tar.gz" android-plugin
+
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/android/android-plugin
+        path: plugins/android/android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
         retention-days: 7
 
   # f4#1178 iOS plugin, part 1 of 4 (plan: issuecomment-5851326218 on #1178,
@@ -2026,7 +2044,7 @@ jobs:
   release:
     name: Release
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, test, race]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -2135,7 +2153,7 @@ jobs:
   nightly:
     name: Nightly
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
-    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, test, race]
+    needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, test, race]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
