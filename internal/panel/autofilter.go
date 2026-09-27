@@ -41,6 +41,7 @@ func (fp *FileSystemPanel) AllEntries() []*FileEntry {
 // one. Directory loads go through here instead of assigning fp.Entries, so a
 // load cannot overwrite the rows an active filter is holding back.
 func (fp *FileSystemPanel) setEntries(entries []*FileEntry) {
+	fp.entriesRevision++
 	if fp.autoFilterOn {
 		fp.unfilteredEntries = entries
 	} else {
@@ -52,6 +53,7 @@ func (fp *FileSystemPanel) setEntries(entries []*FileEntry) {
 // addEntries appends rows to the complete list. A chunked load calls it once
 // per chunk, so the visible list is re-derived per chunk rather than per row.
 func (fp *FileSystemPanel) addEntries(entries ...*FileEntry) {
+	fp.entriesRevision++
 	if fp.autoFilterOn {
 		fp.unfilteredEntries = append(fp.unfilteredEntries, entries...)
 	} else {
@@ -78,6 +80,11 @@ func (fp *FileSystemPanel) autoFilterWanted() bool {
 // back when the filter ends, and otherwise rebuilds the matching subset.
 func (fp *FileSystemPanel) refilterEntries() {
 	defer fp.rebuildDisplayRows()
+	// Called directly (updateAutoFilter/ExitFastFind) as well as through
+	// setEntries/addEntries above, and any of its branches below can replace
+	// fp.Entries wholesale, so it owns its own entriesRevision bump rather
+	// than relying on a caller to have already done one.
+	fp.entriesRevision++
 	switch want := fp.autoFilterWanted(); {
 	case want && !fp.autoFilterOn:
 		fp.autoFilterOn = true

@@ -3,7 +3,12 @@
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-  outputs = { self, nixpkgs }:
+  # Consumed by checks only: homeManagerModules below is a plain module and
+  # takes its Home Manager from whichever configuration imports it.
+  inputs.home-manager.url = "github:nix-community/home-manager";
+  inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
+
+  outputs = { self, nixpkgs, home-manager }:
     let
       inherit (nixpkgs) lib;
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
@@ -14,10 +19,9 @@
       version = if self ? rev then "unstable-${self.shortRev}" else "dirty";
     in
     {
-      packages = forAllSystems ({ pkgs, system }: rec {
-        default = f4;
-        f4 = pkgs.buildGoModule {
-          pname = "f4";
+      packages = forAllSystems ({ pkgs, ... }: let
+        mkF4 = ttyOnly: pkgs.buildGoModule {
+          pname = if ttyOnly then "f4-tty" else "f4-gui";
           inherit version;
           src = self;
 
@@ -43,9 +47,10 @@
           # Must track go.mod/go.sum: after a dependency change nix build
           # fails with "hash mismatch in fixed-output derivation ... got:
           # sha256-...", and that got: value is the new vendorHash.
-          vendorHash = "sha256-b9AcNCavq7iA1i7LFC5wJiR5DU8Pi3cL126nTvHJEN4=";
+          vendorHash = "sha256-OplgnxlMZ4tzqH5L8/sM76snRUV0kVObPALiA3dYg08=";
 
           subPackages = [ "cmd/f4" ];
+          tags = lib.optionals ttyOnly [ "tty_only" "vtui_noebiten" "vtui_nogogpu" ];
 
           ldflags = [
             "-s"
@@ -60,37 +65,72 @@
           # keep it out of the build sandbox.
           doCheck = false;
 
-          postInstall = ''
+          postInstall = let docDir = if ttyOnly then "f4-tty" else "f4"; in ''
+            install -Dm644 f4.example.ini README.md -t $out/share/doc/${docDir}
+            install -Dm644 plugins/visren/LICENSE.upstream $out/share/doc/${docDir}/licenses/VisRen-BSD-3-Clause.txt
+            install -Dm644 plugins/ios/LICENSE.go-ios $out/share/doc/${docDir}/licenses/go-ios-MIT.txt
+          '' + lib.optionalString ttyOnly ''
+            mkdir -p $out/libexec/f4-tty
+            mv $out/bin/f4 $out/libexec/f4-tty/f4-tty
+            install -Dm644 internal/dialog/help/*.hlf -t $out/libexec/f4-tty/help
+            cat > $out/bin/f4-tty <<EOF
+            #!${pkgs.runtimeShell}
+            exec "$out/libexec/f4-tty/f4-tty" "\$@"
+            EOF
+            chmod +x $out/bin/f4-tty
+          '' + lib.optionalString (!ttyOnly) ''
+            # Only the English help text is embedded; the other .hlf files are
+            # found at runtime in dirname(argv[0])/help, the same layout as the
+            # release archives.
+            install -Dm644 internal/dialog/help/*.hlf -t $out/bin/help
+            cat > $out/bin/f4-gui <<'EOF'
+            #!${pkgs.runtimeShell}
+            exec "$(dirname "$0")/f4" --gui "$@"
+            EOF
+            chmod +x $out/bin/f4-gui
+          '' + lib.optionalString (!ttyOnly && pkgs.stdenv.hostPlatform.isLinux) ''
             install -Dm644 packaging/linux/f4.desktop -t $out/share/applications
-            install -Dm644 f4.example.ini README.md -t $out/share/doc/f4
-            install -Dm644 plugins/visren/LICENSE.upstream $out/share/doc/f4/licenses/VisRen-BSD-3-Clause.txt
-            install -Dm644 plugins/ios/LICENSE.go-ios $out/share/doc/f4/licenses/go-ios-MIT.txt
-          '' + lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
             for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
               install -Dm644 internal/gui/assets/icon/generated/f4-''${size}.png \
                 $out/share/icons/hicolor/''${size}x''${size}/apps/io.github.unxed.f4.png
             done
             install -Dm644 internal/gui/assets/icon/f4.svg \
               $out/share/icons/hicolor/scalable/apps/io.github.unxed.f4.svg
-            # Only the English help text is embedded; the other .hlf files are
-            # found at runtime in dirname(argv[0])/help, the same layout as the
-            # release archives.
-            install -Dm644 internal/dialog/help/*.hlf -t $out/bin/help
           '';
 
           meta = {
-            description = "TUI file manager reproducing the UX of far2l and Far Manager";
+            description = if ttyOnly then "Terminal-only f4 file manager" else "f4 file manager with terminal and graphical modes";
             homepage = "https://github.com/unxed/f4";
             license = lib.licenses.bsd3;
-            mainProgram = "f4";
+            mainProgram = if ttyOnly then "f4-tty" else "f4";
             platforms = lib.platforms.linux ++ lib.platforms.darwin;
           };
         };
-      });
+      in rec {
+          default = f4-gui;
+          f4 = f4-gui;
+          f4-gui = mkF4 false;
+          f4-tty = mkF4 true;
+        });
 
       overlays.default = final: _: {
         f4 = self.packages.${final.stdenv.hostPlatform.system}.default;
+        f4-gui = self.packages.${final.stdenv.hostPlatform.system}.f4-gui;
+        f4-tty = self.packages.${final.stdenv.hostPlatform.system}.f4-tty;
       };
+
+      homeManagerModules = {
+        default = self.homeManagerModules.f4;
+        f4 = import ./packaging/nix/home-manager-module.nix;
+      };
+
+      checks = forAllSystems ({ pkgs, ... }: {
+        f4-gui = self.packages.${pkgs.stdenv.hostPlatform.system}.f4-gui;
+        f4-tty = self.packages.${pkgs.stdenv.hostPlatform.system}.f4-tty;
+        home-manager-module = import ./packaging/nix/home-manager-module-check.nix {
+          inherit pkgs home-manager;
+        };
+      });
 
       devShells = forAllSystems ({ pkgs, ... }: {
         default = pkgs.mkShell {
@@ -103,6 +143,16 @@
           type = "app";
           program = "${self.packages.${system}.default}/bin/f4";
           meta.description = "f4 file manager";
+        };
+        gui = {
+          type = "app";
+          program = "${self.packages.${system}.f4-gui}/bin/f4-gui";
+          meta.description = "f4 graphical window";
+        };
+        tty = {
+          type = "app";
+          program = "${self.packages.${system}.f4-tty}/bin/f4-tty";
+          meta.description = "f4 terminal-only build";
         };
       });
     };

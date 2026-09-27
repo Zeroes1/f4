@@ -107,6 +107,14 @@ func TestDriveMenu_CtrlNOpensBookmarkEditor(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// swapFrameManager (not just Init): ResizeConsole below starts two real
+	// directory-load workers (its panels default to "."), and Init leaves
+	// the process-wide vtui.FrameManager singleton in place -- a leftover
+	// background worker from an earlier test (or these panels' own, still
+	// running past this test) can then post to the very manager this test
+	// asserts against. Swapping gives this test a manager instance no other
+	// test's goroutine ever held a reference to.
+	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := NewPanelsFrame()
 	defer pf.Close()
@@ -166,6 +174,17 @@ func TestDriveMenu_CtrlNThroughFrameManagerDoesNotForkWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// swapFrameManager (not just Init): ResizeConsole below starts two real
+	// directory-load workers (its panels default to "."), and Init leaves
+	// the process-wide vtui.FrameManager singleton in place -- a leftover
+	// background worker from an earlier test (or these panels' own, still
+	// running past this test) can post a frame onto the very manager this
+	// test's screen-count assertion reads, exactly the kind of leak
+	// e58d6bd7 fixed for FileSystemPanel's own load queue. Swapping gives
+	// this test a manager instance no other test's goroutine ever held a
+	// reference to, so only this test's own Ctrl+N key can move its
+	// screen count.
+	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := NewPanelsFrame()
 	defer pf.Close()
