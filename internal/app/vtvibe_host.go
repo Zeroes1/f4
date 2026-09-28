@@ -168,6 +168,18 @@ func init() {
 		Handler:     withAI(func(pf *panel.PanelsFrame) { aiApplyPatch(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "AI.UndoPatch",
+		Area:        "Shell",
+		Label:       "Undo AP Patch",
+		LabelKey:    "Action.AI.UndoPatch",
+		Description: "Put back the files the last applied ap patch changed",
+		DescKey:     "Action.AI.UndoPatch.Desc",
+		MenuPath:    "Commands",
+		MenuSubPath: "AI",
+		Visible:     func() bool { return aiTopUndo() != nil },
+		Handler:     withAI(func(pf *panel.PanelsFrame) { aiUndoPatch(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "AI.Setup",
 		Area:        "Shell",
 		Label:       "AI Setup",
@@ -526,6 +538,8 @@ func aiCommand(app vfs.App, arg string) {
 		aiNewSession(pf)
 	case lower == "apply" || lower == "patch":
 		aiApplyPatch(pf)
+	case lower == "undo":
+		aiUndoPatch(pf)
 	case lower == "ap" || lower == "spec":
 		aiAttachAPSpec(pf)
 	case lower == "key":

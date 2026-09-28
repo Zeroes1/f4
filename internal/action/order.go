@@ -300,6 +300,7 @@ var actionMenuOrder = []string{
 	"AI.Ask",
 	"AI.NewSession",
 	"AI.ApplyPatch",
+	"AI.UndoPatch",
 	"AI.Setup",
 	"AI.Help",
 	"AI.AttachAPSpec",

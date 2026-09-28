@@ -101,6 +101,12 @@ type Result struct {
 	// Apply aborts early in strict mode: it holds whatever modifications
 	// were already resolved before the abort.
 	ModificationResults []ModificationResult
+	// Undo is the transaction journal of a real run that wrote something
+	// (StatusSuccess or StatusPartial): Undo.Revert puts every touched path
+	// back as it was before this call, unless something changed it since.
+	// nil for a dry run, a failed run (a write that fails midway is rolled
+	// back before Apply returns) and a run with nothing to write.
+	Undo *Undo
 }
 
 // ModStatus is one Modification's outcome, the level of detail
@@ -239,10 +245,34 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 		e.printf("         A briefing for the generating model is in %s\n", e.afailedMDPath)
 	}
 
+	var undo *Undo
 	if e.dryRun {
 		e.reportDryRun()
-	} else if res := e.commit(); res != nil {
-		return res
+	} else if len(e.writePlan) > 0 {
+		// Transaction (docs/VTVIBE.md §7.4): snapshot everything the plan
+		// touches, write, and either roll the snapshot back at once if a
+		// write fails or hand it to the caller as Result.Undo.
+		u, err := beginUndo(projectDir, e.writePlan)
+		if err != nil {
+			return e.fatal(StatusFailed, "", false, 0, false, &AppError{
+				Code:    ErrSnapshotError,
+				Message: "Cannot snapshot the files the patch touches, nothing was written: " + err.Error(),
+			})
+		}
+		if res := e.commit(); res != nil {
+			note := "Everything already written was rolled back."
+			if rerr := u.restore(); rerr != nil {
+				note = "Rolling back what was already written failed too: " + rerr.Error()
+			}
+			res.Error.Message += " " + note
+			e.printf("%s\n", note)
+			return res
+		}
+		if err := u.seal(); err != nil {
+			e.printf("  ! WARNING: the patch cannot be undone: %v\n", err)
+		} else {
+			undo = u
+		}
 	}
 
 	if !e.dryRun && len(e.failedChangesOutput) == 0 && pathExists(e.afailedMDPath) {
@@ -254,9 +284,9 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 		for _, b := range e.failedChangesOutput {
 			failedFiles = append(failedFiles, b.FilePath)
 		}
-		return &Result{Status: StatusPartial, FailedFiles: failedFiles, ModificationResults: e.modResults}
+		return &Result{Status: StatusPartial, FailedFiles: failedFiles, ModificationResults: e.modResults, Undo: undo}
 	}
-	return &Result{Status: StatusSuccess, ModificationResults: e.modResults}
+	return &Result{Status: StatusSuccess, ModificationResults: e.modResults, Undo: undo}
 }
 
 // --- engine: per-Apply-call mutable state ----------------------------

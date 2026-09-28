@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/mattn/go-runewidth"
-	"github.com/unxed/f4/internal/diffview"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/textdiff"
 	"github.com/unxed/f4/internal/vtvibe"
 	"github.com/unxed/f4/internal/vtvibe/ap"
 	"github.com/unxed/f4/vfs"
@@ -33,15 +33,24 @@ import (
 // anything that only worked together with it shows up as failing before a
 // byte is written.
 //
-// Enter or F3 on a row opens that one edit side by side (diffview, the same
-// view "Compare by content" uses): the fragment of the file around the
-// edit before and after it, as the dry run computed it
-// (ap.ModificationResult.Preview).
+// The table shares the dialog with a diff pane (aiReviewDiffPane) that is
+// always on screen, below the table: it shows the row under the cursor's
+// own edit (ap.ModificationResult.Preview, unified style - a line number
+// and a leading ' '/'-'/'+' the way "diff -u" marks context/removed/added
+// lines), and follows the cursor as it moves, no keypress needed. Ctrl+Tab
+// moves the keyboard focus to the pane and back to the table (both
+// aiReviewTable and aiReviewDiffPane answer it directly, ahead of
+// vtui.Group's own Tab handling, so it never reaches FrameManager's
+// workspace switcher); while the pane has focus, the arrow/paging keys
+// scroll it instead of moving the table's cursor. This replaced an earlier
+// cut (f4#1606 8/N) where Enter/F3 opened the same fragment in a modal
+// internal/diffview screen; that is gone now that the pane is permanent,
+// but the table still swallows Enter/F3 rather than let Enter fall through
+// to the dialog's default button (see aiReviewTable.ProcessKey).
 //
 // F8 rejects the edit under the cursor with a reason: it is left out like a
 // row switched off, and a line about it goes into the draft of the next
-// message to the model (vtvibe_ap_reject.go). Not here yet: a diff pane
-// next to the table, Ctrl+Z.
+// message to the model (vtvibe_ap_reject.go). Not here yet: Ctrl+Z.
 
 // aiReview is the review screen's state: the dry run's rows, which of them
 // are checked and which are rejected. A rejected row is never checked.
@@ -288,12 +297,19 @@ func aiReviewTotals(mods []ap.ModificationResult) string {
 // ordinary vtui.Table keys.
 type aiReviewTable struct {
 	*vtui.Table
-	onToggle func(idx int)
-	onDiff   func(idx int)
-	onReject func(idx int)
+	onToggle  func(idx int)
+	onReject  func(idx int)
+	onCtrlTab func()
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
+	if e != nil && e.KeyDown && e.VirtualKeyCode == vtinput.VK_TAB &&
+		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 {
+		if t.onCtrlTab != nil {
+			t.onCtrlTab()
+		}
+		return true
+	}
 	if e != nil && e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
 		vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 		switch e.VirtualKeyCode {
@@ -304,12 +320,14 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 			}
 			return true
 		case vtinput.VK_RETURN, vtinput.VK_F3:
-			// Enter is taken from the dialog's default button on purpose:
-			// on a list of edits it means "show me this one", and applying
-			// the patch stays one deliberate press of Apply away.
-			if t.onDiff != nil {
-				t.onDiff(t.RowAt(t.SelectPos))
-			}
+			// Both swallowed, on purpose, rather than left unhandled: the
+			// diff pane already shows the row under the cursor without a
+			// keypress (f4#1606 step e), so neither key opens anything any
+			// more, but Enter must still not fall through to the group and
+			// trigger the dialog's default button (usually "Apply") just
+			// because the table has focus. docs/VTVIBE.md §7.3 reserves
+			// both for the future level-0 screen (Enter into the real
+			// file, F3 the whole .ap) - not this step.
 			return true
 		case vtinput.VK_F8:
 			if t.onReject != nil {
@@ -321,26 +339,218 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 	return t.Table.ProcessKey(e)
 }
 
-// aiReviewShowDiff opens one row's own edit in a diffview: left the
-// fragment before it, right after, titled with the file and the line the
-// fragment starts at. A row with nothing to compare (already applied,
-// failing, excluded, a RENAME or a whole-file DELETE) gets a short message
-// instead.
-func aiReviewShowDiff(m ap.ModificationResult) {
-	p := m.Preview
-	if p == nil {
-		vtui.ShowMessage(i18n.Msg("AI.ReviewTitle"), i18n.Msg("AI.ReviewNoDiff"), []string{i18n.Msg("vtui.Ok")})
-		return
-	}
-	where := fmt.Sprintf("%s:%d", m.FilePath, p.StartLine)
-	dv, err := diffview.NewDiffView(where+" ("+i18n.Msg("AI.ReviewDiffBefore")+")",
-		where+" ("+i18n.Msg("AI.ReviewDiffAfter")+")", p.Before, p.After)
+// aiReviewDiffLine is one line of an aiReviewDiffPane's unified rendering:
+// a leading marker (' ' context, '-' only in Before, '+' only in After),
+// the line number on whichever side the marker points at, and the text.
+type aiReviewDiffLine struct {
+	marker byte
+	lineNo int
+	text   string
+}
+
+// aiReviewBuildDiffLines turns a Preview's Before/After fragment into a
+// unified-diff-shaped line list, the layout docs/VTVIBE.md §7.3 draws for
+// the review screen's diff panel: context once, a removed line then the
+// added line(s) that replaced it, each numbered on its own side. It reuses
+// internal/textdiff (the same line-diff algorithm internal/diffview draws
+// full-screen) rather than a diff of its own; Preview's own Before/After
+// line indices, already 0-based into the fragment, plus StartLine, are
+// enough to number every line without tracking two running counters here.
+func aiReviewBuildDiffLines(p *ap.Preview) []aiReviewDiffLine {
+	ops, err := textdiff.Diff(p.Before, p.After)
 	if err != nil {
-		aiShowError(err)
+		return nil
+	}
+	rows := textdiff.Rows(p.Before, p.After, ops)
+	lines := make([]aiReviewDiffLine, 0, len(rows)+1)
+	for _, row := range rows {
+		switch {
+		case row.Left.Kind == textdiff.RowFiller:
+			lines = append(lines, aiReviewDiffLine{'+', p.StartLine + row.Right.Line, row.Right.Text})
+		case row.Right.Kind == textdiff.RowFiller:
+			lines = append(lines, aiReviewDiffLine{'-', p.StartLine + row.Left.Line, row.Left.Text})
+		case row.Left.Kind == textdiff.RowChanged:
+			lines = append(lines, aiReviewDiffLine{'-', p.StartLine + row.Left.Line, row.Left.Text})
+			lines = append(lines, aiReviewDiffLine{'+', p.StartLine + row.Right.Line, row.Right.Text})
+		default: // RowEqual
+			// Both sides carry the same text, but only Right.Line, the
+			// after-edit number, stays meaningful once an earlier
+			// insertion or deletion in this fragment has shifted line
+			// numbers; ahead of the edit the two are equal anyway.
+			lines = append(lines, aiReviewDiffLine{' ', p.StartLine + row.Right.Line, row.Left.Text})
+		}
+	}
+	return lines
+}
+
+// aiReviewDiffPane is the review screen's permanent diff panel (f4#1606
+// step e, replacing the Enter/F3 modal of 8/N): a read-only, scrollable
+// view of the table row under the cursor's own edit. setPreview is called
+// once at construction and again from the table's OnSelect, so the pane
+// always shows the current row without a keypress. Ctrl+Tab (see
+// aiReviewTable.ProcessKey and this type's own ProcessKey) moves the
+// dialog's keyboard focus onto the pane and back; while focused, the pane
+// scrolls with the same keys internal/diffview does.
+type aiReviewDiffPane struct {
+	vtui.ScreenObject
+	title     string
+	lines     []aiReviewDiffLine
+	message   string // shown instead of lines, e.g. AI.ReviewNoDiff
+	topPos    int
+	onCtrlTab func()
+}
+
+func newAIReviewDiffPane(w, h int) *aiReviewDiffPane {
+	p := &aiReviewDiffPane{}
+	p.SetPosition(0, 0, w-1, h-1)
+	p.SetCanFocus(true)
+	return p
+}
+
+// setPreview points the pane at m's own edit: nothing (AI.ReviewNoDiff) for
+// a row with no Preview (already applied, failing, excluded, RENAME, a
+// whole file deleted or created) or, degenerately, a Preview whose Before
+// and After turn out equal.
+func (p *aiReviewDiffPane) setPreview(m ap.ModificationResult) {
+	p.topPos = 0
+	p.lines = nil
+	p.title = ""
+	p.message = ""
+	if m.Preview == nil {
+		p.message = i18n.Msg("AI.ReviewNoDiff")
 		return
 	}
-	dv.ResizeConsole(vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight())
-	vtui.FrameManager.AddScreen(dv)
+	p.title = fmt.Sprintf("%s:%d", m.FilePath, m.Preview.StartLine)
+	p.lines = aiReviewBuildDiffLines(m.Preview)
+	if len(p.lines) == 0 {
+		p.message = i18n.Msg("AI.ReviewNoDiff")
+	}
+}
+
+// viewHeight is how many lines fit under the pane's title and its dashed
+// rule (one row each).
+func (p *aiReviewDiffPane) viewHeight() int {
+	if h := p.Y2 - p.Y1 - 1; h > 0 {
+		return h
+	}
+	return 0
+}
+
+func (p *aiReviewDiffPane) clampTop() {
+	if maxTop := len(p.lines) - p.viewHeight(); p.topPos > maxTop {
+		p.topPos = max(maxTop, 0)
+	}
+	if p.topPos < 0 {
+		p.topPos = 0
+	}
+}
+
+// ProcessKey: Ctrl+Tab hands focus back to the table (answered here, ahead
+// of vtui.Group's own Tab handling, the same way aiReviewTable answers it -
+// see that type's comment); while focused, the pane scrolls instead of
+// moving anything in the table it no longer has the cursor on.
+func (p *aiReviewDiffPane) ProcessKey(e *vtinput.InputEvent) bool {
+	if e == nil || !e.KeyDown {
+		return false
+	}
+	ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
+	if ctrl && e.VirtualKeyCode == vtinput.VK_TAB {
+		if p.onCtrlTab != nil {
+			p.onCtrlTab()
+		}
+		return true
+	}
+	if ctrl {
+		return false
+	}
+	h := max(p.viewHeight(), 1)
+	switch e.VirtualKeyCode {
+	case vtinput.VK_UP:
+		p.topPos--
+	case vtinput.VK_DOWN:
+		p.topPos++
+	case vtinput.VK_PRIOR: // PgUp
+		p.topPos -= h
+	case vtinput.VK_NEXT: // PgDn
+		p.topPos += h
+	case vtinput.VK_HOME:
+		p.topPos = 0
+	case vtinput.VK_END:
+		p.topPos = len(p.lines)
+	default:
+		return false
+	}
+	p.clampTop()
+	return true
+}
+
+// ProcessMouse gives the pane the same wheel scrolling internal/diffview
+// has; clicking it does nothing yet (moving focus there is Ctrl+Tab's job).
+func (p *aiReviewDiffPane) ProcessMouse(e *vtinput.InputEvent) bool {
+	if e.WheelDirection == 0 {
+		return false
+	}
+	const wheelLines = 3
+	if e.WheelDirection > 0 {
+		p.topPos -= wheelLines
+	} else {
+		p.topPos += wheelLines
+	}
+	p.clampTop()
+	return true
+}
+
+// aiReviewDiffLineAttr tints the base text attribute by marker, the same
+// muted red/green internal/diffview uses for a deleted/inserted row.
+func aiReviewDiffLineAttr(base uint64, marker byte) uint64 {
+	switch marker {
+	case '-':
+		return vtui.SetRGBBack(base, 0x5A2323)
+	case '+':
+		return vtui.SetRGBBack(base, 0x235A23)
+	default:
+		return base
+	}
+}
+
+func (p *aiReviewDiffPane) Show(scr *vtui.ScreenBuf) {
+	p.ScreenObject.Show(scr)
+	x1, y1, x2, y2 := p.X1, p.Y1, p.X2, p.Y2
+	if x2 < x1 || y2 < y1 {
+		return
+	}
+	width := x2 - x1 + 1
+	textAttr := p.GetStateAttr(vtui.ColDialogText, vtui.ColDialogText)
+	titleAttr := p.GetStateAttr(vtui.ColDialogBoxTitle, vtui.ColDialogHighlightBoxTitle)
+	boxAttr := vtui.Palette[vtui.ColDialogBox]
+
+	pnt := vtui.NewPainter(scr)
+	pnt.Fill(x1, y1, x2, y2, ' ', textAttr)
+	pnt.DrawString(x1, y1, aiReviewLabel(p.title, width), titleAttr)
+	if y2 > y1 {
+		pnt.Fill(x1, y1+1, x2, y1+1, '─', boxAttr)
+	}
+
+	p.clampTop()
+	h := p.viewHeight()
+	if len(p.lines) == 0 {
+		if p.message != "" && h > 0 {
+			pnt.DrawString(x1, y1+2, aiReviewLabel(p.message, width), textAttr)
+		}
+		return
+	}
+	for i := 0; i < h; i++ {
+		idx := p.topPos + i
+		if idx >= len(p.lines) {
+			break
+		}
+		y := y1 + 2 + i
+		ln := p.lines[idx]
+		attr := aiReviewDiffLineAttr(textAttr, ln.marker)
+		pnt.Fill(x1, y, x2, y, ' ', attr)
+		text := fmt.Sprintf("%c%5d %s", ln.marker, ln.lineNo, ln.text)
+		pnt.DrawString(x1, y, vtui.TruncateString(text, width, ""), attr)
+	}
 }
 
 // aiReviewLabel fits s into exactly w columns for a vtui.Text: '&' would
@@ -368,7 +578,16 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	scrW := vtui.FrameManager.GetScreenSize()
 	scrH := vtui.FrameManager.GetScreenHeight()
 	dlgW := min(max(scrW-4, 60), 100)
-	dlgH := min(max(len(mods)+12, 16), max(scrH-2, 16))
+	// diffH is the permanent diff pane's height, under the table rather
+	// than beside it: aiReviewTable's columns need most of inner's width to
+	// stay readable (File/Locator are MinWidth 12 each, and go narrower
+	// than that fast), so splitting the dialog left/right the way
+	// docs/VTVIBE.md §7.3's mockup draws it would starve one side or the
+	// other on anything but a very wide screen. Stacked, the table keeps
+	// its usual width and the pane gets its own scrollable rows below it.
+	diffH := min(max(scrH/4, 6), 14)
+	minH := 16 + diffH
+	dlgH := min(max(len(mods)+12+diffH, minH), max(scrH-2, minH))
 	inner := dlgW - 4
 
 	dlg := vtui.NewCenteredDialog(dlgW, dlgH, i18n.Msg("AI.ReviewTitle"))
@@ -387,12 +606,13 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		{Title: i18n.Msg("AI.ReviewColLocator"), MinWidth: 12},
 	}
 	// Below the table: the selected row's detail, the totals, how many rows
-	// are checked, the diff key hint, a blank line and the buttons.
+	// are checked, the diff hint, the permanent diff pane, a blank line and
+	// the buttons.
 	rev := newAIReview(mods)
 	if patch != nil {
 		rev.attachRejections(patch)
 	}
-	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-9, cols)}
+	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-9-diffH, cols)}
 	table.SetOwner(dlg)
 	table.ShowHeader = true
 	table.ShowScrollBar = true
@@ -417,10 +637,21 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		detail.SetText(aiReviewLabel(text, inner))
 	}
 	showDetail(0)
+
+	diffPane := newAIReviewDiffPane(inner, diffH)
+	diffPane.SetOwner(dlg)
+	if len(mods) > 0 {
+		diffPane.setPreview(mods[0])
+	}
 	table.OnSelect = func(idx int) {
 		showDetail(idx)
+		if idx >= 0 && idx < len(mods) {
+			diffPane.setPreview(mods[idx])
+		}
 		vtui.FrameManager.Redraw()
 	}
+	table.onCtrlTab = func() { dlg.SetFocusedItem(diffPane) }
+	diffPane.onCtrlTab = func() { dlg.SetFocusedItem(table) }
 
 	totals := vtui.NewText(0, 0, aiReviewLabel(aiReviewTotals(mods), inner), 0)
 	checkedLabel := func() string {
@@ -435,11 +666,6 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		hint += " " + i18n.Msg("AI.ReviewRejectHint")
 	}
 	diffHint := vtui.NewText(0, 0, aiReviewLabel(hint, inner), 0)
-	table.onDiff = func(idx int) {
-		if idx >= 0 && idx < len(mods) {
-			aiReviewShowDiff(mods[idx])
-		}
-	}
 
 	var buttons []*vtui.Button
 	addButton := func(label string, onClick func()) *vtui.Button {
@@ -520,6 +746,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	vbox.Add(totals, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(checked, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(diffHint, vtui.Margins{Bottom: 1}, vtui.AlignFill)
+	vbox.Add(diffPane, vtui.Margins{Bottom: 1}, vtui.AlignFill)
 	btnRow := vtui.NewHBoxLayout(0, 0, inner, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
@@ -534,6 +761,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	dlg.AddItem(totals)
 	dlg.AddItem(checked)
 	dlg.AddItem(diffHint)
+	dlg.AddItem(diffPane)
 	for _, b := range buttons {
 		dlg.AddItem(b)
 	}

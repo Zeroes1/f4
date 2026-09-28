@@ -332,8 +332,20 @@ func (p *statusPanel) showHunks() { p.showHunksOf(modeStage) }
 func (p *statusPanel) showStagedHunks() { p.showHunksOf(modeUnstage) }
 
 // showDiscardHunks is F8: the unstaged diff again, to throw hunks or lines
-// of the working file away.
-func (p *statusPanel) showDiscardHunks() { p.showHunksOf(modeDiscard) }
+// of the working file away. An untracked entry ("??", status.go's
+// parseStatus) has no diff at all -- git diff shows nothing for a path
+// with no committed or indexed version to compare it against -- so there
+// is nothing here for HunkView to open; untracked.go's
+// confirmDeleteUntracked offers to remove the path from disk instead, the
+// nearest reading of "discard" left for it, with the same confirm-first
+// shape.
+func (p *statusPanel) showDiscardHunks() {
+	if entry, ok := p.selectedEntry(); ok && entry.XY == "??" {
+		p.confirmDeleteUntracked(entry)
+		return
+	}
+	p.showHunksOf(modeDiscard)
+}
 
 func (p *statusPanel) showHunksOf(mode hunkMode) {
 	entry, ok := p.selectedEntry()

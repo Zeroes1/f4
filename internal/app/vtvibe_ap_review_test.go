@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/unxed/f4/internal/diffview"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
@@ -243,6 +242,18 @@ func aiReviewTableOf(t *testing.T, w *vtui.Window) *aiReviewTable {
 	return nil
 }
 
+// aiReviewPaneOf finds the permanent diff pane in the dialog.
+func aiReviewPaneOf(t *testing.T, w *vtui.Window) *aiReviewDiffPane {
+	t.Helper()
+	for _, it := range w.GetChildren() {
+		if p, ok := it.(*aiReviewDiffPane); ok {
+			return p
+		}
+	}
+	t.Fatal("review dialog has no diff pane")
+	return nil
+}
+
 func aiKey(vk uint16, ch rune) *vtinput.InputEvent {
 	return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, Char: ch}
 }
@@ -374,9 +385,11 @@ func TestAIShowPatchReviewAfterExclusion(t *testing.T) {
 	dlg.Close()
 }
 
-// TestAIShowPatchReviewDiff: Enter or F3 on a row opens that edit's own
-// before/after fragment in a diffview; a row with nothing to compare says so
-// instead, and neither key applies the patch.
+// TestAIShowPatchReviewDiff: the diff pane under the table is permanent
+// (f4#1606 step e) and always shows the row under the cursor's own edit,
+// without Enter; Enter and F3 do nothing now (that used to open the same
+// fragment as a modal internal/diffview screen, f4#1606 8/N), and Ctrl+Tab
+// moves the keyboard focus onto the pane and back instead.
 func TestAIShowPatchReviewDiff(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	scr := vtui.NewSilentScreenBuf()
@@ -396,54 +409,107 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 			"\te, ok := d.lookup(p)", "\tif !ok {", "\t\treturn 0, ErrNotFound", "\t}", "\treturn d.openEntry(ctx, e)", "}"},
 	}
 	dlg := aiShowPatchReview(nil, &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}, t.TempDir(), mods, 2, "")
+	table := aiReviewTableOf(t, dlg)
+	pane := aiReviewPaneOf(t, dlg)
+
 	text := aiScreenText(t, scr, dlg)
-	t.Logf("review screen:\n%s", text)
+	t.Logf("review screen, table focused, diff pane on the first row:\n%s", text)
 	if !strings.Contains(text, i18n.Msg("AI.ReviewDiffHint")) {
 		t.Errorf("review screen lacks the diff hint %q", i18n.Msg("AI.ReviewDiffHint"))
 	}
-	table := aiReviewTableOf(t, dlg)
+	if !strings.Contains(text, "vfs/ai_vfs.go:117") {
+		t.Errorf("diff pane lacks its title:\n%s", text)
+	}
 
-	// F3 on the skipped row: nothing to compare, a message says so.
-	table.MoveSelection(1)
-	if !table.ProcessKey(aiKey(vtinput.VK_F3, 0)) {
-		t.Fatal("F3 not handled by the review table")
+	// The pane already parsed the edit into a unified-style line list: the
+	// deletion and the first addition share line 121 (a same-position
+	// replacement), the trailing context is renumbered past the four extra
+	// lines the edit inserted (docs/VTVIBE.md §7.3's own mockup, 117..126).
+	want := []aiReviewDiffLine{
+		{' ', 117, "}"}, {' ', 118, ""}, {' ', 119, "func (d *aiDrive) Open("},
+		{' ', 120, "\tctx context.Context, p string"},
+		{'-', 121, "\treturn 0, ErrNotSupported"}, {'+', 121, "\te, ok := d.lookup(p)"},
+		{'+', 122, "\tif !ok {"}, {'+', 123, "\t\treturn 0, ErrNotFound"}, {'+', 124, "\t}"},
+		{'+', 125, "\treturn d.openEntry(ctx, e)"}, {' ', 126, "}"},
 	}
-	msg, isWin := vtui.FrameManager.GetTopFrame().(*vtui.Window)
-	if !isWin || msg == dlg {
-		t.Fatalf("F3 on a row without a preview: top frame %T, want a message", vtui.FrameManager.GetTopFrame())
+	if len(pane.lines) != len(want) {
+		t.Fatalf("pane.lines = %+v, want %d lines", pane.lines, len(want))
 	}
-	if text := aiScreenText(t, scr, msg); !strings.Contains(text, strings.Fields(i18n.Msg("AI.ReviewNoDiff"))[0]) {
-		t.Errorf("message lacks %q:\n%s", i18n.Msg("AI.ReviewNoDiff"), text)
-	}
-	msg.Close()
-
-	// Enter on the first row: the diff opens on a screen of its own, the
-	// review dialog stays where it was.
-	table.MoveSelection(-1)
-	if !table.ProcessKey(aiKey(vtinput.VK_RETURN, '\r')) {
-		t.Fatal("Enter not handled by the review table")
-	}
-	dv, ok := vtui.FrameManager.GetTopFrame().(*diffview.DiffView)
-	if !ok {
-		t.Fatalf("top frame after Enter = %T, want *diffview.DiffView", vtui.FrameManager.GetTopFrame())
-	}
-	diffText := aiScreenText(t, scr, dv)
-	t.Logf("diff of the selected edit:\n%s", diffText)
-	for _, want := range []string{
-		"vfs/ai_vfs.go:117 (" + i18n.Msg("AI.ReviewDiffBefore") + ")",
-		"vfs/ai_vfs.go:117 (" + i18n.Msg("AI.ReviewDiffAfter") + ")",
-		"return 0, ErrNotSupported", "e, ok := d.lookup(p)", "return d.openEntry(ctx, e)",
-	} {
-		if !strings.Contains(diffText, want) {
-			t.Errorf("diff view lacks %q", want)
+	for i, w := range want {
+		if pane.lines[i] != w {
+			t.Errorf("pane.lines[%d] = %+v, want %+v", i, pane.lines[i], w)
 		}
 	}
-	if dlg.IsDone() || calls != 0 {
-		t.Fatal("Enter or F3 closed the review or ran the patcher")
+
+	// Scrolled to the change itself, both the removed and the added line
+	// are on screen (the pane is only 4 rows tall on a 24-row test screen).
+	pane.topPos = 4
+	text = aiScreenText(t, scr, dlg)
+	t.Logf("diff pane scrolled to the change:\n%s", text)
+	for _, want := range []string{"return 0, ErrNotSupported", "e, ok := d.lookup(p)"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("scrolled diff pane lacks %q:\n%s", want, text)
+		}
 	}
-	dv.ProcessKey(aiKey(vtinput.VK_ESCAPE, 0))
-	if !dv.IsDone() {
-		t.Error("Esc does not close the diff view")
+
+	// Enter and F3 do nothing now: no modal, no patcher call, and the row
+	// underneath does not even need a Preview (the "already applied" row
+	// has none). Down is a real key press (not MoveSelection), the same
+	// path OnSelect fires from - moving the cursor is what is supposed to
+	// refresh the pane here.
+	if !table.ProcessKey(aiKey(vtinput.VK_DOWN, 0)) {
+		t.Fatal("Down not handled by the review table")
+	}
+	for _, vk := range []uint16{vtinput.VK_RETURN, vtinput.VK_F3} {
+		if !table.ProcessKey(aiKey(vk, 0)) {
+			t.Fatalf("key %d not handled by the review table", vk)
+		}
+	}
+	if dlg.IsDone() || calls != 0 || vtui.FrameManager.GetTopFrame() != vtui.Frame(dlg) {
+		t.Fatal("Enter or F3 closed the review, ran the patcher, or opened another screen")
+	}
+
+	// Moving the cursor - not Enter - is what updates the pane: on a row
+	// without a Preview it falls back to AI.ReviewNoDiff.
+	if pane.message != i18n.Msg("AI.ReviewNoDiff") || len(pane.lines) != 0 {
+		t.Fatalf("pane after the cursor moved off the diff: message=%q lines=%+v", pane.message, pane.lines)
+	}
+	if text := aiScreenText(t, scr, dlg); !strings.Contains(text, i18n.Msg("AI.ReviewNoDiff")) {
+		t.Errorf("pane does not show %q:\n%s", i18n.Msg("AI.ReviewNoDiff"), text)
+	}
+
+	// Ctrl+Tab moves the keyboard focus onto the pane and back; while it
+	// has focus, arrow keys scroll it instead of moving the table's cursor.
+	if !table.ProcessKey(aiKey(vtinput.VK_UP, 0)) { // back to the row with a diff
+		t.Fatal("Up not handled by the review table")
+	}
+	if pane.message != "" || len(pane.lines) == 0 {
+		t.Fatalf("pane after moving back onto the diff row: message=%q lines=%+v", pane.message, pane.lines)
+	}
+	ctrlTab := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
+		VirtualKeyCode: vtinput.VK_TAB, ControlKeyState: vtinput.LeftCtrlPressed}
+	if !table.ProcessKey(ctrlTab) {
+		t.Fatal("Ctrl+Tab not handled by the review table")
+	}
+	if got := dlg.GetFocusedItem(); got != pane {
+		t.Fatalf("Ctrl+Tab on the table did not focus the pane (focus = %T)", got)
+	}
+	t.Logf("review screen, diff pane focused after Ctrl+Tab:\n%s", aiScreenText(t, scr, dlg))
+	selBefore := table.SelectPos
+	if !pane.ProcessKey(aiKey(vtinput.VK_DOWN, 0)) {
+		t.Fatal("Down not handled by the focused pane")
+	}
+	if pane.topPos == 0 {
+		t.Error("Down on the focused pane did not scroll it")
+	}
+	if table.SelectPos != selBefore {
+		t.Error("scrolling the pane moved the table's cursor")
+	}
+	if !pane.ProcessKey(ctrlTab) {
+		t.Fatal("Ctrl+Tab not handled by the pane")
+	}
+	if got := dlg.GetFocusedItem(); got != table {
+		t.Fatalf("Ctrl+Tab on the pane did not return focus to the table (focus = %T)", got)
 	}
 }
 

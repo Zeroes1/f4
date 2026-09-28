@@ -280,6 +280,7 @@ AI.TogglePanel
 AI.Ask
 AI.NewSession
 AI.ApplyPatch
+AI.UndoPatch
 AI.Setup
 AI.Help
 AI.AttachAPSpec

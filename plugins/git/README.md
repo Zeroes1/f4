@@ -366,6 +366,28 @@ archive tools (f4#609) rather than linking a Go git implementation.
   found a line higher), a whole hunk from a subdirectory, a change on top
   of staged lines, a deleted file, and that cancelling changes nothing.
 
+## Part 16: F8 on an untracked file deletes it
+
+- `git diff` shows nothing for an untracked entry (`??`) -- there is no
+  committed or indexed version to compare it against -- so before this
+  part **F8** on one just toasted "nothing to discard in parts" and did
+  nothing else. Now it asks to delete the path from disk outright instead:
+  "Delete `<path>` from disk? Git does not track it, so there is nothing
+  to discard it back to -- this removes it outright. This cannot be
+  undone." Only **Delete** goes on; Cancel or Esc leaves it.
+- The same confirm-first shape Part 15's discard uses, just without
+  `HunkView` in between -- there are no hunks to pick from an untracked
+  path, so the whole path is the only thing F8 can offer.
+- An untracked directory is one first-level `?? <dir>/` status entry, not
+  descended into (`parseStatus`, `status.go`): its trailing `/` is what
+  tells `confirmDeleteUntracked`/`deleteUntracked` (`untracked.go`) to
+  remove it recursively (`os.RemoveAll`) rather than as a single file
+  (`os.Remove`).
+- Tests (`untracked_test.go`) delete an untracked file and an untracked
+  directory with its content, check the panel reloads without the entry
+  and keeps the cursor sensible, check Cancel/Esc leaves the path alone,
+  and dump the confirmation screen in English and Russian.
+
 ## Design notes
 
 - Every git invocation goes through `execGit` (a package-level var, the

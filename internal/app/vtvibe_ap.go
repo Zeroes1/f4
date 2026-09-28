@@ -79,17 +79,7 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 		return
 	}
 
-	body := fmt.Sprintf(i18n.Msg("AI.PatchConfirm"), root, len(patch.Files))
-	shown := patch.Files
-	if len(shown) > 12 {
-		shown = shown[:12]
-	}
-	for _, f := range shown {
-		body += "\n  " + f
-	}
-	if len(patch.Files) > len(shown) {
-		body += "\n  " + fmt.Sprintf(i18n.Msg("AI.PatchMoreFiles"), len(patch.Files)-len(shown))
-	}
+	body := fmt.Sprintf(i18n.Msg("AI.PatchConfirm"), root, len(patch.Files)) + aiPathList(patch.Files)
 	if patch.Ignored > 0 {
 		body += "\n\n" + fmt.Sprintf(i18n.Msg("AI.PatchIgnored"), patch.Ignored)
 	}
@@ -115,6 +105,7 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry bool, only map[ap.ModKey]bool) {
 	var output string
 	var mods []ap.ModificationResult
+	var undo *ap.Undo
 	exitCode := 0
 
 	title := i18n.Msg("AI.PatchTitle")
@@ -140,6 +131,7 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 			result := ap.Apply(patchPath, root, ap.Options{DryRun: dry, Only: only, Out: &out})
 			output = out.String()
 			mods = result.ModificationResults
+			undo = result.Undo
 			exitCode = aiPatchExitCode(result.Status)
 			return nil
 		},
@@ -151,6 +143,9 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 				return
 			}
 			pf.RefreshAll()
+			// A real run that wrote something can be undone (Ctrl+Z in
+			// the AI panel, ai:undo, or Undo on the result right below).
+			aiPushUndo(undo)
 			// A dry run that got as far as individual modifications
 			// ends on the review table (vtvibe_ap_review.go); a real
 			// run, or a dry run that failed before any modification,
@@ -159,7 +154,7 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 				aiShowPatchReview(pf, patch, root, mods, exitCode, output)
 				return
 			}
-			aiShowPatchResult(pf, root, dry, exitCode, output)
+			aiShowPatchResult(pf, root, dry, exitCode, output, undo)
 		})
 }
 
@@ -180,8 +175,10 @@ func aiPatchExitCode(status ap.Status) int {
 
 // aiShowPatchResult reports what the patcher said. exitCode comes from
 // aiPatchExitCode: 0 applied, 2 applied in part, anything else nothing was
-// written.
-func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode int, output string) {
+// written. undo, when non-nil, is the run's transaction (ap.Result.Undo) and
+// adds an Undo button that reverts it without asking again - the result is
+// the moment the human sees what the patch did.
+func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode int, output string, undo *ap.Undo) {
 	var head string
 	switch {
 	case exitCode == 0 && dry:
@@ -220,6 +217,11 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 		}
 	}
 
+	hasUndo := undo != nil
+	if hasUndo {
+		buttons = append(buttons, i18n.Msg("AI.BtnUndoPatch"))
+	}
+
 	dlg := vtui.ShowMessage(i18n.Msg("AI.PatchTitle"), body, buttons)
 	dlg.OnResult = func(code int) {
 		// -1 is BaseFrame.Close's exit code for "dismissed without picking a
@@ -232,6 +234,7 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 		// match.
 		viewLogIdx := -1
 		attachReportIdx := -1
+		undoIdx := -1
 
 		currIdx := 1
 		if hasOutput {
@@ -240,6 +243,10 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 		}
 		if hasReport {
 			attachReportIdx = currIdx
+			currIdx++
+		}
+		if hasUndo {
+			undoIdx = currIdx
 		}
 
 		switch {
@@ -247,6 +254,8 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 			aiViewPatchLog(pf, output)
 		case hasReport && code == attachReportIdx:
 			aiAttachFailureReport(reportPath)
+		case hasUndo && code == undoIdx:
+			aiRevertPatch(pf, undo)
 		}
 	}
 }
