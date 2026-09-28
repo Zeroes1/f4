@@ -45,7 +45,8 @@ func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
 		return 2
 	}
 
-	if explicit && cfg.Channel != channel {
+	switched := explicit && cfg.Channel != channel
+	if switched {
 		// The named channel is configured before GitHub is asked: an "already
 		// up to date" exit or a network failure would otherwise leave the
 		// automatic checks on the old channel, calling the user back to it.
@@ -59,7 +60,9 @@ func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
 	defer cancel()
 
 	fmt.Printf("Checking the %s channel...\n", ChannelName(channel))
-	cand, err := Check(ctx, cfg, b)
+	checkCfg := cfg
+	checkCfg.SwitchedChannel = switched
+	cand, err := Check(ctx, checkCfg, b)
 	if err != nil {
 		fmt.Printf("f4: update check failed: %v\n", err)
 		return 1
@@ -74,7 +77,11 @@ func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
 		return 1
 	}
 
-	fmt.Printf("Installing %s\n", cand.DisplayVersion)
+	if cand.OlderThanRunning {
+		fmt.Printf("Installing %s, the current stable release (older than the running build)\n", cand.DisplayVersion)
+	} else {
+		fmt.Printf("Installing %s\n", cand.DisplayVersion)
+	}
 	// Percentages are redrawn with a carriage return, so a redirected run gets
 	// none: in a file they pile into one unreadable line.
 	showProgress := term.IsTerminal(int(os.Stdout.Fd()))

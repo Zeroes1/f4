@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -61,6 +62,12 @@ type Settings struct {
 	Interval    int    // 0 = Never, 1 = Every start, 2 = Daily, 3 = Weekly
 	LastCheck   int64  // Unix timestamp of the last check
 	LastVersion string // the update key of the build already installed
+
+	// SwitchedChannel says the user has just named Channel in place of the
+	// other one -- `f4 --update stable` on a nightly setup, or a new channel
+	// picked in the update dialog before Check. It is not stored: after an
+	// install, LastVersion records the switch on its own. See #1218.
+	SwitchedChannel bool
 }
 
 // Build describes the running binary to the update check.
@@ -122,6 +129,10 @@ type Candidate struct {
 	// tells builds apart not at all.
 	UpdateKey   string
 	NeedsUpdate bool
+	// OlderThanRunning marks a stable release offered to someone who has
+	// moved from nightly to stable while running a build newer than that
+	// release: installing it is a step back, and the prompt says so.
+	OlderThanRunning bool
 }
 
 // Check asks GitHub what cfg.Channel offers and whether that is newer than the
@@ -181,12 +192,49 @@ func Check(ctx context.Context, cfg Settings, b Build) (Candidate, error) {
 	if cfg.Channel == ChannelNightly {
 		cand.UpdateKey = assetUpdated
 		cand.DisplayVersion = nightlyDisplayVersion(release, assetUpdated)
-		cand.NeedsUpdate = cfg.LastVersion != cand.UpdateKey
+		cand.NeedsUpdate = cfg.LastVersion != cand.UpdateKey || runningOlderThanNightly(release, b)
 		return cand, nil
 	}
 
 	cand.NeedsUpdate = stableReleaseNeedsUpdate(release, b, cfg.LastVersion)
+	if !cand.NeedsUpdate && release.TagName != b.Version && leavingNightly(cfg, b) {
+		// Dates say the running build is newer, and for someone who never
+		// left stable that rightly means "nothing to install". Someone who
+		// has chosen stable over nightly, though, asked for the release
+		// itself, so it is offered even though it is older. See #1218.
+		cand.NeedsUpdate = true
+		cand.OlderThanRunning = true
+	}
 	return cand, nil
+}
+
+// leavingNightly says a stable check comes from a user who has moved from the
+// nightly channel to stable: either the switch was just made, or the build
+// last installed by the updater is a nightly one -- its update key is an asset
+// upload time, while a stable key is a release tag. A release build has
+// nothing to leave.
+func leavingNightly(cfg Settings, b Build) bool {
+	if b.IsRelease {
+		return false
+	}
+	if cfg.SwitchedChannel {
+		return true
+	}
+	_, err := time.Parse(time.RFC3339, cfg.LastVersion)
+	return err == nil
+}
+
+// runningOlderThanNightly compares the running build with the commit the
+// nightly release was built from. LastVersion alone only says that an install
+// of this nightly once finished; when the binary that runs is still an older
+// one, "already up to date" would be false. See #1218.
+func runningOlderThanNightly(release Release, b Build) bool {
+	if b.IsRelease {
+		return false
+	}
+	_, builtOn := commitInfoFromReleaseBody(release.Body)
+	nightly, running := parseBuildTime(builtOn), parseBuildTime(b.TimeText)
+	return !nightly.IsZero() && !running.IsZero() && nightly.After(running)
 }
 
 // nightlyDisplayVersion names a nightly build the way F1 > Help Index names it
@@ -275,7 +323,7 @@ func stableReleaseNeedsUpdate(release Release, b Build, lastVersion string) bool
 }
 
 func parseBuildTime(value string) time.Time {
-	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04"} {
+	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02 15:04"} {
 		if parsed, err := time.ParseInLocation(layout, value, time.UTC); err == nil {
 			return parsed
 		}
@@ -289,13 +337,32 @@ func parseBuildTime(value string) time.Time {
 //	**Commit:** `<hash>`
 //	**Built on:** `<time>`
 //
-// Returns empty strings if either line isn't found, so the caller can fall
+// or, as the nightly workflow writes it today, on one plain line:
+//
+//	... Commit: <hash>. Built on: <time>
+//
+// Returns empty strings if either field isn't found, so the caller can fall
 // back to the asset timestamp.
 func commitInfoFromReleaseBody(body string) (commit, builtOn string) {
 	commit = extractBacktickedField(body, "**Commit:**")
 	builtOn = extractBacktickedField(body, "**Built on:**")
+	if commit == "" {
+		if m := plainCommitField.FindStringSubmatch(body); m != nil {
+			commit = m[1]
+		}
+	}
+	if builtOn == "" {
+		if m := plainBuiltOnField.FindStringSubmatch(body); m != nil {
+			builtOn = m[1]
+		}
+	}
 	return commit, builtOn
 }
+
+var (
+	plainCommitField  = regexp.MustCompile(`\bCommit:\s*([0-9a-fA-F]{7,40})\b`)
+	plainBuiltOnField = regexp.MustCompile(`\bBuilt on:\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?Z?)`)
+)
 
 func extractBacktickedField(body, label string) string {
 	i := strings.Index(body, label)

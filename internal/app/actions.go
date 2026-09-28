@@ -4757,6 +4757,7 @@ func actionUpdateSettings(pf *panel.PanelsFrame) {
 		dlg.Close()
 	}
 	btnCheck.OnClick = func() {
+		switched := config.App.UpdateChannel != comboChannel.Menu.SelectPos
 		config.App.UpdateChannel = comboChannel.Menu.SelectPos
 		config.App.UpdateInterval = comboInterval.Menu.SelectPos
 		config.SaveConfig()
@@ -4765,7 +4766,7 @@ func actionUpdateSettings(pf *panel.PanelsFrame) {
 		// check waits for GitHub. The dialog is already closed, so the
 		// network request can safely continue in the background and post
 		// its result back through FrameManager when it completes.
-		go CheckForUpdates(pf, true)
+		go checkForUpdates(pf, true, switched)
 	}
 
 	vtui.FrameManager.Push(dlg)
