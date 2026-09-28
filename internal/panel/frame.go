@@ -2730,7 +2730,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	if e.Type == vtinput.FocusEventType {
 		if !e.SetFocus {
-			pf.CancelFastFind()
+			pf.CancelQuickSearchOnFocusLost()
 		}
 		pf.SetFocus(e.SetFocus)
 		// Reload macros from disk when regaining focus to share them across instances
@@ -4057,10 +4057,26 @@ func (pf *PanelsFrame) autoplayPlayerForPanel(fsp *FileSystemPanel, e *vtinput.I
 // Find, but clearing both slots prevents a stale inactive search from coming
 // back after Tab, a panel swap, or an overlay closes.
 func (pf *PanelsFrame) CancelFastFind() bool {
+	return pf.cancelFastFind(false)
+}
+
+// CancelQuickSearchOnFocusLost closes the cursor-moving quick search when the
+// application loses focus -- Alt+Tab or a mouse click into another window --
+// but leaves an open autofilter window alone. Unlike the quick search, the
+// filter is a window the user opened on purpose, so only a repeat lone Alt or
+// Esc is allowed to close it (f4 #1131); a focus change is neither.
+func (pf *PanelsFrame) CancelQuickSearchOnFocusLost() bool {
+	return pf.cancelFastFind(true)
+}
+
+func (pf *PanelsFrame) cancelFastFind(keepAutoFilter bool) bool {
 	cancelled := false
 	for _, panel := range pf.Panels {
 		fsp, ok := panel.(*FileSystemPanel)
 		if !ok || !fsp.FastFindMode {
+			continue
+		}
+		if keepAutoFilter && fsp.AutoFilterActive() {
 			continue
 		}
 		fsp.ExitFastFind()
