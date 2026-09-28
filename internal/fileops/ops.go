@@ -504,6 +504,11 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 			}
 		}
 
+		// Computed once per operation, not per item: srcBasePath and
+		// dirToEnsure are the same source/destination directories for
+		// every name in this batch, and dirToEnsure is now known to exist.
+		sameDeviceMove := isMove && sameDeviceForMove(ctx, srcVfs, srcBasePath, dstVfs, dirToEnsure)
+
 		var totalStats vfs.OpStats
 		scanErr := error(nil)
 		lastScanUpdate := startTime
@@ -715,7 +720,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 				targetItemPath = dstVfs.Join(destPath, targetName)
 			}
 
-			if isMove && vfs.SameSession(srcVfs, dstVfs) {
+			if isMove && (vfs.SameSession(srcVfs, dstVfs) || sameDeviceMove) {
 				renamed, err := tryOptimizedRename(ctx, srcVfs, dstVfs, srcPath, targetItemPath)
 				if err != nil {
 					return err
@@ -1163,6 +1168,52 @@ func shouldDisplayFileOpError(err error) bool {
 		return true
 	}
 	return !errors.Is(err, context.Canceled)
+}
+
+// sameDeviceForMove reports whether srcDirPath (on srcVFS) and dstDirPath
+// (on dstVFS) sit on the same underlying filesystem device, so a move
+// between them can take the instant tryOptimizedRename path instead of
+// scanning, copying and deleting the whole tree.
+//
+// vfs.SameSession alone misses the common case: the two panels are two
+// independent *vfs.OSVFS instances with no shared session identity, even
+// when they both read the very same local disk — so a move between two
+// panels on one filesystem always fell back to scan+copy+delete (#1635),
+// exactly the far2l pain point the ticket points at as reference. far2l's
+// own answer (far2l/src/mix/drivemix.cpp, CheckDisksProps with
+// CHECKEDPROPS_ISSAMEDISK) is to compare raw device ids (stat's st_dev)
+// instead of any session/connection notion, which is what this mirrors —
+// through vfs.FileIdentifier, the same (device, inode) capability OSVFS
+// already exposes for hard-link dedup (os_vfs_physical_unix.go on POSIX via
+// Stat_t.Dev, os_vfs_physical_windows.go on Windows via the NTFS volume
+// serial number).
+//
+// It returns false, never an error, whenever a device id isn't available
+// (a remote VFS, a platform whose OSVFS leaves FileIdentity unimplemented,
+// or a Stat failure): callers then simply keep the existing
+// scan+copy+delete path. A device match here is a fast pre-check, not a
+// guarantee — tryOptimizedRename still asks the destination VFS to rename,
+// and a race between this check and that rename (e.g. a remount) surfaces
+// as an ordinary rename failure, which the caller already falls back on
+// the same way it does for any other tryOptimizedRename failure.
+func sameDeviceForMove(ctx context.Context, srcVFS vfs.VFS, srcDirPath string, dstVFS vfs.VFS, dstDirPath string) bool {
+	srcIdf, ok := srcVFS.(vfs.FileIdentifier)
+	if !ok {
+		return false
+	}
+	dstIdf, ok := dstVFS.(vfs.FileIdentifier)
+	if !ok {
+		return false
+	}
+	srcDev, _, ok := srcIdf.FileIdentity(ctx, srcDirPath)
+	if !ok {
+		return false
+	}
+	dstDev, _, ok := dstIdf.FileIdentity(ctx, dstDirPath)
+	if !ok {
+		return false
+	}
+	return srcDev == dstDev
 }
 
 // tryOptimizedRename only renames into a proven-empty destination. A remote
