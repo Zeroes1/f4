@@ -108,6 +108,14 @@ func TestIssue1229RenameOntoExistingFileAsksToOverwrite(t *testing.T) {
 		_, err := os.Stat(filepath.Join(dir, "a.txt"))
 		return os.IsNotExist(err)
 	})
+	// a.txt being gone does not mean the rename has let go of b.txt yet: on
+	// Windows (seen on windows/arm64) opening it right away can still hit
+	// the same sharing violation, so wait until it can actually be read.
+	pumpUntil(t, "b.txt to become readable after the rename", func() bool {
+		// #nosec G304 G703 -- the path is inside the private test temp directory.
+		_, err := os.ReadFile(filepath.Join(dir, "b.txt"))
+		return err == nil
+	})
 	if got, _ := readFile(t, filepath.Join(dir, "b.txt")); got != "A" {
 		t.Errorf("b.txt = %q after overwriting, want the content of a.txt", got)
 	}
