@@ -72,6 +72,12 @@ func (pf *PanelsFrame) ReplaceMarkedNames(names []string) {
 func (pf *PanelsFrame) GetSelectedName() string {
 	return pf.Active().(*FileSystemPanel).GetSelectedName()
 }
+
+// GetSelectedIsDir implements vfs.SelectedIsDirHost (f4#1356) by delegating
+// to the active FileSystemPanel's own cached cursor state.
+func (pf *PanelsFrame) GetSelectedIsDir() (isDir bool, known bool) {
+	return pf.Active().(*FileSystemPanel).GetSelectedIsDir()
+}
 func (pf *PanelsFrame) SetPendingSelection(name string) {
 	if fsp := pf.GetActivePanel(); fsp != nil {
 		fsp.PendingSelection = name

@@ -4131,6 +4131,21 @@ func (fp *FileSystemPanel) GetRawSelectedName() string {
 	return fp.Entries[idx].Name
 }
 
+// GetSelectedIsDir backs vfs.SelectedIsDirHost (f4#1356): it reports whether
+// the cursor entry is a directory by reading the already-cached
+// vfs.VFSItem.IsDir on that *FileEntry, the same field GetSelectedName
+// already reads to name the entry -- no Stat, no VFS round trip. The ".."
+// pseudo-entry is always built with IsDir: true, so a cursor parked on it is
+// correctly reported as a directory too. known is false only when there is
+// no entry under the cursor to ask.
+func (fp *FileSystemPanel) GetSelectedIsDir() (isDir bool, known bool) {
+	idx := fp.GetCursorIndex()
+	if len(fp.Entries) == 0 || idx < 0 || idx >= len(fp.Entries) {
+		return false, false
+	}
+	return fp.Entries[idx].IsDir, true
+}
+
 // SetSelectedByName picks or unpicks an entry by name and reports whether the
 // panel shows such an entry at all. It is how the picture gallery keeps the
 // panel underneath in step with what the reader has picked; a panel that has

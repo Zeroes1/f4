@@ -230,3 +230,21 @@ type TextEditorRequest struct {
 type TextEditorHost interface {
 	OpenTextEditor(TextEditorRequest) error
 }
+
+// SelectedIsDirHost is an optional App capability implemented by hosts that
+// can answer "is the current selection a directory?" synchronously, from
+// already-cached panel state, without any new filesystem round trip
+// (f4#1356). PanelsFrame implements it by reading the cursor entry's cached
+// vfs.VFSItem.IsDir, exactly what GetSelectedName already reads to name that
+// entry -- so this costs no extra I/O over what a Visible/Enabled predicate
+// already pays.
+//
+// known is false when the host cannot answer at all right now (for example,
+// nothing under the cursor); it is deliberately not a place for a host to
+// report "unknown" merely because a real Stat would be needed, since no
+// current implementation needs one. Callers must treat known==false the
+// same as "this host does not implement SelectedIsDirHost at all": absence
+// of information, never grounds to assume either true or false.
+type SelectedIsDirHost interface {
+	GetSelectedIsDir() (isDir bool, known bool)
+}
