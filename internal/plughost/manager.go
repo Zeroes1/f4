@@ -11,6 +11,7 @@ import (
 	gitplugin "github.com/unxed/f4/plugins/git"
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/ide"
+	"github.com/unxed/f4/plugins/intchecker"
 	"github.com/unxed/f4/plugins/mediainfo"
 	observerplugin "github.com/unxed/f4/plugins/observer"
 	"github.com/unxed/f4/plugins/proclist"
@@ -156,6 +157,8 @@ func (pm *PluginManager) loadInternal() {
 		&dummy_internal.InternalDummyPlugin{},
 		&visren.Plugin{},
 		&id3editor.ID3EditorPlugin{},
+		// Integrity checker (f4#1623 step 1): checksum file generation.
+		intchecker.NewPlugin(),
 		envman.NewPlugin(config.GetF4ConfigDir()),
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
 		// Both builds: the lite build's SQLite client runs the host's

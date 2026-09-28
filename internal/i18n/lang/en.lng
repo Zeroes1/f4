@@ -66,6 +66,26 @@ ID3Editor.FieldGenre=Genre:
 ID3Editor.FieldComment=Comment:
 ID3Editor.FieldVersion=Version:
 
+IntChecker.Menu=Integrity &checker
+IntChecker.Command.Desc=Generate checksum files (SFV, MD5, SHA) for the selected files
+IntChecker.Title=Integrity Checker
+IntChecker.Generate=&Generate hashes...
+IntChecker.GenerateTitle=Generate hashes
+IntChecker.Algorithm=&Algorithm:
+IntChecker.OutputSingleFile=Output to: single file (all checksums in one file)
+IntChecker.OutputFileName=&File name:
+IntChecker.BadOutputName=Enter a file name without a directory.
+IntChecker.NothingSelected=Select files first.
+IntChecker.OverwriteQuestion=File %s already exists.\nOverwrite it?
+IntChecker.Overwrite=&Overwrite
+IntChecker.ProgressHashing=Hashing
+IntChecker.ProgressFiles=File %d of %d
+IntChecker.Cancelled=Checksum calculation has been interrupted by user.
+IntChecker.NoFiles=No files to hash. Directories are not processed yet.
+IntChecker.WriteError=Failed to write %s:\n%v
+IntChecker.ReadErrors=%d file(s) could not be read and were left out:
+IntChecker.MoreErrors=...and %d more.
+
 vtui.Ok=&Ok
 vtui.Cancel=Cancel
 vtui.Save=&Save

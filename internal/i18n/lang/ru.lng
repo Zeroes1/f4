@@ -66,6 +66,26 @@ ID3Editor.FieldGenre=Жанр:
 ID3Editor.FieldComment=Комментарий:
 ID3Editor.FieldVersion=Версия:
 
+IntChecker.Menu=Проверка &целостности
+IntChecker.Command.Desc=Создать файлы контрольных сумм (SFV, MD5, SHA) для выбранных файлов
+IntChecker.Title=Проверка целостности
+IntChecker.Generate=&Вычислить хэши...
+IntChecker.GenerateTitle=Вычисление хэшей
+IntChecker.Algorithm=&Алгоритм:
+IntChecker.OutputSingleFile=Вывод: один файл (все контрольные суммы в одном файле)
+IntChecker.OutputFileName=&Имя файла:
+IntChecker.BadOutputName=Введите имя файла без каталога.
+IntChecker.NothingSelected=Сначала выберите файлы.
+IntChecker.OverwriteQuestion=Файл %s уже существует.\nПерезаписать его?
+IntChecker.Overwrite=&Перезаписать
+IntChecker.ProgressHashing=Вычисление
+IntChecker.ProgressFiles=Файл %d из %d
+IntChecker.Cancelled=Вычисление контрольных сумм прервано пользователем.
+IntChecker.NoFiles=Нет файлов для вычисления. Каталоги пока не обрабатываются.
+IntChecker.WriteError=Не удалось записать %s:\n%v
+IntChecker.ReadErrors=Не удалось прочитать файлов: %d, они пропущены:
+IntChecker.MoreErrors=...и ещё %d.
+
 vtui.Ok=&Ок
 vtui.Cancel=Отмена
 vtui.Save=&Сохранить
