@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/internal/toast"
@@ -106,6 +107,23 @@ func (p *PluginPanelInstance) Show(scr *vtui.ScreenBuf) {
 	p.controller.Show(scr)
 }
 
+// isPluginPanelCloseKey reports a plain F10 key press. Under a panel plugin
+// F10 closes the panel and returns to the file panel, the same way Esc does
+// (f4#312, reviewer request). This deliberately takes the key from the
+// window-level App.Quit (F10 in the Shell area): a panel plugin is a
+// transient view over the file panel, and the project convention for such
+// transient views is that Esc/F10 close them (the viewer and editor close on
+// F10 as well), whereas an unintended quit of the whole file manager loses
+// the user's session. Quit stays reachable through Esc then F10 and the menu;
+// a controller that declares or handles F10 itself still wins.
+func isPluginPanelCloseKey(e *vtinput.InputEvent) bool {
+	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != vtinput.VK_F10 {
+		return false
+	}
+	const mods = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed
+	return e.ControlKeyState&mods == 0
+}
+
 func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 	if p == nil || p.controller == nil {
 		return false
@@ -121,6 +139,13 @@ func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	if p.controller.ProcessKey(e) {
+		return true
+	}
+	// F10 leaves the panel too (see isPluginPanelCloseKey); it is checked
+	// here as well so a keybar click, which is injected straight into
+	// ProcessKey, closes the panel just as the key does.
+	if isPluginPanelCloseKey(e) {
+		p.Close()
 		return true
 	}
 	// Escape is the common close gesture for a panel plugin that does not
@@ -285,12 +310,44 @@ var filePanelSelectionActions = map[string]bool{
 	"panel.restoreselection":         true,
 }
 
+// filePanelNavigationActions are the Panel.* actions that navigate or read
+// the file panel under a panel plugin: directory changes (Ctrl+PgUp/Ctrl+PgDn,
+// Ctrl+Del, Alt+Left/Right), name scrolling, path/name clipboard and insert
+// gestures, and the ones that open or transform the entry under its cursor.
+// Same reason as filePanelSelectionActions: the file panel is hidden, so these
+// would silently change a directory or copy a name the user cannot see
+// (f4#312, Ctrl+PgUp/Ctrl+PgDn kept switching directories under ProcList).
+var filePanelNavigationActions = map[string]bool{
+	"panel.goparent":              true,
+	"panel.goroot":                true,
+	"panel.enterdirectory":        true,
+	"panel.historyback":           true,
+	"panel.historyforward":        true,
+	"panel.scrollnamesleft":       true,
+	"panel.scrollnamesright":      true,
+	"panel.scrollnameshome":       true,
+	"panel.scrollnamesend":        true,
+	"panel.copypath":              true,
+	"panel.insertpath":            true,
+	"panel.copyname":              true,
+	"panel.copyselectednames":     true,
+	"panel.copyselectedpaths":     true,
+	"panel.copyselectedrealpaths": true,
+	"panel.insertfilename":        true,
+	"panel.systemexplorer":        true,
+	"panel.selectnavigation":      true,
+	"panel.fileassociations":      true,
+	"panel.base64encodefile":      true,
+	"panel.base64decodefile":      true,
+	"panel.comparefilesbycontent": true,
+}
+
 // IsFilePanelScopedAction reports whether an action operates on the file
-// panel's cursor or selection. Such bindings stand down while a panel plugin
+// panel's cursor, selection or directory. Such bindings stand down while a panel plugin
 // owns the keyboard: the file panel is hidden under the plugin, so F8 must
 // not delete, F4 must not edit and Gray+ must not select a file the user
 // cannot see (f4#312). The rule is the File.* namespace plus
-// filePanelSelectionActions, deliberately by name and not per key, so a
+// filePanelSelectionActions and filePanelNavigationActions, deliberately by name and not per key, so a
 // user's own rebinding (File.Delete on another key) stands down too and a
 // window-level action on an F-key (Help, menus, quit) keeps working.
 func IsFilePanelScopedAction(name string) bool {
@@ -298,7 +355,7 @@ func IsFilePanelScopedAction(name string) bool {
 	if i := strings.IndexByte(name, ':'); i >= 0 {
 		name = name[:i]
 	}
-	return strings.HasPrefix(name, "file.") || filePanelSelectionActions[name]
+	return strings.HasPrefix(name, "file.") || filePanelSelectionActions[name] || filePanelNavigationActions[name]
 }
 
 // PluginPanelStandsDown reports whether a configured hotkey resolving to
@@ -324,6 +381,9 @@ func (pf *PanelsFrame) pluginPanelKeyLabels(inst *PluginPanelInstance, fallbacks
 		fallbacks = &trimmed
 	}
 	set := keymap.KeyBarLabelsForAreaExcept("Shell", fallbacks, IsFilePanelScopedAction)
+	// F10 closes the panel (isPluginPanelCloseKey) instead of quitting; a
+	// plugin that declares its own F10 overrides this caption below.
+	set.Normal[vtinput.VK_F10-vtinput.VK_F1], set.NormalDisabled[vtinput.VK_F10-vtinput.VK_F1] = i18n.Msg("PanelPlugin.KeyBar.Close"), false
 	for _, k := range inst.PanelKeys() {
 		if k.VK < vtinput.VK_F1 || k.VK > vtinput.VK_F12 || k.Label == "" {
 			continue

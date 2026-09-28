@@ -742,6 +742,7 @@ GitStatus.ColumnStatus=Status
 GitStatus.ColumnPath=Path
 GitStatus.PanelTitle=Git status: %s (%d)
 GitStatus.Detached=detached HEAD
+PanelPlugin.KeyBar.Close=Close
 GitStatus.KeyBar.Refresh=Refresh
 GitStatus.KeyBar.Hunks=Hunks
 GitStatus.KeyBar.UnstageHunks=Unstage

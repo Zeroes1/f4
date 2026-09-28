@@ -72,8 +72,10 @@ source for normal file actions.
 The host calls the panel controller with the ordinary `vtui` drawing and input
 interfaces. Before each draw and input event it supplies a `PanelContext` with
 the panel side, screen bounds, active side, current path, cursor name, marked
-names, and the corresponding snapshot from the other file panel. `Esc` closes
-the panel when the controller does not consume it. This keeps panel plugins
+names, and the corresponding snapshot from the other file panel. `Esc` and
+plain `F10` close the panel when the controller does not consume them (F10 is
+Quit elsewhere; under a panel plugin it returns to the file panel, and the
+keybar caption says so). This keeps panel plugins
 portable and prevents them from reaching into f4's private panel state.
 
 A panel plugin's own keys go through one shared primitive instead of a
@@ -87,11 +89,12 @@ declares keys or not:
 * a declared key runs before any global plugin hotkey or configured f4
   hotkey, including keys injected by a click on the keybar;
 * bindings that act on the hidden file panel's cursor or selection (every
-  `File.*` action and the group-selection actions) and global plugin
+  `File.*` action, the group-selection actions and the file-panel navigation
+  ones such as `Panel.GoParent`/`Panel.EnterDirectory` on Ctrl+PgUp/Ctrl+PgDn) and global plugin
   hotkeys stand down, so their keys reach the controller's `ProcessKey`
   instead; the hidden file panel itself never receives keys;
 * the keybar shows the declared captions, blanks the file-panel captions and
-  keeps every other f4 binding (Help, menus, panel toggles, quit).
+  keeps every other f4 binding (Help, menus, panel toggles); F10 is captioned as closing the panel.
 
 `vfs.DispatchPanelKey` is the host's dispatcher, exported so a controller can
 route the same declarations from its own `ProcessKey`.

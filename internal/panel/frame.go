@@ -2398,6 +2398,12 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 		return pluginPanel.ProcessKey(e)
 	}
 
+	// Plain F10 closes the panel plugin (the controller sees it first), so
+	// the window-level Quit on F10 does not take it (f4#312).
+	if pluginPanel != nil && isPluginPanelCloseKey(e) {
+		return pluginPanel.ProcessKey(e)
+	}
+
 	// Check global hotkeys (ignoring Lock and Enhanced keys)
 	if pluginPanel == nil {
 		for _, hk := range plughost.GlobalHotkeysSnapshot() {
