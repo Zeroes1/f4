@@ -61,6 +61,35 @@ func TestHandleEditRejectsUnsupportedSelections(t *testing.T) {
 	}
 }
 
+// TestCanHandleEditMatchesHandleEditEligibility checks that the Enabled
+// predicate wired into the plugin command (f4#1356) agrees with what
+// handleEdit itself accepts: disabled exactly on the selections that would
+// otherwise pop an error dialog, enabled on a real local MP3 file.
+func TestCanHandleEditMatchesHandleEditEligibility(t *testing.T) {
+	local := vfs.NewOSVFS(t.TempDir())
+	tests := []struct {
+		name      string
+		activeVFS vfs.VFS
+		selected  []string
+		want      bool
+	}{
+		{name: "no active VFS", want: false},
+		{name: "remote VFS", activeVFS: nonLocalID3VFS{}, selected: []string{"song.mp3"}, want: false},
+		{name: "no selection", activeVFS: local, want: false},
+		{name: "non MP3", activeVFS: local, selected: []string{"song.txt"}, want: false},
+		{name: "MP3", activeVFS: local, selected: []string{"song.mp3"}, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			app := &id3AppStub{activeVFS: test.activeVFS, selected: test.selected}
+			if got := canHandleEdit(app); got != test.want {
+				t.Errorf("canHandleEdit() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func writeID3TestFile(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "song.mp3")
