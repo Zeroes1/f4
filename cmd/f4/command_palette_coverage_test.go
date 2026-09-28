@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 60
+const commandPaletteF4Surfaces = 61
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -99,7 +99,10 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 		class: paletteAuditModalLocal, rationale: "the calendar dialog's day grid captures PgUp/PgDn/Ctrl+PgUp/Ctrl+PgDn/Home locally to page the month/year and jump to today; Panel.Calendar is its registered entry point",
 	},
 	"app.(*aiReviewTable).ProcessKey": {
-		class: paletteAuditModalLocal, rationale: "the ap patch review dialog's table captures Space/Ins locally to switch the edit under the cursor on and off Enter/F3 to show that edit's diff and F8 to reject it with a reason for the model's next message; the dialog is reached from the AI panel's dry run, and neither means anything outside it",
+		class: paletteAuditModalLocal, rationale: "the ap patch review dialog's table captures Space/Ins to switch the edit under the cursor on and off, F8 to reject it with a reason for the model's next message, Ctrl+Tab to move focus to the permanent diff pane beside it (Enter/F3 are swallowed and do nothing, on purpose - see aiReviewDiffPane below); the dialog is reached from the AI panel's dry run, and none of it means anything outside it",
+	},
+	"app.(*aiReviewDiffPane).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the ap patch review dialog's permanent diff pane scrolls locally (arrows/paging/Home/End) and hands focus back to the table on Ctrl+Tab; it only ever shows the row the table's own cursor is on, nothing outside the dialog",
 	},
 	"app.(*markdownView).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the formatted Markdown view is a read-only frame F3 opens on a Markdown file in place of the text viewer; F3/F10 close it and F4 goes back to the text view, local to it like the text viewer's own mode switch, and scrolling is HelpView's",
