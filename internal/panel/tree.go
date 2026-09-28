@@ -107,13 +107,18 @@ func (it treeItem) GetCellText(int) string {
 // has focus, F5/F6 (actionCopyMove, internal/app/actions.go) copy/move the
 // selection from Source() -- the other, still-visible panel that opened the
 // tree -- into SelectedPath(), the highlighted node, without navigating
-// into it first (part 3 of f4#1602), and F7 (actionMkDir) creates a new
+// into it first (part 3 of f4#1602), F7 (actionMkDir) creates a new
 // subdirectory right under the highlighted node the same way, refreshing it
-// via RefreshChildrenAndSelect (part 4 of f4#1602). F8/Del acting on the
-// highlighted node itself, the way far2l's own tree panel supports, is
-// still a follow-up part, as is a persistent expand/collapse cache across
-// tree panel instances and a per-plugin f4:config knob (e.g. root = current
-// dir instead of the whole volume) -- see f4#1602.
+// via RefreshChildrenAndSelect (part 4 of f4#1602), and F8/Del
+// (actionDeleteWithDisposition) delete the highlighted node itself,
+// reusing the very same confirmation dialog as an ordinary panel delete,
+// then leave the cursor on a neighboring row via RefreshAfterDelete (part 5
+// of f4#1602). The tree's own root row refuses F8/Del (IsRootSelected):
+// deleting it would mean deleting the whole current volume, which is not a
+// node a real panel could ever have offered as a delete target either.
+// Still a follow-up part: a persistent expand/collapse cache across tree
+// panel instances and a per-plugin f4:config knob (e.g. root = current dir
+// instead of the whole volume) -- see f4#1602.
 type TreePanel struct {
 	src     *FileSystemPanel
 	Frame   *vtui.BorderedFrame
@@ -531,6 +536,100 @@ func (t *TreePanel) RefreshChildrenAndSelect(name string) {
 		return
 	}
 	t.setCursor(idx)
+}
+
+// IsRootSelected reports whether the cursor is on the tree's own root row --
+// the whole current volume, rather than one of its subdirectories. F8/Del
+// (actionDeleteWithDisposition, internal/app/actions.go) checks this before
+// acting on the highlighted node: the root has no parent row to refresh
+// afterward, and "deleting" it would mean deleting the whole volume the
+// source panel is browsing, never a sensible interpretation of Del on a
+// tree node (f4#1602, part 5 of N). The root is always row 0: nothing is
+// ever spliced in ahead of it (spliceChildren only ever inserts after an
+// existing row).
+func (t *TreePanel) IsRootSelected() bool {
+	return t.cursorIndex() == 0
+}
+
+// siblingIndices returns the flat-list row indices of items[parent]'s own
+// children -- items[i].parentIndex == parent -- in the same top-to-bottom
+// order the tree lists them, skipping over any already-expanded
+// descendants of an earlier sibling that sit at a deeper level in between
+// two siblings in the flat list. Mirrors the range scan revealChild already
+// does to find the last sibling before splicing in a new one.
+func (t *TreePanel) siblingIndices(parent int) []int {
+	depth := t.items[parent].depth
+	end := parent + 1
+	for end < len(t.items) && t.items[end].depth > depth {
+		end++
+	}
+	var out []int
+	for i := parent + 1; i < end; i++ {
+		if t.items[i].parentIndex == parent {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// RefreshAfterDelete re-scans the parent of the row under the cursor after
+// its underlying directory has just been removed from disk, and leaves the
+// cursor on a neighboring row rather than on the now-nonexistent path: the
+// sibling that used to follow the deleted node, or, failing that (the
+// deleted node was the last child), the one that used to precede it, or the
+// parent itself if the deleted node had no siblings at all. Used by F8/Del
+// (actionDeleteWithDisposition, internal/app/actions.go) while the tree has
+// focus (f4#1602, part 5 of N) -- the mirror image of RefreshChildrenAndSelect
+// (part 4 of N), which refreshes the highlighted node's own children after
+// adding one beneath it; here the deleted node itself is gone, so it is the
+// *parent* that needs re-scanning. A no-op if the cursor is out of range or
+// already on the root (see IsRootSelected; there is no parent to refresh).
+func (t *TreePanel) RefreshAfterDelete() {
+	idx := t.cursorIndex()
+	if idx < 0 || idx == 0 {
+		return
+	}
+	parent := t.items[idx].parentIndex
+	if parent < 0 {
+		return
+	}
+
+	var next, prev string
+	siblings := t.siblingIndices(parent)
+	for i, s := range siblings {
+		if s != idx {
+			continue
+		}
+		if i+1 < len(siblings) {
+			next = t.items[siblings[i+1]].name
+		}
+		if i-1 >= 0 {
+			prev = t.items[siblings[i-1]].name
+		}
+		break
+	}
+
+	if !t.items[parent].collapsed {
+		t.collapseAt(parent)
+	}
+	t.items[parent].expandable = true
+	t.items[parent].collapsed = true
+	t.expandAt(parent)
+	t.syncRows()
+
+	if next != "" {
+		if child := t.findChild(parent, next); child != -1 {
+			t.setCursor(child)
+			return
+		}
+	}
+	if prev != "" {
+		if child := t.findChild(parent, prev); child != -1 {
+			t.setCursor(child)
+			return
+		}
+	}
+	t.setCursor(parent)
 }
 
 // activateSelected changes the source panel's directory to the highlighted

@@ -3259,20 +3259,83 @@ func deleteRefreshCallback(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, ac
 	}
 }
 
+// treeDeleteRefreshCallback is ExecuteDeleteOpWithDispositionAt's onComplete
+// for F8/Del's tree branch (actionDeleteWithDisposition, f4#1602 part 5 of
+// N): unlike deleteRefreshCallback's active-panel path above, which
+// re-checks each requested name and refreshes the whole panel, the tree's
+// own highlighted node either is gone now or never existed as a separate
+// panel row to re-check in the first place -- TreePanel.RefreshAfterDelete
+// re-scans its parent directly and picks its own neighboring row to land
+// on. The tree's refresh is synchronous, so it needs an explicit redraw the
+// same way actionMkDir's tree branch already does for its own synchronous,
+// non-RefreshAll path.
+func treeDeleteRefreshCallback(t *panel.TreePanel) func() {
+	return func() {
+		t.RefreshAfterDelete()
+		vtui.FrameManager.Redraw()
+	}
+}
+
 func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDisposition, explicitPermanent bool) {
-	fsp := pf.GetActivePanel()
-	if fsp == nil {
-		return
+	var (
+		fsp       *panel.FileSystemPanel
+		treeAlt   *panel.TreePanel
+		activeVfs vfs.VFS
+		basePath  string
+		names     []string
+	)
+
+	// With the tree (Ctrl+T) focused, F8/Del deletes the highlighted node
+	// itself rather than acting on the active panel's own selection -- the
+	// same "the tree is a real destination panel, not just a navigator"
+	// behavior F5/F6/F7 already got (f4#1602, parts 3-4 of N). The node's
+	// parent directory stands in for basePath/activeVfs the way
+	// treeCopyMoveTarget's and actionMkDir's fresh OSVFS already stand in
+	// for a real panel on that directory -- rooted one level up from theirs,
+	// at the node's parent, since here it is the node itself that gets
+	// deleted, not something created or copied inside it. The root row is
+	// not a valid target at all (see TreePanel.IsRootSelected's doc comment).
+	if t := focusedTreePanel(pf); t != nil {
+		if t.IsRootSelected() {
+			return
+		}
+		selPath := t.SelectedPath()
+		if selPath == "" {
+			return
+		}
+		treeAlt = t
+		basePath = filepath.Dir(selPath)
+		names = []string{filepath.Base(selPath)}
+		activeVfs = vfs.NewOSVFS(basePath)
+	} else {
+		fsp = pf.GetActivePanel()
+		if fsp == nil {
+			return
+		}
+		activeVfs = fsp.Vfs
+		basePath = activeVfs.GetPath()
+		names = fsp.GetSelectedNames()
+		if len(names) == 0 {
+			return
+		}
+		if panel.DispatchPanelAction(pf, vfs.PanelActionDelete, panel.SelectedPanelActionPaths(fsp)) {
+			return
+		}
 	}
 
-	activeVfs := fsp.Vfs
-	basePath := activeVfs.GetPath()
-	names := fsp.GetSelectedNames()
-	if len(names) == 0 {
-		return
-	}
-	if panel.DispatchPanelAction(pf, vfs.PanelActionDelete, panel.SelectedPanelActionPaths(fsp)) {
-		return
+	// onComplete lands the cursor after the delete completes: on the
+	// active panel's successor as before when F8/Del targets it directly,
+	// or on a neighboring row of the tree's own highlighted node's parent --
+	// re-scanning it, since the deleted node no longer exists to refresh
+	// itself -- when F8/Del targeted the tree instead (see treeAlt above;
+	// f4#1602 part 5 of N). The tree's own refresh is synchronous, so it
+	// needs an explicit redraw the same way actionMkDir's tree branch
+	// already does for its own synchronous, non-RefreshAll path.
+	var onComplete func()
+	if treeAlt != nil {
+		onComplete = treeDeleteRefreshCallback(treeAlt)
+	} else {
+		onComplete = deleteRefreshCallback(pf, fsp, activeVfs, basePath, names)
 	}
 
 	titleKey := "Delete.Title"
@@ -3288,9 +3351,11 @@ func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDi
 	}
 
 	if !config.App.ConfirmDelete {
-		fsp.PendingSelection = fsp.GetSuccessorName()
+		if treeAlt == nil {
+			fsp.PendingSelection = fsp.GetSuccessorName()
+		}
 		stopPlayerForDelete(pf, activeVfs, basePath, names)
-		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, config.App.DefaultFileOpMode, disposition, deleteRefreshCallback(pf, fsp, activeVfs, basePath, names))
+		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, config.App.DefaultFileOpMode, disposition, onComplete)
 		return
 	}
 
@@ -3353,10 +3418,12 @@ func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDi
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnDel.OnClick = func() {
 		mode := comboMode.Menu.SelectPos
-		fsp.PendingSelection = fsp.GetSuccessorName()
+		if treeAlt == nil {
+			fsp.PendingSelection = fsp.GetSuccessorName()
+		}
 		dlg.Close()
 		stopPlayerForDelete(pf, activeVfs, basePath, names)
-		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, mode, disposition, deleteRefreshCallback(pf, fsp, activeVfs, basePath, names))
+		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, mode, disposition, onComplete)
 	}
 
 	if config.App.DeleteCancelFocused {

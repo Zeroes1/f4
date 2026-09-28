@@ -131,6 +131,28 @@ func fileCopyMoveEnabled(isMove bool) func() bool {
 	}
 }
 
+// fileDeleteEnabled is the Enabled predicate for File.Delete (F8) and
+// File.DeletePermanent (Shift+Del), extending activePanelHasSelectionTarget
+// with the tree case the same way fileCopyMoveEnabled already does for
+// F5/F6: with the tree (Ctrl+T) focused, F8/Del target its highlighted node
+// directly (actionDeleteWithDisposition's own focusedTreePanel branch), not
+// the active panel's own selection, so gating on activePanelHasSelectionTarget
+// alone would leave the key wrongly disabled whenever the real panel
+// underneath the tree happens to have its cursor on ".." -- the one case
+// its own cursor fallback refuses (FileSystemPanel.GetSelectedNames) -- even
+// though the tree itself has a perfectly good node highlighted (f4#1602,
+// part 5 of N).
+func fileDeleteEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	if t := focusedTreePanel(pf); t != nil {
+		return !t.IsRootSelected() && t.SelectedPath() != ""
+	}
+	return activePanelHasSelectionTarget()
+}
+
 // symlinkEditEnabled is the Enabled predicate for File.EditSymlink. It
 // mirrors actionEditSymlink's own three refusal branches -- exactly one
 // target selected (SymlinkEdit.OneFile), that target actually is a symlink
@@ -716,7 +738,7 @@ func init() {
 		DescKey:     "Action.File.Delete.Desc",
 		DefaultKeys: []string{"F8"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileDeleteEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDelete(pf) }),
 	})
 	registerAction(action.Action{
@@ -728,7 +750,7 @@ func init() {
 		DescKey:     "Action.File.DeletePermanent.Desc",
 		DefaultKeys: []string{"ShiftDel", "ShiftNumDel"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileDeleteEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDeletePermanent(pf) }),
 	})
 	registerAction(action.Action{
