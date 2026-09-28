@@ -189,7 +189,8 @@ func (cp *AIChatPanel) navigateToTarget(target string) {
 	}
 }
 
-// ProcessKey adds the AI-specific hotkeys (copy last response, apply patch)
+// ProcessKey adds the AI-specific hotkeys (copy last response, apply patch,
+// undo the last applied patch)
 // on top of vtui.ChatWindow's generic scrolling/link/input handling.
 func (cp *AIChatPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	if !e.KeyDown || !cp.IsFocused() {
@@ -199,6 +200,7 @@ func (cp *AIChatPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
 	rctrl := (e.ControlKeyState & vtinput.RightCtrlPressed) != 0
+	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 
 	if e.VirtualKeyCode == vtinput.VK_C && rctrl && !alt && !shift {
 		session := cp.getSession()
@@ -215,6 +217,13 @@ func (cp *AIChatPanel) ProcessKey(e *vtinput.InputEvent) bool {
 
 	if e.VirtualKeyCode == vtinput.VK_P && rctrl && !alt && !shift {
 		aiApplyPatch(panel.FindPanelsFrameAnyScreen())
+		return true
+	}
+
+	// Ctrl+Z (either Ctrl) undoes the last applied patch (docs/VTVIBE.md
+	// §7.4); the input line has no undo of its own to take it from.
+	if e.VirtualKeyCode == vtinput.VK_Z && ctrl && !alt && !shift {
+		aiUndoPatch(panel.FindPanelsFrameAnyScreen())
 		return true
 	}
 

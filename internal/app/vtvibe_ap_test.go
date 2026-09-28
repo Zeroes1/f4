@@ -113,6 +113,7 @@ func TestAIPatchExitCode(t *testing.T) {
 func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	aiUndoTestStack(t)
 
 	root := t.TempDir()
 	target := filepath.Join(root, "a.txt")
@@ -176,6 +177,9 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 	if got, err := os.ReadFile(target); err != nil || string(got) != "line1\nline2\n" {
 		t.Fatalf("dry run changed the file: %q, %v", got, err)
 	}
+	if aiTopUndo() != nil {
+		t.Fatal("a dry run recorded a transaction to undo")
+	}
 
 	// Only the second REPLACE is checked (the review screen's Options.Only):
 	// the first one must stay unapplied.
@@ -183,6 +187,17 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 	waitForResult()
 	if got, err := os.ReadFile(target); err != nil || string(got) != "line1\nLINE2\n" {
 		t.Fatalf("applied file = %q, %v; want only the checked modification to have landed", got, err)
+	}
+	// The real run is on the undo stack (Ctrl+Z in the AI panel).
+	u := aiTopUndo()
+	if u == nil {
+		t.Fatal("a real run did not record its transaction")
+	}
+	if err := u.Revert(); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "line1\nline2\n" {
+		t.Fatalf("reverted file = %q, %v; want the original", got, err)
 	}
 }
 

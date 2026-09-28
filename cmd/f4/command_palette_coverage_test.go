@@ -81,7 +81,7 @@ var commandPaletteTargetPackage = map[string]string{}
 
 var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"app.(*AIChatPanel).ProcessKey": {
-		class: paletteAuditPanelProvider, rationale: "focused AI panel commands are supplied by the panel-context palette provider; text and link navigation remain local",
+		class: paletteAuditPanelProvider, rationale: "focused AI panel commands are supplied by the panel-context palette provider; Ctrl+Z (undo the last applied ap patch) is also the registered AI.UndoPatch action; text and link navigation remain local",
 	},
 	"app.(*ArkanoidFrame).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "Arkanoid commands are supplied by commandPaletteArkanoidEntries",

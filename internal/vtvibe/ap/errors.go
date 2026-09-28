@@ -31,6 +31,9 @@ const (
 	ErrFileDeleteError     ErrCode = "FILE_DELETE_ERROR"
 	ErrFileRenameError     ErrCode = "FILE_RENAME_ERROR"
 	ErrDirCreateError      ErrCode = "DIR_CREATE_ERROR"
+	// ErrSnapshotError: the undo snapshot of the paths a patch touches
+	// (undo.go) could not be taken, so nothing was written.
+	ErrSnapshotError ErrCode = "SNAPSHOT_ERROR"
 )
 
 // AppError is one failed modification or one fatal patch-level failure. It
