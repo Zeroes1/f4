@@ -101,7 +101,7 @@ func TestResolveSavePath(t *testing.T) {
 
 func TestGenerateDialogDisablesFileNameForOtherOutputs(t *testing.T) {
 	initValidateTestScreen(t)
-	d := newGenerateDialog("photos")
+	d := newGenerateDialog("photos", DefaultSettings())
 	if d.editOutput.IsDisabled() || d.editOutput.GetText() != "photos.md5" {
 		t.Fatalf("single file: disabled=%v text=%q", d.editOutput.IsDisabled(), d.editOutput.GetText())
 	}
@@ -143,7 +143,7 @@ func TestGenerateDialogDump(t *testing.T) {
 		i18n.InitLang(lang, "en", "")
 
 		scr := initValidateTestScreen(t)
-		d := newGenerateDialog("photos")
+		d := newGenerateDialog("photos", DefaultSettings())
 		d.output.Selected = int(outputSeparate)
 		d.output.OnChange(int(outputSeparate))
 		d.win.Show(scr)

@@ -2511,6 +2511,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── plugin_test.go
     │   │   ├── progress.go
     │   │   ├── progress_test.go
+    │   │   ├── settings.go
+    │   │   ├── settings_test.go
     │   │   ├── validate.go
     │   │   ├── validate_test.go
     │   │   └── validate_ui.go

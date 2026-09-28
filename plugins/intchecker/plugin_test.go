@@ -79,7 +79,7 @@ var _ vfs.ContributionHost = (*contributionHostMock)(nil)
 
 func TestPluginRegistersPanelCommandAndUnregistersIt(t *testing.T) {
 	host := &contributionHostMock{hostMock: &hostMock{}}
-	plugin := NewPlugin()
+	plugin := NewPlugin(t.TempDir())
 	if err := plugin.Init(host); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestPluginRegistersPanelCommandAndUnregistersIt(t *testing.T) {
 
 func TestPluginFallsBackToLegacyMenu(t *testing.T) {
 	host := &hostMock{}
-	if err := NewPlugin().Init(host); err != nil {
+	if err := NewPlugin(t.TempDir()).Init(host); err != nil {
 		t.Fatal(err)
 	}
 	if host.legacyLabel == "" || host.legacyHandler == nil {
@@ -140,7 +140,7 @@ func TestPluginFallsBackToLegacyMenu(t *testing.T) {
 
 func TestPluginInitFailsWhenRegistrationFails(t *testing.T) {
 	host := &contributionHostMock{hostMock: &hostMock{}, err: errors.New("injected")}
-	plugin := NewPlugin()
+	plugin := NewPlugin(t.TempDir())
 	if err := plugin.Init(host); err == nil {
 		t.Fatal("Init succeeded despite registration failure")
 	}
@@ -189,7 +189,7 @@ func TestSelectedFileNamesDropsParentEntry(t *testing.T) {
 
 func TestMenuOffersGenerateAndValidate(t *testing.T) {
 	app := &appMock{}
-	NewPlugin().showMenu(app)
+	NewPlugin(t.TempDir()).showMenu(app)
 	if len(app.menu) != 2 || app.menu[menuGenerate] != vtui.Msg("IntChecker.Generate") ||
 		app.menu[menuValidate] != vtui.Msg("IntChecker.Validate") {
 		t.Fatalf("menu = %q", app.menu)

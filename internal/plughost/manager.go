@@ -158,7 +158,7 @@ func (pm *PluginManager) loadInternal() {
 		&visren.Plugin{},
 		&id3editor.ID3EditorPlugin{},
 		// Integrity checker (f4#1623 step 1): checksum file generation.
-		intchecker.NewPlugin(),
+		intchecker.NewPlugin(config.GetF4ConfigDir()),
 		envman.NewPlugin(config.GetF4ConfigDir()),
 		mediainfo.NewPlugin(config.GetF4ConfigDir()),
 		// Both builds: the lite build's SQLite client runs the host's

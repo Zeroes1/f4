@@ -326,7 +326,7 @@ func TestGeneratedFilesValidate(t *testing.T) {
 
 func TestGenerateDialogOptions(t *testing.T) {
 	initValidateTestScreen(t)
-	d := newGenerateDialog("photos")
+	d := newGenerateDialog("photos", DefaultSettings())
 	if d.recursive.State != 1 || d.absolute.State != 0 || d.editMask.GetText() != defaultMask {
 		t.Fatalf("defaults: recursive=%d absolute=%d mask=%q", d.recursive.State, d.absolute.State, d.editMask.GetText())
 	}

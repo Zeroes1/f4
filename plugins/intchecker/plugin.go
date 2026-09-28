@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/unxed/f4/vfs"
@@ -24,15 +26,25 @@ const (
 type Plugin struct {
 	api           vfs.HostAPI
 	registrations []vfs.Registration
+	configDir     string
+	store         *settingsStore
 }
 
-// NewPlugin returns the integrity checker plugin.
-func NewPlugin() *Plugin { return &Plugin{} }
+// NewPlugin returns the integrity checker plugin. configDir is where its
+// generate settings (Settings, see settings.go) persist between runs; an
+// empty string falls back to vfs.CustomConfigDir or os.UserConfigDir(), the
+// same order plugins/mediainfo and plugins/proclist use.
+func NewPlugin(configDir string) *Plugin { return &Plugin{configDir: configDir} }
 
 func (p *Plugin) GetName() string { return "Integrity Checker" }
 
 func (p *Plugin) Init(api vfs.HostAPI) error {
 	p.api = api
+	store, loadErr := newSettingsStore(p.settingsDirectory())
+	p.store = store
+	if loadErr != nil {
+		api.Log("integrity checker: " + loadErr.Error() + "; using defaults")
+	}
 	contributions, ok := api.(vfs.ContributionHost)
 	if !ok {
 		api.RegisterPluginMenuItem(vtui.Msg("IntChecker.Menu"), p.showMenu)
@@ -69,7 +81,7 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			SearchKeys:     []string{"IntChecker.Generate"},
 			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv"},
 			Enabled:        canRun,
-			Run:            showGenerateDialog,
+			Run:            p.showGenerateDialog,
 		},
 		{
 			ID:             validateCommandID,
@@ -109,6 +121,21 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
+// settingsDirectory is where the generate settings file lives, in the same
+// order plugins/mediainfo's plugin.go resolves its own settings directory.
+func (p *Plugin) settingsDirectory() string {
+	if strings.TrimSpace(p.configDir) != "" {
+		return p.configDir
+	}
+	if strings.TrimSpace(vfs.CustomConfigDir) != "" {
+		return vfs.CustomConfigDir
+	}
+	if directory, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(directory, "f4")
+	}
+	return "."
+}
+
 // canRun dims the command when there is no panel filesystem to work on.
 func canRun(app vfs.App) bool {
 	return app.GetActivePanelVFS() != nil
@@ -127,7 +154,7 @@ func (p *Plugin) showMenu(app vfs.App) {
 	}, func(idx int) {
 		switch idx {
 		case menuGenerate:
-			showGenerateDialog(app)
+			p.showGenerateDialog(app)
 		case menuValidate:
 			showValidate(app)
 		}
@@ -206,29 +233,31 @@ func outputModeNames() []string {
 	}
 }
 
-// newGenerateDialog builds the dialog for a panel directory named dirBase.
-// The file name field belongs to the "Single file" output and is disabled
-// for the others. Recursion is on by default, so selected directories are
-// hashed with everything in them, as IntChecker does. The file encoding
-// defaults to UTF-8, what md5sum and sha256sum read; it applies to every
-// output, including "Save to file" of the display window.
-func newGenerateDialog(dirBase string) *generateDialog {
+// newGenerateDialog builds the dialog for a panel directory named dirBase,
+// preset to settings -- the previous run's choices (settings.go), everything
+// but the output file name and the mask: the file name field always starts
+// from dirBase and the mask field always starts at defaultMask, since the
+// author asked (f4#1623) to keep exactly those two fresh on every run. The
+// file name field belongs to the "Single file" output and is disabled for
+// the others. The file encoding applies to every output, including "Save to
+// file" of the display window.
+func newGenerateDialog(dirBase string, settings Settings) *generateDialog {
 	width, height := 60, 24
 	d := &generateDialog{win: vtui.NewCenteredDialog(width, height, vtui.Msg("IntChecker.GenerateTitle"))}
 	d.win.ShowClose = true
 
 	d.algorithm = vtui.NewRadioGroup(0, 0, 2, algorithmNames())
-	d.algorithm.Selected = int(DefaultAlgorithm)
+	d.algorithm.Selected = int(settings.Algorithm)
 	lblAlgorithm := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.Algorithm"), d.algorithm)
 
 	d.output = vtui.NewRadioGroup(0, 0, 1, outputModeNames())
-	d.output.Selected = int(outputSingle)
+	d.output.Selected = int(settings.Output)
 	lblOutput := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.OutputTo"), d.output)
 
-	d.editOutput = vtui.NewEdit(0, 0, width-6, defaultOutputName(dirBase, DefaultAlgorithm))
+	d.editOutput = vtui.NewEdit(0, 0, width-6, defaultOutputName(dirBase, settings.Algorithm))
 	lblOutputEdit := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.OutputFileName"), d.editOutput)
 
-	current := DefaultAlgorithm
+	current := settings.Algorithm
 	d.algorithm.OnChange = func(idx int) {
 		next := Algorithm(idx)
 		if !next.valid() {
@@ -242,15 +271,16 @@ func newGenerateDialog(dirBase string) *generateDialog {
 	}
 
 	d.recursive = vtui.NewCheckbox(0, 0, vtui.Msg("IntChecker.Recursive"), false)
-	d.recursive.State = 1
+	d.recursive.State = checkboxState(settings.Recursive)
 	d.absolute = vtui.NewCheckbox(0, 0, vtui.Msg("IntChecker.AbsolutePaths"), false)
+	d.absolute.State = checkboxState(settings.Absolute)
 	d.editMask = vtui.NewEdit(0, 0, 10, defaultMask)
 	lblMask := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FileMask"), d.editMask)
 	// The mask field takes the rest of its row.
 	lx1, _, lx2, _ := lblMask.GetPosition()
 	maskWidth := width - 4 - (lx2 - lx1 + 1) - 1
 	d.editMask.SetPosition(0, 0, maskWidth-1, 0)
-	d.encoding = newEncodingCombo(24, writeEncodingChoices(), fileEncoding{Codepage: utf8Codepage})
+	d.encoding = newEncodingCombo(24, writeEncodingChoices(), settings.Encoding)
 	lblEncoding := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FileEncoding"), d.encoding.box)
 
 	d.btnOK = vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
@@ -290,7 +320,15 @@ func newGenerateDialog(dirBase string) *generateDialog {
 	return d
 }
 
-func showGenerateDialog(app vfs.App) {
+// checkboxState turns a persisted bool into the 0/1 vtui.Checkbox uses.
+func checkboxState(on bool) int {
+	if on {
+		return 1
+	}
+	return 0
+}
+
+func (p *Plugin) showGenerateDialog(app vfs.App) {
 	fs := app.GetActivePanelVFS()
 	if fs == nil {
 		return
@@ -301,29 +339,49 @@ func showGenerateDialog(app vfs.App) {
 		return
 	}
 	dir := fs.GetPath()
-	d := newGenerateDialog(fs.Base(dir))
-	d.btnOK.OnClick = func() {
-		algorithm := Algorithm(d.algorithm.Selected)
-		mode := outputMode(d.output.Selected)
-		if !algorithm.valid() || !mode.valid() {
-			return
-		}
-		output := strings.TrimSpace(d.editOutput.GetText())
-		if mode == outputSingle && !validOutputName(output) {
-			vtui.ShowMessage(vtui.Msg("IntChecker.Title"), vtui.Msg("IntChecker.BadOutputName"), []string{vtui.Msg("vtui.Ok")})
-			return
-		}
-		d.win.Close()
-		job := generateJob{
-			fs: fs, dir: dir, names: names, algorithm: algorithm, mode: mode, output: output,
-			recursive: d.recursive.State == 1,
-			absolute:  d.absolute.State == 1,
-			mask:      strings.TrimSpace(d.editMask.GetText()),
-			encoding:  d.encoding.selected(),
-		}
-		startGenerate(app, job)
-	}
+	d := newGenerateDialog(fs.Base(dir), p.store.snapshot())
+	d.btnOK.OnClick = func() { p.submitGenerate(app, fs, dir, names, d) }
 	vtui.FrameManager.Push(d.win)
+}
+
+// submitGenerate validates the dialog, persists the settings it remembers
+// (f4#1623 point 1: every generate setting except the output file name and
+// the mask, which the dialog always asks for fresh), closes the dialog and
+// starts the job. Split out of showGenerateDialog's OnClick so a test can
+// drive it directly, against a dialog it built and edited itself, without
+// simulating a button click through vtui.FrameManager.
+func (p *Plugin) submitGenerate(app vfs.App, fs vfs.VFS, dir string, names []string, d *generateDialog) {
+	algorithm := Algorithm(d.algorithm.Selected)
+	mode := outputMode(d.output.Selected)
+	if !algorithm.valid() || !mode.valid() {
+		return
+	}
+	output := strings.TrimSpace(d.editOutput.GetText())
+	if mode == outputSingle && !validOutputName(output) {
+		vtui.ShowMessage(vtui.Msg("IntChecker.Title"), vtui.Msg("IntChecker.BadOutputName"), []string{vtui.Msg("vtui.Ok")})
+		return
+	}
+	d.win.Close()
+	recursive := d.recursive.State == 1
+	absolute := d.absolute.State == 1
+	encoding := d.encoding.selected()
+	if err := p.store.save(Settings{
+		Algorithm: algorithm,
+		Output:    mode,
+		Recursive: recursive,
+		Absolute:  absolute,
+		Encoding:  encoding,
+	}); err != nil && p.api != nil {
+		p.api.Log("integrity checker: " + err.Error())
+	}
+	job := generateJob{
+		fs: fs, dir: dir, names: names, algorithm: algorithm, mode: mode, output: output,
+		recursive: recursive,
+		absolute:  absolute,
+		mask:      strings.TrimSpace(d.editMask.GetText()),
+		encoding:  encoding,
+	}
+	startGenerate(app, job)
 }
 
 // validOutputName accepts a plain file name in the current directory. Other
