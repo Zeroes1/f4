@@ -160,3 +160,50 @@ func TestActivePanelHasSelectionTarget_NoPanelsFrame(t *testing.T) {
 		t.Error("with no panels frame at all, there is no target")
 	}
 }
+
+// TestFileCopyMoveEnabled checks the Enabled predicate wired to File.Copy
+// (F5) and File.Move (F6): it must mirror actionCopyMove's own refusal
+// branches for a passive player-panel playlist (Player.MoveRefused /
+// Player.LocalOnly) so the key and menu item dim instead of the hotkey
+// opening one of those error dialogs (f4#1356, part 3).
+func TestFileCopyMoveEnabled(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.GetActivePanel()
+	fsp.Vfs = vfs.NewOSVFS(t.TempDir())
+	fsp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "file.txt"}},
+	}
+	fsp.SetCursorIndex(0)
+
+	if fileCopyMoveEnabled(false)() || fileCopyMoveEnabled(true)() {
+		t.Error("cursor on \"..\" with nothing marked should disable both Copy and Move")
+	}
+
+	fsp.SetCursorIndex(1)
+	if !fileCopyMoveEnabled(false)() || !fileCopyMoveEnabled(true)() {
+		t.Error("a real target with no player panel opposite should enable both Copy and Move")
+	}
+
+	// A player panel opposite: F6 (move) must stay disabled regardless of
+	// the source, and F5 (copy) only for a non-local source.
+	pf.AltPanels[1-pf.ActiveIdx] = &panel.PlayerPanel{}
+	if fileCopyMoveEnabled(true)() {
+		t.Error("Move must stay disabled with a player panel opposite (Player.MoveRefused)")
+	}
+	if !fileCopyMoveEnabled(false)() {
+		t.Error("Copy from a local filesystem must stay enabled with a player panel opposite")
+	}
+
+	fsp.Vfs = vfs.NewNullVFS(0)
+	if fileCopyMoveEnabled(false)() {
+		t.Error("Copy from a non-local filesystem must disable with a player panel opposite (Player.LocalOnly)")
+	}
+}

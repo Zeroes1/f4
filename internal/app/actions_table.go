@@ -72,11 +72,11 @@ func GetAction(name string) (action.Action, bool) {
 // marked entry, or the cursor on something other than "..".
 // FileSystemPanel.GetSelectedNames already encodes this exact rule (used by
 // actionFileAttributes, actionCopyMove and actionDeleteWithDisposition to
-// decide whether they have a target); this is the Enabled predicate wired to
-// File.Attributes, File.Copy, File.Move, File.Delete and
-// File.DeletePermanent, so the menu item and F-key dim and the hotkey stops
-// short of the handler instead of the handler quietly returning early
-// (f4#1356).
+// decide whether they have a target); this is the Enabled predicate wired
+// directly to File.Attributes, File.Delete and File.DeletePermanent, and
+// folded into fileCopyMoveEnabled below for File.Copy/File.Move, so the menu
+// item and F-key dim and the hotkey stops short of the handler instead of
+// the handler quietly returning early (f4#1356).
 func activePanelHasSelectionTarget() bool {
 	pf := panel.FindPanelsFrame()
 	if pf == nil {
@@ -87,6 +87,41 @@ func activePanelHasSelectionTarget() bool {
 		return false
 	}
 	return len(fsp.GetSelectedNames()) > 0
+}
+
+// fileCopyMoveEnabled extends activePanelHasSelectionTarget with the one
+// extra case actionCopyMove itself refuses even when a target exists: the
+// passive panel is the music player playlist (*panel.PlayerPanel), which is
+// not a place to copy or move real files into. F6 (isMove) is always
+// refused there -- the player never removes anything from the source
+// directory -- and F5 is refused too when the source is not a local
+// filesystem, since the player can only add local paths to its playlist.
+// This mirrors actionCopyMove's own Player.MoveRefused / Player.LocalOnly
+// branches so File.Copy/File.Move's menu item and F5/F6 key dim to match,
+// instead of the hotkey opening one of those error dialogs for a move/copy
+// that can never succeed (f4#1356, part 3).
+func fileCopyMoveEnabled(isMove bool) func() bool {
+	return func() bool {
+		if !activePanelHasSelectionTarget() {
+			return false
+		}
+		pf := panel.FindPanelsFrame()
+		if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+			return false
+		}
+		if _, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); !ok {
+			return true
+		}
+		if isMove {
+			return false
+		}
+		fsp := pf.GetActivePanel()
+		if fsp == nil {
+			return false
+		}
+		_, isLocal := fsp.Vfs.(*vfs.OSVFS)
+		return isLocal
+	}
 }
 
 // cursorOnParent reports whether the panel's cursor sits on the ".."
@@ -538,7 +573,7 @@ func init() {
 		DefaultKeys:         []string{"F5"},
 		MenuPath:            "Files",
 		MenuSeparatorBefore: true,
-		Enabled:             activePanelHasSelectionTarget,
+		Enabled:             fileCopyMoveEnabled(false),
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, false) }),
 	})
 	registerAction(action.Action{
@@ -561,7 +596,7 @@ func init() {
 		DescKey:     "Action.File.Move.Desc",
 		DefaultKeys: []string{"F6"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileCopyMoveEnabled(true),
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, true) }),
 	})
 	registerAction(action.Action{
