@@ -248,7 +248,10 @@ var legacyCases = []legacyCase{
 		files: map[string]string{"35_safe_create_empty.txt": ""},
 		patch: "# Test overwrite of empty file.\n" +
 			"35a00999 AP 3.1\n35a00999 CREATE\n35_safe_create_empty.txt\n35a00999 content\nFilled.\n",
-		expectFiles: map[string]string{"35_safe_create_empty.txt": "Filled.\n"},
+		// The existing file is empty, so there is no line ending to detect:
+		// the written content falls back to the OS default (§2.4, see
+		// osLineSep and c28 in cases_test.go), "\r\n" on Windows.
+		expectFiles: map[string]string{"35_safe_create_empty.txt": "Filled." + osLineSep()},
 	},
 	{
 		// run_tests.py: 36_safe_create_fail / patches/36_safe_create_fail.ap
@@ -304,14 +307,16 @@ var legacyCases = []legacyCase{
 		name: "61_tolerant_comments_non_strict_mode_strips_hash_comments_around_directives",
 		patch: "# comment before header\n61a00061 AP 3.1\n# comment between\n" +
 			"61a00061 FILE\ntolerant.txt\n# another comment\n61a00061 CREATE\n61a00061 content\nWorks!\n",
-		expectFiles: map[string]string{"tolerant.txt": "Works!\n"},
+		// A brand-new file with no declared newline mode: OS default ending.
+		expectFiles: map[string]string{"tolerant.txt": "Works!" + osLineSep()},
 	},
 	{
 		// run_tests.py: 62_tolerant_missing_header / patches/62_tolerant_missing_header.ap
 		name:  "62_tolerant_missing_header_non_strict_mode_auto_detects_the_patch_ID_without_an_AP_header",
 		patch: "# This patch completely lacks the AP 3.1 header\n62a00062 FILE\ntolerant.txt\n\n62a00062 CREATE\n62a00062 content\nWorks!\n",
+		// A brand-new file with no declared newline mode: OS default ending.
 		expectFiles: map[string]string{
-			"tolerant.txt": "Works!\n",
+			"tolerant.txt": "Works!" + osLineSep(),
 		},
 	},
 	{
@@ -321,8 +326,10 @@ var legacyCases = []legacyCase{
 		name:  "63_tolerant_anchor_as_snippet_non_strict_mode_accepts_anchor_as_the_snippet",
 		files: map[string]string{"63_source.txt": "Line 1"},
 		patch: "63a00063 AP 3.1\n\n63a00063 FILE\n63_source.txt\n\n63a00063 REPLACE\n63a00063 anchor\nLine 1\n63a00063 content\nReplaced Line 1\n",
+		// The source has a single line with no terminator, so no line
+		// ending is detected and the OS default is used.
 		expectFiles: map[string]string{
-			"63_source.txt": "Replaced Line 1\n",
+			"63_source.txt": "Replaced Line 1" + osLineSep(),
 		},
 	},
 	{
