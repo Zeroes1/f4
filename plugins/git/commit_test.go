@@ -8,6 +8,7 @@ import (
 
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
 
 func TestHasStagedChangesTrueWhenAnyEntryIsStaged(t *testing.T) {
@@ -203,6 +204,78 @@ func TestRunCommitFailureLeavesThePanelUntouched(t *testing.T) {
 	}
 	if len(panel.table.Rows) != 1 {
 		t.Fatalf("rows after a failed commit = %d, want 1 (unchanged)", len(panel.table.Rows))
+	}
+}
+
+func TestOnCommitMessageEnteredTrimsOuterBlankLinesButKeepsInternalOnes(t *testing.T) {
+	withFakeGit(t, "# branch.head main\n1 M. N... 100644 100644 100644 aaaaaaa bbbbbbb staged.go\n", nil)
+
+	controller, err := newStatusPanel(vfs.PanelContext{Current: vfs.PanelState{Path: "/repo"}, Bounds: [4]int{0, 0, 39, 19}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = controller.Close() }()
+	panel := controller.(*statusPanel)
+
+	var commitArgs []string
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		if args[2] == "commit" {
+			commitArgs = args
+			return []byte("[main abc1234] Subject\n 1 file changed, 1 insertion(+)\n"), nil
+		}
+		return []byte("# branch.head main\n"), nil
+	}
+
+	// A vtui.MultiLineEdit buffer with a leading and a trailing blank line
+	// (the user pressed Enter once before typing, and once more after the
+	// last line) -- those two should be trimmed away, but the single blank
+	// line separating the subject from the body must survive: that is the
+	// git convention a multi-line message needs to keep (showCommitMessageEditor's
+	// own doc comment, commit.go).
+	panel.onCommitMessageEntered("\nSubject\n\nBody line one\nBody line two\n\n")
+
+	want := []string{"-c", "core.quotepath=false", "commit", "-m", "Subject\n\nBody line one\nBody line two"}
+	if !reflect.DeepEqual(commitArgs, want) {
+		t.Fatalf("commit args = %#v, want %#v", commitArgs, want)
+	}
+}
+
+func TestOnCommitMessageEnteredRejectsAMessageThatIsOnlyBlankLines(t *testing.T) {
+	withFakeGit(t, "# branch.head main\n1 M. N... 100644 100644 100644 aaaaaaa bbbbbbb staged.go\n", nil)
+
+	controller, err := newStatusPanel(vfs.PanelContext{Current: vfs.PanelState{Path: "/repo"}, Bounds: [4]int{0, 0, 39, 19}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = controller.Close() }()
+	panel := controller.(*statusPanel)
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return nil, nil
+	}
+
+	// A vtui.MultiLineEdit left on several empty rows (Enter pressed a few
+	// times, nothing typed) joins into "\n\n\n" -- blank throughout, the
+	// same as an empty or whitespace-only single-line message already was.
+	panel.onCommitMessageEntered("\n\n\n")
+
+	if calls != 0 {
+		t.Fatalf("git invocations for a message that is only blank lines = %d, want 0", calls)
+	}
+}
+
+func TestShowCommitMessageEditorWithNilFrameManagerDoesNotCallOnOk(t *testing.T) {
+	original := vtui.FrameManager
+	vtui.FrameManager = nil
+	defer func() { vtui.FrameManager = original }()
+
+	var called bool
+	showCommitMessageEditor("", func(string) { called = true })
+
+	if called {
+		t.Fatal("showCommitMessageEditor called onOk with a nil vtui.FrameManager, want it to just return")
 	}
 }
 

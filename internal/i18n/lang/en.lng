@@ -661,6 +661,7 @@ GitStatus.StageFailed=git add failed: %s
 GitStatus.UnstageFailed=git restore --staged failed: %s
 GitStatus.CommitTitle= Commit
 GitStatus.CommitPrompt=Commit message:
+GitStatus.CommitEditorHint=First line is the subject; leave a blank line before a longer body.
 GitStatus.NothingToCommit=Nothing staged to commit
 GitStatus.CommitMessageEmpty=Commit message cannot be empty
 GitStatus.CommitFailed=git commit failed: %s

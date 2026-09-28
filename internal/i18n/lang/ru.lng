@@ -661,6 +661,7 @@ GitStatus.StageFailed=Не удалось выполнить git add: %s
 GitStatus.UnstageFailed=Не удалось выполнить git restore --staged: %s
 GitStatus.CommitTitle= Коммит
 GitStatus.CommitPrompt=Сообщение коммита:
+GitStatus.CommitEditorHint=Первая строка — тема; перед более длинным текстом оставьте пустую строку.
 GitStatus.NothingToCommit=Нет застейдженных изменений для коммита
 GitStatus.CommitMessageEmpty=Сообщение коммита не может быть пустым
 GitStatus.CommitFailed=Не удалось выполнить git commit: %s

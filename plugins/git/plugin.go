@@ -19,9 +19,9 @@
 // (git add) or unstage (git restore --staged) that whole file, whichever
 // applies, then reload the panel.
 //
-// v4 (f4#659 part 4 of N, commit.go) adds Ctrl+K: a one-line commit message
-// prompt over whatever Insert has already staged, then `git commit -m`.
-// Nothing staged shows a toast instead of opening the dialog.
+// v4 (f4#659 part 4 of N, commit.go) adds Ctrl+K: a commit message prompt
+// over whatever Insert has already staged, then `git commit -m`. Nothing
+// staged shows a toast instead of opening the dialog.
 //
 // v5 (f4#659 part 5 of N, log.go/logview.go/logdiff.go) adds Ctrl+E: a
 // read-only list of the repository's recent commits, pushed as its own
@@ -34,6 +34,11 @@
 // exactly the way Ctrl+E's log already is; Enter runs `git switch` on the
 // highlighted branch and reloads both that list and the status panel
 // underneath.
+//
+// v7 (f4#659 part 9 of N, commit.go) upgrades Ctrl+K's dialog from a
+// one-line prompt to a vtui.MultiLineEdit field, so a commit message can
+// have a subject line, a blank line, and a longer body -- the "editor for
+// commit messages" the ticket asked for from the start.
 //
 // Staging/unstaging a single hunk is still a follow-up part, not this one --
 // see the ticket for the full list.

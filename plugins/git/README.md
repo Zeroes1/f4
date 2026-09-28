@@ -172,11 +172,43 @@ archive tools (f4#609) rather than linking a Go git implementation.
   QuickSearch is, the same type-to-filter gesture the status and log views
   already have.
 
+## Part 9: a multi-line commit message editor (`commit.go`)
+
+- **Ctrl+K** now opens `showCommitMessageEditor`, a `vtui.MultiLineEdit`
+  field, instead of part 4's one-line `internal/dialog.FileInputBox` prompt
+  -- the "editor for commit messages" the ticket asked for from the start,
+  which a single-line field could never really be: a message with its own
+  subject line, a blank line, and a longer body (the shape git itself
+  expects from an `$EDITOR`-composed `COMMIT_EDITMSG`) had nowhere to go
+  before this. Composed by hand from `vtui.NewCenteredDialog`,
+  `vtui.NewButton` and `vtui.NewHBoxLayout`, the same way
+  `plugins/envman/dialogs.go`'s own profile dialog builds its own
+  `MultiLineEdit` field, rather than through `internal/dialog.FileDialog`:
+  that helper's fixed heights are sized for its own family of file dialogs
+  (copy/move/rename), not a resizable paragraph of text.
+- Confirming (the **Ok** button, or its own mnemonic) runs `git commit -m
+  "<message>"` exactly as part 4 did -- `-m`'s argument reaches git through
+  `exec.Cmd`'s own argv, never a shell, so an embedded newline needs no
+  escaping and git records the message verbatim (after its own
+  `commit.cleanup=strip`, the same cleanup a message typed into `$EDITOR`
+  would get either way). Only the dialog changed; `onCommitMessageEntered`
+  and `runCommit` (commit.go) are otherwise unchanged from part 4.
+- Enter inside the field types a newline, the way any multi-line text field
+  should -- it does not submit the dialog the way a single-line `vtui.Edit`'s
+  Enter would have. `strings.TrimSpace` on the confirmed text still only
+  strips a blank line the user left at the very start or end of the field;
+  it does not touch a blank line between the subject and the body, which is
+  exactly the convention a multi-line message needs to keep. A message that
+  is blank throughout is rejected with the same toast an empty single-line
+  one already was.
+- `--amend` and a commit signature/author override remain out of scope --
+  see the ticket for the remaining list.
+
 ## What is deliberately not here yet
 
 Everything else the ticket asks for: staging/unstaging a single hunk within
-a file (needs f4#613's diff widget to pick the hunk), a multi-line commit
-message editor, a per-file diff for a multi-file commit in the log view, and
+a file (needs f4#613's diff widget to pick the hunk, and f4#613 is itself
+still open), a per-file diff for a multi-file commit in the log view, and
 creating or deleting a branch from this list. Each is its own atomic
 follow-up part of f4#659, not this one.
 
