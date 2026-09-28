@@ -161,11 +161,11 @@ func TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621(t *testing.T) {
 		})
 	}
 
-	// A single Ctrl+F1 after Esc must bring back both panels immediately --
-	// the exact ask in #1621's "Проверить" text, without a second press.
+	// A single Ctrl+F1 after Esc must bring back only the left panel: the two
+	// keys drive their own panels independently (#1621).
 	press(vtinput.VK_F1)
-	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("first Ctrl+F1 after Esc-hide: show=%v left=%v right=%v; want true,true,true",
+	if !pf.ShowPanels || !pf.ShowLeftPanel || pf.ShowRightPanel {
+		t.Fatalf("first Ctrl+F1 after Esc-hide: show=%v left=%v right=%v; want true,true,false",
 			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
 	}
 
@@ -173,8 +173,8 @@ func TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621(t *testing.T) {
 	// single-side toggle: it must not re-hide the whole frame or restore
 	// anything, just flip the left panel off.
 	press(vtinput.VK_F1)
-	if !pf.ShowPanels || pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("second Ctrl+F1: show=%v left=%v right=%v; want true,false,true",
+	if pf.ShowPanels || pf.ShowLeftPanel || pf.ShowRightPanel {
+		t.Fatalf("second Ctrl+F1: show=%v left=%v right=%v; want false,false,false",
 			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
 	}
 }
@@ -210,8 +210,8 @@ func TestPanelsFrame_CtrlF2RestoresAfterEscHide_Issue1621(t *testing.T) {
 		VirtualKeyCode:  vtinput.VK_F2,
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
-	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("first Ctrl+F2 after Esc-hide: show=%v left=%v right=%v; want true,true,true",
+	if !pf.ShowPanels || pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("first Ctrl+F2 after Esc-hide: show=%v left=%v right=%v; want true,false,true",
 			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
 	}
 }
@@ -262,8 +262,8 @@ func TestPanelsFrame_CtrlF1CtrlF2_HostMode_SwitchesPhysicalScreen_Issue1621(t *t
 		VirtualKeyCode:  vtinput.VK_F1,
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
-	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("Ctrl+F1 in ShellModeHost after Esc-hide: show=%v left=%v right=%v; want true,true,true",
+	if !pf.ShowPanels || !pf.ShowLeftPanel || pf.ShowRightPanel {
+		t.Fatalf("Ctrl+F1 in ShellModeHost after Esc-hide: show=%v left=%v right=%v; want true,true,false",
 			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
 	}
 	// The actual point of #1621's Host-mode fix: Ctrl+F1 must hand the

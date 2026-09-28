@@ -1949,63 +1949,7 @@ func init() {
 		DefaultKeys:  []string{"CtrlF1:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			// Esc/Ctrl+O (TogglePanelsVisibility) hide the panels frame by
-			// flipping only ShowPanels, leaving ShowLeftPanel/ShowRightPanel
-			// at whatever they were before (f4#1621) -- usually true/true,
-			// the ordinary two-panel view. Judging "nothing shown yet" by
-			// those stale per-side flags instead of the actual on-screen
-			// pf.ShowPanels made the first Ctrl+F1 after such a hide flip
-			// ShowLeftPanel off (since it was stale-true), so only the right
-			// panel came up; a second press was needed to bring the left
-			// one back too. The fix below goes one step further still: on
-			// that first press, don't toggle a side at all -- just restore
-			// pf.ShowPanels and let whichever sides were on screen before
-			// Esc reappear exactly as they were, both if that was the
-			// normal view. Only once something is already visible does
-			// Ctrl+F1 go back to toggling the left panel on its own.
-			//
-			// A restore has nothing to fall back to when both per-side
-			// flags are ALSO false (both panels were hidden individually,
-			// via Ctrl+F1+Ctrl+F2, rather than by Esc/Ctrl+O) -- that state
-			// carries no memory of what to bring back, so this case keeps
-			// the plain single-side toggle instead (issue #927).
-			showPanelsBefore := pf.ShowPanels
-			pf.ExitWide()
-			if !showPanelsBefore && (pf.ShowLeftPanel || pf.ShowRightPanel) {
-				pf.ShowPanels = true
-			} else {
-				pf.ShowLeftPanel = !pf.ShowLeftPanel
-				if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
-					pf.ActiveIdx = 1
-				}
-				if !pf.ShowLeftPanel && !pf.ShowRightPanel {
-					pf.ShowPanels = false
-				} else if !showPanelsBefore {
-					pf.ShowPanels = true
-				}
-			}
-			if pf.LastW > 0 && pf.LastH > 0 {
-				pf.ResizeConsole(pf.LastW, pf.LastH)
-			}
-			// ShellModeHost shows the running shell on the host's own
-			// screen buffer while panels are hidden and hands the physical
-			// screen back only through EnterHostConsole/LeaveHostConsole
-			// (the same pair TogglePanelsVisibility calls for Esc/Ctrl+O).
-			// Without this, pf.ShowPanels flips internally but the host
-			// console never yields the screen, so Ctrl+F1/Ctrl+F2 silently
-			// did nothing visible in "Host with overlay"/"Host without
-			// overlay" presentation (f4#1621).
-			if pf.ShowPanels != showPanelsBefore {
-				if pf.ShowPanels {
-					pf.LeaveHostConsole()
-				} else {
-					pf.EnterHostConsole()
-				}
-			}
-			vtui.FrameManager.HardRefresh()
-			if pf.ShowPanels {
-				pf.RefreshAll()
-			}
+			toggleSidePanel(pf, 0)
 		}),
 	})
 	registerAction(action.Action{
@@ -2018,45 +1962,7 @@ func init() {
 		DefaultKeys:  []string{"CtrlF2:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			// See the matching comment in Panel.ToggleLeftPanel above
-			// (f4#1621): pf.ShowPanels, the actual on-screen state, decides
-			// whether this press restores the saved view (both branches
-			// below) or does an ordinary toggle of just this side. A
-			// restore has nothing to fall back to when both per-side flags
-			// are also false (issue #927), so that case keeps the plain
-			// single-side toggle instead.
-			showPanelsBefore := pf.ShowPanels
-			pf.ExitWide()
-			if !showPanelsBefore && (pf.ShowLeftPanel || pf.ShowRightPanel) {
-				pf.ShowPanels = true
-			} else {
-				pf.ShowRightPanel = !pf.ShowRightPanel
-				if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
-					pf.ActiveIdx = 0
-				}
-				if !pf.ShowLeftPanel && !pf.ShowRightPanel {
-					pf.ShowPanels = false
-				} else if !showPanelsBefore {
-					pf.ShowPanels = true
-				}
-			}
-			if pf.LastW > 0 && pf.LastH > 0 {
-				pf.ResizeConsole(pf.LastW, pf.LastH)
-			}
-			// See the matching comment in Panel.ToggleLeftPanel above
-			// (f4#1621): ShellModeHost needs the same explicit hand-back of
-			// the physical screen.
-			if pf.ShowPanels != showPanelsBefore {
-				if pf.ShowPanels {
-					pf.LeaveHostConsole()
-				} else {
-					pf.EnterHostConsole()
-				}
-			}
-			vtui.FrameManager.HardRefresh()
-			if pf.ShowPanels {
-				pf.RefreshAll()
-			}
+			toggleSidePanel(pf, 1)
 		}),
 	})
 	registerAction(action.Action{
@@ -3442,4 +3348,54 @@ func init() {
 		MenuPath:    "Options",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { dialog.ShowViewerSettings() }),
 	})
+}
+
+// toggleSidePanel implements Ctrl+F1 (side 0, left) and Ctrl+F2 (side 1,
+// right); the two keys drive their own panel independently (f4#1621).
+//
+// While the panels frame is hidden (Esc/Ctrl+O/Del flip only pf.ShowPanels and
+// leave the per-side flags stale) or both sides were switched off one by one
+// (issue #927), the press shows only its own side and clears the other one, so
+// Ctrl+F1 then Ctrl+F2 (or the other way round) brings the panels back one at a
+// time. With something already on screen it is the plain toggle of that side.
+//
+// ShellModeHost keeps the running shell on the host's own screen while the
+// panels are hidden and hands the physical screen back only through
+// EnterHostConsole/LeaveHostConsole (the pair TogglePanelsVisibility uses), so
+// every real change of pf.ShowPanels must go through it, else Ctrl+F1/Ctrl+F2
+// look like no-ops in "Host with overlay"/"Host without overlay".
+func toggleSidePanel(pf *panel.PanelsFrame, side int) {
+	showPanelsBefore := pf.ShowPanels
+	pf.ExitWide()
+	mine, other := &pf.ShowLeftPanel, &pf.ShowRightPanel
+	if side == 1 {
+		mine, other = other, mine
+	}
+	if !showPanelsBefore {
+		*mine, *other = true, false
+		pf.ActiveIdx = side
+		pf.ShowPanels = true
+	} else {
+		*mine = !*mine
+		if !*mine && pf.ActiveIdx == side && *other {
+			pf.ActiveIdx = 1 - side
+		}
+		if !*mine && !*other {
+			pf.ShowPanels = false
+		}
+	}
+	if pf.LastW > 0 && pf.LastH > 0 {
+		pf.ResizeConsole(pf.LastW, pf.LastH)
+	}
+	if pf.ShowPanels != showPanelsBefore {
+		if pf.ShowPanels {
+			pf.LeaveHostConsole()
+		} else {
+			pf.EnterHostConsole()
+		}
+	}
+	vtui.FrameManager.HardRefresh()
+	if pf.ShowPanels {
+		pf.RefreshAll()
+	}
 }
