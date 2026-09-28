@@ -665,6 +665,7 @@ GitStatus.NothingToCommit=Nothing staged to commit
 GitStatus.CommitMessageEmpty=Commit message cannot be empty
 GitStatus.CommitFailed=git commit failed: %s
 GitStatus.CommitDone=Committed: %s
+
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.
 GitDiff.CompareFailed=Failed to build the diff: %v

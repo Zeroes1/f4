@@ -665,6 +665,7 @@ GitStatus.NothingToCommit=Нет застейдженных изменений �
 GitStatus.CommitMessageEmpty=Сообщение коммита не может быть пустым
 GitStatus.CommitFailed=Не удалось выполнить git commit: %s
 GitStatus.CommitDone=Закоммичено: %s
+
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
 GitDiff.CompareFailed=Не удалось построить diff: %v
