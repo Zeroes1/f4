@@ -165,7 +165,7 @@ func showCalendarDialog() {
 	year, month := now.Year(), now.Month()
 
 	lblMonth := vtui.NewLabel(0, 0, "", nil)
-	lblHint := vtui.NewLabel(0, 0, "PgUp/PgDn: month   Ctrl+PgUp/PgDn: year", nil)
+	lblHint := vtui.NewLabel(0, 0, i18n.Msg("Calendar.Hint"), nil)
 
 	gridWidth := 7*calendarColumnWidth + 6 // 6 one-cell separators between columns
 	table := &calendarTable{Table: vtui.NewTable(0, 0, gridWidth, 1+calendarWeeks, calendarColumns())}

@@ -742,6 +742,7 @@ Calculator.BtnInsert=&Вставить
 
 Calendar.Title= Календарь
 Calendar.BtnInsert=&Вставить
+Calendar.Hint=PgUp/PgDn — месяц   Ctrl+PgUp/PgDn — год
 Calendar.Mon=Пн
 Calendar.Tue=Вт
 Calendar.Wed=Ср
@@ -1420,6 +1421,7 @@ Player.NothingAdded=В выделении нет аудиофайлов.
 Player.NeedFFmpeg=Для воспроизведения файлов %s нужен ffmpeg, а он не установлен.
 
 TreePanel.Title= Дерево
+TreePanel.ColumnName=Имя
 
 MediaInfo.LanguageCode=ru
 MediaInfo.Menu=&Информация о медиа

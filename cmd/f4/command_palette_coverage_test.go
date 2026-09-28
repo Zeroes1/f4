@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 56
+const commandPaletteF4Surfaces = 58
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -94,6 +94,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"app.(*commandPaletteDialog).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the palette dialog owns query, navigation, execution, and cancellation while it is open",
+	},
+	"app.(*calendarTable).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the calendar dialog's day grid captures PgUp/PgDn/Ctrl+PgUp/Ctrl+PgDn/Home locally to page the month/year and jump to today; Panel.Calendar is its registered entry point",
 	},
 	"editor.(*EditorView).ProcessKey": {
 		class: paletteAuditActionArea, rationale: "editor commands are registered actions; raw text and cursor editing remain local primitives",
@@ -157,6 +160,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"panel.(*QuickViewPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the focused Quick View toggle is supplied by the panel-context palette provider",
+	},
+	"panel.(*TreePanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the focused directory-tree toggle is supplied by the panel-context palette provider; Right/Left expand or collapse the row under the cursor and Enter navigates the source panel, all local primitives inside the panel",
 	},
 	"fileops.(*QueueFrame).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "queue commands are supplied by commandPaletteQueueEntries",

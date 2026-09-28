@@ -742,6 +742,7 @@ Calculator.BtnInsert=&Insert
 
 Calendar.Title= Calendar
 Calendar.BtnInsert=&Insert
+Calendar.Hint=PgUp/PgDn: month   Ctrl+PgUp/PgDn: year
 Calendar.Mon=Mon
 Calendar.Tue=Tue
 Calendar.Wed=Wed
@@ -1420,6 +1421,7 @@ Player.NothingAdded=No audio files were found in the selection.
 Player.NeedFFmpeg=ffmpeg is needed to play %s files and it is not installed.
 
 TreePanel.Title= Tree
+TreePanel.ColumnName=Name
 
 MediaInfo.LanguageCode=en
 MediaInfo.Menu=&Media information

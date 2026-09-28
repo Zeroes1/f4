@@ -127,7 +127,7 @@ func NewTreePanel(src *FileSystemPanel) *TreePanel {
 	t.Frame.ColorBoxIdx = theme.ColPanelBox
 	t.Frame.ColorTitleIdx = theme.ColPanelTitle
 
-	t.Table = vtui.NewTable(0, 0, 1, 1, []vtui.TableColumn{{Title: "Name"}})
+	t.Table = vtui.NewTable(0, 0, 1, 1, []vtui.TableColumn{{Title: i18n.Msg("TreePanel.ColumnName")}})
 	t.Table.ShowHeader = false
 	t.Table.QuickSearch = true
 	t.Table.ColorTextIdx = theme.ColPanelText
