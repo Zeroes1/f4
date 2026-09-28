@@ -272,7 +272,7 @@ func writeLLMReport(path, patchContent string, fileReports []fileReport, fatal *
 		out = append(out, fence(patchContent, ""))
 	}
 
-	return os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o644)
+	return os.WriteFile(path, []byte(strings.Join(out, "\n")), 0o600)
 }
 
 // failedFileBlock is one FILE block's worth of modifications that failed in
@@ -320,5 +320,5 @@ func writeAfailedAP(path, patchID string, blocks []*failedFileBlock) error {
 			b.WriteString("\n")
 		}
 	}
-	return os.WriteFile(path, []byte(b.String()), 0o644)
+	return os.WriteFile(path, []byte(b.String()), 0o600)
 }

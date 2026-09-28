@@ -147,13 +147,13 @@ type engine struct {
 
 func (e *engine) printf(format string, args ...any) {
 	if !e.silent {
-		fmt.Fprintf(e.out, format, args...)
+		_, _ = fmt.Fprintf(e.out, format, args...) // Progress output has nowhere else to be reported.
 	}
 }
 
 func (e *engine) warn(msg string) {
 	if !e.silent {
-		fmt.Fprintf(e.out, "  [TOLERANT] %s\n", msg)
+		_, _ = fmt.Fprintf(e.out, "  [TOLERANT] %s\n", msg) // Progress output has nowhere else to be reported.
 	}
 }
 
@@ -252,7 +252,7 @@ func (e *engine) commit() *Result {
 		if err := os.MkdirAll(filepath.Dir(op.path), 0o755); err != nil {
 			return e.fatal(StatusFailed, op.relPath, true, 0, false, &AppError{Code: ErrFileWriteError, Message: err.Error()})
 		}
-		if err := os.WriteFile(op.path, []byte(op.content), 0o644); err != nil {
+		if err := os.WriteFile(op.path, []byte(op.content), 0o600); err != nil {
 			return e.fatal(StatusFailed, op.relPath, true, 0, false, &AppError{Code: ErrFileWriteError, Message: err.Error()})
 		}
 	}

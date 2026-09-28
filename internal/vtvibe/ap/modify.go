@@ -173,7 +173,7 @@ func (e *engine) applyOneModification(
 		switch {
 		case snippetVal == nil:
 			aerr = &AppError{Code: ErrInvalidModification, Message: "Range requires 'snippet'.", Context: map[string]any{}}
-		case !(action == "REPLACE" || action == "DELETE" || action == "INSERT_AFTER" || action == "INSERT_BEFORE"):
+		case action != "REPLACE" && action != "DELETE" && action != "INSERT_AFTER" && action != "INSERT_BEFORE":
 			aerr = &AppError{Code: ErrInvalidModification,
 				Message: fmt.Sprintf("Action '%s' does not support range.", action), Context: map[string]any{}}
 		case (action == "INSERT_AFTER" || action == "INSERT_BEFORE") && e.strict:

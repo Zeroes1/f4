@@ -33,7 +33,7 @@ func detectLineEndings(path string) string {
 	if err != nil {
 		return osLineSep()
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	buf := make([]byte, 1024)
 	n, _ := f.Read(buf)
 	chunk := buf[:n]
