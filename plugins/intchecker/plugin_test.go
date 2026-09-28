@@ -153,12 +153,17 @@ type appMock struct {
 	fs       vfs.VFS
 	selected []string
 	menu     []string
+	// cursor is what GetSelectedName returns -- the name f4#1623's
+	// showValidate checks to decide between checking the file under the
+	// cursor right away or opening the dialog. Empty, the zero value, keeps
+	// every existing test's "nothing under the cursor" behaviour.
+	cursor string
 }
 
 func (a *appMock) GetActivePanelVFS() vfs.VFS  { return a.fs }
 func (a *appMock) GetPassivePanelVFS() vfs.VFS { return nil }
 func (a *appMock) GetSelectedNames() []string  { return a.selected }
-func (a *appMock) GetSelectedName() string     { return "" }
+func (a *appMock) GetSelectedName() string     { return a.cursor }
 func (a *appMock) RefreshAll()                 {}
 func (a *appMock) SetPendingSelection(string)  {}
 func (a *appMock) RunProgressTask(string, string, bool, func(context.Context, func(string, int)) error, func(error)) {

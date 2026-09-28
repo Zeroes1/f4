@@ -204,6 +204,99 @@ func TestRunValidateSortsEveryFileIntoAVerdict(t *testing.T) {
 	}
 }
 
+// TestRunValidateIgnoreMissing covers f4#1623 point 2's "Ignore missing
+// files" checkbox: a listed file that is not on disk (c.txt in the fixture)
+// disappears from the report entirely instead of counting as a problem,
+// while every other verdict -- OK, mismatch, read error -- is unaffected.
+func TestRunValidateIgnoreMissing(t *testing.T) {
+	dir, file := validateFixture(t)
+	job := validateJob{fs: vfs.NewOSVFS(dir), dir: dir, file: file, ignoreMissing: true}
+	res, err := runValidate(context.Background(), job, &recordingReporter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []entryStatus{statusOK, statusMismatch, statusReadError, statusOK}
+	if len(res.Results) != len(want) {
+		t.Fatalf("results = %+v", res.Results)
+	}
+	for i, status := range want {
+		if res.Results[i].Status != status {
+			t.Errorf("result %d = %+v, want status %d", i, res.Results[i], status)
+		}
+		if res.Results[i].Name == "c.txt" {
+			t.Errorf("the missing file was not ignored: %+v", res.Results[i])
+		}
+	}
+	if res.Counts != [statusCount]int{2, 1, 0, 1} {
+		t.Fatalf("counts = %v, want missing = 0", res.Counts)
+	}
+}
+
+// TestRunValidateIgnoreMissingAllMissingStillAsksForDirectory checks that
+// "Ignore missing files" does not change errAllMissing: checking zero files
+// is still meaningless, and the caller must still be asked for another
+// directory (f4#1623 point 2 only asked to stop *counting* missing files as
+// a problem, not to silently accept an empty check).
+func TestRunValidateIgnoreMissingAllMissingStillAsksForDirectory(t *testing.T) {
+	_, file := validateFixture(t)
+	empty := t.TempDir()
+	job := validateJob{fs: vfs.NewOSVFS(empty), dir: empty, file: file, ignoreMissing: true}
+	if _, err := runValidate(context.Background(), job, &recordingReporter{}); !errors.Is(err, errAllMissing) {
+		t.Fatalf("err = %v, want errAllMissing", err)
+	}
+}
+
+// TestRunValidateStopOnMismatch covers f4#1623 point 2's "Stop on first
+// mismatch" checkbox: the run ends right after the first mismatched file
+// (b.txt in the fixture, the second entry) instead of checking the rest of
+// the list, and validateResult.StoppedEarly records that it did.
+func TestRunValidateStopOnMismatch(t *testing.T) {
+	dir, file := validateFixture(t)
+	job := validateJob{fs: vfs.NewOSVFS(dir), dir: dir, file: file, stopOnMismatch: true}
+	res, err := runValidate(context.Background(), job, &recordingReporter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.StoppedEarly {
+		t.Fatal("StoppedEarly not set")
+	}
+	want := []entryStatus{statusOK, statusMismatch}
+	if len(res.Results) != len(want) {
+		t.Fatalf("results = %+v, want a two-entry prefix", res.Results)
+	}
+	for i, status := range want {
+		if res.Results[i].Status != status {
+			t.Errorf("result %d = %+v, want status %d", i, res.Results[i], status)
+		}
+	}
+	if res.Counts != [statusCount]int{1, 1, 0, 0} {
+		t.Fatalf("counts = %v, want only the checked prefix", res.Counts)
+	}
+	if !strings.Contains(validateReport(res, 0), vtui.Msg("IntChecker.StoppedOnMismatch")) {
+		t.Fatalf("report does not mention the early stop:\n%s", validateReport(res, 0))
+	}
+}
+
+// TestRunValidateStopOnMismatchWithoutAnyMismatchRunsToCompletion makes sure
+// "Stop on first mismatch" only ever cuts a run short, never lengthens or
+// otherwise changes one that never mismatches.
+func TestRunValidateStopOnMismatchWithoutAnyMismatchRunsToCompletion(t *testing.T) {
+	dir := t.TempDir()
+	makeTree(t, dir, "a.txt", "sub/b.txt")
+	file := ChecksumFile{Algorithm: AlgSHA256, Entries: []Entry{
+		{Name: "a.txt", Sum: mustHex(t, abcDigests[AlgSHA256])},
+		{Name: "sub/b.txt", Sum: mustHex(t, abcDigests[AlgSHA256])},
+	}}
+	job := validateJob{fs: vfs.NewOSVFS(dir), dir: dir, file: file, stopOnMismatch: true}
+	res, err := runValidate(context.Background(), job, &recordingReporter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StoppedEarly || res.Counts[statusOK] != 2 || len(res.Results) != 2 {
+		t.Fatalf("result = %+v", res)
+	}
+}
+
 func TestRunValidateFindsBackslashNames(t *testing.T) {
 	dir, _ := validateFixture(t)
 	file := ChecksumFile{Algorithm: AlgMD5, Entries: []Entry{{Name: `sub\d.txt`, Sum: mustHex(t, abcDigests[AlgMD5])}}}
@@ -322,7 +415,7 @@ func TestStartValidateReportsResult(t *testing.T) {
 	writeTestFile(t, dir, "list.sfv", "a.txt 352441C2\n")
 	app := &taskAppMock{messages: make(chan string, 1)}
 	fs := vfs.NewOSVFS(dir)
-	startValidate(app, fs, filepath.Join(dir, "list.sfv"), dir, autoDetectEncoding)
+	startValidate(app, fs, filepath.Join(dir, "list.sfv"), dir, validateOptions{encoding: autoDetectEncoding}, nil)
 	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.AllOK"), 1); got != want {
 		t.Fatalf("message = %q, want %q", got, want)
 	}
@@ -333,11 +426,11 @@ func TestStartValidateReportsUnreadableChecksumFile(t *testing.T) {
 	writeTestFile(t, dir, "empty.md5", "")
 	app := &taskAppMock{messages: make(chan string, 1)}
 	fs := vfs.NewOSVFS(dir)
-	startValidate(app, fs, filepath.Join(dir, "empty.md5"), dir, autoDetectEncoding)
+	startValidate(app, fs, filepath.Join(dir, "empty.md5"), dir, validateOptions{encoding: autoDetectEncoding}, nil)
 	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.NoChecksums"), filepath.Join(dir, "empty.md5")); got != want {
 		t.Fatalf("message = %q, want %q", got, want)
 	}
-	startValidate(app, fs, filepath.Join(dir, "empty.md5"), filepath.Join(dir, "nope"), autoDetectEncoding)
+	startValidate(app, fs, filepath.Join(dir, "empty.md5"), filepath.Join(dir, "nope"), validateOptions{encoding: autoDetectEncoding}, nil)
 	if got := <-app.messages; got != fmt.Sprintf(vtui.Msg("IntChecker.DirNotFound"), filepath.Join(dir, "nope")) {
 		t.Fatalf("message = %q", got)
 	}
@@ -357,7 +450,12 @@ func TestStartValidateAsksForDirectoryWhenNothingIsFound(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, dir, "list.md5", abcDigests[AlgMD5]+" *elsewhere.txt\n")
 	app := &taskAppMock{messages: make(chan string, 1)}
-	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir, autoDetectEncoding)
+	store, err := newSettingsStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{store: store}
+	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir, validateOptions{encoding: autoDetectEncoding}, p.openValidateDialog)
 	if _, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window); !ok {
 		t.Fatalf("top frame = %T, want the directory dialog", vtui.FrameManager.GetTopFrame())
 	}
@@ -376,13 +474,15 @@ func TestValidateDialogDump(t *testing.T) {
 		i18n.InitLang(lang, "en", "")
 		for _, note := range []string{"", vtui.Msg("IntChecker.FilesNotFound")} {
 			scr := initValidateTestScreen(t)
-			d := newValidateDialog(note, "/home/user/photos.md5", "/mnt/cdrom", autoDetectEncoding)
+			d := newValidateDialog(note, "/home/user/photos.md5", "/mnt/cdrom", validateOptions{encoding: autoDetectEncoding})
 			d.win.Show(scr)
 			var dump bytes.Buffer
 			scr.Dump(&dump)
 			text, _, _ := strings.Cut(dump.String(), "--- CELL METADATA")
 			for _, want := range []string{"/home/user/photos.md5", "/mnt/cdrom", strings.ReplaceAll(vtui.Msg("IntChecker.ValidateTitle"), "&", ""),
-				strings.ReplaceAll(vtui.Msg("IntChecker.FileEncoding"), "&", "") + " " + vtui.Msg("IntChecker.EncodingAuto")} {
+				strings.ReplaceAll(vtui.Msg("IntChecker.FileEncoding"), "&", "") + " " + vtui.Msg("IntChecker.EncodingAuto"),
+				strings.ReplaceAll(vtui.Msg("IntChecker.IgnoreMissing"), "&", ""),
+				strings.ReplaceAll(vtui.Msg("IntChecker.StopOnMismatch"), "&", "")} {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s dump lacks %q:\n%s", lang, want, text)
 				}
@@ -392,5 +492,137 @@ func TestValidateDialogDump(t *testing.T) {
 			}
 			t.Logf("%s, note=%v:\n%s", lang, note != "", text)
 		}
+	}
+}
+
+// TestNewValidateDialogAppliesOptions checks that every validateOptions
+// field lands on the right widget when the dialog is built.
+func TestNewValidateDialogAppliesOptions(t *testing.T) {
+	initValidateTestScreen(t)
+	opts := validateOptions{encoding: fileEncoding{Codepage: utf8Codepage}, ignoreMissing: true, stopOnMismatch: true}
+	d := newValidateDialog("", "", "", opts)
+	if got := d.encoding.selected(); got != opts.encoding {
+		t.Errorf("encoding = %+v, want %+v", got, opts.encoding)
+	}
+	if d.ignoreMissing.State != 1 {
+		t.Errorf("ignoreMissing = %d, want 1", d.ignoreMissing.State)
+	}
+	if d.stopOnMismatch.State != 1 {
+		t.Errorf("stopOnMismatch = %d, want 1", d.stopOnMismatch.State)
+	}
+
+	off := newValidateDialog("", "", "", validateOptions{encoding: opts.encoding})
+	if off.ignoreMissing.State != 0 || off.stopOnMismatch.State != 0 {
+		t.Errorf("checkboxes not off by default: ignoreMissing=%d stopOnMismatch=%d", off.ignoreMissing.State, off.stopOnMismatch.State)
+	}
+}
+
+// TestQuickAndDialogValidateOptions covers f4#1623 point 2's two entry
+// points into "Validate files": the quick, cursor-on-checksum-file path
+// (quickValidateOptions) keeps auto-detecting the encoding but still applies
+// the persisted checkboxes, while the dialog's defaults
+// (dialogValidateOptions) also default the encoding to whatever "Generate
+// hashes" last used -- the literal ask ("by default, the same encoding as
+// for generation").
+func TestQuickAndDialogValidateOptions(t *testing.T) {
+	store, err := newSettingsStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.Encoding = fileEncoding{Codepage: utf8Codepage, BOM: true}
+	settings.ValidateIgnoreMissing = true
+	settings.ValidateStopOnMismatch = true
+	if err := store.save(settings); err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{store: store}
+
+	quick := p.quickValidateOptions()
+	if quick.encoding != autoDetectEncoding {
+		t.Errorf("quick encoding = %+v, want auto-detect", quick.encoding)
+	}
+	if !quick.ignoreMissing || !quick.stopOnMismatch {
+		t.Errorf("quick options dropped the persisted checkboxes: %+v", quick)
+	}
+
+	dialog := p.dialogValidateOptions()
+	if dialog.encoding != settings.Encoding {
+		t.Errorf("dialog encoding = %+v, want %+v (same as generation)", dialog.encoding, settings.Encoding)
+	}
+	if !dialog.ignoreMissing || !dialog.stopOnMismatch {
+		t.Errorf("dialog options dropped the persisted checkboxes: %+v", dialog)
+	}
+}
+
+// TestSubmitValidatePersistsCheckboxesNotEncoding drives submitValidate (the
+// dialog's real Ok handler) end to end and checks what actually landed on
+// disk: the two checkboxes follow the dialog, the encoding choice does not
+// (f4#1623 point 2 -- see saveValidateOptions), and the generate settings
+// already on disk survive untouched.
+func TestSubmitValidatePersistsCheckboxesNotEncoding(t *testing.T) {
+	initValidateTestScreen(t)
+	dir := t.TempDir()
+	writeTestFile(t, dir, "a.txt", "abc")
+	writeTestFile(t, dir, "list.md5", abcDigests[AlgMD5]+" *a.txt\n")
+	configDir := t.TempDir()
+	store, err := newSettingsStore(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := DefaultSettings()
+	seed.Algorithm = AlgSHA512
+	seed.Encoding = fileEncoding{Codepage: utf8Codepage, BOM: true}
+	if err := store.save(seed); err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{api: &hostMock{}, store: store}
+	fs := vfs.NewOSVFS(dir)
+	app := &taskAppMock{appMock: appMock{fs: fs}, messages: make(chan string, 1)}
+
+	d := newValidateDialog("", "list.md5", "", p.dialogValidateOptions())
+	d.ignoreMissing.State = 1
+	d.stopOnMismatch.State = 1
+	// A different encoding than what is persisted, to prove it does not
+	// overwrite Settings.Encoding.
+	d.encoding = newEncodingCombo(24, readEncodingChoices(), fileEncoding{Codepage: utf8Codepage})
+	p.submitValidate(app, fs, dir, d)
+	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.AllOK"), 1); got != want {
+		t.Fatalf("message = %q, want %q", got, want)
+	}
+
+	got := p.store.snapshot()
+	if !got.ValidateIgnoreMissing || !got.ValidateStopOnMismatch {
+		t.Fatalf("checkboxes not persisted: %+v", got)
+	}
+	if got.Algorithm != AlgSHA512 || got.Encoding != seed.Encoding {
+		t.Fatalf("submitValidate touched the generate settings: %+v", got)
+	}
+}
+
+// TestShowValidateQuickRunAppliesPersistedIgnoreMissing is an end-to-end
+// check of f4#1623 point 2's most common path: the cursor already sits on a
+// checksum file, so "Validate files" never shows a dialog, yet the
+// persisted "Ignore missing files" checkbox must still apply -- otherwise
+// the setting would be unreachable for exactly the workflow the original
+// f4#1623 spec made the default.
+func TestShowValidateQuickRunAppliesPersistedIgnoreMissing(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, dir, "a.txt", "abc")
+	writeTestFile(t, dir, "list.md5", abcDigests[AlgMD5]+" *a.txt\n"+abcDigests[AlgMD5]+" *missing.txt\n")
+	store, err := newSettingsStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.ValidateIgnoreMissing = true
+	if err := store.save(settings); err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{store: store}
+	app := &taskAppMock{appMock: appMock{fs: vfs.NewOSVFS(dir), cursor: "list.md5"}, messages: make(chan string, 1)}
+	p.showValidate(app)
+	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.AllOK"), 1); got != want {
+		t.Fatalf("message = %q, want %q (missing.txt should have been ignored)", got, want)
 	}
 }

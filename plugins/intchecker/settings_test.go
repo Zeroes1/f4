@@ -12,20 +12,23 @@ import (
 func TestDefaultSettings(t *testing.T) {
 	settings := DefaultSettings()
 	want := Settings{
-		Algorithm: DefaultAlgorithm,
-		Output:    outputSingle,
-		Recursive: true,
-		Absolute:  false,
-		Encoding:  fileEncoding{Codepage: utf8Codepage},
+		Algorithm:              DefaultAlgorithm,
+		Output:                 outputSingle,
+		Recursive:              true,
+		Absolute:               false,
+		Encoding:               fileEncoding{Codepage: utf8Codepage},
+		ValidateIgnoreMissing:  false,
+		ValidateStopOnMismatch: false,
 	}
 	if settings != want {
 		t.Fatalf("DefaultSettings() = %+v, want %+v", settings, want)
 	}
 }
 
-// TestSettingsStoreRoundTrip covers f4#1623 point 1: everything the generate
-// dialog remembers, saved by one store and read back by a fresh one, as
-// happens across two runs of f4.
+// TestSettingsStoreRoundTrip covers f4#1623 points 1 and 2: everything the
+// generate dialog remembers, plus the validate dialog's "Ignore missing
+// files"/"Stop on first mismatch" checkboxes, saved by one store and read
+// back by a fresh one, as happens across two runs of f4.
 func TestSettingsStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	store, err := newSettingsStore(dir)
@@ -37,11 +40,13 @@ func TestSettingsStoreRoundTrip(t *testing.T) {
 	}
 
 	want := Settings{
-		Algorithm: AlgSHA256,
-		Output:    outputDirectory,
-		Recursive: false,
-		Absolute:  true,
-		Encoding:  fileEncoding{Codepage: 1251},
+		Algorithm:              AlgSHA256,
+		Output:                 outputDirectory,
+		Recursive:              false,
+		Absolute:               true,
+		Encoding:               fileEncoding{Codepage: 1251},
+		ValidateIgnoreMissing:  true,
+		ValidateStopOnMismatch: true,
 	}
 	if err := store.save(want); err != nil {
 		t.Fatal(err)
@@ -208,5 +213,72 @@ func TestSubmitGeneratePersistsSettingsExceptNameAndMask(t *testing.T) {
 	}
 	if next.algorithm.Selected != int(AlgSHA256) || next.output.Selected != int(outputDisplay) {
 		t.Fatalf("next dialog dropped remembered algorithm/output: algorithm=%d output=%d", next.algorithm.Selected, next.output.Selected)
+	}
+}
+
+// TestSubmitGeneratePreservesValidateOptions guards against the same class
+// of bug TestSubmitGeneratePersistsSettingsExceptNameAndMask already covers
+// for the file name and mask, but the other way around: f4#1623 point 2
+// added ValidateIgnoreMissing/ValidateStopOnMismatch to the very same
+// Settings struct submitGenerate writes, so a "Generate hashes" run must not
+// silently reset the "Validate files" dialog's remembered checkboxes.
+func TestSubmitGeneratePreservesValidateOptions(t *testing.T) {
+	initValidateTestScreen(t)
+	configDir := t.TempDir()
+	store, err := newSettingsStore(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := DefaultSettings()
+	seed.ValidateIgnoreMissing = true
+	seed.ValidateStopOnMismatch = true
+	if err := store.save(seed); err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{api: &hostMock{}, store: store}
+
+	fsDir := t.TempDir()
+	fs := vfs.NewOSVFS(fsDir)
+	d := newGenerateDialog("photos", p.store.snapshot())
+	d.algorithm.Selected = int(AlgSHA256)
+	app := &appMock{fs: fs}
+	p.submitGenerate(app, fs, fsDir, []string{"a.txt"}, d)
+
+	got := p.store.snapshot()
+	if !got.ValidateIgnoreMissing || !got.ValidateStopOnMismatch {
+		t.Fatalf("submitGenerate reset the validate checkboxes: %+v", got)
+	}
+	if got.Algorithm != AlgSHA256 {
+		t.Fatalf("submitGenerate did not apply its own change: %+v", got)
+	}
+}
+
+// TestSaveValidateOptionsPreservesGenerateSettings is the mirror case: the
+// "Validate files" dialog's Ok must not reset the "Generate hashes" choices
+// that already live in the same Settings struct and file.
+func TestSaveValidateOptionsPreservesGenerateSettings(t *testing.T) {
+	configDir := t.TempDir()
+	store, err := newSettingsStore(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed := DefaultSettings()
+	seed.Algorithm = AlgSHA512
+	seed.Absolute = true
+	if err := store.save(seed); err != nil {
+		t.Fatal(err)
+	}
+	p := &Plugin{api: &hostMock{}, store: store}
+
+	if err := p.saveValidateOptions(validateOptions{ignoreMissing: true, stopOnMismatch: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	got := p.store.snapshot()
+	if got.Algorithm != AlgSHA512 || !got.Absolute {
+		t.Fatalf("saveValidateOptions reset the generate settings: %+v", got)
+	}
+	if !got.ValidateIgnoreMissing || !got.ValidateStopOnMismatch {
+		t.Fatalf("saveValidateOptions did not apply its own change: %+v", got)
 	}
 }

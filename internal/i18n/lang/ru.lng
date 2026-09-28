@@ -138,6 +138,9 @@ IntChecker.EncodingOEM=OEM (%d)
 IntChecker.EncodingAuto=Автоопределение
 IntChecker.UnencodableNames=Имена файлов (%d) нельзя записать в кодировке %s, они пропущены:
 IntChecker.CannotEncodeList=В списке есть имена файлов, которые нельзя записать в %s.\nВыберите другую кодировку.
+IntChecker.IgnoreMissing=&Игнорировать отсутствующие файлы
+IntChecker.StopOnMismatch=&Останавливаться на первом несовпадении
+IntChecker.StoppedOnMismatch=Проверка остановлена на первом несовпадении; остальной список не проверялся.
 
 vtui.Ok=&Ок
 vtui.Cancel=Отмена

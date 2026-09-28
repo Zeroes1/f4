@@ -205,7 +205,7 @@ func TestStartValidateReadsChosenEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := &taskAppMock{messages: make(chan string, 1)}
-	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir, fileEncoding{Codepage: 866})
+	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir, validateOptions{encoding: fileEncoding{Codepage: 866}}, nil)
 	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.AllOK"), 1); got != want {
 		t.Fatalf("message = %q, want %q", got, want)
 	}

@@ -94,7 +94,7 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			SearchKeys:     []string{"IntChecker.Validate"},
 			SearchTerms:    []string{"checksum", "hash", "verify", "check", "sfv"},
 			Enabled:        canRun,
-			Run:            showValidate,
+			Run:            p.showValidate,
 		},
 	}
 	for _, command := range commands {
@@ -156,7 +156,7 @@ func (p *Plugin) showMenu(app vfs.App) {
 		case menuGenerate:
 			p.showGenerateDialog(app)
 		case menuValidate:
-			showValidate(app)
+			p.showValidate(app)
 		}
 	})
 }
@@ -365,13 +365,17 @@ func (p *Plugin) submitGenerate(app vfs.App, fs vfs.VFS, dir string, names []str
 	recursive := d.recursive.State == 1
 	absolute := d.absolute.State == 1
 	encoding := d.encoding.selected()
-	if err := p.store.save(Settings{
-		Algorithm: algorithm,
-		Output:    mode,
-		Recursive: recursive,
-		Absolute:  absolute,
-		Encoding:  encoding,
-	}); err != nil && p.api != nil {
+	// Start from the current snapshot, not a bare Settings{}: f4#1623 point 2
+	// added the ValidateIgnoreMissing/ValidateStopOnMismatch fields to the
+	// same struct, and a literal listing only the generate fields would
+	// silently reset them to false on every "Generate hashes" run.
+	toSave := p.store.snapshot()
+	toSave.Algorithm = algorithm
+	toSave.Output = mode
+	toSave.Recursive = recursive
+	toSave.Absolute = absolute
+	toSave.Encoding = encoding
+	if err := p.store.save(toSave); err != nil && p.api != nil {
 		p.api.Log("integrity checker: " + err.Error())
 	}
 	job := generateJob{

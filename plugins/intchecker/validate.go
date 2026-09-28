@@ -264,12 +264,19 @@ type validateJob struct {
 	dir      string // where the listed relative names are looked up
 	file     ChecksumFile
 	encoding fileEncoding // what the file was read as, for the dialog
+	// ignoreMissing and stopOnMismatch are the "Validate files" dialog's
+	// checkboxes (f4#1623 point 2), carried from validateOptions.
+	ignoreMissing  bool
+	stopOnMismatch bool
 }
 
 // validateResult is what a run found, in checksum file order.
 type validateResult struct {
 	Results []entryResult
 	Counts  [statusCount]int
+	// StoppedEarly is set when stopOnMismatch cut the run short, right after
+	// the first mismatch: Results then covers only a prefix of file.Entries.
+	StoppedEarly bool
 }
 
 func (r *validateResult) add(name string, status entryStatus, err error) {
@@ -350,6 +357,12 @@ func runValidate(ctx context.Context, job validateJob, reporter progressReporter
 	speed := newProgressSpeed()
 	for _, loc := range located {
 		if loc.Status != statusOK {
+			// f4#1623 point 2: with "Ignore missing files" on, a listed file
+			// that is not on disk is left out of the report entirely, as if
+			// it were never listed -- not counted, not shown as a problem.
+			if loc.Status == statusMissing && job.ignoreMissing {
+				continue
+			}
 			res.add(loc.Name, loc.Status, loc.Err)
 			continue
 		}
@@ -372,8 +385,14 @@ func runValidate(ctx context.Context, job validateJob, reporter progressReporter
 		done += read
 		if bytes.Equal(sum, in.entry.Sum) {
 			res.add(in.entry.Name, statusOK, nil)
-		} else {
-			res.add(in.entry.Name, statusMismatch, nil)
+			continue
+		}
+		res.add(in.entry.Name, statusMismatch, nil)
+		// f4#1623 point 2: with "Stop on first mismatch" on, the run ends
+		// right here instead of checking the rest of the list.
+		if job.stopOnMismatch {
+			res.StoppedEarly = true
+			break
 		}
 	}
 	if err := ctx.Err(); err != nil {
@@ -420,6 +439,9 @@ func validateReport(res validateResult, malformed int) string {
 			lines = append(lines, line)
 			listed++
 		}
+	}
+	if res.StoppedEarly {
+		lines = append(lines, "", vtui.Msg("IntChecker.StoppedOnMismatch"))
 	}
 	if malformed > 0 {
 		lines = append(lines, "", fmt.Sprintf(vtui.Msg("IntChecker.Malformed"), malformed))

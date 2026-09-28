@@ -138,6 +138,9 @@ IntChecker.EncodingOEM=OEM (%d)
 IntChecker.EncodingAuto=Auto-detect
 IntChecker.UnencodableNames=%d file name(s) cannot be written in %s and were left out:
 IntChecker.CannotEncodeList=The list has file names that cannot be written in %s.\nChoose another encoding.
+IntChecker.IgnoreMissing=&Ignore missing files
+IntChecker.StopOnMismatch=&Stop on first mismatch
+IntChecker.StoppedOnMismatch=Stopped after the first mismatch; the rest of the list was not checked.
 
 vtui.Ok=&Ok
 vtui.Cancel=Cancel

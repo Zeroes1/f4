@@ -23,18 +23,33 @@ type Settings struct {
 	Recursive bool         `json:"recursive"`
 	Absolute  bool         `json:"absolute"`
 	Encoding  fileEncoding `json:"encoding"`
+	// ValidateIgnoreMissing and ValidateStopOnMismatch are the "Validate
+	// files" dialog's "Ignore missing files"/"Stop on first mismatch"
+	// checkboxes (f4#1623, review of build d1a1b7d, point 2). They persist
+	// between runs the same way the generate settings above do, through the
+	// same store and file; the checksum file encoding is deliberately not
+	// stored here -- the dialog's default for it always tracks Encoding
+	// above (see Plugin.showValidate in validate_ui.go), which is the
+	// literal ask ("by default, the same encoding as for generation").
+	ValidateIgnoreMissing  bool `json:"validateIgnoreMissing"`
+	ValidateStopOnMismatch bool `json:"validateStopOnMismatch"`
 }
 
 // DefaultSettings is what a fresh install (or a settings file this version
 // cannot make sense of) starts with -- the same defaults the dialog offered
-// before it remembered anything.
+// before it remembered anything. The validate checkboxes both default to
+// off, so a user who never opens the "Validate files" dialog keeps today's
+// behaviour: missing files are reported, and a mismatch does not stop the
+// run.
 func DefaultSettings() Settings {
 	return Settings{
-		Algorithm: DefaultAlgorithm,
-		Output:    outputSingle,
-		Recursive: true,
-		Absolute:  false,
-		Encoding:  fileEncoding{Codepage: utf8Codepage},
+		Algorithm:              DefaultAlgorithm,
+		Output:                 outputSingle,
+		Recursive:              true,
+		Absolute:               false,
+		Encoding:               fileEncoding{Codepage: utf8Codepage},
+		ValidateIgnoreMissing:  false,
+		ValidateStopOnMismatch: false,
 	}
 }
 
