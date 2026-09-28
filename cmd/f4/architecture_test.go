@@ -140,6 +140,9 @@ var architectureLayers = map[string]int{
 	"internal/fusefs": 1,
 	"internal/vtvibe": 1,
 
+	// Verbatim port of unxed/ap's patcher, no f4-internal imports at all.
+	"internal/vtvibe/ap": 0,
+
 	// Modal dialogs, the help viewer and help/ beside it. Layer 3 for the
 	// company it keeps rather than for what it imports: it may reach every
 	// leaf and none of the interactive subsystems.
