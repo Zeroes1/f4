@@ -1,10 +1,11 @@
+//go:build !windows
+
 package terminal
 
 import (
 	"errors"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -71,9 +72,6 @@ func waitForPTYCondition(p *PTY, out *strings.Builder, timeout time.Duration, co
 // IsBusy() also reads false before the wrapped command has even forked
 // yet (see internal/panel/frame.go's pollManagedExecutionDebounce).
 func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("PTY job control is a Unix concept; not meaningful on Windows")
-	}
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
