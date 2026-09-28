@@ -510,33 +510,41 @@ type F4Config struct {
 	// ArchiveTarIndexCache keeps the file index of an opened tar archive in the
 	// cache so that opening it again is instant. Off rebuilds the index every
 	// time, which is slower and never out of date (#1187).
-	ArchiveTarIndexCache     bool
-	EditorExpandTabs         int
-	EditorAutoIndent         bool
-	EditorCursorBeyondEOL    bool
-	EditorTabSize            int
-	EditorUseEditorConfig    bool
-	EditorCrosshair          bool
-	EditorMarkOccurrences    bool
-	UseExternalEditor        bool
-	ExternalEditorCommand    string
-	ExternalEditorConsole    string
-	ExternalEditorGUI        string
-	EditorAutodetectCodePage bool
-	EditorHighlighter        string
-	EditorSyntaxAnimation    bool
-	EditorColorerScheme      string
-	EditorColorerBackground  bool
-	EditorColorerSyntax      bool
-	EditorColorerCatalog     string
-	EditorColorerPairs       bool   // draw the pair under the cursor, FarColorer's PairsDraw
-	EditorColorerOldOutline  bool   // list lines, not labels, in the outliner: FarColorer's OldOutlineView
-	EditorColorerUserHrc     string // user schemes, FarColorer's UserHrcPath
-	EditorColorerUserHrd     string // user colour styles, FarColorer's UserHrdPath
-	EditorColorerHrcSettings string // user HRC settings, FarColorer's UserHrcSettingsPath
-	EditorCrossMode          int
-	ViewerHighlighting       int // where viewers highlight syntax; see ViewerHighlightOff
-	EditorDefaultCodePage    int
+	ArchiveTarIndexCache bool
+	// ArchiveUseRatarmountIfAvailable opts in to using the user's own
+	// external `ratarmount` (https://github.com/mxmlnkn/ratarmount), when it
+	// is found on PATH, as a faster tar-index backend instead of f4's own
+	// internal/tarindexcache (#251). This first part only stores the
+	// preference and lets plugins/archive.RatarmountAvailable() detect the
+	// binary; it does not change how archives are opened yet -- see that
+	// function's doc comment for the plan.
+	ArchiveUseRatarmountIfAvailable bool
+	EditorExpandTabs                int
+	EditorAutoIndent                bool
+	EditorCursorBeyondEOL           bool
+	EditorTabSize                   int
+	EditorUseEditorConfig           bool
+	EditorCrosshair                 bool
+	EditorMarkOccurrences           bool
+	UseExternalEditor               bool
+	ExternalEditorCommand           string
+	ExternalEditorConsole           string
+	ExternalEditorGUI               string
+	EditorAutodetectCodePage        bool
+	EditorHighlighter               string
+	EditorSyntaxAnimation           bool
+	EditorColorerScheme             string
+	EditorColorerBackground         bool
+	EditorColorerSyntax             bool
+	EditorColorerCatalog            string
+	EditorColorerPairs              bool   // draw the pair under the cursor, FarColorer's PairsDraw
+	EditorColorerOldOutline         bool   // list lines, not labels, in the outliner: FarColorer's OldOutlineView
+	EditorColorerUserHrc            string // user schemes, FarColorer's UserHrcPath
+	EditorColorerUserHrd            string // user colour styles, FarColorer's UserHrdPath
+	EditorColorerHrcSettings        string // user HRC settings, FarColorer's UserHrcSettingsPath
+	EditorCrossMode                 int
+	ViewerHighlighting              int // where viewers highlight syntax; see ViewerHighlightOff
+	EditorDefaultCodePage           int
 	// EditorMemoryMap lets the editor map a local file instead of reading it
 	// in chunks. Off means every buffer takes the lazily fetched path, which
 	// is the escape hatch for a file system where mapping misbehaves.
@@ -717,99 +725,100 @@ var App = F4Config{
 	// far2l's KnownDocumentTypes (multiarc/src/MultiArc.cpp), the list it
 	// refuses to sink into on Enter "even while its really archive", plus
 	// .epub, which f4 issue #1184 named and far2l's list does not.
-	ArchiveTarIndexCache:     true,
-	ArchiveEnterExcludeMask:  "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub",
-	EditorExpandTabs:         0,
-	EditorAutoIndent:         true,
-	EditorCursorBeyondEOL:    false,
-	EditorTabSize:            4,
-	EditorUseEditorConfig:    true,
-	EditorCrosshair:          false,
-	EditorMarkOccurrences:    true,
-	UseExternalEditor:        false,
-	ExternalEditorCommand:    "",
-	ExternalEditorConsole:    "",
-	ExternalEditorGUI:        "",
-	EditorAutodetectCodePage: true,
-	EditorHighlighter:        "Chroma",
-	EditorSyntaxAnimation:    false,
-	EditorColorerScheme:      "",
-	EditorColorerBackground:  true,
-	EditorColorerSyntax:      true,
-	EditorColorerCatalog:     "",
-	EditorColorerPairs:       true,
-	EditorColorerOldOutline:  true,
-	EditorColorerUserHrc:     "",
-	EditorColorerUserHrd:     "",
-	EditorColorerHrcSettings: "",
-	EditorCrossMode:          ColorerCrossBoth,
-	ViewerHighlighting:       ViewerHighlightOff,
-	EditorDefaultCodePage:    65001,
-	EditorMemoryMap:          true,
-	ViewerAutodetectCodePage: true,
-	ViewerDefaultCodePage:    65001,
-	WheelPanelUp:             0,
-	WheelPanelDown:           0,
-	WheelEditorUp:            0,
-	WheelEditorDown:          0,
-	WheelViewerUp:            0,
-	WheelViewerDown:          0,
-	WheelMenuUp:              0,
-	WheelMenuDown:            0,
-	WheelTableUp:             0,
-	WheelTableDown:           0,
-	PathHintTimeout:          2,
-	PathHintFullPath:         false,
-	PathHintSource:           2,
-	PathHintMaxVisible:       5,
-	PathHintPerCategory:      true,
-	DialogAutoComplete:       true,
-	HistoryShowTimes:         [HistoryTypeCount]int{HistoryShowDateTime, HistoryShowDateTime, HistoryShowDateTime},
-	HistoryDirsPrefixLen:     24,
-	SlideShowDelay:           DefaultSlideShowDelay,
-	ImageOverlay:             true,
-	TTYXKeys:                 true,
-	TTYXKeyList:              DefaultTTYXKeyList,
-	ImageExternalTimeout:     DefaultImageExternalTimeout,
-	ImageDecoderPriority:     "",
-	ConfirmCopy:              true,
-	ConfirmMove:              true,
-	ConfirmDelete:            true,
-	UseTrash:                 false,
-	ConfirmExit:              true,
-	DeleteCancelFocused:      false,
-	AutoSaveSettings:         true,
-	AutoSaveDialogSettings:   true,
-	AutoSavePanelSettings:    true,
-	AutoSaveCurrentPanel:     true,
-	AutoSaveGUIWindow:        true,
-	DefaultFileOpMode:        0,
-	FileOpPathDisplay:        0,
-	CopyAccessRights:         0,
-	GuiFont:                  "",
-	GuiUseSystemMonospace:    true,
-	GuiFontSize:              DefaultGuiFontSize(runtime.GOOS),
-	GuiCols:                  100,
-	GuiRows:                  30,
-	GuiPosX:                  0,
-	GuiPosY:                  0,
-	GuiPositionSaved:         false,
-	StartupMode:              StartupModeAuto,
-	StartInCurrentFolder:     false,
-	GuiBackend:               "",
-	TTYBackend:               "",
-	ConsoleTitleTemplate:     "f4 %Ver %Platform %Admin - %State",
-	DisplayFullPathInTitle:   false,
-	UpdateChannel:            0,
-	ProxyMode:                netproxy.ModeSystem,
-	UpdateInterval:           3, // Default to Weekly
-	EnforceColorCorrection:   true,
-	MenuLoopScroll:           true,
-	HighlightPriority:        0,
-	LastUpdateCheck:          0,
-	LastUpdateVersion:        "",
-	Compare:                  DefaultCompareOptions(),
-	Sync:                     DefaultSyncOptions(),
+	ArchiveTarIndexCache:            true,
+	ArchiveUseRatarmountIfAvailable: false,
+	ArchiveEnterExcludeMask:         "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub",
+	EditorExpandTabs:                0,
+	EditorAutoIndent:                true,
+	EditorCursorBeyondEOL:           false,
+	EditorTabSize:                   4,
+	EditorUseEditorConfig:           true,
+	EditorCrosshair:                 false,
+	EditorMarkOccurrences:           true,
+	UseExternalEditor:               false,
+	ExternalEditorCommand:           "",
+	ExternalEditorConsole:           "",
+	ExternalEditorGUI:               "",
+	EditorAutodetectCodePage:        true,
+	EditorHighlighter:               "Chroma",
+	EditorSyntaxAnimation:           false,
+	EditorColorerScheme:             "",
+	EditorColorerBackground:         true,
+	EditorColorerSyntax:             true,
+	EditorColorerCatalog:            "",
+	EditorColorerPairs:              true,
+	EditorColorerOldOutline:         true,
+	EditorColorerUserHrc:            "",
+	EditorColorerUserHrd:            "",
+	EditorColorerHrcSettings:        "",
+	EditorCrossMode:                 ColorerCrossBoth,
+	ViewerHighlighting:              ViewerHighlightOff,
+	EditorDefaultCodePage:           65001,
+	EditorMemoryMap:                 true,
+	ViewerAutodetectCodePage:        true,
+	ViewerDefaultCodePage:           65001,
+	WheelPanelUp:                    0,
+	WheelPanelDown:                  0,
+	WheelEditorUp:                   0,
+	WheelEditorDown:                 0,
+	WheelViewerUp:                   0,
+	WheelViewerDown:                 0,
+	WheelMenuUp:                     0,
+	WheelMenuDown:                   0,
+	WheelTableUp:                    0,
+	WheelTableDown:                  0,
+	PathHintTimeout:                 2,
+	PathHintFullPath:                false,
+	PathHintSource:                  2,
+	PathHintMaxVisible:              5,
+	PathHintPerCategory:             true,
+	DialogAutoComplete:              true,
+	HistoryShowTimes:                [HistoryTypeCount]int{HistoryShowDateTime, HistoryShowDateTime, HistoryShowDateTime},
+	HistoryDirsPrefixLen:            24,
+	SlideShowDelay:                  DefaultSlideShowDelay,
+	ImageOverlay:                    true,
+	TTYXKeys:                        true,
+	TTYXKeyList:                     DefaultTTYXKeyList,
+	ImageExternalTimeout:            DefaultImageExternalTimeout,
+	ImageDecoderPriority:            "",
+	ConfirmCopy:                     true,
+	ConfirmMove:                     true,
+	ConfirmDelete:                   true,
+	UseTrash:                        false,
+	ConfirmExit:                     true,
+	DeleteCancelFocused:             false,
+	AutoSaveSettings:                true,
+	AutoSaveDialogSettings:          true,
+	AutoSavePanelSettings:           true,
+	AutoSaveCurrentPanel:            true,
+	AutoSaveGUIWindow:               true,
+	DefaultFileOpMode:               0,
+	FileOpPathDisplay:               0,
+	CopyAccessRights:                0,
+	GuiFont:                         "",
+	GuiUseSystemMonospace:           true,
+	GuiFontSize:                     DefaultGuiFontSize(runtime.GOOS),
+	GuiCols:                         100,
+	GuiRows:                         30,
+	GuiPosX:                         0,
+	GuiPosY:                         0,
+	GuiPositionSaved:                false,
+	StartupMode:                     StartupModeAuto,
+	StartInCurrentFolder:            false,
+	GuiBackend:                      "",
+	TTYBackend:                      "",
+	ConsoleTitleTemplate:            "f4 %Ver %Platform %Admin - %State",
+	DisplayFullPathInTitle:          false,
+	UpdateChannel:                   0,
+	ProxyMode:                       netproxy.ModeSystem,
+	UpdateInterval:                  3, // Default to Weekly
+	EnforceColorCorrection:          true,
+	MenuLoopScroll:                  true,
+	HighlightPriority:               0,
+	LastUpdateCheck:                 0,
+	LastUpdateVersion:               "",
+	Compare:                         DefaultCompareOptions(),
+	Sync:                            DefaultSyncOptions(),
 
 	// Pictures and video open in their own viewers (issue #991).
 	ViewerOpenAsSupportedType: true,
@@ -1060,6 +1069,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.EditorAutoComplete = merged.GetString("Editor", "AutoComplete", "1") == "1"
 	cfg.EditorAutoCompleteMask = merged.GetString("Editor", "AutoCompleteMask", "*.go;*.c;*.cpp;*.h;*.hpp;*.py;*.js;*.ts;*.rs;*.java;*.sh;*.txt;*.md;*.html;*.css;*.json")
 	cfg.ArchiveTarIndexCache = merged.GetString("Panel", "ArchiveTarIndexCache", "1") == "1"
+	cfg.ArchiveUseRatarmountIfAvailable = merged.GetString("Panel", "ArchiveUseRatarmountIfAvailable", "0") == "1"
 	cfg.ArchiveEnterExcludeMask = merged.GetString("Panel", "ArchiveEnterExcludeMask", "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub")
 
 	cfg.EditorExpandTabs = 0
@@ -1269,6 +1279,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	sb.WriteString("[Panel]\n")
 	fmt.Fprintf(&sb, "ArchiveEnterExcludeMask = %s\n", cfg.ArchiveEnterExcludeMask)
 	fmt.Fprintf(&sb, "ArchiveTarIndexCache = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveTarIndexCache])
+	fmt.Fprintf(&sb, "ArchiveUseRatarmountIfAvailable = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveUseRatarmountIfAvailable])
 	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHiddenFiles])
 	fmt.Fprintf(&sb, "ShowDirPrefix = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowDirPrefix])
 	fmt.Fprintf(&sb, "ShowHighlightMarks = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHighlightMarks])

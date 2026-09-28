@@ -493,6 +493,11 @@ type FileSystemPanel struct {
 	scrollMouseActive     bool
 	minimalScrollDragGap  int
 	headerMouseActive     bool
+	columnResizeActive    bool
+	columnResizeIndex     int
+	columnResizeStartX    int
+	columnResizeLeftWidth int
+	columnResizeRightW    int
 	Frame                 *vtui.BorderedFrame
 	Vfs                   vfs.VFS
 	Entries               []*FileEntry
@@ -1353,6 +1358,127 @@ func (fp *FileSystemPanel) hiddenSortModeHeaderAt(x int) (SortMode, bool) {
 		return fp.SortMode, x >= fp.Table.X1 && x < columnEnd
 	}
 	return fp.SortMode, x >= columnEnd-rightWidth && x < columnEnd
+}
+
+// headerColumnBorderAt reports the index of the column to the left of the
+// one-cell separator at (x, y) in the header row, so a mouse-down there can
+// start a live column resize (f4#246) instead of a sort click. It only
+// recognizes a single-stripe layout (Detailed-style: one row of several
+// field columns) -- Brief/Medium's multiple stripes of repeating columns are
+// a separate, harder case (dragging one stripe's border would need to decide
+// whether to also resize every other stripe) left for a follow-up part.
+func (fp *FileSystemPanel) headerColumnBorderAt(x, y int) (int, bool) {
+	if !fp.Table.ShowHeader || y != fp.Table.Y1 || x < fp.Table.X1 || x > fp.Table.X2 {
+		return 0, false
+	}
+	if !fp.layoutValid() || fp.layout.stripes != 1 || len(fp.Table.Columns) < 2 {
+		return 0, false
+	}
+	columnX := fp.Table.X1
+	for column, tableColumn := range fp.Table.Columns {
+		columnX += tableColumn.Width
+		if column == len(fp.Table.Columns)-1 {
+			break
+		}
+		if x == columnX {
+			return column, true
+		}
+		columnX++
+	}
+	return 0, false
+}
+
+// minResizableColumnWidth keeps a dragged column at least this wide -- one
+// cell is the same floor preparePanelLayout already enforces when it shrinks
+// columns to fit a narrow panel.
+const minResizableColumnWidth = 1
+
+// startColumnResize begins a mouse drag of the border between column and
+// column+1 (see headerColumnBorderAt), captured at screen column x.
+func (fp *FileSystemPanel) startColumnResize(column, x int) {
+	if column < 0 || column+1 >= len(fp.Table.Columns) {
+		return
+	}
+	fp.columnResizeActive = true
+	fp.columnResizeIndex = column
+	fp.columnResizeStartX = x
+	fp.columnResizeLeftWidth = fp.Table.Columns[column].Width
+	fp.columnResizeRightW = fp.Table.Columns[column+1].Width
+}
+
+// dragColumnResize applies the in-progress resize live: it grows the left
+// column and shrinks the right one by the same amount (or the reverse),
+// never past minResizableColumnWidth, and redraws immediately. The change is
+// only persisted to panel_modes.ini once the drag ends (finishColumnResize);
+// intermediate positions are not written to disk.
+func (fp *FileSystemPanel) dragColumnResize(x int) {
+	if !fp.columnResizeActive {
+		return
+	}
+	col := fp.columnResizeIndex
+	if col+1 >= len(fp.Table.Columns) {
+		fp.columnResizeActive = false
+		return
+	}
+	delta := x - fp.columnResizeStartX
+	left := fp.columnResizeLeftWidth + delta
+	right := fp.columnResizeRightW - delta
+	if left < minResizableColumnWidth {
+		right -= minResizableColumnWidth - left
+		left = minResizableColumnWidth
+	}
+	if right < minResizableColumnWidth {
+		left -= minResizableColumnWidth - right
+		right = minResizableColumnWidth
+	}
+	if left < minResizableColumnWidth {
+		return // the panel is too narrow for both columns to keep the floor
+	}
+	fp.Table.Columns[col].Width = left
+	fp.Table.Columns[col+1].Width = right
+	if col+1 < len(fp.layout.columns) {
+		fp.layout.columns[col].Width = left
+		fp.layout.columns[col].Percent = false
+		fp.layout.columns[col+1].Width = right
+		fp.layout.columns[col+1].Percent = false
+	}
+	fp.updateSortColumnTitles()
+	fp.Refresh()
+}
+
+// finishColumnResize saves the two columns' final widths from the drag
+// started by startColumnResize into the mode's persisted settings, the same
+// PanelViewModeSettings/SetPanelViewModeSettings pair the "Panel Modes"
+// dialog's numeric width field uses (viewmodes_dialog.go) -- so a resize
+// done by dragging shows up there too, and survives a restart.
+//
+// It only updates this panel's own layout immediately; a second panel
+// currently showing the same mode picks up the new widths the next time it
+// resizes or switches mode (the same lag SetViewMode already has today for
+// any other out-of-dialog settings change) rather than being force-relaid
+// out here -- reaching across to the sibling panel is left for a follow-up
+// if it turns out to matter in practice.
+func (fp *FileSystemPanel) finishColumnResize() {
+	if !fp.columnResizeActive {
+		return
+	}
+	fp.columnResizeActive = false
+	col := fp.columnResizeIndex
+	if col+1 >= len(fp.Table.Columns) {
+		return
+	}
+	mode := fp.layout.mode
+	settings := PanelViewModeSettings(mode)
+	if col+1 >= len(settings.Columns) {
+		return
+	}
+	settings.Columns[col].Width = fp.Table.Columns[col].Width
+	settings.Columns[col].Percent = false
+	settings.Columns[col+1].Width = fp.Table.Columns[col+1].Width
+	settings.Columns[col+1].Percent = false
+	if err := SetPanelViewModeSettings(mode, &settings); err != nil {
+		vtui.DebugLog("panel column resize: save failed: %v", err)
+	}
 }
 
 // panelScrollMetrics maps the panel's item-based scrolling onto the
@@ -3787,6 +3913,15 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 		fp.headerMouseActive = false
 		fp.rowDragButton = 0
 		fp.stopDragAutoScroll()
+		fp.finishColumnResize()
+	}
+
+	// A resize drag in progress takes priority over every other header/row
+	// hit-test below: once the border is grabbed, the pointer driving it is
+	// what matters, not whatever happens to be under it (f4#246).
+	if isMove && fp.columnResizeActive {
+		fp.dragColumnResize(int(e.MouseX))
+		return true
 	}
 
 	if e.WheelDirection == 0 && fp.groupHeadingAt(int(e.MouseX), int(e.MouseY)) {
@@ -3794,6 +3929,10 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 	}
 	if e.WheelDirection == 0 && e.ButtonState&vtinput.FromLeft1stButtonPressed != 0 &&
 		e.KeyDown && e.MouseEventFlags&vtinput.MouseMoved == 0 {
+		if column, ok := fp.headerColumnBorderAt(int(e.MouseX), int(e.MouseY)); ok {
+			fp.startColumnResize(column, int(e.MouseX))
+			return true
+		}
 		if mode, ok := fp.headerSortModeAt(int(e.MouseX), int(e.MouseY)); ok {
 			fp.headerMouseActive = true
 			fp.SetSortMode(mode)

@@ -1016,6 +1016,16 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { panel.ActionOpenTempPanel(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.Calculator",
+		Area:        "Shell",
+		Label:       "Calculator",
+		LabelKey:    "Menu.Commands.Calculator",
+		Description: "Open the built-in calculator",
+		DescKey:     "Action.Panel.Calculator.Desc",
+		MenuPath:    "Commands",
+		Handler:     func() bool { showCalculatorDialog(); return true },
+	})
+	registerAction(action.Action{
 		Name:                "Panel.CommandHistory",
 		Area:                "Shell",
 		Label:               "Command History",

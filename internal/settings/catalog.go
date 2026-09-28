@@ -68,6 +68,7 @@ SeparateFileExtensions|panels|File listing|Separate filename extensions|Align th
 ShowPanelFileInfo|panels|File listing|Focused-file status row|Reserve a bottom row for the focused name, size and modification time. Short panels suppress this row.||live
 PanelScrollbarMode|panels|File listing|Panel scrollbar|Hide the scrollbar, show a minimal one, or show the full scrollbar with arrows.|0:Off;1:Minimal;2:Full|live
 ArchiveTarIndexCache|panels|Directory loading|Cache tar archive indexes|Keep the file index of an opened tar archive in the cache, so opening it again is instant. Off rebuilds the index each time the archive is opened: slower, but never out of date.||live
+ArchiveUseRatarmountIfAvailable|panels|Directory loading|Prefer ratarmount when installed|Use the external ratarmount tool as a faster tar-index backend when it is found on PATH, instead of f4's own index cache. Has no effect if ratarmount is not installed.||live
 SyncPanelLoad|panels|Directory loading|Wait for complete directory listing|Replace the listing only when all directory results are ready and bypass cached previews. Off permits incremental results. It does not block all UI work.||next directory load
 InfoPanelCPUGPU|panels|Information panels|Show CPU and GPU information|Include locally collected CPU and GPU sections when the information provider does not supply authoritative information.||live
 InfoPanelBytes|panels|Information panels|Show sizes in bytes|Display raw bytes instead of human-readable sizes in information and quick-view panels.||live

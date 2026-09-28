@@ -73,6 +73,7 @@ var actionMenuOrder = []string{
 	"Panel.Bookmarks",
 	"Panel.PluginMenu",
 	"Panel.TempPanel",
+	"Panel.Calculator",
 	"Panel.CommandHistory",
 	"Panel.FoldersHistory",
 	"Panel.ViewerEditorHistory",

@@ -50,17 +50,50 @@ type cmdShellSession struct {
 	Pf *PanelsFrame
 
 	// promptSeq counts every prompt-end mark; sentSeq is its value when the
-	// line now running was typed. A prompt can only end that line if it was
-	// printed after it — a startup prompt still crossing ConPTY does not
-	// count.
+	// first of the lines now outstanding was typed. A prompt can only answer
+	// one of them if it was printed after that — a startup prompt still
+	// crossing ConPTY does not count.
 	promptSeq uint64
 	sentSeq   uint64
-	pending   bool // a typed line (command or directory sync) has no prompt yet
-	inBatch   bool // a .bat/.cmd file is being executed: nested cmd is not the shell
-	observed  terminal.PromptSnapshot
-	timer     *time.Timer
-	attempts  int
-	Closed    bool
+
+	// pendingLines counts typed lines (a directory sync, a command, or
+	// both queued back to back) whose own completion prompt has not been
+	// seen yet. f4 does not wait for one typed line to settle before typing
+	// the next: syncPTYDirectory's cwd ping runs at panel-path-change time,
+	// unconditionally, and a command the user runs can follow it within the
+	// same frame. On an ordinary shell the ping's prompt arrives long before
+	// anything else is typed, so this never exceeds 1. But when the shell is
+	// slow to print even its first prompt (a cold cmd.exe start took ~4s in
+	// the field, #1376), both lines can already be queued when it finally
+	// answers -- and a single "the most recent line" slot cannot tell the
+	// sync's own, perfectly ordinary completion prompt apart from the
+	// command's. Treated as the answer to whichever was tracked, it ended
+	// the command (dropped f4 back to its panels, and in ShellModeHost off
+	// the primary screen) while Far Manager had not even started. Each real
+	// settle now retires exactly one outstanding line, and only the last one
+	// still owed a prompt ends the execution.
+	//
+	// notedAtSeq is promptSeq's value the last time a line was typed. It is
+	// what tells the #1376 startup race (both lines queued while promptSeq
+	// is still the same, unanswered value) apart from a plain sequence of
+	// separate commands, each typed only after the previous one already got
+	// its own prompt mark -- a nested shell (#1376's own regression test,
+	// TestCmdSessionNestedCmdHoldsTerminal) held by a console child settles
+	// into "held", never released, but its prompt mark still lands and moves
+	// promptSeq. Without this, a command typed into that nested shell piled
+	// its line onto the still-outstanding, merely-held one instead of
+	// starting fresh, and the extra pendingLines it left behind was never
+	// anyone's to retire: nothing on the wire answers a line nobody
+	// remembers sending. pendingLines then never reached zero and the wait
+	// for the outer shell's own prompt, after the nested shell was long
+	// gone, never let go of the panels.
+	pendingLines int
+	notedAtSeq   uint64
+	inBatch      bool // a .bat/.cmd file is being executed: nested cmd is not the shell
+	observed     terminal.PromptSnapshot
+	timer        *time.Timer
+	attempts     int
+	Closed       bool
 }
 
 // cmdPromptSettleDelay is how long after a prompt mark the screen is first
@@ -154,21 +187,37 @@ func newCmdShellSession(pf *PanelsFrame) *cmdShellSession {
 	return &cmdShellSession{Pf: pf}
 }
 
-// noteSent records that a line was typed into the shell and that the
-// prompt f4 is waiting for has not been printed yet.
+// noteSent records that one more line was typed into the shell. It only
+// piles onto whatever is already outstanding when no prompt mark has
+// arrived since the previous line was typed -- the #1376 startup race,
+// where syncPTYDirectory's ping and the command right after it can both be
+// queued before the shell has printed a single byte. Once a mark has been
+// seen since, whatever was outstanding has already had the state machine's
+// attention (settled, held by a console child, still flickering -- settle
+// decides which), even if it did not release: this new line starts its own
+// fresh count rather than adding a line nobody will ever retire on its
+// behalf, which left pendingLines never reaching zero. Only the first line
+// of a fresh count sets sentSeq: it marks the threshold no prompt already
+// in flight can cross, and it must not move while later lines queue up
+// behind the first, or a prompt that only answers an earlier one would
+// start looking like it predates the newest line too.
 func (s *cmdShellSession) noteSent() {
 	if s == nil {
 		return
 	}
 	s.mu.Lock()
-	s.pending = true
-	s.sentSeq = s.promptSeq
-	if s.promptSeq == 0 {
-		// No prompt has been seen yet, so the shell's startup prompt is
-		// still on its way and will arrive after the line: it is not the
-		// answer to it.
-		s.sentSeq = 1
+	if s.pendingLines == 0 || s.promptSeq != s.notedAtSeq {
+		s.sentSeq = s.promptSeq
+		if s.promptSeq == 0 {
+			// No prompt has been seen yet, so the shell's startup prompt is
+			// still on its way and will arrive after the line: it is not the
+			// answer to it.
+			s.sentSeq = 1
+		}
+		s.pendingLines = 0
 	}
+	s.notedAtSeq = s.promptSeq
+	s.pendingLines++
 	s.mu.Unlock()
 	s.Pf.noteLocalShellBusy(true)
 }
@@ -193,7 +242,7 @@ func (s *cmdShellSession) idle() bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return !s.pending
+	return s.pendingLines == 0
 }
 
 func (s *cmdShellSession) close() {
@@ -286,7 +335,7 @@ func (s *cmdShellSession) settle(seq uint64) {
 			s.mu.Unlock()
 			return
 		}
-		previous, sentSeq, pending := s.observed, s.sentSeq, s.pending
+		previous, sentSeq, pendingLines := s.observed, s.sentSeq, s.pendingLines
 		inBatch := s.inBatch
 		s.mu.Unlock()
 
@@ -328,7 +377,7 @@ func (s *cmdShellSession) settle(seq uint64) {
 			return
 		}
 
-		if pending && seq <= sentSeq {
+		if pendingLines > 0 && seq <= sentSeq {
 			// This prompt was printed before the line we typed; the shell has
 			// not even started on it. The prompt for our line will come.
 			vtui.DebugLog("CMD_SESSION: prompt %d predates the typed line (sent=%d), ignoring", seq, sentSeq)
@@ -383,7 +432,24 @@ func (s *cmdShellSession) settle(seq uint64) {
 			}
 		}
 
-		vtui.DebugLog("CMD_SESSION: prompt %d settled (sent=%d pending=%v children=%v)", seq, sentSeq, pending, children)
+		// This settle answers exactly one outstanding line. If others are
+		// still queued behind it (noteSent's doc comment above explains how
+		// more than one gets typed before any prompt answers either), only
+		// retire it here; the execution ends when the last one gets its own
+		// settle, which the next real prompt mark schedules via handleMark.
+		s.mu.Lock()
+		if !s.Closed && seq == s.promptSeq && s.pendingLines > 0 {
+			s.pendingLines--
+		}
+		remaining := s.pendingLines
+		s.mu.Unlock()
+
+		if remaining > 0 {
+			vtui.DebugLog("CMD_SESSION: prompt %d settled one of the outstanding lines (sent=%d children=%v), %d left", seq, sentSeq, children, remaining)
+			return
+		}
+
+		vtui.DebugLog("CMD_SESSION: prompt %d settled (sent=%d children=%v)", seq, sentSeq, children)
 		s.release()
 	})
 }
@@ -462,7 +528,7 @@ func (s *cmdShellSession) retryOrRelease(seq uint64) {
 func (s *cmdShellSession) release() {
 	pf := s.Pf
 	s.mu.Lock()
-	s.pending = false
+	s.pendingLines = 0
 	s.inBatch = false
 	s.mu.Unlock()
 	pf.ShellPromptReady = true

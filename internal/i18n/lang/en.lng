@@ -590,6 +590,7 @@ Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
+Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Player.Desc=Toggle the audio player panel
 Action.Settings.MacKeyboard=&Mac keyboard
 Action.Settings.MacKeyboard.Desc=Use the macOS editing chords: Cmd for line and document edges, Opt for word navigation
@@ -731,6 +732,12 @@ Search.AllEditorTitle=Found: %s
 Search.Title= Search
 Search.NotFound=Pattern not found.
 
+Calculator.Title=Calculator
+Calculator.Prompt=Expression:
+Calculator.ResultEmpty=(press Enter to calculate)
+Calculator.ResultError=Invalid expression
+Calculator.BtnInsert=&Insert
+
 Select.Title= Select
 Select.Mask=&Enter selection mask:
 
@@ -776,6 +783,7 @@ Menu.Commands.BackgroundJobs=Background Jobs
 Menu.Commands.RunRemote=Run Command Remotely
 Menu.Commands.Bookmarks=Bookmarks
 Menu.Commands.TempPanel=Temporary panel
+Menu.Commands.Calculator=Calculator
 Menu.SortName=Name
 Menu.SortExt=Extension
 Menu.SortTime=Time
@@ -2223,6 +2231,8 @@ SettingsCenter.ApplyCommandParallelism.Description=Maximum concurrent commands i
 SettingsCenter.ApplyCommandParallelism.Label=Concurrent Apply commands
 SettingsCenter.ArchiveTarIndexCache.Description=Keep the file index of an opened tar archive in the cache, so opening it again is instant. Off rebuilds the index each time the archive is opened: slower, but never out of date.
 SettingsCenter.ArchiveTarIndexCache.Label=Cache tar archive indexes
+SettingsCenter.ArchiveUseRatarmountIfAvailable.Description=Use the external ratarmount tool as a faster tar-index backend when it is found on PATH, instead of f4's own index cache. Has no effect if ratarmount is not installed.
+SettingsCenter.ArchiveUseRatarmountIfAvailable.Label=Prefer ratarmount when installed
 SettingsCenter.AutoSaveCurrentPanel.Description=Remember locations and focused files for both sides of saved workspaces. Save and restore panel paths must also be enabled.
 SettingsCenter.AutoSaveCurrentPanel.Label=Save panel locations automatically
 SettingsCenter.AutoSaveDialogSettings.Description=Automatically persist configuration and dialog-related changes. Explicit Apply still saves when this is off.

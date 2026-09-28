@@ -301,6 +301,58 @@ func TestCmdSessionIgnoresConsoleTitle(t *testing.T) {
 	})
 }
 
+// f4#1376's Host-mode report: with ConsoleMode set to "host" (with or
+// without the overlay), Far Manager never started -- it tried to load, then
+// f4 dropped straight back to its panels while Far was still coming up.
+// No HOST_REPLY line ever appeared in the debug log, meaning Far itself
+// never even got a chance to send a query: f4 gave up on it before it had
+// drawn anything.
+//
+// The field logs (a real Windows box, not a slow CI runner) showed cmd.exe
+// taking ~4 seconds to print even its very first prompt after the local
+// shell started. In that window, f4 had already typed two lines back to
+// back: syncPTYDirectory's directory-sync ping (sent unconditionally at
+// startup) and the "cd /d ... & Far.exe" line the user's Enter keypress
+// sent right after. Both went out before cmd printed a single prompt, so
+// both got the same sentSeq, and the sync ping's own perfectly ordinary,
+// childless completion prompt -- the second prompt to cross the pipe --
+// was consumed as the answer to the still-outstanding Far.exe line,
+// ending the execution and, in ShellModeHost, calling LeaveHostConsole()
+// before Far had drawn a single frame.
+func TestCmdSessionTwoQueuedLinesEachNeedTheirOwnPrompt(t *testing.T) {
+	forEachBuild(t, func(t *testing.T, sim *cmdShellSim) {
+		// Both lines are typed before the shell has printed anything at all
+		// (promptSeq == 0), exactly as syncPTYDirectory's ping and the
+		// command that follows it can be on a cold shell.
+		sim.pf.CmdSession.noteSent() // the directory sync ping
+		sim.pf.Executing = true
+		sim.pf.ReturnToPanels = true
+		sim.pf.ShowPanels = false
+		sim.pf.CmdSession.noteSent() // "cd /d ... & Far.exe", typed right after
+
+		sim.feed("Microsoft Windows [Version 10.0]\r\n\r\n")
+		sim.prompt("") // the shell's very first prompt, predates every typed line
+		sim.wait(settledWithin)
+		sim.expectExecuting(true, "after the shell's very first prompt")
+
+		sim.feed("cd /d \"C:\\work\" & rem f4_sync\r\n\r\n")
+		sim.prompt("") // the sync line's own, perfectly ordinary completion
+		sim.wait(settledWithin)
+		sim.expectExecuting(true, "after the sync line's own prompt, with Far.exe still outstanding")
+		if sim.pf.ShowPanels {
+			t.Fatalf("[%s] panels came back before Far.exe's own prompt (f4#1376)", sim.build.name)
+		}
+
+		sim.feed("far.exe\r\n\r\n")
+		sim.prompt("") // Far.exe's own completion (it exiting, in real life)
+		sim.wait(settledWithin)
+		sim.expectExecuting(false, "after Far.exe's own prompt")
+		if !sim.pf.ShowPanels {
+			t.Errorf("[%s] panels did not come back after Far.exe's own prompt", sim.build.name)
+		}
+	})
+}
+
 // The directory sync is a typed line like any other: no second sync may be
 // typed until its prompt has settled.
 func TestCmdSessionSyncWaitsForPrompt(t *testing.T) {
@@ -401,7 +453,7 @@ func TestCmdSessionFlickeringPromptIsReleased(t *testing.T) {
 		// that a stuck settle cannot keep Esc disabled. Driving retryOrRelease
 		// itself keeps the test independent of timer scheduling.
 		sim.pf.Executing = true
-		sim.pf.CmdSession.pending = true
+		sim.pf.CmdSession.pendingLines = 1
 		sim.pf.CmdSession.promptSeq = 5
 		sim.pf.CmdSession.sentSeq = 4
 		seq := sim.pf.CmdSession.promptSeq
@@ -430,7 +482,7 @@ func TestCmdSessionFlickeringPromptHeldByChildIsNotReleased(t *testing.T) {
 		sim.pty.setChildren(terminal.ChildProcess{Name: "far.exe", GUI: false})
 
 		sim.pf.Executing = true
-		sim.pf.CmdSession.pending = true
+		sim.pf.CmdSession.pendingLines = 1
 		sim.pf.CmdSession.promptSeq = 5
 		sim.pf.CmdSession.sentSeq = 4
 		seq := sim.pf.CmdSession.promptSeq
