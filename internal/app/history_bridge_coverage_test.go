@@ -5,10 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/terminal"
+	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -332,7 +334,7 @@ func TestOpenViewerEditorHistoryEntry_DispatchesByMode(t *testing.T) {
 	if entries := loadViewerEditorHistory(); len(entries) != 1 || entries[0].Mode != historyModeEdit {
 		t.Fatalf("edit mode was not routed to actionOpenEditor: %#v", entries)
 	}
-	drainRenameTasks(t)
+	closeOpenedHistoryFile(t, path, historyModeEdit)
 
 	if !openViewerEditorHistoryEntry(pf, viewerEditorHistoryEntry{Local: true, Path: path}, historyModeView) {
 		t.Fatal("view mode reported it did not open")
@@ -340,7 +342,32 @@ func TestOpenViewerEditorHistoryEntry_DispatchesByMode(t *testing.T) {
 	if entries := loadViewerEditorHistory(); len(entries) != 1 || entries[0].Mode != historyModeView {
 		t.Fatalf("view mode was not routed to actionOpenViewer: %#v", entries)
 	}
-	drainRenameTasks(t)
+	closeOpenedHistoryFile(t, path, historyModeView)
+}
+
+// closeOpenedHistoryFile waits for the async open a history entry triggered
+// to land as a real editor or viewer frame on path, then closes it. Leaving
+// it open keeps the file handle (the editor's mapping, the viewer's backend)
+// alive past the test, and on Windows t.TempDir's cleanup then fails to
+// delete a file another handle still holds open.
+func closeOpenedHistoryFile(t *testing.T, path string, mode viewerEditorHistoryMode) {
+	t.Helper()
+	v := vfs.NewOSVFS(filepath.Dir(path))
+	if mode == historyModeEdit {
+		var ev *editor.EditorView
+		pumpUntil(t, "the editor to open "+path, func() bool {
+			ev, _ = findOpenedEditor(v, path)
+			return ev != nil
+		})
+		ev.Close()
+		return
+	}
+	var vv *viewer.ViewerView
+	pumpUntil(t, "the viewer to open "+path, func() bool {
+		vv, _ = findOpenedViewer(v, path)
+		return vv != nil
+	})
+	vv.Close()
 }
 
 // TestRevealViewerEditorHistoryEntry_NonLocalShowsMessage covers the guard
@@ -462,8 +489,9 @@ func TestActionViewerEditorHistory_ReturnAndFunctionKeysOpenWithOverride(t *test
 				t.Fatalf("history after open = %#v, want mode %q", entries, tc.wantMode)
 			}
 			// Let the async open this triggered land instead of leaving its
-			// goroutine to write to a channel nobody drains.
-			drainRenameTasks(t)
+			// goroutine to write to a channel nobody drains, and close what it
+			// opened so the temp dir can be removed on Windows.
+			closeOpenedHistoryFile(t, path, tc.wantMode)
 		})
 	}
 }
