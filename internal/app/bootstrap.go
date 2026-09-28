@@ -673,7 +673,7 @@ The following switches may be used in the command line:
                          testing where interactive navigation is unreliable)
  -gui, --gui [Backend]  Force run in GUI-mode
                          [Backend] values: "win32" (or "winapi", "gdi"),
-                         "gogpu", "ebiten", "x11", "wayland", "auto",
+                         "gogpu", "ebiten", "x11", "wayland", "cocoa", "auto",
                          if Backend omited, the configured default is used
                          ([Startup] GuiBackend), or the most suitable one;
                          "auto" ignores the configured default for this run
@@ -932,6 +932,23 @@ func tryRunDefaultGui() error {
 				return nil
 			} else {
 				errs = append(errs, fmt.Sprintf("gogpu: %v", err))
+			}
+		}
+
+		// macOS: fall back to the native Cocoa window before X11. Cocoa is
+		// always built (unlike gogpu, it carries no vtui_noXXX build tag), so
+		// a lite build -- which has no gogpu -- reaches it right after
+		// gogpu's "not built" error above, and a regular build reaches it if
+		// gogpu's FFI layer could not load. vtui does not pick cocoa on its
+		// own: an empty backend name on darwin still means "look for
+		// DISPLAY/WAYLAND_DISPLAY", so it has to be named explicitly here,
+		// ahead of the X11/XQuartz fallback below (f4#1571).
+		if runtime.GOOS == "darwin" {
+			vtui.DebugLog("GUI_AUTO: Trying cocoa...")
+			if err := gui.RunGui("cocoa", setupGuiUI); err == nil {
+				return nil
+			} else {
+				errs = append(errs, fmt.Sprintf("cocoa: %v", err))
 			}
 		}
 

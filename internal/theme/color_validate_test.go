@@ -16,16 +16,17 @@ import (
 // check; #143 and #144 then tuned it against exactly this kind of
 // exhaustive, real-scheme sweep, fixing several false positives it
 // originally had on f4's own shipped defaults (f4#363). Default Dark's
-// Menu.Highlight.Selected (and its horizontal-menu twin) is what is left
-// once those fixes land: a saturated red directly on a saturated olive
-// green, both around L*≈50 — genuinely near-isoluminant, at 1.7:1 WCAG
-// contrast — a real, pre-existing color-scheme wrinkle the check is right
-// to catch, not a false positive to work around. See vtui#144's
+// Menu.Highlight.Selected and HMenu.Highlight.Selected used to be left
+// flagged even after those fixes landed: a saturated red directly on a
+// saturated olive green, both around L*≈50 — genuinely near-isoluminant, at
+// 1.7:1 WCAG contrast (see vtui#144's
 // TestValidateColors_FlagsNearIsoluminantSaturatedClash for the same
-// combination as a dedicated vtui-level regression.
-var styleKnownColorIssues = map[string][]string{
-	"Default Dark": {"Menu.Highlight.Selected", "HMenu.Highlight.Selected"},
-}
+// combination as a dedicated vtui-level regression). f4#1622 reported this
+// startup warning as user-visible confusion, so default_dark.ini now gives
+// both slots the same light foreground Dialog.Button.Highlight.Selected
+// already used on the identical green background, clearing the clash; the
+// map is empty until a future style needs its own accepted exception.
+var styleKnownColorIssues = map[string][]string{}
 
 // TestValidateActiveColors_ShippedStylesPassClean applies every built-in
 // style (the actual .ini files under styles/, embedded and shipped with f4)

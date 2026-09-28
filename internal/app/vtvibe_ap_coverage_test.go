@@ -21,16 +21,6 @@ func TestAIPatchTargetDirSkipsNonLocalPanels(t *testing.T) {
 	}
 }
 
-func TestAIPythonPathReportsMissingInterpreter(t *testing.T) {
-	setupPortableIni(t, "0")
-	t.Setenv("PATH", t.TempDir())
-	writeVtvibeINI(t, "[general]\n")
-
-	if got, err := aiPythonPath(); err == nil || got != "" {
-		t.Fatalf("aiPythonPath() = %q, %v; want no interpreter error", got, err)
-	}
-}
-
 func TestAIShowPatchResultStatesAndAttachReport(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())

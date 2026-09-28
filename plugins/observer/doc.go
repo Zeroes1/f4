@@ -6,10 +6,34 @@
 //
 // # Scope so far (f4#1563)
 //
-// This package is still infrastructure only: it has no notion of a
-// directory tree beyond one GetItem call at a time, is not registered as a
-// vfs.VFSProvider, and is not reachable from Enter on a panel. What it does
-// provide is:
+// Parts 1-4 built infrastructure only: ABI marshaling and a loader that can
+// drive LoadSubModule/OpenStorage/GetItem/ExtractItem against a real module,
+// with no notion of a directory tree beyond one GetItem call at a time, no
+// vfs.VFSProvider, and nothing reachable from Enter on a panel. Part 5 adds
+// exactly one, deliberately narrow slice on top of that: Provider
+// (provider.go) is a real vfs.VFSProvider, registered from both build tags
+// (internal/plughost/manager.go), that drives a real isoimg.wasm against a
+// real ISO9660 image, builds its whole directory tree from a GetItem walk
+// (ObserverVFS in vfs.go), and lets a panel browse it and read files out of
+// it -- with no observer.ini, no module selection beyond that one hardcoded
+// module, and no cancellation beyond what ctx already gives every VFS
+// call. Those remain later, separate parts; see status/1563.md in the
+// accounting repository for what is next. Part 7 (password.go) already
+// closed one item off that list: OpenStorage returning
+// SOR_PASSWORD_REQUIRED now drives the same interactive password retry loop
+// plugins/archive/password.go gives ArchiveVFS, instead of a bare error.
+// Part 8 added PanelEnterAllowed (provider.go), ObserverEnterExcludeMask's
+// own escape hatch. Part 9 (config.go) closed the remaining "no
+// observer.ini, no module selection" gap named two paragraphs up: Provider
+// now tries an ordered []moduleEntry read from
+// observer.ini/observer_user.ini (falling back to the same single
+// isoimg/"*.iso" row when neither file exists), which answers both
+// "configure Observer the way Far does" and "pick between several modules
+// for one format" with the same mechanism -- file order in [Modules]
+// already is the priority, upstream's own host never needed a second one.
+// PlugRing distribution and real modules beyond isoimg remain unstarted.
+//
+// What parts 1-4 already provide, and part 5 builds on unchanged, is:
 //
 //   - Go types and constants for the Observer module ABI (API v6, see
 //     src/common/ModuleDef.h in lazyhamster/Observer), laid out the way a

@@ -50,6 +50,7 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 			Description:    "Create an archive from the selected files",
 			DescriptionKey: "Archive.Command.Add.Desc",
 			SearchKeys:     []string{"Attributes.Archive"},
+			Enabled:        canAddArchive,
 			Run:            actionAddArchive,
 		})
 		if err != nil {
@@ -66,6 +67,7 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 			Description:    "Extract the selected archive to the passive panel",
 			DescriptionKey: "Archive.Command.Extract.Desc",
 			SearchKeys:     []string{"Attributes.Archive"},
+			Enabled:        canOperateOnArchive,
 			Run:            actionExtractArchive,
 		})
 		if err != nil {
@@ -108,11 +110,81 @@ func resolveLocalArchivePath(app vfs.App) (string, bool) {
 	return srcPath, true
 }
 
+// canOperateOnArchive reports whether "Extract files"/"Test archive"
+// (Shift+F2/Shift+F3) have an archive to act on: either the active panel
+// already is one (ArchiveVFS), where Extract copies the selected members and
+// Test verifies the archive itself, or the cursor sits on a local-filesystem
+// file whose format ArchiveProvider recognizes as an archive -- the same
+// recognition Enter already relies on to decide whether to browse into a
+// file (its CanOpen backs FindProvider, see vfs/vfs.go). Before this,
+// resolveLocalArchivePath's local-filesystem branch accepted any selected
+// name at all, regardless of its format, and only the extraction/testing
+// machinery itself discovered a bad target, well after Shift+F2/Shift+F3
+// had already committed to running it.
+//
+// This backs archive.extract's PluginCommand.Enabled, which dims the Files
+// menu row and command-palette entry, and it also guards the raw
+// actionExtractArchive/actionTestArchive handlers directly: their Shift+F2/
+// Shift+F3 hotkeys are registered through RegisterGlobalHotkey rather than
+// through the plugin-command dispatch that PluginCommand.Enabled gates, so a
+// press still reached them unconditionally (f4#1356).
+func canOperateOnArchive(app vfs.App) bool {
+	srcVfs := app.GetActivePanelVFS()
+	if srcVfs == nil {
+		return false
+	}
+	if _, ok := srcVfs.(*ArchiveVFS); ok {
+		return true
+	}
+	if _, ok := srcVfs.(*vfs.OSVFS); !ok {
+		return false
+	}
+	name := app.GetSelectedName()
+	if name == "" || name == ".." {
+		return false
+	}
+	// Join, not Abs: CanOpen resolves the path itself (it is what
+	// File.EnterDirectory's own isArchive check hands FindProvider too, see
+	// internal/app/actions_table.go), and OSVFS.Abs is idempotent on an
+	// already-absolute path in any case.
+	path := srcVfs.Join(srcVfs.GetPath(), name)
+	return (&ArchiveProvider{}).CanOpen(context.Background(), srcVfs, path)
+}
+
+// canAddArchive reports whether "Add to archive" (Shift+F1) has something to
+// add: at least one marked/selected item besides the ".." navigation row.
+// actionAddArchive already filters exactly this before it opens its name
+// prompt; canAddArchive mirrors that filter without the prompt's side
+// effects, so it can back both the archive.add PluginCommand's Enabled
+// (dims the Files menu row/palette entry) and the Shift+F1 global hotkey,
+// which bypasses PluginCommand.Enabled the same way Shift+F2/Shift+F3 do
+// (see canOperateOnArchive).
+func canAddArchive(app vfs.App) bool {
+	if app.GetActivePanelVFS() == nil {
+		return false
+	}
+	for _, name := range app.GetSelectedNames() {
+		if name != ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // actionExtractArchive runs on the UI thread as a global hotkey handler, so
 // every blocking prompt (app.Message waits for the UI loop) must run on a
 // separate goroutine. Calling app.Message synchronously here deadlocked f4
 // on Shift+F2 inside an archive.
 func actionExtractArchive(app vfs.App) {
+	if !canOperateOnArchive(app) {
+		// Neither an archive panel nor a recognized archive under the
+		// cursor: a dimmed Files-menu row/palette entry would refuse this
+		// through PluginCommand.Enabled, and Shift+F2 refuses it the same
+		// way here, silently, instead of the "Extraction supported only
+		// from local filesystem" dialog this used to show for any target
+		// (f4#1356).
+		return
+	}
 	srcVfs := app.GetActivePanelVFS()
 	dstVfs := app.GetPassivePanelVFS()
 	if srcVfs == nil || dstVfs == nil {
@@ -130,9 +202,6 @@ func actionExtractArchive(app vfs.App) {
 
 	srcPath, ok := resolveLocalArchivePath(app)
 	if !ok {
-		if name := app.GetSelectedName(); name != "" && name != ".." {
-			go app.Message(" Error ", "Extraction supported only from local filesystem", []string{"&Ok"})
-		}
 		return
 	}
 	destDir := dstVfs.GetPath()
@@ -220,11 +289,15 @@ type markedNamesApp interface {
 // the same restriction Shift+F2 already applies to extraction. With nothing
 // marked the whole archive is tested, exactly as before (f4#1250).
 func actionTestArchive(app vfs.App) {
+	if !canOperateOnArchive(app) {
+		// Same guard as actionExtractArchive, and for the same reason: Test
+		// archive has no menu entry to dim at all (it is only ever reached
+		// through the Shift+F3 global hotkey), so refusing silently here is
+		// the only place this class of fix can land for it (f4#1356).
+		return
+	}
 	srcPath, ok := resolveLocalArchivePath(app)
 	if !ok {
-		if name := app.GetSelectedName(); name != "" && name != ".." {
-			go app.Message(" Error ", "Testing supported only for local archives", []string{"&Ok"})
-		}
 		return
 	}
 	// Inside the archive, test with the password it was entered with: the

@@ -3,6 +3,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -203,5 +204,154 @@ func TestRunCLIFallsBackWhenPreferredDirUnavailable(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(FallbackDir(home), "f4")); err != nil {
 		t.Fatalf("binary not installed into fallback dir: %v", err)
+	}
+}
+
+func TestRunCLIFailsWhenHomeDirUnavailable(t *testing.T) {
+	oldHome := UserHomeDir
+	UserHomeDir = func() (string, error) { return "", errors.New("no home for you") }
+	defer func() { UserHomeDir = oldHome }()
+
+	srcDir := t.TempDir()
+	exe := writeFakeExecutable(t, srcDir, "f4")
+
+	if got := RunCLI(exe, Options{}); got != 1 {
+		t.Fatalf("RunCLI = %d, want 1", got)
+	}
+}
+
+func TestRunCLIFailsWhenNeitherInstallDirCanBeCreated(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	parent := t.TempDir()
+	roParent := filepath.Join(parent, "ro")
+	if err := os.Mkdir(roParent, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	// home itself does not exist yet, and its parent forbids creating it, so
+	// both PreferredDir and FallbackDir fail the same way.
+	home := filepath.Join(roParent, "home")
+	srcDir := t.TempDir()
+	exe := writeFakeExecutable(t, srcDir, "f4")
+
+	fakeEnv(t, home, map[string]string{
+		"PATH":  "/usr/bin:/bin",
+		"SHELL": "/bin/bash",
+	}, false)
+
+	if got := RunCLI(exe, Options{}); got != 1 {
+		t.Fatalf("RunCLI = %d, want 1", got)
+	}
+}
+
+func TestRunCLIFailsWhenCopyExecutableFails(t *testing.T) {
+	home := t.TempDir()
+	srcDir := t.TempDir()
+	// exe points at a file that was never written, so CopyExecutable's own
+	// os.Stat fails.
+	exe := filepath.Join(srcDir, "does-not-exist")
+
+	fakeEnv(t, home, map[string]string{
+		"PATH":  "/usr/bin:/bin",
+		"SHELL": "/bin/bash",
+	}, false)
+
+	if got := RunCLI(exe, Options{}); got != 1 {
+		t.Fatalf("RunCLI = %d, want 1", got)
+	}
+}
+
+func TestRunCLIFailsWhenProfileFileIsUnreadable(t *testing.T) {
+	home := t.TempDir()
+	srcDir := t.TempDir()
+	exe := writeFakeExecutable(t, srcDir, "f4")
+
+	// .bashrc is a directory here, so os.ReadFile fails with an error other
+	// than "not exist" (EISDIR), which RunCLI must not treat as "no profile
+	// yet".
+	if err := os.MkdirAll(filepath.Join(home, ".bashrc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeEnv(t, home, map[string]string{
+		"PATH":  "/usr/bin:/bin",
+		"SHELL": "/bin/bash",
+	}, false)
+
+	if got := RunCLI(exe, Options{}); got != 1 {
+		t.Fatalf("RunCLI = %d, want 1", got)
+	}
+}
+
+func TestRunCLIFailsWhenAppendProfileLineFails(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	home := t.TempDir()
+	srcDir := t.TempDir()
+	exe := writeFakeExecutable(t, srcDir, "f4")
+
+	// fish's config lives under ~/.config/fish/; making ~/.config read-only
+	// lets AppendProfileLine's os.MkdirAll(.../fish) fail while the profile
+	// path itself is still a plain "does not exist yet" ENOENT for
+	// os.ReadFile.
+	configDir := filepath.Join(home, ".config")
+	if err := os.Mkdir(configDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+
+	fakeEnv(t, home, map[string]string{
+		"PATH":  "/usr/bin:/bin",
+		"SHELL": "/usr/bin/fish",
+	}, false)
+
+	if got := RunCLI(exe, Options{AutoConfirm: true}); got != 1 {
+		t.Fatalf("RunCLI = %d, want 1", got)
+	}
+}
+
+func TestConfirmStdinReadsAnswer(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"y", "y\n", true},
+		{"yes", "yes\n", true},
+		{"uppercase Y", "Y\n", true},
+		{"mixed case Yes", "Yes\n", true},
+		{"explicit no", "n\n", false},
+		{"empty line", "\n", false},
+		{"garbage", "maybe\n", false},
+		{"trailing spaces", "  yes  \n", true},
+		{"no trailing newline before EOF", "yes", true},
+		{"empty input, immediate EOF", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldStdin := os.Stdin
+			os.Stdin = r
+			defer func() {
+				os.Stdin = oldStdin
+				_ = r.Close()
+			}()
+
+			done := make(chan struct{})
+			go func() {
+				_, _ = w.WriteString(c.input)
+				_ = w.Close()
+				close(done)
+			}()
+
+			if got := confirmStdin("Add it now? [y/N] "); got != c.want {
+				t.Errorf("confirmStdin(%q) = %v, want %v", c.input, got, c.want)
+			}
+			<-done
+		})
 	}
 }

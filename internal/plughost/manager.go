@@ -8,9 +8,11 @@ import (
 	"github.com/unxed/f4/plugins/chroma"
 	"github.com/unxed/f4/plugins/dummy_internal"
 	"github.com/unxed/f4/plugins/envman"
+	gitplugin "github.com/unxed/f4/plugins/git"
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/ide"
 	"github.com/unxed/f4/plugins/mediainfo"
+	observerplugin "github.com/unxed/f4/plugins/observer"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/visren"
@@ -161,6 +163,12 @@ func (pm *PluginManager) loadInternal() {
 		// backend_default_lite.go).
 		sqliteplugin.NewPlugin(),
 		proclist.NewPlugin(config.GetF4ConfigDir()),
+		// Git status view (f4#659 part 1 of N): wraps the host's own `git`
+		// binary, no platform gate at this layer -- gitplugin.Available()
+		// (internal/app/git_actions.go's Visible check) covers "git is
+		// missing from PATH" instead, the same plugin/action split
+		// plugins/sqlite's CLI backend uses.
+		gitplugin.NewPlugin(),
 		// IDE mode (f4#382): scaffold only for now -- registration and the
 		// three IDE.Build/Run/Test commands, no toolchain integration yet.
 		// See plugins/ide's package doc for the full plan.
@@ -186,6 +194,15 @@ func (pm *PluginManager) loadInternal() {
 	// plugins_lite.go/plugins_full.go, the single point of truth for which
 	// build tag gets which set, for the full accounting.
 	plugins = append(plugins, optionalVFSPlugins()...)
+
+	// observerplugin registers after archive/multiarc (f4#1563's own design
+	// requires this: "Регистрировать провайдер нужно после archive, чтобы
+	// zip, 7z, rar и SFX оставались за ним"), in both build tags -- unlike
+	// everything optionalVFSPlugins covers, an Observer module is a wazero
+	// wasm reactor, the same dependency transport_wazero.go already keeps in
+	// both builds for the generic wasm plugin transport, so there is no
+	// lite/full split to make here at all.
+	plugins = append(plugins, observerplugin.NewPlugin(config.GetF4ConfigDir()))
 
 	for _, p := range plugins {
 		if err := p.Init(pm.api); err == nil {

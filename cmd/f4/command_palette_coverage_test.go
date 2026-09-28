@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 56
+const commandPaletteF4Surfaces = 58
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -94,6 +94,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"app.(*commandPaletteDialog).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the palette dialog owns query, navigation, execution, and cancellation while it is open",
+	},
+	"app.(*calendarTable).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the calendar dialog's day grid captures PgUp/PgDn/Ctrl+PgUp/Ctrl+PgDn/Home locally to page the month/year and jump to today; Panel.Calendar is its registered entry point",
 	},
 	"editor.(*EditorView).ProcessKey": {
 		class: paletteAuditActionArea, rationale: "editor commands are registered actions; raw text and cursor editing remain local primitives",
@@ -158,6 +161,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"panel.(*QuickViewPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the focused Quick View toggle is supplied by the panel-context palette provider",
 	},
+	"panel.(*TreePanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the focused directory-tree toggle is supplied by the panel-context palette provider; Right/Left expand or collapse the row under the cursor and Enter navigates the source panel, all local primitives inside the panel",
+	},
 	"fileops.(*QueueFrame).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "queue commands are supplied by commandPaletteQueueEntries",
 	},
@@ -218,6 +224,18 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"proclist.(*procListPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
+	},
+	"git.(*statusPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the git status panel forwards raw input to its own vtui.Table; Enter/Insert/Ctrl+K/Ctrl+E are the panel's own diff, stage-or-unstage, commit and log commands, and the panel itself is reached through the plugin-owned PluginPanelInstance surface Action.App.GitStatus opens, the same split proclist_actions.go uses for plugins/proclist (f4#659 part 1 of N)",
+	},
+	"git.(*LogView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this read-only commit-log screen, opened with Ctrl+E on the status panel that Action.App.GitStatus reaches; F5/Enter/close are local screen primitives, and navigation/quick-search fall through to its table (f4#659 part 5 of N)",
+	},
+	"git.(*BranchView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local branch list, opened with Ctrl+S on the status panel that Action.App.GitStatus reaches; F5/Enter/Insert/Delete/F8/close are local screen primitives (switch, create, delete branch) and navigation/quick-search fall through to its table, the same split LogView already uses (f4#659 part 7 of N)",
+	},
+	"git.(*LogDiffFilesView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local changed-file picker, opened with Enter on a LogView commit that changed more than one path; Enter/close are local screen primitives (pick one path and diff it) and navigation/quick-search fall through to its table, the same split LogView/BranchView already use (f4#659 part 11 of N)",
 	},
 }
 

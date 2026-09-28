@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -40,6 +41,16 @@ import (
 )
 
 const openingProgressDelay = 250 * time.Millisecond
+
+// errCannotEditDirectory and errCannotViewDirectory are sentinels the
+// editor/viewer opening workers below return for a directory target, so the
+// completion callback can show the same dedicated message a local open
+// always has, instead of the generic "Failed to open file:" wrapper other
+// errors get.
+var (
+	errCannotEditDirectory = errors.New("cannot edit a directory")
+	errCannotViewDirectory = errors.New("cannot view a directory")
+)
 
 // editorHeaderIsBinary: NUL in the header means binary — text in any codepage
 // (cp1251 included, which the viewer's utf8 check would call binary) has none.
@@ -1073,35 +1084,53 @@ func openEditorInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 		return
 	}
 	if fileops.IsLocalOSVFS(v) {
-		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			var f vfs.ReadAtCloser
-			if v != nil {
-				if stat, errStat := v.Stat(ctx.Context, path); errStat == nil && stat.IsDir {
-					ctx.RunOnUI(func() {
-						vtui.ShowMessage(" Error ", "Cannot edit a directory.", []string{"&Ok"})
-					})
-					return
-				}
-				var err error
-				f, err = v.Open(ctx.Context, path)
-				if err != nil {
-					if os.IsNotExist(err) {
-						f = nil
-					} else {
-						ctx.RunOnUI(func() {
-							if err == os.ErrInvalid {
-								vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets, Devices).", []string{"&Ok"})
-							} else {
-								vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
-							}
-						})
-						return
-					}
-				}
+		// Same delayed "Opening..." dialog the non-local branch below already
+		// shows, not the old bare vtui.RunAsync with no dialog at all: a local
+		// open normally returns well inside openingProgressDelay so nothing
+		// appears, exactly as before, but v.Open falling back to the sudo
+		// helper for a file this process cannot read on its own can sit for a
+		// long time on a slow PAM prompt (e.g. a fingerprint reader retrying)
+		// with that old path silent throughout -- no dialog, and unlike
+		// entering a sudo-only directory (navigateElevatedDirectoryAsync's
+		// spinner), no title-bar indicator either (f4#1411). The
+		// ProgressCallback wired into ctx below lets OSVFS.Open say
+		// "Requesting sudo access..." the moment it actually reaches that
+		// fallback, same channel a remote VFS already uses to report its own
+		// progress into this dialog.
+		var f vfs.ReadAtCloser
+		pf.RunProgressTaskAfter(openingProgressDelay, " Opening... ", "Preparing to edit file...", false, func(ctx context.Context, update func(msg string, percent int)) error {
+			if v == nil {
+				return nil
 			}
-			ctx.RunOnUI(func() {
-				showEditor(pf, v, path, f)
-			})
+			update("Opening file...", -1)
+			if stat, errStat := v.Stat(ctx, path); errStat == nil && stat.IsDir {
+				return errCannotEditDirectory
+			}
+			ctx = context.WithValue(ctx, vfs.ProgressKey, vfs.ProgressCallback(update))
+			var err error
+			f, err = v.Open(ctx, path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					f = nil
+					return nil
+				}
+				return err
+			}
+			return nil
+		}, func(err error) {
+			if err != nil {
+				switch {
+				case err == context.Canceled:
+				case err == errCannotEditDirectory:
+					vtui.ShowMessage(" Error ", "Cannot edit a directory.", []string{"&Ok"})
+				case err == os.ErrInvalid:
+					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets, Devices).", []string{"&Ok"})
+				default:
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
+				}
+				return
+			}
+			showEditor(pf, v, path, f)
 		})
 		return
 	}
@@ -1634,29 +1663,40 @@ func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, force
 		}
 	}
 	if fileops.IsLocalOSVFS(v) {
-		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// Same reasoning as openEditorInternal's identical branch (f4#1411):
+		// the old bare vtui.RunAsync here showed nothing while v.Open's sudo
+		// fallback could sit on a slow PAM prompt, so route through the same
+		// delayed "Opening..." dialog and ProgressCallback wiring the
+		// non-local branch below already uses. A fast local open (the common
+		// case) still finishes well inside openingProgressDelay, so nothing
+		// appears, same as before.
+		var vv *viewer.ViewerView
+		pf.RunProgressTaskAfter(openingProgressDelay, " Opening... ", "Preparing to open file...", false, func(ctx context.Context, update func(msg string, percent int)) error {
+			update("Opening file...", -1)
 			if v != nil {
-				if stat, err := v.Stat(ctx.Context, path); err == nil && stat.IsDir {
-					ctx.RunOnUI(func() {
-						vtui.ShowMessage(" Error ", "Cannot view a directory.", []string{"&Ok"})
-					})
-					return
+				if stat, err := v.Stat(ctx, path); err == nil && stat.IsDir {
+					return errCannotViewDirectory
 				}
 			}
-
-			vv, err := viewer.NewViewerView(ctx.Context, v, path)
-			ctx.RunOnUI(func() {
-				if err == nil {
-					showViewerMode(pf, vv, path, forceHex)
-				} else {
+			ctx = context.WithValue(ctx, vfs.ProgressKey, vfs.ProgressCallback(update))
+			var err error
+			vv, err = viewer.NewViewerView(ctx, v, path)
+			return err
+		}, func(err error) {
+			if err != nil {
+				switch {
+				case err == context.Canceled:
+				case err == errCannotViewDirectory:
+					vtui.ShowMessage(" Error ", "Cannot view a directory.", []string{"&Ok"})
+				case err == os.ErrInvalid:
+					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets).", []string{"&Ok"})
+				default:
 					vtui.DebugLog("PANELS: Failed to open vv for %s: %v", path, err)
-					if err == os.ErrInvalid {
-						vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets).", []string{"&Ok"})
-					} else {
-						vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
-					}
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
 				}
-			})
+				return
+			}
+			showViewerMode(pf, vv, path, forceHex)
 		})
 		return
 	}
@@ -2265,10 +2305,49 @@ func actionEditFile(pf *panel.PanelsFrame) {
 // copy/move dialog, the same as the operation-mode field below it.
 const rightsComboWidth = 32
 
+// focusedTreePanel returns pf.ActiveIdx's *panel.TreePanel if that is what
+// currently has focus there, or nil otherwise -- the shared check behind
+// every "does the highlighted tree node act as the target here" action
+// (F5/F6 via treeCopyMoveTarget, F7 via actionMkDir; f4#1602 parts 3-4).
+func focusedTreePanel(pf *panel.PanelsFrame) *panel.TreePanel {
+	if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+		return nil
+	}
+	t, ok := pf.AltPanels[pf.ActiveIdx].(*panel.TreePanel)
+	if !ok || !t.IsFocused() {
+		return nil
+	}
+	return t
+}
+
+// treeCopyMoveTarget reports whether pf.ActiveIdx's slot currently shows a
+// focused *panel.TreePanel -- the case where F5/F6 (actionCopyMove) target
+// the tree's highlighted node as the destination directly, rather than the
+// inactive panel's own directory, and take their file selection from
+// Source(), the other, still-visible panel that opened the tree (see
+// TreePanel.SelectedPath's own doc comment; f4#1602 part 3). Returns
+// (nil, nil) when the tree isn't the thing with focus right now, in which
+// case actionCopyMove and fileCopyMoveEnabled fall back to their previous,
+// plain active/inactive-panel behavior unchanged.
+func treeCopyMoveTarget(pf *panel.PanelsFrame) (*panel.TreePanel, *panel.FileSystemPanel) {
+	t := focusedTreePanel(pf)
+	if t == nil {
+		return nil, nil
+	}
+	return t, t.Source()
+}
+
 func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	fspSrc := pf.GetActivePanel()
 	fspDst := pf.GetInactivePanel()
-	if fspSrc == nil || fspDst == nil {
+
+	treeAlt, treeSrc := treeCopyMoveTarget(pf)
+	if treeAlt != nil {
+		fspSrc = treeSrc
+		fspDst = nil
+	}
+
+	if fspSrc == nil || (fspDst == nil && treeAlt == nil) {
 		return
 	}
 
@@ -2284,50 +2363,65 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 		prompt = i18n.Msg("Move.Prompt")
 	}
 
-	srcVfs, dstVfs := fspSrc.Vfs, fspDst.Vfs
+	srcVfs := fspSrc.Vfs
 	srcBasePath := srcVfs.GetPath()
-	if player, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); ok {
-		// The player panel is a playlist, not a place: F5 adds
-		// references, F6 is refused rather than moving music around.
-		if isMove {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.MoveRefused"), []string{i18n.Msg("vtui.Ok")})
+
+	var dstVfs vfs.VFS
+	if treeAlt != nil {
+		// The tree only ever names a real OS directory (see tree.go's own
+		// scanChildDirs/os.Stat use), so a fresh OSVFS rooted there is
+		// exactly what fspDst.Vfs would have been for an ordinary panel
+		// sitting on that same directory.
+		destPath := treeAlt.SelectedPath()
+		if destPath == "" {
 			return
 		}
-		osv, isLocal := srcVfs.(*vfs.OSVFS)
-		if !isLocal {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.LocalOnly"), []string{i18n.Msg("vtui.Ok")})
-			return
-		}
-		paths := make([]string, 0, len(names))
-		for _, n := range names {
-			if abs, err := osv.Abs(filepath.Join(srcBasePath, n)); err == nil {
-				paths = append(paths, abs)
+		dstVfs = vfs.NewOSVFS(destPath)
+	} else {
+		dstVfs = fspDst.Vfs
+		if player, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); ok {
+			// The player panel is a playlist, not a place: F5 adds
+			// references, F6 is refused rather than moving music around.
+			if isMove {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.MoveRefused"), []string{i18n.Msg("vtui.Ok")})
+				return
 			}
-		}
-		if player.AddPaths(paths) == 0 {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.NothingAdded"), []string{i18n.Msg("vtui.Ok")})
+			osv, isLocal := srcVfs.(*vfs.OSVFS)
+			if !isLocal {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.LocalOnly"), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			paths := make([]string, 0, len(names))
+			for _, n := range names {
+				if abs, err := osv.Abs(filepath.Join(srcBasePath, n)); err == nil {
+					paths = append(paths, abs)
+				}
+			}
+			if player.AddPaths(paths) == 0 {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.NothingAdded"), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, entry := range fspSrc.Entries {
+				entry.Selected = false
+			}
+			vtui.FrameManager.Redraw()
 			return
 		}
-		fspSrc.SelectedItems = make(map[string]bool)
-		for _, entry := range fspSrc.Entries {
-			entry.Selected = false
+		if temp, ok := dstVfs.(*panel.TempPanelVFS); ok {
+			// A temporary panel contains references, not copies. Keep F5/F6
+			// useful for it, but never remove the real source on F6: the
+			// reference list is intentionally non-destructive.
+			if err := temp.AddReferences(context.Background(), srcVfs, names); err != nil {
+				vtui.ShowMessage(i18n.Msg("Error.Title"), fmt.Sprintf(i18n.Msg("TempPanel.AddError"), err), []string{i18n.Msg("vtui.Ok")})
+			}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, entry := range fspSrc.Entries {
+				entry.Selected = false
+			}
+			pf.RefreshAll()
+			return
 		}
-		vtui.FrameManager.Redraw()
-		return
-	}
-	if temp, ok := dstVfs.(*panel.TempPanelVFS); ok {
-		// A temporary panel contains references, not copies. Keep F5/F6
-		// useful for it, but never remove the real source on F6: the
-		// reference list is intentionally non-destructive.
-		if err := temp.AddReferences(context.Background(), srcVfs, names); err != nil {
-			vtui.ShowMessage(i18n.Msg("Error.Title"), fmt.Sprintf(i18n.Msg("TempPanel.AddError"), err), []string{i18n.Msg("vtui.Ok")})
-		}
-		fspSrc.SelectedItems = make(map[string]bool)
-		for _, entry := range fspSrc.Entries {
-			entry.Selected = false
-		}
-		pf.RefreshAll()
-		return
 	}
 
 	initialDest := dstVfs.GetPath()
@@ -2341,11 +2435,9 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 
 	onCompleteWithClear := func() {
 		if pf != nil {
-			if fsp := pf.GetActivePanel(); fsp != nil {
-				fsp.SelectedItems = make(map[string]bool)
-				for _, e := range fsp.Entries {
-					e.Selected = false
-				}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, e := range fspSrc.Entries {
+				e.Selected = false
 			}
 			pf.RefreshAll()
 		}
@@ -2353,11 +2445,11 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 
 	// A move takes the cursor's entry away with it, so the panel is told where
 	// to land before the operation starts — afterwards the name it would look
-	// for is gone.
+	// for is gone. fspSrc, not pf.GetActivePanel(): with the tree focused
+	// (treeAlt != nil above) the active *slot* holds the tree's own hidden
+	// underlying panel, not the panel the selection actually came from.
 	if isMove {
-		if fsp := pf.GetActivePanel(); fsp != nil {
-			fsp.PendingSelection = fsp.GetSuccessorName()
-		}
+		fspSrc.PendingSelection = fspSrc.GetSuccessorName()
 	}
 
 	if isMove && !config.App.ConfirmMove {
@@ -3207,20 +3299,83 @@ func deleteRefreshCallback(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, ac
 	}
 }
 
+// treeDeleteRefreshCallback is ExecuteDeleteOpWithDispositionAt's onComplete
+// for F8/Del's tree branch (actionDeleteWithDisposition, f4#1602 part 5 of
+// N): unlike deleteRefreshCallback's active-panel path above, which
+// re-checks each requested name and refreshes the whole panel, the tree's
+// own highlighted node either is gone now or never existed as a separate
+// panel row to re-check in the first place -- TreePanel.RefreshAfterDelete
+// re-scans its parent directly and picks its own neighboring row to land
+// on. The tree's refresh is synchronous, so it needs an explicit redraw the
+// same way actionMkDir's tree branch already does for its own synchronous,
+// non-RefreshAll path.
+func treeDeleteRefreshCallback(t *panel.TreePanel) func() {
+	return func() {
+		t.RefreshAfterDelete()
+		vtui.FrameManager.Redraw()
+	}
+}
+
 func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDisposition, explicitPermanent bool) {
-	fsp := pf.GetActivePanel()
-	if fsp == nil {
-		return
+	var (
+		fsp       *panel.FileSystemPanel
+		treeAlt   *panel.TreePanel
+		activeVfs vfs.VFS
+		basePath  string
+		names     []string
+	)
+
+	// With the tree (Ctrl+T) focused, F8/Del deletes the highlighted node
+	// itself rather than acting on the active panel's own selection -- the
+	// same "the tree is a real destination panel, not just a navigator"
+	// behavior F5/F6/F7 already got (f4#1602, parts 3-4 of N). The node's
+	// parent directory stands in for basePath/activeVfs the way
+	// treeCopyMoveTarget's and actionMkDir's fresh OSVFS already stand in
+	// for a real panel on that directory -- rooted one level up from theirs,
+	// at the node's parent, since here it is the node itself that gets
+	// deleted, not something created or copied inside it. The root row is
+	// not a valid target at all (see TreePanel.IsRootSelected's doc comment).
+	if t := focusedTreePanel(pf); t != nil {
+		if t.IsRootSelected() {
+			return
+		}
+		selPath := t.SelectedPath()
+		if selPath == "" {
+			return
+		}
+		treeAlt = t
+		basePath = filepath.Dir(selPath)
+		names = []string{filepath.Base(selPath)}
+		activeVfs = vfs.NewOSVFS(basePath)
+	} else {
+		fsp = pf.GetActivePanel()
+		if fsp == nil {
+			return
+		}
+		activeVfs = fsp.Vfs
+		basePath = activeVfs.GetPath()
+		names = fsp.GetSelectedNames()
+		if len(names) == 0 {
+			return
+		}
+		if panel.DispatchPanelAction(pf, vfs.PanelActionDelete, panel.SelectedPanelActionPaths(fsp)) {
+			return
+		}
 	}
 
-	activeVfs := fsp.Vfs
-	basePath := activeVfs.GetPath()
-	names := fsp.GetSelectedNames()
-	if len(names) == 0 {
-		return
-	}
-	if panel.DispatchPanelAction(pf, vfs.PanelActionDelete, panel.SelectedPanelActionPaths(fsp)) {
-		return
+	// onComplete lands the cursor after the delete completes: on the
+	// active panel's successor as before when F8/Del targets it directly,
+	// or on a neighboring row of the tree's own highlighted node's parent --
+	// re-scanning it, since the deleted node no longer exists to refresh
+	// itself -- when F8/Del targeted the tree instead (see treeAlt above;
+	// f4#1602 part 5 of N). The tree's own refresh is synchronous, so it
+	// needs an explicit redraw the same way actionMkDir's tree branch
+	// already does for its own synchronous, non-RefreshAll path.
+	var onComplete func()
+	if treeAlt != nil {
+		onComplete = treeDeleteRefreshCallback(treeAlt)
+	} else {
+		onComplete = deleteRefreshCallback(pf, fsp, activeVfs, basePath, names)
 	}
 
 	titleKey := "Delete.Title"
@@ -3236,9 +3391,11 @@ func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDi
 	}
 
 	if !config.App.ConfirmDelete {
-		fsp.PendingSelection = fsp.GetSuccessorName()
+		if treeAlt == nil {
+			fsp.PendingSelection = fsp.GetSuccessorName()
+		}
 		stopPlayerForDelete(pf, activeVfs, basePath, names)
-		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, config.App.DefaultFileOpMode, disposition, deleteRefreshCallback(pf, fsp, activeVfs, basePath, names))
+		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, config.App.DefaultFileOpMode, disposition, onComplete)
 		return
 	}
 
@@ -3301,10 +3458,12 @@ func actionDeleteWithDisposition(pf *panel.PanelsFrame, disposition vfs.DeleteDi
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnDel.OnClick = func() {
 		mode := comboMode.Menu.SelectPos
-		fsp.PendingSelection = fsp.GetSuccessorName()
+		if treeAlt == nil {
+			fsp.PendingSelection = fsp.GetSuccessorName()
+		}
 		dlg.Close()
 		stopPlayerForDelete(pf, activeVfs, basePath, names)
-		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, mode, disposition, deleteRefreshCallback(pf, fsp, activeVfs, basePath, names))
+		go fileops.ExecuteDeleteOpWithDispositionAt(activeVfs, basePath, names, mode, disposition, onComplete)
 	}
 
 	if config.App.DeleteCancelFocused {
@@ -3339,6 +3498,22 @@ func actionMkDir(pf *panel.PanelsFrame) {
 	}
 
 	activeVfs := pnl.Vfs
+
+	// With the tree (Ctrl+T) focused, F7 creates the new folder as a child
+	// of the highlighted node rather than of the active panel's own
+	// directory -- the same "the tree is a real destination panel, not just
+	// a navigator" behavior F5/F6 already got via treeCopyMoveTarget (see
+	// its doc comment for why a fresh OSVFS rooted there stands in for a
+	// real panel sitting on that same directory; f4#1602 part 4 of N).
+	var treeAlt *panel.TreePanel
+	if t := focusedTreePanel(pf); t != nil {
+		destPath := t.SelectedPath()
+		if destPath == "" {
+			return
+		}
+		treeAlt = t
+		activeVfs = vfs.NewOSVFS(destPath)
+	}
 
 	dlg := vtui.NewCenteredDialog(40, 11, i18n.Msg("MakeFolder.Title"))
 	dlg.ShowClose = true
@@ -3403,6 +3578,23 @@ func actionMkDir(pf *panel.PanelsFrame) {
 			return err
 		}
 
+		// onDone lands the cursor on the created folder: on the active
+		// panel as before when F7 targets it directly, or on the tree's
+		// own highlighted node -- re-scanning it so the new child is
+		// visible -- when F7 targeted the tree instead (see treeAlt above;
+		// f4#1602 part 4 of N). The tree's own refresh is synchronous, so
+		// it needs an explicit redraw the same way actionCopyMove's player
+		// branch already does for its own synchronous, non-RefreshAll path.
+		onDone := func() {
+			if treeAlt != nil {
+				treeAlt.RefreshChildrenAndSelect(name)
+				vtui.FrameManager.Redraw()
+				return
+			}
+			pnl.PendingSelection = name
+			pf.RefreshAll()
+		}
+
 		if mode == 0 { // Queue
 			rk := fileops.GetResourceKey(activeVfs)
 			var keys []string
@@ -3410,14 +3602,11 @@ func actionMkDir(pf *panel.PanelsFrame) {
 				keys = append(keys, rk)
 			}
 			task := &fileops.QueueTask{
-				Type:    "MkDir",
-				Desc:    desc,
-				ResKeys: keys,
-				Run:     runFunc,
-				OnComplete: func() {
-					pnl.PendingSelection = name
-					pf.RefreshAll()
-				},
+				Type:       "MkDir",
+				Desc:       desc,
+				ResKeys:    keys,
+				Run:        runFunc,
+				OnComplete: onDone,
 			}
 			fileops.GlobalQueueManager.Enqueue(task)
 		} else { // Background / Foreground
@@ -3427,8 +3616,7 @@ func actionMkDir(pf *panel.PanelsFrame) {
 					if err != nil {
 						vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Operation.Error"), err.Error()), []string{"&Ok"})
 					}
-					pnl.PendingSelection = name
-					pf.RefreshAll()
+					onDone()
 				})
 			})
 			_ = taskCtx

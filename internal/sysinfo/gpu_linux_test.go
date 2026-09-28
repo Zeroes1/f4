@@ -4,6 +4,7 @@ package sysinfo
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -145,6 +146,41 @@ func TestLookupPCINameEmptyVendor(t *testing.T) {
 	if got := lookupPCIName("", "1234"); got != "" {
 		t.Errorf("lookupPCIName(empty vendor) = %q, want empty", got)
 	}
+}
+
+func TestLookupPCINameUnknownVendor(t *testing.T) {
+	// "zzzz" is not a hex id at all, so it cannot appear in either
+	// /usr/share/hwdata/pci.ids or /usr/share/misc/pci.ids on any real
+	// system (unlike the reserved "ffff", which pci.ids does list as
+	// "Illegal Vendor ID") -- this exercises the full path-search loop (both
+	// candidate files opened or skipped) down to the final "not found"
+	// return, regardless of whether either file happens to exist on the runner.
+	if got := lookupPCIName("zzzz", "zzzz"); got != "" {
+		t.Errorf("lookupPCIName(zzzz, zzzz) = %q, want empty for a vendor id no pci.ids lists", got)
+	}
+}
+
+func TestQueryHostGPUsFromWSL(t *testing.T) {
+	_, wmicErr := exec.LookPath("wmic.exe")
+	_, psErr := exec.LookPath("powershell.exe")
+
+	got := queryHostGPUsFromWSL()
+
+	if wmicErr != nil && psErr != nil {
+		// Neither Windows interop binary is on PATH, which is true for
+		// every non-WSL Linux CI runner: both exec.LookPath calls must
+		// fail closed and the function must return nil rather than
+		// panicking, blocking, or running past its 3s timeout.
+		if got != nil {
+			t.Errorf("queryHostGPUsFromWSL() = %#v, want nil when neither wmic.exe nor powershell.exe is on PATH", got)
+		}
+		return
+	}
+	// On a machine that does happen to expose one of the interop
+	// binaries, just make sure the call completes without panicking;
+	// its output depends on that binary's real output, which this test
+	// doesn't control.
+	t.Logf("queryHostGPUsFromWSL() = %#v (wmic.exe present=%v, powershell.exe present=%v)", got, wmicErr == nil, psErr == nil)
 }
 
 func TestGPU(t *testing.T) {

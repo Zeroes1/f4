@@ -55,6 +55,7 @@ Panel.Bookmarks
 Panel.PluginMenu
 Panel.TempPanel
 Panel.Calculator
+Panel.Calendar
 Panel.CommandHistory
 Panel.FoldersHistory
 Panel.ViewerEditorHistory
@@ -131,6 +132,7 @@ Panel.TogglePassivePanel
 Panel.InfoPanel
 Panel.QuickView
 Panel.Player
+Panel.Tree
 Panel.SplitLeft
 Panel.SplitRight
 Panel.SplitUp
@@ -236,6 +238,7 @@ Panel.MountList
 App.Spreadsheet
 App.SQLite
 App.ProcList
+App.GitStatus
 Panel.Left.ViewBrief
 Panel.Left.ViewMedium
 Panel.Left.ViewDetailed

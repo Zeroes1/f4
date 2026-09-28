@@ -661,6 +661,18 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 		}
 		if os.IsPermission(err) && globalSudoClient.IsAvailable() {
 			vtui.DebugLog("VFS: Permission denied for Open(%q), attempting sudo...", path)
+			// SudoClient.Open's first call spawns the elevated dispatcher via
+			// "sudo -A" and can then sit for a long time on a slow PAM prompt
+			// (e.g. a fingerprint reader retrying) before it either succeeds
+			// or falls back to the askpass password dialog. A caller that
+			// wired a ProgressCallback into ctx (f4#1411: the editor/viewer
+			// opening a local file that turns out to need sudo) gets told
+			// right here, before that possibly-long wait, instead of seeing
+			// nothing until the password dialog -- or nothing at all --
+			// eventually appears.
+			if update, ok := ctx.Value(ProgressKey).(ProgressCallback); ok && update != nil {
+				update("Requesting sudo access...", -1)
+			}
 			sudoF, sudoErr := globalSudoClient.Open(prepareOSPath(path), os.O_RDONLY, 0)
 			if sudoErr == nil {
 				info, _ := sudoF.Stat()

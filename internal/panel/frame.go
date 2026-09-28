@@ -72,6 +72,12 @@ func (pf *PanelsFrame) ReplaceMarkedNames(names []string) {
 func (pf *PanelsFrame) GetSelectedName() string {
 	return pf.Active().(*FileSystemPanel).GetSelectedName()
 }
+
+// GetSelectedIsDir implements vfs.SelectedIsDirHost (f4#1356) by delegating
+// to the active FileSystemPanel's own cached cursor state.
+func (pf *PanelsFrame) GetSelectedIsDir() (isDir bool, known bool) {
+	return pf.Active().(*FileSystemPanel).GetSelectedIsDir()
+}
 func (pf *PanelsFrame) SetPendingSelection(name string) {
 	if fsp := pf.GetActivePanel(); fsp != nil {
 		fsp.PendingSelection = name
@@ -245,6 +251,10 @@ type PanelsFrame struct {
 	ReturnToPanels        bool
 	CmdSession            *cmdShellSession // local cmd.exe completion tracking (Windows)
 	workspaceCommandTitle string
+	// managedExecStartedAt/managedExecIdleStreak back the #1603 job-control
+	// debounce in pollManagedExecutionDebounce: see that method's doc comment.
+	managedExecStartedAt  time.Time
+	managedExecIdleStreak int
 
 	MenuBar *vtui.MenuBar
 	CmdLine *cmdline.CommandLine
@@ -1994,10 +2004,18 @@ func (pf *PanelsFrame) shellBusyChanged(busy bool) {
 
 // beginManagedExecution marks a command that carries its own OSC 133 C/D
 // pair, wrapped around it by f4 itself. Its D marker is unambiguous: it is
-// printed by the very command line we sent, so it always ends the execution.
+// printed by the very command line we sent, so it normally ends the
+// execution promptly, including after the command is job-control *stopped*
+// rather than finished (Ctrl+Z, #1603) -- bash reliably prints a belated D
+// for the abandoned job right after its "Stopped" notice (confirmed across
+// linux/amd64, linux/arm64 and darwin/arm64 in managed_exec_test.go). That
+// is not guaranteed for every shell or every VFS peer, though, so
+// armManagedExecDebounce's caller in Show() provides a marker-independent
+// backstop regardless of whether this particular D ever shows up.
 func (pf *PanelsFrame) BeginManagedExecution() {
 	pf.Executing = true
 	pf.ignoreNextPrompt = false
+	pf.armManagedExecDebounce()
 }
 
 // beginPromptDrivenExecution marks a command that carries no markers of its
@@ -2008,6 +2026,82 @@ func (pf *PanelsFrame) BeginManagedExecution() {
 func (pf *PanelsFrame) BeginPromptDrivenExecution() {
 	pf.Executing = true
 	pf.ignoreNextPrompt = !pf.ShellPromptReady
+	pf.armManagedExecDebounce()
+}
+
+// managedExecStartGuard is how long after arming (BeginManagedExecution or
+// BeginPromptDrivenExecution) pollManagedExecutionDebounce ignores
+// PTY.IsBusy() reading false. The command line has just been written to the
+// PTY, but the wrapped command may not have forked and claimed the
+// terminal's foreground process group yet -- IsBusy()'s TIOCGPGRP check
+// reads false during that gap for exactly the same reason it reads false
+// once a real job-control stop hands the terminal back to the shell.
+// Without this guard, starting any managed command would trip the debounce
+// below immediately, before it ever ran.
+const managedExecStartGuard = 300 * time.Millisecond
+
+// managedExecIdleDebounceStreak is how many consecutive
+// pollManagedExecutionDebounce calls, past managedExecStartGuard, must see
+// PTY.IsBusy() false in a row before it is trusted as a real job-control
+// stop rather than a single transient scheduling blip.
+const managedExecIdleDebounceStreak = 3
+
+// armManagedExecDebounce resets pollManagedExecutionDebounce's bookkeeping
+// for a freshly started execution, so the guard window and idle streak below
+// are measured from this command, not a stale one.
+func (pf *PanelsFrame) armManagedExecDebounce() {
+	pf.managedExecStartedAt = time.Now()
+	pf.managedExecIdleStreak = 0
+}
+
+// pollManagedExecutionDebounce is #1603's backstop for job-control stops
+// (Ctrl+Z) of a command run from f4's own command line. pf.Executing is
+// normally cleared by the D marker a managed command prints on completion
+// (see ManagedForegroundCommand) or by the next shell prompt for a
+// prompt-driven one, and in the common bash case that marker still shows up
+// -- delayed, right after the "Stopped" job-control notice -- even once the
+// wrapped command is merely *stopped*, not finished (confirmed against a
+// real PTY across linux/amd64, linux/arm64 and darwin/arm64 in
+// managed_exec_test.go). But nothing here guarantees that for every shell
+// or every VFS peer: a command whose stop never produces any further marker
+// at all would leave pf.Executing -- and therefore IsPtyBusy/
+// TerminalOwnsKeyboard -- stuck true forever, which is #1603 itself.
+//
+// The fix reuses PTY.IsBusy()'s TIOCGPGRP check, which independently and
+// correctly notices the shell reclaiming the terminal's foreground process
+// group the moment a job-control stop happens (also confirmed in
+// managed_exec_test.go) -- but only once debounced: past the just-armed
+// guard window above, IsBusy() has to read false managedExecIdleDebounceStreak
+// times in a row before this treats it as a real stop rather than a blip,
+// and any true reading in between resets the streak to zero.
+//
+// Called once per frame from Show(), right before it computes IsPtyBusy()
+// for this same frame's layout decisions, so a stop detected here is
+// reflected immediately rather than one frame late. It is kept as its own
+// step, distinct from IsPtyBusy(), because it mutates pf.Executing --
+// IsPtyBusy() is called from many other places as a plain query and must
+// stay side-effect-free.
+func (pf *PanelsFrame) pollManagedExecutionDebounce() {
+	if !pf.Executing {
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	if time.Since(pf.managedExecStartedAt) < managedExecStartGuard {
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	active := pf.GetActivePTY()
+	if active == nil || active.IsBusy() {
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	pf.managedExecIdleStreak++
+	if pf.managedExecIdleStreak < managedExecIdleDebounceStreak {
+		return
+	}
+	pf.managedExecIdleStreak = 0
+	vtui.DebugLog("PTY: job-control stop detected without a completion marker (#1603); ending managed execution")
+	pf.endExecution()
 }
 
 // endExecution is the single place where a finished command hands the
@@ -2054,6 +2148,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 	if pf.ShellMode == terminal.ShellModeHost && pf.IsHostConsoleActive() {
 		return
 	}
+	pf.pollManagedExecutionDebounce()
 	isBusy := pf.IsPtyBusy()
 
 	// 1. Dynamic Layout Adjustment
@@ -3114,11 +3209,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 						// putting the shell into PS2 continuation, where it
 						// would sit swallowing everything typed next.
 						sqCmd := ShellSingleQuote(cmd)
+						wrapped := terminal.ManagedForegroundCommand(sqCmd)
 						if path != "" {
 							sqPath := strings.ReplaceAll(path, "'", "'\\''")
-							fullWireCmd = fmt.Sprintf(" set +H; cd '%s' && { trap \"printf ''\" INT; printf \"\\033]133;C\\007\"; eval %s ; FARVTRESULT=$?; printf \"\\033]133;D\\007\"; trap - INT; (exit $FARVTRESULT); }\r", sqPath, sqCmd)
+							fullWireCmd = fmt.Sprintf(" set +H; cd '%s' && %s\r", sqPath, wrapped)
 						} else {
-							fullWireCmd = fmt.Sprintf(" { trap \"printf ''\" INT; printf \"\\033]133;C\\007\"; eval %s ; FARVTRESULT=$?; printf \"\\033]133;D\\007\"; trap - INT; (exit $FARVTRESULT); }\r", sqCmd)
+							fullWireCmd = fmt.Sprintf(" %s\r", wrapped)
 						}
 						pf.BeginManagedExecution()
 						pf.ReturnToPanels = pf.ShowPanels

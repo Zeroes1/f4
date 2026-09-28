@@ -874,6 +874,38 @@ func (tv *TerminalView) EraseDisplay(mode int, attr uint64) {
 				}
 			}
 		}
+	case 1:
+		// ED 1 ("Erase Above"): everything from the top-left corner through
+		// the cursor, inclusive, is blanked; rows below the cursor are left
+		// untouched. This mirrors case 0 (erase from cursor to the bottom)
+		// and EraseLine's own mode 1, which already implements the
+		// equivalent "start of line to cursor" rule. It was missing here,
+		// so a program sending CSI 1 J (e.g. `clear` on some shells, or an
+		// editor repainting the top of the screen) saw no effect at all.
+		if tv.CursorY >= 0 && tv.CursorY < tv.Height {
+			line := buf[tv.CursorY]
+			end := tv.CursorX + 1
+			if end > len(line) {
+				end = len(line)
+			}
+			for j := 0; j < end; j++ {
+				line[j] = vtui.CharInfo{Char: ' ', Attributes: attr}
+			}
+			if !tv.UseAltScreen {
+				tv.WrapFlags[tv.CursorY] = false
+			}
+		}
+		for i := 0; i < tv.CursorY; i++ {
+			if i >= 0 && i < len(buf) {
+				line := buf[i]
+				for j := range line {
+					line[j] = vtui.CharInfo{Char: ' ', Attributes: attr}
+				}
+				if !tv.UseAltScreen {
+					tv.WrapFlags[i] = false
+				}
+			}
+		}
 	}
 }
 

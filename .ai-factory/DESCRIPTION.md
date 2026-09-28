@@ -36,7 +36,7 @@ Two project conventions drive everything else:
 - **Programming language:** Go 1.26.6, `CGO_ENABLED=0`
 - **Framework:** none (custom TUI); UI and input come from the external `vtui` and
   `vtinput` libraries
-- **Rendering backends:** `--gui=win32|gogpu|x11|wayland|ebiten`,
+- **Rendering backends:** `--gui=win32|gogpu|x11|wayland|ebiten|cocoa`,
   `--tty=ansi|win32`
 - **Database:** none for the application itself; `plugins/sqlite` reads user SQLite
   files as a VFS

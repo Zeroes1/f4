@@ -589,9 +589,14 @@ Action.App.SQLite.Desc=Открыть клиент SQLite для базы дан
 ; --- ProcList ---
 Action.App.ProcList=Список процессов
 Action.App.ProcList.Desc=Открыть живой список процессов в активной панели
+; --- Git ---
+Action.App.GitStatus=&Статус git
+Action.App.GitStatus.Desc=Открыть статус рабочего каталога git-репозитория активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
+Action.Panel.Calendar.Desc=Открыть встроенный календарь
 Action.Panel.Player.Desc=Показать или скрыть панель аудиоплеера
+Action.Panel.Tree.Desc=Показать или скрыть панель дерева каталогов
 Action.Settings.MacKeyboard=Клавиатура &Mac
 Action.Settings.MacKeyboard.Desc=Раскладка macOS для правки текста: Cmd — начало и конец строки и файла, Opt — переходы по словам
 Action.Panel.GroupByNone=Группировать по: Выключено
@@ -645,6 +650,61 @@ ProcList.Config.RefreshLabel=Интервал обновления (мс):
 ProcList.Config.SaveBtn=&Сохранить
 ProcList.Config.Error=Ошибка настроек
 ProcList.Config.ErrInterval=Интервал обновления должен быть числом миллисекунд
+
+GitStatus.ColumnStatus=Статус
+GitStatus.ColumnPath=Путь
+GitStatus.PanelTitle=Статус git: %s (%d)
+GitStatus.Detached=отделённый HEAD
+GitStatus.NoPath=Нет каталога активной панели для запуска git status
+GitStatus.RefreshFailed=Не удалось обновить статус git: %s
+GitStatus.StageFailed=Не удалось выполнить git add: %s
+GitStatus.UnstageFailed=Не удалось выполнить git restore --staged: %s
+GitStatus.CommitTitle= Коммит
+GitStatus.CommitPrompt=Сообщение коммита:
+GitStatus.CommitEditorHint=Первая строка — тема; перед более длинным текстом оставьте пустую строку.
+GitStatus.NothingToCommit=Нет застейдженных изменений для коммита
+GitStatus.CommitMessageEmpty=Сообщение коммита не может быть пустым
+GitStatus.CommitFailed=Не удалось выполнить git commit: %s
+GitStatus.CommitDone=Закоммичено: %s
+
+GitDiff.ReadFailed=Не удалось прочитать %s: %v
+GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
+GitDiff.CompareFailed=Не удалось построить diff: %v
+
+GitLog.ColumnHash=Хэш
+GitLog.ColumnAuthor=Автор
+GitLog.ColumnDate=Дата
+GitLog.ColumnSubject=Сообщение
+GitLog.PanelTitle=Лог git (%d)
+GitLog.OpenFailed=Не удалось получить лог git: %s
+GitLog.RefreshFailed=Не удалось обновить лог git: %s
+GitLog.Refresh=Обновить
+GitLog.Close=Закрыть
+GitLog.DiffFailed=Не удалось определить изменения коммита: %s
+GitLog.DiffNoChanges=В этом коммите нет изменений для показа (слитый коммит либо коммит без итоговых изменений)
+GitLog.FilesPanelTitle=Изменённые файлы коммита %s (%d)
+
+GitBranch.ColumnCurrent=Текущая
+GitBranch.ColumnName=Ветка
+GitBranch.PanelTitle=Ветки git (%d)
+GitBranch.OpenFailed=Не удалось получить список веток git: %s
+GitBranch.RefreshFailed=Не удалось обновить список веток git: %s
+GitBranch.Refresh=Обновить
+GitBranch.Close=Закрыть
+GitBranch.SwitchFailed=Не удалось выполнить git switch: %s
+GitBranch.SwitchDone=Переключено на ветку: %s
+GitBranch.NewTitle= Новая ветка
+GitBranch.NewPrompt=Имя ветки:
+GitBranch.NewNameEmpty=Имя ветки не может быть пустым
+GitBranch.NewFailed=Не удалось выполнить git branch: %s
+GitBranch.NewDone=Создана ветка: %s
+GitBranch.Delete=Удалить
+GitBranch.DeleteTitle= Удаление ветки
+GitBranch.DeleteConfirm=Удалить ветку '%s'?
+GitBranch.DeleteButton=&Удалить
+GitBranch.DeleteCurrent=Невозможно удалить текущую ветку
+GitBranch.DeleteFailed=Не удалось выполнить git branch -d: %s
+GitBranch.DeleteDone=Удалена ветка: %s
 
 Editor.GotoTitle=Перейти к позиции
 Editor.GotoLine=Строка:
@@ -738,6 +798,17 @@ Calculator.ResultEmpty=(нажмите Enter для вычисления)
 Calculator.ResultError=Некорректное выражение
 Calculator.BtnInsert=&Вставить
 
+Calendar.Title= Календарь
+Calendar.BtnInsert=&Вставить
+Calendar.Hint=PgUp/PgDn — месяц   Ctrl+PgUp/PgDn — год
+Calendar.Mon=Пн
+Calendar.Tue=Вт
+Calendar.Wed=Ср
+Calendar.Thu=Чт
+Calendar.Fri=Пт
+Calendar.Sat=Сб
+Calendar.Sun=Вс
+
 Select.Title= Пометка
 Select.Mask=&Введите маску для пометки:
 
@@ -784,6 +855,7 @@ Menu.Commands.RunRemote=Выполнить команду на сервере
 Menu.Commands.Bookmarks=Закладки
 Menu.Commands.TempPanel=Временная панель
 Menu.Commands.Calculator=Калькулятор
+Menu.Commands.Calendar=Календарь
 Menu.SortName=Имя
 Menu.SortExt=Расширение
 Menu.SortTime=Время
@@ -826,6 +898,7 @@ Menu.Shell.Options=&Настройки
 Menu.Terminal.File=&Файл
 Menu.ProxySettings=Настройки &прокси
 Menu.Panel.Player=&Плеер
+Menu.Panel.Tree=&Дерево
 Menu.Terminal.Options=&Параметры
 
 RemoteCmd.Title=Команда на сервере
@@ -1404,6 +1477,9 @@ Player.MoveRefused=Плейлист хранит только ссылки; до
 Player.LocalOnly=Пока в плейлист можно добавлять только файлы с локальной файловой системы.
 Player.NothingAdded=В выделении нет аудиофайлов.
 Player.NeedFFmpeg=Для воспроизведения файлов %s нужен ffmpeg, а он не установлен.
+
+TreePanel.Title= Дерево
+TreePanel.ColumnName=Имя
 
 MediaInfo.LanguageCode=ru
 MediaInfo.Menu=&Информация о медиа
@@ -3538,6 +3614,10 @@ SettingsCenter.PanelGroupLargeMiB.Description=Верхняя граница вк
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=Группировка
 SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Парольная авторизация для передачи между серверами
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Разрешить f4 использовать пароль из сохранённого соединения для авторизации второго прыжка при копировании или перемещении с сервера на сервер вместо SSH-ключей или агента. По умолчанию отключено: это раскрывает пароль другому серверу.
+SettingsCenter.TreeRootWholeVolume.Label=Открывать дерево каталогов от корня тома
+SettingsCenter.TreeRootWholeVolume.Description=Открывает дерево каталогов (Ctrl+T) от корня всего текущего тома исходной панели, как в far2l. Выключено — открывает от текущего каталога исходной панели.
+SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Дерево каталогов
+SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=при следующем открытии дерева
 
 Group.Menu=Группировать по…
 Group.Menu.Desc=Открыть меню группировки панели

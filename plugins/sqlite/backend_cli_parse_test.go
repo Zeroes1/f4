@@ -1,8 +1,12 @@
 package sqlite
 
 import (
+	"bufio"
+	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
+	"io"
 	"math"
 	"reflect"
 	"testing"
@@ -109,5 +113,79 @@ func TestReadQuoteRecords(t *testing.T) {
 		if _, ok := parseSQLLiteral(field); ok {
 			t.Errorf("parseSQLLiteral(%q) took an expression for a literal", field)
 		}
+	}
+}
+
+// parseReal reads back what realBitsSQL wrote, m||'p'||e; either half can be
+// malformed if a future sqlite3 build ever changed the format underneath it.
+func TestParseRealRejectsMalformedText(t *testing.T) {
+	for _, text := range []string{
+		"xp5",   // mantissa is not a number
+		"12pxy", // exponent is not a number
+	} {
+		if _, err := parseReal(text); err == nil {
+			t.Errorf("parseReal(%q) accepted a malformed value", text)
+		}
+	}
+}
+
+// unistr's own inverse (unistr()) never emits an escape it cannot parse back,
+// but the text quote mode prints is not guaranteed to be exactly that -- a
+// future sqlite3 could print something wider, so an unparsable escape must
+// fail rather than silently swallow bytes.
+func TestUnistrRejectsInvalidCodePoints(t *testing.T) {
+	for _, text := range []string{
+		`\uZZZZ`,     // not hex digits
+		`\U00110000`, // one past the last valid Unicode code point
+	} {
+		if _, ok := unistr(text); ok {
+			t.Errorf("unistr(%q) accepted an invalid escape", text)
+		}
+	}
+}
+
+func TestAfterMarkerNotFound(t *testing.T) {
+	if _, err := afterMarker([]byte("no marker was ever printed\n")); err == nil {
+		t.Error("afterMarker accepted output without the marker")
+	}
+}
+
+// A record that ends at EOF without its trailing 0x1E is not how sqlite3's
+// own output looks, but the reader has to hand back what arrived rather than
+// silently drop it if the process is ever killed mid-write.
+func TestCLIRecordReaderKeepsAnUnterminatedTrailingRecord(t *testing.T) {
+	r := &cliRecordReader{r: bufio.NewReader(bytes.NewReader([]byte("a\x1Fb")))}
+	record, err := r.next()
+	if err != nil {
+		t.Fatalf("next() = %v", err)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(record, want) {
+		t.Errorf("next() = %#v, want %#v", record, want)
+	}
+	if _, err := r.next(); err != io.EOF {
+		t.Errorf("next() at end = %v, want io.EOF", err)
+	}
+}
+
+type erroringReader struct{ err error }
+
+func (r erroringReader) Read([]byte) (int, error) { return 0, r.err }
+
+// scanTable reads straight off the process's stdout pipe, so a broken pipe
+// or a killed sqlite3 can hand the reader a real error, not just EOF.
+func TestCLIRecordReaderPropagatesReadErrors(t *testing.T) {
+	boom := errors.New("boom")
+	r := &cliRecordReader{r: bufio.NewReader(io.MultiReader(bytes.NewReader([]byte("a\x1F")), erroringReader{boom}))}
+	if _, err := r.next(); !errors.Is(err, boom) {
+		t.Errorf("next() = %v, want %v", err, boom)
+	}
+}
+
+// updateCell must not let a NUL byte anywhere near sqlite3: the client
+// checks for it (sqlText) before ever touching the backend.
+func TestUpdateCellRejectsNULByte(t *testing.T) {
+	backend := &cliBackend{}
+	if _, err := backend.updateCell(context.Background(), "t", "c", 1, "a\x00b"); err == nil {
+		t.Error("updateCell accepted a value with a NUL byte")
 	}
 }

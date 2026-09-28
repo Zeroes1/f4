@@ -581,17 +581,22 @@ Action.AI.ApplyPatch=Apply AP Patch
 Action.AI.ApplyPatch.Desc=Apply the ap patch from the last answer to the folder in the other panel
 Action.Settings.Proxy.Desc=Configure the proxy used for updates, plugins and network connections
 ; --- Spreadsheet ---
-Action.App.Spreadsheet=Spreadsheet
+Action.App.Spreadsheet=Sprea&dsheet
 Action.App.Spreadsheet.Desc=Open the spreadsheet workspace
 ; --- SQLite ---
 Action.App.SQLite=SQLite &client
 Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 ; --- ProcList ---
-Action.App.ProcList=Process list
+Action.App.ProcList=P&rocess list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
+; --- Git ---
+Action.App.GitStatus=Gi&t status
+Action.App.GitStatus.Desc=Open the working tree status of the active panel's git repository
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
+Action.Panel.Calendar.Desc=Open the built-in calendar
 Action.Panel.Player.Desc=Toggle the audio player panel
+Action.Panel.Tree.Desc=Toggle the directory tree panel
 Action.Settings.MacKeyboard=&Mac keyboard
 Action.Settings.MacKeyboard.Desc=Use the macOS editing chords: Cmd for line and document edges, Opt for word navigation
 Action.Panel.GroupByNone=Group by: Off
@@ -645,6 +650,61 @@ ProcList.Config.RefreshLabel=Refresh interval (ms):
 ProcList.Config.SaveBtn=&Save
 ProcList.Config.Error=Settings error
 ProcList.Config.ErrInterval=Refresh interval must be a number of milliseconds
+
+GitStatus.ColumnStatus=Status
+GitStatus.ColumnPath=Path
+GitStatus.PanelTitle=Git status: %s (%d)
+GitStatus.Detached=detached HEAD
+GitStatus.NoPath=No active panel directory to run git status in
+GitStatus.RefreshFailed=Git status refresh failed: %s
+GitStatus.StageFailed=git add failed: %s
+GitStatus.UnstageFailed=git restore --staged failed: %s
+GitStatus.CommitTitle= Commit
+GitStatus.CommitPrompt=Commit message:
+GitStatus.CommitEditorHint=First line is the subject; leave a blank line before a longer body.
+GitStatus.NothingToCommit=Nothing staged to commit
+GitStatus.CommitMessageEmpty=Commit message cannot be empty
+GitStatus.CommitFailed=git commit failed: %s
+GitStatus.CommitDone=Committed: %s
+
+GitDiff.ReadFailed=Failed to read %s: %v
+GitDiff.TooLarge=This file is too large or too different for a diff in this version.
+GitDiff.CompareFailed=Failed to build the diff: %v
+
+GitLog.ColumnHash=Hash
+GitLog.ColumnAuthor=Author
+GitLog.ColumnDate=Date
+GitLog.ColumnSubject=Subject
+GitLog.PanelTitle=Git log (%d)
+GitLog.OpenFailed=Git log failed: %s
+GitLog.RefreshFailed=Git log refresh failed: %s
+GitLog.Refresh=Refresh
+GitLog.Close=Close
+GitLog.DiffFailed=Failed to inspect the commit's changes: %s
+GitLog.DiffNoChanges=This commit has no changes to show (a merge commit, or one with no net changes)
+GitLog.FilesPanelTitle=Changed files in %s (%d)
+
+GitBranch.ColumnCurrent=Current
+GitBranch.ColumnName=Branch
+GitBranch.PanelTitle=Git branches (%d)
+GitBranch.OpenFailed=Git branch list failed: %s
+GitBranch.RefreshFailed=Git branch list refresh failed: %s
+GitBranch.Refresh=Refresh
+GitBranch.Close=Close
+GitBranch.SwitchFailed=git switch failed: %s
+GitBranch.SwitchDone=Switched to branch: %s
+GitBranch.NewTitle= New branch
+GitBranch.NewPrompt=Branch name:
+GitBranch.NewNameEmpty=Branch name cannot be empty
+GitBranch.NewFailed=git branch failed: %s
+GitBranch.NewDone=Created branch: %s
+GitBranch.Delete=Delete
+GitBranch.DeleteTitle= Delete branch
+GitBranch.DeleteConfirm=Delete branch '%s'?
+GitBranch.DeleteButton=&Delete
+GitBranch.DeleteCurrent=Cannot delete the current branch
+GitBranch.DeleteFailed=git branch -d failed: %s
+GitBranch.DeleteDone=Deleted branch: %s
 
 Editor.GotoTitle=Go to position
 Editor.GotoLine=Line:
@@ -738,6 +798,17 @@ Calculator.ResultEmpty=(press Enter to calculate)
 Calculator.ResultError=Invalid expression
 Calculator.BtnInsert=&Insert
 
+Calendar.Title= Calendar
+Calendar.BtnInsert=&Insert
+Calendar.Hint=PgUp/PgDn: month   Ctrl+PgUp/PgDn: year
+Calendar.Mon=Mon
+Calendar.Tue=Tue
+Calendar.Wed=Wed
+Calendar.Thu=Thu
+Calendar.Fri=Fri
+Calendar.Sat=Sat
+Calendar.Sun=Sun
+
 Select.Title= Select
 Select.Mask=&Enter selection mask:
 
@@ -784,6 +855,7 @@ Menu.Commands.RunRemote=Run Command Remotely
 Menu.Commands.Bookmarks=Bookmarks
 Menu.Commands.TempPanel=Temporary panel
 Menu.Commands.Calculator=Calculator
+Menu.Commands.Calendar=Calendar
 Menu.SortName=Name
 Menu.SortExt=Extension
 Menu.SortTime=Time
@@ -826,6 +898,7 @@ Menu.Shell.Options=&Options
 Menu.Terminal.File=&File
 Menu.ProxySettings=&Proxy settings
 Menu.Panel.Player=&Player
+Menu.Panel.Tree=&Tree
 Menu.Terminal.Options=&Options
 
 RemoteCmd.Title=Remote command
@@ -1404,6 +1477,9 @@ Player.MoveRefused=The playlist keeps references only; use F5 to add tracks. F6 
 Player.LocalOnly=Only files from a local file system can be added to the playlist for now.
 Player.NothingAdded=No audio files were found in the selection.
 Player.NeedFFmpeg=ffmpeg is needed to play %s files and it is not installed.
+
+TreePanel.Title= Tree
+TreePanel.ColumnName=Name
 
 MediaInfo.LanguageCode=en
 MediaInfo.Menu=&Media information
@@ -3538,6 +3614,10 @@ SettingsCenter.PanelGroupLargeMiB.Description=Inclusive upper bound. Positive, s
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=Grouping
 SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=Password auth for server-to-server transfers
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Let f4 use a saved connection's password to authenticate the second hop of a server-to-server copy or move, instead of requiring SSH keys or agent access. Off by default: this exposes that password to the other server.
+SettingsCenter.TreeRootWholeVolume.Label=Root the tree panel at the whole volume
+SettingsCenter.TreeRootWholeVolume.Description=Root the Ctrl+T tree panel at the source panel's whole current volume, as far2l does. Off roots it at the source panel's current directory instead.
+SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Directory tree
+SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=next tree open
 
 Group.Menu=Group by…
 Group.Menu.Desc=Show panel grouping modes

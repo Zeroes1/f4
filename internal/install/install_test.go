@@ -171,6 +171,23 @@ func TestEnsureDirRejectsFileInThePlaceOfADir(t *testing.T) {
 	}
 }
 
+func TestEnsureDirFailsWhenParentIsNotWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	parent := t.TempDir()
+	roParent := filepath.Join(parent, "ro")
+	if err := os.Mkdir(roParent, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	// dir does not exist (a clean os.Stat "not exist"), but its parent
+	// forbids creating it, so MkdirAll itself must fail.
+	dir := filepath.Join(roParent, "bin")
+	if _, err := EnsureDir(dir); err == nil {
+		t.Fatal("EnsureDir: want error when the parent directory cannot be written to, got nil")
+	}
+}
+
 func TestCopyExecutablePreservesExecutableBit(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "f4-src")
@@ -314,6 +331,131 @@ func TestAppendProfileLinePreservesExistingContentAndAddsNewline(t *testing.T) {
 	want := "# my existing config, no trailing newline\n" + line + "\n"
 	if string(data) != want {
 		t.Errorf("content = %q, want %q", data, want)
+	}
+}
+
+func TestCopyExecutableFailsWhenSourceMissing(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "does-not-exist")
+	dst := filepath.Join(dir, "f4")
+
+	if err := CopyExecutable(src, dst); err == nil {
+		t.Fatal("CopyExecutable: want error when source is missing, got nil")
+	}
+}
+
+func TestCopyExecutableFailsWhenSourceUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a file without read permission")
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "f4-src")
+	if err := os.WriteFile(src, []byte("binary"), 0o200); err != nil { // #nosec G306 -- test fixture: deliberately write-only.
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "f4")
+
+	if err := CopyExecutable(src, dst); err == nil {
+		t.Fatal("CopyExecutable: want error when source cannot be opened for read, got nil")
+	}
+}
+
+func TestCopyExecutableFailsWhenDestinationDirMissing(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "f4-src")
+	if err := os.WriteFile(src, []byte("binary"), 0o755); err != nil { // #nosec G306 -- test fixture, not sensitive
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "missing-dir", "f4")
+
+	if err := CopyExecutable(src, dst); err == nil {
+		t.Fatal("CopyExecutable: want error when destination directory does not exist, got nil")
+	}
+}
+
+func TestCopyExecutableFailsWhenSourceIsADirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "srcdir")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "out", "f4")
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CopyExecutable(src, dst); err == nil {
+		t.Fatal("CopyExecutable: want error when reading a directory as the source, got nil")
+	}
+	if _, err := os.Stat(dst + ".new"); !os.IsNotExist(err) {
+		t.Errorf("temp file %s.new left behind after copy failure: %v", dst, err)
+	}
+}
+
+func TestCopyExecutableFailsWhenDestinationIsADirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "f4-src")
+	if err := os.WriteFile(src, []byte("binary"), 0o755); err != nil { // #nosec G306 -- test fixture, not sensitive
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "f4")
+	if err := os.Mkdir(dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CopyExecutable(src, dst); err == nil {
+		t.Fatal("CopyExecutable: want error when destination is an existing directory, got nil")
+	}
+	if _, err := os.Stat(dst + ".new"); !os.IsNotExist(err) {
+		t.Errorf("temp file %s.new left behind after copy failure: %v", dst, err)
+	}
+}
+
+func TestAppendProfileLineFailsWhenPathIsADirectory(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "profile")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := AppendProfileLine(path, "export PATH=\"x:$PATH\""); err == nil {
+		t.Fatal("AppendProfileLine: want error when path is a directory, got nil")
+	}
+}
+
+func TestAppendProfileLineFailsWhenParentCannotBeCreated(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	parent := t.TempDir()
+	roParent := filepath.Join(parent, "ro")
+	if err := os.Mkdir(roParent, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(roParent, "sub", ".bashrc")
+
+	if _, err := AppendProfileLine(path, "export PATH=\"x:$PATH\""); err == nil {
+		t.Fatal("AppendProfileLine: want error when the profile's directory cannot be created, got nil")
+	}
+}
+
+func TestAppendProfileLineFailsWhenFileCannotBeOpened(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permission checks")
+	}
+	parent := t.TempDir()
+	roDir := filepath.Join(parent, "ro")
+	if err := os.Mkdir(roDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	// The profile file itself does not exist yet (a clean ENOENT for
+	// os.ReadFile), and os.MkdirAll(roDir, ...) is a no-op since roDir
+	// already exists -- so the failure has to come from os.OpenFile trying
+	// to create the file inside a directory it cannot write to.
+	path := filepath.Join(roDir, ".bashrc")
+
+	if _, err := AppendProfileLine(path, "export PATH=\"x:$PATH\""); err == nil {
+		t.Fatal("AppendProfileLine: want error when the profile file cannot be created, got nil")
 	}
 }
 

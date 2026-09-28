@@ -72,11 +72,11 @@ func GetAction(name string) (action.Action, bool) {
 // marked entry, or the cursor on something other than "..".
 // FileSystemPanel.GetSelectedNames already encodes this exact rule (used by
 // actionFileAttributes, actionCopyMove and actionDeleteWithDisposition to
-// decide whether they have a target); this is the Enabled predicate wired to
-// File.Attributes, File.Copy, File.Move, File.Delete and
-// File.DeletePermanent, so the menu item and F-key dim and the hotkey stops
-// short of the handler instead of the handler quietly returning early
-// (f4#1356).
+// decide whether they have a target); this is the Enabled predicate wired
+// directly to File.Attributes, File.Delete and File.DeletePermanent, and
+// folded into fileCopyMoveEnabled below for File.Copy/File.Move, so the menu
+// item and F-key dim and the hotkey stops short of the handler instead of
+// the handler quietly returning early (f4#1356).
 func activePanelHasSelectionTarget() bool {
 	pf := panel.FindPanelsFrame()
 	if pf == nil {
@@ -87,6 +87,126 @@ func activePanelHasSelectionTarget() bool {
 		return false
 	}
 	return len(fsp.GetSelectedNames()) > 0
+}
+
+// fileCopyMoveEnabled extends activePanelHasSelectionTarget with the one
+// extra case actionCopyMove itself refuses even when a target exists: the
+// passive panel is the music player playlist (*panel.PlayerPanel), which is
+// not a place to copy or move real files into. F6 (isMove) is always
+// refused there -- the player never removes anything from the source
+// directory -- and F5 is refused too when the source is not a local
+// filesystem, since the player can only add local paths to its playlist.
+// This mirrors actionCopyMove's own Player.MoveRefused / Player.LocalOnly
+// branches so File.Copy/File.Move's menu item and F5/F6 key dim to match,
+// instead of the hotkey opening one of those error dialogs for a move/copy
+// that can never succeed (f4#1356, part 3).
+func fileCopyMoveEnabled(isMove bool) func() bool {
+	return func() bool {
+		pf := panel.FindPanelsFrame()
+		if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+			return false
+		}
+		// With the tree (Ctrl+T) focused, F5/F6 target its highlighted node
+		// rather than the inactive panel, taking the selection from the
+		// other, still-visible panel that opened it -- see
+		// treeCopyMoveTarget's own doc comment (f4#1602 part 3).
+		if treeAlt, treeSrc := treeCopyMoveTarget(pf); treeAlt != nil {
+			return treeSrc != nil && len(treeSrc.GetSelectedNames()) > 0 && treeAlt.SelectedPath() != ""
+		}
+		if !activePanelHasSelectionTarget() {
+			return false
+		}
+		if _, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); !ok {
+			return true
+		}
+		if isMove {
+			return false
+		}
+		fsp := pf.GetActivePanel()
+		if fsp == nil {
+			return false
+		}
+		_, isLocal := fsp.Vfs.(*vfs.OSVFS)
+		return isLocal
+	}
+}
+
+// fileDeleteEnabled is the Enabled predicate for File.Delete (F8) and
+// File.DeletePermanent (Shift+Del), extending activePanelHasSelectionTarget
+// with the tree case the same way fileCopyMoveEnabled already does for
+// F5/F6: with the tree (Ctrl+T) focused, F8/Del target its highlighted node
+// directly (actionDeleteWithDisposition's own focusedTreePanel branch), not
+// the active panel's own selection, so gating on activePanelHasSelectionTarget
+// alone would leave the key wrongly disabled whenever the real panel
+// underneath the tree happens to have its cursor on ".." -- the one case
+// its own cursor fallback refuses (FileSystemPanel.GetSelectedNames) -- even
+// though the tree itself has a perfectly good node highlighted (f4#1602,
+// part 5 of N).
+func fileDeleteEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	if t := focusedTreePanel(pf); t != nil {
+		return !t.IsRootSelected() && t.SelectedPath() != ""
+	}
+	return activePanelHasSelectionTarget()
+}
+
+// symlinkEditEnabled is the Enabled predicate for File.EditSymlink. It
+// mirrors actionEditSymlink's own three refusal branches -- exactly one
+// target selected (SymlinkEdit.OneFile), that target actually is a symlink
+// (SymlinkEdit.NotSymlink), and the panel's VFS implements SymlinkVFS
+// (SymlinkEdit.Unsupported) -- one of the two control examples viklequick
+// named in f4#1356 itself. Unlike actionEditSymlink, which confirms
+// IsSymlink with a fresh Lstat before opening the dialog, this runs
+// synchronously on every menu build and keypress, so it reads the
+// VFSItem.IsSymlink flag the last directory listing already cached on the
+// entry instead of doing I/O.
+func symlinkEditEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil {
+		return false
+	}
+	names := fsp.GetSelectedNames()
+	if len(names) != 1 {
+		return false
+	}
+	if _, ok := fsp.Vfs.(vfs.SymlinkVFS); !ok {
+		return false
+	}
+	for _, e := range fsp.Entries {
+		if e.Name == names[0] {
+			return e.IsSymlink
+		}
+	}
+	return false
+}
+
+// shareLinkEnabled is the Enabled predicate for File.Share. The action's own
+// Visible predicate already keeps the menu item off panels whose VFS does
+// not implement vfs.ShareLinkProvider; this repeats that check (Enabled is
+// consulted independently of Visible, see action.Action.Enabled) and adds
+// the one refusal actionShareLink still has left after that: exactly one
+// entry must be selected, or it shows the "Share.SelectOne" error dialog
+// instead of running (f4#1356).
+func shareLinkEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil {
+		return false
+	}
+	if _, ok := fsp.Vfs.(vfs.ShareLinkProvider); !ok {
+		return false
+	}
+	return len(fsp.GetSelectedNames()) == 1
 }
 
 // cursorOnParent reports whether the panel's cursor sits on the ".."
@@ -519,6 +639,7 @@ func init() {
 		DefaultKeys: []string{"CtrlG"},
 		MenuPath:    "Files",
 		Visible:     panel.PanelCanApplyCommand,
+		Enabled:     panel.PanelCanApplyCommand,
 		Handler: func() bool {
 			if pf := panel.FindPanelsFrame(); pf != nil {
 				panel.ActionApplyCommand(pf)
@@ -537,7 +658,7 @@ func init() {
 		DefaultKeys:         []string{"F5"},
 		MenuPath:            "Files",
 		MenuSeparatorBefore: true,
-		Enabled:             activePanelHasSelectionTarget,
+		Enabled:             fileCopyMoveEnabled(false),
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, false) }),
 	})
 	registerAction(action.Action{
@@ -560,7 +681,7 @@ func init() {
 		DescKey:     "Action.File.Move.Desc",
 		DefaultKeys: []string{"F6"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileCopyMoveEnabled(true),
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, true) }),
 	})
 	registerAction(action.Action{
@@ -582,6 +703,7 @@ func init() {
 		Description: "Edit the target of the selected symbolic link",
 		DescKey:     "Action.File.EditSymlink.Desc",
 		MenuPath:    "Files",
+		Enabled:     symlinkEditEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditSymlink(pf) }),
 	})
 	registerAction(action.Action{
@@ -616,7 +738,7 @@ func init() {
 		DescKey:     "Action.File.Delete.Desc",
 		DefaultKeys: []string{"F8"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileDeleteEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDelete(pf) }),
 	})
 	registerAction(action.Action{
@@ -628,7 +750,7 @@ func init() {
 		DescKey:     "Action.File.DeletePermanent.Desc",
 		DefaultKeys: []string{"ShiftDel", "ShiftNumDel"},
 		MenuPath:    "Files",
-		Enabled:     activePanelHasSelectionTarget,
+		Enabled:     fileDeleteEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionDeletePermanent(pf) }),
 	})
 	registerAction(action.Action{
@@ -664,6 +786,7 @@ func init() {
 			_, ok := pnl.Vfs.(vfs.ShareLinkProvider)
 			return ok
 		},
+		Enabled: shareLinkEnabled,
 		Handler: withPF(func(pf *panel.PanelsFrame) { actionShareLink(pf) }),
 	})
 	registerAction(action.Action{
@@ -1024,6 +1147,16 @@ func init() {
 		DescKey:     "Action.Panel.Calculator.Desc",
 		MenuPath:    "Commands",
 		Handler:     func() bool { showCalculatorDialog(); return true },
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Calendar",
+		Area:        "Shell",
+		Label:       "Calendar",
+		LabelKey:    "Menu.Commands.Calendar",
+		Description: "Open the built-in calendar",
+		DescKey:     "Action.Panel.Calendar.Desc",
+		MenuPath:    "Commands",
+		Handler:     func() bool { showCalendarDialog(); return true },
 	})
 	registerAction(action.Action{
 		Name:                "Panel.CommandHistory",
@@ -1764,7 +1897,17 @@ func init() {
 		Description: "Refresh panel contents",
 		DescKey:     "Action.Panel.Rescan.Desc",
 		DefaultKeys: []string{"CtrlR"},
-		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.RefreshAll() }),
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			// far2l's own Ctrl+R on its tree panel re-reads the tree itself,
+			// not the (still-visible, but not what the user is looking at
+			// right now) panel behind it -- see TreePanel.Rescan's doc
+			// comment (f4#1602 part 6).
+			if t := focusedTreePanel(pf); t != nil {
+				t.Rescan()
+				return
+			}
+			pf.RefreshAll()
+		}),
 	})
 	registerAction(action.Action{
 		Name:        "Panel.Swap",
@@ -1806,7 +1949,15 @@ func init() {
 		DefaultKeys:  []string{"CtrlF1:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
+			// Judge "nothing shown yet" by pf.ShowPanels, the actual
+			// on-screen state, not by ShowLeftPanel/ShowRightPanel: Esc/
+			// Ctrl+O (TogglePanelsVisibility) hide the panels frame by
+			// flipping only ShowPanels, leaving the per-side flags at
+			// whatever they were before (f4#1621). Reading those stale
+			// true/true flags here made the first Ctrl+F1 after such a
+			// hide flip ShowLeftPanel without ever bringing ShowPanels
+			// back, so the panels stayed invisible for a press or two.
+			allPanelsHidden := !pf.ShowPanels
 			pf.ExitWide()
 			pf.ShowLeftPanel = !pf.ShowLeftPanel
 			if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
@@ -1836,7 +1987,10 @@ func init() {
 		DefaultKeys:  []string{"CtrlF2:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
+			// See the matching comment in Panel.ToggleLeftPanel above
+			// (f4#1621): pf.ShowPanels, not the per-side flags, is what
+			// tells us whether anything was actually on screen.
+			allPanelsHidden := !pf.ShowPanels
 			pf.ExitWide()
 			pf.ShowRightPanel = !pf.ShowRightPanel
 			if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
@@ -1916,6 +2070,18 @@ func init() {
 		DefaultKeys: []string{"CtrlShiftM"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.ToggleAltPanel("player", func(src *panel.FileSystemPanel) panel.AltPanel { return panel.NewPlayerPanel(src) })
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Tree",
+		Area:        "Shell",
+		Label:       "Tree",
+		LabelKey:    "Menu.Panel.Tree",
+		Description: "Toggle the directory tree panel",
+		DescKey:     "Action.Panel.Tree.Desc",
+		DefaultKeys: []string{"CtrlT"},
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			pf.ToggleAltPanel("tree", func(src *panel.FileSystemPanel) panel.AltPanel { return panel.NewTreePanel(src) })
 		}),
 	})
 	registerAction(action.Action{

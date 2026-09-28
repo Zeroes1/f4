@@ -52,7 +52,7 @@ Unix.** Основной режим обязан сохранять PTY.
 ### 2.2. GUI-бэкенды
 
 `internal/gui/run_unix.go`/`run_windows.go` → `vtui.RunInGUIWindow(...)`; GUI-хосты вызывают
-`vtui.SetActiveBackend("x11"|"wayland"|"gogpu"|"ebiten"|"win32")`, в чистом терминале
+`vtui.SetActiveBackend("x11"|"wayland"|"gogpu"|"ebiten"|"win32"|"cocoa")`, в чистом терминале
 `vtui.ActiveBackend() == ""`. Плюс `checkAndDetach()` переоткрывает процесс с
 `stdin/stdout/stderr → /dev/null`. Хостового терминала физически нет → **в GUI всегда
 откат на «свой терминал»**.

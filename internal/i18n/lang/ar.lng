@@ -2055,3 +2055,7 @@ SettingsCenter.PanelGroupLargeMiB.Description=حد أعلى شامل. يجب أ�
 SettingsCenter.Text.b3c6e63fa9679a23c1d76910f6fc574d71dcd6ffb6079b757a4a9d8c85398e86=التجميع
 SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea5657879f7=مصادقة بكلمة المرور لعمليات النقل بين الخادمين
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=يسمح لـ f4 باستخدام كلمة مرور اتصال محفوظ لمصادقة النقلة الثانية في نسخ أو نقل الملفات بين الخادمين، بدلاً من طلب مفاتيح SSH أو وصول العميل. معطّل افتراضيًا: يكشف هذا كلمة المرور للخادم الآخر.
+SettingsCenter.TreeRootWholeVolume.Label=تجذير لوحة الشجرة عند وحدة التخزين بأكملها
+SettingsCenter.TreeRootWholeVolume.Description=يجذّر شجرة الدليل (Ctrl+T) عند جذر وحدة التخزين الحالية بأكملها للوحة المصدر، كما يفعل far2l. عند الإيقاف يجذّرها بدلاً من ذلك عند الدليل الحالي للوحة المصدر.
+SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=شجرة الدليل
+SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=الفتح التالي للشجرة

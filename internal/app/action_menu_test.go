@@ -330,6 +330,63 @@ func TestBuildMenuBarItems_IncludesPluginPanelCommandsInDeclaredMenu(t *testing.
 	}
 }
 
+func TestBuildMenuBarItems_DimsPluginCommandWithEnabledFalse(t *testing.T) {
+	t.Cleanup(testutil.SetFrameManagerScreens(t, []*vtui.AppScreen{{Frames: []vtui.Frame{&panel.PanelsFrame{}}}}, 0))
+
+	api := &coreAPI{}
+	run := 0
+	enabled := false
+	registration, err := api.RegisterPluginCommand(vfs.PluginCommand{
+		ID:       "test.menu.disabled-command",
+		Location: vfs.PluginCommandPanel,
+		Label:    "Disableable command",
+		MenuPath: "Files",
+		Enabled:  func(vfs.App) bool { return enabled },
+		Run:      func(vfs.App) { run++ },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(registration.Unregister)
+
+	old := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = old })
+
+	findItem := func() *vtui.MenuItem {
+		items := BuildMenuBarItems("Shell")
+		if len(items) == 0 || items[0].Label != "&Files" {
+			t.Fatalf("Files menu is missing: %+v", items)
+		}
+		for index, item := range items[0].SubItems {
+			if action.PlainLabel(item.Text) == "Disableable command" {
+				return &items[0].SubItems[index]
+			}
+		}
+		t.Fatalf("Files menu has no plugin command: %+v", items[0].SubItems)
+		return nil
+	}
+
+	// Enabled()==false dims the item exactly like a core action's Enabled
+	// does (f4#1356): the row stays put, it just cannot be clicked.
+	item := findItem()
+	if !item.Disabled {
+		t.Fatalf("disabled plugin command was not dimmed: %+v", *item)
+	}
+
+	enabled = true
+	item = findItem()
+	if item.Disabled {
+		t.Fatalf("enabled plugin command stayed dimmed: %+v", *item)
+	}
+	// ExecutePluginCommand re-checks Enabled itself, so this click is safe
+	// even against a menu snapshot built while the command was disabled.
+	item.OnClick()
+	if run != 1 {
+		t.Fatalf("plugin command ran %d times, want once", run)
+	}
+}
+
 func TestBuildMenuBarItemsSkipsPluginVisibilityBeforePanelsFrameRegistration(t *testing.T) {
 	t.Cleanup(testutil.SetFrameManagerScreens(t, nil, 0))
 

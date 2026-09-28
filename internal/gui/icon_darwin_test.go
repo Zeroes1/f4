@@ -18,7 +18,13 @@ func TestApplyDarwinDockIconSkipsNonCocoaBackends(t *testing.T) {
 	oldIcon := darwinIconICNS
 	darwinIconICNS = nil
 	t.Cleanup(func() { darwinIconICNS = oldIcon })
-	applyDarwinDockIcon("gogpu")
+	// gogpu, ebiten and the native cocoa backend (f4#1571) all open a real
+	// AppKit window and take the stamping path; nulling the embedded icon
+	// above sends each straight to its early "nothing to stamp" return
+	// instead of touching AppKit, which is all a non-GUI unit test may do.
+	for _, backend := range []string{"gogpu", "ebiten", "cocoa"} {
+		applyDarwinDockIcon(backend)
+	}
 }
 
 func TestHasCustomIconFlag(t *testing.T) {

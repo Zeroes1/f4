@@ -478,6 +478,7 @@ type F4Config struct {
 	DriveMenuOptions         uint32 // display/filter flags for the Alt+F1/Alt+F2 menu
 	InfoPanelBytes           bool   // Ctrl+L info panel: true = raw bytes, false = human (GiB/MiB…)
 	InfoPanelCPUGPU          bool   // Ctrl+L info panel: show CPU and GPU sections (off by default)
+	TreeRootWholeVolume      bool   // Ctrl+T tree panel root: true = whole current volume (far2l), false = source panel's current directory
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
 	TerminalCtrlNWorkspace   bool   // reserve Ctrl+N in terminal views for cloning panels to a workspace
 	KeepTerminalCursor       bool
@@ -507,6 +508,14 @@ type F4Config struct {
 	// archive even when their content is one. It is a far2l file mask, so
 	// "|" still carves an exception out of it.
 	ArchiveEnterExcludeMask string
+	// ObserverEnterExcludeMask is ArchiveEnterExcludeMask's counterpart for
+	// plugins/observer (f4#1563): files Enter must not open as an Observer
+	// container (an ISO image, for the one module wired up so far) even
+	// when their content is one. Ctrl+PgDn keeps opening them either way.
+	// Empty by default -- unlike office documents, which are ZIP containers
+	// far2l already lists, nothing yet is known to collide with the formats
+	// Observer modules cover.
+	ObserverEnterExcludeMask string
 	// ArchiveTarIndexCache keeps the file index of an opened tar archive in the
 	// cache so that opening it again is instant. Off rebuilds the index every
 	// time, which is slower and never out of date (#1187).
@@ -697,6 +706,7 @@ var App = F4Config{
 	DriveMenuOptions:         DefaultDriveMenuOptions,
 	InfoPanelBytes:           false,
 	InfoPanelCPUGPU:          false,
+	TreeRootWholeVolume:      true,
 	EscTogglePanels:          true,
 	TerminalCtrlNWorkspace:   true,
 	KeepTerminalCursor:       false,
@@ -728,6 +738,7 @@ var App = F4Config{
 	ArchiveTarIndexCache:            true,
 	ArchiveUseRatarmountIfAvailable: false,
 	ArchiveEnterExcludeMask:         "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub",
+	ObserverEnterExcludeMask:        "",
 	EditorExpandTabs:                0,
 	EditorAutoIndent:                true,
 	EditorCursorBeyondEOL:           false,
@@ -959,6 +970,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.DriveMenuOptions = ParseDriveMenuOptions(merged.GetString("Panel", "DriveMenuOptions", ""))
 	cfg.InfoPanelBytes = merged.GetString("Panel", "InfoPanelBytes", "0") == "1"
 	cfg.InfoPanelCPUGPU = merged.GetString("Panel", "InfoPanelCPUGPU", "0") == "1"
+	cfg.TreeRootWholeVolume = merged.GetString("Panel", "TreeRootWholeVolume", "1") == "1"
 	cfg.EscTogglePanels = merged.GetString("Panel", "EscTogglePanels", "1") == "1"
 	cfg.TerminalCtrlNWorkspace = merged.GetString("Panel", "TerminalCtrlNWorkspace", "1") == "1"
 	cfg.KeepTerminalCursor = merged.GetString("Panel", "KeepTerminalCursor", "0") == "1"
@@ -1071,6 +1083,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.ArchiveTarIndexCache = merged.GetString("Panel", "ArchiveTarIndexCache", "1") == "1"
 	cfg.ArchiveUseRatarmountIfAvailable = merged.GetString("Panel", "ArchiveUseRatarmountIfAvailable", "0") == "1"
 	cfg.ArchiveEnterExcludeMask = merged.GetString("Panel", "ArchiveEnterExcludeMask", "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub")
+	cfg.ObserverEnterExcludeMask = merged.GetString("Panel", "ObserverEnterExcludeMask", "")
 
 	cfg.EditorExpandTabs = 0
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "ExpandTabs", "0"), "%d", &cfg.EditorExpandTabs)
@@ -1278,6 +1291,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "MacKeyboard = %s\n\n", ParseMacKeysMode(cfg.MacKeyboard))
 	sb.WriteString("[Panel]\n")
 	fmt.Fprintf(&sb, "ArchiveEnterExcludeMask = %s\n", cfg.ArchiveEnterExcludeMask)
+	fmt.Fprintf(&sb, "ObserverEnterExcludeMask = %s\n", cfg.ObserverEnterExcludeMask)
 	fmt.Fprintf(&sb, "ArchiveTarIndexCache = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveTarIndexCache])
 	fmt.Fprintf(&sb, "ArchiveUseRatarmountIfAvailable = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveUseRatarmountIfAvailable])
 	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHiddenFiles])
@@ -1291,6 +1305,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "DriveMenuOptions = %d\n", cfg.DriveMenuOptions)
 	fmt.Fprintf(&sb, "InfoPanelBytes = %d\n", map[bool]int{true: 1, false: 0}[cfg.InfoPanelBytes])
 	fmt.Fprintf(&sb, "InfoPanelCPUGPU = %d\n", map[bool]int{true: 1, false: 0}[cfg.InfoPanelCPUGPU])
+	fmt.Fprintf(&sb, "TreeRootWholeVolume = %d\n", map[bool]int{true: 1, false: 0}[cfg.TreeRootWholeVolume])
 	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[cfg.EscTogglePanels])
 	fmt.Fprintf(&sb, "TerminalCtrlNWorkspace = %d\n", map[bool]int{true: 1, false: 0}[cfg.TerminalCtrlNWorkspace])
 	fmt.Fprintf(&sb, "KeepTerminalCursor = %d\n", map[bool]int{true: 1, false: 0}[cfg.KeepTerminalCursor])

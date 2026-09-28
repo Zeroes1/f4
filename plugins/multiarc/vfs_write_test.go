@@ -24,6 +24,7 @@ type fakeAdd struct {
 // a test can follow a VFS write through to the relisting that follows.
 type fakeWriter struct {
 	entries  []entry
+	listErr  error
 	checkErr error
 	addErr   error
 	checks   []writeOp
@@ -34,7 +35,7 @@ type fakeWriter struct {
 func (*fakeWriter) id() string { return "fakew" }
 
 func (w *fakeWriter) list(context.Context, string) ([]entry, error) {
-	return append([]entry(nil), w.entries...), nil
+	return append([]entry(nil), w.entries...), w.listErr
 }
 
 func (*fakeWriter) extractAll(context.Context, string, string) error         { return nil }

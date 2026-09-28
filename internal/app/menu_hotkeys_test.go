@@ -43,10 +43,19 @@ func requireDistinctHotkeys(t *testing.T, where string, items []vtui.MenuItem) {
 	}
 }
 
-// requireHotkeys fails for every item that has letters to carry a hotkey and
-// has none. Menus of these sizes always allow one for each.
+// requireHotkeys fails for every item that has no hotkey although a letter or
+// digit of its own text is still free in its menu. An item whose every letter
+// is already taken by other items is let go: a menu with more items than
+// distinct letters (the English Commands menu is one) cannot give each its
+// own, and a repeated hotkey is worse than none (#1258).
 func requireHotkeys(t *testing.T, where string, items []vtui.MenuItem) {
 	t.Helper()
+	used := map[rune]bool{}
+	for _, item := range items {
+		if hk := vtui.ExtractHotkey(item.Text); hk != 0 && !item.Separator {
+			used[unicode.ToLower(hk)] = true
+		}
+	}
 	for _, item := range items {
 		if len(item.SubItems) > 0 {
 			requireHotkeys(t, where+" > "+item.Text, item.SubItems)
@@ -56,8 +65,8 @@ func requireHotkeys(t *testing.T, where string, items []vtui.MenuItem) {
 		}
 		plain := plainMenuText(item.Text)
 		for _, r := range plain {
-			if unicode.IsLetter(r) {
-				t.Errorf("%s: %q has no hotkey", where, plain)
+			if (unicode.IsLetter(r) || unicode.IsDigit(r)) && !used[unicode.ToLower(r)] {
+				t.Errorf("%s: %q has no hotkey although %q is free", where, plain, string(r))
 				break
 			}
 		}

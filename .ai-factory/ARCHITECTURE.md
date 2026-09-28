@@ -301,7 +301,7 @@ silence; this prose can, and the check for that is at the end of this section.
 `internal/piecetable`, `internal/semantic`, `internal/sheet`,
 `internal/sysinfo`, `internal/testutil`, `internal/textdiff`,
 `internal/textsearch`, `internal/theme`, `internal/toast`, `internal/ttyx`,
-`internal/unpack`, `internal/wincon`.
+`internal/unpack`, `internal/vtvibe/ap`, `internal/wincon`.
 
 **Layer 1 — subsystems over the leaves:** `internal/fileops`,
 `internal/fusefs` → `vfs`, `internal/textlayout` → `internal/piecetable`,
