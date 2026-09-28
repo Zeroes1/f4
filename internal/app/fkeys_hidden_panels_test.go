@@ -107,6 +107,71 @@ func TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927(t *testing.T) {
 	}
 }
 
+// TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621 covers the state Esc
+// (Panel.Toggle / TogglePanelsVisibility) actually leaves behind: it hides
+// the panels frame by flipping only ShowPanels, without touching
+// ShowLeftPanel/ShowRightPanel -- unlike Ctrl+F1/Ctrl+F2, which keep those
+// two in sync with what's on screen. A user who hides the panels with Esc
+// therefore reaches ShowPanels=false with ShowLeftPanel=ShowRightPanel=true
+// (still set from before the Esc), not the all-false state
+// TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927 covers. Ctrl+F1
+// used to read those stale true/true flags to decide whether to also flip
+// ShowPanels back on, so the very first Ctrl+F1 after an Esc silently did
+// nothing (no visible panel), and a lone, repeated Ctrl+F1 could never bring
+// the left panel up at all -- exactly the two symptoms reported in #1621.
+func TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	previousMacros := macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacros
+	})
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	// The state Esc leaves behind: panels hidden, but the per-side flags
+	// still true from before the Esc (TogglePanelsVisibility never clears
+	// them on hide).
+	pf.ShowLeftPanel = true
+	pf.ShowRightPanel = true
+	pf.ShowPanels = false
+	pf.TermView.UseAltScreen = false
+	vtui.FrameManager.Push(pf)
+
+	press := func(vk uint16) {
+		pressKey(pf, &vtinput.InputEvent{
+			Type:            vtinput.KeyEventType,
+			KeyDown:         true,
+			VirtualKeyCode:  vk,
+			ControlKeyState: vtinput.LeftCtrlPressed,
+		})
+	}
+
+	press(vtinput.VK_F1)
+	if !pf.ShowPanels {
+		t.Fatalf("first Ctrl+F1 after Esc-hide: show=%v left=%v right=%v; want ShowPanels=true",
+			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+	if pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("first Ctrl+F1 after Esc-hide: left=%v right=%v; want left hidden, right shown",
+			pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+
+	// A repeated, lone Ctrl+F1 (no Ctrl+F2 in between, test2 of #1621) must
+	// keep toggling the left panel while the panels stay visible, never
+	// drop back to the hidden terminal.
+	press(vtinput.VK_F1)
+	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("second Ctrl+F1: show=%v left=%v right=%v; want true,true,true",
+			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+}
+
 // TestHotkeys_ShellActions_TerminalArea_GatedByAltScreen ensures the
 // Terminal-area bindings do NOT fire when a full-screen application
 // (mc, htop, vim, less) is active — those keys belong to the app.

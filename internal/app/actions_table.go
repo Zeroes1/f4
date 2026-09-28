@@ -1949,7 +1949,15 @@ func init() {
 		DefaultKeys:  []string{"CtrlF1:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
+			// Judge "nothing shown yet" by pf.ShowPanels, the actual
+			// on-screen state, not by ShowLeftPanel/ShowRightPanel: Esc/
+			// Ctrl+O (TogglePanelsVisibility) hide the panels frame by
+			// flipping only ShowPanels, leaving the per-side flags at
+			// whatever they were before (f4#1621). Reading those stale
+			// true/true flags here made the first Ctrl+F1 after such a
+			// hide flip ShowLeftPanel without ever bringing ShowPanels
+			// back, so the panels stayed invisible for a press or two.
+			allPanelsHidden := !pf.ShowPanels
 			pf.ExitWide()
 			pf.ShowLeftPanel = !pf.ShowLeftPanel
 			if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
@@ -1979,7 +1987,10 @@ func init() {
 		DefaultKeys:  []string{"CtrlF2:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			allPanelsHidden := !pf.ShowLeftPanel && !pf.ShowRightPanel
+			// See the matching comment in Panel.ToggleLeftPanel above
+			// (f4#1621): pf.ShowPanels, not the per-side flags, is what
+			// tells us whether anything was actually on screen.
+			allPanelsHidden := !pf.ShowPanels
 			pf.ExitWide()
 			pf.ShowRightPanel = !pf.ShowRightPanel
 			if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
