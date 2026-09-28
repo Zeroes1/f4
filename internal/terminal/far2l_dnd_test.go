@@ -252,8 +252,9 @@ func (m *memSource) ReadAt(id uint64, p []byte, off uint64) (int, bool, error) {
 	if off >= uint64(len(b)) {
 		return 0, true, nil
 	}
-	n := copy(p, b[off:])
-	return n, off+uint64(n) >= uint64(len(b)), nil
+	rest := b[off:]
+	n := copy(p, rest)
+	return n, n == len(rest), nil
 }
 
 func (m *memSource) Close() {

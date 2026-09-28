@@ -76,7 +76,11 @@ func TestCounterPanelKeysReachTheHostOverRPC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	defer controller.Close()
+	defer func() {
+		if err := controller.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	}()
 	provider, ok := controller.(vfs.PanelKeyProvider)
 	if !ok {
 		t.Fatal("the RPC panel does not declare keys to the host")
@@ -92,8 +96,10 @@ func TestCounterPanelKeysReachTheHostOverRPC(t *testing.T) {
 	shiftF8 := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F8,
 		ControlKeyState: vtinput.ShiftPressed}
 	f5 := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F5}
-	if !vfs.DispatchPanelKey(provider.PanelKeys(), f5) || !vfs.DispatchPanelKey(provider.PanelKeys(), f5) {
-		t.Fatal("F5 was not dispatched")
+	for press := 1; press <= 2; press++ {
+		if !vfs.DispatchPanelKey(provider.PanelKeys(), f5) {
+			t.Fatalf("F5 press %d was not dispatched", press)
+		}
 	}
 	if plugin.count != 2 {
 		t.Fatalf("count = %d after two F5, want 2", plugin.count)

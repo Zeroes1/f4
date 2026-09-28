@@ -92,10 +92,10 @@ func (e fileEncoding) encode(text string) ([]byte, error) {
 func decodeChecksumFile(data []byte, codepage int) ([]byte, int, error) {
 	cp, ok := vfs.DetectBOM(data)
 	if !ok {
-		switch {
-		case codepage == vfs.CodepageAutoDetect:
+		switch codepage {
+		case vfs.CodepageAutoDetect:
 			cp = vfs.DetectEncoding(data, true, vfs.SystemANSICodepage())
-		case codepage == 0:
+		case 0:
 			cp = utf8Codepage
 		default:
 			cp = codepage

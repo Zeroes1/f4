@@ -76,7 +76,7 @@ func aiRejectDraftText(patch *vtvibe.Patch, byKey map[ap.ModKey]aiReject) string
 		id = patch.ID
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(i18n.Msg("AI.RejectDraftHeader"), id))
+	fmt.Fprintf(&b, i18n.Msg("AI.RejectDraftHeader"), id)
 	for _, r := range list {
 		b.WriteString("\n")
 		b.WriteString(aiRejectLine(r))
