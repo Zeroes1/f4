@@ -12,6 +12,7 @@ import (
 	"github.com/unxed/f4/internal/vtvibe"
 	"github.com/unxed/f4/internal/vtvibe/ap"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -24,36 +25,109 @@ import (
 // fails and why. From there the human either applies the patch for real or
 // walks away having written nothing.
 //
-// Not here yet, on purpose (each needs work in the engine, not the screen):
-// toggling individual modifications on and off, a diff pane, Ctrl+Z. The
-// table is read-only; "Apply" applies the whole patch exactly as the plain
-// Apply button in the confirmation dialog does.
+// Every row can be switched off and on again (Space, or Ins, which also
+// moves down as it does in the panels). "Apply" then applies only the
+// checked rows (ap.Options.Only), and "Dry run" runs the check again with
+// the current choice - a row left out comes back as "excluded", and
+// anything that only worked together with it shows up as failing before a
+// byte is written. Not here yet: a diff pane, Ctrl+Z.
+
+// aiReview is the review screen's state: the dry run's rows and which of
+// them are checked.
+type aiReview struct {
+	mods []ap.ModificationResult
+	on   []bool
+}
+
+// newAIReview checks every row except the ones the dry run itself was told
+// to leave out, so a re-run dry run keeps the choice it was made with.
+func newAIReview(mods []ap.ModificationResult) *aiReview {
+	r := &aiReview{mods: mods, on: make([]bool, len(mods))}
+	for i, m := range mods {
+		r.on[i] = m.Status != ap.ModExcluded
+	}
+	return r
+}
+
+func (r *aiReview) toggle(i int) {
+	if i >= 0 && i < len(r.on) {
+		r.on[i] = !r.on[i]
+	}
+}
+
+func (r *aiReview) checked() int {
+	n := 0
+	for _, on := range r.on {
+		if on {
+			n++
+		}
+	}
+	return n
+}
+
+// only is the ap.Options.Only for the current choice: nil when every row is
+// checked (the whole patch, exactly as before there was a choice), else the
+// checked rows' keys.
+func (r *aiReview) only() map[ap.ModKey]bool {
+	if r.checked() == len(r.on) {
+		return nil
+	}
+	only := make(map[ap.ModKey]bool, len(r.on))
+	for i, on := range r.on {
+		if on {
+			only[r.mods[i].Key()] = true
+		}
+	}
+	return only
+}
+
+// canApply: some checked row would write something. An excluded row that
+// has been checked again counts too - the dry run did not look at it, so
+// nothing says it would not apply.
+func (r *aiReview) canApply() bool {
+	for i, on := range r.on {
+		if on && aiReviewMayApply(r.mods[i].Status) {
+			return true
+		}
+	}
+	return false
+}
+
+func aiReviewMayApply(s ap.ModStatus) bool { return s == ap.ModOK || s == ap.ModExcluded }
 
 // aiReviewRow is one ModificationResult as a table row.
 type aiReviewRow struct {
-	m ap.ModificationResult
+	r *aiReview
+	i int
 }
 
 const (
-	aiReviewColFile = iota
+	aiReviewColCheck = iota
+	aiReviewColFile
 	aiReviewColAction
 	aiReviewColStatus
 	aiReviewColLocator
 )
 
-func (r aiReviewRow) GetCellText(col int) string {
+func (row aiReviewRow) GetCellText(col int) string {
+	r := row.r.mods[row.i]
 	switch col {
+	case aiReviewColCheck:
+		if row.r.on[row.i] {
+			return "[x]"
+		}
+		return "[ ]"
 	case aiReviewColFile:
-		return r.m.FilePath
+		return r.FilePath
 	case aiReviewColAction:
-		if r.m.Action == "" {
+		if r.Action == "" {
 			return "-"
 		}
-		return r.m.Action
+		return r.Action
 	case aiReviewColStatus:
-		return aiReviewStatusText(r.m.Status)
+		return aiReviewStatusText(r.Status)
 	case aiReviewColLocator:
-		return aiReviewOneLine(r.m.Locator)
+		return aiReviewOneLine(r.Locator)
 	}
 	return ""
 }
@@ -64,6 +138,8 @@ func aiReviewStatusText(s ap.ModStatus) string {
 		return i18n.Msg("AI.ReviewOK")
 	case ap.ModSkipped:
 		return i18n.Msg("AI.ReviewSkipped")
+	case ap.ModExcluded:
+		return i18n.Msg("AI.ReviewExcluded")
 	default:
 		return i18n.Msg("AI.ReviewFailed")
 	}
@@ -101,19 +177,53 @@ func aiReviewDetail(m ap.ModificationResult) string {
 	return aiReviewOneLine(m.Locator)
 }
 
-// aiReviewCounts splits the modifications by outcome.
-func aiReviewCounts(mods []ap.ModificationResult) (ok, skipped, failed int) {
+// aiReviewCounts splits the modifications by outcome. Excluded rows are
+// their own count: leaving an edit out is a choice, not an error.
+func aiReviewCounts(mods []ap.ModificationResult) (ok, skipped, failed, excluded int) {
 	for _, m := range mods {
 		switch m.Status {
 		case ap.ModOK:
 			ok++
 		case ap.ModSkipped:
 			skipped++
+		case ap.ModExcluded:
+			excluded++
 		default:
 			failed++
 		}
 	}
 	return
+}
+
+// aiReviewTotals is the dry run's summary line.
+func aiReviewTotals(mods []ap.ModificationResult) string {
+	ok, skipped, failed, excluded := aiReviewCounts(mods)
+	if excluded > 0 {
+		return fmt.Sprintf(i18n.Msg("AI.ReviewTotalsExcluded"), ok, skipped, failed, excluded)
+	}
+	return fmt.Sprintf(i18n.Msg("AI.ReviewTotals"), ok, skipped, failed)
+}
+
+// aiReviewTable is the review table with the row toggles on top of the
+// ordinary vtui.Table keys.
+type aiReviewTable struct {
+	*vtui.Table
+	onToggle func(idx int)
+}
+
+func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
+	if e != nil && e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
+		vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
+		switch e.VirtualKeyCode {
+		case vtinput.VK_SPACE, vtinput.VK_INSERT:
+			t.onToggle(t.RowAt(t.SelectPos))
+			if e.VirtualKeyCode == vtinput.VK_INSERT {
+				t.MoveSelection(1)
+			}
+			return true
+		}
+	}
+	return t.Table.ProcessKey(e)
 }
 
 // aiReviewLabel fits s into exactly w columns for a vtui.Text: '&' would
@@ -124,6 +234,14 @@ func aiReviewLabel(s string, w int) string {
 	return strings.ReplaceAll(padLabelTo(s, w), "&", "&&")
 }
 
+// aiReviewRunPatcher is what the review screen's Apply and Dry run buttons
+// call; a variable only so tests can see what they asked for (assigned in
+// init, as a plain initializer would be an initialization cycle through
+// aiRunPatcher -> aiShowPatchReview).
+var aiReviewRunPatcher func(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry bool, only map[ap.ModKey]bool)
+
+func init() { aiReviewRunPatcher = aiRunPatcher }
+
 // aiShowPatchReview is what a dry run ends in when the patcher got as far
 // as reasoning about individual modifications. exitCode/output are the same
 // as for aiShowPatchResult, which remains the screen for a real run and for
@@ -133,31 +251,33 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	scrW := vtui.FrameManager.GetScreenSize()
 	scrH := vtui.FrameManager.GetScreenHeight()
 	dlgW := min(max(scrW-4, 60), 100)
-	dlgH := min(max(len(mods)+10, 14), max(scrH-2, 14))
+	dlgH := min(max(len(mods)+11, 15), max(scrH-2, 15))
 	inner := dlgW - 4
 
 	dlg := vtui.NewCenteredDialog(dlgW, dlgH, i18n.Msg("AI.ReviewTitle"))
 	dlg.ShowClose = true
 
 	statusW := runewidth.StringWidth(i18n.Msg("AI.ReviewColStatus"))
-	for _, s := range []ap.ModStatus{ap.ModOK, ap.ModSkipped, ap.ModFailed} {
+	for _, s := range []ap.ModStatus{ap.ModOK, ap.ModSkipped, ap.ModFailed, ap.ModExcluded} {
 		statusW = max(statusW, runewidth.StringWidth(aiReviewStatusText(s)))
 	}
 	cols := []vtui.TableColumn{
+		{Title: "", Width: 3},
 		{Title: i18n.Msg("AI.ReviewColFile"), MinWidth: 12},
 		{Title: i18n.Msg("AI.ReviewColAction"), Width: 13},
 		{Title: i18n.Msg("AI.ReviewColStatus"), Width: statusW},
 		{Title: i18n.Msg("AI.ReviewColLocator"), MinWidth: 12},
 	}
-	// Below the table: the selected row's detail, the totals, a blank line
-	// and the buttons.
-	table := vtui.NewTable(0, 0, inner, dlgH-7, cols)
+	// Below the table: the selected row's detail, the totals, how many rows
+	// are checked, a blank line and the buttons.
+	rev := newAIReview(mods)
+	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-8, cols)}
 	table.SetOwner(dlg)
 	table.ShowHeader = true
 	table.ShowScrollBar = true
 	rows := make([]vtui.TableRow, len(mods))
 	for i := range mods {
-		rows[i] = aiReviewRow{m: mods[i]}
+		rows[i] = aiReviewRow{r: rev, i: i}
 	}
 	table.SetRows(rows)
 
@@ -175,8 +295,11 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		vtui.FrameManager.Redraw()
 	}
 
-	okN, skippedN, failedN := aiReviewCounts(mods)
-	totals := vtui.NewText(0, 0, aiReviewLabel(fmt.Sprintf(i18n.Msg("AI.ReviewTotals"), okN, skippedN, failedN), inner), 0)
+	totals := vtui.NewText(0, 0, aiReviewLabel(aiReviewTotals(mods), inner), 0)
+	checkedLabel := func() string {
+		return aiReviewLabel(fmt.Sprintf(i18n.Msg("AI.ReviewChecked"), rev.checked(), len(mods)), inner)
+	}
+	checked := vtui.NewText(0, 0, checkedLabel(), 0)
 
 	var buttons []*vtui.Button
 	addButton := func(label string, onClick func()) *vtui.Button {
@@ -186,13 +309,28 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		buttons = append(buttons, b)
 		return b
 	}
-	// Apply is offered only when there is something left to apply: a patch
-	// whose every row is "already applied" or "fails" would write nothing.
-	if okN > 0 && patch != nil {
-		addButton(i18n.Msg("AI.BtnApplyPatch"), func() {
+	// Apply is offered only when some row could write something: a patch
+	// whose every row is "already applied" or "fails" would write nothing
+	// whatever is checked. It is disabled while no such row is checked.
+	var applyBtn *vtui.Button
+	mayApply := false
+	for _, m := range mods {
+		mayApply = mayApply || aiReviewMayApply(m.Status)
+	}
+	if mayApply && patch != nil {
+		applyBtn = addButton(i18n.Msg("AI.BtnApplyPatch"), func() {
+			if !rev.canApply() {
+				return
+			}
 			dlg.Close()
-			aiRunPatcher(pf, patch, root, false)
-		}).IsDefault = true
+			aiReviewRunPatcher(pf, patch, root, false, rev.only())
+		})
+	}
+	if patch != nil {
+		addButton(i18n.Msg("AI.ReviewBtnDryRun"), func() {
+			dlg.Close()
+			aiReviewRunPatcher(pf, patch, root, true, rev.only())
+		})
 	}
 	if output = strings.TrimSpace(output); output != "" {
 		addButton(i18n.Msg("AI.BtnViewLog"), func() { aiViewPatchLog(pf, output) })
@@ -204,14 +342,27 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		}
 	}
 	closeBtn := addButton(i18n.Msg("AI.ReviewBtnClose"), func() { dlg.Close() })
-	if okN == 0 {
-		closeBtn.IsDefault = true
+	syncButtons := func() {
+		can := applyBtn != nil && rev.canApply()
+		if applyBtn != nil {
+			applyBtn.SetDisabled(!can)
+			applyBtn.IsDefault = can
+		}
+		closeBtn.IsDefault = !can
+	}
+	syncButtons()
+	table.onToggle = func(idx int) {
+		rev.toggle(idx)
+		checked.SetText(checkedLabel())
+		syncButtons()
+		vtui.FrameManager.Redraw()
 	}
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, inner, dlgH-2)
 	vbox.Add(table, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(detail, vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(totals, vtui.Margins{Bottom: 1}, vtui.AlignFill)
+	vbox.Add(totals, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(checked, vtui.Margins{Bottom: 1}, vtui.AlignFill)
 	btnRow := vtui.NewHBoxLayout(0, 0, inner, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
@@ -224,6 +375,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	dlg.AddItem(table)
 	dlg.AddItem(detail)
 	dlg.AddItem(totals)
+	dlg.AddItem(checked)
 	for _, b := range buttons {
 		dlg.AddItem(b)
 	}
