@@ -589,6 +589,9 @@ Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 ; --- ProcList ---
 Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
+; --- Git ---
+Action.App.GitStatus=Git status
+Action.App.GitStatus.Desc=Open the working tree status of the active panel's git repository
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Calendar.Desc=Open the built-in calendar
@@ -647,6 +650,13 @@ ProcList.Config.RefreshLabel=Refresh interval (ms):
 ProcList.Config.SaveBtn=&Save
 ProcList.Config.Error=Settings error
 ProcList.Config.ErrInterval=Refresh interval must be a number of milliseconds
+
+GitStatus.ColumnStatus=Status
+GitStatus.ColumnPath=Path
+GitStatus.PanelTitle=Git status: %s (%d)
+GitStatus.Detached=detached HEAD
+GitStatus.NoPath=No active panel directory to run git status in
+GitStatus.RefreshFailed=Git status refresh failed: %s
 
 Editor.GotoTitle=Go to position
 Editor.GotoLine=Line:

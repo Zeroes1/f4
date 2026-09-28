@@ -589,6 +589,9 @@ Action.App.SQLite.Desc=Открыть клиент SQLite для базы дан
 ; --- ProcList ---
 Action.App.ProcList=Список процессов
 Action.App.ProcList.Desc=Открыть живой список процессов в активной панели
+; --- Git ---
+Action.App.GitStatus=Статус git
+Action.App.GitStatus.Desc=Открыть статус рабочего каталога git-репозитория активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
 Action.Panel.Calendar.Desc=Открыть встроенный календарь
@@ -647,6 +650,13 @@ ProcList.Config.RefreshLabel=Интервал обновления (мс):
 ProcList.Config.SaveBtn=&Сохранить
 ProcList.Config.Error=Ошибка настроек
 ProcList.Config.ErrInterval=Интервал обновления должен быть числом миллисекунд
+
+GitStatus.ColumnStatus=Статус
+GitStatus.ColumnPath=Путь
+GitStatus.PanelTitle=Статус git: %s (%d)
+GitStatus.Detached=отделённый HEAD
+GitStatus.NoPath=Нет каталога активной панели для запуска git status
+GitStatus.RefreshFailed=Не удалось обновить статус git: %s
 
 Editor.GotoTitle=Перейти к позиции
 Editor.GotoLine=Строка:

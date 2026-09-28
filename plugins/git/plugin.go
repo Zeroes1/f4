@@ -1,0 +1,94 @@
+// Package git is f4's built-in git client (f4#659): status, diffs, staging,
+// log and branches, wrapping the host's own `git` binary via os/exec rather
+// than linking a Go git implementation -- the same trade-off
+// plugins/multiarc makes for archive tools, in the spirit of f4#609 and per
+// the ticket's own text ("go-git только если окажется необходимым").
+//
+// v1 (f4#659 part 1 of N) is deliberately narrow: a read-only working-tree
+// status view, in the same "view first, act later" order plugins/proclist
+// took for f4#312. It registers one vfs.PanelProvider ("f4.gitstatus") that
+// lists `git status --porcelain=v2`'s changed, unmerged and untracked paths
+// for the active panel's current directory, with F5 to refresh. Diffing a
+// changed file (reusing internal/diffview/internal/textdiff, f4#613),
+// staging/unstaging, commit, log and branch switching are follow-up parts,
+// not this one -- see the ticket for the full list.
+package git
+
+import (
+	"errors"
+	"fmt"
+	"sync"
+
+	"github.com/unxed/f4/vfs"
+)
+
+// panelProviderID is also the ID plughost.RegisterPanelProvider derives its
+// auto-generated "Open Git status" command ID from: "panel." + this ID,
+// lowercased (internal/plughost/panel_providers.go). internal/app's own
+// menu row and hotkey (git_actions.go) call that derived command by ID,
+// duplicated there as a constant for the same reason
+// plugins/proclist/proclist_actions.go duplicates plugins/proclist's own ID.
+const panelProviderID = "f4.gitstatus"
+
+// Plugin exposes the git working-tree status as an in-process f4 panel
+// plugin.
+type Plugin struct {
+	mu           sync.Mutex
+	registration vfs.Registration
+	initialized  bool
+}
+
+// NewPlugin constructs the built-in git client plugin.
+func NewPlugin() *Plugin { return &Plugin{} }
+
+func (p *Plugin) GetName() string { return "Git" }
+
+// Init registers the git status panel provider. Unlike plugins/proclist,
+// this has no platform gate: the plugin itself is always registered,
+// whether or not a `git` binary happens to be on PATH -- Available() (used
+// by internal/app/git_actions.go's Visible check) covers that instead, the
+// same way the plugin/action split works for plugins/sqlite's CLI backend.
+func (p *Plugin) Init(api vfs.HostAPI) error {
+	if api == nil {
+		return errors.New("Git: nil host API")
+	}
+	host, ok := api.(vfs.PanelContributionHost)
+	if !ok {
+		return errors.New("Git: host does not support panel contributions")
+	}
+
+	p.mu.Lock()
+	if p.initialized {
+		p.mu.Unlock()
+		return errors.New("Git: plugin is already initialized")
+	}
+	p.mu.Unlock()
+
+	registration, err := host.RegisterPanelProvider(vfs.PanelProvider{
+		ID:          panelProviderID,
+		Title:       "Git status",
+		Description: "Working tree status (git status) of the active panel's directory",
+		Open:        newStatusPanel,
+	})
+	if err != nil {
+		return fmt.Errorf("Git: register panel provider: %w", err)
+	}
+
+	p.mu.Lock()
+	p.registration = registration
+	p.initialized = true
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *Plugin) Close() error {
+	p.mu.Lock()
+	registration := p.registration
+	p.registration = nil
+	p.initialized = false
+	p.mu.Unlock()
+	if registration != nil {
+		registration.Unregister()
+	}
+	return nil
+}
