@@ -836,7 +836,20 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 
 	if !terminalOpPlanned {
 		finalContent := strings.Join(strings.Split(workingContent, "\n"), newlineChar)
-		if finalContent != originalContent || !fileExisted {
+		// "Did the patch change this file?" has to be answered in one
+		// line-ending domain. originalContent is LF-normalized, so comparing
+		// it with finalContent (already re-joined with newlineChar) made
+		// every CRLF/CR file look changed: a no-op patch rewrote it and
+		// appended the final newline meant only for files it really edits
+		// (f4#1606; the reference ap.py has the same slip). The text
+		// changed, or an explicit FILE LF/CRLF/CR asks for endings the file
+		// does not have yet - otherwise the file is left byte for byte.
+		changed := !fileExisted || workingContent != originalContent
+		if !changed && change.Newline != "" {
+			raw, rerr := os.ReadFile(filePath)
+			changed = rerr != nil || string(raw) != finalContent
+		}
+		if changed {
 			if finalContent != "" && !strings.HasSuffix(finalContent, newlineChar) {
 				finalContent += newlineChar
 			}
