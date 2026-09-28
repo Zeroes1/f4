@@ -189,3 +189,31 @@ func TestRefreshIntervalFallsBackToDefaultOnANonPositiveSetting(t *testing.T) {
 		t.Fatalf("refreshInterval() with a nil store = %v, want the default %v", got, defaultRefreshInterval)
 	}
 }
+
+// TestPanelKeysDeclaresEveryProcListGesture pins the keys ProcList hands the
+// host's shared panel-key primitive (vfs.PanelKeyProvider, f4#312): each one
+// must be declared, captioned for the keybar, and Ctrl+F8 only where
+// suspend/resume exists at all.
+func TestPanelKeysDeclaresEveryProcListGesture(t *testing.T) {
+	p := newTestProcListPanel(t)
+	type chord struct {
+		vk    uint16
+		shift bool
+		ctrl  bool
+	}
+	got := map[chord]bool{}
+	for _, k := range p.PanelKeys() {
+		if k.Label == "" || k.Run == nil {
+			t.Errorf("key %#x/%#x has no caption or no handler", k.VK, k.Mods)
+		}
+		got[chord{k.VK, k.Mods&vtinput.ShiftPressed != 0, k.Mods&vtinput.LeftCtrlPressed != 0}] = true
+	}
+	for _, want := range []chord{{vtinput.VK_F3, false, false}, {vtinput.VK_F8, false, false}, {vtinput.VK_F1, true, false}, {vtinput.VK_F2, true, false}} {
+		if !got[want] {
+			t.Errorf("missing declared key %+v", want)
+		}
+	}
+	if got[chord{vtinput.VK_F8, false, true}] != suspendResumeSupported {
+		t.Errorf("Ctrl+F8 declared = %v, want %v (suspendResumeSupported)", !suspendResumeSupported, suspendResumeSupported)
+	}
+}

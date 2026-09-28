@@ -2349,20 +2349,33 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 
-	// Check global hotkeys (ignoring Lock and Enhanced keys)
-	for _, hk := range plughost.GlobalHotkeysSnapshot() {
-		hkCtrl := (hk.Mods & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
-		hkAlt := (hk.Mods & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
-		hkShift := (hk.Mods & vtinput.ShiftPressed) != 0
+	// A panel plugin that owns the keyboard runs its declared keys ahead of
+	// every hotkey, and global plugin hotkeys stand down under it: the ones
+	// registered today (archive/multiarc Shift+F1..F3) act on the file
+	// panel's cursor, which the plugin hides (vfs.PanelKeyProvider, f4#312).
+	pluginPanel := pf.focusedPluginPanel()
+	if pluginPanel != nil && vfs.DispatchPanelKey(pluginPanel.PanelKeys(), e) {
+		return true
+	}
 
-		if e.VirtualKeyCode == hk.VK && ctrl == hkCtrl && alt == hkAlt && shift == hkShift {
-			hk.Handler(pf)
-			return true
+	// Check global hotkeys (ignoring Lock and Enhanced keys)
+	if pluginPanel == nil {
+		for _, hk := range plughost.GlobalHotkeysSnapshot() {
+			hkCtrl := (hk.Mods & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
+			hkAlt := (hk.Mods & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
+			hkShift := (hk.Mods & vtinput.ShiftPressed) != 0
+
+			if e.VirtualKeyCode == hk.VK && ctrl == hkCtrl && alt == hkAlt && shift == hkShift {
+				hk.Handler(pf)
+				return true
+			}
 		}
 	}
 
-	// Panel Controller interception (allows plugins to override default keys)
-	if pf.ShowPanels {
+	// Panel Controller interception (allows plugins to override default
+	// keys). A VFS controller belongs to the file panel, so it stands down
+	// under a panel plugin just as the file panel itself does.
+	if pf.ShowPanels && pluginPanel == nil {
 		if fsp := pf.GetActivePanel(); fsp != nil {
 			if pc, ok := fsp.Vfs.(PanelController); ok {
 				if pc.ProcessPanelKey(pf, e) {
@@ -3264,7 +3277,13 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			return true
 		} else {
 
-			// CommandLine is empty, panels are visible.
+			// CommandLine is empty, panels are visible. A focused panel
+			// plugin that did not claim Enter leaves it unclaimed: the file
+			// under the hidden file panel's cursor must not be entered or
+			// executed (vfs.PanelKeyProvider, f4#312).
+			if pf.focusedPluginPanel() != nil {
+				return true
+			}
 			if fsp := pf.GetActivePanel(); fsp != nil && !ctrl && !alt && !shift &&
 				DispatchPanelAction(pf, vfs.PanelActionActivate, SelectedPanelActionPaths(fsp)) {
 				return true
@@ -3294,7 +3313,8 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// command line. The gray numpad keys are bound to the corresponding
 	// actions (Panel.SelectGroup / DeselectGroup / InvertSelection);
 	// both paths are suspended while fast find is active.
-	if pf.ShowPanels && config.App.NavigationMode != config.NavigationSearchFirst && !alt && !ctrl && pf.CmdLine.IsEmpty() {
+	if pf.ShowPanels && config.App.NavigationMode != config.NavigationSearchFirst && !alt && !ctrl && pf.CmdLine.IsEmpty() &&
+		pf.focusedPluginPanel() == nil {
 		if e.Char == '+' || e.Char == '-' || e.Char == '*' {
 			isFastFind := false
 			if fsp := pf.GetActivePanel(); fsp != nil && fsp.FastFindMode {
@@ -3377,9 +3397,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 
-	// 3. Try Active Panel
+	// 3. Try Active Panel. Not while a panel plugin owns the keyboard: the
+	// FileSystemPanel under it is hidden, and a key the plugin declined
+	// (Enter, Ins, Del, a letter...) must not move, mark or open a file the
+	// user cannot see (vfs.PanelKeyProvider, f4#312).
 	if pf.ShowPanels && (!pf.SearchFirstMode() || !pf.CommandLineFocused) {
-		if pf.Active().ProcessKey(e) {
+		if pf.focusedPluginPanel() == nil && pf.Active().ProcessKey(e) {
 			pf.autoplayPlayerForPanel(pf.GetActivePanel(), e)
 			return true
 		}
@@ -4421,6 +4444,9 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 		Ctrl: vtui.KeyBarLabels{
 			i18n.Msg("KeyBar.CtrlF1"), i18n.Msg("KeyBar.CtrlF2"), i18n.Msg("KeyBar.CtrlF3"), i18n.Msg("KeyBar.CtrlF4"), i18n.Msg("KeyBar.CtrlF5"), i18n.Msg("KeyBar.CtrlF6"), i18n.Msg("KeyBar.CtrlF7"), "", "", "", i18n.Msg("KeyBar.CtrlF11"), i18n.Msg("KeyBar.CtrlF12"),
 		},
+	}
+	if inst := pf.focusedPluginPanel(); inst != nil {
+		return pf.pluginPanelKeyLabels(inst, fallbacks)
 	}
 	res := keymap.KeyBarLabelsForArea(area, fallbacks)
 	if overrideF2 {

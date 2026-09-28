@@ -69,6 +69,15 @@ FAR3 does not have at all:
   portable, privilege-free way to read "is this process currently stopped"
   either, the same gap that keeps this out of the table as a column.
 
+All of these keys (and F3 below) are declared through the host's shared
+panel-plugin key primitive (`PanelKeys`, `vfs.PanelKeyProvider`; see
+`docs/PLUGINS.md`, "Panel-only plugins"), not switched on in `ProcessKey`.
+That is what makes them win over the file panel's own F3/F8/Shift+F1/F2
+while ProcList has the focus, makes the file panel's other file actions
+(F4, F5, F6, ...) stand down instead of acting on the file hidden under the
+list, and puts their captions on the keybar. Ctrl+F8 is declared only where
+suspend/resume exists, so it has no caption on Windows.
+
 None of the three needs a setting to turn off: kill's confirmation is
 unconditional, matching how narrowly this plugin scopes everything else.
 

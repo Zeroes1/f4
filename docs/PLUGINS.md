@@ -76,6 +76,26 @@ names, and the corresponding snapshot from the other file panel. `Esc` closes
 the panel when the controller does not consume it. This keeps panel plugins
 portable and prevents them from reaching into f4's private panel state.
 
+A panel plugin's own keys go through one shared primitive instead of a
+hand-written `ProcessKey` switch: the controller also implements
+`vfs.PanelKeyProvider` and returns `[]vfs.PanelKey` -- virtual key,
+modifiers, an already-localized keybar caption, a `Run` callback and an
+optional `Enabled` predicate. While a panel plugin has the focus in the
+active slot, f4 applies the same rules to every panel plugin, whether it
+declares keys or not:
+
+* a declared key runs before any global plugin hotkey or configured f4
+  hotkey, including keys injected by a click on the keybar;
+* bindings that act on the hidden file panel's cursor or selection (every
+  `File.*` action and the group-selection actions) and global plugin
+  hotkeys stand down, so their keys reach the controller's `ProcessKey`
+  instead; the hidden file panel itself never receives keys;
+* the keybar shows the declared captions, blanks the file-panel captions and
+  keeps every other f4 binding (Help, menus, panel toggles, quit).
+
+`vfs.DispatchPanelKey` is the host's dispatcher, exported so a controller can
+route the same declarations from its own `ProcessKey`.
+
 RPC plugins declare panel descriptors in the structured `Plugin.Init` result:
 
 ```text

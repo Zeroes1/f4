@@ -379,38 +379,39 @@ func (p *procListPanel) SetFocus(focused bool) {
 
 func (p *procListPanel) IsFocused() bool { return p.table.IsFocused() }
 
-// ProcessKey adds f4#312 part 3's process management, and part 4's F3
-// details view (showDetails, details.go), on top of the table's own
-// navigation/sort/quick-search handling: F3 details (a read-only snapshot,
-// FAR3's own F3 gesture), F8 kill (with confirmation, confirmKill in
-// actions.go), Shift+F1/F2 lower/raise priority (FAR3's own bindings for the
-// same thing), and Ctrl+F8 suspend/resume toggle -- new in f4, not in FAR3,
-// and only offered where suspendResumeSupported is true (linux/darwin; not
-// Windows, which has no supported API for it). Unmatched keys, including
-// Ctrl+F8 where unsupported, fall through to the table exactly as before
-// this change.
+var _ vfs.PanelKeyProvider = (*procListPanel)(nil)
+
+// PanelKeys declares this panel's own keys through the host's shared
+// panel-plugin key primitive (vfs.PanelKeyProvider, f4#312): F3 details (a
+// read-only snapshot, FAR3's own F3 gesture; showDetails, details.go), F8
+// kill (with confirmation, confirmKill in actions.go), Shift+F1/F2
+// lower/raise priority (FAR3's own bindings for the same thing), and Ctrl+F8
+// suspend/resume toggle -- new in f4, not in FAR3, and declared only where
+// suspendResumeSupported is true (linux/darwin; not Windows, which has no
+// supported API for it). Declaring them, rather than switching on them in
+// ProcessKey, is what makes the host run them ahead of the file panel's own
+// F3/F8/Shift+F1/F2 bindings and put their captions on the keybar.
+func (p *procListPanel) PanelKeys() []vfs.PanelKey {
+	keys := []vfs.PanelKey{
+		{VK: vtinput.VK_F3, Label: i18n.Msg("ProcList.KeyBar.Details"), Run: p.showDetails},
+		{VK: vtinput.VK_F8, Label: i18n.Msg("ProcList.KeyBar.Kill"), Run: p.confirmKill},
+		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityDown"), Run: func() { p.adjustPriority(false) }},
+		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityUp"), Run: func() { p.adjustPriority(true) }},
+	}
+	if suspendResumeSupported {
+		keys = append(keys, vfs.PanelKey{VK: vtinput.VK_F8, Mods: vtinput.LeftCtrlPressed, Label: i18n.Msg("ProcList.KeyBar.Suspend"), Run: p.toggleSuspend})
+	}
+	return keys
+}
+
+// ProcessKey routes the declared PanelKeys first -- the host normally
+// dispatches them before the key ever gets here, but a host without the
+// PanelKeyProvider hook (and this package's tests) still reaches them --
+// and hands everything else to the table's own navigation/sort/quick-search
+// handling.
 func (p *procListPanel) ProcessKey(e *vtinput.InputEvent) bool {
-	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
-		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
-		alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
-		shift := e.ControlKeyState&vtinput.ShiftPressed != 0
-		switch {
-		case e.VirtualKeyCode == vtinput.VK_F3 && !ctrl && !alt && !shift:
-			p.showDetails()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F8 && !ctrl && !alt && !shift:
-			p.confirmKill()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F8 && ctrl && !alt && !shift && suspendResumeSupported:
-			p.toggleSuspend()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F1 && shift && !ctrl && !alt:
-			p.adjustPriority(false)
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F2 && shift && !ctrl && !alt:
-			p.adjustPriority(true)
-			return true
-		}
+	if vfs.DispatchPanelKey(p.PanelKeys(), e) {
+		return true
 	}
 	return p.table.ProcessKey(e)
 }

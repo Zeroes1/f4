@@ -597,6 +597,15 @@ func (hm *HotkeyManager) Unbind(area, key string) {
 // defaults when a key has no binding. A key explicitly unbound ("None")
 // gets an empty label.
 func KeyBarLabelsForArea(area string, fallbacks *vtui.KeySet) *vtui.KeySet {
+	return KeyBarLabelsForAreaExcept(area, fallbacks, nil)
+}
+
+// KeyBarLabelsForAreaExcept is KeyBarLabelsForArea with a filter: a key
+// whose resolved action satisfies drop gets an empty label (not its
+// fallback), because the caller has made that binding stand down -- a
+// panel plugin hiding the file panel's File.* captions (f4#312) is the
+// reason this exists. A nil drop filters nothing.
+func KeyBarLabelsForAreaExcept(area string, fallbacks *vtui.KeySet, drop func(actionName string) bool) *vtui.KeySet {
 	var fbNormal, fbShift, fbAlt, fbCtrl vtui.KeyBarLabels
 	if fallbacks != nil {
 		fbNormal, fbShift, fbAlt, fbCtrl = fallbacks.Normal, fallbacks.Shift, fallbacks.Alt, fallbacks.Ctrl
@@ -610,6 +619,9 @@ func KeyBarLabelsForArea(area string, fallbacks *vtui.KeySet) *vtui.KeySet {
 		if hm := GlobalHotkeysMgr; hm != nil {
 			if actName := hm.GetAction(area, prefix+keyNum); actName != "" {
 				if strings.EqualFold(actName, "none") {
+					return "", false
+				}
+				if drop != nil && drop(actName) {
 					return "", false
 				}
 				if act, ok := LookupAction(actName); ok {
