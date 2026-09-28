@@ -519,6 +519,7 @@ func init() {
 		DefaultKeys: []string{"CtrlG"},
 		MenuPath:    "Files",
 		Visible:     panel.PanelCanApplyCommand,
+		Enabled:     panel.PanelCanApplyCommand,
 		Handler: func() bool {
 			if pf := panel.FindPanelsFrame(); pf != nil {
 				panel.ActionApplyCommand(pf)
