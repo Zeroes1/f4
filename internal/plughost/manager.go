@@ -12,6 +12,7 @@ import (
 	"github.com/unxed/f4/plugins/id3editor"
 	"github.com/unxed/f4/plugins/ide"
 	"github.com/unxed/f4/plugins/mediainfo"
+	observerplugin "github.com/unxed/f4/plugins/observer"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/visren"
@@ -193,6 +194,15 @@ func (pm *PluginManager) loadInternal() {
 	// plugins_lite.go/plugins_full.go, the single point of truth for which
 	// build tag gets which set, for the full accounting.
 	plugins = append(plugins, optionalVFSPlugins()...)
+
+	// observerplugin registers after archive/multiarc (f4#1563's own design
+	// requires this: "Регистрировать провайдер нужно после archive, чтобы
+	// zip, 7z, rar и SFX оставались за ним"), in both build tags -- unlike
+	// everything optionalVFSPlugins covers, an Observer module is a wazero
+	// wasm reactor, the same dependency transport_wazero.go already keeps in
+	// both builds for the generic wasm plugin transport, so there is no
+	// lite/full split to make here at all.
+	plugins = append(plugins, observerplugin.NewPlugin(config.GetF4ConfigDir()))
 
 	for _, p := range plugins {
 		if err := p.Init(pm.api); err == nil {
