@@ -121,11 +121,12 @@ func parseStatus(output []byte) statusResult {
 			}
 		case strings.HasPrefix(line, "? "):
 			res.Entries = append(res.Entries, statusEntry{XY: "??", Path: strings.TrimPrefix(line, "? ")})
-		case strings.HasPrefix(line, "! "):
-			// Ignored files: not requested (no --ignored flag), so this
-			// should never actually appear; skip defensively rather than
-			// mis-parse it as a change.
 		}
+		// A "! " (ignored file) line, or any other unrecognized line, falls
+		// through unmatched here: ignored files are not requested (no
+		// --ignored flag), so this should never actually appear, and it is
+		// skipped defensively -- with no case to match, the loop simply
+		// moves on -- rather than mis-parsed as a change.
 	}
 	return res
 }

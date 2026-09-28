@@ -17,7 +17,7 @@ func TestApplyDryRunLeavesFilesUntouched(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "a.txt")
 	original := "line1\nline2\nline3\n"
-	if err := os.WriteFile(target, []byte(original), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte(original), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 	patchPath := filepath.Join(dir, "_case.ap")
