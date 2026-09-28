@@ -145,7 +145,22 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 				vtui.FrameManager.RemoveFrame(top)
 				top = vtui.FrameManager.GetTopFrame()
 			}
-			if top != nil {
+			// A lone, not-yet-done top frame is not necessarily the result:
+			// it is just as often aiRunPatcher's progress dialog, still
+			// running its worker. RunProgressTaskAfter closes the progress
+			// dialog and pushes the result dialog in the very same UI task
+			// (frame.go's `if dialogShown { dlg.Close() }; onComplete(err)`),
+			// so a genuine result never sits alone - it always lands on top
+			// of the now-Done progress dialog it replaced. Treating a lone
+			// frame as the result races the worker: on a slow poll tick the
+			// progress dialog can still be the only frame around (its own
+			// worker goroutine simply hasn't finished os.WriteFile/ap.Apply
+			// yet), and force-closing it here returns before that write ever
+			// runs, so the very next os.ReadFile in this test sees the old
+			// content. Wait for the two-deep shape instead: closed progress
+			// underneath, fresh result on top.
+			activeFrames := vtui.FrameManager.GetActiveFrames(vtui.FrameManager.ActiveIdx)
+			if top != nil && len(activeFrames) >= 2 {
 				top.Close()
 				vtui.FrameManager.RemoveFrame(top)
 				return
