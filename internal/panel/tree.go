@@ -103,9 +103,15 @@ func (it treeItem) GetCellText(int) string {
 // bookmarks_dialog.go's Enter handling already does via NavigateToBookmark.
 // Right/Left expand/collapse the row under the cursor without navigating.
 //
-// Scope for this part: a persistent expand/collapse cache across tree
-// panel instances and a per-plugin f4:config knob (e.g. root = current dir
-// instead of the whole volume) are follow-up parts (see f4#1602).
+// The tree is also a real destination panel, not just a navigator: when it
+// has focus, F5/F6 (actionCopyMove, internal/app/actions.go) copy/move the
+// selection from Source() -- the other, still-visible panel that opened the
+// tree -- into SelectedPath(), the highlighted node, without navigating
+// into it first (part 3 of f4#1602). F7 (mkdir) and F8/Del acting on the
+// highlighted node itself, the way far2l's own tree panel supports, are
+// still follow-up parts, as is a persistent expand/collapse cache across
+// tree panel instances and a per-plugin f4:config knob (e.g. root = current
+// dir instead of the whole volume) -- see f4#1602.
 type TreePanel struct {
 	src     *FileSystemPanel
 	Frame   *vtui.BorderedFrame
@@ -480,6 +486,21 @@ func (t *TreePanel) GetSelectedName() string {
 		return ""
 	}
 	return t.items[idx].name
+}
+
+// SelectedPath returns the absolute filesystem path of the row under the
+// cursor, or "" if the cursor is out of range. This is the tree acting as a
+// full panel in its own right rather than a pure navigator (see far2l's
+// treelist.cpp and f4#1602's tracking comment): F5/F6 (actionCopyMove) use
+// it as the copy/move destination when the tree has focus, taking the
+// selection itself from Source(), the other, still-visible panel that
+// opened the tree.
+func (t *TreePanel) SelectedPath() string {
+	idx := t.cursorIndex()
+	if idx < 0 {
+		return ""
+	}
+	return t.items[idx].path
 }
 
 // activateSelected changes the source panel's directory to the highlighted

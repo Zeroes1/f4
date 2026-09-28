@@ -102,11 +102,18 @@ func activePanelHasSelectionTarget() bool {
 // that can never succeed (f4#1356, part 3).
 func fileCopyMoveEnabled(isMove bool) func() bool {
 	return func() bool {
-		if !activePanelHasSelectionTarget() {
-			return false
-		}
 		pf := panel.FindPanelsFrame()
 		if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+			return false
+		}
+		// With the tree (Ctrl+T) focused, F5/F6 target its highlighted node
+		// rather than the inactive panel, taking the selection from the
+		// other, still-visible panel that opened it -- see
+		// treeCopyMoveTarget's own doc comment (f4#1602 part 3).
+		if treeAlt, treeSrc := treeCopyMoveTarget(pf); treeAlt != nil {
+			return treeSrc != nil && len(treeSrc.GetSelectedNames()) > 0 && treeAlt.SelectedPath() != ""
+		}
+		if !activePanelHasSelectionTarget() {
 			return false
 		}
 		if _, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); !ok {

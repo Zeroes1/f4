@@ -891,6 +891,99 @@ func TestActionCopyMove_TrailingSlash(t *testing.T) {
 	vtui.FrameManager.Pop()
 }
 
+// TestActionCopyMove_TreeDestination drives F5 (actionCopyMove) with the
+// tree panel (Ctrl+T) focused: the destination must be the tree's
+// highlighted node, not the (here unrelated) inactive panel, and the
+// selection must come from the panel that opened the tree, not the hidden
+// FileSystemPanel sitting underneath the tree's own slot -- see
+// treeCopyMoveTarget's doc comment (f4#1602 part 3).
+func TestActionCopyMove_TreeDestination(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	root := t.TempDir()
+	fromDir := filepath.Join(root, "from")
+	toDir := filepath.Join(root, "to")
+	if err := os.Mkdir(fromDir, 0o700); err != nil {
+		t.Fatalf("mkdir from: %v", err)
+	}
+	if err := os.Mkdir(toDir, 0o700); err != nil {
+		t.Fatalf("mkdir to: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fromDir, "test.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("write test.txt: %v", err)
+	}
+
+	fspFrom := panel.NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(fromDir))
+	paneltest.WaitForLoad(t, fspFrom)
+	idx := -1
+	for i, e := range fspFrom.Entries {
+		if e.Name == "test.txt" {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatalf("test.txt not found in %+v", fspFrom.Entries)
+	}
+	fspFrom.SetCursorIndex(idx)
+
+	fspTo := panel.NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(toDir))
+	paneltest.WaitForLoad(t, fspTo)
+	wantDest := fspTo.Vfs.GetPath()
+
+	tp := panel.NewTreePanel(fspFrom)
+	// revealPath lands the cursor on fromDir's own row; "to" is its next
+	// sibling (both are root's only children), so one Down reaches it.
+	if got := tp.GetSelectedName(); got != "from" {
+		t.Fatalf("precondition: tree cursor on %q, want \"from\"", got)
+	}
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN}) {
+		t.Fatal("Down should be consumed by the tree's table")
+	}
+	if got := tp.GetSelectedName(); got != "to" {
+		t.Fatalf("precondition: tree cursor on %q after Down, want \"to\"", got)
+	}
+	tp.SetFocus(true)
+	pf.AltPanels[pf.ActiveIdx] = tp
+
+	if !fileCopyMoveEnabled(false)() {
+		t.Fatal("Copy should be enabled with the tree focused and a real selection on its source panel")
+	}
+
+	actionCopyMove(pf, false)
+
+	top := vtui.FrameManager.GetTopFrame()
+	dlg, ok := top.(vtui.Container)
+	if !ok {
+		t.Fatal("Copy dialog not found on top")
+	}
+	var editDest *vtui.Edit
+	for _, itm := range dlg.GetChildren() {
+		if e, ok := itm.(*vtui.Edit); ok {
+			editDest = e
+			break
+		}
+	}
+	if editDest == nil {
+		t.Fatal("Destination edit field not found in dialog")
+	}
+
+	wantText := wantDest + string(os.PathSeparator)
+	if got := editDest.GetText(); got != wantText {
+		t.Errorf("Copy dialog destination = %q, want %q (the tree's highlighted node)", got, wantText)
+	}
+
+	top.SetExitCode(-1)
+	vtui.FrameManager.Pop()
+}
+
 func TestActionCopyMove_ModeMenuDoesNotCoverButtons(t *testing.T) {
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)

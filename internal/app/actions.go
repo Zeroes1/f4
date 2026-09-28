@@ -2265,10 +2265,37 @@ func actionEditFile(pf *panel.PanelsFrame) {
 // copy/move dialog, the same as the operation-mode field below it.
 const rightsComboWidth = 32
 
+// treeCopyMoveTarget reports whether pf.ActiveIdx's slot currently shows a
+// focused *panel.TreePanel -- the case where F5/F6 (actionCopyMove) target
+// the tree's highlighted node as the destination directly, rather than the
+// inactive panel's own directory, and take their file selection from
+// Source(), the other, still-visible panel that opened the tree (see
+// TreePanel.SelectedPath's own doc comment; f4#1602 part 3). Returns
+// (nil, nil) when the tree isn't the thing with focus right now, in which
+// case actionCopyMove and fileCopyMoveEnabled fall back to their previous,
+// plain active/inactive-panel behavior unchanged.
+func treeCopyMoveTarget(pf *panel.PanelsFrame) (*panel.TreePanel, *panel.FileSystemPanel) {
+	if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+		return nil, nil
+	}
+	t, ok := pf.AltPanels[pf.ActiveIdx].(*panel.TreePanel)
+	if !ok || !t.IsFocused() {
+		return nil, nil
+	}
+	return t, t.Source()
+}
+
 func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	fspSrc := pf.GetActivePanel()
 	fspDst := pf.GetInactivePanel()
-	if fspSrc == nil || fspDst == nil {
+
+	treeAlt, treeSrc := treeCopyMoveTarget(pf)
+	if treeAlt != nil {
+		fspSrc = treeSrc
+		fspDst = nil
+	}
+
+	if fspSrc == nil || (fspDst == nil && treeAlt == nil) {
 		return
 	}
 
@@ -2284,50 +2311,65 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 		prompt = i18n.Msg("Move.Prompt")
 	}
 
-	srcVfs, dstVfs := fspSrc.Vfs, fspDst.Vfs
+	srcVfs := fspSrc.Vfs
 	srcBasePath := srcVfs.GetPath()
-	if player, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); ok {
-		// The player panel is a playlist, not a place: F5 adds
-		// references, F6 is refused rather than moving music around.
-		if isMove {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.MoveRefused"), []string{i18n.Msg("vtui.Ok")})
+
+	var dstVfs vfs.VFS
+	if treeAlt != nil {
+		// The tree only ever names a real OS directory (see tree.go's own
+		// scanChildDirs/os.Stat use), so a fresh OSVFS rooted there is
+		// exactly what fspDst.Vfs would have been for an ordinary panel
+		// sitting on that same directory.
+		destPath := treeAlt.SelectedPath()
+		if destPath == "" {
 			return
 		}
-		osv, isLocal := srcVfs.(*vfs.OSVFS)
-		if !isLocal {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.LocalOnly"), []string{i18n.Msg("vtui.Ok")})
-			return
-		}
-		paths := make([]string, 0, len(names))
-		for _, n := range names {
-			if abs, err := osv.Abs(filepath.Join(srcBasePath, n)); err == nil {
-				paths = append(paths, abs)
+		dstVfs = vfs.NewOSVFS(destPath)
+	} else {
+		dstVfs = fspDst.Vfs
+		if player, ok := pf.AltPanels[1-pf.ActiveIdx].(*panel.PlayerPanel); ok {
+			// The player panel is a playlist, not a place: F5 adds
+			// references, F6 is refused rather than moving music around.
+			if isMove {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.MoveRefused"), []string{i18n.Msg("vtui.Ok")})
+				return
 			}
-		}
-		if player.AddPaths(paths) == 0 {
-			vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.NothingAdded"), []string{i18n.Msg("vtui.Ok")})
+			osv, isLocal := srcVfs.(*vfs.OSVFS)
+			if !isLocal {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.LocalOnly"), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			paths := make([]string, 0, len(names))
+			for _, n := range names {
+				if abs, err := osv.Abs(filepath.Join(srcBasePath, n)); err == nil {
+					paths = append(paths, abs)
+				}
+			}
+			if player.AddPaths(paths) == 0 {
+				vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.NothingAdded"), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, entry := range fspSrc.Entries {
+				entry.Selected = false
+			}
+			vtui.FrameManager.Redraw()
 			return
 		}
-		fspSrc.SelectedItems = make(map[string]bool)
-		for _, entry := range fspSrc.Entries {
-			entry.Selected = false
+		if temp, ok := dstVfs.(*panel.TempPanelVFS); ok {
+			// A temporary panel contains references, not copies. Keep F5/F6
+			// useful for it, but never remove the real source on F6: the
+			// reference list is intentionally non-destructive.
+			if err := temp.AddReferences(context.Background(), srcVfs, names); err != nil {
+				vtui.ShowMessage(i18n.Msg("Error.Title"), fmt.Sprintf(i18n.Msg("TempPanel.AddError"), err), []string{i18n.Msg("vtui.Ok")})
+			}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, entry := range fspSrc.Entries {
+				entry.Selected = false
+			}
+			pf.RefreshAll()
+			return
 		}
-		vtui.FrameManager.Redraw()
-		return
-	}
-	if temp, ok := dstVfs.(*panel.TempPanelVFS); ok {
-		// A temporary panel contains references, not copies. Keep F5/F6
-		// useful for it, but never remove the real source on F6: the
-		// reference list is intentionally non-destructive.
-		if err := temp.AddReferences(context.Background(), srcVfs, names); err != nil {
-			vtui.ShowMessage(i18n.Msg("Error.Title"), fmt.Sprintf(i18n.Msg("TempPanel.AddError"), err), []string{i18n.Msg("vtui.Ok")})
-		}
-		fspSrc.SelectedItems = make(map[string]bool)
-		for _, entry := range fspSrc.Entries {
-			entry.Selected = false
-		}
-		pf.RefreshAll()
-		return
 	}
 
 	initialDest := dstVfs.GetPath()
@@ -2341,11 +2383,9 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 
 	onCompleteWithClear := func() {
 		if pf != nil {
-			if fsp := pf.GetActivePanel(); fsp != nil {
-				fsp.SelectedItems = make(map[string]bool)
-				for _, e := range fsp.Entries {
-					e.Selected = false
-				}
+			fspSrc.SelectedItems = make(map[string]bool)
+			for _, e := range fspSrc.Entries {
+				e.Selected = false
 			}
 			pf.RefreshAll()
 		}
@@ -2353,11 +2393,11 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 
 	// A move takes the cursor's entry away with it, so the panel is told where
 	// to land before the operation starts — afterwards the name it would look
-	// for is gone.
+	// for is gone. fspSrc, not pf.GetActivePanel(): with the tree focused
+	// (treeAlt != nil above) the active *slot* holds the tree's own hidden
+	// underlying panel, not the panel the selection actually came from.
 	if isMove {
-		if fsp := pf.GetActivePanel(); fsp != nil {
-			fsp.PendingSelection = fsp.GetSuccessorName()
-		}
+		fspSrc.PendingSelection = fspSrc.GetSuccessorName()
 	}
 
 	if isMove && !config.App.ConfirmMove {
