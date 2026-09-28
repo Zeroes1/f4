@@ -84,6 +84,13 @@ type DNDClient struct {
 	// terminal's own offer ids (far2l_dnd.go).
 	newBinding func() (far2ldnd.ID, error)
 
+	// bridge, when set, replaces out/pending/nextRID below entirely: every
+	// round trip shares the real far2l channel's own RID counter instead
+	// of this client's, through vtui.Far2lInteractTimeout. See
+	// far2l_dnd_bridge.go (NewBridgedDNDClient) for why a second,
+	// independent RID counter cannot share that channel safely.
+	bridge *far2lBridge
+
 	mu      sync.Mutex // guards the fields below
 	bound   bool
 	binding far2ldnd.ID
@@ -314,6 +321,9 @@ func (c *DNDClient) HandleFrame(kind far2ldnd.FrameKind, stack []byte) error {
 // reuse the number, which cannot happen while this RID is still reserved --
 // finally arrives.
 func (c *DNDClient) roundTrip(ctx context.Context, q far2ldnd.Request) (far2ldnd.ReplyFrame, error) {
+	if c.bridge != nil {
+		return c.bridge.roundTrip(ctx, q)
+	}
 	rid, ch, err := c.allocRID()
 	if err != nil {
 		return far2ldnd.ReplyFrame{}, err
@@ -338,6 +348,9 @@ func (c *DNDClient) roundTrip(ctx context.Context, q far2ldnd.Request) (far2ldnd
 // sendNoReply writes q under RID 0: fire-and-forget, allowed only for CLOSE
 // and for switching a binding off (far2ldnd.EncodeRequest enforces this).
 func (c *DNDClient) sendNoReply(q far2ldnd.Request) error {
+	if c.bridge != nil {
+		return c.bridge.sendNoReply(q)
+	}
 	stack, err := far2ldnd.EncodeRequest(0, q)
 	if err != nil {
 		return err

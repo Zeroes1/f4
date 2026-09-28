@@ -1245,6 +1245,14 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	}
 	previousEventFilter := vtui.FrameManager.EventFilter
 	vtui.FrameManager.EventFilter = func(e *vtinput.InputEvent) bool {
+		// INPUT_DND (unxed/f4#1628) is the one far2l "f2l" event
+		// vtinput.ParseFar2lAPC does not already translate into a plain
+		// key/mouse/resize InputEvent of its own, so it is still sitting
+		// here, unclaimed, as a Far2lEventType/"event" pair; nothing else
+		// in this filter chain has any business with it either way.
+		if terminal.RealDNDClient().DispatchBridgedEvent(e) {
+			return true
+		}
 		// The lone-Alt detector must see every event before anything can
 		// consume it: an Alt+F7 the hotkey dispatcher takes still spoils
 		// the Alt tap (#1131).
