@@ -311,7 +311,12 @@ func TestExistingOutputs(t *testing.T) {
 		{outputDisplay, nil},
 	} {
 		job.mode = tc.mode
-		got, err := existingOutputs(context.Background(), job)
+		var ignored generateResult
+		inputs, err := collectInputs(context.Background(), job, &ignored, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := existingOutputs(context.Background(), job, inputs)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -99,8 +99,14 @@ type generateDialog struct {
 	algorithm  *vtui.RadioGroup
 	output     *vtui.RadioGroup
 	editOutput *vtui.Edit
+	recursive  *vtui.Checkbox
+	absolute   *vtui.Checkbox
+	editMask   *vtui.Edit
 	btnOK      *vtui.Button
 }
+
+// defaultMask is the file mask the dialog offers: every file.
+const defaultMask = "*"
 
 // outputModeNames lists the "Output to" choices in radio button order.
 func outputModeNames() []string {
@@ -114,9 +120,10 @@ func outputModeNames() []string {
 
 // newGenerateDialog builds the dialog for a panel directory named dirBase.
 // The file name field belongs to the "Single file" output and is disabled
-// for the others.
+// for the others. Recursion is on by default, so selected directories are
+// hashed with everything in them, as IntChecker does.
 func newGenerateDialog(dirBase string) *generateDialog {
-	width, height := 60, 19
+	width, height := 60, 23
 	d := &generateDialog{win: vtui.NewCenteredDialog(width, height, vtui.Msg("IntChecker.GenerateTitle"))}
 	d.win.ShowClose = true
 
@@ -144,12 +151,22 @@ func newGenerateDialog(dirBase string) *generateDialog {
 		d.editOutput.SetDisabled(outputMode(idx) != outputSingle)
 	}
 
+	d.recursive = vtui.NewCheckbox(0, 0, vtui.Msg("IntChecker.Recursive"), false)
+	d.recursive.State = 1
+	d.absolute = vtui.NewCheckbox(0, 0, vtui.Msg("IntChecker.AbsolutePaths"), false)
+	d.editMask = vtui.NewEdit(0, 0, 10, defaultMask)
+	lblMask := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FileMask"), d.editMask)
+	// The mask field takes the rest of its row.
+	lx1, _, lx2, _ := lblMask.GetPosition()
+	maskWidth := width - 4 - (lx2 - lx1 + 1) - 1
+	d.editMask.SetPosition(0, 0, maskWidth-1, 0)
+
 	d.btnOK = vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
 	d.btnOK.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, vtui.Msg("vtui.Cancel"))
 	btnCancel.OnClick = func() { d.win.Close() }
 
-	for _, item := range []vtui.UIElement{lblAlgorithm, d.algorithm, lblOutput, d.output, lblOutputEdit, d.editOutput, d.btnOK, btnCancel} {
+	for _, item := range []vtui.UIElement{lblAlgorithm, d.algorithm, lblOutput, d.output, lblOutputEdit, d.editOutput, d.recursive, d.absolute, lblMask, d.editMask, d.btnOK, btnCancel} {
 		d.win.AddItem(item)
 	}
 
@@ -160,6 +177,12 @@ func newGenerateDialog(dirBase string) *generateDialog {
 	vbox.Add(d.output, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(lblOutputEdit, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(d.editOutput, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(d.recursive, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(d.absolute, vtui.Margins{}, vtui.AlignLeft)
+	maskRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	maskRow.Add(lblMask, vtui.Margins{}, vtui.AlignLeft)
+	maskRow.Add(d.editMask, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(maskRow, vtui.Margins{}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -194,10 +217,13 @@ func showGenerateDialog(app vfs.App) {
 			return
 		}
 		d.win.Close()
-		job := generateJob{fs: fs, dir: dir, names: names, algorithm: algorithm, mode: mode, output: output}
-		// app.Message waits for the answer, so everything from the
-		// overwrite question on runs off the UI goroutine.
-		go startGenerate(app, job)
+		job := generateJob{
+			fs: fs, dir: dir, names: names, algorithm: algorithm, mode: mode, output: output,
+			recursive: d.recursive.State == 1,
+			absolute:  d.absolute.State == 1,
+			mask:      strings.TrimSpace(d.editMask.GetText()),
+		}
+		startGenerate(app, job)
 	}
 	vtui.FrameManager.Push(d.win)
 }
@@ -241,21 +267,53 @@ func confirmOverwrite(app vfs.App, job *generateJob, existing []string) bool {
 	return true
 }
 
+// startGenerate runs a job in two steps, each with its own progress and
+// cancellation: first the selected files are collected (walking the selected
+// directories when the job is recursive) and the existing checksum files are
+// found, then, once the user has answered the overwrite question, everything
+// is hashed and written.
 func startGenerate(app vfs.App, job generateJob) {
-	existing, err := existingOutputs(context.Background(), job)
-	if err != nil {
-		return
+	var (
+		res      generateResult
+		inputs   []hashInput
+		existing []string
+	)
+	title := vtui.Msg("IntChecker.GenerateTitle")
+	hash := func(job generateJob) {
+		app.RunAdvancedProgressTask(title, false, func(ctx context.Context, reporter vfs.TaskReporter) error {
+			var err error
+			res, err = hashInputs(ctx, job, inputs, res, reporter)
+			return err
+		}, func(err error) {
+			finishGenerate(app, job, res, err)
+		})
 	}
-	if !confirmOverwrite(app, &job, existing) {
-		return
-	}
-	var res generateResult
-	app.RunAdvancedProgressTask(vtui.Msg("IntChecker.GenerateTitle"), false, func(ctx context.Context, reporter vfs.TaskReporter) error {
+	app.RunAdvancedProgressTask(title, false, func(ctx context.Context, reporter vfs.TaskReporter) error {
 		var err error
-		res, err = runGenerate(ctx, job, reporter)
+		inputs, err = collectInputs(ctx, job, &res, func(dir string, files, dirs int64) {
+			reporter.UpdateScan(dir, files, dirs)
+		})
+		if err != nil {
+			return err
+		}
+		existing, err = existingOutputs(ctx, job, inputs)
 		return err
 	}, func(err error) {
-		finishGenerate(app, job, res, err)
+		if err != nil {
+			finishGenerate(app, job, res, err)
+			return
+		}
+		if len(existing) == 0 || len(inputs) == 0 {
+			hash(job)
+			return
+		}
+		// app.Message waits for the answer, so the overwrite question
+		// runs off the UI goroutine.
+		go func() {
+			if confirmOverwrite(app, &job, existing) {
+				hash(job)
+			}
+		}()
 	})
 }
 

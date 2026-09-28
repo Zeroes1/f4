@@ -5,15 +5,14 @@
 // f4#1623.
 //
 // The feature is built in atomic steps. Done: "Generate hashes" with an
-// algorithm choice for the marked files (or the file under the cursor) of the
-// current directory and all four outputs -- a single file, a separate
-// "<file><ext>" per file, one "<directory name><ext>" per directory, and a
-// window with the list that copies it to the clipboard or saves it -- and
-// "Validate files" for the checksum file under the cursor or one the user
-// names, asking for the directory when the listed files are not found. Still
-// to come: recursion into directories (until then the per-directory output
-// writes one file into the current directory), absolute paths, the file mask
-// filter and the output encoding.
+// algorithm choice for the marked files (or the file under the cursor),
+// recursion into the marked directories, relative or absolute paths, a file
+// mask filter and all four outputs -- a single file, a separate
+// "<file><ext>" per file, one "<directory name><ext>" per directory
+// ("sub/sub.md5" for the files of sub), and a window with the list that copies
+// it to the clipboard or saves it -- and "Validate files" for the checksum
+// file under the cursor or one the user names, asking for the directory when
+// the listed files are not found. Still to come: the output encoding.
 //
 // Invariants:
 //   - Checksum files are written only after every selected file has been
