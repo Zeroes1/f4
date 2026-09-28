@@ -124,6 +124,40 @@ func fileCopyMoveEnabled(isMove bool) func() bool {
 	}
 }
 
+// symlinkEditEnabled is the Enabled predicate for File.EditSymlink. It
+// mirrors actionEditSymlink's own three refusal branches -- exactly one
+// target selected (SymlinkEdit.OneFile), that target actually is a symlink
+// (SymlinkEdit.NotSymlink), and the panel's VFS implements SymlinkVFS
+// (SymlinkEdit.Unsupported) -- one of the two control examples viklequick
+// named in f4#1356 itself. Unlike actionEditSymlink, which confirms
+// IsSymlink with a fresh Lstat before opening the dialog, this runs
+// synchronously on every menu build and keypress, so it reads the
+// VFSItem.IsSymlink flag the last directory listing already cached on the
+// entry instead of doing I/O.
+func symlinkEditEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil {
+		return false
+	}
+	names := fsp.GetSelectedNames()
+	if len(names) != 1 {
+		return false
+	}
+	if _, ok := fsp.Vfs.(vfs.SymlinkVFS); !ok {
+		return false
+	}
+	for _, e := range fsp.Entries {
+		if e.Name == names[0] {
+			return e.IsSymlink
+		}
+	}
+	return false
+}
+
 // cursorOnParent reports whether the panel's cursor sits on the ".."
 // (parent-directory) entry — used by the far2l Ins clipboard shortcuts
 // that treat this position as the current folder itself.
@@ -618,6 +652,7 @@ func init() {
 		Description: "Edit the target of the selected symbolic link",
 		DescKey:     "Action.File.EditSymlink.Desc",
 		MenuPath:    "Files",
+		Enabled:     symlinkEditEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditSymlink(pf) }),
 	})
 	registerAction(action.Action{

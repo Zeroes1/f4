@@ -207,3 +207,52 @@ func TestFileCopyMoveEnabled(t *testing.T) {
 		t.Error("Copy from a non-local filesystem must disable with a player panel opposite (Player.LocalOnly)")
 	}
 }
+
+// TestSymlinkEditEnabled checks the Enabled predicate wired to
+// File.EditSymlink: it must mirror actionEditSymlink's own refusal branches
+// (SymlinkEdit.OneFile / NotSymlink / Unsupported) so the menu item dims
+// instead of the action opening one of those error dialogs (f4#1356, part 4).
+func TestSymlinkEditEnabled(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.GetActivePanel()
+	fsp.Vfs = vfs.NewOSVFS(t.TempDir())
+	fsp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "file.txt"}},
+		{VFSItem: vfs.VFSItem{Name: "link", IsSymlink: true}},
+	}
+
+	fsp.SetCursorIndex(0)
+	if symlinkEditEnabled() {
+		t.Error("cursor on \"..\" with nothing marked should disable Edit Symlink")
+	}
+
+	fsp.SetCursorIndex(1)
+	if symlinkEditEnabled() {
+		t.Error("a regular file target must disable Edit Symlink (SymlinkEdit.NotSymlink)")
+	}
+
+	fsp.SetCursorIndex(2)
+	if !symlinkEditEnabled() {
+		t.Error("a symlink target on a SymlinkVFS-capable panel must enable Edit Symlink")
+	}
+
+	fsp.SetItemSelected(1, true)
+	fsp.SetItemSelected(2, true)
+	if symlinkEditEnabled() {
+		t.Error("more than one marked item must disable Edit Symlink (SymlinkEdit.OneFile)")
+	}
+
+	fsp.SetItemSelected(1, false)
+	fsp.Vfs = vfs.NewNullVFS(0)
+	if symlinkEditEnabled() {
+		t.Error("a VFS without SymlinkVFS support must disable Edit Symlink (SymlinkEdit.Unsupported)")
+	}
+}
