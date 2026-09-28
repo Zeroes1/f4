@@ -744,6 +744,10 @@ GitStatus.NothingToCommit=Нет застейдженных изменений �
 GitStatus.CommitMessageEmpty=Сообщение коммита не может быть пустым
 GitStatus.CommitFailed=Не удалось выполнить git commit: %s
 GitStatus.CommitDone=Закоммичено: %s
+GitStatus.DeleteUntrackedTitle= Удаление файла
+GitStatus.DeleteUntrackedConfirm=Удалить %s с диска?\n\nGit его не отслеживает, поэтому откатывать нечего — путь будет удалён безвозвратно. Это действие нельзя отменить.
+GitStatus.DeleteUntrackedButton=&Удалить
+GitStatus.DeleteUntrackedFailed=Не удалось удалить %s: %s
 
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.

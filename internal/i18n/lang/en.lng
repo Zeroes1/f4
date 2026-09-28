@@ -744,6 +744,10 @@ GitStatus.NothingToCommit=Nothing staged to commit
 GitStatus.CommitMessageEmpty=Commit message cannot be empty
 GitStatus.CommitFailed=git commit failed: %s
 GitStatus.CommitDone=Committed: %s
+GitStatus.DeleteUntrackedTitle= Delete file
+GitStatus.DeleteUntrackedConfirm=Delete %s from disk?\n\nGit does not track it, so there is nothing to discard it back to -- this removes it outright. This cannot be undone.
+GitStatus.DeleteUntrackedButton=&Delete
+GitStatus.DeleteUntrackedFailed=Could not delete %s: %s
 
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.

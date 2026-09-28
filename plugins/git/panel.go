@@ -199,7 +199,10 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // Delete in a file panel and in this plugin's own branch list
 // (branchview.go) -- the destructive key of the Far-style keybar, and this
 // is the one destructive thing this panel does to a file; its keybar
-// caption says "Discard", not "Delete", because the file itself stays.
+// caption says "Discard", not "Delete", because the file itself stays --
+// except on an untracked entry, where there is no diff and so nothing to
+// discard back to: there (untracked.go) F8 offers to delete the path from
+// disk outright, after the same kind of confirmation.
 //
 // Enter, Insert, F4, Shift+F4 and F8 act on the entry under the cursor, so they are disabled
 // while the list is empty: the key is still consumed, exactly as before,
