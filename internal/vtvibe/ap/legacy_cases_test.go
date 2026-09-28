@@ -63,13 +63,13 @@ func runLegacyCase(t *testing.T, c legacyCase) {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatalf("setup: mkdir for %q: %v", rel, err)
 		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("setup: write %q: %v", rel, err)
 		}
 	}
 
 	patchPath := filepath.Join(dir, "_case.ap")
-	if err := os.WriteFile(patchPath, []byte(c.patch), 0o644); err != nil {
+	if err := os.WriteFile(patchPath, []byte(c.patch), 0o600); err != nil {
 		t.Fatalf("setup: write patch: %v", err)
 	}
 

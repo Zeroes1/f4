@@ -23,7 +23,7 @@ func TestApplyDryRunLeavesFilesUntouched(t *testing.T) {
 	patchPath := filepath.Join(dir, "_case.ap")
 	patch := "aa000001 AP 3.2\n\naa000001 FILE\na.txt\n\n" +
 		"aa000001 REPLACE\naa000001 snippet\nline2\naa000001 content\nLINE2\n"
-	if err := os.WriteFile(patchPath, []byte(patch), 0o644); err != nil {
+	if err := os.WriteFile(patchPath, []byte(patch), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -48,17 +48,17 @@ func TestApplyDryRunLeavesFilesUntouched(t *testing.T) {
 
 func TestApplyDryRunReportsRenameAndDelete(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "old.txt"), []byte("x\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "old.txt"), []byte("x\n"), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "gone.txt"), []byte("y\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "gone.txt"), []byte("y\n"), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 	patchPath := filepath.Join(dir, "_case.ap")
 	patch := "aa000002 AP 3.2\n\n" +
 		"aa000002 FILE\nold.txt\n\naa000002 RENAME\nnew.txt\n\n" +
 		"aa000002 FILE\ngone.txt\n\naa000002 DELETE\n"
-	if err := os.WriteFile(patchPath, []byte(patch), 0o644); err != nil {
+	if err := os.WriteFile(patchPath, []byte(patch), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
@@ -88,13 +88,13 @@ func TestApplyDryRunReportsRenameAndDelete(t *testing.T) {
 
 func TestApplyDryRunStillReportsFailures(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("line1\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("line1\n"), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 	patchPath := filepath.Join(dir, "_case.ap")
 	patch := "aa000003 AP 3.2\n\naa000003 FILE\na.txt\n\n" +
 		"aa000003 REPLACE\naa000003 snippet\nno such line\naa000003 content\nX\n"
-	if err := os.WriteFile(patchPath, []byte(patch), 0o644); err != nil {
+	if err := os.WriteFile(patchPath, []byte(patch), 0o600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
 
