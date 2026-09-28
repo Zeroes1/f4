@@ -72,6 +72,7 @@ ArchiveUseRatarmountIfAvailable|panels|Directory loading|Prefer ratarmount when 
 SyncPanelLoad|panels|Directory loading|Wait for complete directory listing|Replace the listing only when all directory results are ready and bypass cached previews. Off permits incremental results. It does not block all UI work.||next directory load
 InfoPanelCPUGPU|panels|Information panels|Show CPU and GPU information|Include locally collected CPU and GPU sections when the information provider does not supply authoritative information.||live
 InfoPanelBytes|panels|Information panels|Show sizes in bytes|Display raw bytes instead of human-readable sizes in information and quick-view panels.||live
+TreeRootWholeVolume|panels|Directory tree|Root the tree panel at the whole volume|Root the Ctrl+T tree panel at the source panel's whole current volume, as far2l does. Off roots it at the source panel's current directory instead.||next tree open
 NavigationMode|panels|Typing and focus|Panel navigation|Classic types into the command line. Vim adds j/k and double dd/cc/mm actions. Search-first separates filename-search and command focus.|0:Classic;1:Vim;2:Search first|live
 PanelGroupSmallMiB|panels|Grouping|Small group limit (MiB)|Inclusive upper size bound for Small. The three group limits must be positive and strictly increasing.||live
 PanelGroupMediumMiB|panels|Grouping|Medium group limit (MiB)|Inclusive upper size bound for Medium. Applies to logical size and size on disk.||live

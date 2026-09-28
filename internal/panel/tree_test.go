@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -197,6 +198,38 @@ func TestNewTreePanel_RootsAtVolumeAndRevealsCwd(t *testing.T) {
 	}
 	if got := filepath.Clean(tp.items[idx].path); got != filepath.Clean(wantPath) {
 		t.Errorf("cursor path = %q, want %q (the source panel's own directory)", got, wantPath)
+	}
+}
+
+// TestNewTreePanel_RootAtCurrentDirWhenConfigured checks the
+// TreeRootWholeVolume follow-up (f4#1602, part 7 of N): with the setting
+// off, the tree roots at the source panel's own current directory instead
+// of its whole volume, and the cursor lands on that same root row rather
+// than on some deeper child of it.
+func TestNewTreePanel_RootAtCurrentDirWhenConfigured(t *testing.T) {
+	before := config.App
+	defer func() { config.App = before }()
+	config.App.TreeRootWholeVolume = false
+
+	root := t.TempDir()
+	fsp := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
+	waitForLoad(t, fsp)
+
+	tp := NewTreePanel(fsp)
+	wantPath := fsp.Vfs.GetPath() // canonical form (e.g. macOS resolves /tmp -> /private/tmp)
+
+	if got, want := tp.root, wantPath; got != want {
+		t.Errorf("tree root = %q, want %q (the source panel's own directory, not the volume root)", got, want)
+	}
+	if got, want := tp.root, treeVolumeRoot(wantPath); got == want {
+		t.Errorf("tree root = %q, should not equal the volume root %q when TreeRootWholeVolume is off", got, want)
+	}
+	idx := tp.cursorIndex()
+	if idx < 0 {
+		t.Fatal("cursor should land on a real row after construction")
+	}
+	if got := filepath.Clean(tp.items[idx].path); got != filepath.Clean(wantPath) {
+		t.Errorf("cursor path = %q, want %q (the root row itself)", got, wantPath)
 	}
 }
 

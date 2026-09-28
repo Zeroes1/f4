@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtinput"
@@ -91,12 +92,14 @@ func (it treeItem) GetCellText(int) string {
 // Navigator has an equivalent tree view), bound to Ctrl+T -- see AltPanel's
 // own doc comment, which already named "tree" alongside "info"/"quick_view"
 // as a planned Kind. First atomic part of the DOS Navigator ideas ticket
-// (f4#1602). The tree is rooted at the source panel's current volume (its
-// filesystem root on POSIX, the drive root on Windows) -- matching far2l's
-// own "tree of the current disk" scope -- and lazily expanded: only the
-// root and the chain of directories down to the source panel's current
-// directory are read up front (revealPath), everything else is read the
-// first time the user expands it (Right arrow / expandAt).
+// (f4#1602). The tree is rooted at the source panel's current volume by
+// default (its filesystem root on POSIX, the drive root on Windows) --
+// matching far2l's own "tree of the current disk" scope -- or, when the
+// TreeRootWholeVolume setting (f4:config, part 7 of f4#1602) is off, at the
+// source panel's own current directory instead; either way it is lazily
+// expanded: only the root and the chain of directories down to the source
+// panel's current directory are read up front (revealPath), everything
+// else is read the first time the user expands it (Right arrow / expandAt).
 //
 // Enter on a row changes Source()'s directory to that row's path and closes
 // the tree, the same "pick a target, then get out of the way" round trip
@@ -123,8 +126,7 @@ func (it treeItem) GetCellText(int) string {
 // one way an already-expanded node's listing could go stale for as long as
 // the tree stays open.
 // Still a follow-up part: a persistent expand/collapse cache across tree
-// panel instances and a per-plugin f4:config knob (e.g. root = current dir
-// instead of the whole volume) -- see f4#1602.
+// panel instances -- see f4#1602.
 type TreePanel struct {
 	src     *FileSystemPanel
 	Frame   *vtui.BorderedFrame
@@ -141,7 +143,7 @@ type TreePanel struct {
 // SetPosition below only needs to be internally consistent, not final.
 func NewTreePanel(src *FileSystemPanel) *TreePanel {
 	x1, y1, x2, y2 := src.GetPosition()
-	t := &TreePanel{src: src, root: treeVolumeRoot(treeRootFor(src))}
+	t := &TreePanel{src: src, root: treeRoot(src)}
 
 	t.Frame = vtui.NewBorderedFrame(x1, y1, x2, y2, vtui.SingleBox, i18n.Msg("TreePanel.Title"))
 	t.Frame.ColorBoxIdx = theme.ColPanelBox
@@ -169,6 +171,17 @@ func treeRootFor(src *FileSystemPanel) string {
 		return ""
 	}
 	return src.Vfs.GetPath()
+}
+
+// treeRoot is the tree's own root row's path: src's whole current volume by
+// default (far2l's own scope), or just src's current directory when the
+// TreeRootWholeVolume setting (#1602 follow-up) is off.
+func treeRoot(src *FileSystemPanel) string {
+	path := treeRootFor(src)
+	if config.App.TreeRootWholeVolume {
+		return treeVolumeRoot(path)
+	}
+	return path
 }
 
 // treeVolumeRoot returns path's volume root: "/" on POSIX (VolumeName is
