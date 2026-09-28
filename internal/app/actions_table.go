@@ -2061,6 +2061,19 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.AutoFilter",
+		Area:        "Shell",
+		Label:       "Autofilter",
+		Description: "Open or close the panel autofilter",
+		DescKey:     "Action.Panel.AutoFilter.Desc",
+		// A lone Alt press does the same when the autofilter option is on;
+		// this key is for terminals that never report Alt on its own.
+		DefaultKeys: []string{"CtrlAltF"},
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			pf.ToggleAutoFilter()
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.Player",
 		Area:        "Shell",
 		Label:       "Player",

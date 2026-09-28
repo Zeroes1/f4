@@ -493,7 +493,7 @@ type F4Config struct {
 	UsePromptFormat          bool
 	PromptFormat             string
 	NavigationMode           PanelNavigationMode
-	PanelAutoFilter          bool // panel quick search hides non-matching rows instead of moving the cursor
+	PanelAutoFilter          bool // a lone Alt press opens the panel autofilter (hides non-matching rows); Alt+letter stays the quick search
 	PanelStrictAutoFilter    bool // panel quick search/autofilter requires an exact match instead of tolerating one typo
 	PanelGroupSmallMiB       int
 	PanelGroupMediumMiB      int

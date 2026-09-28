@@ -561,9 +561,12 @@ type FileSystemPanel struct {
 	fastFindMatcherKey         string
 	fastFindMatcherStrict      bool
 	fastFindMatchers           []*vtui.FuzzyMatcher
-	// autoFilterOn is set while the quick search is narrowing the panel
-	// rather than moving the cursor. unfilteredEntries then holds the
-	// complete row list and Entries the matching subset; see autofilter.go.
+	// autoFilterMode is set while the filter window is open (the search
+	// box narrows the panel instead of moving the cursor), autoFilterOn
+	// while its query is actually hiding rows. unfilteredEntries then holds
+	// the complete row list and Entries the matching subset; see
+	// autofilter.go.
+	autoFilterMode     bool
 	autoFilterOn       bool
 	unfilteredEntries  []*FileEntry
 	showInactiveCursor bool
@@ -3311,7 +3314,11 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 
 		p.Fill(fx1, fy1, fx2, fy2, ' ', vtui.Palette[vtui.ColDialogText])
 		p.DrawBox(fx1, fy1, fx2, fy2, vtui.Palette[vtui.ColDialogBox], vtui.DoubleBox)
-		p.DrawTitle(fx1, fy1, fx2, i18n.Msg("Viewer.SearchTitle"), vtui.Palette[vtui.ColDialogBoxTitle])
+		title := i18n.Msg("Viewer.SearchTitle")
+		if fp.autoFilterMode {
+			title = i18n.Msg("Panel.AutoFilterTitle")
+		}
+		p.DrawTitle(fx1, fy1, fx2, title, vtui.Palette[vtui.ColDialogBoxTitle])
 
 		searchStr := fp.FastFindStr
 		for runewidth.StringWidth(searchStr) > boxW-4 {
@@ -3320,7 +3327,8 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 		}
 
 		searchColor := vtui.Palette[theme.ColPanelFastFindNoMatch]
-		if fp.fastFindHasMatches() {
+		// An empty filter hides nothing, so it is not a failed search either.
+		if fp.fastFindHasMatches() || (fp.autoFilterMode && autoFilterQuery(fp.FastFindStr) == "") {
 			searchColor = vtui.Palette[vtui.ColMenuHighlight]
 		}
 		searchAttr := fastFindMatchAttr(vtui.Palette[vtui.ColDialogText], searchColor)
@@ -3543,7 +3551,7 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 		// navigation keys walk the result and the filter stays up -- that walk
 		// is the point of filtering. The cursor-moving search has nothing to
 		// walk and still closes on them.
-		filtering := fp.autoFilterOn
+		filtering := fp.autoFilterMode
 		if !filtering && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) {
 			fp.ExitFastFind()
 			vtui.FrameManager.Redraw()
@@ -3574,7 +3582,7 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			} else {
 				fp.FastFindStr = "*" + fp.FastFindStr
 			}
-			if autoFilterQuery(fp.FastFindStr) == "" {
+			if autoFilterQuery(fp.FastFindStr) == "" && !fp.autoFilterMode {
 				fp.ExitFastFind()
 			} else {
 				fp.applyFastFind()
@@ -3587,8 +3595,10 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 				runes := []rune(fp.FastFindStr)
 				fp.FastFindStr = string(runes[:len(runes)-1])
 				// A bare "*" is no query at all: erasing the last character of
-				// a filter ends the search instead of matching everything.
-				if autoFilterQuery(fp.FastFindStr) == "" {
+				// a quick search ends it instead of matching everything. The
+				// filter window stays open with every row shown -- it closes
+				// only on Alt, Esc or Enter (#1131).
+				if autoFilterQuery(fp.FastFindStr) == "" && !fp.autoFilterMode {
 					fp.ExitFastFind()
 				} else {
 					fp.applyFastFind()
@@ -3623,15 +3633,12 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 	} else {
 		searchFirstInput := config.App.NavigationMode == config.NavigationSearchFirst && fp.IsFocused() && !alt
 		if e.Char != 0 && (alt || searchFirstInput) && !ctrl && unicode.IsPrint(e.Char) {
+			// Typing a name is always the quick search, also with the
+			// autofilter enabled: the filter has its own key (a lone Alt
+			// or Panel.AutoFilter, see autofilter.go).
 			fp.FastFindMode = true
+			fp.autoFilterMode = false
 			fp.FastFindStr = string(unicode.ToLower(e.Char))
-			if config.App.PanelAutoFilter {
-				// A filter answers "which files have this in the name", so it
-				// starts unanchored. Seeding the '*' rather than special-casing
-				// the matcher keeps one meaning for the prefix: F2 still takes
-				// it off and narrows the filter to names starting with it.
-				fp.FastFindStr = "*" + fp.FastFindStr
-			}
 			fp.applyFastFind()
 			vtui.FrameManager.Redraw()
 			return true
@@ -3950,8 +3957,8 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	if fp.FastFindMode && e.ButtonState != 0 && !fp.autoFilterOn {
-		// A narrowed panel keeps its filter here on purpose: the rows under
+	if fp.FastFindMode && e.ButtonState != 0 && !fp.autoFilterMode {
+		// A filtered panel keeps its filter here on purpose: the rows under
 		// the pointer are the filtered ones, and giving the hidden rows back
 		// before this click is resolved would land it on a different file.
 		// The filter closes on Esc, on Enter, and on leaving the directory.
