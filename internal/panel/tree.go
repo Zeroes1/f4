@@ -107,9 +107,11 @@ func (it treeItem) GetCellText(int) string {
 // has focus, F5/F6 (actionCopyMove, internal/app/actions.go) copy/move the
 // selection from Source() -- the other, still-visible panel that opened the
 // tree -- into SelectedPath(), the highlighted node, without navigating
-// into it first (part 3 of f4#1602). F7 (mkdir) and F8/Del acting on the
-// highlighted node itself, the way far2l's own tree panel supports, are
-// still follow-up parts, as is a persistent expand/collapse cache across
+// into it first (part 3 of f4#1602), and F7 (actionMkDir) creates a new
+// subdirectory right under the highlighted node the same way, refreshing it
+// via RefreshChildrenAndSelect (part 4 of f4#1602). F8/Del acting on the
+// highlighted node itself, the way far2l's own tree panel supports, is
+// still a follow-up part, as is a persistent expand/collapse cache across
 // tree panel instances and a per-plugin f4:config knob (e.g. root = current
 // dir instead of the whole volume) -- see f4#1602.
 type TreePanel struct {
@@ -501,6 +503,34 @@ func (t *TreePanel) SelectedPath() string {
 		return ""
 	}
 	return t.items[idx].path
+}
+
+// RefreshChildrenAndSelect re-scans the disk children of the row under the
+// cursor and leaves the cursor on the child named name if one is found
+// there, or on the node itself otherwise (e.g. name no longer exists). Used
+// by F7 (actionMkDir, internal/app/actions.go) after it creates a new
+// subdirectory directly under the tree's highlighted node while the tree has
+// focus (f4#1602, part 4 of N): the node is force-expanded -- even if it was
+// collapsed before, since a moment ago it may have had no children at all --
+// so the newly created one becomes visible. A no-op if the cursor is out of
+// range.
+func (t *TreePanel) RefreshChildrenAndSelect(name string) {
+	idx := t.cursorIndex()
+	if idx < 0 {
+		return
+	}
+	if !t.items[idx].collapsed {
+		t.collapseAt(idx)
+	}
+	t.items[idx].expandable = true
+	t.items[idx].collapsed = true
+	t.expandAt(idx)
+	t.syncRows()
+	if child := t.findChild(idx, name); child != -1 {
+		t.setCursor(child)
+		return
+	}
+	t.setCursor(idx)
 }
 
 // activateSelected changes the source panel's directory to the highlighted

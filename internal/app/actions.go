@@ -2265,6 +2265,21 @@ func actionEditFile(pf *panel.PanelsFrame) {
 // copy/move dialog, the same as the operation-mode field below it.
 const rightsComboWidth = 32
 
+// focusedTreePanel returns pf.ActiveIdx's *panel.TreePanel if that is what
+// currently has focus there, or nil otherwise -- the shared check behind
+// every "does the highlighted tree node act as the target here" action
+// (F5/F6 via treeCopyMoveTarget, F7 via actionMkDir; f4#1602 parts 3-4).
+func focusedTreePanel(pf *panel.PanelsFrame) *panel.TreePanel {
+	if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+		return nil
+	}
+	t, ok := pf.AltPanels[pf.ActiveIdx].(*panel.TreePanel)
+	if !ok || !t.IsFocused() {
+		return nil
+	}
+	return t
+}
+
 // treeCopyMoveTarget reports whether pf.ActiveIdx's slot currently shows a
 // focused *panel.TreePanel -- the case where F5/F6 (actionCopyMove) target
 // the tree's highlighted node as the destination directly, rather than the
@@ -2275,11 +2290,8 @@ const rightsComboWidth = 32
 // case actionCopyMove and fileCopyMoveEnabled fall back to their previous,
 // plain active/inactive-panel behavior unchanged.
 func treeCopyMoveTarget(pf *panel.PanelsFrame) (*panel.TreePanel, *panel.FileSystemPanel) {
-	if pf == nil || pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
-		return nil, nil
-	}
-	t, ok := pf.AltPanels[pf.ActiveIdx].(*panel.TreePanel)
-	if !ok || !t.IsFocused() {
+	t := focusedTreePanel(pf)
+	if t == nil {
 		return nil, nil
 	}
 	return t, t.Source()
@@ -3380,6 +3392,22 @@ func actionMkDir(pf *panel.PanelsFrame) {
 
 	activeVfs := pnl.Vfs
 
+	// With the tree (Ctrl+T) focused, F7 creates the new folder as a child
+	// of the highlighted node rather than of the active panel's own
+	// directory -- the same "the tree is a real destination panel, not just
+	// a navigator" behavior F5/F6 already got via treeCopyMoveTarget (see
+	// its doc comment for why a fresh OSVFS rooted there stands in for a
+	// real panel sitting on that same directory; f4#1602 part 4 of N).
+	var treeAlt *panel.TreePanel
+	if t := focusedTreePanel(pf); t != nil {
+		destPath := t.SelectedPath()
+		if destPath == "" {
+			return
+		}
+		treeAlt = t
+		activeVfs = vfs.NewOSVFS(destPath)
+	}
+
 	dlg := vtui.NewCenteredDialog(40, 11, i18n.Msg("MakeFolder.Title"))
 	dlg.ShowClose = true
 
@@ -3443,6 +3471,23 @@ func actionMkDir(pf *panel.PanelsFrame) {
 			return err
 		}
 
+		// onDone lands the cursor on the created folder: on the active
+		// panel as before when F7 targets it directly, or on the tree's
+		// own highlighted node -- re-scanning it so the new child is
+		// visible -- when F7 targeted the tree instead (see treeAlt above;
+		// f4#1602 part 4 of N). The tree's own refresh is synchronous, so
+		// it needs an explicit redraw the same way actionCopyMove's player
+		// branch already does for its own synchronous, non-RefreshAll path.
+		onDone := func() {
+			if treeAlt != nil {
+				treeAlt.RefreshChildrenAndSelect(name)
+				vtui.FrameManager.Redraw()
+				return
+			}
+			pnl.PendingSelection = name
+			pf.RefreshAll()
+		}
+
 		if mode == 0 { // Queue
 			rk := fileops.GetResourceKey(activeVfs)
 			var keys []string
@@ -3450,14 +3495,11 @@ func actionMkDir(pf *panel.PanelsFrame) {
 				keys = append(keys, rk)
 			}
 			task := &fileops.QueueTask{
-				Type:    "MkDir",
-				Desc:    desc,
-				ResKeys: keys,
-				Run:     runFunc,
-				OnComplete: func() {
-					pnl.PendingSelection = name
-					pf.RefreshAll()
-				},
+				Type:       "MkDir",
+				Desc:       desc,
+				ResKeys:    keys,
+				Run:        runFunc,
+				OnComplete: onDone,
 			}
 			fileops.GlobalQueueManager.Enqueue(task)
 		} else { // Background / Foreground
@@ -3467,8 +3509,7 @@ func actionMkDir(pf *panel.PanelsFrame) {
 					if err != nil {
 						vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Operation.Error"), err.Error()), []string{"&Ok"})
 					}
-					pnl.PendingSelection = name
-					pf.RefreshAll()
+					onDone()
 				})
 			})
 			_ = taskCtx

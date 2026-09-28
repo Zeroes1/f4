@@ -984,6 +984,121 @@ func TestActionCopyMove_TreeDestination(t *testing.T) {
 	vtui.FrameManager.Pop()
 }
 
+// TestActionMkDir_TreeDestination drives F7 (actionMkDir) with the tree
+// panel (Ctrl+T) focused: the new folder must be created as a child of the
+// tree's highlighted node, not of the active panel's own directory, and the
+// tree cursor must land on it afterwards -- see actionMkDir's own
+// focusedTreePanel branch and TreePanel.RefreshChildrenAndSelect (f4#1602
+// part 4).
+func TestActionMkDir_TreeDestination(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+
+	oldQueue := fileops.GlobalQueueManager
+	queue := fileops.NewQueueManagerWithTasks()
+	fileops.GlobalQueueManager = queue
+	defer func() { fileops.GlobalQueueManager = oldQueue }()
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	root := t.TempDir()
+	fromDir := filepath.Join(root, "from")
+	toDir := filepath.Join(root, "to")
+	if err := os.Mkdir(fromDir, 0o700); err != nil {
+		t.Fatalf("mkdir from: %v", err)
+	}
+	if err := os.Mkdir(toDir, 0o700); err != nil {
+		t.Fatalf("mkdir to: %v", err)
+	}
+
+	fspFrom := panel.NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(fromDir))
+	paneltest.WaitForLoad(t, fspFrom)
+
+	tp := panel.NewTreePanel(fspFrom)
+	// revealPath lands the cursor on fromDir's own row; "to" is its next
+	// sibling (both are root's only children), so one Down reaches it --
+	// same precondition TestActionCopyMove_TreeDestination relies on.
+	if got := tp.GetSelectedName(); got != "from" {
+		t.Fatalf("precondition: tree cursor on %q, want \"from\"", got)
+	}
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN}) {
+		t.Fatal("Down should be consumed by the tree's table")
+	}
+	if got := tp.GetSelectedName(); got != "to" {
+		t.Fatalf("precondition: tree cursor on %q after Down, want \"to\"", got)
+	}
+	tp.SetFocus(true)
+	pf.AltPanels[pf.ActiveIdx] = tp
+
+	actionMkDir(pf)
+
+	top := vtui.FrameManager.GetTopFrame()
+	if top == nil || top.GetTitle() != i18n.Msg("MakeFolder.Title") {
+		t.Fatalf("Expected MkDir dialog, got %v", top)
+	}
+	dlg, ok := top.(vtui.Container)
+	if !ok {
+		t.Fatal("MkDir dialog not found on top")
+	}
+	var editName *vtui.Edit
+	var btnOk *vtui.Button
+	var comboMode *vtui.ComboBox
+	for _, itm := range dlg.GetChildren() {
+		if e, ok := itm.(*vtui.Edit); ok && editName == nil {
+			editName = e
+		}
+		if b, ok := itm.(*vtui.Button); ok && b.IsDefault {
+			btnOk = b
+		}
+		if c, ok := itm.(*vtui.ComboBox); ok {
+			comboMode = c
+		}
+	}
+	if editName == nil || btnOk == nil || comboMode == nil {
+		t.Fatal("MkDir dialog missing its name field, mode combo or default (Ok) button")
+	}
+	editName.SetText("newsub")
+	// Force Queue mode regardless of config.App.DefaultFileOpMode's current
+	// value, so this test can inspect the enqueued task deterministically
+	// instead of racing a Background/Foreground goroutine.
+	comboMode.Menu.SetSelectPos(0)
+	btnOk.OnClick()
+
+	tasks := queue.Tasks()
+	if len(tasks) == 0 {
+		t.Fatal("actionMkDir did not enqueue a task")
+	}
+	task := tasks[len(tasks)-1]
+	if err := task.Run(context.Background(), &fileops.DummyReporter{}, nil); err != nil {
+		t.Fatalf("MkDir task.Run: %v", err)
+	}
+	task.SetState("Done")
+	if task.OnComplete != nil {
+		task.OnComplete()
+	}
+
+	// The new folder must land under the tree's highlighted node (toDir),
+	// not under fromDir (the panel that opened the tree).
+	if info, err := os.Stat(filepath.Join(toDir, "newsub")); err != nil || !info.IsDir() {
+		t.Fatalf("newsub not created under toDir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fromDir, "newsub")); err == nil {
+		t.Fatal("newsub must not be created under fromDir")
+	}
+
+	if got := tp.GetSelectedName(); got != "newsub" {
+		t.Fatalf("tree cursor after F7 = %q, want %q", got, "newsub")
+	}
+	wantPath := filepath.Join(toDir, "newsub")
+	if got := tp.SelectedPath(); got != wantPath {
+		t.Fatalf("tree SelectedPath after F7 = %q, want %q", got, wantPath)
+	}
+}
+
 func TestActionCopyMove_ModeMenuDoesNotCoverButtons(t *testing.T) {
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
