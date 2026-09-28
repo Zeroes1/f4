@@ -128,6 +128,13 @@ func BuildChildEnv(env []string, graphics, kittyTerm bool) []string {
 			strings.HasPrefix(kv, "TERM_PROGRAM=") {
 			continue
 		}
+		// F4_NESTED is ours too, and one is appended below: a nested f4
+		// inherits the marker from the terminal that started it, and keeping
+		// that copy would hand the child one line per nesting level the
+		// session has already seen instead of exactly one.
+		if strings.HasPrefix(kv, "F4_NESTED=") {
+			continue
+		}
 		if kittyTerm && strings.HasPrefix(kv, "TERM=") {
 			continue
 		}
