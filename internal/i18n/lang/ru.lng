@@ -742,7 +742,6 @@ GitStatus.ColumnStatus=Статус
 GitStatus.ColumnPath=Путь
 GitStatus.PanelTitle=Статус git: %s (%d)
 GitStatus.Detached=отделённый HEAD
-PanelPlugin.KeyBar.Close=Закрыть
 GitStatus.KeyBar.Refresh=Обновить
 GitStatus.KeyBar.Hunks=Куски
 GitStatus.KeyBar.UnstageHunks=Убрать
@@ -762,6 +761,8 @@ GitStatus.DeleteUntrackedTitle= Удаление файла
 GitStatus.DeleteUntrackedConfirm=Удалить %s с диска?\n\nGit его не отслеживает, поэтому откатывать нечего — путь будет удалён безвозвратно. Это действие нельзя отменить.
 GitStatus.DeleteUntrackedButton=&Удалить
 GitStatus.DeleteUntrackedFailed=Не удалось удалить %s: %s
+
+PanelPlugin.KeyBar.Close=Закрыть
 
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.

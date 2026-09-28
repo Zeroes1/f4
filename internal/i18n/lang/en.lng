@@ -742,7 +742,6 @@ GitStatus.ColumnStatus=Status
 GitStatus.ColumnPath=Path
 GitStatus.PanelTitle=Git status: %s (%d)
 GitStatus.Detached=detached HEAD
-PanelPlugin.KeyBar.Close=Close
 GitStatus.KeyBar.Refresh=Refresh
 GitStatus.KeyBar.Hunks=Hunks
 GitStatus.KeyBar.UnstageHunks=Unstage
@@ -762,6 +761,8 @@ GitStatus.DeleteUntrackedTitle= Delete file
 GitStatus.DeleteUntrackedConfirm=Delete %s from disk?\n\nGit does not track it, so there is nothing to discard it back to -- this removes it outright. This cannot be undone.
 GitStatus.DeleteUntrackedButton=&Delete
 GitStatus.DeleteUntrackedFailed=Could not delete %s: %s
+
+PanelPlugin.KeyBar.Close=Close
 
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.
