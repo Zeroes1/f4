@@ -324,7 +324,7 @@ func TestDNDBindNegotiates(t *testing.T) {
 func TestDNDBindShrinksChunkToFrame(t *testing.T) {
 	e := newDNDEnv(t)
 	b := e.bind(t, dndBindingA, 4096, 100000, far2ldnd.FeatureStream)
-	if b.MaxFrame != 4096 || b.MaxChunk != far2ldnd.MaxReadData(4096, far2ldnd.BEL) {
+	if b.MaxFrame != 4096 || b.MaxChunk != far2ldnd.MaxReadData(4096, far2ldnd.ST) {
 		t.Fatalf("granted frame %d chunk %d", b.MaxFrame, b.MaxChunk)
 	}
 	if b.Features != far2ldnd.FeatureStream {
@@ -655,8 +655,13 @@ func TestDNDClose(t *testing.T) {
 		t.Fatalf("source closed %d times", src.closeCount())
 	}
 	wantStatus(t, e.request(t, 11, &far2ldnd.ReadRequest{Offer: offer, ItemID: 1, Length: 1}), far2ldnd.StatusOfferGone)
+	// A reason above the protocol's own range is clamped to CloseFailed, not
+	// refused (owner's answer 9): CLOSE is a cleanup barrier, and this one
+	// still just repeats the already-closed offer, empty body and all.
 	badReason := popOrder([]byte{12}, []byte{'d'}, []byte{'c'}, offer[:], []byte{4})
-	wantStatus(t, e.raw(t, badReason), far2ldnd.StatusBadRequest)
+	if got := e.raw(t, badReason); got != replyFrame(t, 12, nil) {
+		t.Fatalf("CLOSE reason 4 (clamped to 3): %q", got)
+	}
 
 	src2 := oneFile(1, streamFlags, "abc")
 	offer2 := e.offer(t, src2)
@@ -766,7 +771,11 @@ func TestDNDFrameLimit(t *testing.T) {
 func TestDNDMalformedRequests(t *testing.T) {
 	e := newDNDEnv(t)
 	unknown := popOrder([]byte{4}, []byte{'d'}, []byte{'z'})
-	wantStatus(t, e.raw(t, unknown), far2ldnd.StatusBadRequest)
+	// A well-formed request for an operation this version does not have --
+	// -5, not -4 (owner's answer 2): -4 would tell a new client this
+	// terminal has no DND family at all, which ErrNoDND's empty reply is
+	// reserved for.
+	wantStatus(t, e.raw(t, unknown), far2ldnd.StatusUnsupported)
 	// LIST must be answered, so RID 0 is malformed -- and there is no one to
 	// tell.
 	e.silent(t, popOrder([]byte{0}, []byte{'d'}, []byte{'l'}, make([]byte, 16), le64(0), le64(0)))
@@ -786,13 +795,31 @@ func TestDNDProcessFar2lInteract(t *testing.T) {
 	}
 }
 
-func TestDNDMessageFitsReply(t *testing.T) {
-	long := strings.Repeat("я", 600) // 1200 bytes
-	m := dndMessage(long + "\xff")
-	if len(m) > far2ldnd.MaxMessageLen || !strings.HasPrefix(long, m) {
-		t.Fatalf("message of %d bytes", len(m))
+// dndErrorLocked shortens a diagnostic to whatever the *current* frame limit
+// carries, not just far2ldnd's own flat MaxMessageLen ceiling (owner's
+// answer 3): pre-BIND, that is BindFrameLimit (512 bytes), well under 1024;
+// after BIND negotiates a large enough max_frame, the full 1024-byte
+// ceiling fits.
+func TestDNDErrorFitsFrame(t *testing.T) {
+	e := newDNDEnv(t)
+	long := strings.Repeat("я", 600) // 1200 bytes, over both ceilings
+
+	e.pty.Reset()
+	e.tv.dndAsyncError(9, far2ldnd.StatusUnsupported, long)
+	frame := e.wait(t, 1)[0]
+	if n := len(frame); n > far2ldnd.BindFrameLimit {
+		t.Fatalf("pre-BIND error reply is %d bytes, over BindFrameLimit %d", n, far2ldnd.BindFrameLimit)
 	}
-	if got := dndMessage("a\xffb"); got != "a?b" {
-		t.Fatalf("invalid UTF-8: %q", got)
+	var se *far2ldnd.StatusError
+	if _, err := parseReply(t, frame); !errors.As(err, &se) || !strings.HasPrefix(long, se.Message) {
+		t.Fatalf("pre-BIND message not shortened from the original: %v", err)
+	}
+
+	e.bind(t, dndBindingA, far2ldnd.DefaultMaxFrame, far2ldnd.DefaultMaxChunk, far2ldnd.FeatureStream)
+	e.pty.Reset()
+	e.tv.dndAsyncError(10, far2ldnd.StatusIOError, long)
+	frame2 := e.wait(t, 1)[0]
+	if _, err := parseReply(t, frame2); !errors.As(err, &se) || len(se.Message) != far2ldnd.MaxMessageLen {
+		t.Fatalf("post-BIND message not shortened to MaxMessageLen: %v", err)
 	}
 }

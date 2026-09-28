@@ -264,10 +264,9 @@ func TestRequestRejections(t *testing.T) {
 		{"bind off with limits", enc(4, &BindRequest{Version: 1, MaxFrame: 4096}), ErrInvalid, StatusBadRequest},
 		{"bind frame below 4096", enc(4, &BindRequest{Version: 1, Enable: true, MaxFrame: 4095, MaxChunk: 1, Window: 1}), ErrInvalid, StatusBadRequest},
 		{"bind chunk 0", enc(4, &BindRequest{Version: 1, Enable: true, MaxFrame: 4096, Window: 1}), ErrInvalid, StatusBadRequest},
-		{"bind window 33", enc(4, &BindRequest{Version: 1, Enable: true, MaxFrame: 4096, MaxChunk: 1, Window: 33}), ErrInvalid, StatusBadRequest},
+		{"bind window 0", enc(4, &BindRequest{Version: 1, Enable: true, MaxFrame: 4096, MaxChunk: 1, Window: 0}), ErrInvalid, StatusBadRequest},
 		{"bind version 2", enc(4, &BindRequest{Version: 2, Enable: true}), ErrUnsupportedVersion, StatusUnsupported},
-		{"close reason 4", enc(4, &CloseRequest{Reason: 4}), ErrInvalid, StatusBadRequest},
-		{"unknown subcommand", []byte{'z', 'd', 4}, ErrUnknownSubcommand, StatusBadRequest},
+		{"unknown subcommand", []byte{'z', 'd', 4}, ErrUnknownSubcommand, StatusUnsupported},
 		{"clipboard", []byte{'c', 'c', 4}, ErrNotDND, StatusBadRequest},
 		{"empty", nil, ErrTruncated, StatusBadRequest},
 	}
@@ -301,6 +300,46 @@ func TestRequestRejections(t *testing.T) {
 	}
 	if _, err := EncodeRequest(4, &BindRequest{Version: 2}); !errors.Is(err, ErrUnsupportedVersion) {
 		t.Errorf("encode BIND v2: %v", err)
+	}
+}
+
+// TestRequestDecodeLeniency covers the owner's answers that make request
+// decoding more tolerant than the strict encoder: a BIND window above the
+// protocol's reply ceiling is a profile to negotiate down, not a malformed
+// request (answer 4), and a CLOSE reason outside 0..3 is clamped to 3
+// rather than refused, so the barrier still runs (answer 9).
+func TestRequestDecodeLeniency(t *testing.T) {
+	q := &BindRequest{Version: 1, Enable: true, Binding: seqID(6), MaxFrame: 4096, MaxChunk: 1, Window: 1000, WantedFeatures: FeatureStream}
+	if _, err := EncodeRequest(9, q); err != nil {
+		t.Fatalf("encode BIND window 1000: %v", err)
+	}
+	stack := roundTripRequest(t, 9, q)
+	if _, _, err := DecodeRequest(stack); err != nil {
+		t.Fatalf("decode BIND window 1000: %v", err)
+	}
+
+	// Laid out by hand with Reason=4 (the encoder refuses this; only a
+	// decoder should ever meet it, from another implementation).
+	var w stackWriter
+	w.u8(7)
+	w.u8(InteractDND)
+	w.u8(SubClose)
+	w.id(seqID(1))
+	w.u8(4)
+	bad, err := w.bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EncodeRequest(7, &CloseRequest{Offer: seqID(1), Reason: 4}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("encode CLOSE reason 4: %v", err)
+	}
+	rid, got, err := DecodeRequest(bad)
+	if err != nil {
+		t.Fatalf("decode CLOSE reason 4: %v", err)
+	}
+	c, ok := got.(*CloseRequest)
+	if !ok || rid != 7 || c.Reason != CloseFailed {
+		t.Fatalf("CLOSE reason 4 not clamped: rid %d, %+v", rid, got)
 	}
 }
 
@@ -357,6 +396,10 @@ func TestBindReply(t *testing.T) {
 		"window zero":     func(b *BindReply) { b.Window = 0 },
 		"unwanted bit":    func(b *BindReply) { b.Features |= 4 },
 		"no feature":      func(b *BindReply) { b.Features = 0 },
+		"chunk overflows max_frame": func(b *BindReply) {
+			b.MaxFrame = MinMaxFrame
+			b.MaxChunk = MinMaxFrame // far above what MinMaxFrame can carry
+		},
 	}
 	for name, mut := range bad {
 		b := ok
@@ -413,14 +456,29 @@ func TestOldServerAndErrors(t *testing.T) {
 	if _, err := EncodeError(1, StatusIOError, strings.Repeat("x", MaxMessageLen)); err != nil {
 		t.Errorf("message of exactly %d bytes: %v", MaxMessageLen, err)
 	}
-	if _, err := EncodeError(1, StatusIOError, strings.Repeat("x", MaxMessageLen+1)); !errors.Is(err, ErrTooLong) {
+	// A message over MaxMessageLen is shortened, not refused (owner's answer
+	// 3): the caller's RID must not hang forever just because the terminal
+	// had something long to say.
+	long, err := EncodeError(1, StatusIOError, strings.Repeat("x", MaxMessageLen+1))
+	if err != nil {
 		t.Errorf("long message: %v", err)
+	}
+	if f, err := DecodeReply(long); err == nil || !errors.As(err, &se) || len(se.Message) != MaxMessageLen {
+		t.Errorf("long message not shortened to %d bytes: %+v, %v", MaxMessageLen, f, err)
 	}
 	if _, err := EncodeError(1, StatusOK, ""); !errors.Is(err, ErrInvalid) {
 		t.Errorf("error with status 1: %v", err)
 	}
-	if _, err := EncodeError(1, StatusIOError, "\xff"); !errors.Is(err, ErrInvalidUTF8) {
+	// Invalid UTF-8 is replaced, not refused, the same as a message that is
+	// merely too long: TruncateText already guarantees valid UTF-8 before
+	// EncodeError ever sees it (dndErrorLocked, far2l_dnd.go, calls the same
+	// helper for its own frame-aware shortening).
+	invalid, err := EncodeError(1, StatusIOError, "a\xffb")
+	if err != nil {
 		t.Errorf("non-UTF-8 message: %v", err)
+	}
+	if f, err := DecodeReply(invalid); err == nil || !errors.As(err, &se) || se.Message != "a?b" {
+		t.Errorf("non-UTF-8 message not replaced: %+v, %v", f, err)
 	}
 	if _, err := EncodeReply(0, nil); !errors.Is(err, ErrInvalid) {
 		t.Errorf("reply to RID 0: %v", err)
@@ -528,21 +586,64 @@ func TestListReply(t *testing.T) {
 		t.Errorf("entry over 16 KiB: %v", err)
 	}
 
-	badEntries := map[string]Entry{
-		"item 0":                 {Kind: KindFile},
-		"size without flag":      {ItemID: 1, Size: 5},
-		"random without stream":  {ItemID: 1, Flags: ItemRandomAccess},
-		"frozen without stream":  {ItemID: 1, Flags: ItemFrozen},
-		"native name, no enc":    {ItemID: 1, NativeName: []byte("x")},
-		"uri without reference":  {ItemID: 1, ReferenceURI: "file:///x"},
-		"name is not UTF-8":      {ItemID: 1, Name: "\xff"},
-		"namespace is not UTF-8": {ItemID: 1, SourceNamespace: "\xc3"},
+	// The encoder still refuses all of these (Entry.check, unchanged); a
+	// decoder only ever meets them from another implementation. Everything
+	// but item_id 0 and invalid UTF-8 (a file name is never safe to guess a
+	// replacement for, unlike a diagnostic message) is normalized instead of
+	// refused (owner's answer 7 and the bullet list after the nine
+	// questions).
+	badEntries := []struct {
+		name    string
+		in      Entry
+		want    Entry // zero Entry{} for the two still-rejected cases
+		decodes bool
+	}{
+		{"item 0", Entry{Kind: KindFile}, Entry{}, false},
+		{"size without flag", Entry{ItemID: 1, Size: 5}, Entry{ItemID: 1}, true},
+		{"random without stream", Entry{ItemID: 1, Flags: ItemRandomAccess}, Entry{ItemID: 1}, true},
+		{"frozen without stream", Entry{ItemID: 1, Flags: ItemFrozen}, Entry{ItemID: 1}, true},
+		{"native name, no enc", Entry{ItemID: 1, NativeName: []byte("x")}, Entry{ItemID: 1}, true},
+		{"uri without reference", Entry{ItemID: 1, ReferenceURI: "file:///x"}, Entry{ItemID: 1}, true},
+		{"reference without uri", Entry{ItemID: 1, Flags: ItemReference}, Entry{ItemID: 1}, true},
+		{"name is not UTF-8", Entry{ItemID: 1, Name: "\xff"}, Entry{}, false},
+		{"namespace is not UTF-8", Entry{ItemID: 1, SourceNamespace: "\xc3"}, Entry{}, false},
 	}
-	for name, e := range badEntries {
-		if _, err := EncodeReply(5, &ListReply{NextCursor: CursorLastPage, Entries: []Entry{e}}); err == nil {
-			t.Errorf("encode %s accepted", name)
+	for _, c := range badEntries {
+		if _, err := EncodeReply(5, &ListReply{NextCursor: CursorLastPage, Entries: []Entry{c.in}}); err == nil {
+			t.Errorf("encode %s accepted", c.name)
 		}
-		// And the decoder refuses the same entry laid out by hand.
+		// The decoder sees the same entry laid out by hand, bypassing the
+		// encoder's own checks (str's UTF-8 validation included, for the two
+		// cases that build invalid UTF-8 on purpose).
+		var w stackWriter
+		w.u64(c.in.ItemID)
+		w.u8(c.in.Kind)
+		w.u16(c.in.Flags)
+		w.u64(c.in.Size)
+		w.blob([]byte(c.in.Name))
+		w.u8(c.in.NativeEncoding)
+		w.blob(c.in.NativeName)
+		w.blob([]byte(c.in.ReferenceURI))
+		w.blob([]byte(c.in.SourceNamespace))
+		b, _ := w.bytes()
+		got, err := decodeEntry(b)
+		switch {
+		case !c.decodes && err == nil:
+			t.Errorf("decode %s accepted", c.name)
+		case c.decodes && err != nil:
+			t.Errorf("decode %s: %v", c.name, err)
+		case c.decodes && !reflect.DeepEqual(got, c.want):
+			t.Errorf("decode %s: got %+v, want %+v", c.name, got, c.want)
+		}
+	}
+
+	// A page with one unusable entry (item_id 0) among good ones keeps the
+	// rest instead of losing the whole copy over it (owner's answer to the
+	// bullet list). The encoder refuses to ever produce this (Entry.check),
+	// so the page is laid out by hand, the same way EncodeReply and
+	// ListReply.put would have -- one item_id 0 is the only thing another
+	// implementation could put here that this f4 itself never would.
+	rawEntry := func(e Entry) []byte {
 		var w stackWriter
 		w.u64(e.ItemID)
 		w.u8(e.Kind)
@@ -553,10 +654,31 @@ func TestListReply(t *testing.T) {
 		w.blob(e.NativeName)
 		w.blob([]byte(e.ReferenceURI))
 		w.blob([]byte(e.SourceNamespace))
-		b, _ := w.bytes()
-		if _, err := decodeEntry(b); err == nil {
-			t.Errorf("decode %s accepted", name)
+		b, err := w.bytes()
+		if err != nil {
+			t.Fatal(err)
 		}
+		return b
+	}
+	var mw stackWriter
+	mw.u8(5)
+	mw.i8(int8(StatusOK))
+	mw.u64(CursorLastPage)
+	mw.u32(3)
+	mw.blob(rawEntry(Entry{ItemID: 1, Kind: KindFile, Name: "a"}))
+	mw.blob(rawEntry(Entry{Kind: KindFile, Name: "bad"})) // item_id 0
+	mw.blob(rawEntry(Entry{ItemID: 2, Kind: KindFile, Name: "b"}))
+	mixedStack, err := mw.bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mixedFrame, err := DecodeReply(mixedStack)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mixedList, err := DecodeListReply(mixedFrame)
+	if err != nil || len(mixedList.Entries) != 2 || mixedList.Entries[0].ItemID != 1 || mixedList.Entries[1].ItemID != 2 {
+		t.Errorf("mixed page: %+v, %v", mixedList, err)
 	}
 
 	// A later version may put more fields into an entry; v1 ignores them.
@@ -640,29 +762,56 @@ func TestEvent(t *testing.T) {
 		t.Error("PositionKnown")
 	}
 
-	bad := map[string]Event{
-		"reserved flag":       {Flags: 2},
-		"modifiers not known": {Modifiers: 1},
-		"half unknown":        {X: -1, Y: 3},
-		"negative":            {X: -2, Y: -2},
+	// The encoder still refuses all of these (check, unchanged); a decoder
+	// only ever meets them from another implementation and normalizes them
+	// in place instead (owner's answers 5 and 6).
+	bad := []struct {
+		name string
+		in   Event
+		want Event
+	}{
+		{"reserved flag", Event{Flags: 2}, Event{Flags: 0}},
+		{"modifiers not known", Event{Modifiers: 1}, Event{}},
+		{"half unknown", Event{X: -1, Y: 3}, Event{X: -1, Y: -1}},
+		{"negative", Event{X: -2, Y: -2}, Event{X: -1, Y: -1}},
+		{"reserved bit kept with known modifiers",
+			Event{Modifiers: 0x1f, Flags: EventModifiersKnown | 2},
+			Event{Modifiers: 0x1f, Flags: EventModifiersKnown}},
 	}
-	for name, ev := range bad {
-		if _, err := EncodeEvent(&ev); !errors.Is(err, ErrInvalid) {
-			t.Errorf("encode %s: %v", name, err)
+	for _, c := range bad {
+		if _, err := EncodeEvent(&c.in); !errors.Is(err, ErrInvalid) {
+			t.Errorf("encode %s: %v", c.name, err)
 		}
 		var w stackWriter
 		w.u8(InputDND)
-		w.id(ev.Binding)
-		w.id(ev.Offer)
-		w.i16(ev.X)
-		w.i16(ev.Y)
-		w.u32(ev.Modifiers)
-		w.u16(ev.Flags)
+		w.id(c.in.Binding)
+		w.id(c.in.Offer)
+		w.i16(c.in.X)
+		w.i16(c.in.Y)
+		w.u32(c.in.Modifiers)
+		w.u16(c.in.Flags)
 		b, _ := w.bytes()
-		if _, err := DecodeEvent(b); !errors.Is(err, ErrInvalid) {
-			t.Errorf("decode %s: %v", name, err)
+		got, err := DecodeEvent(b)
+		c.want.Binding, c.want.Offer = c.in.Binding, c.in.Offer
+		if err != nil || got != c.want {
+			t.Errorf("decode %s: got %+v, %v; want %+v", c.name, got, err, c.want)
 		}
 	}
+
+	// binding and offer still decode even with a tail below them, so the
+	// caller can CLOSE the right offer at once instead of waiting out its
+	// lease (owner's answer 1).
+	ev := Event{Binding: seqID(1), Offer: seqID(2), X: -1, Y: -1}
+	stack, err := EncodeEvent(&ev)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tailed := append([]byte{9, 9, 9}, stack...)
+	got, err := DecodeEvent(tailed)
+	if !errors.Is(err, ErrTrailing) || got.Binding != ev.Binding || got.Offer != ev.Offer {
+		t.Errorf("event with a tail: %+v, %v", got, err)
+	}
+
 	if _, err := DecodeEvent([]byte{'K'}); !errors.Is(err, ErrNotDND) {
 		t.Errorf("another event: %v", err)
 	}
@@ -720,5 +869,34 @@ func TestMaxReadData(t *testing.T) {
 	// The proposed profile: 32 KiB of data fit in a 64 KiB frame (§ 7).
 	if MaxReadData(DefaultMaxFrame, ST) < DefaultMaxChunk {
 		t.Error("the default chunk does not fit the default frame")
+	}
+}
+
+// TestMaxErrorText checks the exact byte counts the owner's answer 3 works
+// out by hand for BindFrameLimit (512): 369 bytes of message at ST, 372 at
+// BEL, and that the result is in fact the largest that still fits.
+func TestMaxErrorText(t *testing.T) {
+	cases := []struct {
+		term Terminator
+		want int
+	}{{ST, 369}, {BEL, 372}}
+	for _, c := range cases {
+		got := MaxErrorText(BindFrameLimit, c.term)
+		if got != c.want {
+			t.Errorf("MaxErrorText(%d, %q) = %d, want %d", BindFrameLimit, c.term.String(), got, c.want)
+		}
+		fits := func(n int) bool {
+			stack, err := EncodeError(1, StatusIOError, strings.Repeat("x", n))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return FrameLen(FrameReply, len(stack), c.term) <= BindFrameLimit
+		}
+		if !fits(got) || fits(got+1) {
+			t.Errorf("MaxErrorText(%d, %q) = %d is not the largest that fits", BindFrameLimit, c.term.String(), got)
+		}
+	}
+	if MaxErrorText(10, BEL) != 0 || MaxErrorText(0, ST) != 0 {
+		t.Error("tiny frames must leave no room")
 	}
 }

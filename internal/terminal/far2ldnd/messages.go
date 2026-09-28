@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
+	"unicode/utf8"
 )
 
 // Identifiers proposed by the specification (§ 6). They are not yet agreed
@@ -102,12 +104,20 @@ func (e *StatusError) Error() string {
 	return fmt.Sprintf("far2ldnd: status %d: %s", e.Status, e.Message)
 }
 
-// StatusFor is the reply status for a request DecodeRequest refused.
+// StatusFor is the reply status for a request DecodeRequest refused. An
+// unsupported version or subcommand is a well-formed request this server
+// merely cannot serve (-5, StatusUnsupported): the terminal understands DND
+// (an empty reply, ErrNoDND, is reserved for "no DND at all" and would
+// mislead a client that only asked for something this version does not
+// have); anything that does not parse is StatusBadRequest (-4, owner's
+// answers 1 and 2).
 func StatusFor(err error) Status {
-	if errors.Is(err, ErrUnsupportedVersion) {
+	switch {
+	case errors.Is(err, ErrUnsupportedVersion), errors.Is(err, ErrUnknownSubcommand):
 		return StatusUnsupported
+	default:
+		return StatusBadRequest
 	}
-	return StatusBadRequest
 }
 
 // Request is one of *BindRequest, *ListRequest, *ReadRequest, *CloseRequest.
@@ -194,6 +204,14 @@ func (q *BindRequest) pop(r *stackReader) {
 	q.WantedFeatures = r.u32()
 }
 
+// check validates a BIND request itself, on either side of the wire: what
+// it asks for is a profile to negotiate down, not a ceiling the request
+// must already fit under (owner's answer 4). Only the protocol's own floor
+// applies here; checkLimits' upper bound on window is a rule of the
+// *reply* alone (see its own comment) and dndBind (far2l_dnd.go) already
+// clamps max_frame/max_chunk down unconditionally with min() and never
+// even reads q.Window, so there is nothing an upper bound here would
+// protect.
 func (q *BindRequest) check() error {
 	if q.Version != Version {
 		return fmt.Errorf("%w: %d", ErrUnsupportedVersion, q.Version)
@@ -204,9 +222,27 @@ func (q *BindRequest) check() error {
 		}
 		return nil
 	}
-	return checkLimits(q.MaxFrame, q.MaxChunk, q.Window)
+	return checkRequestLimits(q.MaxFrame, q.MaxChunk, q.Window)
 }
 
+// checkRequestLimits is the floor a BIND request's own numbers must clear.
+func checkRequestLimits(frame, chunk uint32, window uint16) error {
+	switch {
+	case frame < MinMaxFrame:
+		return fmt.Errorf("%w: max_frame %d below %d", ErrInvalid, frame, MinMaxFrame)
+	case chunk < MinMaxChunk:
+		return fmt.Errorf("%w: max_chunk %d below %d", ErrInvalid, chunk, MinMaxChunk)
+	case window < MinWindow:
+		return fmt.Errorf("%w: window %d below %d", ErrInvalid, window, MinWindow)
+	}
+	return nil
+}
+
+// checkLimits is what a BIND *reply* must satisfy, on either side of the
+// wire: unlike the request, the granted window is capped at MaxWindow, a
+// structural limit of this side of the channel (255 RIDs shared with
+// clipboard and image far2l calls, owner's answer 4) rather than a profile
+// either side is free to exceed and let the other clamp.
 func checkLimits(frame, chunk uint32, window uint16) error {
 	switch {
 	case frame < MinMaxFrame:
@@ -348,6 +384,15 @@ func DecodeRequest(stack []byte) (rid uint8, q Request, err error) {
 	if err := checkRID(rid, q); err != nil {
 		return rid, q, err
 	}
+	// CLOSE is a cleanup barrier that only really needs the offer; refusing
+	// it over a reason outside the protocol's own range would leave the
+	// offer occupied until its lease expires, and a RID-0 sender would never
+	// even learn of the refusal (owner's answer 9). Clamp before the shared
+	// check below, which stays strict for whoever composes the request with
+	// the encoder.
+	if c, ok := q.(*CloseRequest); ok && c.Reason > CloseFailed {
+		c.Reason = CloseFailed
+	}
 	return rid, q, q.check()
 }
 
@@ -453,6 +498,12 @@ func (e *Entry) check() error {
 		return fmt.Errorf("%w: native_name without native_encoding", ErrInvalid)
 	case e.Flags&ItemReference == 0 && e.ReferenceURI != "":
 		return fmt.Errorf("%w: reference_uri without REFERENCE", ErrInvalid)
+	case e.Flags&ItemReference != 0 && e.ReferenceURI == "":
+		// A flag without a URI promises an empty representation (owner's
+		// answer 7); decodeEntry's normalize clears the flag instead of
+		// refusing this from another implementation, but this encoder never
+		// produces it in the first place.
+		return fmt.Errorf("%w: REFERENCE without reference_uri", ErrInvalid)
 	}
 	return nil
 }
@@ -478,8 +529,38 @@ func (e *Entry) encode() ([]byte, error) {
 	return b, err
 }
 
+// normalize fixes up, in place, whatever an entry's fields disagree on but
+// that carries no meaning of its own once dropped (owner's answer 7): the
+// encoder (check and encode, above) never produces any of this, so v1 f4
+// only ever meets it from another implementation. Feature-negotiated
+// consistency -- a representation flag this binding never asked for in
+// BIND -- is not this package's to enforce either: decodeEntry has no
+// access to what was granted, so that check belongs to whoever consumes
+// ListReply with the BindReply already in hand (DNDClient, step 4).
+func (e *Entry) normalize() {
+	if e.Flags&ItemSizeKnown == 0 {
+		e.Size = 0
+	}
+	if e.Flags&ItemStream == 0 {
+		e.Flags &^= ItemRandomAccess | ItemFrozen
+	}
+	if e.NativeEncoding == NativeNone {
+		e.NativeName = nil
+	}
+	switch {
+	case e.Flags&ItemReference == 0:
+		e.ReferenceURI = ""
+	case e.ReferenceURI == "":
+		e.Flags &^= ItemReference
+	}
+}
+
 // decodeEntry parses one entry blob. Bytes left after the known fields are a
-// tail a later version may add; v1 ignores it (§ 6.3).
+// tail a later version may add; v1 ignores it (§ 6.3). item_id 0 is the one
+// field normalize cannot fix up -- the entry cannot be told apart from any
+// other later, so DecodeListReply drops just this entry and keeps the rest
+// of the page (owner's answer to the bullet list following the nine
+// questions).
 func decodeEntry(b []byte) (Entry, error) {
 	r := stackReader{b: b}
 	var e Entry
@@ -498,7 +579,11 @@ func decodeEntry(b []byte) (Entry, error) {
 	if len(e.NativeName) == 0 {
 		e.NativeName = nil
 	}
-	return e, e.check()
+	if e.ItemID == 0 {
+		return Entry{}, fmt.Errorf("%w: item_id 0", ErrInvalid)
+	}
+	e.normalize()
+	return e, nil
 }
 
 func (d *ReadReply) put(w *stackWriter) error {
@@ -538,20 +623,42 @@ func EncodeReply(rid uint8, body Reply) ([]byte, error) {
 	return w.bytes()
 }
 
+// TruncateText cuts s to at most limit bytes on a UTF-8 rune boundary,
+// replacing invalid UTF-8 with "?" first. A diagnostic message carries no
+// meaning of its own beyond being readable (unlike a LIST entry's file
+// name, which TruncateText is never used on): shortening it is more useful
+// than refusing to send it at all (owner's "общий принцип" and answer 3).
+func TruncateText(s string, limit int) string {
+	s = strings.ToValidUTF8(s, "?")
+	if len(s) <= limit {
+		return s
+	}
+	s = s[:limit]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
 // EncodeError builds the stack of a failed reply: RID, status, message.
+// message is shortened to this package's own flat ceiling (MaxMessageLen)
+// rather than refused (owner's answer 3): a caller that also knows the
+// frame this reply has to fit -- BindFrameLimit before BIND, the negotiated
+// max_frame after -- shortens further first with MaxErrorText and
+// TruncateText, since EncodeError itself has no way to learn that number.
+// An EncodeError that could still fail over its message would leave the
+// caller's RID hung forever, unable to tell it the request failed at all.
 func EncodeError(rid uint8, status Status, message string) ([]byte, error) {
 	switch {
 	case rid == 0:
 		return nil, fmt.Errorf("%w: reply to RID 0", ErrInvalid)
 	case status == StatusOK:
 		return nil, fmt.Errorf("%w: error reply with status 1", ErrInvalid)
-	case len(message) > MaxMessageLen:
-		return nil, fmt.Errorf("%w: message of %d bytes, limit %d", ErrTooLong, len(message), MaxMessageLen)
 	}
 	var w stackWriter
 	w.u8(rid)
 	w.i8(int8(status))
-	w.str(message)
+	w.str(TruncateText(message, MaxMessageLen))
 	return w.bytes()
 }
 
@@ -623,6 +730,13 @@ func DecodeBindReply(f ReplyFrame, q *BindRequest) (BindReply, error) {
 	if err := checkLimits(b.MaxFrame, b.MaxChunk, b.Window); err != nil {
 		return b, err
 	}
+	// A client does not yet know which terminator its future READ replies
+	// will actually close with, so it has to assume the worse of the two
+	// (ST, one byte longer than BEL) when checking that max_chunk's reply
+	// can even fit inside max_frame (owner's answer 4).
+	if b.MaxChunk > MaxReadData(b.MaxFrame, ST) {
+		return b, fmt.Errorf("%w: BIND reply max_chunk %d does not fit max_frame %d", ErrInvalid, b.MaxChunk, b.MaxFrame)
+	}
 	return b, nil
 }
 
@@ -642,11 +756,18 @@ func DecodeListReply(f ReplyFrame) (ListReply, error) {
 	for i := uint32(0); i < count; i++ {
 		b := r.blob(MaxEntryLen)
 		if r.err != nil {
+			// The blob itself does not parse: a framing problem the rest of
+			// the page cannot be trusted around, unlike one bad entry below.
 			return ListReply{}, fmt.Errorf("entry %d: %w", i, r.err)
 		}
 		e, err := decodeEntry(b)
 		if err != nil {
-			return ListReply{}, fmt.Errorf("entry %d: %w", i, err)
+			// One unusable entry (item_id 0 today, decodeEntry's only
+			// remaining rejection once normalize absorbs the rest) does not
+			// have to cost the whole page and the copy it was fetched for
+			// (owner's "отказ на приёме стоит дорого"): skip it and keep
+			// going.
+			continue
 		}
 		l.Entries = append(l.Entries, e)
 	}
@@ -656,7 +777,13 @@ func DecodeListReply(f ReplyFrame) (ListReply, error) {
 	return l, nil
 }
 
-// DecodeReadReply parses the reply to q; it may carry at most q.Length bytes.
+// DecodeReadReply parses the reply to q; it may carry at most q.Length
+// bytes (r.blob's limit above enforces that on the wire; a reply longer
+// than asked is still ErrTooLong). observed_size without SIZE_KNOWN carries
+// no meaning and is normalized to 0 rather than refused (owner's answer to
+// the bullet list); an empty reply without EOF is still an error, because
+// it would stop a reader's progress dead without saying so (d.check, used
+// by the encoder, keeps enforcing both).
 func DecodeReadReply(f ReplyFrame, q *ReadRequest) (ReadReply, error) {
 	r := stackReader{b: f.body}
 	var d ReadReply
@@ -666,7 +793,13 @@ func DecodeReadReply(f ReplyFrame, q *ReadRequest) (ReadReply, error) {
 	if err := r.end(); err != nil {
 		return ReadReply{}, err
 	}
-	return d, d.check()
+	if d.Flags&ReadSizeKnown == 0 {
+		d.ObservedSize = 0
+	}
+	if len(d.Data) == 0 && d.Flags&ReadEOF == 0 {
+		return ReadReply{}, fmt.Errorf("%w: empty READ reply without EOF", ErrInvalid)
+	}
+	return d, nil
 }
 
 // DecodeEmptyReply checks the empty body of CLOSE.
@@ -700,6 +833,25 @@ func (ev *Event) check() error {
 // PositionKnown reports whether the event carries a cell position.
 func (ev *Event) PositionKnown() bool { return ev.X >= 0 && ev.Y >= 0 }
 
+// normalize fixes up, in place, whatever an event's fields do not carry
+// meaning in rather than refusing the event over them (owner's answers 5
+// and 6): a sender must never produce any of this (check, above, still
+// guards EncodeEvent), so v1 f4 only meets it from another implementation,
+// or from a later version's reserved bits it does not understand yet --
+// masking them off is the safe default either way. Any coordinate the
+// terminal's own current size may since have outgrown (a resize racing the
+// drop) is for the application to treat as unknown too; this package has no
+// notion of a grid to compare against.
+func (ev *Event) normalize() {
+	ev.Flags &= EventModifiersKnown
+	if ev.Flags&EventModifiersKnown == 0 {
+		ev.Modifiers = 0
+	}
+	if ev.X < 0 || ev.Y < 0 {
+		ev.X, ev.Y = -1, -1
+	}
+}
+
 // EncodeEvent builds the stack of INPUT_DND.
 func EncodeEvent(ev *Event) ([]byte, error) {
 	if err := ev.check(); err != nil {
@@ -717,7 +869,12 @@ func EncodeEvent(ev *Event) ([]byte, error) {
 }
 
 // DecodeEvent parses the stack of an f2l event. ErrNotDND means another
-// event, for its own handler.
+// event, for its own handler. binding and offer sit at the top of the
+// stack (the first two fields popped after the event code) and decode
+// correctly even when a tail is left over below them, so a trailing-bytes
+// error (owner's answer 1) still comes back with them set: the application
+// can CLOSE(offer, 3) at once instead of leaving the offer occupied until
+// its lease expires.
 func DecodeEvent(stack []byte) (Event, error) {
 	r := stackReader{b: stack}
 	code := r.u8()
@@ -734,8 +891,12 @@ func DecodeEvent(stack []byte) (Event, error) {
 	ev.Y = r.i16()
 	ev.Modifiers = r.u32()
 	ev.Flags = r.u16()
-	if err := r.end(); err != nil {
-		return Event{}, err
+	if r.err != nil {
+		return Event{}, r.err
 	}
-	return ev, ev.check()
+	if err := r.end(); err != nil {
+		return Event{Binding: ev.Binding, Offer: ev.Offer}, err
+	}
+	ev.normalize()
+	return ev, nil
 }

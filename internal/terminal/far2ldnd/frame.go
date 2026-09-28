@@ -79,6 +79,28 @@ func MaxReadData(maxFrame uint32, t Terminator) uint32 {
 	return stack - readReplyOverhead
 }
 
+// errorReplyOverhead is RID, status and the message's own length prefix.
+const errorReplyOverhead = 1 + 1 + 4
+
+// MaxErrorText is the largest message whose EncodeError(rid, status, ·)
+// reply still fits in maxFrame when sent with terminator t -- the same
+// shrink MaxReadData works out for a READ reply, for an error reply's
+// layout instead (RID, status, str message). BindFrameLimit before BIND
+// caps it well under EncodeError's own flat MaxMessageLen ceiling (owner's
+// answer 3): 369 bytes at ST, 372 at BEL.
+func MaxErrorText(maxFrame uint32, t Terminator) int {
+	fixed := uint32(len(replyIntro)) + uint32(len(t.String()))
+	if maxFrame <= fixed {
+		return 0
+	}
+	budget := maxFrame - fixed
+	stack := budget / 4 * 3
+	if stack <= errorReplyOverhead {
+		return 0
+	}
+	return int(stack - errorReplyOverhead) //nolint:gosec // bounded by maxFrame, far below MaxInt
+}
+
 // ParseFrame takes a complete APC carrying a stack apart. Control APCs such
 // as far2l1, far2lok and far2l0 carry no stack and are refused, as is
 // anything that is not base64 after the prefix. Missing base64 padding is

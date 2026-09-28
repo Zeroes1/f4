@@ -24,10 +24,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/unxed/f4/internal/terminal/far2ldnd"
 )
@@ -385,7 +383,14 @@ func (tv *TerminalView) dndBind(rid uint8, q *far2ldnd.BindRequest) {
 		Features:    features,
 	}
 	// The chunk shrinks so that a READ reply always fits the frame (§ 7).
-	grant.MaxChunk = min(q.MaxChunk, far2ldnd.DefaultMaxChunk, far2ldnd.MaxReadData(grant.MaxFrame, far2ldnd.BEL))
+	// Every reply this terminal sends is BEL-terminated (dndWriteLocked),
+	// but the grant itself is computed against the one-byte-tighter ST
+	// bound: DecodeBindReply checks a client's own grant the same
+	// conservative way, since nothing in the wire format tells a client in
+	// advance which terminator its future READ replies will actually close
+	// with (owner's answer 4). ST's bound is never above BEL's for the same
+	// max_frame, so this is always at least as tight as the real wire needs.
+	grant.MaxChunk = min(q.MaxChunk, far2ldnd.DefaultMaxChunk, far2ldnd.MaxReadData(grant.MaxFrame, far2ldnd.ST))
 	// A new binding revokes the offers of the old one (§ 6.1).
 	d.unbindLocked()
 	d.bound = true
@@ -554,29 +559,24 @@ func (tv *TerminalView) dndReplyLocked(rid uint8, body far2ldnd.Reply) {
 	tv.dndWriteLocked(far2ldnd.FrameReply, stack)
 }
 
+// dndErrorLocked shortens msg to what the *current* frame limit can carry
+// before handing it to EncodeError: EncodeError's own ceiling (MaxMessageLen,
+// 1024 bytes) is only ever the right bound once BIND has negotiated a large
+// enough max_frame, and before that -- or for a BIND request itself, which
+// answers within BindFrameLimit -- 1024 bytes of message would not even fit
+// the 512-byte reply it has to travel in (owner's answer 3). Every error
+// reply goes out as BEL (dndWriteLocked), so that is what bounds the budget
+// here.
 func (tv *TerminalView) dndErrorLocked(rid uint8, status far2ldnd.Status, msg string) {
 	if rid == 0 {
 		return
 	}
-	stack, err := far2ldnd.EncodeError(rid, status, dndMessage(msg))
+	limit := far2ldnd.MaxErrorText(uint32(tv.dnd.frameLimitLocked()), far2ldnd.BEL) //nolint:gosec // frameLimitLocked is at most DefaultMaxFrame
+	stack, err := far2ldnd.EncodeError(rid, status, far2ldnd.TruncateText(msg, limit))
 	if err != nil {
 		return
 	}
 	tv.dndWriteLocked(far2ldnd.FrameReply, stack)
-}
-
-// dndMessage makes a diagnostic fit the error reply: valid UTF-8, at most
-// 1024 bytes, cut on a rune boundary.
-func dndMessage(s string) string {
-	s = strings.ToValidUTF8(s, "?")
-	if len(s) <= far2ldnd.MaxMessageLen {
-		return s
-	}
-	s = s[:far2ldnd.MaxMessageLen]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 // dndPeek decodes only the last base64 groups of a request: the stack is
