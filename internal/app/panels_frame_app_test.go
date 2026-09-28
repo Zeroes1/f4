@@ -655,7 +655,7 @@ func TestPanelsFrame_MenuCommands(t *testing.T) {
 	if !strings.HasPrefix(menuText, "√") {
 		t.Errorf("Menu checkmark not updated, got %q", menuText)
 	}
-	sortText := pf.MenuBar.Items[0].SubItems[7].Text
+	sortText := pf.MenuBar.Items[0].SubItems[13].Text
 	if !strings.HasPrefix(sortText, "√") {
 		t.Errorf("Sort menu checkmark not updated, got %q", sortText)
 	}

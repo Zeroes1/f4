@@ -633,6 +633,50 @@ func finishSideMenu(m vtui.MenuBarItem) vtui.MenuBarItem {
 	return bar[0]
 }
 
+// extraViewModes are the modes a side menu lists after the four f4 always
+// had: far2l's Ctrl+5 .. Ctrl+9 and Ctrl+0, in slot order (f4#410). Their
+// commands, left and right, are appended at the end of appcmd's list.
+var extraViewModes = [...]ViewMode{ViewMode5, ViewMode6, ViewMode7, ViewMode8, ViewMode9, ViewMode0}
+
+var leftViewModeCommands = [len(extraViewModes)]int{
+	appcmd.CmLeftViewMode5, appcmd.CmLeftViewMode6, appcmd.CmLeftViewMode7,
+	appcmd.CmLeftViewMode8, appcmd.CmLeftViewMode9, appcmd.CmLeftViewMode0,
+}
+
+var rightViewModeCommands = [len(extraViewModes)]int{
+	appcmd.CmRightViewMode5, appcmd.CmRightViewMode6, appcmd.CmRightViewMode7,
+	appcmd.CmRightViewMode8, appcmd.CmRightViewMode9, appcmd.CmRightViewMode0,
+}
+
+// sideMenuBuiltinModeRows is how many mode rows come first in a side menu:
+// Brief, Medium, Detailed and Wide.
+const sideMenuBuiltinModeRows = 4
+
+// withExtraViewModeRows puts a row for each of extraViewModes after the four
+// built-in mode rows of a side menu. The rows are named by the mode slots, so
+// a mode the user reshaped in Options -> File panel modes is chosen from the
+// same place as the four preset ones.
+func withExtraViewModeRows(commands [len(extraViewModes)]int, items []vtui.MenuItem) []vtui.MenuItem {
+	rows := make([]vtui.MenuItem, len(extraViewModes))
+	for i, mode := range extraViewModes {
+		rows[i] = vtui.MenuItem{Text: menuhotkeys.Auto(panelViewModeName(mode.Key())), Command: commands[i]}
+	}
+	out := make([]vtui.MenuItem, 0, len(items)+len(rows))
+	out = append(out, items[:sideMenuBuiltinModeRows]...)
+	out = append(out, rows...)
+	return append(out, items[sideMenuBuiltinModeRows:]...)
+}
+
+// sideMenuModeRows is the number of mode rows a side menu starts with: the
+// separator that follows them is at that index. A menu bar mocked with fewer
+// rows keeps just the four built-in ones.
+func sideMenuModeRows(items []vtui.MenuItem) int {
+	if n := sideMenuBuiltinModeRows + len(extraViewModes); len(items) > n && items[n].Separator {
+		return n
+	}
+	return sideMenuBuiltinModeRows
+}
+
 // leftMenu builds the custom side menu for the left panel. View and
 // sort modes act on a fixed side through Cm commands, so they stay
 // command-routed rather than generated from the action registry.
@@ -657,7 +701,7 @@ func (pf *PanelsFrame) leftMenu() vtui.MenuBarItem {
 			{Text: i18n.Msg("Menu.Exit"), Command: vtui.CmQuit},
 		}}
 	}
-	return vtui.MenuBarItem{Label: menuhotkeys.Auto(i18n.Msg("Menu.Left")), SubItems: []vtui.MenuItem{
+	return vtui.MenuBarItem{Label: menuhotkeys.Auto(i18n.Msg("Menu.Left")), SubItems: withExtraViewModeRows(leftViewModeCommands, []vtui.MenuItem{
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Brief")), Command: appcmd.CmLeftBrief},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Medium")), Command: appcmd.CmLeftMedium},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Detailed")), Command: appcmd.CmLeftDetailed},
@@ -679,7 +723,7 @@ func (pf *PanelsFrame) leftMenu() vtui.MenuBarItem {
 		{Text: i18n.Msg("Action.Workspace.NewTerminal"), Command: appcmd.CmWorkspaceNewTerminal, Shortcut: "Ctrl+Shift+O"},
 		{Text: i18n.Msg("Action.Workspace.Close"), Command: appcmd.CmWorkspaceClose, Shortcut: "Ctrl+W"},
 		{Text: i18n.Msg("Menu.Exit"), Command: vtui.CmQuit},
-	}}
+	})}
 }
 
 // rightMenu builds the custom side menu for the right panel.
@@ -698,7 +742,7 @@ func (pf *PanelsFrame) rightMenu() vtui.MenuBarItem {
 			{Text: sideMenuText("Menu.Right.DriveMenu"), Command: appcmd.CmRightDriveMenu, Shortcut: "Alt+F2"},
 		}}
 	}
-	return vtui.MenuBarItem{Label: menuhotkeys.Auto(i18n.Msg("Menu.Right")), SubItems: []vtui.MenuItem{
+	return vtui.MenuBarItem{Label: menuhotkeys.Auto(i18n.Msg("Menu.Right")), SubItems: withExtraViewModeRows(rightViewModeCommands, []vtui.MenuItem{
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Brief")), Command: appcmd.CmRightBrief},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Medium")), Command: appcmd.CmRightMedium},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.Left.Detailed")), Command: appcmd.CmRightDetailed},
@@ -714,7 +758,7 @@ func (pf *PanelsFrame) rightMenu() vtui.MenuBarItem {
 		{Text: sideMenuText("Group.Menu"), Command: appcmd.CmRightGroupMenu},
 		{Separator: true},
 		{Text: sideMenuText("Menu.Right.DriveMenu"), Command: appcmd.CmRightDriveMenu, Shortcut: "Alt+F2"},
-	}}
+	})}
 }
 
 // appendTerminalMenuItems keeps terminal-specific log commands reachable from
@@ -902,6 +946,18 @@ var CommandToActionName = map[int]string{
 	appcmd.CmRightMedium:           "Panel.Right.ViewMedium",
 	appcmd.CmRightDetailed:         "Panel.Right.ViewDetailed",
 	appcmd.CmRightWide:             "Panel.Right.ViewWide",
+	appcmd.CmLeftViewMode5:         "Panel.Left.ViewMode5",
+	appcmd.CmLeftViewMode6:         "Panel.Left.ViewMode6",
+	appcmd.CmLeftViewMode7:         "Panel.Left.ViewMode7",
+	appcmd.CmLeftViewMode8:         "Panel.Left.ViewMode8",
+	appcmd.CmLeftViewMode9:         "Panel.Left.ViewMode9",
+	appcmd.CmLeftViewMode0:         "Panel.Left.ViewMode0",
+	appcmd.CmRightViewMode5:        "Panel.Right.ViewMode5",
+	appcmd.CmRightViewMode6:        "Panel.Right.ViewMode6",
+	appcmd.CmRightViewMode7:        "Panel.Right.ViewMode7",
+	appcmd.CmRightViewMode8:        "Panel.Right.ViewMode8",
+	appcmd.CmRightViewMode9:        "Panel.Right.ViewMode9",
+	appcmd.CmRightViewMode0:        "Panel.Right.ViewMode0",
 	appcmd.CmLeftSortName:          "Panel.Left.SortByName",
 	appcmd.CmLeftSortExt:           "Panel.Left.SortByExt",
 	appcmd.CmLeftSortTime:          "Panel.Left.SortByTime",
@@ -964,6 +1020,18 @@ var commandShortcutActionName = map[int]string{
 	appcmd.CmRightMedium:       "Panel.ViewMedium",
 	appcmd.CmRightDetailed:     "Panel.ViewDetailed",
 	appcmd.CmRightWide:         "Panel.ViewWide",
+	appcmd.CmLeftViewMode5:     "Panel.ViewMode5",
+	appcmd.CmLeftViewMode6:     "Panel.ViewMode6",
+	appcmd.CmLeftViewMode7:     "Panel.ViewMode7",
+	appcmd.CmLeftViewMode8:     "Panel.ViewMode8",
+	appcmd.CmLeftViewMode9:     "Panel.ViewMode9",
+	appcmd.CmLeftViewMode0:     "Panel.ViewMode0",
+	appcmd.CmRightViewMode5:    "Panel.ViewMode5",
+	appcmd.CmRightViewMode6:    "Panel.ViewMode6",
+	appcmd.CmRightViewMode7:    "Panel.ViewMode7",
+	appcmd.CmRightViewMode8:    "Panel.ViewMode8",
+	appcmd.CmRightViewMode9:    "Panel.ViewMode9",
+	appcmd.CmRightViewMode0:    "Panel.ViewMode0",
 	appcmd.CmLeftSortName:      "Panel.SortByName",
 	appcmd.CmLeftSortExt:       "Panel.SortByExt",
 	appcmd.CmLeftSortTime:      "Panel.SortByTime",
@@ -1027,28 +1095,41 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 		pf.MenuBar.Items[0].SubItems[i].Text = getMenuText(lMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
 		pf.MenuBar.Items[4].SubItems[i].Text = getMenuText(rMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
 	}
+	// The rows for far2l's other six modes (f4#410) sit right after the four
+	// above; the sort rows follow the separator that ends the mode rows.
+	lModeRows, rModeRows := sideMenuModeRows(pf.MenuBar.Items[0].SubItems), sideMenuModeRows(pf.MenuBar.Items[4].SubItems)
+	for i, mode := range extraViewModes {
+		label := menuhotkeys.Auto(panelViewModeName(mode.Key()))
+		if lModeRows > sideMenuBuiltinModeRows {
+			pf.MenuBar.Items[0].SubItems[sideMenuBuiltinModeRows+i].Text = getMenuText(lMode, mode, label)
+		}
+		if rModeRows > sideMenuBuiltinModeRows {
+			pf.MenuBar.Items[4].SubItems[sideMenuBuiltinModeRows+i].Text = getMenuText(rMode, mode, label)
+		}
+	}
 	for i, item := range []struct {
 		mode SortMode
 		key  string
 	}{{SortName, "SortName"}, {SortExt, "SortExt"}, {SortTime, "SortTime"}, {SortSize, "SortSize"}, {SortUnsorted, "SortUnsorted"}} {
-		pf.MenuBar.Items[0].SubItems[i+5].Text = getSortMenuText(lSort, item.mode, menuhotkeys.Auto(i18n.Msg("Menu."+item.key)))
-		pf.MenuBar.Items[4].SubItems[i+5].Text = getSortMenuText(rSort, item.mode, menuhotkeys.Auto(i18n.Msg("Menu."+item.key)))
+		pf.MenuBar.Items[0].SubItems[lModeRows+1+i].Text = getSortMenuText(lSort, item.mode, menuhotkeys.Auto(i18n.Msg("Menu."+item.key)))
+		pf.MenuBar.Items[4].SubItems[rModeRows+1+i].Text = getSortMenuText(rSort, item.mode, menuhotkeys.Auto(i18n.Msg("Menu."+item.key)))
 	}
 
 	// The sort-group toggle sits right after the sort modes; a mock menu bar
 	// built with fewer rows (tests) simply keeps its own text.
-	if len(pf.MenuBar.Items[0].SubItems) > 10 && len(pf.MenuBar.Items[4].SubItems) > 10 {
+	lGroupRow, rGroupRow := lModeRows+6, rModeRows+6
+	if len(pf.MenuBar.Items[0].SubItems) > lGroupRow && len(pf.MenuBar.Items[4].SubItems) > rGroupRow {
 		groupLabel := menuhotkeys.Auto(i18n.Msg("Menu.SortUseGroups"))
-		pf.MenuBar.Items[0].SubItems[10].Text = getToggleMenuText(lGroups, groupLabel)
-		pf.MenuBar.Items[4].SubItems[10].Text = getToggleMenuText(rGroups, groupLabel)
+		pf.MenuBar.Items[0].SubItems[lGroupRow].Text = getToggleMenuText(lGroups, groupLabel)
+		pf.MenuBar.Items[4].SubItems[rGroupRow].Text = getToggleMenuText(rGroups, groupLabel)
 	}
 
 	// The numeric-sort toggle sits right after the sort-group toggle, for the
 	// same reason and with the same test-friendly guard.
-	if len(pf.MenuBar.Items[0].SubItems) > 11 && len(pf.MenuBar.Items[4].SubItems) > 11 {
+	if len(pf.MenuBar.Items[0].SubItems) > lGroupRow+1 && len(pf.MenuBar.Items[4].SubItems) > rGroupRow+1 {
 		numericLabel := menuhotkeys.Auto(i18n.Msg("Menu.SortNumeric"))
-		pf.MenuBar.Items[0].SubItems[11].Text = getToggleMenuText(lNumeric, numericLabel)
-		pf.MenuBar.Items[4].SubItems[11].Text = getToggleMenuText(rNumeric, numericLabel)
+		pf.MenuBar.Items[0].SubItems[lGroupRow+1].Text = getToggleMenuText(lNumeric, numericLabel)
+		pf.MenuBar.Items[4].SubItems[rGroupRow+1].Text = getToggleMenuText(rNumeric, numericLabel)
 	}
 
 	// Update shortcuts dynamically from the action registry. Framework-owned
@@ -4252,6 +4333,22 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		return true
 	case appcmd.CmRightWide:
 		pf.SetPanelViewMode(1, ViewModeWide)
+		return true
+	case appcmd.CmLeftViewMode5, appcmd.CmLeftViewMode6, appcmd.CmLeftViewMode7,
+		appcmd.CmLeftViewMode8, appcmd.CmLeftViewMode9, appcmd.CmLeftViewMode0:
+		for i, c := range leftViewModeCommands {
+			if c == cmd {
+				pf.SetPanelViewMode(0, extraViewModes[i])
+			}
+		}
+		return true
+	case appcmd.CmRightViewMode5, appcmd.CmRightViewMode6, appcmd.CmRightViewMode7,
+		appcmd.CmRightViewMode8, appcmd.CmRightViewMode9, appcmd.CmRightViewMode0:
+		for i, c := range rightViewModeCommands {
+			if c == cmd {
+				pf.SetPanelViewMode(1, extraViewModes[i])
+			}
+		}
 		return true
 	case appcmd.CmLeftAIContext:
 		if aiCmd, ok := pf.Panels[0].(interface{ AiSetViewMode(string, bool) }); ok {

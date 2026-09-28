@@ -12,6 +12,15 @@ far2l's column syntax (`mix/panelmix.cpp`) and width distribution
 - **Options → File panel modes** lists the ten modes. Enter opens a mode:
   column types, column widths, *Full screen*, and *Reset* back to the built-in
   definition. Closing the dialog returns to the list, as in far2l.
+- The **Left** and **Right** menus list all ten modes, the current one
+  marked, and choose the mode for their own panel (f4#410). A mode reshaped in
+  *File panel modes*, for instance to two stripes of a name and a size
+  (`N,S,N,S`), is picked there like the four preset ones; the menu names the
+  modes by their slot names, and the shortcut column shows the Ctrl digit.
+  The commands are `CmLeftViewMode5..0` / `CmRightViewMode5..0`, backed by the
+  actions `Panel.Left.ViewMode5..0` / `Panel.Right.ViewMode5..0`; the rows sit
+  right after Wide, so the sort rows start at index 11
+  (`sideMenuModeRows` finds the split in `UpdateMenuCheckmarks`).
 - A mode with *Full screen* set takes the whole width through f4's existing
   Wide layout (`PanelsFrame.Wide`), which is what Ctrl+4 has always done.
 
@@ -94,6 +103,5 @@ built-in ones are written, and the file is removed when none do.
   fills the `P` physical-size column), so the `LN` column reads blank during
   plain panel browsing on native Windows — same as `O`/`U`/`P` already do
   there — rather than showing a wrong number (f4#1400).
-- The Left and Right menus still list only the first four modes.
 - After a restart a widened panel shows mode 4 even if another full screen
   mode was active.

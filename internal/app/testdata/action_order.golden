@@ -245,6 +245,12 @@ Panel.Left.ViewBrief
 Panel.Left.ViewMedium
 Panel.Left.ViewDetailed
 Panel.Left.ViewWide
+Panel.Left.ViewMode5
+Panel.Left.ViewMode6
+Panel.Left.ViewMode7
+Panel.Left.ViewMode8
+Panel.Left.ViewMode9
+Panel.Left.ViewMode0
 Panel.Left.SortByName
 Panel.Left.SortByExt
 Panel.Left.SortByTime
@@ -261,6 +267,12 @@ Panel.Right.ViewBrief
 Panel.Right.ViewMedium
 Panel.Right.ViewDetailed
 Panel.Right.ViewWide
+Panel.Right.ViewMode5
+Panel.Right.ViewMode6
+Panel.Right.ViewMode7
+Panel.Right.ViewMode8
+Panel.Right.ViewMode9
+Panel.Right.ViewMode0
 Panel.Right.SortByName
 Panel.Right.SortByExt
 Panel.Right.SortByTime

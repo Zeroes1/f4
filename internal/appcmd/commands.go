@@ -104,4 +104,18 @@ const (
 	CmSortNumeric
 	CmLeftSortNumeric
 	CmRightSortNumeric
+	// Appended for the same reason: the side menus list far2l's other six
+	// panel modes (f4#410), in the order of the ViewMode5 .. ViewMode0 slots.
+	CmLeftViewMode5
+	CmLeftViewMode6
+	CmLeftViewMode7
+	CmLeftViewMode8
+	CmLeftViewMode9
+	CmLeftViewMode0
+	CmRightViewMode5
+	CmRightViewMode6
+	CmRightViewMode7
+	CmRightViewMode8
+	CmRightViewMode9
+	CmRightViewMode0
 )
