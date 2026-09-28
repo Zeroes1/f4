@@ -420,7 +420,7 @@ func TestAnsiParser_HandleEsc_IndexScrollsAtBottomMargin(t *testing.T) {
 	}
 	if tv.Lines[0][0].Char != 'B' || tv.Lines[1][0].Char != 'C' || tv.Lines[2][0].Char != ' ' {
 		t.Fatalf("Index at bottom margin: rows=%q/%q/%q, want B/C/blank",
-			tv.Lines[0][0].Char, tv.Lines[1][0].Char, tv.Lines[2][0].Char)
+			rune(tv.Lines[0][0].Char), rune(tv.Lines[1][0].Char), rune(tv.Lines[2][0].Char))
 	}
 }
 
@@ -441,7 +441,7 @@ func TestAnsiParser_HandleEsc_ReverseIndexScrollsAtTopMargin(t *testing.T) {
 	}
 	if tv.Lines[0][0].Char != ' ' || tv.Lines[1][0].Char != 'A' || tv.Lines[2][0].Char != 'B' {
 		t.Fatalf("Reverse Index at top margin: rows=%q/%q/%q, want blank/A/B",
-			tv.Lines[0][0].Char, tv.Lines[1][0].Char, tv.Lines[2][0].Char)
+			rune(tv.Lines[0][0].Char), rune(tv.Lines[1][0].Char), rune(tv.Lines[2][0].Char))
 	}
 }
 
@@ -475,7 +475,7 @@ func TestAnsiParser_HandleEsc_RISResetsToInitialState(t *testing.T) {
 		t.Fatalf("RIS: scroll region=[%d,%d], want [0,%d]", tv.ScrollTop, tv.ScrollBottom, tv.Height-1)
 	}
 	if tv.Lines[1][2].Char != ' ' {
-		t.Fatalf("RIS: screen not cleared, Lines[1][2]=%q", tv.Lines[1][2].Char)
+		t.Fatalf("RIS: screen not cleared, Lines[1][2]=%q", rune(tv.Lines[1][2].Char))
 	}
 }
 
@@ -491,7 +491,7 @@ func TestAnsiParser_HandleEsc_KeypadModesAreNoOpsAndDoNotWedgeTheParser(t *testi
 	p.Process([]byte("\x1b=\x1b>Z"))
 
 	if tv.Lines[0][0].Char != 'Z' {
-		t.Fatalf("after keypad no-ops: Lines[0][0]=%q, want 'Z'", tv.Lines[0][0].Char)
+		t.Fatalf("after keypad no-ops: Lines[0][0]=%q, want 'Z'", rune(tv.Lines[0][0].Char))
 	}
 }
 
@@ -610,7 +610,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1b(BZ"))
 
 		if tv.Lines[0][0].Char != 'Z' {
-			t.Fatalf("after ESC ( B: Lines[0][0]=%q, want 'Z'", tv.Lines[0][0].Char)
+			t.Fatalf("after ESC ( B: Lines[0][0]=%q, want 'Z'", rune(tv.Lines[0][0].Char))
 		}
 	})
 
@@ -626,7 +626,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1bP\x1b\\C")) // ESC P, aborted by ESC, then ST, then 'C'
 
 		if tv.Lines[0][0].Char != 'C' {
-			t.Fatalf("after aborted DCS: Lines[0][0]=%q, want 'C'", tv.Lines[0][0].Char)
+			t.Fatalf("after aborted DCS: Lines[0][0]=%q, want 'C'", rune(tv.Lines[0][0].Char))
 		}
 	})
 
@@ -642,7 +642,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1bP0phello\x07B"))
 
 		if tv.Lines[0][0].Char != 'B' {
-			t.Fatalf("after BEL-terminated DCS: Lines[0][0]=%q, want 'B'", tv.Lines[0][0].Char)
+			t.Fatalf("after BEL-terminated DCS: Lines[0][0]=%q, want 'B'", rune(tv.Lines[0][0].Char))
 		}
 	})
 }
