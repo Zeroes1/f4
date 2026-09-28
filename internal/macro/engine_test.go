@@ -3,6 +3,7 @@ package macro
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -161,7 +162,10 @@ func TestMacroManagerSaveWritesAndReloadsMacros(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Save did not create the ini file: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
+	// Windows has no Unix permission bits: os.Stat reports 0666 for any
+	// writable file whatever mode it was created with, so the 0600 check
+	// only means something elsewhere.
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Errorf("ini file mode = %v, want 0600", perm)
 	}
 
