@@ -137,6 +137,46 @@ jobs:
       - name: Test
         run: go test ./...
 
+  # Cheap repo-wide checks that build.yml runs only in the full matrix (its
+  # "Check formatting" / "Check language file formatting" steps and the
+  # Quality job's actionlint), so a finding surfaces at land time instead of
+  # in the train. Motivating case: a key inserted in the middle of a group in
+  # internal/i18n/lang/*.lng passed quick, then failed the train (#1642) on
+  # langfmt -check. Only seconds-cheap checks belong here; govulncheck (its
+  # result moves with the vulnerability database, not with the code) and
+  # icon regeneration stay in the full matrix. A separate job so it runs in
+  # parallel with check and adds nothing to quick's latency.
+  format:
+    name: Format checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.6'
+          cache-dependency-path: go.sum
+
+      - name: Check formatting
+        run: |
+          if [ -n "$(gofmt -s -l .)" ]; then
+            echo "The following files are not properly formatted:"
+            gofmt -s -l .
+            echo "Please run 'gofmt -s -w .' and commit the changes."
+            exit 1
+          fi
+
+      - name: Check language file formatting
+        run: go run ./tools/langfmt -check internal/i18n/lang/*.lng
+
+      - name: Run actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
   # Mirrors build.yml's lint job (same action, version, config, shards and
   # cache keys) so a finding surfaces at land time instead of in the train.
   lint:
