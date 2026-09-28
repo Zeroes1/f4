@@ -56,6 +56,78 @@ type Result struct {
 	// FailedFiles lists the files with at least one failed modification,
 	// for StatusPartial (tolerant mode).
 	FailedFiles []string
+	// ModificationResults is a per-Modification report, one entry for
+	// every Modification Apply actually reasoned about (in patch order,
+	// across every FILE block), regardless of the outcome. It is a finer
+	// grain than FailedFiles/FilePath/ModIdx above: those only ever name
+	// the *first* fatal failure (strict mode) or the set of files that had
+	// *some* failure (tolerant mode), which is enough to report a failure
+	// but not enough to build a patch review screen that lists every hunk
+	// with its own status (docs/VTVIBE.md §17 sketches such a screen
+	// around a similar Hunk/Status shape - this is the data for it, not
+	// the screen itself, see f4#1606). Populated best-effort even when
+	// Apply aborts early in strict mode: it holds whatever modifications
+	// were already resolved before the abort.
+	ModificationResults []ModificationResult
+}
+
+// ModStatus is one Modification's outcome, the level of detail
+// ModificationResult reports. It intentionally stays coarser than the
+// ErrCode taxonomy in errors.go (SNIPPET_NOT_FOUND, AMBIGUOUS_MATCH, ...):
+// a failed ModificationResult's Err already carries that finer reason, so a
+// caller that wants a VTVIBE.md-style StatusAmbiguous/StatusNotFound/...
+// breakdown can derive it from Err.Code instead of this package
+// duplicating that taxonomy a second time.
+type ModStatus int
+
+const (
+	// ModOK means the modification was applied: it changed the file (or
+	// created/renamed/deleted it) as instructed.
+	ModOK ModStatus = iota
+	// ModSkipped means the modification was not applied because the
+	// target was already in the requested state (idempotency, per the ap
+	// spec) - not a failure.
+	ModSkipped
+	// ModFailed means the modification could not be applied; Err explains
+	// why.
+	ModFailed
+)
+
+func (s ModStatus) String() string {
+	switch s {
+	case ModOK:
+		return "OK"
+	case ModSkipped:
+		return "SKIPPED"
+	case ModFailed:
+		return "FAILED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ModificationResult is one Modification's outcome within an Apply call.
+type ModificationResult struct {
+	// FilePath is the FILE block's path this modification belongs to,
+	// already resolved the same way FailedFiles/Result.FilePath are
+	// (resolvePathPrefix applied, "/", "\\" trimmed).
+	FilePath string
+	// ModIdx is the 0-based index of this modification within its FILE
+	// block's Modifications, matching Result.ModIdx and the "Mod #N"
+	// (N = ModIdx+1) progress text. -1 for a whole-file operation that
+	// carries no Modification of its own (currently: RENAME).
+	ModIdx int
+	// Action is the modification's directive (REPLACE, INSERT_AFTER,
+	// DELETE, CREATE, RECREATE, RENAME, ...), "" if never set.
+	Action string
+	// Locator is the text the modification searched for, for display
+	// without re-parsing the patch: the snippet if given, else the
+	// anchor; for RENAME (ModIdx -1) the destination path instead; ""
+	// for a bare DELETE/CREATE, which carries no locator at all.
+	Locator string
+	Status  ModStatus
+	// Err is set when Status is ModFailed; nil otherwise.
+	Err *AppError
 }
 
 // Apply applies the ap-format patch at patchFile to the tree rooted at
@@ -123,9 +195,9 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 		for _, b := range e.failedChangesOutput {
 			failedFiles = append(failedFiles, b.FilePath)
 		}
-		return &Result{Status: StatusPartial, FailedFiles: failedFiles}
+		return &Result{Status: StatusPartial, FailedFiles: failedFiles, ModificationResults: e.modResults}
 	}
-	return &Result{Status: StatusSuccess}
+	return &Result{Status: StatusSuccess, ModificationResults: e.modResults}
 }
 
 // --- engine: per-Apply-call mutable state ----------------------------
@@ -143,6 +215,7 @@ type engine struct {
 	llmFileReports      []fileReport
 	failedChangesOutput []*failedFileBlock
 	writePlan           []writeOp
+	modResults          []ModificationResult
 }
 
 func (e *engine) printf(format string, args ...any) {
@@ -165,7 +238,45 @@ func (e *engine) fatal(status Status, filePath string, hasFilePath bool, modIdx 
 	fatal := &fatalInfo{HasFilePath: hasFilePath, FilePath: filePath, Err: aerr}
 	_ = writeLLMReport(e.afailedMDPath, e.patchContent, e.llmFileReports, fatal, e.strict)
 	e.printf("\nERROR: %s\n", aerr.Message)
-	return &Result{Status: status, Error: aerr, FilePath: filePath, HasFilePath: hasFilePath, ModIdx: modIdx, HasModIdx: hasModIdx}
+	return &Result{
+		Status: status, Error: aerr, FilePath: filePath, HasFilePath: hasFilePath, ModIdx: modIdx, HasModIdx: hasModIdx,
+		ModificationResults: e.modResults,
+	}
+}
+
+// recordModResult appends one Modification's outcome to the per-Apply-call
+// report (Result.ModificationResults). mod may be nil (a patch-level
+// failure with no specific modification, e.g. an unparseable FILE block);
+// Action/Locator are then left empty.
+func (e *engine) recordModResult(filePath string, modIdx int, mod *Modification, status ModStatus, aerr *AppError) {
+	var action, locator string
+	if mod != nil {
+		action = mod.Action
+		locator = modLocator(mod)
+	}
+	e.modResults = append(e.modResults, ModificationResult{
+		FilePath: filePath, ModIdx: modIdx, Action: action, Locator: locator, Status: status, Err: aerr,
+	})
+}
+
+// recordFileResult is recordModResult's counterpart for a whole-FILE-block
+// operation that carries no Modification of its own - currently RENAME
+// only, since a bare whole-file DELETE still has a real Modification
+// (mods[0]) to key off. ModIdx -1 marks it as such to callers.
+func (e *engine) recordFileResult(filePath, action, locator string, status ModStatus, aerr *AppError) {
+	e.modResults = append(e.modResults, ModificationResult{
+		FilePath: filePath, ModIdx: -1, Action: action, Locator: locator, Status: status, Err: aerr,
+	})
+}
+
+// modLocator is the text a Modification searched for, preferring snippet
+// over anchor - the same precedence Apply itself uses when both may be
+// given (see the "TOLERANT: Using 'anchor' as snippet" fallback).
+func modLocator(m *Modification) string {
+	if s := derefOr(m.Snippet, ""); s != "" {
+		return s
+	}
+	return derefOr(m.Anchor, "")
 }
 
 func (e *engine) addFailedWholeChange(relativePath, newline string, mods []*Modification) {
@@ -316,6 +427,13 @@ func (e *engine) processChange(change *FileChange) *Result {
 	filePath, secErr := securePath(e.projectDir, relativePath)
 	if secErr != nil {
 		aerr := &AppError{Code: ErrInvalidFilePath, Message: "Path traversal detected or invalid path format."}
+		if len(change.Modifications) > 0 {
+			for i, m := range change.Modifications {
+				e.recordModResult(relativePath, i, m, ModFailed, aerr)
+			}
+		} else if change.RenameTo != nil {
+			e.recordFileResult(relativePath, "RENAME", *change.RenameTo, ModFailed, aerr)
+		}
 		if e.strict {
 			return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 		}
@@ -348,10 +466,12 @@ func (e *engine) processChange(change *FileChange) *Result {
 	if len(mods) == 1 && mods[0].Action == "DELETE" && isBareDelete(mods[0]) {
 		if !pathExists(filePath) {
 			e.reportIdempotencySkip(fmt.Sprintf("Path to delete does not exist: %s", filePath))
+			e.recordModResult(relativePath, 0, mods[0], ModSkipped, nil)
 			return nil
 		}
 		e.writePlan = append(e.writePlan, writeOp{kind: opDeletePath, path: filePath, relPath: relativePath})
 		e.printf("  + SUCCESS: File deleted.\n")
+		e.recordModResult(relativePath, 0, mods[0], ModOK, nil)
 		return nil
 	}
 
@@ -375,6 +495,7 @@ func (e *engine) processRename(change *FileChange, relativePath, filePath, strip
 	newFilePath, secErr := securePath(e.projectDir, newRelativePath)
 	if secErr != nil {
 		aerr := &AppError{Code: ErrInvalidFilePath, Message: "Path traversal detected in new rename path."}
+		e.recordFileResult(relativePath, "RENAME", newRelativePath, ModFailed, aerr)
 		if e.strict {
 			return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 		}
@@ -386,9 +507,11 @@ func (e *engine) processRename(change *FileChange, relativePath, filePath, strip
 	if pathExists(newFilePath) {
 		if !pathExists(filePath) {
 			e.reportIdempotencySkip(fmt.Sprintf("Source does not exist, but destination does. Assuming rename complete: %s", newFilePath))
+			e.recordFileResult(relativePath, "RENAME", newRelativePath, ModSkipped, nil)
 			return nil
 		}
 		aerr := &AppError{Code: ErrDestinationExists, Message: "Rename destination already exists."}
+		e.recordFileResult(relativePath, "RENAME", newRelativePath, ModFailed, aerr)
 		if e.strict {
 			return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 		}
@@ -399,6 +522,7 @@ func (e *engine) processRename(change *FileChange, relativePath, filePath, strip
 
 	if !pathExists(filePath) {
 		aerr := &AppError{Code: ErrFileNotFound, Message: "Target for rename not found."}
+		e.recordFileResult(relativePath, "RENAME", newRelativePath, ModFailed, aerr)
 		if e.strict {
 			return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 		}
@@ -409,6 +533,7 @@ func (e *engine) processRename(change *FileChange, relativePath, filePath, strip
 
 	e.writePlan = append(e.writePlan, writeOp{kind: opRename, path: filePath, newPath: newFilePath, relPath: relativePath})
 	e.printf("  + SUCCESS: Renamed to %s\n", newRelativePath)
+	e.recordFileResult(relativePath, "RENAME", newRelativePath, ModOK, nil)
 	return nil
 }
 
@@ -463,6 +588,9 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 		}
 		if !hasCreateOrRecreate {
 			aerr := &AppError{Code: ErrFileNotFound, Message: "Target file not found."}
+			for i, m := range change.Modifications {
+				e.recordModResult(relativePath, i, m, ModFailed, aerr)
+			}
 			if e.strict {
 				return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 			}
@@ -519,6 +647,9 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 			}
 			if progressed {
 				madeProgress = true
+				e.recordModResult(relativePath, modIdx, mod, ModOK, nil)
+			} else {
+				e.recordModResult(relativePath, modIdx, mod, ModSkipped, nil)
 			}
 			lastModEndPos = newLastEnd
 		}
@@ -547,6 +678,7 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 			e.printf("  - FAILED: Mod #%d (%s). Reason: %s\n", f.Idx+1, actionOrUnknown(f.Mod.Action), f.Err.Message)
 			block := e.findOrCreateFailedBlock(relativePath, change.Newline)
 			block.Modifications = append(block.Modifications, f.Mod)
+			e.recordModResult(relativePath, f.Idx, f.Mod, ModFailed, f.Err)
 		}
 	}
 

@@ -35,6 +35,10 @@ func (e *engine) applyOneModification(
 	}
 	fatalOrFail := func(aerr *AppError) (*Result, *modFailure, bool, int, bool) {
 		if e.strict {
+			// Record before calling fatal(): fatal() snapshots
+			// e.modResults into the Result it returns, so the failing
+			// modification itself must already be in it.
+			e.recordModResult(relativePath, modIdx, mod, ModFailed, aerr)
 			return e.fatal(StatusFailed, relativePath, true, modIdx, true, aerr), nil, false, 0, true
 		}
 		return fail(aerr)
