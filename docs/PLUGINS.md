@@ -111,6 +111,20 @@ The host then uses these calls lazily:
   optional; when present it replaces the current widget tree.
 * `Plugin.ClosePanel` receives `{ ID }` when the panel is dismissed.
 
+An RPC panel declares its keys (the same `vfs.PanelKey` contract as in-process
+panels, see above) by adding `Keys` and `HasKeys: true` to the `OpenPanel` and
+`PanelEvent` answers. Each key is `{ VK, Mods, Label, Disabled }`; a declared
+key is delivered as an ordinary `PanelEvent` of `Kind` `key`, and a `Disabled`
+one is consumed by f4 without a call. f4 keeps the last declaration it
+received (it never asks for it while drawing the keybar), so a plugin re-sends
+the set with any answer after which it may differ; an answer without `HasKeys`
+keeps it, and `HasKeys` with no `Keys` clears it. Plugins that never set
+`HasKeys` behave exactly as before, and f4 builds that predate panel keys
+ignore the fields. In Go, implement `f4plugin.PanelKeyProvider` next to
+`f4plugin.PanelProvider`: the SDK attaches the set to every answer and also
+consumes disabled keys under older f4 builds; `plugins/dummy_rpc` has a
+counter panel that uses it.
+
 The `.vui` document is rendered by the same `vtui` controls and wire format
 used by the bindings in the `vtui` repository. The plugin owns semantic
 behavior and may return a new document after any event; f4 owns placement,

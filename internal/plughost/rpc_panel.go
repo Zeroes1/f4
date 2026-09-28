@@ -28,9 +28,39 @@ type RPCPanelOpenRequest struct {
 // Document is UTF-8 JSON in the vtui .vui document format. Keeping the wire
 // payload as bytes lets MessagePack carry the exact document without making
 // the RPC protocol depend on vtui's Go struct field names.
+//
+// Keys is the panel's key declaration (f4#312, see RPCPanelKey). HasKeys says
+// whether the plugin sent one at all: a plugin built before panel keys never
+// sets it and keeps the old behavior, while HasKeys with an empty Keys clears
+// a previous declaration.
 type RPCPanelOpenResponse struct {
 	Document []byte
+	Keys     []RPCPanelKey
+	HasKeys  bool
 }
+
+// RPCPanelKey is the transport-safe form of vfs.PanelKey. VK and Mods are the
+// vtinput key code and modifier bits, Label the localized keybar caption.
+// Disabled dims the caption and makes the host consume the key without
+// calling the plugin; the flag is inverted relative to vfs.PanelKey.Enabled so
+// a zero value is an enabled key.
+//
+// A remote plugin cannot answer a synchronous question every time f4 draws
+// its keybar, so the declaration travels with the plugin's answers instead:
+// Plugin.OpenPanel and every Plugin.PanelEvent response may carry a fresh
+// set, exactly like they may carry a fresh .vui document, and the host keeps
+// the last one it got. A declared key is sent to the plugin as an ordinary
+// Plugin.PanelEvent of Kind "key".
+type RPCPanelKey struct {
+	VK       uint16
+	Mods     uint32
+	Label    string
+	Disabled bool
+}
+
+// maxRPCPanelKeys bounds one declaration; the keybar has 48 visible slots and
+// anything past a few dozen keys is a plugin bug, not a key map.
+const maxRPCPanelKeys = 64
 
 type RPCPanelEventRequest struct {
 	ID      string
@@ -43,6 +73,10 @@ type RPCPanelEventResponse struct {
 	Handled  bool
 	Document []byte
 	Close    bool
+	// Keys and HasKeys replace the panel's key declaration when HasKeys is
+	// set; see RPCPanelOpenResponse.
+	Keys    []RPCPanelKey
+	HasKeys bool
 }
 
 func RegisterRPCPluginPanels(
@@ -82,7 +116,14 @@ func RegisterRPCPluginPanels(
 				if err := back.Call("Plugin.OpenPanel", RPCPanelOpenRequest{ID: panelID, Context: ctx}, &response); err != nil {
 					return nil, fmt.Errorf("open panel %q: %w", panelID, err)
 				}
-				return newRPCVUIPanel(back, panelID, response.Document)
+				panel, err := newRPCVUIPanel(back, panelID, response.Document)
+				if err != nil {
+					return nil, err
+				}
+				if response.HasKeys {
+					panel.setKeys(response.Keys)
+				}
+				return panel, nil
 			},
 		})
 		if err != nil {
@@ -98,14 +139,21 @@ func RegisterRPCPluginPanels(
 // rpcVUIPanel is a small host-side adapter for a vtui .vui tree. The remote
 // plugin owns behavior: f4 forwards raw key/mouse events plus the latest panel
 // context and replaces the tree when the plugin returns a new document.
+//
+// It implements vfs.PanelKeyProvider for plugins that declare keys. The host
+// asks for PanelKeys on every key and every keybar draw, so the declaration is
+// kept here, converted once when the plugin sends a different one, and never
+// fetched over the transport on demand.
 type rpcVUIPanel struct {
-	sess    PluginTransport
-	id      string
-	window  *vtui.Window
-	context vfs.PanelContext
-	focused bool
-	mu      sync.Mutex
-	closed  bool
+	sess     PluginTransport
+	id       string
+	window   *vtui.Window
+	context  vfs.PanelContext
+	focused  bool
+	mu       sync.Mutex
+	closed   bool
+	keysDecl []RPCPanelKey
+	keys     []vfs.PanelKey
 }
 
 func newRPCVUIPanel(sess PluginTransport, id string, document []byte) (*rpcVUIPanel, error) {
@@ -158,6 +206,9 @@ func (p *rpcVUIPanel) processEvent(kind string, event *vtinput.InputEvent) bool 
 		vtui.DebugLog("PANEL [%s]: event failed: %v", id, err)
 		return false
 	}
+	if response.HasKeys && p.setKeys(response.Keys) {
+		vtui.FrameManager.Redraw()
+	}
 	if len(response.Document) > 0 {
 		if err := p.replaceDocument(response.Document); err != nil {
 			vtui.DebugLog("PANEL [%s]: invalid render document: %v", id, err)
@@ -169,6 +220,87 @@ func (p *rpcVUIPanel) processEvent(kind string, event *vtinput.InputEvent) bool 
 		return true
 	}
 	return response.Handled
+}
+
+// PanelKeys returns the last key set the plugin declared. The slice is shared
+// and must not be modified; a panel that never declared keys returns nil,
+// which the host treats exactly like a controller without PanelKeys.
+func (p *rpcVUIPanel) PanelKeys() []vfs.PanelKey {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	return p.keys
+}
+
+// setKeys installs a declaration received from the plugin and reports whether
+// it differs from the current one. Keys without a key code are dropped and the
+// set is capped at maxRPCPanelKeys.
+func (p *rpcVUIPanel) setKeys(declared []RPCPanelKey) bool {
+	clean := make([]RPCPanelKey, 0, len(declared))
+	for _, key := range declared {
+		if key.VK == 0 {
+			continue
+		}
+		key.Label = strings.TrimSpace(key.Label)
+		clean = append(clean, key)
+		if len(clean) == maxRPCPanelKeys {
+			break
+		}
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed || equalRPCPanelKeys(p.keysDecl, clean) {
+		return false
+	}
+	keys := make([]vfs.PanelKey, 0, len(clean))
+	for _, key := range clean {
+		wire := key
+		panelKey := vfs.PanelKey{
+			VK:    wire.VK,
+			Mods:  vtinput.ControlKeyState(wire.Mods),
+			Label: wire.Label,
+			Run:   func() { p.runKey(wire) },
+		}
+		if wire.Disabled {
+			panelKey.Enabled = func() bool { return false }
+		}
+		keys = append(keys, panelKey)
+	}
+	if len(clean) == 0 {
+		clean, keys = nil, nil
+	}
+	p.keysDecl = clean
+	p.keys = keys
+	return true
+}
+
+func equalRPCPanelKeys(a, b []RPCPanelKey) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// runKey sends a declared key to the plugin as the key event it names.
+func (p *rpcVUIPanel) runKey(key RPCPanelKey) {
+	event := vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		RepeatCount:     1,
+		VirtualKeyCode:  key.VK,
+		ControlKeyState: vtinput.ControlKeyState(key.Mods),
+	}
+	p.processEvent("key", &event)
 }
 
 func (p *rpcVUIPanel) replaceDocument(document []byte) error {
