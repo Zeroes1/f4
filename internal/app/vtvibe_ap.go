@@ -208,8 +208,16 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 
 	dlg := vtui.ShowMessage(i18n.Msg("AI.PatchTitle"), body, buttons)
 	dlg.OnResult = func(code int) {
-		var viewLogIdx = -1
-		var attachReportIdx = -1
+		// -1 is BaseFrame.Close's exit code for "dismissed without picking a
+		// button" (Escape, or a caller force-closing the dialog), not a real
+		// button index. viewLogIdx/attachReportIdx must never match it when
+		// their button is not on the dialog at all: comparing code against a
+		// bare "not present" sentinel of -1 would make a dismissal collide
+		// with whichever of them stayed unset and fire that action anyway.
+		// Gate each case on its own hasX flag so an unset index can never
+		// match.
+		viewLogIdx := -1
+		attachReportIdx := -1
 
 		currIdx := 1
 		if hasOutput {
@@ -220,8 +228,8 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 			attachReportIdx = currIdx
 		}
 
-		switch code {
-		case viewLogIdx:
+		switch {
+		case hasOutput && code == viewLogIdx:
 			dir, err := os.MkdirTemp("", "vtvibe-ap-log-")
 			if err == nil {
 				logPath := filepath.Join(dir, "ap_output.log")
@@ -230,7 +238,7 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 					actionOpenViewer(pf, tempVfs, "ap_output.log")
 				}
 			}
-		case attachReportIdx:
+		case hasReport && code == attachReportIdx:
 			aiAttachFailureReport(reportPath)
 		}
 	}
