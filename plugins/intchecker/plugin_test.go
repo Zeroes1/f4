@@ -34,9 +34,9 @@ func (r *registrationMock) Unregister() { r.unregistered++ }
 
 type contributionHostMock struct {
 	*hostMock
-	command      vfs.PluginCommand
-	registration *registrationMock
-	err          error
+	commands      []vfs.PluginCommand
+	registrations []*registrationMock
+	err           error
 }
 
 func (*contributionHostMock) RegisterQuickViewProvider(vfs.QuickViewProvider) (vfs.Registration, error) {
@@ -44,12 +44,26 @@ func (*contributionHostMock) RegisterQuickViewProvider(vfs.QuickViewProvider) (v
 }
 
 func (host *contributionHostMock) RegisterPluginCommand(command vfs.PluginCommand) (vfs.Registration, error) {
-	host.command = command
+	host.commands = append(host.commands, command)
 	if host.err != nil {
 		return nil, host.err
 	}
-	host.registration = &registrationMock{}
-	return host.registration, nil
+	registration := &registrationMock{}
+	host.registrations = append(host.registrations, registration)
+	return registration, nil
+}
+
+// commandByID looks up a registered command; the test fails loudly if it is
+// missing rather than comparing against a zero value.
+func (host *contributionHostMock) commandByID(t *testing.T, id string) vfs.PluginCommand {
+	t.Helper()
+	for _, command := range host.commands {
+		if command.ID == id {
+			return command
+		}
+	}
+	t.Fatalf("command %q was not registered", id)
+	return vfs.PluginCommand{}
 }
 
 func (*contributionHostMock) RegisterCommandPrefix(string, string, func(vfs.App, string)) (vfs.CommandPrefixRegistration, error) {
@@ -72,11 +86,31 @@ func TestPluginRegistersPanelCommandAndUnregistersIt(t *testing.T) {
 	if host.legacyHandler != nil {
 		t.Fatal("rich host also received a legacy menu item")
 	}
-	command := host.command
-	if command.ID != "intchecker.menu" || command.Location != vfs.PluginCommandPanel ||
-		command.LabelKey != "IntChecker.Menu" || command.DescriptionKey != "IntChecker.Command.Desc" ||
-		command.Run == nil || command.Enabled == nil {
-		t.Fatalf("command metadata = %#v", command)
+	if len(host.commands) != 3 {
+		t.Fatalf("registered %d commands, want 3", len(host.commands))
+	}
+	menu := host.commandByID(t, "intchecker.menu")
+	if menu.Location != vfs.PluginCommandPanel || menu.LabelKey != "IntChecker.Menu" ||
+		menu.DescriptionKey != "IntChecker.Command.Desc" || menu.MenuPath != "" ||
+		menu.Run == nil || menu.Enabled == nil {
+		t.Fatalf("menu command metadata = %#v", menu)
+	}
+	// The generate/validate commands are Files-menu entries (f4#1623 part
+	// 4), the same pattern plugins/archive uses for "Add to archive" and
+	// "Extract files": MenuPath places them in the Files menu, and the
+	// host's plugin-command keymap gives each its own assignable hotkey
+	// without the plugin hardcoding one.
+	generate := host.commandByID(t, "intchecker.generate")
+	if generate.Location != vfs.PluginCommandPanel || generate.LabelKey != "IntChecker.Command.Generate" ||
+		generate.DescriptionKey != "IntChecker.Command.Generate.Desc" || generate.MenuPath != "Files" ||
+		generate.Run == nil || generate.Enabled == nil {
+		t.Fatalf("generate command metadata = %#v", generate)
+	}
+	validate := host.commandByID(t, "intchecker.validate")
+	if validate.Location != vfs.PluginCommandPanel || validate.LabelKey != "IntChecker.Command.Validate" ||
+		validate.DescriptionKey != "IntChecker.Command.Validate.Desc" || validate.MenuPath != "Files" ||
+		validate.Run == nil || validate.Enabled == nil {
+		t.Fatalf("validate command metadata = %#v", validate)
 	}
 	if err := plugin.Close(); err != nil {
 		t.Fatal(err)
@@ -84,8 +118,13 @@ func TestPluginRegistersPanelCommandAndUnregistersIt(t *testing.T) {
 	if err := plugin.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if host.registration.unregistered != 1 || plugin.api != nil || plugin.registration != nil {
-		t.Fatalf("Close left state behind: unregistered=%d", host.registration.unregistered)
+	if len(plugin.registrations) != 0 || plugin.api != nil {
+		t.Fatalf("Close left state behind: registrations=%d", len(plugin.registrations))
+	}
+	for _, registration := range host.registrations {
+		if registration.unregistered != 1 {
+			t.Fatalf("registration unregistered %d times, want 1", registration.unregistered)
+		}
 	}
 }
 
