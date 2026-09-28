@@ -31,7 +31,7 @@ require (
 	github.com/unxed/sevenzip v0.1.7
 	github.com/unxed/tar v0.1.137
 	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.376
+	github.com/unxed/vtui v0.1.377
 	github.com/unxed/zip v0.1.143
 	github.com/unxed/zipper v0.1.176
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -90,6 +90,7 @@ require (
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/unxed/goclip v0.1.2 // indirect
 	github.com/unxed/kiwi-go v0.1.0 // indirect
+	github.com/yuin/goldmark v1.8.6 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
