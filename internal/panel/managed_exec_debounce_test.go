@@ -1,4 +1,9 @@
+//go:build !solaris && !illumos
+
 package panel
+
+// solaris/illumos: terminal.PTY does not exist there (NewPTY returns
+// *terminal.SolarisPTY), so this real-PTY test is not built for them.
 
 import (
 	"os/exec"

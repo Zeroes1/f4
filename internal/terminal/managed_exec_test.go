@@ -1,6 +1,9 @@
-//go:build !windows
+//go:build !windows && !solaris && !illumos
 
 package terminal
+
+// solaris/illumos: NewPTY returns *SolarisPTY there (pty_solaris.go), the PTY
+// type these helpers take does not exist on those targets.
 
 import (
 	"errors"
