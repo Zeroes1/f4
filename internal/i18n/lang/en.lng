@@ -68,6 +68,10 @@ ID3Editor.FieldVersion=Version:
 
 IntChecker.Menu=Integrity &checker
 IntChecker.Command.Desc=Generate and verify checksum files (SFV, MD5, SHA)
+IntChecker.Command.Generate=Calculate files checksum
+IntChecker.Command.Generate.Desc=Generate checksums for the selected files
+IntChecker.Command.Validate=Verify files checksum
+IntChecker.Command.Validate.Desc=Verify files against a checksum file
 IntChecker.Title=Integrity Checker
 IntChecker.Generate=&Generate hashes...
 IntChecker.GenerateTitle=Generate hashes
