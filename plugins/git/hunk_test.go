@@ -94,18 +94,18 @@ func key(vk uint16) *vtinput.InputEvent {
 
 func openHunksForOnlyEntry(t *testing.T, p *statusPanel) *HunkView {
 	t.Helper()
-	return openHunksOf(t, p, false)
+	return openHunksOf(t, p, modeStage)
 }
 
-// openHunksOf opens the HunkView F4 (staged false) or Shift+F4 (staged
-// true) would open for the entry under the cursor.
-func openHunksOf(t *testing.T, p *statusPanel, staged bool) *HunkView {
+// openHunksOf opens the HunkView F4 (modeStage), Shift+F4 (modeUnstage)
+// or F8 (modeDiscard) would open for the entry under the cursor.
+func openHunksOf(t *testing.T, p *statusPanel, mode hunkMode) *HunkView {
 	t.Helper()
 	entry, ok := p.selectedEntry()
 	if !ok {
 		t.Fatal("status panel has no entry under the cursor")
 	}
-	v, err := p.openHunkView(entry, staged)
+	v, err := p.openHunkView(entry, mode)
 	if err != nil {
 		t.Fatalf("openHunkView: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestHunksOfUntrackedFileAreNotOffered(t *testing.T) {
 	if !ok {
 		t.Fatal("no entry")
 	}
-	if _, err := p.openHunkView(entry, false); !errors.Is(err, errNoHunks) {
+	if _, err := p.openHunkView(entry, modeStage); !errors.Is(err, errNoHunks) {
 		t.Errorf("openHunkView(untracked) error = %v, want errNoHunks", err)
 	}
 	// F4 through the panel's own keys: consumed, only a toast.
@@ -318,7 +318,7 @@ func TestHunkViewScreenDump(t *testing.T) {
 
 func TestBuildPatchStagedShiftsOldSide(t *testing.T) {
 	fp := &filePatch{
-		staged: true,
+		mode:   modeUnstage,
 		header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
 		hunks: []*diffHunk{
 			testHunk(1, 5, 1, 7, " 1", " 2", "+A", "+B", " 3", " 4", " 5"),
@@ -350,10 +350,10 @@ func stagedTwoHunkRepo(t *testing.T, rel string) string {
 func TestHunkViewUnstagesOnlyThePickedHunk(t *testing.T) {
 	repo := stagedTwoHunkRepo(t, "f.txt")
 	p := openStatusPanelIn(t, repo)
-	v := openHunksOf(t, p, true)
+	v := openHunksOf(t, p, modeUnstage)
 
-	if !v.patch.staged || len(v.patch.hunks) != 2 {
-		t.Fatalf("staged = %v, hunks = %d; want true, 2", v.patch.staged, len(v.patch.hunks))
+	if v.patch.mode != modeUnstage || len(v.patch.hunks) != 2 {
+		t.Fatalf("mode = %v, hunks = %d; want modeUnstage, 2", v.patch.mode, len(v.patch.hunks))
 	}
 	for i := 0; i <= len(v.patch.hunks[0].lines); i++ {
 		v.ProcessKey(key(vtinput.VK_DOWN))
@@ -394,7 +394,7 @@ func TestHunkViewUnstagesOnlyThePickedHunk(t *testing.T) {
 func TestHunkViewUnstagesInSubdirectory(t *testing.T) {
 	repo := stagedTwoHunkRepo(t, "sub/f.txt")
 	p := openStatusPanelIn(t, filepath.Join(repo, "sub"))
-	v := openHunksOf(t, p, true)
+	v := openHunksOf(t, p, modeUnstage)
 
 	v.ProcessKey(key(vtinput.VK_INSERT)) // the first hunk
 	v.ProcessKey(key(vtinput.VK_F2))
@@ -423,7 +423,7 @@ func TestUnstagingTheOnlyHunkOfANewFile(t *testing.T) {
 	runRealGit(t, repo, "add", "new.txt")
 
 	p := openStatusPanelIn(t, repo)
-	v := openHunksOf(t, p, true)
+	v := openHunksOf(t, p, modeUnstage)
 	if len(v.patch.hunks) != 1 {
 		t.Fatalf("hunks = %d, want 1", len(v.patch.hunks))
 	}
@@ -446,7 +446,7 @@ func TestStagedHunksNotOffered(t *testing.T) {
 	if !ok {
 		t.Fatal("no entry")
 	}
-	if _, err := p.openHunkView(entry, true); !errors.Is(err, errNoHunks) {
+	if _, err := p.openHunkView(entry, modeUnstage); !errors.Is(err, errNoHunks) {
 		t.Errorf("openHunkView(unstaged only, staged) error = %v, want errNoHunks", err)
 	}
 	shiftF4 := key(vtinput.VK_F4)
@@ -464,7 +464,7 @@ func TestStagedHunksNotOffered(t *testing.T) {
 	if !ok || entry.OrigPath == "" {
 		t.Fatalf("expected a rename entry, got %+v", entry)
 	}
-	if _, err := p.openHunkView(entry, true); !errors.Is(err, errNoHunks) {
+	if _, err := p.openHunkView(entry, modeUnstage); !errors.Is(err, errNoHunks) {
 		t.Errorf("openHunkView(rename, staged) error = %v, want errNoHunks", err)
 	}
 }
@@ -474,7 +474,7 @@ func TestStagedHunksNotOffered(t *testing.T) {
 func TestUnstageHunkViewScreenDump(t *testing.T) {
 	repo := stagedTwoHunkRepo(t, "f.txt")
 	p := openStatusPanelIn(t, repo)
-	v := openHunksOf(t, p, true)
+	v := openHunksOf(t, p, modeUnstage)
 	v.SetPosition(0, 0, 59, 21)
 	v.ProcessKey(key(vtinput.VK_INSERT))
 
@@ -522,22 +522,22 @@ func pickLines(h *diffHunk, idx ...int) {
 func TestBuildPatchPicksSingleLines(t *testing.T) {
 	const head = "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n"
 	for _, tc := range []struct {
-		name   string
-		staged bool
-		pick   []int // lines of the first hunk
-		want   string
+		name string
+		mode hunkMode
+		pick []int // lines of the first hunk
+		want string
 	}{
-		{"stage +Y", false, []int{3},
+		{"stage +Y", modeStage, []int{3},
 			"@@ -1,3 +1,4 @@\n 1\n 2\n+Y\n 3\n@@ -20,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
-		{"stage -2", false, []int{1},
+		{"stage -2", modeStage, []int{1},
 			"@@ -1,3 +1,2 @@\n 1\n-2\n 3\n@@ -20,3 +19,3 @@\n 20\n-21\n+Z\n 22\n"},
-		{"unstage +Y", true, []int{3},
+		{"unstage +Y", modeUnstage, []int{3},
 			"@@ -1,3 +1,4 @@\n 1\n X\n+Y\n 3\n@@ -20,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
-		{"unstage -2", true, []int{1},
+		{"unstage -2", modeUnstage, []int{1},
 			"@@ -1,5 +1,4 @@\n 1\n-2\n X\n Y\n 3\n@@ -22,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
 	} {
 		fp := &filePatch{
-			staged: tc.staged,
+			mode:   tc.mode,
 			header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
 			hunks: []*diffHunk{
 				testHunk(1, 3, 1, 4, " 1", "-2", "+X", "+Y", " 3"),
@@ -675,7 +675,7 @@ func TestHunkViewStagesSingleLines(t *testing.T) {
 func TestHunkViewUnstagesSingleLines(t *testing.T) {
 	repo := stagedTwoHunkRepo(t, "f.txt")
 	p := openStatusPanelIn(t, repo)
-	v := openHunksOf(t, p, true)
+	v := openHunksOf(t, p, modeUnstage)
 
 	moveTo(t, v, rowB)
 	v.ProcessKey(key(vtinput.VK_INSERT))

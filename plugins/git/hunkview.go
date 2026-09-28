@@ -64,14 +64,21 @@ func displayDiffLine(line string) string {
 // Esc or F10 closes without staging anything.
 //
 // Shift+F4 opens the same view over the file's staged changes (a patch
-// with staged set, `git reset -p` style): the keys are the same, and Enter
+// in modeUnstage, `git reset -p` style): the keys are the same, and Enter
 // or F2 takes the picked hunks out of the index with
 // `git apply --cached -R`. Only the texts differ between the two.
+//
+// F8 opens it over the unstaged changes again, but to throw the picked
+// lines away (`git checkout -p` style): Enter or F2 first asks for
+// confirmation -- with how many lines of how many hunks go -- and only then
+// takes them out of the working file with `git apply -R`, which puts back
+// what the index has there. Nothing keeps the discarded text, hence the
+// question; answering anything but "Discard" changes nothing.
 //
 // Like LogView and BranchView it is its own full-screen vtui.Frame pushed
 // over the panels, not a panel of its own: it belongs to one file of the
 // status list, and closing it returns to that list exactly as it was --
-// reloaded, if something was staged.
+// reloaded, if something was applied.
 type HunkView struct {
 	vtui.BaseFrame
 
@@ -82,13 +89,13 @@ type HunkView struct {
 	path  string
 	patch *filePatch
 
-	// onStaged runs after a successful apply, before the view closes; the
-	// status panel reloads itself there.
-	onStaged func()
+	// onApplied runs after a successful apply, before the view closes;
+	// the status panel reloads itself there.
+	onApplied func()
 }
 
 // newHunkView builds a HunkView for an already loaded patch.
-func newHunkView(dir, path string, patch *filePatch, onStaged func()) *HunkView {
+func newHunkView(dir, path string, patch *filePatch, onApplied func()) *HunkView {
 	frame := vtui.NewBorderedFrame(0, 0, 1, 1, vtui.SingleBox, "")
 	frame.ColorBoxIdx = theme.ColPanelBox
 	frame.ColorTitleIdx = theme.ColPanelTitle
@@ -117,23 +124,26 @@ func newHunkView(dir, path string, patch *filePatch, onStaged func()) *HunkView 
 	}
 	table.SetRows(rows)
 
-	return &HunkView{frame: frame, table: table, dir: dir, path: path, patch: patch, onStaged: onStaged}
+	return &HunkView{frame: frame, table: table, dir: dir, path: path, patch: patch, onApplied: onApplied}
 }
 
 // GetType identifies HunkView on the frame stack, the next free
 // vtui.TypeUser+N slot after LogDiffFilesView's +12 (logdifffiles.go).
 func (v *HunkView) GetType() vtui.FrameType { return vtui.TypeUser + 13 }
 
-// msg picks the staging or the unstaging variant of a text.
-func (v *HunkView) msg(stage, unstage string) string {
-	if v.patch.staged {
+// msg picks the staging, unstaging or discarding variant of a text.
+func (v *HunkView) msg(stage, unstage, discard string) string {
+	switch v.patch.mode {
+	case modeUnstage:
 		return i18n.Msg(unstage)
+	case modeDiscard:
+		return i18n.Msg(discard)
 	}
 	return i18n.Msg(stage)
 }
 
 func (v *HunkView) GetTitle() string {
-	return fmt.Sprintf(v.msg("GitHunks.PanelTitle", "GitHunks.UnstageTitle"), v.path, v.patch.selectedCount(), len(v.patch.hunks))
+	return fmt.Sprintf(v.msg("GitHunks.PanelTitle", "GitHunks.UnstageTitle", "GitHunks.DiscardTitle"), v.path, v.patch.selectedCount(), len(v.patch.hunks))
 }
 
 func (v *HunkView) ResizeConsole(w, h int) {
@@ -159,13 +169,13 @@ func (v *HunkView) SetPosition(x1, y1, x2, y2 int) {
 
 func (v *HunkView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
-		Normal: vtui.KeyBarLabels{"", v.msg("GitHunks.Stage", "GitHunks.Unstage"), "", "", "", "", "", "", "", i18n.Msg("GitLog.Close")},
+		Normal: vtui.KeyBarLabels{"", v.msg("GitHunks.Stage", "GitHunks.Unstage", "GitHunks.Discard"), "", "", "", "", "", "", "", i18n.Msg("GitLog.Close")},
 	}
 }
 
 // ProcessKey: Esc/F10 close; Insert/Space toggle the line or the hunk
-// under the cursor; Enter/F2 stage (or unstage) what is picked. Everything else is
-// table navigation.
+// under the cursor; Enter/F2 stage, unstage or (after a confirmation)
+// discard what is picked. Everything else is table navigation.
 func (v *HunkView) ProcessKey(e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown {
 		return false
@@ -182,7 +192,7 @@ func (v *HunkView) ProcessKey(e *vtinput.InputEvent) bool {
 			v.toggle()
 			return true
 		case vtinput.VK_RETURN, vtinput.VK_F2:
-			v.stageSelected()
+			v.applySelected()
 			return true
 		}
 	}
@@ -245,57 +255,100 @@ func (v *HunkView) toggle() {
 	}
 }
 
-// stageSelected applies the picked lines to the index -- or, for staged
-// ones, takes them out of it -- and closes the view. With nothing picked
-// it only says so; a pick buildPatch cannot turn into a patch, or a failed
-// apply (the file changed on disk or in the index since the view was
-// opened, say), keeps the view open with the reason.
-func (v *HunkView) stageSelected() {
-	n := v.patch.selectedCount()
-	if n == 0 {
+// applySelected is Enter/F2: stage or unstage the picked lines right
+// away, or -- when discarding -- ask first. With nothing picked it only
+// says so, and a pick buildPatch cannot turn into a patch is refused with
+// the reason before any question is asked.
+func (v *HunkView) applySelected() {
+	if v.patch.selectedCount() == 0 {
 		toast.Show(i18n.Msg("GitHunks.NothingSelected"), 3e9)
 		return
 	}
-	if err := applyFilePatch(context.Background(), v.dir, v.patch); err != nil {
-		switch {
-		case errors.Is(err, errWholeFileOnly):
-			toast.Show(i18n.Msg("GitHunks.WholeFileOnly"), 3e9)
-			return
-		case errors.Is(err, errNoNewlineInside):
-			toast.Show(i18n.Msg("GitHunks.NoNewlineInside"), 3e9)
-			return
-		}
-		toast.Show(fmt.Sprintf(v.msg("GitHunks.ApplyFailed", "GitHunks.UnapplyFailed"), err), 3e9)
+	if v.patch.mode != modeDiscard {
+		v.runApply()
 		return
 	}
-	toast.Show(fmt.Sprintf(v.msg("GitHunks.Staged", "GitHunks.Unstaged"), n, len(v.patch.hunks), v.path), 3e9)
-	if v.onStaged != nil {
-		v.onStaged()
+	if _, err := buildPatch(v.patch); err != nil {
+		v.showPatchError(err)
+		return
+	}
+	if vtui.FrameManager == nil {
+		return
+	}
+	confirm := vtui.ShowMessageOnEx(v, i18n.Msg("GitHunks.DiscardConfirmTitle"),
+		fmt.Sprintf(i18n.Msg("GitHunks.DiscardConfirm"), v.patch.pickedLineCount(), v.patch.selectedCount(), len(v.patch.hunks), v.path),
+		[]string{i18n.Msg("GitHunks.DiscardButton"), i18n.Msg("vtui.Cancel")}, vtui.MessageWarn)
+	if confirm == nil {
+		return
+	}
+	confirm.OnResult = func(code int) {
+		if code == 0 {
+			v.runApply()
+		}
+	}
+}
+
+// runApply applies the picked lines the way the view's mode says and
+// closes the view. A failed apply (the file changed on disk or in the
+// index since the view was opened, say) keeps the view open with the
+// reason; git apply changes nothing then.
+func (v *HunkView) runApply() {
+	n := v.patch.selectedCount()
+	if err := applyFilePatch(context.Background(), v.dir, v.patch); err != nil {
+		if !v.showPatchError(err) {
+			toast.Show(fmt.Sprintf(v.msg("GitHunks.ApplyFailed", "GitHunks.UnapplyFailed", "GitHunks.DiscardFailed"), err), 3e9)
+		}
+		return
+	}
+	toast.Show(fmt.Sprintf(v.msg("GitHunks.Staged", "GitHunks.Unstaged", "GitHunks.Discarded"), n, len(v.patch.hunks), v.path), 3e9)
+	if v.onApplied != nil {
+		v.onApplied()
 	}
 	v.SetExitCode(-1)
+}
+
+// showPatchError toasts the reason buildPatch refused the pick and reports
+// whether err was one of those refusals.
+func (v *HunkView) showPatchError(err error) bool {
+	switch {
+	case errors.Is(err, errWholeFileOnly):
+		toast.Show(i18n.Msg("GitHunks.WholeFileOnly"), 3e9)
+	case errors.Is(err, errNoNewlineInside):
+		toast.Show(i18n.Msg("GitHunks.NoNewlineInside"), 3e9)
+	default:
+		return false
+	}
+	return true
 }
 
 // showHunks is F4 on the status panel: load the unstaged diff of the file
 // under the cursor and open a HunkView over it. `git diff` of one file is
 // quick, so this runs synchronously, the same way the panel's own
 // `git status` does.
-func (p *statusPanel) showHunks() { p.showHunksOf(false) }
+func (p *statusPanel) showHunks() { p.showHunksOf(modeStage) }
 
 // showStagedHunks is Shift+F4: the same over the file's staged diff, to
 // take hunks back out of the index.
-func (p *statusPanel) showStagedHunks() { p.showHunksOf(true) }
+func (p *statusPanel) showStagedHunks() { p.showHunksOf(modeUnstage) }
 
-func (p *statusPanel) showHunksOf(staged bool) {
+// showDiscardHunks is F8: the unstaged diff again, to throw hunks or lines
+// of the working file away.
+func (p *statusPanel) showDiscardHunks() { p.showHunksOf(modeDiscard) }
+
+func (p *statusPanel) showHunksOf(mode hunkMode) {
 	entry, ok := p.selectedEntry()
 	if !ok {
 		return
 	}
-	v, err := p.openHunkView(entry, staged)
+	v, err := p.openHunkView(entry, mode)
 	if err != nil {
 		if errors.Is(err, errNoHunks) {
 			msg := "GitHunks.NoHunks"
-			if staged {
+			switch mode {
+			case modeUnstage:
 				msg = "GitHunks.NoStagedHunks"
+			case modeDiscard:
+				msg = "GitHunks.NoDiscardHunks"
 			}
 			toast.Show(fmt.Sprintf(i18n.Msg(msg), entry.Path), 3e9)
 		} else {
@@ -309,19 +362,20 @@ func (p *statusPanel) showHunksOf(staged bool) {
 	}
 }
 
-// openHunkView builds the HunkView for entry -- over its staged changes
-// when staged is set; after a successful apply it reloads the panel with
-// the cursor kept on entry, as Insert does.
+// openHunkView builds the HunkView for entry in the given mode -- over its
+// staged changes for modeUnstage, its unstaged ones otherwise; after a
+// successful apply it reloads the panel with the cursor kept on entry, as
+// Insert does.
 //
 // A staged rename has no hunks to unstage in parts: `git diff --cached` of
 // the new path alone shows it as an added file, and reversing that would
 // drop the new path from the index while the old one stays deleted there.
 // Insert unstages the rename whole.
-func (p *statusPanel) openHunkView(entry statusEntry, staged bool) (*HunkView, error) {
-	if staged && entry.OrigPath != "" {
+func (p *statusPanel) openHunkView(entry statusEntry, mode hunkMode) (*HunkView, error) {
+	if mode == modeUnstage && entry.OrigPath != "" {
 		return nil, errNoHunks
 	}
-	patch, err := loadFilePatch(context.Background(), p.dir, entry.Path, staged)
+	patch, err := loadFilePatch(context.Background(), p.dir, entry.Path, mode)
 	if err != nil {
 		return nil, err
 	}

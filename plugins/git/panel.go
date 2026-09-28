@@ -194,7 +194,14 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // Shift+F4 is the file panel's "edit a new file", which has no meaning
 // here either.
 //
-// Enter, Insert, F4 and Shift+F4 act on the entry under the cursor, so they are disabled
+// F8 (hunks again, hunkview.go) throws picked hunks or lines of the
+// working file away, `git checkout -p` style, after a confirmation. F8 is
+// Delete in a file panel and in this plugin's own branch list
+// (branchview.go) -- the destructive key of the Far-style keybar, and this
+// is the one destructive thing this panel does to a file; its keybar
+// caption says "Discard", not "Delete", because the file itself stays.
+//
+// Enter, Insert, F4, Shift+F4 and F8 act on the entry under the cursor, so they are disabled
 // while the list is empty: the key is still consumed, exactly as before,
 // and nothing runs. Ctrl+K stays enabled with nothing staged on purpose --
 // showCommitDialog answers that case with its own "Nothing staged to
@@ -243,6 +250,7 @@ func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_F4, Label: i18n.Msg("GitStatus.KeyBar.Hunks"), Run: p.showHunks, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.UnstageHunks"), Run: p.showStagedHunks, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F8, Label: i18n.Msg("GitStatus.KeyBar.DiscardHunks"), Run: p.showDiscardHunks, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
 		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
 		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},
@@ -275,7 +283,7 @@ func (p *statusPanel) refresh() {
 func (p *statusPanel) ProcessMouse(e *vtinput.InputEvent) bool { return p.table.ProcessMouse(e) }
 
 // hasSelectedEntry is the Enabled predicate of the keys that act on the
-// entry under the cursor (Enter, Insert).
+// entry under the cursor (Enter, Insert, F4, Shift+F4, F8).
 func (p *statusPanel) hasSelectedEntry() bool {
 	_, ok := p.selectedEntry()
 	return ok

@@ -201,9 +201,10 @@ func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
 		keys[c] = k
 	}
 	shiftF4 := chord{vtinput.VK_F4, false, true}
+	f8 := chord{vtinput.VK_F8, false, false}
 	for _, want := range []chord{
 		{vtinput.VK_F5, false, false}, {vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false},
-		{vtinput.VK_F4, false, false}, shiftF4, {vtinput.VK_K, true, false}, {vtinput.VK_E, true, false}, {vtinput.VK_S, true, false},
+		{vtinput.VK_F4, false, false}, shiftF4, f8, {vtinput.VK_K, true, false}, {vtinput.VK_E, true, false}, {vtinput.VK_S, true, false},
 	} {
 		if _, ok := keys[want]; !ok {
 			t.Errorf("missing declared key %+v", want)
@@ -218,9 +219,12 @@ func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
 	if keys[shiftF4].Label == "" {
 		t.Error("Shift+F4 has no keybar caption")
 	}
+	if keys[f8].Label == "" {
+		t.Error("F8 has no keybar caption")
+	}
 
 	// Empty list: nothing under the cursor for Enter or Insert to act on.
-	for _, c := range []chord{{vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false}, {vtinput.VK_F4, false, false}, shiftF4} {
+	for _, c := range []chord{{vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false}, {vtinput.VK_F4, false, false}, shiftF4, f8} {
 		k := keys[c]
 		if k.Enabled == nil || k.Enabled() {
 			t.Errorf("key %+v should be disabled on an empty list", c)
@@ -246,7 +250,7 @@ func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
 		t.Fatal("plain F5 was not claimed")
 	}
 	for _, k := range kp.PanelKeys() {
-		if (k.VK == vtinput.VK_RETURN || k.VK == vtinput.VK_INSERT || k.VK == vtinput.VK_F4) && k.Enabled != nil && !k.Enabled() {
+		if (k.VK == vtinput.VK_RETURN || k.VK == vtinput.VK_INSERT || k.VK == vtinput.VK_F4 || k.VK == vtinput.VK_F8) && k.Enabled != nil && !k.Enabled() {
 			t.Errorf("key %#x should be enabled with an entry under the cursor", k.VK)
 		}
 	}

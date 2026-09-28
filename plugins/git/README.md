@@ -338,6 +338,34 @@ archive tools (f4#609) rather than linking a Go git implementation.
   one, check the index with `git show :f.txt`, and stage around a missing
   final newline.
 
+## Part 15: discarding part of the working file (F8)
+
+- **F8** on a status-panel entry (keybar: **Discard**) opens the same
+  `HunkView` over the file's unstaged changes (`git diff`, index vs.
+  worktree -- what `git checkout -p` offers). Picking hunks and single
+  lines works as with F4. **Enter**/**F2** first asks: "Discard N changed
+  lines (k of n hunks) from the working file ...? This cannot be undone."
+  Only **Discard** goes on; Cancel or Esc leaves the file, the index and
+  the picks as they were.
+- F8 because it is the destructive key of a Far-style keybar -- Delete in
+  a file panel and in the branch list (Part 7); the caption says
+  "Discard", since the file itself stays.
+- The picked lines are taken out of the working file with `git apply -R`
+  (no `--cached`: the index is not touched), which puts back what the
+  index has there -- not HEAD, so staged changes stay in the file too.
+  The patch is rebuilt the way it is for unstaging: the `+` side is the
+  working file as it is and keeps every line (unpicked `+` lines become
+  context), the `-` side takes the picked lines only, and the `-` start of
+  each kept hunk moves by the line-count change of the rebuilt hunks
+  before it. `git apply` changes nothing if the file no longer matches.
+- A file deleted from the working tree is one hunk: discarding it whole
+  brings the file back; part of it is refused before the question, as are
+  the other picks `buildPatch` cannot represent.
+- Tests on real repositories (`hunk_discard_test.go`) check the working
+  file's bytes after discarding single lines of two hunks (the second one
+  found a line higher), a whole hunk from a subdirectory, a change on top
+  of staged lines, a deleted file, and that cancelling changes nothing.
+
 ## Design notes
 
 - Every git invocation goes through `execGit` (a package-level var, the

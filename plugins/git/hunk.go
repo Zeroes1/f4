@@ -96,22 +96,23 @@ func (h *diffHunk) headerLine() string {
 }
 
 // pickedBody rebuilds the hunk's body for the picked lines only and counts
-// the lines of its two sides. The side that describes the index as it is
-// now -- "-" when staging, "+" when unstaging (the patch is then applied
-// in reverse) -- keeps all its lines; the other side takes only the picked
-// ones:
+// the lines of its two sides. The side that describes the patch's target
+// as it is now -- "-" when staging (the index), "+" when the patch is
+// applied in reverse: unstaging (the index again) and discarding (the
+// working file) -- keeps all its lines; the other side takes only the
+// picked ones:
 //
 //   - a picked "+" or "-" line stays as it is;
-//   - an unpicked line of the index side is not part of the change, so it
+//   - an unpicked line of the target side is not part of the change, so it
 //     becomes a context line (" " and the same text);
 //   - an unpicked line of the other side is left out;
 //   - a "\ No newline at end of file" marker goes with the line before it.
 //
 // This is what `git add -p`'s "e" (edit) asks the user to do by hand.
-func (h *diffHunk) pickedBody(staged bool) (lines []string, oldN, newN int, err error) {
-	indexSide := byte('-')
-	if staged {
-		indexSide = '+'
+func (h *diffHunk) pickedBody(reverse bool) (lines []string, oldN, newN int, err error) {
+	targetSide := byte('-')
+	if reverse {
+		targetSide = '+'
 	}
 	dropped := false // whether the line before a marker was left out
 	for i, line := range h.lines {
@@ -128,7 +129,7 @@ func (h *diffHunk) pickedBody(staged bool) (lines []string, oldN, newN int, err 
 			} else {
 				newN++
 			}
-		case isChangeLine(line) && line[0] == indexSide:
+		case isChangeLine(line) && line[0] == targetSide:
 			lines = append(lines, " "+line[1:])
 			oldN++
 			newN++
@@ -170,18 +171,36 @@ func checkNoNewlineMarkers(lines []string) error {
 	return nil
 }
 
+// hunkMode is what HunkView does with the picked lines of a file.
+type hunkMode int
+
+const (
+	// modeStage (F4): `git diff`, index vs. worktree; the picked lines are
+	// added to the index with `git apply --cached` (`git add -p`).
+	modeStage hunkMode = iota
+	// modeUnstage (Shift+F4): `git diff --cached`, HEAD vs. index; the
+	// picked lines are taken back out of the index with
+	// `git apply --cached -R` (`git reset -p`).
+	modeUnstage
+	// modeDiscard (F8): `git diff` again, index vs. worktree; the picked
+	// lines are taken out of the working file itself with `git apply -R`
+	// -- no --cached -- which puts back what the index has there
+	// (`git checkout -p`). The index is not touched, and nothing keeps the
+	// discarded text: HunkView asks before it applies.
+	modeDiscard
+)
+
+// reverse reports whether the patch is applied with -R: its "+" side then
+// describes the target (the index or the working file) as it is now.
+func (m hunkMode) reverse() bool { return m != modeStage }
+
 // filePatch is one file's diff, split into the file header (the
-// "diff --git", "index", "---" and "+++" lines) and its hunks.
-//
-// staged tells the two directions apart. False: `git diff`, index vs.
-// worktree, and applying the picked lines adds them to the index
-// (`git add -p`). True: `git diff --cached`, HEAD vs. index, and applying
-// the picked lines takes them back out of it (`git reset -p`) -- the same
-// patch applied with `git apply --cached -R`.
+// "diff --git", "index", "---" and "+++" lines) and its hunks, and what is
+// to be done with them (mode).
 type filePatch struct {
 	header []string
 	hunks  []*diffHunk
-	staged bool
+	mode   hunkMode
 }
 
 // lineSide is '-' or '+' for a changed line and ' ' for a context line
@@ -200,6 +219,16 @@ func (fp *filePatch) selectedCount() int {
 		if h.anyPicked() {
 			n++
 		}
+	}
+	return n
+}
+
+// pickedLineCount reports how many "+"/"-" lines are picked in all hunks.
+func (fp *filePatch) pickedLineCount() int {
+	n := 0
+	for _, h := range fp.hunks {
+		picked, _ := h.changeCounts()
+		n += picked
 	}
 	return n
 }
@@ -282,26 +311,30 @@ func parseFilePatch(diff string) (*filePatch, error) {
 }
 
 // buildPatch renders a patch with only the picked lines, ready for
-// `git apply --cached` (or `git apply --cached -R` for a staged patch). It
+// `git apply --cached` (staging), `git apply --cached -R` (unstaging) or
+// `git apply -R` (discarding from the working file). It
 // returns "" when nothing is picked. A hunk with no picked line is left
 // out; every other one is rebuilt by pickedBody, so a hunk picked whole
 // comes out exactly as git printed it.
 //
-// One side of every kept hunk describes the index as it is now, and its
-// start stays as git printed it; the start of the other side is
-// recomputed, the way `git add -p` and `git reset -p` do it, from the
-// line-count change (new lines minus old lines) of the rebuilt hunks
-// written before it -- hunks left out, and lines left out of the hunks
-// that were kept, are not part of the change:
+// One side of every kept hunk describes the patch's target as it is now,
+// and its start stays as git printed it; the start of the other side is
+// recomputed, the way `git add -p`, `git reset -p` and `git checkout -p`
+// do it, from the line-count change (new lines minus old lines) of the
+// rebuilt hunks written before it -- hunks left out, and lines left out of
+// the hunks that were kept, are not part of the change:
 //
-//   - staging (fp.staged false): the patch goes from the index ("-a") to
-//     the new index ("+c" = "-a" moved by that change);
-//   - unstaging (fp.staged true): the patch is applied in reverse, from
-//     the index ("+c") back to the new index ("-a" = "+c" moved back).
+//   - staging: the patch goes from the index ("-a") to the new index
+//     ("+c" = "-a" moved by that change);
+//   - unstaging: the patch is applied in reverse, from the index ("+c")
+//     back to the new index ("-a" = "+c" moved back);
+//   - discarding: the same as unstaging, with the working file in place of
+//     the index -- "+c" is the working file as it is, and the lines kept
+//     out of the patch stay in it.
 //
 // An "old mode"/"new mode" pair is dropped from the header: a mode change
-// is not a line the user picked, so staging a few lines must not stage it
-// along with them (Insert still stages the whole file, mode included).
+// is not a line the user picked, so staging (or discarding) a few lines
+// must not take it along with them (Insert still stages the whole file, mode included).
 //
 // A patch that creates or deletes the file only takes its hunk whole
 // (errWholeFileOnly), and picked lines that would strand a
@@ -327,12 +360,12 @@ func buildPatch(fp *filePatch) (string, error) {
 		if !h.allPicked() && fp.wholeFile() {
 			return "", errWholeFileOnly
 		}
-		lines, oldN, newN, err := h.pickedBody(fp.staged)
+		lines, oldN, newN, err := h.pickedBody(fp.mode.reverse())
 		if err != nil {
 			return "", err
 		}
 		oldStart, newStart := h.oldStart, startAfter(linesBefore(h.oldStart, h.oldCount)+delta, newN)
-		if fp.staged {
+		if fp.mode.reverse() {
 			oldStart, newStart = startAfter(linesBefore(h.newStart, h.newCount)-delta, oldN), h.newStart
 		}
 		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@%s\n", oldStart, oldN, newStart, newN, h.section)
@@ -364,8 +397,8 @@ func startAfter(before, count int) int {
 	return before + 1
 }
 
-// loadFilePatch runs `git diff` -- `git diff --cached` when staged is set
-// -- for path (relative to dir, the way `git status --porcelain=v2` in dir
+// loadFilePatch runs `git diff` -- `git diff --cached` for modeUnstage --
+// for path (relative to dir, the way `git status --porcelain=v2` in dir
 // reports it) and parses the result.
 //
 // The flags pin down every piece of user configuration that would change
@@ -374,9 +407,9 @@ func startAfter(before, count int) int {
 // prefixes (diff.noprefix and diff.mnemonicPrefix would otherwise change
 // them). diff.relative=false keeps the header paths relative to the
 // repository root, which is where applyFilePatch runs `git apply`.
-func loadFilePatch(ctx context.Context, dir, path string, staged bool) (*filePatch, error) {
+func loadFilePatch(ctx context.Context, dir, path string, mode hunkMode) (*filePatch, error) {
 	args := []string{"-c", "diff.relative=false", "diff"}
-	if staged {
+	if mode == modeUnstage {
 		args = append(args, "--cached")
 	}
 	args = append(args, "--no-color", "--no-ext-diff", "--no-textconv",
@@ -389,7 +422,7 @@ func loadFilePatch(ctx context.Context, dir, path string, staged bool) (*filePat
 	if err != nil {
 		return nil, err
 	}
-	fp.staged = staged
+	fp.mode = mode
 	return fp, nil
 }
 
@@ -406,10 +439,14 @@ func repoTopLevel(ctx context.Context, dir string) (string, error) {
 	return top, nil
 }
 
-// applyFilePatch stages the picked lines of fp -- or, for a staged
-// patch, takes them out of the index: the rebuilt patch goes to a
-// temporary file and `git apply --cached` (with -R for a staged patch)
-// reads it from there.
+// applyFilePatch does with the picked lines of fp what its mode says:
+// stages them, takes them out of the index, or takes them out of the
+// working file. The rebuilt patch goes to a temporary file, and
+// `git apply` reads it from there -- with --cached unless discarding (only
+// then is the working file the target, and only then is the index left
+// alone), and with -R unless staging. git apply is all or nothing: a patch
+// that no longer fits (the file changed since the diff was taken) changes
+// nothing and fails.
 //
 // It runs at the repository root rather than in dir: patch paths are
 // root-relative, and `git apply` started from a subdirectory silently
@@ -442,8 +479,12 @@ func applyFilePatch(ctx context.Context, dir string, fp *filePatch) error {
 		return err
 	}
 
-	args := []string{"apply", "--cached", "--whitespace=nowarn"}
-	if fp.staged {
+	args := []string{"apply"}
+	if fp.mode != modeDiscard {
+		args = append(args, "--cached")
+	}
+	args = append(args, "--whitespace=nowarn")
+	if fp.mode.reverse() {
 		args = append(args, "-R")
 	}
 	out, err := runGitIn(ctx, top, append(args, name)...)
