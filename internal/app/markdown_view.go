@@ -123,14 +123,14 @@ func readMarkdownSource(ctx context.Context, v vfs.VFS, path string) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	size := f.Size()
 	if size < 0 || size > markdownViewMaxSize {
 		return nil, errMarkdownTooLarge
 	}
 	buf := make([]byte, size)
 	n, err := f.ReadAt(ctx, buf, 0)
-	if err != nil && !(errors.Is(err, io.EOF) && int64(n) == size) {
+	if err != nil && (!errors.Is(err, io.EOF) || int64(n) != size) {
 		return nil, err
 	}
 	return buf[:n], nil
