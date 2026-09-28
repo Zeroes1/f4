@@ -33,9 +33,15 @@ on:
       - '**.md'
       - 'docs/**'
 
+# lunobot/staging is one linear branch every bot lands on, often faster than a
+# run takes. Cancelling there would starve it: no run would ever finish. With
+# cancel-in-progress off, GitHub keeps the running check and replaces only the
+# queued one, so every run completes and the next always tests the newest tip,
+# which contains every commit in between. A green run on any descendant of a
+# commit covers that commit. Other branches keep cancelling superseded runs.
 concurrency:
   group: quick-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/lunobot/staging' }}
 
 jobs:
   check:

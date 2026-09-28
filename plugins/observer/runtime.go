@@ -530,6 +530,9 @@ func (m *Module) GetItem(storage uint32, itemIndex int32) (GetItemResult, error)
 		return GetItemResult{}, err
 	}
 
+	// #nosec G115 -- res[0] is GetItem's i32 GetItemResult code, already
+	// truncated to 32 bits by the guest; the uint32 step only strips the
+	// zero-extension wazero's uint64 return slot added.
 	result := GetItemResult{Code: int32(uint32(res[0]))}
 	if result.Code != GetItemOK {
 		return result, nil

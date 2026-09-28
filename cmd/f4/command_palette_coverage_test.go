@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 55
+const commandPaletteF4Surfaces = 56
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -163,6 +163,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"viewer.(*ViewerView).ProcessKey": {
 		class: paletteAuditActionArea, rationale: "viewer commands are registered actions; scrolling and selection remain local primitives",
+	},
+	"diffview.(*DiffView).ProcessKey": {
+		class: paletteAuditActionArea, rationale: "the diff view's entry point is the registered Panel.CompareFilesByContent action; scrolling and difference navigation inside it remain local primitives",
 	},
 	"dummy_rpc.(*DummyPlugin).ProcessKey": {
 		class: paletteAuditTransportHook, rationale: "this is the RPC plugin ProcessKey protocol hook, not an in-process frame",

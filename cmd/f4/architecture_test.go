@@ -129,6 +129,13 @@ var architectureLayers = map[string]int{
 	"internal/luaplug":    0,
 	"internal/textlayout": 1,
 
+	// The side-by-side diff: a Myers edit-script diff over line slices (layer
+	// 0, importing nothing of ours) and the two-pane view built on it, on
+	// internal/theme and on internal/i18n (layer 1, the company
+	// internal/update and internal/textlayout keep).
+	"internal/textdiff": 0,
+	"internal/diffview": 1,
+
 	// These two sit on vfs, which stays public.
 	"internal/fusefs": 1,
 	"internal/vtvibe": 1,

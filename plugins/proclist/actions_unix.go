@@ -39,15 +39,13 @@ func changePriority(pid int, up bool) (level int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	// getpriority(2)'s raw syscall return (what x/sys/unix.Getpriority calls,
-	// bypassing glibc) is 20-nice, in 0..39: the kernel cannot return a
-	// negative "success" value on that path, unlike glibc's own getpriority()
-	// wrapper, which already flips the sign back before handing the value to
-	// its caller. setpriority's own prio argument is not encoded the same way
-	// -- it takes the true nice value directly, confirmed empirically (set 10,
-	// read back 10 via ps -o ni) -- so only the read side needs unflipping
-	// here.
-	nice := 20 - prio
+	// x/sys/unix.Getpriority's raw return is NOT the true nice value on every
+	// platform -- rawPriorityToNice (priority_raw_linux.go/priority_raw_darwin.go)
+	// carries the per-OS reasoning. setpriority's own prio argument is not
+	// affected either way -- it takes the true nice value directly on both,
+	// confirmed empirically (set 10, read back 10 via ps -o ni) -- so only
+	// the read side needs converting here.
+	nice := rawPriorityToNice(prio)
 	idx := nearestNiceIndex(nice)
 	switch {
 	case up && idx < len(niceLadder)-1:
