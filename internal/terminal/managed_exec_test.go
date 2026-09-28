@@ -32,36 +32,45 @@ func waitForPTYCondition(p *PTY, out *strings.Builder, timeout time.Duration, co
 	}
 }
 
-// TestManagedForegroundCommand_JobControlStopLeavesNoDMarker pins down,
+// TestManagedForegroundCommand_JobControlStopReclaimsTerminal pins down,
 // against a real PTY and a real interactive shell (not a mock), the
 // mechanism behind f4 #1603: a foreground command run from f4's own command
 // line is wrapped by ManagedForegroundCommand in OSC 133 C/D markers so f4
 // knows when it is done (internal/panel/frame.go's BeginManagedExecution /
 // endExecution, gated on the D marker via shellBusyChanged).
 //
-// If the wrapped command is job-control *stopped* instead of finishing --
-// Ctrl+Z, i.e. a real SIGTSTP delivered through the PTY exactly as f4's own
-// key dispatch already does (see the CI run cited in the #1603 comment
-// thread) -- the interactive shell abandons the rest of that compound
-// command and returns straight to its own prompt: the D marker never runs.
-// This test confirms that end-to-end:
+// An earlier version of this test additionally asserted that the D marker
+// is *never* printed once the wrapped command is job-control *stopped*
+// (Ctrl+Z) instead of finishing, on the theory that bash abandons the rest
+// of the `;`-separated compound command once the foreground job stops. That
+// theory does not hold: real CI runs of this exact test (linux/amd64,
+// linux/arm64, darwin/arm64 -- see the run cited in the #1603 comment
+// thread) show bash reliably continuing past the stopped "sleep" and
+// printing the D marker within a few dozen milliseconds of the "Stopped"
+// job-control notice, on every one of those platforms alike. That makes
+// sense once you look at what actually stops: SIGTSTP only suspends the
+// process group of the forked "sleep" job; the interactive shell's own
+// execution of the compound list is not itself paused, so it sails through
+// the remaining `;`-separated statements (FARVTRESULT=$?; printf D; ...)
+// immediately, leaving "sleep" parked as a stopped background job. So the
+// presence or absence of a belated D marker here is not a meaningful,
+// platform-independent signal either way, and this test does not assert
+// on it in either direction.
 //
-//  1. the D marker is indeed never printed after the stop, and
-//  2. PTY.IsBusy() -- the TIOCGPGRP check pty_linux.go/pty_darwin.go/
-//     pty_bsd.go already use, independent of any marker -- correctly
-//     notices the shell reclaiming the terminal's foreground process group,
-//     flipping back to false on its own.
-//
-// (2) is the empirical groundwork f4 #1603's real fix needs: today
+// What *is* meaningful, and what this test does assert, is that
+// PTY.IsBusy() -- the TIOCGPGRP check pty_linux.go/pty_darwin.go/
+// pty_bsd.go already use, independent of any marker -- correctly and
+// stably notices the shell reclaiming the terminal's foreground process
+// group after the stop, and does not flap back to true afterwards. That is
+// the empirical groundwork f4 #1603's real fix needs: today
 // PanelsFrame.IsPtyBusy() ORs this same IsBusy() with pf.Executing, so a
-// stuck-true pf.Executing (no D marker ever arriving) wins regardless. A
-// fix has to notice IsBusy() going false while pf.Executing is still true
-// and treat that as "the job stopped", but doing that safely needs a
-// separate step: right after BeginManagedExecution() there is a real
-// window where pf.Executing is already true but the wrapped command hasn't
-// forked yet, so IsBusy() also reads false there -- debouncing that race is
-// left to the follow-up (see the #1603 comment thread), not this test.
-func TestManagedForegroundCommand_JobControlStopLeavesNoDMarker(t *testing.T) {
+// stuck-true pf.Executing (were the D marker ever to not arrive) wins
+// regardless. The fix notices IsBusy() going false while pf.Executing is
+// still true and treats that as "the job stopped", debounced against the
+// real, separate window right after BeginManagedExecution() where
+// IsBusy() also reads false before the wrapped command has even forked
+// yet (see internal/panel/frame.go's pollManagedExecutionDebounce).
+func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("PTY job control is a Unix concept; not meaningful on Windows")
 	}
@@ -111,11 +120,19 @@ func TestManagedForegroundCommand_JobControlStopLeavesNoDMarker(t *testing.T) {
 		t.Fatalf("shell never reclaimed the terminal after Ctrl+Z (IsBusy stayed true); PTY output so far: %q", out.String())
 	}
 
-	// Give the shell a little longer to print anything else it's going to,
-	// including -- if the premise here were wrong -- a belated D marker.
-	waitForPTYCondition(p, &out, 500*time.Millisecond, func() bool { return false })
-
-	if strings.Contains(out.String(), "\x1b]133;D\x07") {
-		t.Fatalf("D marker was printed after a job-control stop; f4 #1603's premise (pf.Executing never clears) does not hold here. PTY output: %q", out.String())
+	// The shell may still print a belated D marker for the abandoned "sleep"
+	// job here (see the doc comment above) -- that is not a bug and this
+	// test does not check for it either way. What matters for #1603's fix
+	// is that IsBusy() has genuinely, stably reclaimed "false": drain a
+	// further window and confirm it never flaps back to true, the way it
+	// would if the shell handed the terminal's foreground process group
+	// back to "sleep" again (e.g. a shell that resumed the stopped job on
+	// its own instead of leaving it stopped).
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		waitForPTYCondition(p, &out, 20*time.Millisecond, func() bool { return false })
+		if p.IsBusy() {
+			t.Fatalf("IsBusy() flipped back to true after the shell reclaimed the terminal; PTY output so far: %q", out.String())
+		}
 	}
 }

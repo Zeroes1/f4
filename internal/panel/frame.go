@@ -1998,9 +1998,14 @@ func (pf *PanelsFrame) shellBusyChanged(busy bool) {
 
 // beginManagedExecution marks a command that carries its own OSC 133 C/D
 // pair, wrapped around it by f4 itself. Its D marker is unambiguous: it is
-// printed by the very command line we sent, so it always ends the execution
-// -- unless the command is job-control *stopped* rather than finished (Ctrl+Z,
-// #1603), which armManagedExecDebounce's caller in Show() guards against.
+// printed by the very command line we sent, so it normally ends the
+// execution promptly, including after the command is job-control *stopped*
+// rather than finished (Ctrl+Z, #1603) -- bash reliably prints a belated D
+// for the abandoned job right after its "Stopped" notice (confirmed across
+// linux/amd64, linux/arm64 and darwin/arm64 in managed_exec_test.go). That
+// is not guaranteed for every shell or every VFS peer, though, so
+// armManagedExecDebounce's caller in Show() provides a marker-independent
+// backstop regardless of whether this particular D ever shows up.
 func (pf *PanelsFrame) BeginManagedExecution() {
 	pf.Executing = true
 	pf.ignoreNextPrompt = false
@@ -2043,17 +2048,18 @@ func (pf *PanelsFrame) armManagedExecDebounce() {
 	pf.managedExecIdleStreak = 0
 }
 
-// pollManagedExecutionDebounce is #1603's fix for job-control stops (Ctrl+Z)
-// of a command run from f4's own command line. pf.Executing is normally
-// cleared by the D marker a managed command prints on completion (see
-// ManagedForegroundCommand) or by the next shell prompt for a prompt-driven
-// one -- but a command that is merely *stopped*, not finished, never reaches
-// either: the interactive shell abandons the rest of that command line and
-// returns straight to its own prompt without printing anything more
-// (confirmed against a real PTY in managed_exec_test.go, part 1 of this
-// fix). Left alone, pf.Executing -- and therefore IsPtyBusy/
-// TerminalOwnsKeyboard -- would stay stuck true forever, which is #1603
-// itself.
+// pollManagedExecutionDebounce is #1603's backstop for job-control stops
+// (Ctrl+Z) of a command run from f4's own command line. pf.Executing is
+// normally cleared by the D marker a managed command prints on completion
+// (see ManagedForegroundCommand) or by the next shell prompt for a
+// prompt-driven one, and in the common bash case that marker still shows up
+// -- delayed, right after the "Stopped" job-control notice -- even once the
+// wrapped command is merely *stopped*, not finished (confirmed against a
+// real PTY across linux/amd64, linux/arm64 and darwin/arm64 in
+// managed_exec_test.go). But nothing here guarantees that for every shell
+// or every VFS peer: a command whose stop never produces any further marker
+// at all would leave pf.Executing -- and therefore IsPtyBusy/
+// TerminalOwnsKeyboard -- stuck true forever, which is #1603 itself.
 //
 // The fix reuses PTY.IsBusy()'s TIOCGPGRP check, which independently and
 // correctly notices the shell reclaiming the terminal's foreground process
