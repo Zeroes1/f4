@@ -89,7 +89,7 @@ const errorReplyOverhead = 1 + 1 + 4
 // caps it well under EncodeError's own flat MaxMessageLen ceiling (owner's
 // answer 3): 369 bytes at ST, 372 at BEL.
 func MaxErrorText(maxFrame uint32, t Terminator) int {
-	fixed := uint32(len(replyIntro)) + uint32(len(t.String()))
+	fixed := uint32(len(replyIntro)) + uint32(len(t.String())) //nolint:gosec // replyIntro and t.String() are short fixed constants, never near MaxUint32
 	if maxFrame <= fixed {
 		return 0
 	}
