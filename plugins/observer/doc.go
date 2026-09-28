@@ -6,10 +6,21 @@
 //
 // # Scope so far (f4#1563)
 //
-// This package is still infrastructure only: it has no notion of a
-// directory tree beyond one GetItem call at a time, is not registered as a
-// vfs.VFSProvider, and is not reachable from Enter on a panel. What it does
-// provide is:
+// Parts 1-4 built infrastructure only: ABI marshaling and a loader that can
+// drive LoadSubModule/OpenStorage/GetItem/ExtractItem against a real module,
+// with no notion of a directory tree beyond one GetItem call at a time, no
+// vfs.VFSProvider, and nothing reachable from Enter on a panel. Part 5 adds
+// exactly one, deliberately narrow slice on top of that: Provider
+// (provider.go) is a real vfs.VFSProvider, registered from both build tags
+// (internal/plughost/manager.go), that drives a real isoimg.wasm against a
+// real ISO9660 image, builds its whole directory tree from a GetItem walk
+// (ObserverVFS in vfs.go), and lets a panel browse it and read files out of
+// it -- with no observer.ini, no module selection beyond that one hardcoded
+// module, no password support, and no cancellation beyond what ctx already
+// gives every VFS call. Those remain later, separate parts; see
+// status/1563.md in the accounting repository for what is next.
+//
+// What parts 1-4 already provide, and part 5 builds on unchanged, is:
 //
 //   - Go types and constants for the Observer module ABI (API v6, see
 //     src/common/ModuleDef.h in lazyhamster/Observer), laid out the way a
