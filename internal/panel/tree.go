@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
@@ -13,6 +14,72 @@ import (
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
+
+// treeExpandCache remembers, for the lifetime of this f4 process only, every
+// directory path any tree panel (Ctrl+T) has ever expanded, across separate
+// TreePanel instances: TreePanel is rebuilt from scratch on every Ctrl+T
+// (see NewTreePanel), so without this the whole expand/collapse state a user
+// built up while browsing was thrown away the moment they closed the tree
+// (Enter, or Ctrl+T again) and started over fully collapsed at the next
+// open. Keyed by absolute path -- not by root or by which TreePanel expanded
+// it -- since a path names the same directory on disk regardless of which
+// (volume- or cwd-rooted, see TreeRootWholeVolume) tree happened to reach
+// it.
+//
+// Deliberately process-lifetime, not persisted to disk (settings.ini/
+// f4:config): the owner's own tracking comment on f4#1602 named this exact
+// fork -- in-memory for the session vs. surviving a process restart --
+// without resolving it, and neither the ticket body nor any later comment
+// picked a side (see f4#1602 for the open follow-up question about
+// promoting this to a persisted cache instead). In-memory is the smaller,
+// reversible choice: it already fixes the concrete, observed loss (open,
+// drill in, close, reopen -- back to square one, all inside one run of f4),
+// adds no on-disk format to design, version, migrate or invalidate against
+// renamed/removed directories, and can still be layered with persistence
+// later without changing this cache's own keying or call sites.
+var (
+	treeExpandCacheMu sync.Mutex
+	treeExpandCache   = map[string]struct{}{}
+)
+
+// rememberTreeExpanded records that path's children are now visible in some
+// tree panel. Called only by expandAt itself, never by its callers, so
+// every way a node can become expanded -- Right arrow, revealPath's
+// auto-expand of the chain down to the source panel's directory,
+// RefreshChildrenAndSelect, RefreshAfterDelete, Rescan -- is covered by this
+// one call site.
+func rememberTreeExpanded(path string) {
+	treeExpandCacheMu.Lock()
+	treeExpandCache[path] = struct{}{}
+	treeExpandCacheMu.Unlock()
+}
+
+// forgetTreeExpanded is rememberTreeExpanded's inverse, called by collapseAt
+// for the node it collapses and for every descendant row collapsing removes
+// along with it -- otherwise a later re-expand of an ancestor the user
+// explicitly collapsed would silently resurrect a deeper branch the cache
+// still remembered from before, contradicting the user's own last action on
+// it.
+func forgetTreeExpanded(path string) {
+	treeExpandCacheMu.Lock()
+	delete(treeExpandCache, path)
+	treeExpandCacheMu.Unlock()
+}
+
+// treeExpandedSnapshot returns every path treeExpandCache currently holds,
+// for NewTreePanel to replay (via applyExpandedPaths) into a freshly built
+// tree. A snapshot rather than a live iterator: the replay mutates the
+// cache right back (through expandAt's own rememberTreeExpanded calls),
+// which would race with ranging over the same map directly.
+func treeExpandedSnapshot() []string {
+	treeExpandCacheMu.Lock()
+	defer treeExpandCacheMu.Unlock()
+	paths := make([]string, 0, len(treeExpandCache))
+	for p := range treeExpandCache {
+		paths = append(paths, p)
+	}
+	return paths
+}
 
 // treeChildScanCap bounds how many directory entries a single expand reads
 // before giving up on that one directory -- a defensive limit against a
@@ -124,9 +191,11 @@ func (it treeItem) GetCellText(int) string {
 // via Rescan (part 6 of f4#1602) -- the same far2l Ctrl+R the owner named
 // alongside F5/F6/F7/F8/Del as expected tree behavior, and otherwise the
 // one way an already-expanded node's listing could go stale for as long as
-// the tree stays open.
-// Still a follow-up part: a persistent expand/collapse cache across tree
-// panel instances -- see f4#1602.
+// the tree stays open. Which branches are expanded also survives closing
+// and reopening the tree (Ctrl+T) within the same run of f4 -- but not a
+// restart of the f4 process itself -- via treeExpandCache (part 8 of
+// f4#1602); see that cache's own doc comment for why in-memory, not
+// persisted to settings.ini/f4:config, is the scope this part chose.
 type TreePanel struct {
 	src     *FileSystemPanel
 	Frame   *vtui.BorderedFrame
@@ -159,6 +228,13 @@ func NewTreePanel(src *FileSystemPanel) *TreePanel {
 	t.items = []treeItem{{name: t.root, path: t.root, depth: 0, parentIndex: -1, expandable: true, collapsed: true}}
 	t.expandAt(0)
 	t.revealPath(treeRootFor(src))
+	// Resume whatever branches an earlier tree panel (this same run of f4,
+	// possibly a different TreePanel instance -- see treeExpandCache's own
+	// doc comment) left expanded, in addition to the cwd chain revealPath
+	// just walked above. Applied after revealPath, not before, so this
+	// never disturbs the cursor revealPath already placed on src's current
+	// directory.
+	t.applyExpandedPaths(treeExpandedSnapshot())
 	t.syncRows()
 
 	t.SetFocus(false)
@@ -251,6 +327,7 @@ func (t *TreePanel) expandAt(at int) {
 	}
 	t.spliceChildren(at, children)
 	t.items[at].collapsed = false
+	rememberTreeExpanded(item.path)
 }
 
 // spliceChildren inserts children right after items[at], shifting
@@ -285,6 +362,9 @@ func (t *TreePanel) collapseAt(at int) {
 	}
 	removed := end - (at + 1)
 	if removed > 0 {
+		for i := at + 1; i < end; i++ {
+			forgetTreeExpanded(t.items[i].path)
+		}
 		t.items = append(t.items[:at+1], t.items[end:]...)
 		for i := range t.items {
 			if t.items[i].parentIndex >= end {
@@ -293,6 +373,7 @@ func (t *TreePanel) collapseAt(at int) {
 		}
 	}
 	t.items[at].collapsed = true
+	forgetTreeExpanded(t.items[at].path)
 }
 
 // revealPath expands the chain of directories from the root down to
@@ -664,6 +745,26 @@ func (t *TreePanel) RefreshAfterDelete() {
 	t.setCursor(parent)
 }
 
+// applyExpandedPaths re-expands every directory named in paths -- via
+// resolvePath, which also expands every ancestor it walks through on the
+// way to each one, then expandAt(idx) for the path itself, the same two-step
+// resolvePath's own doc comment already spells out. Used both by Rescan
+// (paths collected from the tree's own current, in-session items) and by
+// NewTreePanel (paths from treeExpandCache, the process-lifetime cache, so a
+// freshly opened tree resumes wherever the previous one left off). A path
+// that no longer resolves -- its directory renamed, removed, or simply
+// outside this tree's own root -- is silently skipped, exactly like
+// resolvePath's other callers; order does not matter, since expanding an
+// already-expanded node (or one whose ancestor got expanded by an earlier
+// entry in paths) is a no-op.
+func (t *TreePanel) applyExpandedPaths(paths []string) {
+	for _, p := range paths {
+		if idx := t.resolvePath(p); idx != -1 {
+			t.expandAt(idx)
+		}
+	}
+}
+
 // Rescan re-reads every directory the tree currently has expanded, from
 // the root back down, dropping subdirectories that no longer exist on disk
 // and picking up ones that appeared since -- far2l's own Ctrl+R on its tree
@@ -699,19 +800,7 @@ func (t *TreePanel) Rescan() {
 
 	t.items = []treeItem{{name: t.root, path: t.root, depth: 0, parentIndex: -1, expandable: true, collapsed: true}}
 	t.expandAt(0)
-	for _, p := range expandedPaths {
-		// resolvePath only expands the *ancestors* it walks through on the
-		// way to p (see its own doc comment -- it leaves the final node
-		// itself alone, since revealPath's own callers only ever wanted the
-		// cursor on it, not its children read too); expandAt(idx) is the
-		// actual re-read of p's own children this loop is for. A collapsed
-		// node whose parent no longer exists on disk resolves to -1 here and
-		// is silently dropped -- exactly right, since it can no longer be
-		// expanded either.
-		if ridx := t.resolvePath(p); ridx != -1 {
-			t.expandAt(ridx)
-		}
-	}
+	t.applyExpandedPaths(expandedPaths)
 
 	pos := -1
 	for target := selectedPath; target != ""; {

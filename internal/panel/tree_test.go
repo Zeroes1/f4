@@ -25,6 +25,23 @@ func newBareTreePanel(root string) *TreePanel {
 	return t
 }
 
+// resetTreeExpandCache clears the process-lifetime tree expand cache
+// (treeExpandCache, f4#1602 part 8 of N) before a test and again on
+// cleanup, so a prior test's cache entries can never leak into this one and
+// this one's can never leak into a later one. t.TempDir() already gives
+// every test its own directory no other test can name, so key collisions
+// are not the actual concern -- a clean, deterministic starting state is.
+func resetTreeExpandCache(t *testing.T) {
+	t.Helper()
+	clear := func() {
+		treeExpandCacheMu.Lock()
+		treeExpandCache = map[string]struct{}{}
+		treeExpandCacheMu.Unlock()
+	}
+	clear()
+	t.Cleanup(clear)
+}
+
 // TestTreeExpandCollapse_SpliceLogic drives expandAt/collapseAt directly
 // against a small real directory tree and checks the flat list's shape
 // (depth, parentIndex, collapsed) after each step -- the mechanics f4#1602's
@@ -344,5 +361,121 @@ func TestTreePanel_EnterNavigatesSourceAndCloses(t *testing.T) {
 	}
 	if pf.AltPanels[opp] != nil {
 		t.Errorf("tree should have closed itself, AltPanels[%d] = %v", opp, pf.AltPanels[opp])
+	}
+}
+
+// TestTreeCollapse_ForgetsCachedDescendants checks the treeExpandCache side
+// of collapseAt (f4#1602, part 8 of N): collapsing a node must forget both
+// its own cache entry and every descendant's, not just the rows it splices
+// out of the flat list -- otherwise a later re-expand of that same node (in
+// this tree panel, or in a brand new one opened afterward) would silently
+// resurrect a deeper branch the cache still remembered from before the
+// user's own collapse.
+func TestTreeCollapse_ForgetsCachedDescendants(t *testing.T) {
+	resetTreeExpandCache(t)
+
+	root := t.TempDir()
+	other := filepath.Join(root, "other")
+	deep := filepath.Join(other, "deep")
+	if err := os.MkdirAll(deep, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	tp := newBareTreePanel(root)
+	tp.expandAt(0)
+	otherIdx := tp.findChild(0, "other")
+	if otherIdx == -1 {
+		t.Fatal("precondition: other should be listed under root")
+	}
+	tp.expandAt(otherIdx)
+	deepIdx := tp.findChild(otherIdx, "deep")
+	if deepIdx == -1 {
+		t.Fatal("precondition: deep should be listed under other")
+	}
+	tp.expandAt(deepIdx)
+
+	treeExpandCacheMu.Lock()
+	_, otherCached := treeExpandCache[other]
+	_, deepCached := treeExpandCache[deep]
+	treeExpandCacheMu.Unlock()
+	if !otherCached {
+		t.Fatal("precondition: other should be cached as expanded")
+	}
+	if !deepCached {
+		t.Fatal("precondition: deep should be cached as expanded")
+	}
+
+	tp.collapseAt(otherIdx)
+
+	treeExpandCacheMu.Lock()
+	_, otherCached = treeExpandCache[other]
+	_, deepCached = treeExpandCache[deep]
+	treeExpandCacheMu.Unlock()
+	if otherCached {
+		t.Error("collapsing other should forget its own cache entry")
+	}
+	if deepCached {
+		t.Error("collapsing other should also forget deep's cache entry: it is no longer reachable without re-expanding other")
+	}
+}
+
+// TestNewTreePanel_ResumesExpandedBranchesAcrossInstances is the actual
+// f4#1602 part 8 scenario: a tree panel the user drilled into ("other",
+// then "other/deep") and then closed -- NewTreePanel rebuilds TreePanel from
+// scratch on every Ctrl+T, so without treeExpandCache this state would
+// simply be gone once that first instance stopped existing. A second,
+// independent TreePanel instance (as a real Ctrl+T-Ctrl+T-again would
+// produce) must resume both branches already expanded, from the
+// process-lifetime cache alone -- it never itself expanded either node.
+func TestNewTreePanel_ResumesExpandedBranchesAcrossInstances(t *testing.T) {
+	resetTreeExpandCache(t)
+	before := config.App
+	defer func() { config.App = before }()
+	config.App.TreeRootWholeVolume = false // root the tree at its own directory, not the OS volume root
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "other", "deep"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// fsp resolves root to its canonical form (e.g. macOS resolves /tmp ->
+	// /private/tmp) -- built once and reused for both instances below, so
+	// "first" (built directly, bypassing NewTreePanel) and "second" (built
+	// through it) key treeExpandCache with the exact same path strings.
+	fsp := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
+	waitForLoad(t, fsp)
+	canonicalRoot := fsp.Vfs.GetPath()
+
+	first := newBareTreePanel(canonicalRoot)
+	first.expandAt(0)
+	otherIdx := first.findChild(0, "other")
+	if otherIdx == -1 {
+		t.Fatal("precondition: other should be listed under root")
+	}
+	first.expandAt(otherIdx)
+	deepIdx := first.findChild(otherIdx, "deep")
+	if deepIdx == -1 {
+		t.Fatal("precondition: deep should be listed under other")
+	}
+	first.expandAt(deepIdx)
+	// first is simply discarded here, the same as closing the tree panel
+	// (Ctrl+T again, or Enter) would do -- nothing about it is carried
+	// forward explicitly into the second instance below.
+
+	second := NewTreePanel(fsp)
+
+	otherIdx2 := second.findChild(0, "other")
+	if otherIdx2 == -1 {
+		t.Fatal("other should be listed under root in the second tree panel")
+	}
+	if second.items[otherIdx2].collapsed {
+		t.Error("a freshly opened tree panel should resume \"other\" already expanded, from the process-lifetime cache")
+	}
+	deepIdx2 := second.findChild(otherIdx2, "deep")
+	if deepIdx2 == -1 {
+		t.Fatal("deep should be listed under other in the second tree panel")
+	}
+	if second.items[deepIdx2].collapsed {
+		t.Error("a freshly opened tree panel should resume \"other/deep\" already expanded too")
 	}
 }
