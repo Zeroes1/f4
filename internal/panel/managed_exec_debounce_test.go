@@ -125,11 +125,26 @@ func TestPanelsFrame_ManagedExecutionDebounce_JobControlStopFreesKeyboard(t *tes
 
 	// Real Ctrl+Z (SIGTSTP): the exact control byte f4's own key dispatch
 	// already writes to the master for this key (part 1's comment thread).
-	if _, err := p.Write([]byte{0x1a}); err != nil {
-		t.Fatalf("sending Ctrl+Z: %v", err)
-	}
-
-	if !drivePanelsFrameShowUntil(t, pf, scr, 2*time.Second, func() bool { return !p.IsBusy() }) {
+	// IsBusy goes true as soon as bash hands the terminal to the child's
+	// process group, which can be before that child has reset SIGTSTP from
+	// the interactive shell's "ignore" back to default; a Ctrl+Z landing in
+	// that window is silently dropped. Under load (full `go test ./...` on a
+	// macOS runner) that window is wide enough to hit, so keep re-sending
+	// Ctrl+Z until the shell reclaims the terminal -- once sleep is stopped,
+	// further Ctrl+Z at bash's prompt are ignored by bash itself.
+	lastCtrlZ := time.Time{}
+	if !drivePanelsFrameShowUntil(t, pf, scr, 5*time.Second, func() bool {
+		if !p.IsBusy() {
+			return true
+		}
+		if time.Since(lastCtrlZ) >= 250*time.Millisecond {
+			if _, err := p.Write([]byte{0x1a}); err != nil {
+				t.Fatalf("sending Ctrl+Z: %v", err)
+			}
+			lastCtrlZ = time.Now()
+		}
+		return false
+	}) {
 		t.Fatal("shell never reclaimed the terminal after Ctrl+Z (IsBusy stayed true)")
 	}
 
