@@ -151,7 +151,8 @@ func TestGenerateDialogDump(t *testing.T) {
 		scr.Dump(&dump)
 		text, _, _ := strings.Cut(dump.String(), "--- CELL METADATA")
 		options := []string{"photos.md5", "SHA-512", strings.ReplaceAll(vtui.Msg("IntChecker.Recursive"), "&", ""),
-			strings.ReplaceAll(vtui.Msg("IntChecker.AbsolutePaths"), "&", ""), strings.ReplaceAll(vtui.Msg("IntChecker.FileMask"), "&", "") + " *"}
+			strings.ReplaceAll(vtui.Msg("IntChecker.AbsolutePaths"), "&", ""), strings.ReplaceAll(vtui.Msg("IntChecker.FileMask"), "&", "") + " *",
+			strings.ReplaceAll(vtui.Msg("IntChecker.FileEncoding"), "&", "") + " UTF-8"}
 		for _, want := range append(outputModeNames(), options...) {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s dialog dump lacks %q:\n%s", lang, want, text)

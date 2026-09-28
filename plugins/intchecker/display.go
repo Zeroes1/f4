@@ -2,6 +2,7 @@ package intchecker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -113,9 +114,10 @@ func resolveSavePath(fs vfs.VFS, dir, text string) (string, bool) {
 	return fs.Join(dir, text), true
 }
 
-// saveHashList writes the displayed list to target, asking before it
-// replaces an existing file. It waits for the answer, so it runs off the UI
-// goroutine; the dialogs it opens sit on top of the list window.
+// saveHashList writes the displayed list to target in the job's encoding,
+// asking before it replaces an existing file. It waits for the answer, so it
+// runs off the UI goroutine; the dialogs it opens sit on top of the list
+// window.
 func saveHashList(app vfs.App, win *vtui.Window, job generateJob, target string, data []byte) {
 	title := vtui.Msg("IntChecker.Title")
 	ctx := context.Background()
@@ -132,8 +134,15 @@ func saveHashList(app vfs.App, win *vtui.Window, job generateJob, target string,
 		}
 		overwrite = true
 	}
-	err := writeFile(ctx, job.fs, target, data, overwrite)
+	encoded, err := job.encoding.encode(string(data))
+	if err == nil {
+		err = writeFile(ctx, job.fs, target, encoded, overwrite)
+	}
 	vtui.FrameManager.PostTask(func() {
+		if errors.Is(err, errUnencodableName) {
+			vtui.ShowMessageOn(win, title, fmt.Sprintf(vtui.Msg("IntChecker.CannotEncodeList"), job.encoding.name()), []string{vtui.Msg("vtui.Ok")})
+			return
+		}
 		if err != nil {
 			vtui.ShowMessageOn(win, title, fmt.Sprintf(vtui.Msg("IntChecker.WriteError"), target, err), []string{vtui.Msg("vtui.Ok")})
 			return

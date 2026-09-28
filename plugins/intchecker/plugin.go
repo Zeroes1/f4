@@ -102,6 +102,7 @@ type generateDialog struct {
 	recursive  *vtui.Checkbox
 	absolute   *vtui.Checkbox
 	editMask   *vtui.Edit
+	encoding   *encodingCombo
 	btnOK      *vtui.Button
 }
 
@@ -121,9 +122,11 @@ func outputModeNames() []string {
 // newGenerateDialog builds the dialog for a panel directory named dirBase.
 // The file name field belongs to the "Single file" output and is disabled
 // for the others. Recursion is on by default, so selected directories are
-// hashed with everything in them, as IntChecker does.
+// hashed with everything in them, as IntChecker does. The file encoding
+// defaults to UTF-8, what md5sum and sha256sum read; it applies to every
+// output, including "Save to file" of the display window.
 func newGenerateDialog(dirBase string) *generateDialog {
-	width, height := 60, 23
+	width, height := 60, 24
 	d := &generateDialog{win: vtui.NewCenteredDialog(width, height, vtui.Msg("IntChecker.GenerateTitle"))}
 	d.win.ShowClose = true
 
@@ -160,13 +163,15 @@ func newGenerateDialog(dirBase string) *generateDialog {
 	lx1, _, lx2, _ := lblMask.GetPosition()
 	maskWidth := width - 4 - (lx2 - lx1 + 1) - 1
 	d.editMask.SetPosition(0, 0, maskWidth-1, 0)
+	d.encoding = newEncodingCombo(24, writeEncodingChoices(), fileEncoding{Codepage: utf8Codepage})
+	lblEncoding := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FileEncoding"), d.encoding.box)
 
 	d.btnOK = vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
 	d.btnOK.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, vtui.Msg("vtui.Cancel"))
 	btnCancel.OnClick = func() { d.win.Close() }
 
-	for _, item := range []vtui.UIElement{lblAlgorithm, d.algorithm, lblOutput, d.output, lblOutputEdit, d.editOutput, d.recursive, d.absolute, lblMask, d.editMask, d.btnOK, btnCancel} {
+	for _, item := range []vtui.UIElement{lblAlgorithm, d.algorithm, lblOutput, d.output, lblOutputEdit, d.editOutput, d.recursive, d.absolute, lblMask, d.editMask, lblEncoding, d.encoding.box, d.btnOK, btnCancel} {
 		d.win.AddItem(item)
 	}
 
@@ -183,6 +188,11 @@ func newGenerateDialog(dirBase string) *generateDialog {
 	maskRow.Add(lblMask, vtui.Margins{}, vtui.AlignLeft)
 	maskRow.Add(d.editMask, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(maskRow, vtui.Margins{}, vtui.AlignFill)
+	encodingRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	encodingRow.Spacing = 1
+	encodingRow.Add(lblEncoding, vtui.Margins{}, vtui.AlignLeft)
+	encodingRow.Add(d.encoding.box, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(encodingRow, vtui.Margins{}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -222,6 +232,7 @@ func showGenerateDialog(app vfs.App) {
 			recursive: d.recursive.State == 1,
 			absolute:  d.absolute.State == 1,
 			mask:      strings.TrimSpace(d.editMask.GetText()),
+			encoding:  d.encoding.selected(),
 		}
 		startGenerate(app, job)
 	}
@@ -383,5 +394,18 @@ func generateReport(job generateJob, res generateResult) string {
 	}
 	appendFailures(vtui.Msg("IntChecker.WriteErrors"), res.WriteFailures)
 	appendFailures(vtui.Msg("IntChecker.ReadErrors"), res.Failures)
+	if len(res.Unencodable) > 0 {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.UnencodableNames"), len(res.Unencodable), job.encoding.name()))
+		for i, name := range res.Unencodable {
+			if i == shown {
+				lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.MoreErrors"), len(res.Unencodable)-shown))
+				break
+			}
+			lines = append(lines, name)
+		}
+	}
 	return strings.Join(lines, "\n")
 }

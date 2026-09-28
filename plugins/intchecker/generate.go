@@ -56,6 +56,9 @@ type generateJob struct {
 	// match to be hashed; empty means every file. Directories are always
 	// entered, the mask only picks files.
 	mask string
+	// encoding is how the checksum files store their text. Names it cannot
+	// store are left out of the files and reported (Unencodable).
+	encoding fileEncoding
 	// overwrite says the user agreed to replace existing checksum files.
 	// Without it a checksum file is created only if it does not exist, so a
 	// file that appeared while hashing is never clobbered.
@@ -85,6 +88,10 @@ type generateResult struct {
 	// WriteFailures are checksum files that could not be written; the
 	// others are still written.
 	WriteFailures []fileFailure
+	// Unencodable are hashed files (relative to the job's dir) left out
+	// of the checksum files because the chosen encoding cannot store their
+	// names.
+	Unencodable []string
 	// Text is the checksum list of the "Display" mode.
 	Text string
 }
@@ -344,6 +351,9 @@ func hashInputs(ctx context.Context, job generateJob, inputs []hashInput, res ge
 	if err := ctx.Err(); err != nil {
 		return res, err
 	}
+	if job.mode != outputDisplay {
+		entries = storableEntries(job, entries, &res)
+	}
 	if len(entries) == 0 {
 		return res, nil
 	}
@@ -358,7 +368,7 @@ func hashInputs(ctx context.Context, job generateJob, inputs []hashInput, res ge
 		res.Written = len(entries)
 		return res, nil
 	case outputSingle:
-		data, err := FormatHashFile(job.algorithm, storedEntries(job, entries))
+		data, err := encodeHashFile(job, storedEntries(job, entries))
 		if err != nil {
 			return res, err
 		}
@@ -370,6 +380,31 @@ func hashInputs(ctx context.Context, job generateJob, inputs []hashInput, res ge
 		return res, nil
 	}
 	return res, writeManyOutputs(ctx, job, entries, &res)
+}
+
+// storableEntries drops the entries whose stored names the job's encoding
+// cannot represent and lists them in res.Unencodable. One such name does not
+// cost the other files their checksums, the same as an unreadable file.
+func storableEntries(job generateJob, entries []Entry, res *generateResult) []Entry {
+	kept := entries[:0]
+	for _, e := range entries {
+		if _, stored := job.outputFor(e.Name); job.encoding.canStore(stored) {
+			kept = append(kept, e)
+			continue
+		}
+		res.Unencodable = append(res.Unencodable, e.Name)
+	}
+	return kept
+}
+
+// encodeHashFile renders entries (already named as stored) in the checksum
+// file format of the job's algorithm and encoding.
+func encodeHashFile(job generateJob, entries []Entry) ([]byte, error) {
+	data, err := FormatHashFile(job.algorithm, entries)
+	if err != nil {
+		return nil, err
+	}
+	return job.encoding.encode(string(data))
 }
 
 // storedEntries renames entries (named relative to the job's dir) to the
@@ -408,7 +443,7 @@ func writeManyOutputs(ctx context.Context, job generateJob, entries []Entry, res
 				continue
 			}
 		}
-		data, err := FormatHashFile(job.algorithm, groups[target])
+		data, err := encodeHashFile(job, groups[target])
 		if err == nil {
 			err = writeFile(ctx, job.fs, full, data, job.overwrite)
 		}
