@@ -1026,6 +1026,16 @@ func init() {
 		Handler:     func() bool { showCalculatorDialog(); return true },
 	})
 	registerAction(action.Action{
+		Name:        "Panel.Calendar",
+		Area:        "Shell",
+		Label:       "Calendar",
+		LabelKey:    "Menu.Commands.Calendar",
+		Description: "Open the built-in calendar",
+		DescKey:     "Action.Panel.Calendar.Desc",
+		MenuPath:    "Commands",
+		Handler:     func() bool { showCalendarDialog(); return true },
+	})
+	registerAction(action.Action{
 		Name:                "Panel.CommandHistory",
 		Area:                "Shell",
 		Label:               "Command History",

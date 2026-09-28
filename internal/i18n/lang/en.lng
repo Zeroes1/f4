@@ -591,6 +591,7 @@ Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
+Action.Panel.Calendar.Desc=Open the built-in calendar
 Action.Panel.Player.Desc=Toggle the audio player panel
 Action.Panel.Tree.Desc=Toggle the directory tree panel
 Action.Settings.MacKeyboard=&Mac keyboard
@@ -739,6 +740,16 @@ Calculator.ResultEmpty=(press Enter to calculate)
 Calculator.ResultError=Invalid expression
 Calculator.BtnInsert=&Insert
 
+Calendar.Title= Calendar
+Calendar.BtnInsert=&Insert
+Calendar.Mon=Mon
+Calendar.Tue=Tue
+Calendar.Wed=Wed
+Calendar.Thu=Thu
+Calendar.Fri=Fri
+Calendar.Sat=Sat
+Calendar.Sun=Sun
+
 Select.Title= Select
 Select.Mask=&Enter selection mask:
 
@@ -785,6 +796,7 @@ Menu.Commands.RunRemote=Run Command Remotely
 Menu.Commands.Bookmarks=Bookmarks
 Menu.Commands.TempPanel=Temporary panel
 Menu.Commands.Calculator=Calculator
+Menu.Commands.Calendar=Calendar
 Menu.SortName=Name
 Menu.SortExt=Extension
 Menu.SortTime=Time

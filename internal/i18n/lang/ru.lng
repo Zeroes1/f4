@@ -591,6 +591,7 @@ Action.App.ProcList=Список процессов
 Action.App.ProcList.Desc=Открыть живой список процессов в активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
+Action.Panel.Calendar.Desc=Открыть встроенный календарь
 Action.Panel.Player.Desc=Показать или скрыть панель аудиоплеера
 Action.Panel.Tree.Desc=Показать или скрыть панель дерева каталогов
 Action.Settings.MacKeyboard=Клавиатура &Mac
@@ -739,6 +740,16 @@ Calculator.ResultEmpty=(нажмите Enter для вычисления)
 Calculator.ResultError=Некорректное выражение
 Calculator.BtnInsert=&Вставить
 
+Calendar.Title= Календарь
+Calendar.BtnInsert=&Вставить
+Calendar.Mon=Пн
+Calendar.Tue=Вт
+Calendar.Wed=Ср
+Calendar.Thu=Чт
+Calendar.Fri=Пт
+Calendar.Sat=Сб
+Calendar.Sun=Вс
+
 Select.Title= Пометка
 Select.Mask=&Введите маску для пометки:
 
@@ -785,6 +796,7 @@ Menu.Commands.RunRemote=Выполнить команду на сервере
 Menu.Commands.Bookmarks=Закладки
 Menu.Commands.TempPanel=Временная панель
 Menu.Commands.Calculator=Калькулятор
+Menu.Commands.Calendar=Календарь
 Menu.SortName=Имя
 Menu.SortExt=Расширение
 Menu.SortTime=Время
