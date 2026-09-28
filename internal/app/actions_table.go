@@ -165,6 +165,28 @@ func symlinkEditEnabled() bool {
 	return false
 }
 
+// shareLinkEnabled is the Enabled predicate for File.Share. The action's own
+// Visible predicate already keeps the menu item off panels whose VFS does
+// not implement vfs.ShareLinkProvider; this repeats that check (Enabled is
+// consulted independently of Visible, see action.Action.Enabled) and adds
+// the one refusal actionShareLink still has left after that: exactly one
+// entry must be selected, or it shows the "Share.SelectOne" error dialog
+// instead of running (f4#1356).
+func shareLinkEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil {
+		return false
+	}
+	if _, ok := fsp.Vfs.(vfs.ShareLinkProvider); !ok {
+		return false
+	}
+	return len(fsp.GetSelectedNames()) == 1
+}
+
 // cursorOnParent reports whether the panel's cursor sits on the ".."
 // (parent-directory) entry — used by the far2l Ins clipboard shortcuts
 // that treat this position as the current folder itself.
@@ -742,6 +764,7 @@ func init() {
 			_, ok := pnl.Vfs.(vfs.ShareLinkProvider)
 			return ok
 		},
+		Enabled: shareLinkEnabled,
 		Handler: withPF(func(pf *panel.PanelsFrame) { actionShareLink(pf) }),
 	})
 	registerAction(action.Action{

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 
 	"github.com/unxed/f4/internal/action"
@@ -10,6 +11,27 @@ import (
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
+
+// shareCapableVFS wraps *vfs.OSVFS with a no-op vfs.ShareLinkProvider so
+// TestShareLinkEnabled can exercise shareLinkEnabled's VFS-support branch
+// without a real cloud backend. Its three methods are never actually called
+// -- shareLinkEnabled only does a type assertion -- so their bodies are
+// unreachable stand-ins.
+type shareCapableVFS struct {
+	*vfs.OSVFS
+}
+
+func (shareCapableVFS) ShareLinkInfo(context.Context, string) (vfs.ShareLinkInfo, error) {
+	return vfs.ShareLinkInfo{}, nil
+}
+
+func (shareCapableVFS) CreateShareLink(context.Context, string, vfs.ShareLinkRequest) (vfs.ShareLink, error) {
+	return vfs.ShareLink{}, nil
+}
+
+func (shareCapableVFS) RevokeShareLink(context.Context, string) error { return nil }
+
+var _ vfs.ShareLinkProvider = shareCapableVFS{}
 
 // TestMenuHonoursEnabled checks the menu half of the mechanism (f4#1356): an
 // action with Enabled()==false stays in the menu -- unlike Visible, which
@@ -284,5 +306,50 @@ func TestSymlinkEditEnabled(t *testing.T) {
 	fsp.Vfs = vfs.NewNullVFS(0)
 	if symlinkEditEnabled() {
 		t.Error("a VFS without SymlinkVFS support must disable Edit Symlink (SymlinkEdit.Unsupported)")
+	}
+}
+
+// TestShareLinkEnabled checks the Enabled predicate wired to File.Share: it
+// must mirror actionShareLink's own remaining refusal branch -- exactly one
+// selected entry (Share.SelectOne) -- on top of the vfs.ShareLinkProvider
+// support check File.Share's Visible predicate already applies separately,
+// since Enabled is consulted independently of Visible (f4#1356, part 5).
+func TestShareLinkEnabled(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.GetActivePanel()
+	fsp.Vfs = shareCapableVFS{vfs.NewOSVFS(t.TempDir())}
+	fsp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "file.txt"}},
+		{VFSItem: vfs.VFSItem{Name: "other.txt"}},
+	}
+
+	fsp.SetCursorIndex(0)
+	if shareLinkEnabled() {
+		t.Error("cursor on \"..\" with nothing marked should disable Share")
+	}
+
+	fsp.SetCursorIndex(1)
+	if !shareLinkEnabled() {
+		t.Error("a single target on a ShareLinkProvider-capable panel must enable Share")
+	}
+
+	fsp.SetItemSelected(1, true)
+	fsp.SetItemSelected(2, true)
+	if shareLinkEnabled() {
+		t.Error("more than one marked item must disable Share (Share.SelectOne)")
+	}
+
+	fsp.SetItemSelected(2, false)
+	fsp.Vfs = vfs.NewOSVFS(t.TempDir())
+	if shareLinkEnabled() {
+		t.Error("a VFS without ShareLinkProvider support must disable Share")
 	}
 }
