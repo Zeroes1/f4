@@ -587,7 +587,7 @@ Action.App.Spreadsheet.Desc=Open the spreadsheet workspace
 Action.App.SQLite=SQLite &client
 Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 ; --- ProcList ---
-Action.App.ProcList=Process list
+Action.App.ProcList=P&rocess list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
 ; --- Git ---
 Action.App.GitStatus=Gi&t status
