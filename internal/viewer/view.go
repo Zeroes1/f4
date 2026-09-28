@@ -261,6 +261,13 @@ func (vv *ViewerView) stopTailWatch() {
 // sitting at the end of the file follows it, and one parked further up stays
 // exactly where the reader left it and only gets an honest scrollbar and
 // percentage.
+//
+// Either way the refresh dropped the window cache, so the rows on screen have
+// to be fetched again before they can be painted. The viewer is held unpainted
+// until they are (holdUntilCached): a plain Redraw painted the frame in
+// between, with the text replaced by "[ Loading... ]", once per growth of the
+// file -- a log being written to made the whole viewer blink about once a
+// second while it was read from the top (#1624).
 func (vv *ViewerView) refreshFromFile() {
 	if vv.Backend == nil || vv.Busy {
 		return
@@ -280,7 +287,7 @@ func (vv *ViewerView) refreshFromFile() {
 		vv.followTail()
 		return
 	}
-	vtui.FrameManager.Redraw()
+	vv.holdUntilCached(vv.TopOffset)
 }
 
 // followTail moves a viewer that was showing the end of the file to the file's
@@ -338,7 +345,8 @@ func (vv *ViewerView) holdUntilCached(off int64) {
 
 // Reload rereads the file on demand. Unlike the poll it drops the window cache
 // even when the length did not change, so a file rewritten in place -- same
-// size, different bytes -- also shows its new contents.
+// size, different bytes -- also shows its new contents. Like the poll, it keeps
+// the old contents on screen until the new ones are there to paint.
 func (vv *ViewerView) Reload() {
 	if vv.Backend == nil {
 		return
@@ -350,10 +358,10 @@ func (vv *ViewerView) Reload() {
 		vv.eofVisible = false
 	}
 	if vv.eofVisible {
-		vv.jumpToEnd()
+		vv.followTail()
 		return
 	}
-	vtui.FrameManager.Redraw()
+	vv.holdUntilCached(vv.TopOffset)
 }
 
 // viewerDetectionHeader reads the prefix every codepage decision is made on.
