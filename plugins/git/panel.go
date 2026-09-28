@@ -172,11 +172,16 @@ func (p *statusPanel) SetFocus(focused bool) {
 
 func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 
-// ProcessKey adds F5 (refresh) and Enter (diff, diff.go) on top of the
-// table's own navigation/sort/quick-search handling. Neither is a letter
-// key: QuickSearch claims printable characters while the table is focused
+// ProcessKey adds F5 (refresh), Enter (diff, diff.go) and Insert
+// (stage/unstage, stage.go) on top of the table's own
+// navigation/sort/quick-search handling. None of the three is a letter key:
+// QuickSearch claims printable characters while the table is focused
 // (plugins/proclist/panel.go avoids the same trap by keying its own actions
-// off F-keys), and F5/Enter are the refresh and open gestures a file panel
+// off F-keys) -- and that includes plain Space, which is why staging is
+// bound to Insert instead of the Space lazygit/tig use, following the
+// existing "mark an item" key of Far/Norton-Commander-style file panels
+// (internal/panel/menukeys.go's isAddItemKey) rather than a foreign tool's
+// convention. F5/Enter are the refresh and open gestures a file panel
 // already uses -- this panel has no file Copy or directory-enter of its own
 // for either to collide with.
 func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
@@ -196,6 +201,9 @@ func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
 				return true
 			case vtinput.VK_RETURN:
 				p.showDiff()
+				return true
+			case vtinput.VK_INSERT:
+				p.toggleStage()
 				return true
 			}
 		}

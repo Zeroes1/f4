@@ -15,8 +15,12 @@
 // internal/diffview/internal/textdiff exactly as internal/app's own
 // "Compare files by content" does (f4#613).
 //
-// Staging/unstaging, commit, log and branch switching are still follow-up
-// parts, not this one -- see the ticket for the full list.
+// v3 (f4#659 part 3 of N, stage.go) adds Insert on a listed entry: stage
+// (git add) or unstage (git restore --staged) that whole file, whichever
+// applies, then reload the panel.
+//
+// Staging/unstaging a single hunk, commit, log and branch switching are
+// still follow-up parts, not this one -- see the ticket for the full list.
 package git
 
 import (

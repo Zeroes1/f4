@@ -42,12 +42,45 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - Same guards as "Compare files by content": a side over 8 MiB, or one that
   looks binary (a NUL byte), is refused with a message instead of diffed.
 
+## Part 3: staging and unstaging a whole file (`stage.go`)
+
+- **Insert** on a listed entry stages it (`git add`) if nothing about it is
+  staged yet -- an unstaged modification, a deletion, or an untracked file
+  (`??`) -- or unstages it (`git restore --staged`) if the index already has
+  something staged for it. This is a toggle per file, not per hunk: staging
+  part of a file's changes is a follow-up part of f4#659 (it needs the diff
+  widget from f4#613 to show and select hunks, not just the two-letter
+  status this panel already displays).
+- A merge conflict (`DD`, `AU`, `UD`, `UA`, `DU`, `AA` or `UU`) always runs
+  `git add`, regardless of which of those seven codes it is: the only
+  sensible action from this panel is marking it resolved, and there is
+  nothing meaningful to "unstage" from a conflict.
+- A rename or copy runs the command against *both* the old and new names,
+  not just the one this panel displays: git records a rename as two separate
+  index changes (an add and a delete) that `git status` only *displays*
+  combined into one line, so touching only the new name would stage or
+  unstage half of it and leave the other half behind.
+- Insert was chosen over the Space key some other git clients (`lazygit`,
+  `tig`) use for the same gesture: this table's `QuickSearch` (like every
+  other `vtui.Table` in f4) claims every printable character while focused,
+  Space included, so Space here would type into the filter instead of
+  staging anything. Insert is f4's own existing "mark an item" key in a
+  Far/Norton-Commander-style file panel (see `isAddItemKey` in
+  `internal/panel/menukeys.go`), so it also fits this panel's own
+  vocabulary better than a foreign tool's convention would.
+- After a successful stage/unstage, the panel reloads (the same `git status`
+  call F5 runs) and moves the cursor back to the same path, so toggling
+  several files in a row by stepping down the list does not keep resetting
+  the cursor to the top of a re-sorted table. A failed git command leaves
+  the panel untouched and shows the failure as a toast, the same way a
+  failed F5 refresh already does.
+
 ## What is deliberately not here yet
 
-Everything else the ticket asks for: staging/unstaging a hunk or a whole
-file, commit (with an editor for the message), log, and branch
-switching/creation. Each is its own atomic follow-up part of f4#659, not
-this one.
+Everything else the ticket asks for: staging/unstaging a single hunk within
+a file (needs f4#613's diff widget to pick the hunk), commit (with an editor
+for the message), log, and branch switching/creation. Each is its own atomic
+follow-up part of f4#659, not this one.
 
 ## Design notes
 
