@@ -3,6 +3,7 @@ package panel
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
@@ -116,6 +117,48 @@ func TestNewTreePanel_RootsAtVolumeAndRevealsCwd(t *testing.T) {
 	}
 	if got := filepath.Clean(tp.items[idx].path); got != filepath.Clean(wantPath) {
 		t.Errorf("cursor path = %q, want %q (the source panel's own directory)", got, wantPath)
+	}
+}
+
+// TestNewTreePanel_RevealsThroughSymlinkedPathComponent exercises the
+// symlink half of revealPath's os.Stat fallback (revealChild) with a
+// symlink created directly, rather than relying on a platform-specific
+// symlink already sitting in the CI runner's own temp directory layout
+// (macOS's /var -> /private/var, which every os.TempDir()-derived path
+// crosses on darwin runners -- see f4#1602's tracking comment for the CI
+// failure this covers): the source panel's own directory is reached only
+// through a symlinked path component ("link"), and NewTreePanel must still
+// land the cursor on it rather than stopping at "link" itself, which
+// scanChildDirs deliberately never lists as an expandable row (see its own
+// doc comment).
+func TestNewTreePanel_RevealsThroughSymlinkedPathComponent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Symlink needs elevated privileges on Windows CI runners")
+	}
+	root := t.TempDir()
+	real := filepath.Join(root, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	link := filepath.Join(root, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	target := filepath.Join(link, "sub")
+	if err := os.Mkdir(target, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	fsp := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(target))
+	waitForLoad(t, fsp)
+
+	tp := NewTreePanel(fsp)
+	idx := tp.cursorIndex()
+	if idx < 0 {
+		t.Fatal("cursor should land on a real row after construction")
+	}
+	if got, want := filepath.Clean(tp.items[idx].path), filepath.Clean(target); got != want {
+		t.Errorf("cursor path = %q, want %q (revealed through the symlinked \"link\" component)", got, want)
 	}
 }
 

@@ -3,6 +3,7 @@ package panel
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -268,6 +269,21 @@ func (t *TreePanel) collapseAt(at int) {
 // level it can no longer match or expand -- e.g. target outside root's
 // volume, or a permission error on a directory the source panel itself
 // somehow still reached -- rather than fail the whole tree open.
+//
+// Matching each chain component against the already-expanded children
+// (findChild) is name-based, which two platform quirks can defeat even
+// though target names a real, existing directory the source panel is
+// already sitting in (see f4#1602's tracking comment for the CI failure
+// this fixes): a path component that is itself a symlink to a directory
+// (macOS routes every os.TempDir()-derived path through /var, itself a
+// symlink to /private/var, and scanChildDirs deliberately never lists a
+// symlinked directory -- see its own doc comment -- to avoid following one
+// into a cycle during ordinary browsing), and a short (8.3-style) Windows
+// path component (e.g. "RUNNER~1" for "runneradmin", which is what GitHub's
+// Windows runners set %TEMP% to) that never appears literally in
+// os.ReadDir's listing either. revealChild covers both by falling back to
+// os.Stat, which -- unlike scanChildDirs -- follows a symlink and accepts a
+// short name.
 func (t *TreePanel) revealPath(target string) {
 	root := strings.TrimRight(t.root, string(filepath.Separator))
 	target = strings.TrimRight(filepath.Clean(target), string(filepath.Separator))
@@ -280,12 +296,9 @@ func (t *TreePanel) revealPath(target string) {
 	current := 0
 	for _, part := range parts {
 		t.expandAt(current)
-		next := -1
-		for i := current + 1; i < len(t.items) && t.items[i].parentIndex >= current; i++ {
-			if t.items[i].parentIndex == current && t.items[i].name == part {
-				next = i
-				break
-			}
+		next := t.findChild(current, part)
+		if next == -1 {
+			next = t.revealChild(current, part)
 		}
 		if next == -1 {
 			return
@@ -293,6 +306,78 @@ func (t *TreePanel) revealPath(target string) {
 		current = next
 	}
 	t.setCursor(current)
+}
+
+// findChild returns the row index of items[parent]'s already-listed child
+// named name, or -1 if there is none. Matching is case-insensitive on
+// Windows, where the very listing being searched (scanChildDirs's) already
+// came from a case-preserving but case-insensitive filesystem, so two
+// spellings of the same name are the same child.
+func (t *TreePanel) findChild(parent int, name string) int {
+	for i := parent + 1; i < len(t.items) && t.items[i].parentIndex >= parent; i++ {
+		if t.items[i].parentIndex == parent && pathNamesEqual(t.items[i].name, name) {
+			return i
+		}
+	}
+	return -1
+}
+
+// pathNamesEqual compares one path component of a revealPath chain against
+// a candidate child name. Case-insensitive on Windows (see findChild);
+// exact everywhere else, where case is part of a file's identity.
+func pathNamesEqual(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// revealChild splices in a single node for name under items[parent], for
+// the case findChild alone cannot handle: name is a real subdirectory of
+// items[parent].path that scanChildDirs's own listing does not surface
+// (see revealPath's doc comment for why -- a symlinked directory on macOS,
+// a short Windows name). os.Stat, unlike os.ReadDir's DirEntry, follows a
+// symlink and accepts a short name, so it can confirm the directory exists
+// without needing it to appear in that filtered listing -- and because this
+// single bounded lookup is anchored to the one already-real target path
+// revealPath is unwinding, not a general directory walk, following that
+// one symlink here carries none of scanChildDirs's own cycle risk. Returns
+// -1 if name is not actually a subdirectory there.
+func (t *TreePanel) revealChild(parent int, name string) int {
+	path := filepath.Join(t.items[parent].path, name)
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return -1
+	}
+
+	depth := t.items[parent].depth
+	end := parent + 1
+	for end < len(t.items) && t.items[end].depth > depth {
+		end++
+	}
+	lastSibling := -1
+	for i := parent + 1; i < end; i++ {
+		if t.items[i].parentIndex == parent {
+			lastSibling = i
+		}
+	}
+	if lastSibling != -1 {
+		t.items[lastSibling].last[t.items[lastSibling].depth-1] = false
+	}
+
+	child := treeItem{
+		name:        name,
+		path:        path,
+		depth:       depth + 1,
+		parentIndex: parent,
+		expandable:  true,
+		collapsed:   true,
+		last:        append(append([]bool{}, t.items[parent].last...), true),
+	}
+	t.spliceChildren(end-1, []treeItem{child})
+	t.items[parent].expandable = true
+	t.items[parent].collapsed = false
+	return end
 }
 
 func (t *TreePanel) setCursor(idx int) {
