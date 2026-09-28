@@ -121,14 +121,40 @@ func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 		t.Fatalf("shell never reclaimed the terminal after Ctrl+Z (IsBusy stayed true); PTY output so far: %q", out.String())
 	}
 
-	// The shell may still print a belated D marker for the abandoned "sleep"
-	// job here (see the doc comment above) -- that is not a bug and this
-	// test does not check for it either way. What matters for #1603's fix
-	// is that IsBusy() has genuinely, stably reclaimed "false": drain a
-	// further window and confirm it never flaps back to true, the way it
-	// would if the shell handed the terminal's foreground process group
-	// back to "sleep" again (e.g. a shell that resumed the stopped job on
-	// its own instead of leaving it stopped).
+	// The reclaim above is not the end of the wrapper yet: the shell carries
+	// on through the rest of the compound list (see the doc comment above),
+	// and its very last statement, `(exit $FARVTRESULT)`, is a *subshell*.
+	// An interactive job-control shell forks every subshell as a foreground
+	// job of its own -- new process group, handed the terminal via
+	// tcsetpgrp -- so IsBusy() legitimately reads true again while that
+	// subshell lives, on every managed command, stopped or not. A tight
+	// TIOCGPGRP sampler on macos-latest measured it at about 2-4 ms, with
+	// the foreground group being a fresh one (not sleep's), right after the
+	// D marker and before the prompt. The loop below lands in that window
+	// now and then (PR #1629's CI: D marker printed, no prompt yet), so asserting
+	// "never true again" straight after the reclaim tested the wrapper's
+	// own tail, not the stopped job.
+	//
+	// So first let the shell finish that list: it reads the next input line
+	// only once the current one is fully done, and the quotes split the
+	// sentinel so its echoed input never matches its output.
+	if _, err := p.Write([]byte(" echo F4SET''TLED\r")); err != nil {
+		t.Fatalf("writing the settle sentinel: %v", err)
+	}
+	if !waitForPTYCondition(p, &out, 5*time.Second, func() bool {
+		return strings.Contains(out.String(), "F4SETTLED")
+	}) {
+		t.Fatalf("the shell never got back to reading input after the stop; PTY output so far: %q", out.String())
+	}
+
+	// The shell may still have printed a belated D marker for the abandoned
+	// "sleep" job -- that is not a bug and this test does not check for it
+	// either way. What matters for #1603's fix is that IsBusy() has
+	// genuinely, stably reclaimed "false": drain a further window and
+	// confirm it never flaps back to true, the way it would if the shell
+	// handed the terminal's foreground process group back to "sleep" again
+	// (e.g. a shell that resumed the stopped job on its own instead of
+	// leaving it stopped).
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		waitForPTYCondition(p, &out, 20*time.Millisecond, func() bool { return false })
