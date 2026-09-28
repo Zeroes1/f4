@@ -13,12 +13,14 @@ import (
 type recordingReporter struct {
 	calls     int
 	lastTotal int
+	lastSpeed string
 	files     map[string]bool
 }
 
 func (r *recordingReporter) UpdateTransfer(action, filename string, currentPct int, totalText string, totalPct int, speedText string) {
 	r.calls++
 	r.lastTotal = totalPct
+	r.lastSpeed = speedText
 	if r.files == nil {
 		r.files = map[string]bool{}
 	}
@@ -66,6 +68,12 @@ func TestRunGenerateWritesSortedSingleFile(t *testing.T) {
 	}
 	if reporter.lastTotal != 100 || !reporter.files["a.txt"] || !reporter.files["b.txt"] {
 		t.Fatalf("progress = %+v", reporter)
+	}
+	// Progress carries elapsed time, ETA and hashing speed (issue #1623,
+	// author's 3rd request): every UpdateTransfer call gets a non-empty
+	// speed/time text, not just the final one.
+	if reporter.lastSpeed == "" {
+		t.Fatalf("progress speed/time text is empty")
 	}
 }
 

@@ -330,10 +330,11 @@ func hashInputs(ctx context.Context, job generateJob, inputs []hashInput, res ge
 	var done int64
 	buf := make([]byte, hashBufferSize)
 	entries := make([]Entry, 0, len(inputs))
+	speed := newProgressSpeed()
 	for i, in := range inputs {
 		report := func(fileDone int64) {
 			totalText := fmt.Sprintf(vtui.Msg("IntChecker.ProgressFiles"), i+1, len(inputs))
-			reporter.UpdateTransfer(action, in.name, percent(fileDone, in.size), totalText, percent(done+fileDone, total), "")
+			reporter.UpdateTransfer(action, in.name, percent(fileDone, in.size), totalText, percent(done+fileDone, total), speed.text(done+fileDone, total))
 		}
 		report(0)
 		sum, read, err := hashFile(ctx, job.fs, job.fs.Join(job.dir, in.name), job.algorithm, buf, report)

@@ -1949,27 +1949,58 @@ func init() {
 		DefaultKeys:  []string{"CtrlF1:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			// Judge "nothing shown yet" by pf.ShowPanels, the actual
-			// on-screen state, not by ShowLeftPanel/ShowRightPanel: Esc/
-			// Ctrl+O (TogglePanelsVisibility) hide the panels frame by
-			// flipping only ShowPanels, leaving the per-side flags at
-			// whatever they were before (f4#1621). Reading those stale
-			// true/true flags here made the first Ctrl+F1 after such a
-			// hide flip ShowLeftPanel without ever bringing ShowPanels
-			// back, so the panels stayed invisible for a press or two.
-			allPanelsHidden := !pf.ShowPanels
+			// Esc/Ctrl+O (TogglePanelsVisibility) hide the panels frame by
+			// flipping only ShowPanels, leaving ShowLeftPanel/ShowRightPanel
+			// at whatever they were before (f4#1621) -- usually true/true,
+			// the ordinary two-panel view. Judging "nothing shown yet" by
+			// those stale per-side flags instead of the actual on-screen
+			// pf.ShowPanels made the first Ctrl+F1 after such a hide flip
+			// ShowLeftPanel off (since it was stale-true), so only the right
+			// panel came up; a second press was needed to bring the left
+			// one back too. The fix below goes one step further still: on
+			// that first press, don't toggle a side at all -- just restore
+			// pf.ShowPanels and let whichever sides were on screen before
+			// Esc reappear exactly as they were, both if that was the
+			// normal view. Only once something is already visible does
+			// Ctrl+F1 go back to toggling the left panel on its own.
+			//
+			// A restore has nothing to fall back to when both per-side
+			// flags are ALSO false (both panels were hidden individually,
+			// via Ctrl+F1+Ctrl+F2, rather than by Esc/Ctrl+O) -- that state
+			// carries no memory of what to bring back, so this case keeps
+			// the plain single-side toggle instead (issue #927).
+			showPanelsBefore := pf.ShowPanels
 			pf.ExitWide()
-			pf.ShowLeftPanel = !pf.ShowLeftPanel
-			if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
-				pf.ActiveIdx = 1
-			}
-			if !pf.ShowLeftPanel && !pf.ShowRightPanel {
-				pf.ShowPanels = false
-			} else if allPanelsHidden {
+			if !showPanelsBefore && (pf.ShowLeftPanel || pf.ShowRightPanel) {
 				pf.ShowPanels = true
+			} else {
+				pf.ShowLeftPanel = !pf.ShowLeftPanel
+				if !pf.ShowLeftPanel && pf.ActiveIdx == 0 && pf.ShowRightPanel {
+					pf.ActiveIdx = 1
+				}
+				if !pf.ShowLeftPanel && !pf.ShowRightPanel {
+					pf.ShowPanels = false
+				} else if !showPanelsBefore {
+					pf.ShowPanels = true
+				}
 			}
 			if pf.LastW > 0 && pf.LastH > 0 {
 				pf.ResizeConsole(pf.LastW, pf.LastH)
+			}
+			// ShellModeHost shows the running shell on the host's own
+			// screen buffer while panels are hidden and hands the physical
+			// screen back only through EnterHostConsole/LeaveHostConsole
+			// (the same pair TogglePanelsVisibility calls for Esc/Ctrl+O).
+			// Without this, pf.ShowPanels flips internally but the host
+			// console never yields the screen, so Ctrl+F1/Ctrl+F2 silently
+			// did nothing visible in "Host with overlay"/"Host without
+			// overlay" presentation (f4#1621).
+			if pf.ShowPanels != showPanelsBefore {
+				if pf.ShowPanels {
+					pf.LeaveHostConsole()
+				} else {
+					pf.EnterHostConsole()
+				}
 			}
 			vtui.FrameManager.HardRefresh()
 			if pf.ShowPanels {
@@ -1988,21 +2019,39 @@ func init() {
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			// See the matching comment in Panel.ToggleLeftPanel above
-			// (f4#1621): pf.ShowPanels, not the per-side flags, is what
-			// tells us whether anything was actually on screen.
-			allPanelsHidden := !pf.ShowPanels
+			// (f4#1621): pf.ShowPanels, the actual on-screen state, decides
+			// whether this press restores the saved view (both branches
+			// below) or does an ordinary toggle of just this side. A
+			// restore has nothing to fall back to when both per-side flags
+			// are also false (issue #927), so that case keeps the plain
+			// single-side toggle instead.
+			showPanelsBefore := pf.ShowPanels
 			pf.ExitWide()
-			pf.ShowRightPanel = !pf.ShowRightPanel
-			if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
-				pf.ActiveIdx = 0
-			}
-			if !pf.ShowLeftPanel && !pf.ShowRightPanel {
-				pf.ShowPanels = false
-			} else if allPanelsHidden {
+			if !showPanelsBefore && (pf.ShowLeftPanel || pf.ShowRightPanel) {
 				pf.ShowPanels = true
+			} else {
+				pf.ShowRightPanel = !pf.ShowRightPanel
+				if !pf.ShowRightPanel && pf.ActiveIdx == 1 && pf.ShowLeftPanel {
+					pf.ActiveIdx = 0
+				}
+				if !pf.ShowLeftPanel && !pf.ShowRightPanel {
+					pf.ShowPanels = false
+				} else if !showPanelsBefore {
+					pf.ShowPanels = true
+				}
 			}
 			if pf.LastW > 0 && pf.LastH > 0 {
 				pf.ResizeConsole(pf.LastW, pf.LastH)
+			}
+			// See the matching comment in Panel.ToggleLeftPanel above
+			// (f4#1621): ShellModeHost needs the same explicit hand-back of
+			// the physical screen.
+			if pf.ShowPanels != showPanelsBefore {
+				if pf.ShowPanels {
+					pf.LeaveHostConsole()
+				} else {
+					pf.EnterHostConsole()
+				}
 			}
 			vtui.FrameManager.HardRefresh()
 			if pf.ShowPanels {

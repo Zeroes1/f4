@@ -1038,14 +1038,28 @@ func TestExecuteFileOp_Move_Skip_NoDataLoss(t *testing.T) {
 	}
 }
 func TestExecuteFileOp_MoveAcrossVFS_Fallback(t *testing.T) {
-	// Tests that moving a file between two different VFS implementations
-	// (or when optimized Rename fails) correctly falls back to Copy + Delete.
+	// Tests that moving a file between two VFS instances with no shared
+	// device identity (simulating different volumes/servers, or an
+	// optimized Rename that failed) correctly falls back to Copy + Delete.
+	//
+	// Two independent *vfs.OSVFS values are no longer enough to force this
+	// path on their own (#1635): since sameDeviceForMove was added, two
+	// OSVFS panels that happen to read the same real disk (as tmpSrc/tmpDst
+	// under t.TempDir() normally do) now take the fast rename path instead.
+	// Wrapping srcVfs strips vfs.FileIdentifier (fileOpSafetyProbeVFS embeds
+	// the vfs.VFS interface, which does not promote that optional method) and
+	// gives it a concrete type that differs from dstVfs's, so both
+	// sameDeviceForMove and vfs.SameSession report false and this test keeps
+	// exercising the actual fallback logic. Wrapping the source specifically
+	// (rather than the destination) also lets the assertion below observe
+	// that tryOptimizedRename's Rename call — issued on srcVFS, never
+	// dstVFS — was skipped entirely.
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
 	tmpSrc := t.TempDir()
 	tmpDst := t.TempDir()
 
-	srcVfs := vfs.NewOSVFS(tmpSrc)
+	srcVfs := &fileOpSafetyProbeVFS{VFS: vfs.NewOSVFS(tmpSrc)}
 	dstVfs := vfs.NewOSVFS(tmpDst)
 
 	fileName := "cross_vfs.txt"
@@ -1054,8 +1068,6 @@ func TestExecuteFileOp_MoveAcrossVFS_Fallback(t *testing.T) {
 	}
 
 	// Use ExecuteFileOp with isMove=true.
-	// Since they are different OSVFS instances (simulating different volumes/servers),
-	// the recursiveCopy logic will be used.
 	done := make(chan struct{})
 	ExecuteFileOp(srcVfs, dstVfs, []string{fileName}, tmpDst, true, 2, func() {
 		close(done)
@@ -1078,6 +1090,12 @@ Loop:
 	// Verify result
 	if data, _ := os.ReadFile(filepath.Join(tmpDst, fileName)); string(data) != "payload" {
 		t.Error("File was not moved correctly to destination")
+	}
+	if srcVfs.renameCalls != 0 {
+		t.Errorf("Rename called %d times; move should have used Copy + Delete, not the optimized rename path", srcVfs.renameCalls)
+	}
+	if _, err := os.Stat(filepath.Join(tmpSrc, fileName)); !os.IsNotExist(err) {
+		t.Errorf("source file still present after move: err=%v", err)
 	}
 }
 func TestExecuteFileOp_LargeFileIntegrity(t *testing.T) {
