@@ -3275,7 +3275,15 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 				}
 			}
 			curStr = " ▸ " + curStr + " "
-			if maxCurW := totalStart - (fp.X1 + 1); maxCurW > 0 {
+			maxCurW := totalStart - (fp.X1 + 1)
+			if totalStart < fp.X2 {
+				// Keep one border cell between the two numbers: the cursor
+				// entry ends with a space and the total starts with one, so
+				// without it a narrow panel reads "158 114 573 197 216 698"
+				// as a single figure (#1640).
+				maxCurW--
+			}
+			if maxCurW > 0 {
 				if runewidth.StringWidth(curStr) > maxCurW {
 					curStr = runewidth.Truncate(curStr, maxCurW, "")
 				}
