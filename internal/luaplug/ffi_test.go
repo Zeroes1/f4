@@ -4,6 +4,7 @@ import (
 	"math"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -188,6 +189,10 @@ func TestFFIErrorsArePcallable(t *testing.T) {
 // cleanly, so the check runs through a real Lua call rather than calling
 // checkAddr on a bare, call-less state.
 func TestCheckAddr(t *testing.T) {
+	// largeAddr is a high address that still fits in uintptr and is exactly
+	// representable as a float64 on every pointer width: 1<<62 on 64-bit
+	// targets, 1<<30 on 32-bit ones (linux/arm, windows/386, ...).
+	const largeAddr = uintptr(1) << (strconv.IntSize - 2)
 	cases := []struct {
 		name    string
 		arg     lua.LNumber
@@ -196,7 +201,7 @@ func TestCheckAddr(t *testing.T) {
 	}{
 		{"zero", 0, false, 0},
 		{"ordinary address", 4096, false, 4096},
-		{"large exact address", lua.LNumber(1 << 40), false, 1 << 40},
+		{"large exact address", lua.LNumber(largeAddr), false, largeAddr},
 		{"negative", -1, true, 0},
 		{"nan", lua.LNumber(math.NaN()), true, 0},
 		{"positive infinity", lua.LNumber(math.Inf(1)), true, 0},
