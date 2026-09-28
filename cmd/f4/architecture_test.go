@@ -39,6 +39,11 @@ var architectureLayers = map[string]int{
 	// wired to call it yet.
 	"internal/winex11drag": 0,
 
+	// #1604: dragging files out of f4 in a Windows console into other
+	// applications, Burlak's tool-window technique. A leaf over vtui; the
+	// Windows console session installs it.
+	"internal/wincondrag": 0,
+
 	// Checked conversions, shared by seven packages. Zero imports of ours.
 	"internal/numeric": 0,
 
