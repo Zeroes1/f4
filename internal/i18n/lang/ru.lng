@@ -721,6 +721,7 @@ GitStatus.ColumnPath=Путь
 GitStatus.PanelTitle=Статус git: %s (%d)
 GitStatus.Detached=отделённый HEAD
 GitStatus.KeyBar.Refresh=Обновить
+GitStatus.KeyBar.Hunks=Куски
 GitStatus.NoPath=Нет каталога активной панели для запуска git status
 GitStatus.RefreshFailed=Не удалось обновить статус git: %s
 GitStatus.StageFailed=Не удалось выполнить git add: %s
@@ -736,6 +737,14 @@ GitStatus.CommitDone=Закоммичено: %s
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
 GitDiff.CompareFailed=Не удалось построить diff: %v
+
+GitHunks.PanelTitle=Куски в индекс: %s (выбрано %d из %d)
+GitHunks.Stage=В индекс
+GitHunks.NothingSelected=Сначала выберите хотя бы один кусок клавишей Insert или пробелом
+GitHunks.ApplyFailed=Не удалось выполнить git apply --cached: %s
+GitHunks.Staged=В индекс добавлено кусков: %d из %d (%s)
+GitHunks.NoHunks=В %s нет неиндексированных текстовых изменений, которые можно добавить по частям (неотслеживаемый файл добавляется целиком клавишей Insert)
+GitHunks.OpenFailed=Не удалось выполнить git diff: %s
 
 GitLog.ColumnHash=Хэш
 GitLog.ColumnAuthor=Автор

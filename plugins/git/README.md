@@ -262,13 +262,38 @@ archive tools (f4#609) rather than linking a Go git implementation.
   for -- `commitChangedFiles`'s own doc comment) still shows a toast instead
   of an empty list: there is nothing to pick from either way.
 
+## Part 12: staging part of a file, hunk by hunk (`hunk.go`, `hunkview.go`)
+
+- **F4** on a status-panel entry (keybar: **Hunks**) opens `HunkView`, the
+  file's *unstaged* changes (`git diff`, index vs. worktree -- what
+  `git add -p` offers) as a list of hunks: each hunk's `@@` line followed
+  by its `-`/`+`/context lines.
+- **Insert** or **Space** picks the hunk under the cursor (or drops it
+  again) and moves the cursor to the next hunk's `@@` line, so repeated
+  Insert walks the file hunk by hunk; picked hunks are painted in the
+  "selected" color a marked file has in a file panel, and the title counts
+  them. **Enter** or **F2** stages the picked hunks and returns to the
+  status panel, reloaded, with the cursor on the same file (now `MM` if
+  some changes remain unstaged). **Esc**/**F10** return without staging.
+- Staging rebuilds a patch from the file header and the picked hunks only
+  and hands it to `git apply --cached`. The `+` start of each kept hunk is
+  shifted back by the line-count change of every hunk left out before it,
+  the same adjustment `git add -p` makes; a mode change is left out of the
+  patch (Insert still stages the whole file, mode included). `git apply`
+  runs at the repository root, because from a subdirectory it silently
+  skips root-relative patch paths outside that subdirectory.
+- The diff is taken with color, external diff drivers and textconv turned
+  off and with the standard `a/`/`b/` prefixes forced, so user settings
+  (`diff.noprefix`, `diff.mnemonicPrefix`, `diff.relative`, ...) cannot
+  produce text `git apply` would not read back.
+- An untracked file, a binary file or a mode-only change has no hunks to
+  offer: F4 says so in a toast, and Insert remains the way to stage it.
+
 ## What is deliberately not here yet
 
-Staging/unstaging a single hunk within a file: it needs f4#613's diff
-widget to pick the hunk, not just show a whole file's diff, and f4#613 is
-itself still open (the "Compare files by content" side-by-side view it
-introduced, f4#1605, is not the hunk-picking part that gesture would need).
-This is its own atomic follow-up part of f4#659, blocked on that ticket.
+Unstaging single hunks (`git reset -p`), splitting a hunk into smaller ones
+and picking single lines: each is its own follow-up part of f4#659, on top
+of the same `filePatch`/`buildPatch` pair.
 
 ## Design notes
 

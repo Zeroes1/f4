@@ -183,7 +183,13 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // bindings for the same keys (F5 Copy, Insert mark, Enter open) and puts
 // F5's caption on the keybar; the other keys have no keybar row to show.
 //
-// Enter and Insert act on the entry under the cursor, so they are disabled
+// F4 (hunks, hunkview.go) stages part of a file, `git add -p` style. It
+// takes over the file panel's F4 Edit -- this panel edits no files, and
+// "edit what goes into the index" is the nearest reading of F4 here -- and,
+// being an F-key, gets a keybar caption, so the feature can be found
+// without reading docs.
+//
+// Enter, Insert and F4 act on the entry under the cursor, so they are disabled
 // while the list is empty: the key is still consumed, exactly as before,
 // and nothing runs. Ctrl+K stays enabled with nothing staged on purpose --
 // showCommitDialog answers that case with its own "Nothing staged to
@@ -230,6 +236,7 @@ func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_F5, Label: i18n.Msg("GitStatus.KeyBar.Refresh"), Run: p.refresh},
 		{VK: vtinput.VK_RETURN, Run: p.showDiff, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F4, Label: i18n.Msg("GitStatus.KeyBar.Hunks"), Run: p.showHunks, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
 		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
 		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},

@@ -721,6 +721,7 @@ GitStatus.ColumnPath=Path
 GitStatus.PanelTitle=Git status: %s (%d)
 GitStatus.Detached=detached HEAD
 GitStatus.KeyBar.Refresh=Refresh
+GitStatus.KeyBar.Hunks=Hunks
 GitStatus.NoPath=No active panel directory to run git status in
 GitStatus.RefreshFailed=Git status refresh failed: %s
 GitStatus.StageFailed=git add failed: %s
@@ -736,6 +737,14 @@ GitStatus.CommitDone=Committed: %s
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.
 GitDiff.CompareFailed=Failed to build the diff: %v
+
+GitHunks.PanelTitle=Stage hunks: %s (%d of %d picked)
+GitHunks.Stage=Stage
+GitHunks.NothingSelected=Pick at least one hunk with Insert or Space first
+GitHunks.ApplyFailed=git apply --cached failed: %s
+GitHunks.Staged=Staged %d of %d hunks of %s
+GitHunks.NoHunks=%s has no unstaged text changes to stage in parts (an untracked file is staged whole with Insert)
+GitHunks.OpenFailed=git diff failed: %s
 
 GitLog.ColumnHash=Hash
 GitLog.ColumnAuthor=Author
