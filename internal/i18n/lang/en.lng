@@ -681,6 +681,16 @@ GitLog.Close=Close
 GitLog.DiffFailed=Failed to inspect the commit's changes: %s
 GitLog.DiffUnsupported=Diff view supports commits that change exactly one file (this one changes %d)
 
+GitBranch.ColumnCurrent=Current
+GitBranch.ColumnName=Branch
+GitBranch.PanelTitle=Git branches (%d)
+GitBranch.OpenFailed=Git branch list failed: %s
+GitBranch.RefreshFailed=Git branch list refresh failed: %s
+GitBranch.Refresh=Refresh
+GitBranch.Close=Close
+GitBranch.SwitchFailed=git switch failed: %s
+GitBranch.SwitchDone=Switched to branch: %s
+
 Editor.GotoTitle=Go to position
 Editor.GotoLine=Line:
 Editor.GotoPosition=Position:

@@ -681,6 +681,16 @@ GitLog.Close=Закрыть
 GitLog.DiffFailed=Не удалось определить изменения коммита: %s
 GitLog.DiffUnsupported=Просмотр diff поддерживает только коммиты с одним изменённым файлом (в этом изменено %d)
 
+GitBranch.ColumnCurrent=Текущая
+GitBranch.ColumnName=Ветка
+GitBranch.PanelTitle=Ветки git (%d)
+GitBranch.OpenFailed=Не удалось получить список веток git: %s
+GitBranch.RefreshFailed=Не удалось обновить список веток git: %s
+GitBranch.Refresh=Обновить
+GitBranch.Close=Закрыть
+GitBranch.SwitchFailed=Не удалось выполнить git switch: %s
+GitBranch.SwitchDone=Переключено на ветку: %s
+
 Editor.GotoTitle=Перейти к позиции
 Editor.GotoLine=Строка:
 Editor.GotoPosition=Позиция:

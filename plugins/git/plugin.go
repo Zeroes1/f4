@@ -29,8 +29,14 @@
 // with Enter on a commit reusing the diff widget again for a commit that
 // changes exactly one file.
 //
-// Staging/unstaging a single hunk and branch switching are still follow-up
-// parts, not this one -- see the ticket for the full list.
+// v6 (f4#659 part 7 of N, branch.go/branchview.go) adds Ctrl+S: a read-only
+// list of local branches, the current one marked, pushed as its own screen
+// exactly the way Ctrl+E's log already is; Enter runs `git switch` on the
+// highlighted branch and reloads both that list and the status panel
+// underneath.
+//
+// Staging/unstaging a single hunk is still a follow-up part, not this one --
+// see the ticket for the full list.
 package git
 
 import (

@@ -134,13 +134,51 @@ archive tools (f4#609) rather than linking a Go git implementation.
   which `git show` does not diff without `-m`/`-c`) or more than one shows a
   toast instead of guessing.
 
+## Part 7: switching branches (`branch.go`, `branchview.go`)
+
+- **Ctrl+S** on the status panel opens a read-only list of local branches
+  (`git branch --list --no-color`, parsed by `parseBranchList` in
+  `branch.go`), the current one marked with `*` in its own column -- the
+  same `vtui.BorderedFrame`+`vtui.Table` full-screen-frame shape Ctrl+E's log
+  (part 5) already uses, for the same reason: it needs no panel-provider "go
+  back to what was open before" stack of its own, so Escape/F10 simply pops
+  it and the status panel underneath is exactly as it was. Not Ctrl+B (the
+  more obvious mnemonic, "Branch"): plain `B` is claimed by this table's own
+  QuickSearch like every letter, and Ctrl+B is already the global
+  **Panel.ToggleKeyBar**, which this panel's own key handling has no
+  fallthrough exception for (unlike Ctrl+L/Ctrl+G, see panel.go's
+  `ProcessKey` doc comment) -- claiming it here would silently break the key
+  bar toggle while this view is open. Ctrl+S ("**S**witch branch") is free by
+  the same `grep DefaultKeys` check that justified Ctrl+K and Ctrl+E, and is
+  already precedent for a view-local Ctrl+S: `internal/media/image_view.go`
+  binds it to that view's own slide-show toggle, scoped the same way.
+- **Enter** on a branch runs `git switch <branch>` (not `git checkout`: the
+  newer, purpose-built command gives a clearer refusal than checkout's own
+  more overloaded one when the working tree has changes a switch would
+  overwrite) and, on success, reloads both this list (moving the `*` to the
+  new current branch) and the status panel underneath (so its title and
+  entries reflect the new HEAD). The view itself stays open afterward --
+  switching branches does not imply "done looking at branches," the same way
+  showing a diff from the log view does not close the log.
+- A working tree with local changes that switching would overwrite is not
+  detected ahead of time by this plugin: `git switch` itself refuses with
+  its own explanatory message in that case, which surfaces here as a toast
+  exactly like any other failed git command in this plugin (`toggleStage`,
+  `runCommit`) -- there is no attempt here to stash or merge on the user's
+  behalf.
+- **F5** re-runs `git branch --list` and replaces the list, the same
+  point-in-time refresh every other list in this plugin has. Sorting is not
+  offered (a short branch list has no order worth resorting away from), but
+  QuickSearch is, the same type-to-filter gesture the status and log views
+  already have.
+
 ## What is deliberately not here yet
 
 Everything else the ticket asks for: staging/unstaging a single hunk within
 a file (needs f4#613's diff widget to pick the hunk), a multi-line commit
 message editor, a per-file diff for a multi-file commit in the log view, and
-branch switching/creation. Each is its own atomic follow-up part of f4#659,
-not this one.
+creating or deleting a branch from this list. Each is its own atomic
+follow-up part of f4#659, not this one.
 
 ## Design notes
 

@@ -173,9 +173,10 @@ func (p *statusPanel) SetFocus(focused bool) {
 func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 
 // ProcessKey adds F5 (refresh), Enter (diff, diff.go), Insert
-// (stage/unstage, stage.go), Ctrl+K (commit, commit.go) and Ctrl+E (log,
-// logview.go) on top of the table's own navigation/sort/quick-search
-// handling. None of the first three is a letter key: QuickSearch claims
+// (stage/unstage, stage.go), Ctrl+K (commit, commit.go), Ctrl+E (log,
+// logview.go) and Ctrl+S (branches, branchview.go) on top of the table's own
+// navigation/sort/quick-search handling. None of the first three is a
+// letter key: QuickSearch claims
 // printable characters while the table is focused (plugins/proclist/panel.go
 // avoids the same trap by keying its own actions off F-keys) -- and that
 // includes plain Space, which is why staging is bound to Insert instead of
@@ -202,6 +203,15 @@ func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 // Ctrl+K in commit.go) and, unlike Ctrl+I/Ctrl+J, is not a letter whose
 // Ctrl form collides with a control character (Tab/Line Feed) some
 // terminals may not even deliver distinguishably from the key itself.
+//
+// Ctrl+S ("Switch branch") for branchview.go's branch list is free by that
+// same `grep DefaultKeys` check -- plain Ctrl+S is bound only inside
+// internal/media/image_view.go, as that view's own local slide-show toggle,
+// never as a global AltPanel-independent action this panel's own claim on
+// it could end up shadowing (unlike Ctrl+B, which is the global
+// Panel.ToggleKeyBar and, per internal/keymap/remap.go's own note, is also
+// the kind of chord a terminal multiplexer like tmux may claim before it
+// ever reaches f4 -- one more reason not to reach for it here).
 func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
 		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
@@ -232,6 +242,9 @@ func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
 				return true
 			case vtinput.VK_E:
 				p.showLog()
+				return true
+			case vtinput.VK_S:
+				p.showBranches()
 				return true
 			}
 		}
