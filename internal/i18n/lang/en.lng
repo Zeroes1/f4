@@ -670,6 +670,7 @@ GitStatus.CommitDone=Committed: %s
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.
 GitDiff.CompareFailed=Failed to build the diff: %v
+
 GitLog.ColumnHash=Hash
 GitLog.ColumnAuthor=Author
 GitLog.ColumnDate=Date

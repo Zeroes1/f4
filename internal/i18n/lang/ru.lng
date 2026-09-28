@@ -670,6 +670,7 @@ GitStatus.CommitDone=Закоммичено: %s
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
 GitDiff.CompareFailed=Не удалось построить diff: %v
+
 GitLog.ColumnHash=Хэш
 GitLog.ColumnAuthor=Автор
 GitLog.ColumnDate=Дата
