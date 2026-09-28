@@ -41,10 +41,12 @@ var darwinIconICNS []byte
 // already supplies the icon, so the stamp is skipped there.
 //
 // AppKit calls must happen on the main OS thread: the main goroutine is
-// pinned to it by gogpu's darwin platform package init, and RunGui runs on
+// pinned to it by an init() in whichever backend package this binary links
+// (gogpu's darwin platform package, or vtui's own cocoa_gui_darwin.go in a
+// lite build that carries neither gogpu nor Ebitengine), and RunGui runs on
 // the main goroutine before handing it to the Cocoa event loop.
 func applyDarwinDockIcon(backend string) {
-	if backend != "gogpu" && backend != "ebiten" {
+	if backend != "gogpu" && backend != "ebiten" && backend != "cocoa" {
 		// x11/wayland windows (XQuartz) are not Cocoa apps; leave AppKit alone.
 		return
 	}

@@ -140,9 +140,12 @@ XP lacks a few functions ReactOS has.
 
 The lite build targets routers and other embedded/old-weak-hardware devices.
 Its GUI backends are the ones that draw with the display server's own
-protocol: X11 and Wayland (`--gui=x11`, `--gui=wayland`), and Win32 GDI on
-Windows (`--gui=win32`); the GPU-accelerated `gogpu` and `ebiten` backends,
-and the graphics stack behind them, are left out. Wayland needs a loader to
+protocol: X11 and Wayland (`--gui=x11`, `--gui=wayland`), Win32 GDI on
+Windows (`--gui=win32`), and the native Cocoa window on macOS
+(`--gui=cocoa`, also the automatic default there since a lite build has no
+gogpu) -- unlike the other three, Cocoa needs no separate display server, so
+it needs no XQuartz; the GPU-accelerated `gogpu` and `ebiten` backends, and
+the graphics stack behind them, are left out. Wayland needs a loader to
 reach `libxkbcommon`, so it is available on the amd64 build, which is
 universal like the regular one; the static arm and mipsle builds draw with
 X11. There is no Colorer (Chroma-based syntax highlighting only), no
@@ -257,6 +260,7 @@ UI & input libraries are developed separately ([vtui](https://github.com/unxed/v
 *   `--gui=x11`: Use native X11 windowing (Linux/BSD/macOS).
 *   `--gui=wayland`: Use native Wayland windowing (Linux/BSD).
 *   `--gui=ebiten`: Use the portable Ebitengine graphical backend (Windows/Linux/macOS).
+*   `--gui=cocoa`: Use the native AppKit window (macOS only); needs no XQuartz and no GPU stack.
 *   `--tty=ansi`: Force terminal mode with ANSI input/output.
 *   `--tty=win32`: Force terminal mode with the Windows Console API (`winapi` is an alias).
 *   `--gui=auto` / `--tty=auto`: Ignore the configured default backend for this run and detect one.
@@ -270,6 +274,7 @@ The available backends and their main characteristics are:
 | `--gui=x11` | X11 desktops (Linux/BSD/macOS) | Native X11 windowing. |
 | `--gui=wayland` | Linux/BSD with Wayland | Native Wayland windowing. |
 | `--gui=ebiten` | Windows/Linux/macOS | Portable graphical fallback with no gogpu stack requirement. |
+| `--gui=cocoa` | macOS | Native AppKit window; the automatic default there when gogpu is unavailable, including every lite build. |
 | `--tty=ansi` | ANSI-compatible terminals | Renders through the terminal's byte stream. |
 | `--tty=win32` (`winapi`) | Windows and Wine consoles | Uses the Windows Console API; useful when ConPTY is unavailable. |
 | `Panel.ConsoleMode = host` | Host terminals with PTY support | Sends the shell to the host terminal for native scrollback, selection, and job control; f4 falls back to a simple execution mode when a PTY is unavailable. |
@@ -287,7 +292,7 @@ To avoid repeating the same switch on every start, the choice can be saved in
 ```ini
 [Startup]
 Mode = gui          ; auto (detect, the default), tty, or gui
-GuiBackend = gogpu  ; empty means detect; win32, gogpu, ebiten, x11, wayland
+GuiBackend = gogpu  ; empty means detect; win32, gogpu, ebiten, x11, wayland, cocoa
 TTYBackend =        ; empty means detect; ansi, winapi
 ```
 
