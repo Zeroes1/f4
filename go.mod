@@ -31,7 +31,7 @@ require (
 	github.com/unxed/sevenzip v0.1.7
 	github.com/unxed/tar v0.1.137
 	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.375
+	github.com/unxed/vtui v0.1.376
 	github.com/unxed/zip v0.1.143
 	github.com/unxed/zipper v0.1.176
 	github.com/vmihailenco/msgpack/v5 v5.4.1
@@ -133,10 +133,10 @@ require (
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/stangelandcl/ppmd v0.1.1 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/unxed/keytrans v0.1.34-0.20260927212255-4eab2d5fd642
+	github.com/unxed/keytrans v0.1.35
 	github.com/unxed/par2 v0.1.3 // indirect
 	github.com/unxed/winkeys v0.1.1
-	github.com/unxed/xkb-go v0.1.9-0.20260927162752-f079b0ef6de2 // indirect
+	github.com/unxed/xkb-go v0.1.9 // indirect
 	github.com/unxed/xz v0.1.47 // indirect
 	github.com/unxed/zipcharset v0.1.5 // indirect
 	github.com/unxed/zlib4go v0.1.16 // indirect
