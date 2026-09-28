@@ -10,20 +10,10 @@ import (
 	"github.com/unxed/vtui"
 )
 
-// Command IDs for the plugin's host registrations. The menu command keeps
-// its original ID so existing key bindings and macros do not shift; the
-// generate/validate commands are separate IDs so each gets its own entry in
-// the Files menu and its own assignable hotkey (f4#1623 part 4).
-const (
-	menuCommandID     = "intchecker.menu"
-	generateCommandID = "intchecker.generate"
-	validateCommandID = "intchecker.validate"
-)
-
 // Plugin is the integrity checker's host registration.
 type Plugin struct {
-	api           vfs.HostAPI
-	registrations []vfs.Registration
+	api          vfs.HostAPI
+	registration vfs.Registration
 }
 
 // NewPlugin returns the integrity checker plugin.
@@ -33,14 +23,9 @@ func (p *Plugin) GetName() string { return "Integrity Checker" }
 
 func (p *Plugin) Init(api vfs.HostAPI) error {
 	p.api = api
-	contributions, ok := api.(vfs.ContributionHost)
-	if !ok {
-		api.RegisterPluginMenuItem(vtui.Msg("IntChecker.Menu"), p.showMenu)
-		return nil
-	}
-	commands := []vfs.PluginCommand{
-		{
-			ID:             menuCommandID,
+	if contributions, ok := api.(vfs.ContributionHost); ok {
+		registration, err := contributions.RegisterPluginCommand(vfs.PluginCommand{
+			ID:             "intchecker.menu",
 			Location:       vfs.PluginCommandPanel,
 			Label:          "Integrity &checker",
 			LabelKey:       "IntChecker.Menu",
@@ -50,61 +35,23 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv", "verify"},
 			Enabled:        canRun,
 			Run:            p.showMenu,
-		},
-		{
-			// Direct Files-menu entries, by the same pattern as
-			// plugins/archive's "Add to archive"/"Extract files": a
-			// panel command with MenuPath "Files" gets a Files-menu
-			// row and, through the host's generic plugin-command
-			// keymap (internal/panel/plugin_hotkeys.go), a hotkey the
-			// user can assign and reassign with F4, instead of a
-			// hotkey hardcoded by the plugin.
-			ID:             generateCommandID,
-			Location:       vfs.PluginCommandPanel,
-			Label:          "Calculate files checksum",
-			LabelKey:       "IntChecker.Command.Generate",
-			MenuPath:       "Files",
-			Description:    "Generate checksums for the selected files",
-			DescriptionKey: "IntChecker.Command.Generate.Desc",
-			SearchKeys:     []string{"IntChecker.Generate"},
-			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv"},
-			Enabled:        canRun,
-			Run:            showGenerateDialog,
-		},
-		{
-			ID:             validateCommandID,
-			Location:       vfs.PluginCommandPanel,
-			Label:          "Verify files checksum",
-			LabelKey:       "IntChecker.Command.Validate",
-			MenuPath:       "Files",
-			Description:    "Verify files against a checksum file",
-			DescriptionKey: "IntChecker.Command.Validate.Desc",
-			SearchKeys:     []string{"IntChecker.Validate"},
-			SearchTerms:    []string{"checksum", "hash", "verify", "check", "sfv"},
-			Enabled:        canRun,
-			Run:            showValidate,
-		},
-	}
-	for _, command := range commands {
-		registration, err := contributions.RegisterPluginCommand(command)
+		})
 		if err != nil {
-			for _, done := range p.registrations {
-				done.Unregister()
-			}
-			p.registrations = nil
 			p.api = nil
-			return fmt.Errorf("integrity checker: register %s command: %w", command.ID, err)
+			return fmt.Errorf("integrity checker: register command: %w", err)
 		}
-		p.registrations = append(p.registrations, registration)
+		p.registration = registration
+		return nil
 	}
+	api.RegisterPluginMenuItem(vtui.Msg("IntChecker.Menu"), p.showMenu)
 	return nil
 }
 
 func (p *Plugin) Close() error {
-	for _, registration := range p.registrations {
-		registration.Unregister()
+	if p.registration != nil {
+		p.registration.Unregister()
+		p.registration = nil
 	}
-	p.registrations = nil
 	p.api = nil
 	return nil
 }
