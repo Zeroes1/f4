@@ -231,6 +231,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"git.(*LogView).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "the git plugin owns this read-only commit-log screen, opened with Ctrl+E on the status panel that Action.App.GitStatus reaches; F5/Enter/close are local screen primitives, and navigation/quick-search fall through to its table (f4#659 part 5 of N)",
 	},
+	"git.(*BranchView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local branch list, opened with Ctrl+S on the status panel that Action.App.GitStatus reaches; F5/Enter/Insert/Delete/F8/close are local screen primitives (switch, create, delete branch) and navigation/quick-search fall through to its table, the same split LogView already uses (f4#659 part 7 of N)",
+	},
 }
 
 var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
