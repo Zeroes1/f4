@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/unxed/f4/internal/piecetable"
+	"github.com/unxed/f4/internal/terminal/far2ldnd"
 	"github.com/unxed/f4/internal/textlayout"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/viewer"
@@ -118,6 +119,10 @@ type TerminalView struct {
 	promptOverlaysLastRow bool
 
 	authCache map[string]int
+
+	// dnd is the terminal side of the far2l drag-and-drop protocol, see
+	// far2l_dnd.go. It guards itself.
+	dnd dndServer
 
 	OnTitleChange func(string)
 	OnBusyChange  func(bool)
@@ -1815,7 +1820,9 @@ func (tv *TerminalView) HandleFar2lAPC(s string) {
 			_, _ = tv.Pty.Write([]byte("\x1b_far2lok\x07"))
 		}
 	} else if s == "far2l0" {
-		// Disable
+		// Switching the extensions off revokes every drop offer (§ 12 of
+		// the DnD specification).
+		tv.dndReset()
 	} else if s == "far2lok" {
 		// Acknowledgement from the host terminal. This is not for the internal shell to process visually.
 		// Consume and do nothing.
@@ -1823,6 +1830,13 @@ func (tv *TerminalView) HandleFar2lAPC(s string) {
 		b64 := s[6:]
 		if m := len(b64) % 4; m != 0 {
 			b64 += strings.Repeat("=", 4-m)
+		}
+		// A DnD request is recognised by its last bytes and checked against
+		// its frame limit before the rest is decoded; its replies keep the
+		// order of the requests. The wire length counts ESC _ and a BEL.
+		if rid, cmd, ok := dndPeek(b64); ok && cmd == far2ldnd.InteractDND {
+			tv.dndAccept(rid, len("\x1b_")+len(s)+1, b64)
+			return
 		}
 		decoded, _ := base64.StdEncoding.DecodeString(b64)
 		if len(decoded) > 0 {
@@ -2004,6 +2018,10 @@ func (tv *TerminalView) EnsureFreshPromptLine() {
 	tv.NextLine()
 }
 func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
+	if n := len(data); n >= 2 && data[n-2] == far2ldnd.InteractDND {
+		tv.dndServe(data)
+		return
+	}
 	stk := (*vtinput.Far2lStack)(&data)
 	id := stk.PopU8()
 	cmd := stk.PopU8()
