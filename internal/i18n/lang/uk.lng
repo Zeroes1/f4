@@ -841,6 +841,10 @@ AI.ReviewTotalsExcluded=Холостий прогін: застосується 
 AI.ReviewChecked=Увімкнено правок: %d з %d. Space або Ins вмикає і вимикає правку.
 AI.ReviewBtnDryRun=Пере&вірити
 AI.ReviewBtnClose=&Закрити
+AI.ReviewDiffHint=Enter або F3 показує дифф вибраної правки.
+AI.ReviewNoDiff=Нема що порівнювати: цей рядок не змінює текст.
+AI.ReviewDiffBefore=до
+AI.ReviewDiffAfter=після
 AI.SpecDownloading=Завантаження специфікації AP...
 AI.SpecAttached=ap.md додано, тепер модель відповідатиме AP-патчами.
 

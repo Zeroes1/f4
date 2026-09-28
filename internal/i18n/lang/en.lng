@@ -2266,6 +2266,10 @@ AI.ReviewTotalsExcluded=Dry run: %d to apply, %d already applied, %d failing, %d
 AI.ReviewChecked=Checked: %d of %d. Space or Ins switches an edit on and off.
 AI.ReviewBtnDryRun=&Dry run
 AI.ReviewBtnClose=&Close
+AI.ReviewDiffHint=Enter or F3 shows the selected edit's diff.
+AI.ReviewNoDiff=Nothing to compare: this row changes no text.
+AI.ReviewDiffBefore=before
+AI.ReviewDiffAfter=after
 AI.SpecDownloading=Downloading the ap specification...
 AI.SpecAttached=ap.md was attached and the model is now asked to answer with ap patches.
 

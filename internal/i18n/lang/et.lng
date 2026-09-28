@@ -837,6 +837,10 @@ AI.ReviewTotalsExcluded=Proovikäivitus: rakendub %d, juba rakendatud %d, vigase
 AI.ReviewChecked=Sisse lülitatud: %d / %d. Space või Ins lülitab muudatuse sisse või välja.
 AI.ReviewBtnDryRun=&Proovi
 AI.ReviewBtnClose=&Sulge
+AI.ReviewDiffHint=Enter või F3 näitab valitud muudatuse erinevusi.
+AI.ReviewNoDiff=Pole midagi võrrelda: see rida teksti ei muuda.
+AI.ReviewDiffBefore=enne
+AI.ReviewDiffAfter=pärast
 AI.SpecDownloading=Laaditakse alla ap spetsifikatsiooni...
 AI.SpecAttached=ap.md lisati ja nüüd palutakse mudelil vastata ap paikadega.
 

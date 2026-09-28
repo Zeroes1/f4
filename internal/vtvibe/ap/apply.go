@@ -167,6 +167,14 @@ type ModificationResult struct {
 	Status  ModStatus
 	// Err is set when Status is ModFailed; nil otherwise.
 	Err *AppError
+	// Preview is this modification's own edit - the lines it changed
+	// plus a little context, before and after - for the review screen's
+	// per-row diff (docs/VTVIBE.md §7.3). Set for a ModOK modification
+	// that changed the file's text (REPLACE, DELETE, INSERT_*, RECREATE,
+	// CREATE of a file), in a dry run and a real one alike; nil for every
+	// other status and for operations with no text of their own (RENAME,
+	// a whole-file/directory DELETE, CREATE of a directory). See Preview.
+	Preview *Preview
 }
 
 // ModKey identifies one modification of a patch stably across Apply calls
@@ -773,6 +781,7 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 
 		for _, modIdx := range pendingIdx {
 			mod := change.Modifications[modIdx]
+			before := workingContent
 			res, failure, progressed, newLastEnd, stop := e.applyOneModification(
 				change, mod, modIdx, relativePath, filePath, isExplicitDir, fileExisted,
 				originalContent, &workingContent, initialContent, &dirtyRegions, &consumedLog,
@@ -787,6 +796,7 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 			if progressed {
 				madeProgress = true
 				e.recordModResult(relativePath, modIdx, mod, ModOK, nil)
+				e.modResults[len(e.modResults)-1].Preview = modPreview(before, workingContent)
 			} else {
 				e.recordModResult(relativePath, modIdx, mod, ModSkipped, nil)
 			}

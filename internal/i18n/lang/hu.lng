@@ -761,6 +761,10 @@ AI.ReviewTotalsExcluded=Próbafuttatás: %d alkalmazható, %d már alkalmazva, %
 AI.ReviewChecked=Bekapcsolva: %d / %d. A Space vagy az Ins be- és kikapcsolja a módosítást.
 AI.ReviewBtnDryRun=&Próba
 AI.ReviewBtnClose=&Bezárás
+AI.ReviewDiffHint=Az Enter vagy az F3 megmutatja a kijelölt módosítás diffjét.
+AI.ReviewNoDiff=Nincs mit összehasonlítani: ez a sor nem módosít szöveget.
+AI.ReviewDiffBefore=előtte
+AI.ReviewDiffAfter=utána
 AI.SpecDownloading=Az ap specifikáció letöltése...
 AI.SpecAttached=Az ap.md csatolva lett, a modell mostantól ap-javításokkal válaszol.
 

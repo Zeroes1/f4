@@ -832,6 +832,10 @@ AI.ReviewTotalsExcluded=ドライラン: 適用予定 %d、適用済み %d、失
 AI.ReviewChecked=有効: %d / %d。Space または Ins で変更のオン/オフを切り替えます。
 AI.ReviewBtnDryRun=ドライラン(&D)
 AI.ReviewBtnClose=閉じる(&C)
+AI.ReviewDiffHint=Enter または F3 で選択した変更の差分を表示します。
+AI.ReviewNoDiff=比較するものがありません: この行はテキストを変更しません。
+AI.ReviewDiffBefore=変更前
+AI.ReviewDiffAfter=変更後
 AI.SpecDownloading=ap 仕様をダウンロード中...
 AI.SpecAttached=ap.md を添付しました。モデルは今後 ap パッチで回答します。
 

@@ -840,6 +840,10 @@ AI.ReviewTotalsExcluded=Próba: %d do zastosowania, %d już zastosowanych, %d z 
 AI.ReviewChecked=Włączone: %d z %d. Space lub Ins włącza lub wyłącza zmianę.
 AI.ReviewBtnDryRun=&Próba
 AI.ReviewBtnClose=&Zamknij
+AI.ReviewDiffHint=Enter lub F3 pokazuje różnice wybranej zmiany.
+AI.ReviewNoDiff=Nie ma czego porównać: ten wiersz nie zmienia tekstu.
+AI.ReviewDiffBefore=przed
+AI.ReviewDiffAfter=po
 AI.SpecDownloading=Pobieranie specyfikacji ap...
 AI.SpecAttached=Dołączono ap.md i model ma teraz odpowiadać łatkami ap.
 

@@ -758,6 +758,10 @@ AI.ReviewTotalsExcluded=Փորձնական գործարկում՝ %d կկիրա�
 AI.ReviewChecked=Միացված՝ %d / %d։ Space կամ Ins ստեղնը միացնում կամ անջատում է փոփոխությունը։
 AI.ReviewBtnDryRun=Փո&րձել
 AI.ReviewBtnClose=&Փակել
+AI.ReviewDiffHint=Enter կամ F3 ստեղնը ցույց է տալիս ընտրված փոփոխության տարբերությունը։
+AI.ReviewNoDiff=Համեմատելու բան չկա․ այս տողը տեքստ չի փոխում։
+AI.ReviewDiffBefore=առաջ
+AI.ReviewDiffAfter=հետո
 AI.SpecDownloading=Ap սպեցիֆիկացիան ներբեռնվում է...
 AI.SpecAttached=ap.md-ն կցվեց, և այժմ մոդելին խնդրվում է պատասխանել ap կարկատաններով։
 

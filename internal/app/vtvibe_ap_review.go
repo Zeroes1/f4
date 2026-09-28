@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mattn/go-runewidth"
+	"github.com/unxed/f4/internal/diffview"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/vtvibe"
@@ -30,7 +31,13 @@ import (
 // checked rows (ap.Options.Only), and "Dry run" runs the check again with
 // the current choice - a row left out comes back as "excluded", and
 // anything that only worked together with it shows up as failing before a
-// byte is written. Not here yet: a diff pane, Ctrl+Z.
+// byte is written.
+//
+// Enter or F3 on a row opens that one edit side by side (diffview, the same
+// view "Compare by content" uses): the fragment of the file around the
+// edit before and after it, as the dry run computed it
+// (ap.ModificationResult.Preview). Not here yet: a diff pane next to the
+// table, F8, Ctrl+Z.
 
 // aiReview is the review screen's state: the dry run's rows and which of
 // them are checked.
@@ -209,6 +216,7 @@ func aiReviewTotals(mods []ap.ModificationResult) string {
 type aiReviewTable struct {
 	*vtui.Table
 	onToggle func(idx int)
+	onDiff   func(idx int)
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
@@ -221,9 +229,39 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 				t.MoveSelection(1)
 			}
 			return true
+		case vtinput.VK_RETURN, vtinput.VK_F3:
+			// Enter is taken from the dialog's default button on purpose:
+			// on a list of edits it means "show me this one", and applying
+			// the patch stays one deliberate press of Apply away.
+			if t.onDiff != nil {
+				t.onDiff(t.RowAt(t.SelectPos))
+			}
+			return true
 		}
 	}
 	return t.Table.ProcessKey(e)
+}
+
+// aiReviewShowDiff opens one row's own edit in a diffview: left the
+// fragment before it, right after, titled with the file and the line the
+// fragment starts at. A row with nothing to compare (already applied,
+// failing, excluded, a RENAME or a whole-file DELETE) gets a short message
+// instead.
+func aiReviewShowDiff(m ap.ModificationResult) {
+	p := m.Preview
+	if p == nil {
+		vtui.ShowMessage(i18n.Msg("AI.ReviewTitle"), i18n.Msg("AI.ReviewNoDiff"), []string{i18n.Msg("vtui.Ok")})
+		return
+	}
+	where := fmt.Sprintf("%s:%d", m.FilePath, p.StartLine)
+	dv, err := diffview.NewDiffView(where+" ("+i18n.Msg("AI.ReviewDiffBefore")+")",
+		where+" ("+i18n.Msg("AI.ReviewDiffAfter")+")", p.Before, p.After)
+	if err != nil {
+		aiShowError(err)
+		return
+	}
+	dv.ResizeConsole(vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight())
+	vtui.FrameManager.AddScreen(dv)
 }
 
 // aiReviewLabel fits s into exactly w columns for a vtui.Text: '&' would
@@ -251,7 +289,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	scrW := vtui.FrameManager.GetScreenSize()
 	scrH := vtui.FrameManager.GetScreenHeight()
 	dlgW := min(max(scrW-4, 60), 100)
-	dlgH := min(max(len(mods)+11, 15), max(scrH-2, 15))
+	dlgH := min(max(len(mods)+12, 16), max(scrH-2, 16))
 	inner := dlgW - 4
 
 	dlg := vtui.NewCenteredDialog(dlgW, dlgH, i18n.Msg("AI.ReviewTitle"))
@@ -269,9 +307,9 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		{Title: i18n.Msg("AI.ReviewColLocator"), MinWidth: 12},
 	}
 	// Below the table: the selected row's detail, the totals, how many rows
-	// are checked, a blank line and the buttons.
+	// are checked, the diff key hint, a blank line and the buttons.
 	rev := newAIReview(mods)
-	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-8, cols)}
+	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-9, cols)}
 	table.SetOwner(dlg)
 	table.ShowHeader = true
 	table.ShowScrollBar = true
@@ -300,6 +338,12 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		return aiReviewLabel(fmt.Sprintf(i18n.Msg("AI.ReviewChecked"), rev.checked(), len(mods)), inner)
 	}
 	checked := vtui.NewText(0, 0, checkedLabel(), 0)
+	diffHint := vtui.NewText(0, 0, aiReviewLabel(i18n.Msg("AI.ReviewDiffHint"), inner), 0)
+	table.onDiff = func(idx int) {
+		if idx >= 0 && idx < len(mods) {
+			aiReviewShowDiff(mods[idx])
+		}
+	}
 
 	var buttons []*vtui.Button
 	addButton := func(label string, onClick func()) *vtui.Button {
@@ -362,7 +406,8 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	vbox.Add(table, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(detail, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(totals, vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(checked, vtui.Margins{Bottom: 1}, vtui.AlignFill)
+	vbox.Add(checked, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(diffHint, vtui.Margins{Bottom: 1}, vtui.AlignFill)
 	btnRow := vtui.NewHBoxLayout(0, 0, inner, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
@@ -376,6 +421,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	dlg.AddItem(detail)
 	dlg.AddItem(totals)
 	dlg.AddItem(checked)
+	dlg.AddItem(diffHint)
 	for _, b := range buttons {
 		dlg.AddItem(b)
 	}

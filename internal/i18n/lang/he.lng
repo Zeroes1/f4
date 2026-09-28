@@ -837,6 +837,10 @@ AI.ReviewTotalsExcluded=הרצת ניסיון: %d יוחלו, %d כבר הוחל
 AI.ReviewChecked=מופעלים: %d מתוך %d. Space או Ins מפעילים או מכבים שינוי.
 AI.ReviewBtnDryRun=&ניסיון
 AI.ReviewBtnClose=ס&גירה
+AI.ReviewDiffHint=Enter או F3 מציגים את ההבדלים של השינוי הנבחר.
+AI.ReviewNoDiff=אין מה להשוות: השורה הזו לא משנה טקסט.
+AI.ReviewDiffBefore=לפני
+AI.ReviewDiffAfter=אחרי
 AI.SpecDownloading=מוריד את מפרט ap...
 AI.SpecAttached=ap.md צורף, וכעת המודל מתבקש לענות בתיקוני ap.
 

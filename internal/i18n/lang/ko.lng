@@ -832,6 +832,10 @@ AI.ReviewTotalsExcluded=시험 실행: 적용 예정 %d, 이미 적용됨 %d, �
 AI.ReviewChecked=켜짐: %d / %d. Space 또는 Ins로 변경을 켜거나 끕니다.
 AI.ReviewBtnDryRun=시험 실행(&D)
 AI.ReviewBtnClose=닫기(&C)
+AI.ReviewDiffHint=Enter 또는 F3으로 선택한 변경의 차이를 봅니다.
+AI.ReviewNoDiff=비교할 내용이 없습니다: 이 행은 텍스트를 바꾸지 않습니다.
+AI.ReviewDiffBefore=변경 전
+AI.ReviewDiffAfter=변경 후
 AI.SpecDownloading=ap 사양 다운로드 중...
 AI.SpecAttached=ap.md를 첨부했습니다. 이제 모델이 ap 패치로 답변합니다.
 

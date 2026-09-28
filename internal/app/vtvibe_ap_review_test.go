@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/diffview"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
@@ -371,4 +372,77 @@ func TestAIShowPatchReviewAfterExclusion(t *testing.T) {
 		t.Error("checking an excluded row again should enable Apply")
 	}
 	dlg.Close()
+}
+
+// TestAIShowPatchReviewDiff: Enter or F3 on a row opens that edit's own
+// before/after fragment in a diffview; a row with nothing to compare says so
+// instead, and neither key applies the patch.
+func TestAIShowPatchReviewDiff(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 24)
+	vtui.FrameManager.Init(scr)
+
+	var calls int
+	saved := aiReviewRunPatcher
+	t.Cleanup(func() { aiReviewRunPatcher = saved })
+	aiReviewRunPatcher = func(*panel.PanelsFrame, *vtvibe.Patch, string, bool, map[ap.ModKey]bool) { calls++ }
+
+	mods := aiReviewTestMods()
+	mods[0].Preview = &ap.Preview{
+		StartLine: 117,
+		Before:    []string{"}", "", "func (d *aiDrive) Open(", "\tctx context.Context, p string", "\treturn 0, ErrNotSupported", "}"},
+		After: []string{"}", "", "func (d *aiDrive) Open(", "\tctx context.Context, p string",
+			"\te, ok := d.lookup(p)", "\tif !ok {", "\t\treturn 0, ErrNotFound", "\t}", "\treturn d.openEntry(ctx, e)", "}"},
+	}
+	dlg := aiShowPatchReview(nil, &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}, t.TempDir(), mods, 2, "")
+	text := aiScreenText(t, scr, dlg)
+	t.Logf("review screen:\n%s", text)
+	if !strings.Contains(text, i18n.Msg("AI.ReviewDiffHint")) {
+		t.Errorf("review screen lacks the diff hint %q", i18n.Msg("AI.ReviewDiffHint"))
+	}
+	table := aiReviewTableOf(t, dlg)
+
+	// F3 on the skipped row: nothing to compare, a message says so.
+	table.MoveSelection(1)
+	if !table.ProcessKey(aiKey(vtinput.VK_F3, 0)) {
+		t.Fatal("F3 not handled by the review table")
+	}
+	msg, isWin := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !isWin || msg == dlg {
+		t.Fatalf("F3 on a row without a preview: top frame %T, want a message", vtui.FrameManager.GetTopFrame())
+	}
+	if text := aiScreenText(t, scr, msg); !strings.Contains(text, strings.Fields(i18n.Msg("AI.ReviewNoDiff"))[0]) {
+		t.Errorf("message lacks %q:\n%s", i18n.Msg("AI.ReviewNoDiff"), text)
+	}
+	msg.Close()
+
+	// Enter on the first row: the diff opens on a screen of its own, the
+	// review dialog stays where it was.
+	table.MoveSelection(-1)
+	if !table.ProcessKey(aiKey(vtinput.VK_RETURN, '\r')) {
+		t.Fatal("Enter not handled by the review table")
+	}
+	dv, ok := vtui.FrameManager.GetTopFrame().(*diffview.DiffView)
+	if !ok {
+		t.Fatalf("top frame after Enter = %T, want *diffview.DiffView", vtui.FrameManager.GetTopFrame())
+	}
+	diffText := aiScreenText(t, scr, dv)
+	t.Logf("diff of the selected edit:\n%s", diffText)
+	for _, want := range []string{
+		"vfs/ai_vfs.go:117 (" + i18n.Msg("AI.ReviewDiffBefore") + ")",
+		"vfs/ai_vfs.go:117 (" + i18n.Msg("AI.ReviewDiffAfter") + ")",
+		"return 0, ErrNotSupported", "e, ok := d.lookup(p)", "return d.openEntry(ctx, e)",
+	} {
+		if !strings.Contains(diffText, want) {
+			t.Errorf("diff view lacks %q", want)
+		}
+	}
+	if dlg.IsDone() || calls != 0 {
+		t.Fatal("Enter or F3 closed the review or ran the patcher")
+	}
+	dv.ProcessKey(aiKey(vtinput.VK_ESCAPE, 0))
+	if !dv.IsDone() {
+		t.Error("Esc does not close the diff view")
+	}
 }

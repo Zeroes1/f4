@@ -837,6 +837,10 @@ AI.ReviewTotalsExcluded=Izmēģinājums: tiks lietoti %d, jau lietoti %d, ar kļ
 AI.ReviewChecked=Ieslēgts: %d no %d. Space vai Ins ieslēdz vai izslēdz labojumu.
 AI.ReviewBtnDryRun=&Izmēģināt
 AI.ReviewBtnClose=&Aizvērt
+AI.ReviewDiffHint=Enter vai F3 parāda izvēlētā labojuma atšķirības.
+AI.ReviewNoDiff=Nav ko salīdzināt: šī rinda tekstu nemaina.
+AI.ReviewDiffBefore=pirms
+AI.ReviewDiffAfter=pēc
 AI.SpecDownloading=Notiek ap specifikācijas lejupielāde...
 AI.SpecAttached=ap.md pievienots, un tagad modelim tiek lūgts atbildēt ar ap ielāpiem.
 

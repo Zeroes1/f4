@@ -840,6 +840,10 @@ AI.ReviewTotalsExcluded=Zkušební běh: %d k použití, %d již použito, %d s 
 AI.ReviewChecked=Zapnuto úprav: %d z %d. Space nebo Ins úpravu zapne či vypne.
 AI.ReviewBtnDryRun=Zkušební &běh
 AI.ReviewBtnClose=&Zavřít
+AI.ReviewDiffHint=Enter nebo F3 zobrazí rozdíl vybrané úpravy.
+AI.ReviewNoDiff=Není co porovnat: tento řádek nemění text.
+AI.ReviewDiffBefore=před
+AI.ReviewDiffAfter=po
 AI.SpecDownloading=Stahování specifikace ap...
 AI.SpecAttached=ap.md byl připojen a model je nyní žádán, aby odpovídal záplatami ap.
 

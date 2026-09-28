@@ -840,6 +840,10 @@ AI.ReviewTotalsExcluded=Probelauf: %d anzuwenden, %d bereits angewendet, %d fehl
 AI.ReviewChecked=Aktiviert: %d von %d. Leertaste oder Einfg schaltet eine Änderung ein und aus.
 AI.ReviewBtnDryRun=&Probelauf
 AI.ReviewBtnClose=&Schließen
+AI.ReviewDiffHint=Enter oder F3 zeigt den Diff der gewählten Änderung.
+AI.ReviewNoDiff=Nichts zu vergleichen: diese Zeile ändert keinen Text.
+AI.ReviewDiffBefore=vorher
+AI.ReviewDiffAfter=nachher
 AI.SpecDownloading=ap-Spezifikation wird heruntergeladen...
 AI.SpecAttached=ap.md wurde angehängt, das Modell soll jetzt mit ap-Patches antworten.
 

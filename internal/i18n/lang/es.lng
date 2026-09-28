@@ -840,6 +840,10 @@ AI.ReviewTotalsExcluded=Prueba: %d por aplicar, %d ya aplicados, %d con error, %
 AI.ReviewChecked=Activados: %d de %d. Space o Ins activa o desactiva un cambio.
 AI.ReviewBtnDryRun=&Prueba
 AI.ReviewBtnClose=&Cerrar
+AI.ReviewDiffHint=Enter o F3 muestra el diff del cambio seleccionado.
+AI.ReviewNoDiff=Nada que comparar: esta fila no cambia texto.
+AI.ReviewDiffBefore=antes
+AI.ReviewDiffAfter=después
 AI.SpecDownloading=Descargando la especificación ap...
 AI.SpecAttached=Se adjuntó ap.md y ahora se pide al modelo que responda con parches ap.
 

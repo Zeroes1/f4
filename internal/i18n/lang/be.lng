@@ -840,6 +840,10 @@ AI.ReviewTotalsExcluded=Халасты прагон: прыменіцца %d, у
 AI.ReviewChecked=Уключана правак: %d з %d. Space або Ins уключае і выключае праўку.
 AI.ReviewBtnDryRun=Пра&верыць
 AI.ReviewBtnClose=&Закрыць
+AI.ReviewDiffHint=Enter або F3 паказвае дыф выбранай праўкі.
+AI.ReviewNoDiff=Няма чаго параўноўваць: гэты радок не змяняе тэкст.
+AI.ReviewDiffBefore=да
+AI.ReviewDiffAfter=пасля
 AI.SpecDownloading=Спампоўка спецыфікацыі AP...
 AI.SpecAttached=ap.md далучаны, цяпер мадэль будзе адказваць AP-патчамі.
 

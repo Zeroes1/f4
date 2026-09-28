@@ -837,6 +837,10 @@ AI.ReviewTotalsExcluded=Deneme çalıştırması: %d uygulanacak, %d zaten uygul
 AI.ReviewChecked=Açık: %d / %d. Space veya Ins bir değişikliği açar veya kapatır.
 AI.ReviewBtnDryRun=&Dene
 AI.ReviewBtnClose=&Kapat
+AI.ReviewDiffHint=Enter veya F3 seçili değişikliğin farkını gösterir.
+AI.ReviewNoDiff=Karşılaştırılacak bir şey yok: bu satır metni değiştirmiyor.
+AI.ReviewDiffBefore=önce
+AI.ReviewDiffAfter=sonra
 AI.SpecDownloading=Ap belirtimi indiriliyor...
 AI.SpecAttached=ap.md eklendi ve artık modelden ap yamalarıyla yanıt vermesi isteniyor.
 

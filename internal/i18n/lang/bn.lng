@@ -837,6 +837,10 @@ AI.ReviewTotalsExcluded=পরীক্ষামূলক চালনা: %d �
 AI.ReviewChecked=চালু: %d / %d। Space বা Ins দিয়ে পরিবর্তন চালু বা বন্ধ করুন।
 AI.ReviewBtnDryRun=পরীক্ষা (&D)
 AI.ReviewBtnClose=বন্ধ করুন (&C)
+AI.ReviewDiffHint=Enter বা F3 নির্বাচিত পরিবর্তনের পার্থক্য দেখায়।
+AI.ReviewNoDiff=তুলনা করার কিছু নেই: এই সারি কোনো লেখা বদলায় না।
+AI.ReviewDiffBefore=আগে
+AI.ReviewDiffAfter=পরে
 AI.SpecDownloading=ap স্পেসিফিকেশন ডাউনলোড হচ্ছে...
 AI.SpecAttached=ap.md সংযুক্ত করা হয়েছে, এখন মডেলকে ap প্যাচ দিয়ে উত্তর দিতে বলা হয়েছে।
 
