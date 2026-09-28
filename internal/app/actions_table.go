@@ -1897,7 +1897,17 @@ func init() {
 		Description: "Refresh panel contents",
 		DescKey:     "Action.Panel.Rescan.Desc",
 		DefaultKeys: []string{"CtrlR"},
-		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.RefreshAll() }),
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			// far2l's own Ctrl+R on its tree panel re-reads the tree itself,
+			// not the (still-visible, but not what the user is looking at
+			// right now) panel behind it -- see TreePanel.Rescan's doc
+			// comment (f4#1602 part 6).
+			if t := focusedTreePanel(pf); t != nil {
+				t.Rescan()
+				return
+			}
+			pf.RefreshAll()
+		}),
 	})
 	registerAction(action.Action{
 		Name:        "Panel.Swap",

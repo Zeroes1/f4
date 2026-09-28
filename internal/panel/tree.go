@@ -116,6 +116,12 @@ func (it treeItem) GetCellText(int) string {
 // of f4#1602). The tree's own root row refuses F8/Del (IsRootSelected):
 // deleting it would mean deleting the whole current volume, which is not a
 // node a real panel could ever have offered as a delete target either.
+// Ctrl+R (Panel.Rescan, internal/app/actions_table.go) re-reads every
+// directory the tree currently has expanded from disk while it has focus,
+// via Rescan (part 6 of f4#1602) -- the same far2l Ctrl+R the owner named
+// alongside F5/F6/F7/F8/Del as expected tree behavior, and otherwise the
+// one way an already-expanded node's listing could go stale for as long as
+// the tree stays open.
 // Still a follow-up part: a persistent expand/collapse cache across tree
 // panel instances and a per-plugin f4:config knob (e.g. root = current dir
 // instead of the whole volume) -- see f4#1602.
@@ -298,12 +304,25 @@ func (t *TreePanel) collapseAt(at int) {
 // os.Stat, which -- unlike scanChildDirs -- follows a symlink and accepts a
 // short name.
 func (t *TreePanel) revealPath(target string) {
+	if idx := t.resolvePath(target); idx != -1 {
+		t.setCursor(idx)
+	}
+}
+
+// resolvePath is revealPath's underlying walk, split out so Rescan (below)
+// can both re-expand a previously-expanded directory and probe whether a
+// path still exists without always moving the cursor there. Returns the
+// row index target now lives at (expanding whatever chain of directories
+// it needs to along the way), or -1 if it stops silently at whatever level
+// it can no longer match or expand -- see revealPath's own doc comment for
+// why that can happen even for a real, existing directory.
+func (t *TreePanel) resolvePath(target string) int {
 	root := strings.TrimRight(t.root, string(filepath.Separator))
 	target = strings.TrimRight(filepath.Clean(target), string(filepath.Separator))
 	rel := strings.TrimPrefix(target, root)
 	rel = strings.Trim(rel, string(filepath.Separator))
 	if rel == "" {
-		return
+		return 0
 	}
 	parts := strings.Split(rel, string(filepath.Separator))
 	current := 0
@@ -314,11 +333,11 @@ func (t *TreePanel) revealPath(target string) {
 			next = t.revealChild(current, part)
 		}
 		if next == -1 {
-			return
+			return -1
 		}
 		current = next
 	}
-	t.setCursor(current)
+	return current
 }
 
 // findChild returns the row index of items[parent]'s already-listed child
@@ -630,6 +649,73 @@ func (t *TreePanel) RefreshAfterDelete() {
 		}
 	}
 	t.setCursor(parent)
+}
+
+// Rescan re-reads every directory the tree currently has expanded, from
+// the root back down, dropping subdirectories that no longer exist on disk
+// and picking up ones that appeared since -- far2l's own Ctrl+R on its tree
+// panel (far2l/src/panels/treelist.cpp), which the owner named explicitly
+// as expected tree behavior alongside F5/F6/F7/F8/Del (f4#1602, part 6 of
+// N). It matters because expandAt only ever reads a directory's children
+// once, the first time it is expanded (see treeChildScanCap's doc comment
+// on the tree's own laziness): left alone, an already-expanded node's
+// listing goes stale for as long as the tree stays open, however long that
+// is, while the other panel or an outside process adds, removes or renames
+// directories under it. Rescan(), unlike the constructor, never touches a
+// node the user never expanded in the first place -- a collapsed node's
+// subtree is simply not there to go stale.
+//
+// The cursor stays on its current row's path if that directory still
+// exists, or moves up to the closest ancestor that does otherwise (e.g. the
+// highlighted node itself was just removed from outside the tree) -- never
+// simply back to the root, which would needlessly throw away how deep the
+// user had navigated for an unrelated change two levels up.
+func (t *TreePanel) Rescan() {
+	idx := t.cursorIndex()
+	var selectedPath string
+	if idx >= 0 {
+		selectedPath = t.items[idx].path
+	}
+
+	var expandedPaths []string
+	for _, it := range t.items {
+		if it.expandable && !it.collapsed && it.path != t.root {
+			expandedPaths = append(expandedPaths, it.path)
+		}
+	}
+
+	t.items = []treeItem{{name: t.root, path: t.root, depth: 0, parentIndex: -1, expandable: true, collapsed: true}}
+	t.expandAt(0)
+	for _, p := range expandedPaths {
+		// resolvePath only expands the *ancestors* it walks through on the
+		// way to p (see its own doc comment -- it leaves the final node
+		// itself alone, since revealPath's own callers only ever wanted the
+		// cursor on it, not its children read too); expandAt(idx) is the
+		// actual re-read of p's own children this loop is for. A collapsed
+		// node whose parent no longer exists on disk resolves to -1 here and
+		// is silently dropped -- exactly right, since it can no longer be
+		// expanded either.
+		if ridx := t.resolvePath(p); ridx != -1 {
+			t.expandAt(ridx)
+		}
+	}
+
+	pos := -1
+	for target := selectedPath; target != ""; {
+		if pos = t.resolvePath(target); pos != -1 {
+			break
+		}
+		parent := filepath.Dir(target)
+		if parent == target {
+			break
+		}
+		target = parent
+	}
+	if pos == -1 {
+		pos = 0
+	}
+	t.syncRows()
+	t.setCursor(pos)
 }
 
 // activateSelected changes the source panel's directory to the highlighted

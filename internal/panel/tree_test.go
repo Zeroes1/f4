@@ -96,6 +96,86 @@ func TestTreeExpandCollapse_SpliceLogic(t *testing.T) {
 	}
 }
 
+// TestTreePanel_Rescan drives Rescan directly against a small real
+// directory tree that changes on disk while the tree is open: a previously
+// expanded node loses its only child, a brand new sibling appears next to
+// it, and a directory under a node that was never expanded gains a child
+// of its own. Ctrl+R must pick up the first two (f4#1602, part 6) and leave
+// the third alone -- Rescan only ever re-reads what the user actually
+// expanded.
+func TestTreePanel_Rescan(t *testing.T) {
+	root := t.TempDir()
+	childA := filepath.Join(root, "childA")
+	childB := filepath.Join(root, "childB")
+	grandchild := filepath.Join(childA, "grandchild")
+	if err := os.MkdirAll(grandchild, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Mkdir(childB, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	tp := newBareTreePanel(root)
+	tp.expandAt(0) // root -> childA, childB
+	tp.expandAt(1) // childA -> grandchild
+	tp.syncRows()
+	tp.setCursor(2) // grandchild
+
+	if got := tp.items[2].name; got != "grandchild" {
+		t.Fatalf("precondition: cursor row = %q, want grandchild", got)
+	}
+
+	// Disk changes made entirely outside the tree: grandchild is gone,
+	// childA has a new sibling, and childB (never expanded) gains a child
+	// the tree must not surface.
+	if err := os.RemoveAll(grandchild); err != nil {
+		t.Fatalf("remove grandchild: %v", err)
+	}
+	childC := filepath.Join(root, "childC")
+	if err := os.Mkdir(childC, 0o700); err != nil {
+		t.Fatalf("mkdir childC: %v", err)
+	}
+	hiddenUnderB := filepath.Join(childB, "hidden")
+	if err := os.Mkdir(hiddenUnderB, 0o700); err != nil {
+		t.Fatalf("mkdir hiddenUnderB: %v", err)
+	}
+
+	tp.Rescan()
+
+	// grandchild is gone; the cursor must land on childA, the closest
+	// ancestor that still exists, not snap back to root.
+	idx := tp.cursorIndex()
+	if idx < 0 {
+		t.Fatal("cursor should land on a real row after Rescan")
+	}
+	if got := tp.items[idx].path; got != childA {
+		t.Errorf("cursor after Rescan = %q, want %q (closest surviving ancestor)", got, childA)
+	}
+
+	// childC must now be visible as a root-level row: root was itself
+	// expanded, so Rescan must have re-read it.
+	if tp.findChild(0, "childC") == -1 {
+		t.Error("childC should appear under root after Rescan")
+	}
+	// childA had its only child removed: expandAt must have cleared its
+	// expandable flag rather than leaving a dead "+" marker.
+	if tp.items[idx].expandable {
+		t.Error("childA has no subdirectories left; Rescan should have cleared expandable")
+	}
+	// childB was never expanded before Rescan; its own new child must stay
+	// hidden until the user actually expands it.
+	bIdx := tp.findChild(0, "childB")
+	if bIdx == -1 {
+		t.Fatal("childB should still be listed under root")
+	}
+	if !tp.items[bIdx].collapsed {
+		t.Error("childB was never expanded before Rescan; it must still be collapsed")
+	}
+	if tp.findChild(bIdx, "hidden") != -1 {
+		t.Error("childB's new child must not be spliced in: Rescan never expands a node the user did not")
+	}
+}
+
 // TestNewTreePanel_RootsAtVolumeAndRevealsCwd checks NewTreePanel's actual
 // construction path: rooted at the current volume (not just the source
 // panel's directory) and pre-expanded down to it, with the cursor left on

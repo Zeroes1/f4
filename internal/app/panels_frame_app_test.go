@@ -1531,6 +1531,78 @@ func TestPanelsFrame_ManualRefresh(t *testing.T) {
 	}
 }
 
+// TestPanelsFrame_ManualRefresh_TreeTarget drives Ctrl+R (Panel.Rescan) with
+// the tree panel (Ctrl+T) focused: it must re-scan the tree itself (picking
+// up a directory created on disk after the tree was built) rather than
+// falling back to RefreshAll on the two ordinary panels behind it -- see
+// TreePanel.Rescan's own doc comment (f4#1602 part 6).
+func TestPanelsFrame_ManualRefresh_TreeTarget(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	root := t.TempDir()
+	fromDir := filepath.Join(root, "from")
+	toDir := filepath.Join(root, "to")
+	if err := os.Mkdir(fromDir, 0o700); err != nil {
+		t.Fatalf("mkdir from: %v", err)
+	}
+	if err := os.Mkdir(toDir, 0o700); err != nil {
+		t.Fatalf("mkdir to: %v", err)
+	}
+
+	fsp := panel.NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(fromDir))
+	paneltest.WaitForLoad(t, fsp)
+
+	tp := panel.NewTreePanel(fsp)
+	if got := tp.GetSelectedName(); got != "from" {
+		t.Fatalf("precondition: tree cursor on %q, want \"from\"", got)
+	}
+	tp.SetFocus(true)
+	pf.AltPanels[pf.ActiveIdx] = tp
+
+	// Created after the tree was built, under root -- already expanded as
+	// part of the chain NewTreePanel revealed down to fromDir -- so a plain
+	// Right/Left on "from"/"to" would never pick it up, only a rescan of
+	// root's own children would.
+	extraDir := filepath.Join(root, "zzz_extra")
+	if err := os.Mkdir(extraDir, 0o700); err != nil {
+		t.Fatalf("mkdir extra: %v", err)
+	}
+
+	handled := pressKey(pf, &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_R,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	})
+	if !handled {
+		t.Fatal("Ctrl+R was not handled")
+	}
+
+	// The cursor must stay on "from" (it still exists), not jump back to
+	// root or anywhere else.
+	if got := tp.GetSelectedName(); got != "from" {
+		t.Errorf("tree cursor after Ctrl+R = %q, want %q (unchanged)", got, "from")
+	}
+
+	// Down, Down from "from" should now reach the newly created sibling.
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN}) {
+		t.Fatal("Down should be consumed by the tree")
+	}
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN}) {
+		t.Fatal("Down should be consumed by the tree")
+	}
+	if got, want := tp.SelectedPath(), extraDir; got != want {
+		t.Errorf("after Ctrl+R, two Down from %q landed on %q, want %q (Rescan did not pick up the new directory)", "from", got, want)
+	}
+}
+
 func TestPanelsFrame_CtrlO_HardRedraw(t *testing.T) {
 	fm := vtui.FrameManager
 	scr := vtui.NewSilentScreenBuf()
