@@ -22,13 +22,24 @@ import (
 // part of the transaction.
 func treeState(t *testing.T, dir string) map[string]string {
 	t.Helper()
+	// Read file contents through an os.Root scoped to dir rather than by
+	// the WalkDir callback's own path: a plain os.ReadFile(p) here would
+	// resolve p again from the filesystem root on every call, racing
+	// against whatever WalkDir observed (gosec G122). root.ReadFile stays
+	// confined to dir even if something under it is swapped for a symlink
+	// between the WalkDir stat and this read.
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("open root %s: %v", dir, err)
+	}
+	defer func() { _ = root.Close() }()
 	state := map[string]string{}
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(dir, p)
-		rel = filepath.ToSlash(rel)
+		relOS, _ := filepath.Rel(dir, p)
+		rel := filepath.ToSlash(relOS)
 		if rel == "." || rel == "afailed.md" || rel == "afailed.ap" {
 			return nil
 		}
@@ -44,7 +55,7 @@ func treeState(t *testing.T, dir string) map[string]string {
 			state[rel] = "dir" + perm
 			return nil
 		}
-		b, err := os.ReadFile(p)
+		b, err := root.ReadFile(relOS)
 		if err != nil {
 			return err
 		}
