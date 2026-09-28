@@ -5,11 +5,14 @@ package app
 // help engine's scrolling, wrapping, link-following window fed from Markdown
 // instead of a .hlf file, so f4 only adds what a file viewer needs on top:
 // the whole workspace instead of a help-sized box, the file's name in the
-// title, and F4 to the ordinary text viewer for when the source is what the
-// reader wanted after all.
+// title, F4 to the ordinary text viewer for when the source is what the
+// reader wanted after all, and, the other way, Shift+F3
+// (actionSwitchViewerToMarkdown, below) from that text viewer back to the
+// formatted view.
 //
-// It sits with the picture and video viewers behind "Open images and video in
-// their own viewers": switched off, a .md file opens as text, as before.
+// It sits with the picture and video viewers behind "Open images, video and
+// Markdown in their own viewers": switched off, a .md file opens as text, as
+// before.
 
 import (
 	"context"
@@ -20,6 +23,7 @@ import (
 
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -169,4 +173,21 @@ func showMarkdownView(pf *panel.PanelsFrame, v vfs.VFS, path string, source []by
 	mv.onSource = func() { openPlainViewer(pf, v, path, false) }
 	mv.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.AddScreen(mv)
+}
+
+// actionSwitchViewerToMarkdown is the reverse of markdownView's own F4
+// (onSource, above): from the plain text/hex viewer on a Markdown file, go
+// back to the formatted view. Bound to Shift+F3 (Viewer.MarkdownFormatted) --
+// plain F4 is already Viewer.HexMode there (f4#1625 step 2).
+func actionSwitchViewerToMarkdown(vv *viewer.ViewerView) {
+	if vv == nil || vv.Path == "" || vv.VFS == nil || !isMarkdownFile(vv.Path) {
+		return
+	}
+	pf := panel.FindPanelsFrameAnyScreen()
+	if pf == nil {
+		return
+	}
+	v, path := vv.VFS, vv.Path
+	vv.Close()
+	tryOpenMarkdownViewer(pf, v, path)
 }

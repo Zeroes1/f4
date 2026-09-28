@@ -3331,6 +3331,18 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Viewer.MarkdownFormatted",
+		Area:        "Viewer",
+		Label:       "Markdown",
+		LabelKey:    "Action.Viewer.MarkdownFormatted",
+		Description: "Switch a Markdown file from the text/hex viewer back to the formatted view (the reverse of that view's own F4)",
+		DescKey:     "Action.Viewer.MarkdownFormatted.Desc",
+		DefaultKeys: []string{"ShiftF3"},
+		MenuPath:    "View",
+		Enabled:     viewerState(func(vv *viewer.ViewerView) bool { return isMarkdownFile(vv.Path) }),
+		Handler:     withViewer(func(vv *viewer.ViewerView) { actionSwitchViewerToMarkdown(vv) }),
+	})
+	registerAction(action.Action{
 		Name:        "Viewer.DisasmMode",
 		Area:        "Viewer",
 		Label:       "Disassembler mode",

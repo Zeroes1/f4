@@ -560,9 +560,10 @@ type F4Config struct {
 	EditorMemoryMap          bool
 	ViewerAutodetectCodePage bool
 	ViewerDefaultCodePage    int
-	// ViewerOpenAsSupportedType sends a picture to the image viewer and a
-	// video to the video player when a file is opened for viewing (issue
-	// #991). Off, every file opens in the text and hex viewer.
+	// ViewerOpenAsSupportedType sends a picture to the image viewer, a
+	// video to the video player, and a Markdown file to the formatted
+	// view (issue #991, then #1625) when a file is opened for viewing.
+	// Off, every file opens in the text and hex viewer.
 	ViewerOpenAsSupportedType bool
 	// SystemANSICodePage and SystemOEMCodePage pin what "ANSI" and "OEM"
 	// mean on a system that cannot be asked. 0 keeps the codepage deduced

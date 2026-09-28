@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -106,5 +109,115 @@ func TestMarkdownViewF3Closes(t *testing.T) {
 	mv.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F3})
 	if !mv.IsDone() {
 		t.Fatal("F3 did not close the Markdown view")
+	}
+}
+
+// TestActionSwitchViewerToMarkdownAndBack is the reverse leg of
+// TestMarkdownViewRendersFormattedAndF4GoesToSource: from the plain text
+// viewer on a Markdown file, Shift+F3 (Viewer.MarkdownFormatted) goes back to
+// the formatted view, closing the text viewer behind it (f4#1625 step 2).
+func TestActionSwitchViewerToMarkdownAndBack(t *testing.T) {
+	vtui.SetDefaultPalette()
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(path, []byte("# Title\n\nBody text.\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := vfs.NewOSVFS(dir)
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	// Open the plain text/hex viewer directly, bypassing the "open as
+	// formatted" path -- the situation Shift+F3 exists for.
+	openPlainViewer(pf, v, path, false)
+
+	var vv *viewer.ViewerView
+	timeout := time.After(2 * time.Second)
+	for vv == nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-timeout:
+			t.Fatal("timeout waiting for the text viewer to open")
+		}
+		if top, ok := vtui.FrameManager.GetTopFrame().(*viewer.ViewerView); ok {
+			vv = top
+		}
+	}
+
+	if !RunAction("Viewer.MarkdownFormatted") {
+		t.Fatal("Viewer.MarkdownFormatted failed to run")
+	}
+
+	var mv *markdownView
+	timeout = time.After(2 * time.Second)
+	for mv == nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-timeout:
+			t.Fatal("timeout waiting for the formatted view to reopen")
+		}
+		if top, ok := vtui.FrameManager.GetTopFrame().(*markdownView); ok {
+			mv = top
+		}
+	}
+	defer mv.Close()
+
+	if !vv.IsDone() {
+		t.Error("the text viewer is still open after switching back to the formatted view")
+	}
+}
+
+// TestActionSwitchViewerToMarkdownDisabledForOrdinaryFiles keeps Shift+F3 a
+// no-op (dimmed, per f4#1356's Enabled convention) outside a Markdown file:
+// there is no formatted view to switch to.
+func TestActionSwitchViewerToMarkdownDisabledForOrdinaryFiles(t *testing.T) {
+	vtui.SetDefaultPalette()
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(path, []byte("plain text\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v := vfs.NewOSVFS(dir)
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	openPlainViewer(pf, v, path, false)
+
+	var vv *viewer.ViewerView
+	timeout := time.After(2 * time.Second)
+	for vv == nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-timeout:
+			t.Fatal("timeout waiting for the text viewer to open")
+		}
+		if top, ok := vtui.FrameManager.GetTopFrame().(*viewer.ViewerView); ok {
+			vv = top
+		}
+	}
+	defer vv.Close()
+
+	if RunAction("Viewer.MarkdownFormatted") {
+		t.Fatal("Viewer.MarkdownFormatted ran for a non-Markdown file, want it disabled")
+	}
+	if _, ok := vtui.FrameManager.GetTopFrame().(*viewer.ViewerView); !ok {
+		t.Fatal("the text viewer is no longer the top frame after the disabled action")
 	}
 }

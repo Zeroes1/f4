@@ -245,6 +245,7 @@ var actionMenuOrder = []string{
 	"Viewer.Quit",
 	"Viewer.WrapMode",
 	"Viewer.HexMode",
+	"Viewer.MarkdownFormatted",
 	"Viewer.DisasmMode",
 	"Viewer.Search",
 	"Viewer.SearchNext",

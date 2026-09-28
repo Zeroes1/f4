@@ -1651,9 +1651,10 @@ func openViewerInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 }
 
 func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
-	// Viewer settings -> "Open images and video in their own viewers" (issue
-	// #991). Off, a picture or a video opens like any other file: as text or
-	// as hex, whatever the viewer's own binary check decides.
+	// Viewer settings -> "Open images, video and Markdown in their own
+	// viewers" (issue #991). Off, a picture, a video or a Markdown file
+	// opens like any other file: as text or as hex, whatever the viewer's
+	// own binary check decides.
 	if !forceHex && config.App.ViewerOpenAsSupportedType {
 		if tryOpenVideoPlayer(pf, v, path) {
 			return
