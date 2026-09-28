@@ -135,7 +135,23 @@ func TestSwitchBranchRunsGitSwitchAndReloadsBoth(t *testing.T) {
 }
 
 func TestSwitchBranchFailureLeavesBothPanelsUntouched(t *testing.T) {
-	withFakeGit(t, "* main\n  feature\n", nil)
+	original := execGit
+	t.Cleanup(func() { execGit = original })
+	// withFakeGit's single fixed output cannot serve both setup calls below:
+	// newStatusPanel's reload wants `git status --porcelain=v2 --branch`
+	// shape ("# branch.head main"), newBranchView's reload wants `git branch
+	// --list` shape ("* main\n  feature\n"). Feeding the branch-list shape to
+	// both (as a plain withFakeGit call would) leaves status.branch == ""
+	// straight out of newStatusPanel, since parseStatus never recognizes a
+	// "* main" line -- silently making the "unchanged" assertion below
+	// vacuous (it was already "" before switchBranch ever ran) instead of one
+	// that actually proves a failed switch leaves the prior branch in place.
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		if len(args) > 2 && args[2] == "status" {
+			return []byte("# branch.head main\n"), nil
+		}
+		return []byte("* main\n  feature\n"), nil
+	}
 
 	statusController, err := newStatusPanel(vfs.PanelContext{Current: vfs.PanelState{Path: "/repo"}, Bounds: [4]int{0, 0, 39, 19}})
 	if err != nil {
