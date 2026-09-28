@@ -165,6 +165,10 @@ var architectureLayers = map[string]int{
 	// under the mouse. Nothing below layer 3 imports it.
 	"internal/terminal": 3,
 
+	// The wire codec of the far2l drag-and-drop protocol: byte layouts only,
+	// standard library only, so any layer may use it; the terminal wires it.
+	"internal/terminal/far2ldnd": 0,
+
 	// media reads the terminal's graphics protocols and the viewer's title bar,
 	// so it is layer 3 beside them, not the 1 the plan assigned.
 	"internal/media": 3,
