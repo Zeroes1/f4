@@ -114,11 +114,20 @@ func TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927(t *testing.T) {
 // two in sync with what's on screen. A user who hides the panels with Esc
 // therefore reaches ShowPanels=false with ShowLeftPanel=ShowRightPanel=true
 // (still set from before the Esc), not the all-false state
-// TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927 covers. Ctrl+F1
-// used to read those stale true/true flags to decide whether to also flip
-// ShowPanels back on, so the very first Ctrl+F1 after an Esc silently did
-// nothing (no visible panel), and a lone, repeated Ctrl+F1 could never bring
-// the left panel up at all -- exactly the two symptoms reported in #1621.
+// TestPanelsFrame_CtrlF1CtrlF2RestoreAfterBothHidden_Issue927 covers.
+//
+// An earlier, partial fix judged "nothing shown yet" by pf.ShowPanels
+// instead of those stale flags, but still ran the single-side toggle on
+// that first press, so it flipped ShowLeftPanel off (since it read
+// stale-true) and only the right panel came up; a second press was needed
+// to bring the left one back too. unxed/f4#1621's follow-up report (Windows
+// 11, "Terminal presentation" set to Embedded) showed this in practice: the
+// first Ctrl+F1 after Esc raised only the right panel, and only a second
+// press brought up both. The fix here goes one step further: on that first
+// press, don't toggle a side at all -- restore pf.ShowPanels and let
+// whichever sides were on screen before Esc reappear exactly as they were,
+// both in the ordinary case. Only once something is already visible does
+// Ctrl+F1/Ctrl+F2 go back to toggling its own side.
 func TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
@@ -152,23 +161,117 @@ func TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621(t *testing.T) {
 		})
 	}
 
-	press(vtinput.VK_F1)
-	if !pf.ShowPanels {
-		t.Fatalf("first Ctrl+F1 after Esc-hide: show=%v left=%v right=%v; want ShowPanels=true",
-			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
-	}
-	if pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("first Ctrl+F1 after Esc-hide: left=%v right=%v; want left hidden, right shown",
-			pf.ShowLeftPanel, pf.ShowRightPanel)
-	}
-
-	// A repeated, lone Ctrl+F1 (no Ctrl+F2 in between, test2 of #1621) must
-	// keep toggling the left panel while the panels stay visible, never
-	// drop back to the hidden terminal.
+	// A single Ctrl+F1 after Esc must bring back both panels immediately --
+	// the exact ask in #1621's "Проверить" text, without a second press.
 	press(vtinput.VK_F1)
 	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
-		t.Fatalf("second Ctrl+F1: show=%v left=%v right=%v; want true,true,true",
+		t.Fatalf("first Ctrl+F1 after Esc-hide: show=%v left=%v right=%v; want true,true,true",
 			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+
+	// Now that something is on screen, Ctrl+F1 goes back to its ordinary,
+	// single-side toggle: it must not re-hide the whole frame or restore
+	// anything, just flip the left panel off.
+	press(vtinput.VK_F1)
+	if !pf.ShowPanels || pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("second Ctrl+F1: show=%v left=%v right=%v; want true,false,true",
+			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+}
+
+// TestPanelsFrame_CtrlF2RestoresAfterEscHide_Issue1621 is the Ctrl+F2 mirror
+// of TestPanelsFrame_CtrlF1RestoresAfterEscHide_Issue1621: a lone Ctrl+F2
+// after Esc (without any Ctrl+F1 in between, "test2" of the original #1621
+// report) must also bring back both panels on the very first press.
+func TestPanelsFrame_CtrlF2RestoresAfterEscHide_Issue1621(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	previousMacros := macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacros
+	})
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShowLeftPanel = true
+	pf.ShowRightPanel = true
+	pf.ShowPanels = false
+	pf.TermView.UseAltScreen = false
+	vtui.FrameManager.Push(pf)
+
+	pressKey(pf, &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_F2,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	})
+	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("first Ctrl+F2 after Esc-hide: show=%v left=%v right=%v; want true,true,true",
+			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+}
+
+// TestPanelsFrame_CtrlF1CtrlF2_HostMode_SwitchesPhysicalScreen_Issue1621
+// covers the deeper part of #1621: in ShellModeHost ("Host with overlay" /
+// "Host without overlay" Terminal presentation on Windows), the running
+// shell owns the host's own physical screen buffer while panels are
+// hidden, and only EnterHostConsole/LeaveHostConsole hand it back --
+// TogglePanelsVisibility (Esc/Ctrl+O) already calls that pair, but
+// Panel.ToggleLeftPanel/Panel.ToggleRightPanel did not, so pf.ShowPanels
+// flipped true internally while the host console never yielded the
+// screen: Ctrl+F1/Ctrl+F2 looked like a complete no-op to the user, no
+// matter how many times pressed, while Esc/Ctrl+O/Del worked immediately.
+func TestPanelsFrame_CtrlF1CtrlF2_HostMode_SwitchesPhysicalScreen_Issue1621(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	previousMacros := macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	macro.MacroMgr = macro.NewMacroManager("")
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacros
+	})
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShellMode = terminal.ShellModeHost
+	pf.ShowLeftPanel = true
+	pf.ShowRightPanel = true
+	pf.ShowPanels = false
+	pf.TermView.UseAltScreen = false
+	vtui.FrameManager.Push(pf)
+
+	// Simulate Esc having already handed the physical screen to the host
+	// console (TogglePanelsVisibility's ShellModeHost branch calls exactly
+	// this when hiding panels).
+	pf.EnterHostConsole()
+	if !pf.IsHostConsoleActive() {
+		t.Fatal("EnterHostConsole must leave HostConsoleActive true (test setup)")
+	}
+
+	pressKey(pf, &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_F1,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	})
+	if !pf.ShowPanels || !pf.ShowLeftPanel || !pf.ShowRightPanel {
+		t.Fatalf("Ctrl+F1 in ShellModeHost after Esc-hide: show=%v left=%v right=%v; want true,true,true",
+			pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel)
+	}
+	// The actual point of #1621's Host-mode fix: Ctrl+F1 must hand the
+	// physical screen back via LeaveHostConsole, exactly as Esc/Ctrl+O do,
+	// not just flip the internal ShowPanels flag with nothing on screen to
+	// show for it.
+	if pf.IsHostConsoleActive() {
+		t.Fatal("Ctrl+F1 must call LeaveHostConsole so the host console yields the physical screen back to f4")
 	}
 }
 
