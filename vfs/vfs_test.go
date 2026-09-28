@@ -184,6 +184,10 @@ type fakeVFSProvider struct {
 	open    func(ctx context.Context, parent VFS, path string) (VFS, error)
 }
 
+func (p *fakeVFSProvider) Name() string { return "fake" }
+
+func (p *fakeVFSProvider) Priority() int { return 0 }
+
 func (p *fakeVFSProvider) CanOpen(ctx context.Context, parent VFS, path string) bool {
 	if p.canOpen == nil {
 		return false
@@ -265,6 +269,10 @@ func TestUnregisterProviderNil(t *testing.T) {
 type nonComparableProvider struct {
 	values []int
 }
+
+func (nonComparableProvider) Name() string { return "fake-non-comparable" }
+
+func (nonComparableProvider) Priority() int { return 0 }
 
 func (nonComparableProvider) CanOpen(ctx context.Context, parent VFS, path string) bool {
 	return false
