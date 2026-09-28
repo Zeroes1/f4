@@ -5,17 +5,21 @@
 // f4#1623.
 //
 // The feature is built in atomic steps. Done: "Generate hashes" with an
-// algorithm choice and the "Single file" output for the marked files (or the
-// file under the cursor) of the current directory, and "Validate files" for
-// the checksum file under the cursor or one the user names, asking for the
-// directory when the listed files are not found. Still to come: the other
-// output modes (separate hash files, per directory, display), recursion into
-// directories, absolute paths, the file mask filter and the output encoding.
+// algorithm choice for the marked files (or the file under the cursor) of the
+// current directory and all four outputs -- a single file, a separate
+// "<file><ext>" per file, one "<directory name><ext>" per directory, and a
+// window with the list that copies it to the clipboard or saves it -- and
+// "Validate files" for the checksum file under the cursor or one the user
+// names, asking for the directory when the listed files are not found. Still
+// to come: recursion into directories (until then the per-directory output
+// writes one file into the current directory), absolute paths, the file mask
+// filter and the output encoding.
 //
 // Invariants:
-//   - The checksum file is written only after every selected file has been
+//   - Checksum files are written only after every selected file has been
 //     read. A cancelled or failed run leaves no half-written checksum file
-//     behind, and an existing one is replaced only after the user agreed.
+//     behind, and existing ones are replaced only after the user agreed (or
+//     kept, when the user chose to skip them).
 //   - Files that could not be read are left out of the checksum file and
 //     reported to the user; one unreadable file does not throw away the
 //     hashes of the others.

@@ -93,6 +93,83 @@ func selectedFileNames(app vfs.App) []string {
 	return names
 }
 
+// generateDialog asks how to generate the hashes.
+type generateDialog struct {
+	win        *vtui.Window
+	algorithm  *vtui.RadioGroup
+	output     *vtui.RadioGroup
+	editOutput *vtui.Edit
+	btnOK      *vtui.Button
+}
+
+// outputModeNames lists the "Output to" choices in radio button order.
+func outputModeNames() []string {
+	return []string{
+		vtui.Msg("IntChecker.OutputSingle"),
+		vtui.Msg("IntChecker.OutputSeparate"),
+		vtui.Msg("IntChecker.OutputDirectory"),
+		vtui.Msg("IntChecker.OutputDisplay"),
+	}
+}
+
+// newGenerateDialog builds the dialog for a panel directory named dirBase.
+// The file name field belongs to the "Single file" output and is disabled
+// for the others.
+func newGenerateDialog(dirBase string) *generateDialog {
+	width, height := 60, 19
+	d := &generateDialog{win: vtui.NewCenteredDialog(width, height, vtui.Msg("IntChecker.GenerateTitle"))}
+	d.win.ShowClose = true
+
+	d.algorithm = vtui.NewRadioGroup(0, 0, 2, algorithmNames())
+	d.algorithm.Selected = int(DefaultAlgorithm)
+	lblAlgorithm := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.Algorithm"), d.algorithm)
+
+	d.output = vtui.NewRadioGroup(0, 0, 1, outputModeNames())
+	d.output.Selected = int(outputSingle)
+	lblOutput := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.OutputTo"), d.output)
+
+	d.editOutput = vtui.NewEdit(0, 0, width-6, defaultOutputName(dirBase, DefaultAlgorithm))
+	lblOutputEdit := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.OutputFileName"), d.editOutput)
+
+	current := DefaultAlgorithm
+	d.algorithm.OnChange = func(idx int) {
+		next := Algorithm(idx)
+		if !next.valid() {
+			return
+		}
+		d.editOutput.SetText(switchExtension(d.editOutput.GetText(), current, next))
+		current = next
+	}
+	d.output.OnChange = func(idx int) {
+		d.editOutput.SetDisabled(outputMode(idx) != outputSingle)
+	}
+
+	d.btnOK = vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
+	d.btnOK.IsDefault = true
+	btnCancel := vtui.NewButton(0, 0, vtui.Msg("vtui.Cancel"))
+	btnCancel.OnClick = func() { d.win.Close() }
+
+	for _, item := range []vtui.UIElement{lblAlgorithm, d.algorithm, lblOutput, d.output, lblOutputEdit, d.editOutput, d.btnOK, btnCancel} {
+		d.win.AddItem(item)
+	}
+
+	vbox := vtui.NewVBoxLayout(d.win.X1+2, d.win.Y1+2, width-4, height-4)
+	vbox.Add(lblAlgorithm, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(d.algorithm, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(lblOutput, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(d.output, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(lblOutputEdit, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(d.editOutput, vtui.Margins{}, vtui.AlignFill)
+	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	buttons.HorizontalAlign = vtui.AlignCenter
+	buttons.Spacing = 2
+	buttons.Add(d.btnOK, vtui.Margins{}, vtui.AlignTop)
+	buttons.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
+	vbox.Add(buttons, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Apply()
+	return d
+}
+
 func showGenerateDialog(app vfs.App) {
 	fs := app.GetActivePanelVFS()
 	if fs == nil {
@@ -104,70 +181,25 @@ func showGenerateDialog(app vfs.App) {
 		return
 	}
 	dir := fs.GetPath()
-
-	width, height := 60, 16
-	dlg := vtui.NewCenteredDialog(width, height, vtui.Msg("IntChecker.GenerateTitle"))
-	dlg.ShowClose = true
-
-	algorithmGroup := vtui.NewRadioGroup(0, 0, 2, algorithmNames())
-	algorithmGroup.Selected = int(DefaultAlgorithm)
-	lblAlgorithm := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.Algorithm"), algorithmGroup)
-
-	lblOutput := vtui.NewText(0, 0, vtui.Msg("IntChecker.OutputSingleFile"), vtui.Palette[vtui.ColDialogText])
-	editOutput := vtui.NewEdit(0, 0, width-6, defaultOutputName(fs.Base(dir), DefaultAlgorithm))
-	lblOutputEdit := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.OutputFileName"), editOutput)
-
-	current := DefaultAlgorithm
-	algorithmGroup.OnChange = func(idx int) {
-		next := Algorithm(idx)
-		if !next.valid() {
+	d := newGenerateDialog(fs.Base(dir))
+	d.btnOK.OnClick = func() {
+		algorithm := Algorithm(d.algorithm.Selected)
+		mode := outputMode(d.output.Selected)
+		if !algorithm.valid() || !mode.valid() {
 			return
 		}
-		editOutput.SetText(switchExtension(editOutput.GetText(), current, next))
-		current = next
-	}
-
-	btnOK := vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
-	btnOK.IsDefault = true
-	btnCancel := vtui.NewButton(0, 0, vtui.Msg("vtui.Cancel"))
-
-	for _, item := range []vtui.UIElement{lblAlgorithm, algorithmGroup, lblOutput, lblOutputEdit, editOutput, btnOK, btnCancel} {
-		dlg.AddItem(item)
-	}
-
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-4, height-4)
-	vbox.Add(lblAlgorithm, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(algorithmGroup, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(lblOutput, vtui.Margins{Top: 1}, vtui.AlignLeft)
-	vbox.Add(lblOutputEdit, vtui.Margins{Top: 1}, vtui.AlignLeft)
-	vbox.Add(editOutput, vtui.Margins{}, vtui.AlignFill)
-	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
-	buttons.HorizontalAlign = vtui.AlignCenter
-	buttons.Spacing = 2
-	buttons.Add(btnOK, vtui.Margins{}, vtui.AlignTop)
-	buttons.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
-	vbox.Add(buttons, vtui.Margins{Top: 1}, vtui.AlignFill)
-	vbox.Apply()
-
-	btnOK.OnClick = func() {
-		output := strings.TrimSpace(editOutput.GetText())
-		if !validOutputName(output) {
+		output := strings.TrimSpace(d.editOutput.GetText())
+		if mode == outputSingle && !validOutputName(output) {
 			vtui.ShowMessage(vtui.Msg("IntChecker.Title"), vtui.Msg("IntChecker.BadOutputName"), []string{vtui.Msg("vtui.Ok")})
 			return
 		}
-		algorithm := Algorithm(algorithmGroup.Selected)
-		if !algorithm.valid() {
-			return
-		}
-		dlg.Close()
-		job := generateJob{fs: fs, dir: dir, names: names, algorithm: algorithm, output: output}
+		d.win.Close()
+		job := generateJob{fs: fs, dir: dir, names: names, algorithm: algorithm, mode: mode, output: output}
 		// app.Message waits for the answer, so everything from the
 		// overwrite question on runs off the UI goroutine.
 		go startGenerate(app, job)
 	}
-	btnCancel.OnClick = func() { dlg.Close() }
-
-	vtui.FrameManager.Push(dlg)
+	vtui.FrameManager.Push(d.win)
 }
 
 // validOutputName accepts a plain file name in the current directory. Other
@@ -176,16 +208,46 @@ func validOutputName(name string) bool {
 	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`+"\x00")
 }
 
-func startGenerate(app vfs.App, job generateJob) {
-	target := job.fs.Join(job.dir, job.output)
-	if _, err := job.fs.Stat(context.Background(), target); err == nil {
-		answer := app.Message(vtui.Msg("IntChecker.Title"),
-			fmt.Sprintf(vtui.Msg("IntChecker.OverwriteQuestion"), job.output),
+// confirmOverwrite asks what to do with checksum files that already exist and
+// updates the job. It returns false when the user cancelled. It waits for the
+// answer, so it must not run on the UI goroutine.
+func confirmOverwrite(app vfs.App, job *generateJob, existing []string) bool {
+	if len(existing) == 0 {
+		return true
+	}
+	title := vtui.Msg("IntChecker.Title")
+	if !job.mode.writesManyFiles() {
+		answer := app.Message(title,
+			fmt.Sprintf(vtui.Msg("IntChecker.OverwriteQuestion"), existing[0]),
 			[]string{vtui.Msg("IntChecker.Overwrite"), vtui.Msg("vtui.Cancel")})
 		if answer != 0 {
-			return
+			return false
 		}
 		job.overwrite = true
+		return true
+	}
+	text := fmt.Sprintf(vtui.Msg("IntChecker.OverwriteQuestion"), existing[0])
+	if len(existing) > 1 {
+		text = fmt.Sprintf(vtui.Msg("IntChecker.OverwriteManyQuestion"), len(existing), existing[0])
+	}
+	switch app.Message(title, text, []string{vtui.Msg("IntChecker.Overwrite"), vtui.Msg("IntChecker.Skip"), vtui.Msg("vtui.Cancel")}) {
+	case 0:
+		job.overwrite = true
+	case 1:
+		job.skipExisting = true
+	default:
+		return false
+	}
+	return true
+}
+
+func startGenerate(app vfs.App, job generateJob) {
+	existing, err := existingOutputs(context.Background(), job)
+	if err != nil {
+		return
+	}
+	if !confirmOverwrite(app, &job, existing) {
+		return
 	}
 	var res generateResult
 	app.RunAdvancedProgressTask(vtui.Msg("IntChecker.GenerateTitle"), false, func(ctx context.Context, reporter vfs.TaskReporter) error {
@@ -197,11 +259,18 @@ func startGenerate(app vfs.App, job generateJob) {
 	})
 }
 
-// finishGenerate tells the user how the run ended and puts the panel cursor
-// on the new checksum file.
+// finishGenerate tells the user how the run ended, puts the panel cursor on
+// the new checksum file and, for the display mode, opens the list window. It
+// runs on the UI goroutine.
 func finishGenerate(app vfs.App, job generateJob, res generateResult, err error) {
 	title := vtui.Msg("IntChecker.Title")
 	ok := []string{vtui.Msg("vtui.Ok")}
+	if len(res.Outputs) > 0 {
+		if !strings.Contains(res.Outputs[0], "/") {
+			app.SetPendingSelection(res.Outputs[0])
+		}
+		app.RefreshAll()
+	}
 	switch {
 	case errors.Is(err, context.Canceled):
 		go app.Message(title, vtui.Msg("IntChecker.Cancelled"), ok)
@@ -209,26 +278,52 @@ func finishGenerate(app vfs.App, job generateJob, res generateResult, err error)
 	case errors.Is(err, errNothingToHash):
 		go app.Message(title, vtui.Msg("IntChecker.NoFiles"), ok)
 		return
-	case err != nil:
+	case err != nil && job.mode == outputSingle:
 		go app.Message(title, fmt.Sprintf(vtui.Msg("IntChecker.WriteError"), job.output, err), ok)
 		return
-	}
-	if res.Written > 0 {
-		app.SetPendingSelection(job.output)
-		app.RefreshAll()
-	}
-	if len(res.Failures) == 0 {
+	case err != nil:
+		go app.Message(title, err.Error(), ok)
 		return
 	}
-	lines := make([]string, 0, len(res.Failures)+1)
-	lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.ReadErrors"), len(res.Failures)))
-	const shown = 10
-	for i, failure := range res.Failures {
-		if i == shown {
-			lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.MoreErrors"), len(res.Failures)-shown))
-			break
-		}
-		lines = append(lines, fmt.Sprintf("%s: %v", failure.Name, failure.Err))
+	report := generateReport(job, res)
+	if job.mode == outputDisplay && res.Text != "" {
+		showHashList(app, job, res.Text, report)
+		return
 	}
-	go app.Message(title, strings.Join(lines, "\n"), ok)
+	if report != "" {
+		go app.Message(title, report, ok)
+	}
+}
+
+// generateReport describes what went wrong in a finished run: checksum files
+// kept or not written and files that could not be read. It is empty when
+// everything went fine.
+func generateReport(job generateJob, res generateResult) string {
+	var lines []string
+	const shown = 10
+	appendFailures := func(header string, failures []fileFailure) {
+		if len(failures) == 0 {
+			return
+		}
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, fmt.Sprintf(header, len(failures)))
+		for i, failure := range failures {
+			if i == shown {
+				lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.MoreErrors"), len(failures)-shown))
+				break
+			}
+			lines = append(lines, fmt.Sprintf("%s: %v", failure.Name, failure.Err))
+		}
+	}
+	if job.mode.writesManyFiles() && (len(res.SkippedExisting) > 0 || len(res.WriteFailures) > 0) {
+		lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.FilesWritten"), len(res.Outputs)))
+		if len(res.SkippedExisting) > 0 {
+			lines = append(lines, fmt.Sprintf(vtui.Msg("IntChecker.SkippedExisting"), len(res.SkippedExisting)))
+		}
+	}
+	appendFailures(vtui.Msg("IntChecker.WriteErrors"), res.WriteFailures)
+	appendFailures(vtui.Msg("IntChecker.ReadErrors"), res.Failures)
+	return strings.Join(lines, "\n")
 }
