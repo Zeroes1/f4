@@ -681,7 +681,8 @@ GitLog.RefreshFailed=Git log refresh failed: %s
 GitLog.Refresh=Refresh
 GitLog.Close=Close
 GitLog.DiffFailed=Failed to inspect the commit's changes: %s
-GitLog.DiffUnsupported=Diff view supports commits that change exactly one file (this one changes %d)
+GitLog.DiffNoChanges=This commit has no changes to show (a merge commit, or one with no net changes)
+GitLog.FilesPanelTitle=Changed files in %s (%d)
 
 GitBranch.ColumnCurrent=Current
 GitBranch.ColumnName=Branch

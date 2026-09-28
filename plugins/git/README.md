@@ -235,12 +235,31 @@ archive tools (f4#609) rather than linking a Go git implementation.
   branch shows up or disappears immediately), the same point-in-time
   refresh F5 already gives this list.
 
+## Part 11: picking one file out of a multi-file commit's diff (`logdifffiles.go`)
+
+- **Enter** on a log-view commit that touches more than one path (part 5's
+  own `showDiff`, `logdiff.go`) no longer shows a toast: it opens
+  `LogDiffFilesView`, a small read-only list of just that commit's changed
+  paths (status letter + path, the same two columns and "old -> new" rename
+  rendering the status panel's own table already has). **Enter** on an
+  entry there opens the same side-by-side `internal/diffview` diff a
+  single-file commit's own Enter already gave, against that one path's
+  parent and commit revisions.
+- This did not need f4#613 itself for anything new -- `diffview.DiffView`
+  already compares exactly two whole files, which is exactly what one path
+  out of a multi-file commit still is. The only missing piece was *which*
+  path to hand it, not a different or heavier widget.
+- A merge commit (or any other commit `git show` reports zero changed paths
+  for -- `commitChangedFiles`'s own doc comment) still shows a toast instead
+  of an empty list: there is nothing to pick from either way.
+
 ## What is deliberately not here yet
 
-Everything else the ticket asks for: staging/unstaging a single hunk within
-a file (needs f4#613's diff widget to pick the hunk, and f4#613 is itself
-still open), and a per-file diff for a multi-file commit in the log view.
-Each is its own atomic follow-up part of f4#659, not this one.
+Staging/unstaging a single hunk within a file: it needs f4#613's diff
+widget to pick the hunk, not just show a whole file's diff, and f4#613 is
+itself still open (the "Compare files by content" side-by-side view it
+introduced, f4#1605, is not the hunk-picking part that gesture would need).
+This is its own atomic follow-up part of f4#659, blocked on that ticket.
 
 ## Design notes
 

@@ -52,19 +52,20 @@ func revisionFileContent(ctx context.Context, dir, rev, path string) ([]string, 
 // does for a working-tree change -- just against the commit's parent and
 // the commit itself (<hash>^ and <hash>) instead of HEAD and the worktree.
 //
-// This first version only handles a commit that changes exactly one path:
-// diffview.DiffView takes two whole files, not a multi-file patch, and a
-// commit touching several files would need either picking one of them (a
-// changed-files sub-list, its own atomic follow-up of f4#659) or a
-// different, patch-shaped widget entirely -- both out of scope for this
-// part. Zero changed files (a merge commit, or a no-op one --
-// commitChangedFiles's own doc comment) and more than one both show a toast
-// instead of guessing which file the user meant.
+// diffview.DiffView takes two whole files, not a multi-file patch, so a
+// commit touching more than one path cannot go straight to a diff the way a
+// single-file commit does: showFileDiff below needs telling *which* one.
+// Part 11 (f4#659) added exactly that missing step -- a changed-files
+// sub-list (logdifffiles.go) the user picks one path from -- rather than a
+// different, patch-shaped widget entirely, the same "reuse the two-file
+// DiffView, just tell it which two files" shape f4#613 already settled for
+// every other diff this plugin shows. Zero changed files (a merge commit,
+// or a no-op one -- commitChangedFiles's own doc comment) still has no path
+// to offer a choice between, so that case alone keeps the toast.
 //
-// Loading the changed-file list and both revisions' content can mean three
-// subprocesses, so this runs off the UI goroutine the same way the status
-// panel's own showDiff (diff.go) does, posting the result back with
-// vtui.TaskContext.RunOnUI.
+// Loading the changed-file list can mean a subprocess of its own, so this
+// runs off the UI goroutine the same way the status panel's own showDiff
+// (diff.go) does, posting the result back with vtui.TaskContext.RunOnUI.
 func (lv *LogView) showDiff() {
 	entry, ok := lv.selectedEntry()
 	if !ok {
@@ -79,24 +80,39 @@ func (lv *LogView) showDiff() {
 			})
 			return
 		}
-		if len(files) != 1 {
+		switch len(files) {
+		case 0:
 			ctx.RunOnUI(func() {
-				toast.Show(fmt.Sprintf(i18n.Msg("GitLog.DiffUnsupported"), len(files)), 3e9)
+				toast.Show(i18n.Msg("GitLog.DiffNoChanges"), 3e9)
 			})
-			return
+		case 1:
+			showFileDiff(ctx, dir, hash, shortHash, files[0])
+		default:
+			ctx.RunOnUI(func() {
+				presentLogDiffFiles(dir, hash, shortHash, files)
+			})
 		}
-		f := files[0]
-		left, leftErr := revisionFileContent(ctx, dir, hash+"^", f.oldPath())
-		right, rightErr := revisionFileContent(ctx, dir, hash, f.Path)
-		ctx.RunOnUI(func() {
-			presentLogDiff(shortHash, f, left, right, leftErr, rightErr)
-		})
 	})
 }
 
-// presentLogDiff runs on the UI goroutine only: it turns showDiff's loaded
-// content into either an error dialog, a toast, or an open DiffView, the
-// same background/UI split presentDiff (diff.go) keeps for the status
+// showFileDiff loads one changed path's before/after content and presents
+// it -- the shared tail end of both showDiff's own single-file case above
+// and LogDiffFilesView's own Enter (logdifffiles.go) once the user has
+// picked a path out of a multi-file commit. Always called already off the
+// UI goroutine, inside a vtui.RunAsync callback, the same contract
+// showDiff's own inline version of this code had before part 11 split it
+// out to be shared.
+func showFileDiff(ctx *vtui.TaskContext, dir, hash, shortHash string, f logDiffEntry) {
+	left, leftErr := revisionFileContent(ctx, dir, hash+"^", f.oldPath())
+	right, rightErr := revisionFileContent(ctx, dir, hash, f.Path)
+	ctx.RunOnUI(func() {
+		presentLogDiff(shortHash, f, left, right, leftErr, rightErr)
+	})
+}
+
+// presentLogDiff runs on the UI goroutine only: it turns showFileDiff's
+// loaded content into either an error dialog, a toast, or an open DiffView,
+// the same background/UI split presentDiff (diff.go) keeps for the status
 // panel's own Enter.
 func presentLogDiff(shortHash string, f logDiffEntry, left, right []string, leftErr, rightErr error) {
 	if leftErr != nil {

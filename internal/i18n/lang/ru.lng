@@ -681,7 +681,8 @@ GitLog.RefreshFailed=Не удалось обновить лог git: %s
 GitLog.Refresh=Обновить
 GitLog.Close=Закрыть
 GitLog.DiffFailed=Не удалось определить изменения коммита: %s
-GitLog.DiffUnsupported=Просмотр diff поддерживает только коммиты с одним изменённым файлом (в этом изменено %d)
+GitLog.DiffNoChanges=В этом коммите нет изменений для показа (слитый коммит либо коммит без итоговых изменений)
+GitLog.FilesPanelTitle=Изменённые файлы коммита %s (%d)
 
 GitBranch.ColumnCurrent=Текущая
 GitBranch.ColumnName=Ветка
