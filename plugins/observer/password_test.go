@@ -216,7 +216,7 @@ func TestNewObserverVFS_PasswordPrompt(t *testing.T) {
 		return p, nil
 	})
 
-	v, err := newObserverVFS(context.Background(), parent, path, wasmBytes, "")
+	v, err := newObserverVFS(context.Background(), parent, path, wasmBytes, "", "")
 	if err != nil {
 		t.Fatalf("newObserverVFS: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestNewObserverVFS_PasswordCancelled(t *testing.T) {
 		return "", context.Canceled
 	})
 
-	_, err := newObserverVFS(context.Background(), parent, path, wasmBytes, "")
+	_, err := newObserverVFS(context.Background(), parent, path, wasmBytes, "", "")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("newObserverVFS error = %v, want context.Canceled", err)
 	}

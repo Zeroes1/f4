@@ -22,6 +22,16 @@
 // closed one item off that list: OpenStorage returning
 // SOR_PASSWORD_REQUIRED now drives the same interactive password retry loop
 // plugins/archive/password.go gives ArchiveVFS, instead of a bare error.
+// Part 8 added PanelEnterAllowed (provider.go), ObserverEnterExcludeMask's
+// own escape hatch. Part 9 (config.go) closed the remaining "no
+// observer.ini, no module selection" gap named two paragraphs up: Provider
+// now tries an ordered []moduleEntry read from
+// observer.ini/observer_user.ini (falling back to the same single
+// isoimg/"*.iso" row when neither file exists), which answers both
+// "configure Observer the way Far does" and "pick between several modules
+// for one format" with the same mechanism -- file order in [Modules]
+// already is the priority, upstream's own host never needed a second one.
+// PlugRing distribution and real modules beyond isoimg remain unstarted.
 //
 // What parts 1-4 already provide, and part 5 builds on unchanged, is:
 //

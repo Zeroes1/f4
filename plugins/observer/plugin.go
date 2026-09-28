@@ -8,11 +8,12 @@ import (
 
 // Plugin registers this package's Provider (provider.go) with the host. It
 // needs no panel commands or hotkeys yet -- browsing and reading an
-// Observer-backed container through the VFS it registers is all this first
-// vfs.VFSProvider slice of f4#1563 does; an explicit "Open with Observer
-// module..." command (for modules with an empty filter, mirroring
-// Observer's own F11 behavior) and observer.ini-driven configuration are
-// later, separate parts (see status/1563.md in the accounting repository).
+// Observer-backed container through the VFS it registers, now driven by
+// observer.ini/observer_user.ini when either exists (config.go), is all
+// this does so far. An explicit "Open with Observer module..." command (for
+// modules with an empty filter, mirroring Observer's own F11 behavior)
+// remains a later, separate part (see status/1563.md in the accounting
+// repository).
 //
 // Unlike plugins/archive.ArchivePlugin and plugins/multiarc.Plugin, this one
 // is registered from both build tags (internal/plughost/manager.go), not

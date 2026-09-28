@@ -95,6 +95,7 @@ type ObserverVFS struct {
 	format    string
 
 	wasmBytes []byte // kept only so Clone can re-run newObserverVFS without going back to Provider
+	settings  string // this container's module's own Settings string (config.go), kept for Clone the same way wasmBytes is
 	mod       *Module
 	storage   uint32
 	ra        ReaderAt
@@ -110,7 +111,12 @@ type ObserverVFS struct {
 // the tree, returning a ready-to-browse ObserverVFS rooted at innerPath (""
 // for the container's own root -- Provider.Open always passes that; Clone
 // passes whatever inner path the original instance had navigated to).
-func newObserverVFS(ctx context.Context, parent vfs.VFS, arcPath string, wasmBytes []byte, innerPath string) (*ObserverVFS, error) {
+// settings is passed straight through to LoadSubModule -- Provider builds it
+// per module from observer.ini/observer_user.ini (config.go); every caller
+// that has no config-driven module settings of its own (password_test.go's
+// direct calls) passes "", exactly what every part before this one already
+// hardcoded here.
+func newObserverVFS(ctx context.Context, parent vfs.VFS, arcPath string, wasmBytes []byte, settings string, innerPath string) (*ObserverVFS, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -161,7 +167,7 @@ func newObserverVFS(ctx context.Context, parent vfs.VFS, arcPath string, wasmByt
 		return nil, err
 	}
 
-	if _, err := mod.LoadSubModule(""); err != nil {
+	if _, err := mod.LoadSubModule(settings); err != nil {
 		return fail(err)
 	}
 	// openStorageWithPasswordPrompt (password.go) retries OpenStorage with a
@@ -182,6 +188,7 @@ func newObserverVFS(ctx context.Context, parent vfs.VFS, arcPath string, wasmByt
 		arcPath:   canonical,
 		format:    res.Info.Format,
 		wasmBytes: wasmBytes,
+		settings:  settings,
 		mod:       mod,
 		storage:   res.Storage,
 		ra:        ra,
@@ -544,12 +551,12 @@ func (v *ObserverVFS) ParentVFS() vfs.VFS { return v.parent }
 func (v *ObserverVFS) Clone() vfs.VFS {
 	v.mu.Lock()
 	closed := v.closed
-	parent, arcPath, wasmBytes, innerPath := v.parent, v.arcPath, v.wasmBytes, v.innerPath
+	parent, arcPath, wasmBytes, settings, innerPath := v.parent, v.arcPath, v.wasmBytes, v.settings, v.innerPath
 	v.mu.Unlock()
 	if closed {
 		return vfs.NewNullVFS(0)
 	}
-	clone, err := newObserverVFS(context.Background(), parent, arcPath, wasmBytes, innerPath)
+	clone, err := newObserverVFS(context.Background(), parent, arcPath, wasmBytes, settings, innerPath)
 	if err != nil {
 		return vfs.NewNullVFS(0)
 	}
