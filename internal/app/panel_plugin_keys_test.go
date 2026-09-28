@@ -3,10 +3,12 @@ package app
 import (
 	"testing"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -108,6 +110,101 @@ func TestPanelPluginOwnsItsKeysAndKeyBar(t *testing.T) {
 	instance.Close()
 	if pf.PluginPanelFocused() || pf.PluginPanelStandsDown("File.Delete") {
 		t.Fatal("the stand-down outlived the plugin panel")
+	}
+}
+
+// TestPanelPluginEscReturnsToFilePanel is Zeroes1's item 3 on f4#312: with
+// Esc bound to Panel.Toggle (Esc:EscToggle, the shipped default), Esc on a
+// panel plugin used to hide every panel instead of reaching the plugin, so
+// there was no way back to the file panel. Esc now closes the plugin panel;
+// a non-empty command line still takes it for clearing, and without a
+// plugin panel Esc toggles the panels as before. Item 1 rides along: the
+// plugin menu row is the provider's bare title, not "Open <title>".
+func TestPanelPluginEscReturnsToFilePanel(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(80, 25)
+	vtui.FrameManager.Init(screen)
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ResizeConsole(80, 25)
+	defer pf.Close()
+	vtui.FrameManager.Push(pf)
+
+	previousEscToggle := config.App.EscTogglePanels
+	config.App.EscTogglePanels = true
+	shell := map[string]string{"Esc": "Panel.Toggle:EscToggle"}
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = &keymap.HotkeyManager{
+		Defaults: map[string]map[string]string{"Shell": shell},
+		Bindings: map[string]map[string]string{"Shell": shell},
+	}
+	macro.MacroMgr = &macro.MacroManager{}
+	t.Cleanup(func() {
+		config.App.EscTogglePanels = previousEscToggle
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
+	controller := &panelKeysTestController{}
+	registration, err := (&coreAPI{}).RegisterPanelProvider(vfs.PanelProvider{
+		ID:    "test.panel.esc",
+		Title: "Esc panel",
+		Open:  func(vfs.PanelContext) (vfs.PanelController, error) { return controller, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer registration.Unregister()
+
+	var label string
+	for _, command := range plughost.PluginCommandsSnapshot(vfs.PluginCommandPanel, nil) {
+		if command.ID == "panel.test.panel.esc" {
+			label = command.Label
+		}
+	}
+	if label != "Esc panel" {
+		t.Fatalf("plugin menu row = %q, want the bare title \"Esc panel\"", label)
+	}
+
+	open := func() *panel.PluginPanelInstance {
+		t.Helper()
+		panel.OpenRegisteredPanelProvider(pf, "test.panel.esc")
+		instance, ok := pf.AltPanels[pf.ActiveIdx].(*panel.PluginPanelInstance)
+		if !ok {
+			t.Fatalf("active slot contains %T, want *panel.PluginPanelInstance", pf.AltPanels[pf.ActiveIdx])
+		}
+		instance.SetFocus(true)
+		return instance
+	}
+	esc := func() bool {
+		return pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE})
+	}
+
+	open()
+	pf.CmdLine.InsertString("typed")
+	esc()
+	if !pf.CmdLine.IsEmpty() || !pf.PluginPanelFocused() || !pf.ShowPanels {
+		t.Fatalf("Esc over a non-empty command line: cmdline empty=%v, plugin open=%v, panels=%v; want the line cleared and the plugin kept",
+			pf.CmdLine.IsEmpty(), pf.PluginPanelFocused(), pf.ShowPanels)
+	}
+
+	keysBefore := controller.keys
+	if !esc() {
+		t.Fatal("Esc on a panel plugin was not handled")
+	}
+	if !pf.ShowPanels {
+		t.Fatal("Esc on a panel plugin hid the panels (Panel.Toggle) instead of closing the plugin")
+	}
+	if _, still := pf.AltPanels[pf.ActiveIdx].(*panel.PluginPanelInstance); still || !controller.closed {
+		t.Fatal("Esc did not close the panel plugin")
+	}
+	if controller.keys <= keysBefore {
+		t.Fatal("the plugin controller never saw Esc before the host closed it")
+	}
+
+	esc()
+	if pf.ShowPanels {
+		t.Fatal("with the plugin closed, Esc must toggle the panels again (Esc:EscToggle)")
 	}
 }
 

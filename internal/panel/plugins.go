@@ -125,7 +125,12 @@ func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	// Escape is the common close gesture for a panel plugin that does not
 	// claim it. A plugin that wants to own Escape simply returns true.
+	// While the command line holds text, Esc clears it instead, as it does
+	// over a file panel.
 	if e != nil && e.KeyDown && e.VirtualKeyCode == vtinput.VK_ESCAPE {
+		if p.host != nil && p.host.escClearsCommandLine() {
+			return false
+		}
 		p.Close()
 		return true
 	}

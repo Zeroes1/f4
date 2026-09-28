@@ -2357,6 +2357,15 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 	if pluginPanel != nil && vfs.DispatchPanelKey(pluginPanel.PanelKeys(), e) {
 		return true
 	}
+	// Plain Esc leaves the panel plugin (the controller sees it first, then
+	// PluginPanelInstance closes the panel). Without this the Shell binding
+	// Esc:EscToggle (Panel.Toggle) won the key and hid every panel instead,
+	// so there was no way back to the file panel (f4#312). A non-empty
+	// command line keeps Esc for clearing itself, as on a file panel.
+	if pluginPanel != nil && e.VirtualKeyCode == vtinput.VK_ESCAPE && !ctrl && !alt && !shift &&
+		!pf.escClearsCommandLine() {
+		return pluginPanel.ProcessKey(e)
+	}
 
 	// Check global hotkeys (ignoring Lock and Enhanced keys)
 	if pluginPanel == nil {
@@ -2392,6 +2401,12 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	return false
+}
+
+// escClearsCommandLine reports whether Esc belongs to the command line,
+// which clears its text, rather than to the panel under it.
+func (pf *PanelsFrame) escClearsCommandLine() bool {
+	return pf.CmdLine != nil && !pf.CmdLine.IsEmpty() && (!pf.SearchFirstMode() || pf.CommandLineFocused)
 }
 
 // VetoActionKey reports modal input states in which the panels must see
@@ -2887,7 +2902,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		pf.MenuBar.SelectPos = pos
 		return true
 	}
-	if e.VirtualKeyCode == vtinput.VK_ESCAPE && !pf.CmdLine.IsEmpty() && (!pf.SearchFirstMode() || pf.CommandLineFocused) {
+	if e.VirtualKeyCode == vtinput.VK_ESCAPE && pf.escClearsCommandLine() {
 		pf.CmdLine.Clear()
 		pf.CmdLine.Edit.HistoryPos = -1
 		return true

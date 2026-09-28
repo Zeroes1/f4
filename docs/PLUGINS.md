@@ -64,8 +64,8 @@ Because F4-RPC is a full-duplex protocol, plugins can call back into `f4` at any
 
 A plugin does not have to mount a VFS to provide a full-screen panel surface.
 Native Go plugins can opt into the optional `vfs.PanelContributionHost` and
-register a `vfs.PanelProvider`. f4 publishes one searchable `Open <title>`
-command for each provider. Opening it replaces the active file-panel surface
+register a `vfs.PanelProvider`. f4 publishes one searchable command for each
+provider, labelled with its title. Opening it replaces the active file-panel surface
 for that slot; the underlying `FileSystemPanel` remains alive as the logical
 source for normal file actions.
 

@@ -53,7 +53,7 @@ import (
 )
 
 // panelProviderID is also the ID plughost.RegisterPanelProvider derives its
-// auto-generated "Open Git status" command ID from: "panel." + this ID,
+// auto-generated "Git status" command ID from: "panel." + this ID,
 // lowercased (internal/plughost/panel_providers.go). internal/app's own
 // menu row and hotkey (git_actions.go) call that derived command by ID,
 // duplicated there as a constant for the same reason

@@ -242,7 +242,7 @@ func DispatchPanelKey(keys []PanelKey, e *vtinput.InputEvent) bool {
 }
 
 // PanelProvider describes a panel-only plugin contribution. The host exposes
-// an automatically searchable "Open <Title>" command for every provider.
+// an automatically searchable command for every provider, labelled with Title.
 // Open is called on the UI goroutine and should construct controls quickly;
 // long-running work belongs in the existing task APIs.
 type PanelProvider struct {

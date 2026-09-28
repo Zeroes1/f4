@@ -30,10 +30,12 @@ an F9 "Plugin configuration" entry for visible columns and refresh interval.
 - Sortable by any column (click a header; default sort is CPU%
   descending) and has type-to-filter (`Table.QuickSearch`) across all
   columns.
-- Reachable from the plugin menu/command palette ("Open ProcList", added
+- Reachable from the plugin menu/command palette ("ProcList", added
   automatically by `RegisterPanelProvider`) and from **Commands -> Process
   list** / **Ctrl+Alt+R**, on every platform `Supported()` reports `true`
   for.
+- **Esc** closes the panel and returns to the file panel (it clears an
+  active quick-search filter first, and a non-empty command line first).
 
 ## Process management (f4#312 part 3 of 4)
 
