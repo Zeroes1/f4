@@ -365,9 +365,22 @@ func materializeArchiveSource(ctx context.Context, parent vfs.VFS, archivePath, 
 	}
 	update, reporter := archiveProgressTargets(ctx)
 	pulseDone := make(chan struct{})
-	if update != nil || reporter != nil {
+	// pulseExited is closed when the pulse goroutine returns. stopPulse waits
+	// for it so no late "Opening" pulse can land after this function moved on
+	// (or returned), and the interval is read here, not in the goroutine, so
+	// the goroutine never touches ProgressTickerInterval after we return.
+	pulseExited := make(chan struct{})
+	stopPulse := func() {
+		close(pulseDone)
+		<-pulseExited
+	}
+	if update == nil && reporter == nil {
+		close(pulseExited)
+	} else {
+		interval := ProgressTickerInterval
 		go func() {
-			ticker := time.NewTicker(ProgressTickerInterval)
+			defer close(pulseExited)
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 			for {
 				select {
@@ -387,7 +400,7 @@ func materializeArchiveSource(ctx context.Context, parent vfs.VFS, archivePath, 
 		}()
 	}
 	reader, err := parent.Open(ctx, archivePath)
-	close(pulseDone)
+	stopPulse()
 	if err != nil {
 		return "", 0, nil, err
 	}
