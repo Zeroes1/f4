@@ -35,6 +35,38 @@ type Options struct {
 	// Out gets one line per planned change instead of the write actually
 	// happening.
 	DryRun bool
+	// Only, when non-nil, restricts the run to the modifications it maps
+	// to true - the engine side of the patch review screen's "apply the
+	// checked edits" (docs/VTVIBE.md §7.3). Keys are ModificationResult.Key()
+	// values from an earlier run of the same patch on the same tree
+	// (normally the dry run the review screen was built from), so FilePath
+	// is the already-resolved path and a whole-file RENAME is ModIdx -1.
+	// nil applies everything, as before; a non-nil empty map applies
+	// nothing. A key that matches no modification is ignored - it cannot
+	// widen the selection, so a stale or mistyped key fails safe.
+	//
+	// Every modification left out is reported as ModExcluded and is
+	// otherwise invisible to the run: it is never searched for, never
+	// fails, never lands in afailed.ap/afailed.md, and a FILE block with
+	// nothing selected is not even checked for existence or path safety.
+	// Everything else (tolerant retry, strict atomicity, DryRun, the
+	// afailed.* reports) works on the selected modifications exactly as it
+	// does on a whole patch.
+	//
+	// Dependencies between modifications are deliberately not inferred.
+	// If B's snippet only appears once A (earlier in the same file) has
+	// been applied, selecting B without A makes B fail honestly with
+	// SNIPPET_NOT_FOUND - PARTIAL plus B in afailed.ap in tolerant mode, a
+	// fatal error in strict mode - rather than being dropped silently or
+	// pulling A in behind the user's back: the engine cannot tell "B needs
+	// A" from "B is simply wrong", and a dry run with the same Only shows
+	// the failure before anything is written. Selecting both keeps the
+	// usual multi-pass retry, so their order in the patch still does not
+	// matter. Likewise, a locator repeated within a FILE block keeps
+	// meaning "successive occurrences" whatever is selected: the selected
+	// ones take the next occurrences after the sequential cursor, which a
+	// deselected one does not advance.
+	Only map[ModKey]bool
 	// Out receives progress/warning text when !Silent. Defaults to
 	// io.Discard.
 	Out io.Writer
@@ -91,6 +123,11 @@ const (
 	// ModFailed means the modification could not be applied; Err explains
 	// why.
 	ModFailed
+	// ModExcluded means the caller left the modification out of
+	// Options.Only (the user unchecked it on the review screen), so it was
+	// not even attempted - distinct from ModSkipped, which says the file
+	// already reads as requested.
+	ModExcluded
 )
 
 func (s ModStatus) String() string {
@@ -101,6 +138,8 @@ func (s ModStatus) String() string {
 		return "SKIPPED"
 	case ModFailed:
 		return "FAILED"
+	case ModExcluded:
+		return "EXCLUDED"
 	default:
 		return "UNKNOWN"
 	}
@@ -130,6 +169,18 @@ type ModificationResult struct {
 	Err *AppError
 }
 
+// ModKey identifies one modification of a patch stably across Apply calls
+// on the same patch and tree: the FILE block's resolved path plus the
+// modification's index in it (-1 for RENAME), as ModificationResult reports
+// them. It is what Options.Only is keyed by.
+type ModKey struct {
+	FilePath string
+	ModIdx   int
+}
+
+// Key is r's ModKey, for building Options.Only from a dry run's results.
+func (r ModificationResult) Key() ModKey { return ModKey{FilePath: r.FilePath, ModIdx: r.ModIdx} }
+
 // Apply applies the ap-format patch at patchFile to the tree rooted at
 // projectDir, per §3 of the specification.
 func Apply(patchFile, projectDir string, opts Options) *Result {
@@ -137,7 +188,7 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 	if out == nil {
 		out = io.Discard
 	}
-	e := &engine{strict: opts.Strict, silent: opts.Silent, dryRun: opts.DryRun, out: out, projectDir: projectDir}
+	e := &engine{strict: opts.Strict, silent: opts.Silent, dryRun: opts.DryRun, only: opts.Only, out: out, projectDir: projectDir}
 	e.afailedMDPath = filepath.Join(projectDir, "afailed.md")
 
 	patchBytes, _ := os.ReadFile(patchFile)
@@ -206,6 +257,7 @@ type engine struct {
 	strict     bool
 	silent     bool
 	dryRun     bool
+	only       map[ModKey]bool
 	out        io.Writer
 	projectDir string
 
@@ -242,6 +294,74 @@ func (e *engine) fatal(status Status, filePath string, hasFilePath bool, modIdx 
 		Status: status, Error: aerr, FilePath: filePath, HasFilePath: hasFilePath, ModIdx: modIdx, HasModIdx: hasModIdx,
 		ModificationResults: e.modResults,
 	}
+}
+
+// included reports whether Options.Only selects the modification modIdx
+// (-1: RENAME) of the FILE block at the resolved path relativePath.
+func (e *engine) included(relativePath string, modIdx int) bool {
+	return e.only == nil || e.only[ModKey{FilePath: relativePath, ModIdx: modIdx}]
+}
+
+// selectedMods is mods restricted to the ones Options.Only selects, in
+// patch order - what afailed.ap gets when a whole FILE block fails, so a
+// retry never brings back an edit the user turned down.
+func (e *engine) selectedMods(relativePath string, mods []*Modification) []*Modification {
+	if e.only == nil {
+		return mods
+	}
+	var sel []*Modification
+	for i, m := range mods {
+		if e.included(relativePath, i) {
+			sel = append(sel, m)
+		}
+	}
+	return sel
+}
+
+// blockModIdxs lists the ModIdx values a FILE block is reported under:
+// 0 for a contextual whole-file DELETE, -1 for RENAME, otherwise one per
+// modification - the same keys processChange's branches record.
+func blockModIdxs(change *FileChange) []int {
+	mods := change.Modifications
+	switch {
+	case len(mods) == 1 && mods[0].Action == "DELETE" && isBareDelete(mods[0]):
+		return []int{0}
+	case change.RenameTo != nil:
+		return []int{-1}
+	}
+	idxs := make([]int, len(mods))
+	for i := range idxs {
+		idxs[i] = i
+	}
+	return idxs
+}
+
+// skipExcludedBlock handles a FILE block none of whose modifications
+// Options.Only selects: each is reported ModExcluded and nothing else
+// happens (no existence or path check - the user said "not this file").
+// It returns false, doing nothing, when anything in the block is selected.
+func (e *engine) skipExcludedBlock(change *FileChange, relativePath string) bool {
+	if e.only == nil {
+		return false
+	}
+	idxs := blockModIdxs(change)
+	if len(idxs) == 0 {
+		return false
+	}
+	for _, i := range idxs {
+		if e.included(relativePath, i) {
+			return false
+		}
+	}
+	e.printf("\nFile: %s\n  = EXCLUDED: not selected.\n", relativePath)
+	for _, i := range idxs {
+		if i < 0 {
+			e.recordFileResult(relativePath, "RENAME", *change.RenameTo, ModExcluded, nil)
+		} else {
+			e.recordModResult(relativePath, i, change.Modifications[i], ModExcluded, nil)
+		}
+	}
+	return true
 }
 
 // recordModResult appends one Modification's outcome to the per-Apply-call
@@ -423,13 +543,20 @@ func (e *engine) processChange(change *FileChange) *Result {
 	}
 
 	relativePath, strippedPrefix := resolvePathPrefix(e.projectDir, relativePath)
+	if e.skipExcludedBlock(change, relativePath) {
+		return nil
+	}
 
 	filePath, secErr := securePath(e.projectDir, relativePath)
 	if secErr != nil {
 		aerr := &AppError{Code: ErrInvalidFilePath, Message: "Path traversal detected or invalid path format."}
 		if len(change.Modifications) > 0 {
 			for i, m := range change.Modifications {
-				e.recordModResult(relativePath, i, m, ModFailed, aerr)
+				if e.included(relativePath, i) {
+					e.recordModResult(relativePath, i, m, ModFailed, aerr)
+				} else {
+					e.recordModResult(relativePath, i, m, ModExcluded, nil)
+				}
 			}
 		} else if change.RenameTo != nil {
 			e.recordFileResult(relativePath, "RENAME", *change.RenameTo, ModFailed, aerr)
@@ -438,7 +565,7 @@ func (e *engine) processChange(change *FileChange) *Result {
 			return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 		}
 		e.printf("  - FAILED: Path traversal detected or invalid path format.\n")
-		e.addFailedWholeChange(relativePath, change.Newline, change.Modifications)
+		e.addFailedWholeChange(relativePath, change.Newline, e.selectedMods(relativePath, change.Modifications))
 		return nil
 	}
 
@@ -580,7 +707,7 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 		}
 	} else {
 		hasCreateOrRecreate := false
-		for _, m := range change.Modifications {
+		for _, m := range e.selectedMods(relativePath, change.Modifications) {
 			if m.Action == "CREATE" || m.Action == "RECREATE" {
 				hasCreateOrRecreate = true
 				break
@@ -589,13 +716,17 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 		if !hasCreateOrRecreate {
 			aerr := &AppError{Code: ErrFileNotFound, Message: "Target file not found."}
 			for i, m := range change.Modifications {
-				e.recordModResult(relativePath, i, m, ModFailed, aerr)
+				if e.included(relativePath, i) {
+					e.recordModResult(relativePath, i, m, ModFailed, aerr)
+				} else {
+					e.recordModResult(relativePath, i, m, ModExcluded, nil)
+				}
 			}
 			if e.strict {
 				return e.fatal(StatusFailed, relativePath, true, 0, false, aerr)
 			}
 			e.printf("  - FAILED: Target file not found.\n")
-			e.addFailedWholeChange(relativePath, change.Newline, change.Modifications)
+			e.addFailedWholeChange(relativePath, change.Newline, e.selectedMods(relativePath, change.Modifications))
 			return nil
 		}
 	}
@@ -620,9 +751,17 @@ func (e *engine) processModifications(change *FileChange, relativePath, filePath
 	var dirtyRegions []span
 	terminalOpPlanned := false
 
-	pendingIdx := make([]int, len(change.Modifications))
-	for i := range pendingIdx {
-		pendingIdx[i] = i
+	// Deselected modifications (Options.Only) never enter the retry loop.
+	// The locator-repetition map above still counts them on purpose - see
+	// the Only doc comment.
+	var pendingIdx []int
+	for i, m := range change.Modifications {
+		if e.included(relativePath, i) {
+			pendingIdx = append(pendingIdx, i)
+		} else {
+			e.printf("  = EXCLUDED: Mod #%d (%s) not selected.\n", i+1, actionOrUnknown(m.Action))
+			e.recordModResult(relativePath, i, m, ModExcluded, nil)
+		}
 	}
 	var finalFailedMods []modFailure
 	passNumber := 1
