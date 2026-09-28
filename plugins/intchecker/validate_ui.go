@@ -131,29 +131,6 @@ func resolveValidateInput(fs vfs.VFS, panelDir, hashText, dirText string) (hashP
 	return resolve(hashText), dir, true
 }
 
-// selectionTokenFor captures the panel selection of the checksum file at
-// path, when it sits directly in the panel directory fs is rooted at
-// (fs.GetPath()) -- the only case where an entry name in that panel and path
-// name the same file. It is nil when the checksum file comes from elsewhere
-// (a different directory typed into the dialog) or the host does not support
-// clearing selection (vfs.SelectionClearHost); clearing it later, once
-// validation succeeds, is what f4#1623 asked for.
-func selectionTokenFor(app vfs.App, fs vfs.VFS, path string) vfs.SelectionToken {
-	host, ok := app.(vfs.SelectionClearHost)
-	if !ok {
-		return nil
-	}
-	name := fs.Base(path)
-	if name == "" || name == "." || name == ".." || fs.Join(fs.GetPath(), name) != path {
-		return nil
-	}
-	token, exists := host.CaptureSelectionToken(name)
-	if !exists {
-		return nil
-	}
-	return token
-}
-
 // startValidate loads the checksum file, decodes it as enc says (see
 // decodeChecksumFile) and runs the check with a progress dialog. It waits for
 // message answers, so it must not run on the UI goroutine.
@@ -161,9 +138,6 @@ func startValidate(app vfs.App, fs vfs.VFS, hashPath, dir string, enc fileEncodi
 	title := vtui.Msg("IntChecker.Title")
 	ok := []string{vtui.Msg("vtui.Ok")}
 	ctx := context.Background()
-	// Captured before any I/O, from the panel state as it was when the
-	// command started (f4#1623: cleared on success, left alone otherwise).
-	token := selectionTokenFor(app, fs, hashPath)
 	if item, err := fs.Stat(ctx, dir); err != nil || !item.IsDir {
 		app.Message(title, fmt.Sprintf(vtui.Msg("IntChecker.DirNotFound"), dir), ok)
 		return
@@ -190,7 +164,7 @@ func startValidate(app vfs.App, fs vfs.VFS, hashPath, dir string, enc fileEncodi
 		res, err = runValidate(ctx, job, reporter)
 		return err
 	}, func(err error) {
-		finishValidate(app, job, res, err, token)
+		finishValidate(app, job, res, err)
 	})
 }
 
@@ -206,11 +180,7 @@ func parseErrorText(hashPath string, err error) string {
 
 // finishValidate runs on the UI goroutine when the check ends: it shows the
 // report, or asks for another directory when no listed file was found.
-// token, captured by startValidate before the run, is cleared once the run
-// is confirmed successful (f4#1623): cancelled, failed, or "files not found"
-// runs (which re-ask for a directory, not a finished operation) leave the
-// panel selection alone.
-func finishValidate(app vfs.App, job validateJob, res validateResult, err error, token vfs.SelectionToken) {
+func finishValidate(app vfs.App, job validateJob, res validateResult, err error) {
 	title := vtui.Msg("IntChecker.Title")
 	ok := []string{vtui.Msg("vtui.Ok")}
 	switch {
@@ -221,9 +191,6 @@ func finishValidate(app vfs.App, job validateJob, res validateResult, err error,
 	case err != nil:
 		go app.Message(title, err.Error(), ok)
 	default:
-		if token != nil {
-			token.Clear()
-		}
 		go app.Message(title, validateReport(res, job.file.Malformed), ok)
 	}
 }

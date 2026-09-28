@@ -93,40 +93,6 @@ func selectedFileNames(app vfs.App) []string {
 	return names
 }
 
-// captureSelectionTokens snapshots names' current panel selection, when the
-// host supports it (vfs.SelectionClearHost). Clearing them later, once the
-// operation that used them succeeds, is what f4#1623 asked for: files and
-// folders that were just hashed or verified stop being marked. Hosts (and
-// every test double in this package) that don't implement the optional
-// interface simply get no tokens back, and clearSelectionTokens is then a
-// no-op -- the same graceful fallback vfs.SelectedIsDirHost already uses.
-func captureSelectionTokens(app vfs.App, names []string) map[string]vfs.SelectionToken {
-	host, ok := app.(vfs.SelectionClearHost)
-	if !ok {
-		return nil
-	}
-	var tokens map[string]vfs.SelectionToken
-	for _, name := range names {
-		token, exists := host.CaptureSelectionToken(name)
-		if !exists {
-			continue
-		}
-		if tokens == nil {
-			tokens = make(map[string]vfs.SelectionToken, len(names))
-		}
-		tokens[name] = token
-	}
-	return tokens
-}
-
-// clearSelectionTokens drops every captured token's selection, if it is
-// still exactly what was captured (SelectionToken.Clear).
-func clearSelectionTokens(tokens map[string]vfs.SelectionToken) {
-	for _, token := range tokens {
-		token.Clear()
-	}
-}
-
 // generateDialog asks how to generate the hashes.
 type generateDialog struct {
 	win        *vtui.Window
@@ -323,11 +289,6 @@ func startGenerate(app vfs.App, job generateJob) {
 		inputs   []hashInput
 		existing []string
 	)
-	// Captured before anything runs, so it reflects what the user marked at
-	// the moment they confirmed the dialog; cleared on success (f4#1623),
-	// left untouched otherwise (cancelled, failed, or the user re-marked
-	// something while the job ran -- ClearSelectionIfUnchanged then no-ops).
-	tokens := captureSelectionTokens(app, job.names)
 	title := vtui.Msg("IntChecker.GenerateTitle")
 	hash := func(job generateJob) {
 		app.RunAdvancedProgressTask(title, false, func(ctx context.Context, reporter vfs.TaskReporter) error {
@@ -335,7 +296,7 @@ func startGenerate(app vfs.App, job generateJob) {
 			res, err = hashInputs(ctx, job, inputs, res, reporter)
 			return err
 		}, func(err error) {
-			finishGenerate(app, job, res, err, tokens)
+			finishGenerate(app, job, res, err)
 		})
 	}
 	app.RunAdvancedProgressTask(title, false, func(ctx context.Context, reporter vfs.TaskReporter) error {
@@ -350,7 +311,7 @@ func startGenerate(app vfs.App, job generateJob) {
 		return err
 	}, func(err error) {
 		if err != nil {
-			finishGenerate(app, job, res, err, tokens)
+			finishGenerate(app, job, res, err)
 			return
 		}
 		if len(existing) == 0 || len(inputs) == 0 {
@@ -369,10 +330,8 @@ func startGenerate(app vfs.App, job generateJob) {
 
 // finishGenerate tells the user how the run ended, puts the panel cursor on
 // the new checksum file and, for the display mode, opens the list window. It
-// runs on the UI goroutine. tokens, captured by startGenerate before the run,
-// are cleared once the run is confirmed successful (f4#1623): cancelled or
-// failed runs leave the panel selection alone.
-func finishGenerate(app vfs.App, job generateJob, res generateResult, err error, tokens map[string]vfs.SelectionToken) {
+// runs on the UI goroutine.
+func finishGenerate(app vfs.App, job generateJob, res generateResult, err error) {
 	title := vtui.Msg("IntChecker.Title")
 	ok := []string{vtui.Msg("vtui.Ok")}
 	if len(res.Outputs) > 0 {
@@ -395,7 +354,6 @@ func finishGenerate(app vfs.App, job generateJob, res generateResult, err error,
 		go app.Message(title, err.Error(), ok)
 		return
 	}
-	clearSelectionTokens(tokens)
 	report := generateReport(job, res)
 	if job.mode == outputDisplay && res.Text != "" {
 		showHashList(app, job, res.Text, report)

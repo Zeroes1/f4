@@ -340,30 +340,3 @@ type TextEditorHost interface {
 type SelectedIsDirHost interface {
 	GetSelectedIsDir() (isDir bool, known bool)
 }
-
-// SelectionToken is an opaque handle returned by
-// SelectionClearHost.CaptureSelectionToken.
-type SelectionToken interface {
-	// Clear drops the captured entry's selection, but only if it is still
-	// exactly what was captured (same panel, same directory, same VFS
-	// instance, entry still selected). It reports whether it actually
-	// cleared anything.
-	Clear() bool
-}
-
-// SelectionClearHost is an optional App capability that lets a plugin drop a
-// panel entry's explicit ("Insert"/marked) selection once whatever it
-// started on that entry finishes successfully, without touching entries the
-// user selected or deselected in the meantime (f4#1623: after a successful
-// checksum generation or validation, the processed files and folders should
-// no longer be marked). It mirrors the capture-then-clear pair f4's own
-// "Apply command" already uses on marked panel entries
-// (internal/panel/apply.go, PanelSelectionToken): capture a token right
-// before work starts, then Clear it once the work is done.
-type SelectionClearHost interface {
-	// CaptureSelectionToken snapshots whether name is currently selected on
-	// the active panel. exists is false when name is not currently selected
-	// (or the host has no active panel to ask) -- there is then nothing to
-	// capture and nothing to clear later.
-	CaptureSelectionToken(name string) (token SelectionToken, exists bool)
-}

@@ -84,37 +84,6 @@ func (pf *PanelsFrame) SetPendingSelection(name string) {
 	}
 }
 
-// panelSelectionToken implements vfs.SelectionToken over the
-// PanelSelectionToken captured from a specific FileSystemPanel -- the same
-// panel object the token was captured from, not whatever panel happens to be
-// active when Clear runs later.
-type panelSelectionToken struct {
-	panel *FileSystemPanel
-	token PanelSelectionToken
-}
-
-func (t panelSelectionToken) Clear() bool {
-	if t.panel == nil {
-		return false
-	}
-	return t.panel.ClearSelectionIfUnchanged(t.token)
-}
-
-// CaptureSelectionToken implements vfs.SelectionClearHost (f4#1623) by
-// delegating to the active FileSystemPanel's own PanelSelectionToken
-// capture, the same primitive f4's built-in "Apply command" uses (apply.go).
-func (pf *PanelsFrame) CaptureSelectionToken(name string) (vfs.SelectionToken, bool) {
-	panel := pf.GetActivePanel()
-	if panel == nil {
-		return nil, false
-	}
-	token, ok := panel.CaptureSelectionToken(name)
-	if !ok {
-		return nil, false
-	}
-	return panelSelectionToken{panel: panel, token: token}, true
-}
-
 func (pf *PanelsFrame) AddCommandHistory(cmd string) {
 	pf.CmdLine.Edit.AddHistory(cmd)
 	hp, isF4 := vtui.GlobalHistoryProvider.(*history.F4HistoryProvider)
