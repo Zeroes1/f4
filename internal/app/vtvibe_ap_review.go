@@ -36,14 +36,20 @@ import (
 // Enter or F3 on a row opens that one edit side by side (diffview, the same
 // view "Compare by content" uses): the fragment of the file around the
 // edit before and after it, as the dry run computed it
-// (ap.ModificationResult.Preview). Not here yet: a diff pane next to the
-// table, F8, Ctrl+Z.
+// (ap.ModificationResult.Preview).
+//
+// F8 rejects the edit under the cursor with a reason: it is left out like a
+// row switched off, and a line about it goes into the draft of the next
+// message to the model (vtvibe_ap_reject.go). Not here yet: a diff pane
+// next to the table, Ctrl+Z.
 
-// aiReview is the review screen's state: the dry run's rows and which of
-// them are checked.
+// aiReview is the review screen's state: the dry run's rows, which of them
+// are checked and which are rejected. A rejected row is never checked.
 type aiReview struct {
-	mods []ap.ModificationResult
-	on   []bool
+	mods  []ap.ModificationResult
+	on    []bool
+	patch *vtvibe.Patch
+	rej   map[ap.ModKey]aiReject // nil: rejecting is not offered
 }
 
 // newAIReview checks every row except the ones the dry run itself was told
@@ -56,10 +62,71 @@ func newAIReview(mods []ap.ModificationResult) *aiReview {
 	return r
 }
 
+// attachRejections ties the review to patch's rejection list and switches
+// the rows already rejected off.
+func (r *aiReview) attachRejections(patch *vtvibe.Patch) {
+	r.patch = patch
+	r.rej = aiRejectionsFor(patch)
+	for i := range r.mods {
+		if r.isRejected(i) {
+			r.on[i] = false
+		}
+	}
+}
+
 func (r *aiReview) toggle(i int) {
-	if i >= 0 && i < len(r.on) {
+	if i >= 0 && i < len(r.on) && !r.isRejected(i) {
 		r.on[i] = !r.on[i]
 	}
+}
+
+func (r *aiReview) rejection(i int) (aiReject, bool) {
+	if r.rej == nil || i < 0 || i >= len(r.mods) {
+		return aiReject{}, false
+	}
+	rj, ok := r.rej[r.mods[i].Key()]
+	return rj, ok
+}
+
+func (r *aiReview) isRejected(i int) bool {
+	_, ok := r.rejection(i)
+	return ok
+}
+
+func (r *aiReview) rejected() int {
+	n := 0
+	for i := range r.mods {
+		if r.isRejected(i) {
+			n++
+		}
+	}
+	return n
+}
+
+// reject turns row i down (again, with a new reason if it already was):
+// off, and the draft's rejection list rewritten.
+func (r *aiReview) reject(i int, reason string) {
+	if r.rej == nil || i < 0 || i >= len(r.mods) {
+		return
+	}
+	r.rej[r.mods[i].Key()] = aiRejectOf(i, r.mods[i], reason)
+	r.on[i] = false
+	r.syncDraft()
+}
+
+// unreject takes row i's rejection back: the row is checked again and its
+// line leaves the draft.
+func (r *aiReview) unreject(i int) {
+	if !r.isRejected(i) {
+		return
+	}
+	delete(r.rej, r.mods[i].Key())
+	r.on[i] = true
+	r.syncDraft()
+}
+
+func (r *aiReview) syncDraft() {
+	aiReviewSession().SetDraftSection(aiRejectSection, aiRejectDraftText(r.patch, r.rej))
 }
 
 func (r *aiReview) checked() int {
@@ -120,6 +187,9 @@ func (row aiReviewRow) GetCellText(col int) string {
 	r := row.r.mods[row.i]
 	switch col {
 	case aiReviewColCheck:
+		if row.r.isRejected(row.i) {
+			return "[-]"
+		}
 		if row.r.on[row.i] {
 			return "[x]"
 		}
@@ -132,6 +202,9 @@ func (row aiReviewRow) GetCellText(col int) string {
 		}
 		return r.Action
 	case aiReviewColStatus:
+		if row.r.isRejected(row.i) {
+			return i18n.Msg("AI.ReviewRejected")
+		}
 		return aiReviewStatusText(r.Status)
 	case aiReviewColLocator:
 		return aiReviewOneLine(r.Locator)
@@ -217,6 +290,7 @@ type aiReviewTable struct {
 	*vtui.Table
 	onToggle func(idx int)
 	onDiff   func(idx int)
+	onReject func(idx int)
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
@@ -235,6 +309,11 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 			// the patch stays one deliberate press of Apply away.
 			if t.onDiff != nil {
 				t.onDiff(t.RowAt(t.SelectPos))
+			}
+			return true
+		case vtinput.VK_F8:
+			if t.onReject != nil {
+				t.onReject(t.RowAt(t.SelectPos))
 			}
 			return true
 		}
@@ -299,6 +378,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	for _, s := range []ap.ModStatus{ap.ModOK, ap.ModSkipped, ap.ModFailed, ap.ModExcluded} {
 		statusW = max(statusW, runewidth.StringWidth(aiReviewStatusText(s)))
 	}
+	statusW = max(statusW, runewidth.StringWidth(i18n.Msg("AI.ReviewRejected")))
 	cols := []vtui.TableColumn{
 		{Title: "", Width: 3},
 		{Title: i18n.Msg("AI.ReviewColFile"), MinWidth: 12},
@@ -309,6 +389,9 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	// Below the table: the selected row's detail, the totals, how many rows
 	// are checked, the diff key hint, a blank line and the buttons.
 	rev := newAIReview(mods)
+	if patch != nil {
+		rev.attachRejections(patch)
+	}
 	table := &aiReviewTable{Table: vtui.NewTable(0, 0, inner, dlgH-9, cols)}
 	table.SetOwner(dlg)
 	table.ShowHeader = true
@@ -322,7 +405,13 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	detail := vtui.NewText(0, 0, aiReviewLabel("", inner), 0)
 	showDetail := func(idx int) {
 		text := ""
-		if idx >= 0 && idx < len(mods) {
+		if rj, ok := rev.rejection(idx); ok {
+			reason := rj.reason
+			if reason == "" {
+				reason = i18n.Msg("AI.RejectNoReason")
+			}
+			text = fmt.Sprintf(i18n.Msg("AI.ReviewRejectedDetail"), reason)
+		} else if idx >= 0 && idx < len(mods) {
 			text = aiReviewDetail(mods[idx])
 		}
 		detail.SetText(aiReviewLabel(text, inner))
@@ -335,10 +424,17 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 
 	totals := vtui.NewText(0, 0, aiReviewLabel(aiReviewTotals(mods), inner), 0)
 	checkedLabel := func() string {
+		if n := rev.rejected(); n > 0 {
+			return aiReviewLabel(fmt.Sprintf(i18n.Msg("AI.ReviewCheckedRejected"), rev.checked(), len(mods), n), inner)
+		}
 		return aiReviewLabel(fmt.Sprintf(i18n.Msg("AI.ReviewChecked"), rev.checked(), len(mods)), inner)
 	}
 	checked := vtui.NewText(0, 0, checkedLabel(), 0)
-	diffHint := vtui.NewText(0, 0, aiReviewLabel(i18n.Msg("AI.ReviewDiffHint"), inner), 0)
+	hint := i18n.Msg("AI.ReviewDiffHint")
+	if rev.rej != nil {
+		hint += " " + i18n.Msg("AI.ReviewRejectHint")
+	}
+	diffHint := vtui.NewText(0, 0, aiReviewLabel(hint, inner), 0)
 	table.onDiff = func(idx int) {
 		if idx >= 0 && idx < len(mods) {
 			aiReviewShowDiff(mods[idx])
@@ -395,11 +491,27 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		closeBtn.IsDefault = !can
 	}
 	syncButtons()
-	table.onToggle = func(idx int) {
-		rev.toggle(idx)
+	refresh := func() {
 		checked.SetText(checkedLabel())
+		showDetail(table.RowAt(table.SelectPos))
 		syncButtons()
 		vtui.FrameManager.Redraw()
+	}
+	table.onToggle = func(idx int) {
+		rev.toggle(idx)
+		refresh()
+	}
+	if rev.rej != nil {
+		table.onReject = func(idx int) {
+			if idx < 0 || idx >= len(mods) {
+				return
+			}
+			cur, was := rev.rejection(idx)
+			what := fmt.Sprintf(i18n.Msg("AI.RejectWhat"), idx+1, aiRejectSubject(aiRejectOf(idx, mods[idx], "")))
+			aiShowRejectDialog(what, cur.reason, was,
+				func(reason string) { rev.reject(idx, reason); refresh() },
+				func() { rev.unreject(idx); refresh() })
+		}
 	}
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, inner, dlgH-2)

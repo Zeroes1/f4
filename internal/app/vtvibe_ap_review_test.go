@@ -446,3 +446,188 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 		t.Error("Esc does not close the diff view")
 	}
 }
+
+// aiReviewTestSession gives the review a session of its own for the draft
+// and starts with no rejections on hand.
+func aiReviewTestSession(t *testing.T) *vtvibe.Session {
+	t.Helper()
+	s := vtvibe.NewSession()
+	savedSession, savedRejected := aiReviewSession, aiRejected
+	aiReviewSession = func() *vtvibe.Session { return s }
+	aiRejected.patch, aiRejected.byKey = nil, nil
+	t.Cleanup(func() { aiReviewSession, aiRejected = savedSession, savedRejected })
+	return s
+}
+
+// TestAIReviewReject: a rejected row is left out of Only like a row switched
+// off, and its line with the reason is in the draft; rejections pile up,
+// a second one edits the reason, taking one back removes its line.
+func TestAIReviewReject(t *testing.T) {
+	s := aiReviewTestSession(t)
+	patch := &vtvibe.Patch{ID: "aa000001"}
+	rev := newAIReview(aiReviewTestMods())
+	rev.attachRejections(patch)
+
+	rev.reject(2, "no new dependencies in this project")
+	if rev.on[2] || !rev.isRejected(2) || rev.rejected() != 1 {
+		t.Fatal("rejected row still checked")
+	}
+	if only := rev.only(); len(only) != 3 || only[ap.ModKey{FilePath: "go.mod", ModIdx: 0}] {
+		t.Fatalf("only = %v, want every row but the rejected one", only)
+	}
+	rev.toggle(2)
+	if rev.on[2] {
+		t.Fatal("Space checked a rejected row again")
+	}
+	want := fmt.Sprintf(i18n.Msg("AI.RejectDraftHeader"), "aa000001") + "\n" +
+		fmt.Sprintf(i18n.Msg("AI.RejectDraftLine"), 3, "go.mod, REPLACE «require x v1»", "no new dependencies in this project")
+	if got := s.Draft(); got != want {
+		t.Fatalf("draft = %q, want %q", got, want)
+	}
+
+	// A second rejection is added in screen order, the first one stays.
+	rev.reject(0, "")
+	draft := s.Draft()
+	line1 := fmt.Sprintf(i18n.Msg("AI.RejectDraftLine"), 1, "vfs/ai_vfs.go, REPLACE «return 0, ErrNotSupported»", i18n.Msg("AI.RejectNoReason"))
+	if i, j := strings.Index(draft, line1), strings.Index(draft, "go.mod, REPLACE"); i < 0 || j < 0 || i > j {
+		t.Fatalf("draft lacks the second rejection before the first:\n%s", draft)
+	}
+
+	// Rejecting again edits the reason in place.
+	rev.reject(2, "use the standard library")
+	if draft := s.Draft(); strings.Contains(draft, "no new dependencies") || !strings.Contains(draft, "use the standard library") ||
+		strings.Count(draft, "go.mod") != 1 {
+		t.Fatalf("editing the reason left the draft as:\n%s", draft)
+	}
+
+	// The list survives a new dialog for the same patch (the review is
+	// rebuilt after every dry run), and is gone for another patch.
+	again := newAIReview(aiReviewTestMods())
+	again.attachRejections(patch)
+	if !again.isRejected(0) || !again.isRejected(2) || again.on[0] || again.on[2] {
+		t.Fatal("rejections lost when the review was rebuilt")
+	}
+	// Taking both back: the rows are checked again and the draft is empty.
+	again.unreject(0)
+	again.unreject(2)
+	if !again.on[0] || !again.on[2] || again.only() != nil || s.Draft() != "" {
+		t.Fatalf("taking the rejections back left on=%v draft=%q", again.on, s.Draft())
+	}
+
+	// Sending the draft ends the list: the next review starts clean.
+	again.reject(1, "x")
+	s.ClearDraft()
+	fresh := newAIReview(aiReviewTestMods())
+	fresh.attachRejections(patch)
+	if fresh.rejected() != 0 {
+		t.Fatal("rejections outlived the sent draft")
+	}
+	other := newAIReview(aiReviewTestMods())
+	other.reject(0, "x") // no patch attached: rejecting is not offered
+	if other.isRejected(0) || s.Draft() != "" {
+		t.Fatal("a review without a patch rejected a row")
+	}
+}
+
+// TestAIShowPatchReviewRejectKey drives F8 on the screen: the dialog asks
+// for the reason, the row turns into "rejected" and Apply leaves it out;
+// F8 on it again shows the reason and can take the rejection back.
+func TestAIShowPatchReviewRejectKey(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 24)
+	vtui.FrameManager.Init(scr)
+	s := aiReviewTestSession(t)
+
+	var gotOnly []map[ap.ModKey]bool
+	saved := aiReviewRunPatcher
+	t.Cleanup(func() { aiReviewRunPatcher = saved })
+	aiReviewRunPatcher = func(_ *panel.PanelsFrame, _ *vtvibe.Patch, _ string, _ bool, only map[ap.ModKey]bool) {
+		gotOnly = append(gotOnly, only)
+	}
+
+	patch := &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}
+	dlg := aiShowPatchReview(nil, patch, t.TempDir(), aiReviewTestMods(), 2, "")
+	if text := aiScreenText(t, scr, dlg); !strings.Contains(text, "F8") {
+		t.Errorf("review screen does not mention F8:\n%s", text)
+	}
+	table := aiReviewTableOf(t, dlg)
+	table.MoveSelection(2) // go.mod REPLACE
+
+	rejectDialog := func() (*vtui.Window, *vtui.Edit) {
+		t.Helper()
+		if !table.ProcessKey(aiKey(vtinput.VK_F8, 0)) {
+			t.Fatal("F8 not handled by the review table")
+		}
+		w, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+		if !ok || w == dlg {
+			t.Fatalf("F8: top frame %T, want the reason dialog", vtui.FrameManager.GetTopFrame())
+		}
+		for _, it := range w.GetChildren() {
+			if e, ok := it.(*vtui.Edit); ok {
+				return w, e
+			}
+		}
+		t.Fatal("reason dialog has no input line")
+		return nil, nil
+	}
+
+	w, edit := rejectDialog()
+	text := aiScreenText(t, scr, w)
+	t.Logf("reason dialog:\n%s", text)
+	if want := fmt.Sprintf(i18n.Msg("AI.RejectWhat"), 3, "go.mod, REPLACE «require x v1»"); !strings.Contains(text, want) {
+		t.Errorf("reason dialog lacks %q", want)
+	}
+	if aiReviewButtons(w)[aiCaption("AI.RejectBtnUndo")] != nil {
+		t.Error("Take back offered for a row that is not rejected")
+	}
+	edit.SetText("new dependencies are not welcome here")
+	aiReviewButtons(w)[aiCaption("AI.RejectBtn")].OnClick()
+	if !w.IsDone() {
+		t.Fatal("Reject did not close the reason dialog")
+	}
+
+	text = aiScreenText(t, scr, dlg)
+	t.Logf("review after F8 on the third edit:\n%s", text)
+	for _, want := range []string{
+		"[-]", i18n.Msg("AI.ReviewRejected"),
+		fmt.Sprintf(i18n.Msg("AI.ReviewCheckedRejected"), 3, 4, 1),
+		fmt.Sprintf(i18n.Msg("AI.ReviewRejectedDetail"), "new dependencies are not welcome here"),
+	} {
+		// Long lines are cut to the dialog's width; their start is enough.
+		if r := []rune(want); len(r) > 60 {
+			want = string(r[:60])
+		}
+		if !strings.Contains(text, want) {
+			t.Errorf("review screen lacks %q", want)
+		}
+	}
+	draft := s.Draft()
+	t.Logf("draft of the next message:\n%s", draft)
+	if want := fmt.Sprintf(i18n.Msg("AI.RejectDraftLine"), 3, "go.mod, REPLACE «require x v1»", "new dependencies are not welcome here"); !strings.Contains(draft, want) {
+		t.Errorf("draft lacks %q", want)
+	}
+
+	// F8 again: the reason is there to edit, and Take back undoes it all.
+	w, edit = rejectDialog()
+	if edit.GetText() != "new dependencies are not welcome here" {
+		t.Errorf("reason dialog shows %q, want the current reason", edit.GetText())
+	}
+	undo := aiReviewButtons(w)[aiCaption("AI.RejectBtnUndo")]
+	if undo == nil {
+		t.Fatal("no Take back button for a rejected row")
+	}
+	undo.OnClick()
+	if s.Draft() != "" || strings.Contains(aiScreenText(t, scr, dlg), "[-]") {
+		t.Fatal("Take back left the rejection in the draft or on screen")
+	}
+
+	// Rejected once more, then Apply: the rejected row is not in Only.
+	w, edit = rejectDialog()
+	edit.SetText("no")
+	aiReviewButtons(w)[aiCaption("AI.RejectBtn")].OnClick()
+	aiReviewButtons(dlg)[aiCaption("AI.BtnApplyPatch")].OnClick()
+	if len(gotOnly) != 1 || len(gotOnly[0]) != 3 || gotOnly[0][ap.ModKey{FilePath: "go.mod", ModIdx: 0}] {
+		t.Fatalf("Apply ran with Only = %v, want the three rows not rejected", gotOnly)
+	}
+}
