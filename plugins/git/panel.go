@@ -187,9 +187,14 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // takes over the file panel's F4 Edit -- this panel edits no files, and
 // "edit what goes into the index" is the nearest reading of F4 here -- and,
 // being an F-key, gets a keybar caption, so the feature can be found
-// without reading docs.
+// without reading docs. Shift+F4 is its reverse, unstaging part of a file
+// (`git reset -p`), with its own caption on the Shift keybar row: a
+// separate key rather than F4 guessing the direction from the XY status,
+// because an "MM" file has hunks on both sides and either may be wanted.
+// Shift+F4 is the file panel's "edit a new file", which has no meaning
+// here either.
 //
-// Enter, Insert and F4 act on the entry under the cursor, so they are disabled
+// Enter, Insert, F4 and Shift+F4 act on the entry under the cursor, so they are disabled
 // while the list is empty: the key is still consumed, exactly as before,
 // and nothing runs. Ctrl+K stays enabled with nothing staged on purpose --
 // showCommitDialog answers that case with its own "Nothing staged to
@@ -237,6 +242,7 @@ func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_RETURN, Run: p.showDiff, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_F4, Label: i18n.Msg("GitStatus.KeyBar.Hunks"), Run: p.showHunks, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.UnstageHunks"), Run: p.showStagedHunks, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
 		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
 		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},

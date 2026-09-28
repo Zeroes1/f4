@@ -182,39 +182,48 @@ func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
 	}
 
 	type chord struct {
-		vk   uint16
-		ctrl bool
+		vk    uint16
+		ctrl  bool
+		shift bool
 	}
 	keys := map[chord]vfs.PanelKey{}
 	for _, k := range kp.PanelKeys() {
 		if k.Run == nil {
 			t.Errorf("key %#x/%#x has no handler", k.VK, k.Mods)
 		}
-		if k.Mods&^vtinput.LeftCtrlPressed != 0 {
+		if k.Mods&^(vtinput.LeftCtrlPressed|vtinput.ShiftPressed) != 0 {
 			t.Errorf("key %#x declares unexpected modifiers %#x", k.VK, k.Mods)
 		}
-		keys[chord{k.VK, k.Mods&vtinput.LeftCtrlPressed != 0}] = k
+		c := chord{k.VK, k.Mods&vtinput.LeftCtrlPressed != 0, k.Mods&vtinput.ShiftPressed != 0}
+		if _, dup := keys[c]; dup {
+			t.Errorf("key %+v declared twice", c)
+		}
+		keys[c] = k
 	}
+	shiftF4 := chord{vtinput.VK_F4, false, true}
 	for _, want := range []chord{
-		{vtinput.VK_F5, false}, {vtinput.VK_RETURN, false}, {vtinput.VK_INSERT, false},
-		{vtinput.VK_F4, false}, {vtinput.VK_K, true}, {vtinput.VK_E, true}, {vtinput.VK_S, true},
+		{vtinput.VK_F5, false, false}, {vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false},
+		{vtinput.VK_F4, false, false}, shiftF4, {vtinput.VK_K, true, false}, {vtinput.VK_E, true, false}, {vtinput.VK_S, true, false},
 	} {
 		if _, ok := keys[want]; !ok {
 			t.Errorf("missing declared key %+v", want)
 		}
 	}
-	if keys[chord{vtinput.VK_F5, false}].Label == "" {
+	if keys[chord{vtinput.VK_F5, false, false}].Label == "" {
 		t.Error("F5 has no keybar caption")
 	}
-	if keys[chord{vtinput.VK_F4, false}].Label == "" {
+	if keys[chord{vtinput.VK_F4, false, false}].Label == "" {
 		t.Error("F4 has no keybar caption")
+	}
+	if keys[shiftF4].Label == "" {
+		t.Error("Shift+F4 has no keybar caption")
 	}
 
 	// Empty list: nothing under the cursor for Enter or Insert to act on.
-	for _, vk := range []uint16{vtinput.VK_RETURN, vtinput.VK_INSERT, vtinput.VK_F4} {
-		k := keys[chord{vk, false}]
+	for _, c := range []chord{{vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false}, {vtinput.VK_F4, false, false}, shiftF4} {
+		k := keys[c]
 		if k.Enabled == nil || k.Enabled() {
-			t.Errorf("key %#x should be disabled on an empty list", vk)
+			t.Errorf("key %+v should be disabled on an empty list", c)
 		}
 	}
 	calls := 0

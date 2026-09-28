@@ -10,11 +10,11 @@ import (
 	"strings"
 )
 
-// errNoHunks is what loadFilePatch reports for a path whose unstaged diff
-// has nothing to stage piece by piece: no unstaged changes at all, an
-// untracked file (`git diff` does not show those -- Insert stages them
-// whole), a binary file, or a change of the file mode alone.
-var errNoHunks = errors.New("no unstaged text hunks")
+// errNoHunks is what loadFilePatch reports for a path whose diff has
+// nothing to stage (or unstage) piece by piece: no changes on that side at
+// all, an untracked file (`git diff` does not show those -- Insert stages
+// them whole), a binary file, or a change of the file mode alone.
+var errNoHunks = errors.New("no text hunks")
 
 // diffHunk is one "@@ -a,b +c,d @@" section of a unified diff, together
 // with whether the user picked it for staging. Its body lines are kept
@@ -34,12 +34,18 @@ func (h *diffHunk) headerLine() string {
 	return fmt.Sprintf("@@ -%d,%d +%d,%d @@%s", h.oldStart, h.oldCount, h.newStart, h.newCount, h.section)
 }
 
-// filePatch is one file's `git diff` (index vs. worktree), split into the
-// file header (the "diff --git", "index", "---" and "+++" lines) and its
-// hunks.
+// filePatch is one file's diff, split into the file header (the
+// "diff --git", "index", "---" and "+++" lines) and its hunks.
+//
+// staged tells the two directions apart. False: `git diff`, index vs.
+// worktree, and applying the picked hunks adds them to the index
+// (`git add -p`). True: `git diff --cached`, HEAD vs. index, and applying
+// the picked hunks takes them back out of it (`git reset -p`) -- the same
+// patch applied with `git apply --cached -R`.
 type filePatch struct {
 	header []string
 	hunks  []*diffHunk
+	staged bool
 }
 
 // selectedCount reports how many hunks are picked for staging.
@@ -118,13 +124,22 @@ func parseFilePatch(diff string) (*filePatch, error) {
 }
 
 // buildPatch renders a patch with only the selected hunks, ready for
-// `git apply --cached`. It returns "" when nothing is selected.
+// `git apply --cached` (or `git apply --cached -R` for a staged patch). It
+// returns "" when nothing is selected.
 //
-// The new-side start of every kept hunk is recomputed the way `git add -p`
-// does it: the index the patch applies to will not contain the line-count
-// changes of the hunks left out before it, so each of those shifts the
-// kept hunk's "+c" back by its own (newCount - oldCount). The "-a" side is
-// untouched -- it already counts lines of the index as it is now.
+// One side of every kept hunk describes the index as it is now and stays
+// as git printed it; the other side is recomputed, the way `git add -p`
+// and `git reset -p` do it, because the hunks left out before it are not
+// part of the change:
+//
+//   - staging (fp.staged false): the patch goes from the index ("-a") to
+//     the new index, which will not contain the line-count changes of the
+//     hunks left out before the kept one, so each of those shifts its "+c"
+//     back by its own (newCount - oldCount);
+//   - unstaging (fp.staged true): the patch is applied in reverse, from the
+//     index ("+c") back to the new index ("-a"), and the hunks left out
+//     before the kept one stay in the index, so each of those shifts its
+//     "-a" forward by that same (newCount - oldCount).
 //
 // An "old mode"/"new mode" pair is dropped from the header: a mode change
 // is not a hunk the user picked, so staging a few hunks must not stage it
@@ -147,7 +162,11 @@ func buildPatch(fp *filePatch) string {
 			shift += h.newCount - h.oldCount
 			continue
 		}
-		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@%s\n", h.oldStart, h.oldCount, h.newStart-shift, h.newCount, h.section)
+		oldStart, newStart := h.oldStart, h.newStart-shift
+		if fp.staged {
+			oldStart, newStart = h.oldStart+shift, h.newStart
+		}
+		fmt.Fprintf(&b, "@@ -%d,%d +%d,%d @@%s\n", oldStart, h.oldCount, newStart, h.newCount, h.section)
 		for _, line := range h.lines {
 			b.WriteString(line)
 			b.WriteByte('\n')
@@ -156,8 +175,9 @@ func buildPatch(fp *filePatch) string {
 	return b.String()
 }
 
-// loadFilePatch runs `git diff` for path (relative to dir, the way
-// `git status --porcelain=v2` in dir reports it) and parses the result.
+// loadFilePatch runs `git diff` -- `git diff --cached` when staged is set
+// -- for path (relative to dir, the way `git status --porcelain=v2` in dir
+// reports it) and parses the result.
 //
 // The flags pin down every piece of user configuration that would change
 // the text in a way `git apply` could no longer read back: no color, no
@@ -165,13 +185,23 @@ func buildPatch(fp *filePatch) string {
 // prefixes (diff.noprefix and diff.mnemonicPrefix would otherwise change
 // them). diff.relative=false keeps the header paths relative to the
 // repository root, which is where applyFilePatch runs `git apply`.
-func loadFilePatch(ctx context.Context, dir, path string) (*filePatch, error) {
-	out, err := runGitIn(ctx, dir, "-c", "diff.relative=false", "diff", "--no-color", "--no-ext-diff", "--no-textconv",
+func loadFilePatch(ctx context.Context, dir, path string, staged bool) (*filePatch, error) {
+	args := []string{"-c", "diff.relative=false", "diff"}
+	if staged {
+		args = append(args, "--cached")
+	}
+	args = append(args, "--no-color", "--no-ext-diff", "--no-textconv",
 		"--src-prefix=a/", "--dst-prefix=b/", "-U3", "--", path)
+	out, err := runGitIn(ctx, dir, args...)
 	if err != nil {
 		return nil, errors.New(firstLine(string(out), err))
 	}
-	return parseFilePatch(string(out))
+	fp, err := parseFilePatch(string(out))
+	if err != nil {
+		return nil, err
+	}
+	fp.staged = staged
+	return fp, nil
 }
 
 // repoTopLevel returns the root of the working tree dir belongs to.
@@ -187,8 +217,10 @@ func repoTopLevel(ctx context.Context, dir string) (string, error) {
 	return top, nil
 }
 
-// applyFilePatch stages the selected hunks of fp: the rebuilt patch goes
-// to a temporary file and `git apply --cached` reads it from there.
+// applyFilePatch stages the selected hunks of fp -- or, for a staged
+// patch, takes them out of the index: the rebuilt patch goes to a
+// temporary file and `git apply --cached` (with -R for a staged patch)
+// reads it from there.
 //
 // It runs at the repository root rather than in dir: patch paths are
 // root-relative, and `git apply` started from a subdirectory silently
@@ -218,7 +250,11 @@ func applyFilePatch(ctx context.Context, dir string, fp *filePatch) error {
 		return err
 	}
 
-	out, err := runGitIn(ctx, top, "apply", "--cached", "--whitespace=nowarn", name)
+	args := []string{"apply", "--cached", "--whitespace=nowarn"}
+	if fp.staged {
+		args = append(args, "-R")
+	}
+	out, err := runGitIn(ctx, top, append(args, name)...)
 	if err != nil {
 		return errors.New(firstLine(string(out), err))
 	}

@@ -94,11 +94,18 @@ func key(vk uint16) *vtinput.InputEvent {
 
 func openHunksForOnlyEntry(t *testing.T, p *statusPanel) *HunkView {
 	t.Helper()
+	return openHunksOf(t, p, false)
+}
+
+// openHunksOf opens the HunkView F4 (staged false) or Shift+F4 (staged
+// true) would open for the entry under the cursor.
+func openHunksOf(t *testing.T, p *statusPanel, staged bool) *HunkView {
+	t.Helper()
 	entry, ok := p.selectedEntry()
 	if !ok {
 		t.Fatal("status panel has no entry under the cursor")
 	}
-	v, err := p.openHunkView(entry)
+	v, err := p.openHunkView(entry, staged)
 	if err != nil {
 		t.Fatalf("openHunkView: %v", err)
 	}
@@ -276,7 +283,7 @@ func TestHunksOfUntrackedFileAreNotOffered(t *testing.T) {
 	if !ok {
 		t.Fatal("no entry")
 	}
-	if _, err := p.openHunkView(entry); !errors.Is(err, errNoHunks) {
+	if _, err := p.openHunkView(entry, false); !errors.Is(err, errNoHunks) {
 		t.Errorf("openHunkView(untracked) error = %v, want errNoHunks", err)
 	}
 	// F4 through the panel's own keys: consumed, only a toast.
@@ -306,5 +313,181 @@ func TestHunkViewScreenDump(t *testing.T) {
 	t.Log("\n" + text)
 	if !strings.Contains(text, "f.txt") || !strings.Contains(text, "@@ -1,5 +1,7 @@") {
 		t.Errorf("screen misses the title or the first hunk:\n%s", text)
+	}
+}
+
+func TestBuildPatchStagedShiftsOldSide(t *testing.T) {
+	fp := &filePatch{
+		staged: true,
+		header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
+		hunks: []*diffHunk{
+			{oldStart: 1, oldCount: 5, newStart: 1, newCount: 7, lines: []string{"+A", "+B"}},
+			{oldStart: 22, oldCount: 7, newStart: 24, newCount: 7, lines: []string{"-25", "+X"}, selected: true},
+		},
+	}
+	// The first hunk stays in the index, so the kept one's "-a" moves
+	// forward by its two lines; "+c" already counts lines of the index.
+	want := "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n@@ -24,7 +24,7 @@\n-25\n+X\n"
+	if got := buildPatch(fp); got != want {
+		t.Errorf("buildPatch =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// stagedTwoHunkRepo is twoHunkRepo with both hunks staged.
+func stagedTwoHunkRepo(t *testing.T, rel string) string {
+	t.Helper()
+	repo := twoHunkRepo(t, rel)
+	runRealGit(t, repo, "add", "-A")
+	return repo
+}
+
+// TestHunkViewUnstagesOnlyThePickedHunk is the `git reset -p` side of
+// TestHunkViewStagesOnlyThePickedHunk: both hunks staged, Shift+F4's view
+// lists them from `git diff --cached`, the second one is picked, Enter
+// takes it out of the index -- the first hunk (left in, two lines above)
+// is the case needing the shift of the "-a" side.
+func TestHunkViewUnstagesOnlyThePickedHunk(t *testing.T) {
+	repo := stagedTwoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksOf(t, p, true)
+
+	if !v.patch.staged || len(v.patch.hunks) != 2 {
+		t.Fatalf("staged = %v, hunks = %d; want true, 2", v.patch.staged, len(v.patch.hunks))
+	}
+	for i := 0; i <= len(v.patch.hunks[0].lines); i++ {
+		v.ProcessKey(key(vtinput.VK_DOWN))
+	}
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	if v.patch.hunks[0].selected || !v.patch.hunks[1].selected {
+		t.Fatalf("selection = %v/%v, want false/true", v.patch.hunks[0].selected, v.patch.hunks[1].selected)
+	}
+	if patch := buildPatch(v.patch); !strings.Contains(patch, "@@ -24,7 +24,7 @@") {
+		t.Errorf("unstage patch does not carry the shifted hunk header:\n%s", patch)
+	}
+	if !v.ProcessKey(key(vtinput.VK_RETURN)) {
+		t.Fatal("Enter was not claimed")
+	}
+	if !v.IsDone() {
+		t.Error("the view did not close after unstaging")
+	}
+
+	staged := runRealGit(t, repo, "diff", "--cached")
+	if !strings.Contains(staged, "+A") || strings.Contains(staged, "+X") {
+		t.Errorf("index diff should keep only the first hunk:\n%s", staged)
+	}
+	unstaged := runRealGit(t, repo, "diff")
+	if !strings.Contains(unstaged, "+X") || strings.Contains(unstaged, "+A") {
+		t.Errorf("worktree diff should hold only the second hunk:\n%s", unstaged)
+	}
+	if got := runRealGit(t, repo, "show", ":f.txt"); got != numbered(1, 2)+"A\nB\n"+numbered(3, 30) {
+		t.Errorf("index content after unstaging:\n%s", got)
+	}
+	entry, ok := p.selectedEntry()
+	if !ok || entry.Path != "f.txt" || entry.XY != "MM" {
+		t.Errorf("status panel after unstaging: %+v, want f.txt MM", entry)
+	}
+}
+
+// TestHunkViewUnstagesInSubdirectory: `git apply --cached -R` has to run
+// at the repository root as well.
+func TestHunkViewUnstagesInSubdirectory(t *testing.T) {
+	repo := stagedTwoHunkRepo(t, "sub/f.txt")
+	p := openStatusPanelIn(t, filepath.Join(repo, "sub"))
+	v := openHunksOf(t, p, true)
+
+	v.ProcessKey(key(vtinput.VK_INSERT)) // the first hunk
+	v.ProcessKey(key(vtinput.VK_F2))
+	if !v.IsDone() {
+		t.Fatal("the view did not close after unstaging")
+	}
+
+	staged := runRealGit(t, repo, "diff", "--cached")
+	if !strings.Contains(staged, "+X") || strings.Contains(staged, "+A") {
+		t.Errorf("index diff should keep only the second hunk:\n%s", staged)
+	}
+	if got := runRealGit(t, repo, "show", ":sub/f.txt"); got != numbered(1, 24)+"X\n"+numbered(26, 30) {
+		t.Errorf("index content after unstaging:\n%s", got)
+	}
+}
+
+// TestUnstagingTheOnlyHunkOfANewFile: a staged new file is one hunk from
+// /dev/null; unstaging it takes the file out of the index and leaves it
+// untracked, the same end state Insert gives.
+func TestUnstagingTheOnlyHunkOfANewFile(t *testing.T) {
+	repo := realGitRepo(t)
+	writeRepoFile(t, filepath.Join(repo, "keep.txt"), "keep\n")
+	runRealGit(t, repo, "add", "-A")
+	runRealGit(t, repo, "commit", "-q", "-m", "initial")
+	writeRepoFile(t, filepath.Join(repo, "new.txt"), "one\ntwo\n")
+	runRealGit(t, repo, "add", "new.txt")
+
+	p := openStatusPanelIn(t, repo)
+	v := openHunksOf(t, p, true)
+	if len(v.patch.hunks) != 1 {
+		t.Fatalf("hunks = %d, want 1", len(v.patch.hunks))
+	}
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	v.ProcessKey(key(vtinput.VK_RETURN))
+	if !v.IsDone() {
+		t.Fatal("the view did not close after unstaging")
+	}
+	if got := runRealGit(t, repo, "status", "--porcelain"); got != "?? new.txt\n" {
+		t.Errorf("status after unstaging the new file = %q, want untracked", got)
+	}
+}
+
+// TestStagedHunksNotOffered: Shift+F4 has nothing to show for a file with
+// no staged changes, nor for a staged rename (see openHunkView).
+func TestStagedHunksNotOffered(t *testing.T) {
+	repo := twoHunkRepo(t, "f.txt") // changed, nothing staged
+	p := openStatusPanelIn(t, repo)
+	entry, ok := p.selectedEntry()
+	if !ok {
+		t.Fatal("no entry")
+	}
+	if _, err := p.openHunkView(entry, true); !errors.Is(err, errNoHunks) {
+		t.Errorf("openHunkView(unstaged only, staged) error = %v, want errNoHunks", err)
+	}
+	shiftF4 := key(vtinput.VK_F4)
+	shiftF4.ControlKeyState = vtinput.ShiftPressed
+	if !p.ProcessKey(shiftF4) {
+		t.Error("Shift+F4 was not claimed")
+	}
+
+	runRealGit(t, repo, "checkout", "--", "f.txt")
+	runRealGit(t, repo, "mv", "f.txt", "g.txt")
+	if err := p.reload(); err != nil {
+		t.Fatal(err)
+	}
+	entry, ok = p.selectedEntry()
+	if !ok || entry.OrigPath == "" {
+		t.Fatalf("expected a rename entry, got %+v", entry)
+	}
+	if _, err := p.openHunkView(entry, true); !errors.Is(err, errNoHunks) {
+		t.Errorf("openHunkView(rename, staged) error = %v, want errNoHunks", err)
+	}
+}
+
+// TestUnstageHunkViewScreenDump draws the Shift+F4 view after picking the
+// first hunk; run it with -v to see the screen.
+func TestUnstageHunkViewScreenDump(t *testing.T) {
+	repo := stagedTwoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksOf(t, p, true)
+	v.SetPosition(0, 0, 59, 21)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(60, 22)
+	v.Show(scr)
+	var b strings.Builder
+	scr.Dump(&b)
+	text := b.String()
+	if i := strings.Index(text, "--- CELL METADATA"); i >= 0 {
+		text = text[:i]
+	}
+	t.Log("\n" + text)
+	if !strings.Contains(text, "Unstage hunks: f.txt") || !strings.Contains(text, "@@ -22,7 +24,7 @@") {
+		t.Errorf("screen misses the title or the second hunk:\n%s", text)
 	}
 }

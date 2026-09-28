@@ -289,11 +289,31 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - An untracked file, a binary file or a mode-only change has no hunks to
   offer: F4 says so in a toast, and Insert remains the way to stage it.
 
+## Part 13: unstaging part of a file, hunk by hunk (Shift+F4)
+
+- **Shift+F4** on a status-panel entry (Shift keybar row: **Unstage**)
+  opens the same `HunkView` over the file's *staged* changes
+  (`git diff --cached`, HEAD vs. index -- what `git reset -p` offers). The
+  keys are the same as for F4; **Enter**/**F2** takes the picked hunks out
+  of the index (the worktree is not touched) and returns to the reloaded
+  status panel.
+- A separate key rather than F4 guessing the direction from the status: an
+  `MM` file has hunks on both sides, and either may be the one wanted.
+  Shift+F4 is "edit a new file" in a file panel, which means nothing here.
+- Unstaging applies the patch of the picked hunks in reverse
+  (`git apply --cached -R`, at the repository root, same diff flags). Here
+  the `+` side describes the index as it is, and the `-` start of each kept
+  hunk is shifted forward by the line-count change of every hunk left out
+  (and so left in the index) before it.
+- A staged new file is a single hunk; unstaging it leaves the file
+  untracked. A staged rename is not offered in parts (the diff of the new
+  path alone reads as an added file): Insert unstages it whole.
+
 ## What is deliberately not here yet
 
-Unstaging single hunks (`git reset -p`), splitting a hunk into smaller ones
-and picking single lines: each is its own follow-up part of f4#659, on top
-of the same `filePatch`/`buildPatch` pair.
+Splitting a hunk into smaller ones and picking single lines: each is its
+own follow-up part of f4#659, on top of the same `filePatch`/`buildPatch`
+pair.
 
 ## Design notes
 

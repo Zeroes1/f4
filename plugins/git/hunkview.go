@@ -41,6 +41,11 @@ func displayDiffLine(line string) string {
 // stages the picked hunks with `git apply --cached` and closes, Esc or F10
 // closes without staging anything.
 //
+// Shift+F4 opens the same view over the file's staged changes (a patch
+// with staged set, `git reset -p` style): the keys are the same, and Enter
+// or F2 takes the picked hunks out of the index with
+// `git apply --cached -R`. Only the texts differ between the two.
+//
 // Like LogView and BranchView it is its own full-screen vtui.Frame pushed
 // over the panels, not a panel of its own: it belongs to one file of the
 // status list, and closing it returns to that list exactly as it was --
@@ -97,8 +102,16 @@ func newHunkView(dir, path string, patch *filePatch, onStaged func()) *HunkView 
 // vtui.TypeUser+N slot after LogDiffFilesView's +12 (logdifffiles.go).
 func (v *HunkView) GetType() vtui.FrameType { return vtui.TypeUser + 13 }
 
+// msg picks the staging or the unstaging variant of a text.
+func (v *HunkView) msg(stage, unstage string) string {
+	if v.patch.staged {
+		return i18n.Msg(unstage)
+	}
+	return i18n.Msg(stage)
+}
+
 func (v *HunkView) GetTitle() string {
-	return fmt.Sprintf(i18n.Msg("GitHunks.PanelTitle"), v.path, v.patch.selectedCount(), len(v.patch.hunks))
+	return fmt.Sprintf(v.msg("GitHunks.PanelTitle", "GitHunks.UnstageTitle"), v.path, v.patch.selectedCount(), len(v.patch.hunks))
 }
 
 func (v *HunkView) ResizeConsole(w, h int) {
@@ -124,13 +137,13 @@ func (v *HunkView) SetPosition(x1, y1, x2, y2 int) {
 
 func (v *HunkView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
-		Normal: vtui.KeyBarLabels{"", i18n.Msg("GitHunks.Stage"), "", "", "", "", "", "", "", i18n.Msg("GitLog.Close")},
+		Normal: vtui.KeyBarLabels{"", v.msg("GitHunks.Stage", "GitHunks.Unstage"), "", "", "", "", "", "", "", i18n.Msg("GitLog.Close")},
 	}
 }
 
 // ProcessKey: Esc/F10 close; Insert/Space toggle the hunk under the
-// cursor; Enter/F2 stage the picked hunks. Everything else is table
-// navigation.
+// cursor; Enter/F2 stage (or unstage) the picked hunks. Everything else is
+// table navigation.
 func (v *HunkView) ProcessKey(e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown {
 		return false
@@ -199,10 +212,11 @@ func (v *HunkView) toggleHunk() {
 	}
 }
 
-// stageSelected applies the picked hunks to the index and closes the view.
-// With nothing picked it only says so; a failed apply (the file changed on
-// disk since the view was opened, say) keeps the view open with git's own
-// message.
+// stageSelected applies the picked hunks to the index -- or, for staged
+// hunks, takes them out of it -- and closes the view. With nothing picked
+// it only says so; a failed apply (the file changed on disk or in the
+// index since the view was opened, say) keeps the view open with git's
+// own message.
 func (v *HunkView) stageSelected() {
 	n := v.patch.selectedCount()
 	if n == 0 {
@@ -210,10 +224,10 @@ func (v *HunkView) stageSelected() {
 		return
 	}
 	if err := applyFilePatch(context.Background(), v.dir, v.patch); err != nil {
-		toast.Show(fmt.Sprintf(i18n.Msg("GitHunks.ApplyFailed"), err), 3e9)
+		toast.Show(fmt.Sprintf(v.msg("GitHunks.ApplyFailed", "GitHunks.UnapplyFailed"), err), 3e9)
 		return
 	}
-	toast.Show(fmt.Sprintf(i18n.Msg("GitHunks.Staged"), n, len(v.patch.hunks), v.path), 3e9)
+	toast.Show(fmt.Sprintf(v.msg("GitHunks.Staged", "GitHunks.Unstaged"), n, len(v.patch.hunks), v.path), 3e9)
 	if v.onStaged != nil {
 		v.onStaged()
 	}
@@ -224,15 +238,25 @@ func (v *HunkView) stageSelected() {
 // under the cursor and open a HunkView over it. `git diff` of one file is
 // quick, so this runs synchronously, the same way the panel's own
 // `git status` does.
-func (p *statusPanel) showHunks() {
+func (p *statusPanel) showHunks() { p.showHunksOf(false) }
+
+// showStagedHunks is Shift+F4: the same over the file's staged diff, to
+// take hunks back out of the index.
+func (p *statusPanel) showStagedHunks() { p.showHunksOf(true) }
+
+func (p *statusPanel) showHunksOf(staged bool) {
 	entry, ok := p.selectedEntry()
 	if !ok {
 		return
 	}
-	v, err := p.openHunkView(entry)
+	v, err := p.openHunkView(entry, staged)
 	if err != nil {
 		if errors.Is(err, errNoHunks) {
-			toast.Show(fmt.Sprintf(i18n.Msg("GitHunks.NoHunks"), entry.Path), 3e9)
+			msg := "GitHunks.NoHunks"
+			if staged {
+				msg = "GitHunks.NoStagedHunks"
+			}
+			toast.Show(fmt.Sprintf(i18n.Msg(msg), entry.Path), 3e9)
 		} else {
 			toast.Show(fmt.Sprintf(i18n.Msg("GitHunks.OpenFailed"), err), 3e9)
 		}
@@ -244,10 +268,19 @@ func (p *statusPanel) showHunks() {
 	}
 }
 
-// openHunkView builds the HunkView for entry; after a successful stage it
-// reloads the panel with the cursor kept on entry, as Insert does.
-func (p *statusPanel) openHunkView(entry statusEntry) (*HunkView, error) {
-	patch, err := loadFilePatch(context.Background(), p.dir, entry.Path)
+// openHunkView builds the HunkView for entry -- over its staged changes
+// when staged is set; after a successful apply it reloads the panel with
+// the cursor kept on entry, as Insert does.
+//
+// A staged rename has no hunks to unstage in parts: `git diff --cached` of
+// the new path alone shows it as an added file, and reversing that would
+// drop the new path from the index while the old one stays deleted there.
+// Insert unstages the rename whole.
+func (p *statusPanel) openHunkView(entry statusEntry, staged bool) (*HunkView, error) {
+	if staged && entry.OrigPath != "" {
+		return nil, errNoHunks
+	}
+	patch, err := loadFilePatch(context.Background(), p.dir, entry.Path, staged)
 	if err != nil {
 		return nil, err
 	}

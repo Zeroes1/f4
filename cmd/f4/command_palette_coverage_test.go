@@ -241,7 +241,7 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local branch list, opened with Ctrl+S on the status panel that Action.App.GitStatus reaches; F5/Enter/Insert/Delete/F8/close are local screen primitives (switch, create, delete branch) and navigation/quick-search fall through to its table, the same split LogView already uses (f4#659 part 7 of N)",
 	},
 	"git.(*HunkView).ProcessKey": {
-		class: paletteAuditPluginLocal, rationale: "the git plugin owns this per-file hunk picker, opened with F4 on the status panel that Action.App.GitStatus reaches; Insert/Space (pick a hunk), Enter/F2 (stage the picked hunks) and close are local screen primitives and navigation falls through to its table, the same split LogView/BranchView/LogDiffFilesView already use (f4#659 part 12 of N)",
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this per-file hunk picker, opened with F4 (or Shift+F4 for staged hunks) on the status panel that Action.App.GitStatus reaches; Insert/Space (pick a hunk), Enter/F2 (stage or unstage the picked hunks) and close are local screen primitives and navigation falls through to its table, the same split LogView/BranchView/LogDiffFilesView already use (f4#659 parts 12-13 of N)",
 	},
 	"git.(*LogDiffFilesView).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local changed-file picker, opened with Enter on a LogView commit that changed more than one path; Enter/close are local screen primitives (pick one path and diff it) and navigation/quick-search fall through to its table, the same split LogView/BranchView already use (f4#659 part 11 of N)",
