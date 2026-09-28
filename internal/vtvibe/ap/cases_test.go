@@ -248,8 +248,15 @@ var apCases = []apCase{
 			"bb000028 CREATE\n" +
 			"bb000028 content\n" +
 			"New file created successfully!\n",
+		// The target file is brand new and the patch does not declare a
+		// newline mode, so per §2.4 the patcher falls back to the OS
+		// default line ending, not "\n" unconditionally - matching the
+		// reference's use of os.linesep here (this is the one case in the
+		// suite where that choice is actually observable, since every
+		// other case either edits an existing file or gives an explicit
+		// FILE newline argument).
 		expectFiles: map[string]string{
-			"src/new_file.txt": "New file created successfully!\n",
+			"src/new_file.txt": "New file created successfully!" + osLineSep(),
 		},
 	},
 	{
