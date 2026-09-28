@@ -68,6 +68,10 @@ ID3Editor.FieldVersion=Версия:
 
 IntChecker.Menu=Проверка &целостности
 IntChecker.Command.Desc=Создать и проверить файлы контрольных сумм (SFV, MD5, SHA)
+IntChecker.Command.Generate=Вычислить контрольную сумму файлов
+IntChecker.Command.Generate.Desc=Вычислить контрольные суммы для выбранных файлов
+IntChecker.Command.Validate=Проверить контрольную сумму файлов
+IntChecker.Command.Validate.Desc=Проверить файлы по файлу контрольных сумм
 IntChecker.Title=Проверка целостности
 IntChecker.Generate=&Вычислить хэши...
 IntChecker.GenerateTitle=Вычисление хэшей
