@@ -129,7 +129,23 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 	waitForResult := func() {
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
-			if top := vtui.FrameManager.GetTopFrame(); top != nil {
+			top := vtui.FrameManager.GetTopFrame()
+			// aiRunPatcher's progress dialog closes itself with Close(),
+			// which only sets its exit code (vtui's real event loop is
+			// what actually pops a Done frame, right after running the
+			// task/event that closed it - see frameManager.Step). This
+			// harness drains vtui.FrameManager.TaskChan directly (pumpFor)
+			// without going through that loop, so the closed progress
+			// dialog from THIS call, or a previous one right above it,
+			// can still be sitting on top, already Done, once its own
+			// result dialog (pushed on top of it) has been popped below.
+			// Skip any such leftover instead of mistaking it for a fresh
+			// result.
+			for top != nil && top.IsDone() {
+				vtui.FrameManager.RemoveFrame(top)
+				top = vtui.FrameManager.GetTopFrame()
+			}
+			if top != nil {
 				top.Close()
 				vtui.FrameManager.RemoveFrame(top)
 				return
