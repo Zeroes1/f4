@@ -669,6 +669,17 @@ GitStatus.CommitDone=Закоммичено: %s
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
 GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
 GitDiff.CompareFailed=Не удалось построить diff: %v
+GitLog.ColumnHash=Хэш
+GitLog.ColumnAuthor=Автор
+GitLog.ColumnDate=Дата
+GitLog.ColumnSubject=Сообщение
+GitLog.PanelTitle=Лог git (%d)
+GitLog.OpenFailed=Не удалось получить лог git: %s
+GitLog.RefreshFailed=Не удалось обновить лог git: %s
+GitLog.Refresh=Обновить
+GitLog.Close=Закрыть
+GitLog.DiffFailed=Не удалось определить изменения коммита: %s
+GitLog.DiffUnsupported=Просмотр diff поддерживает только коммиты с одним изменённым файлом (в этом изменено %d)
 
 Editor.GotoTitle=Перейти к позиции
 Editor.GotoLine=Строка:

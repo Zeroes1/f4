@@ -97,12 +97,50 @@ archive tools (f4#609) rather than linking a Go git implementation.
   are their own follow-up parts if and when they turn out to be needed --
   see the ticket.
 
+## Part 5: a read-only commit log (`log.go`, `logview.go`, `logdiff.go`)
+
+- **Ctrl+E** on the status panel opens a read-only list of the repository's
+  last 200 commits (hash, author, date, subject) -- `git log
+  --pretty=format:...`, parsed once by `parseLog` (log.go). Not Ctrl+L, the
+  more obvious mnemonic ("Log"): this panel is itself one of `PanelsFrame`'s
+  `AltPanels`, and Ctrl+L is already the global **Info Panel** toggle, whose
+  own key handling deliberately falls through past *any* focused AltPanel so
+  it still works no matter what the active side is showing -- claiming it
+  here for something unrelated would break that. Ctrl+G ("Git") is likewise
+  already the global **Apply command**. Ctrl+E is free (see panel.go's
+  `ProcessKey` doc comment for the full reasoning) and, unlike Ctrl+I or
+  Ctrl+J, is not a letter whose Ctrl form some terminals conflate with a
+  plain control character (Tab, Line Feed).
+- It opens as its own full-screen `vtui.Frame`
+  (`vtui.FrameManager.AddScreen`), the same way Enter's diff (part 2) already
+  does, rather than a second `vfs.PanelProvider` replacing the status panel
+  in its slot: that needs no "go back to what was open before" stack of its
+  own, and Escape simply pops back to the status panel underneath, exactly
+  as closing a diff already does.
+- **F5** re-runs `git log` and replaces the list, the same point-in-time
+  refresh the status panel's own F5 is. Sorting is not offered -- a commit
+  log's only meaningful order is the one `git log` already produced -- but
+  QuickSearch is, the same type-to-filter gesture the status panel has,
+  useful here for jumping to a commit by author or by a word from its
+  subject.
+- **Enter** on a commit shows a side-by-side diff, reusing
+  `internal/diffview` (f4#613) exactly as the status panel's own Enter
+  (part 2) does -- against the commit's parent and the commit itself
+  (`<hash>^` and `<hash>`) instead of HEAD and the worktree. This first
+  version only handles a commit that changes exactly one file:
+  `diffview.DiffView` takes two whole files, not a multi-file patch, and
+  picking one file out of several (or rendering a patch-shaped view instead)
+  is its own follow-up. A commit with zero changed files (a merge commit,
+  which `git show` does not diff without `-m`/`-c`) or more than one shows a
+  toast instead of guessing.
+
 ## What is deliberately not here yet
 
 Everything else the ticket asks for: staging/unstaging a single hunk within
 a file (needs f4#613's diff widget to pick the hunk), a multi-line commit
-message editor, log, and branch switching/creation. Each is its own atomic
-follow-up part of f4#659, not this one.
+message editor, a per-file diff for a multi-file commit in the log view, and
+branch switching/creation. Each is its own atomic follow-up part of f4#659,
+not this one.
 
 ## Design notes
 

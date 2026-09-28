@@ -669,6 +669,17 @@ GitStatus.CommitDone=Committed: %s
 GitDiff.ReadFailed=Failed to read %s: %v
 GitDiff.TooLarge=This file is too large or too different for a diff in this version.
 GitDiff.CompareFailed=Failed to build the diff: %v
+GitLog.ColumnHash=Hash
+GitLog.ColumnAuthor=Author
+GitLog.ColumnDate=Date
+GitLog.ColumnSubject=Subject
+GitLog.PanelTitle=Git log (%d)
+GitLog.OpenFailed=Git log failed: %s
+GitLog.RefreshFailed=Git log refresh failed: %s
+GitLog.Refresh=Refresh
+GitLog.Close=Close
+GitLog.DiffFailed=Failed to inspect the commit's changes: %s
+GitLog.DiffUnsupported=Diff view supports commits that change exactly one file (this one changes %d)
 
 Editor.GotoTitle=Go to position
 Editor.GotoLine=Line:

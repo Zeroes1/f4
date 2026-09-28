@@ -23,8 +23,14 @@
 // prompt over whatever Insert has already staged, then `git commit -m`.
 // Nothing staged shows a toast instead of opening the dialog.
 //
-// Staging/unstaging a single hunk, log and branch switching are still
-// follow-up parts, not this one -- see the ticket for the full list.
+// v5 (f4#659 part 5 of N, log.go/logview.go/logdiff.go) adds Ctrl+E: a
+// read-only list of the repository's recent commits, pushed as its own
+// screen (vtui.FrameManager.AddScreen) the same way Enter's diff already is,
+// with Enter on a commit reusing the diff widget again for a commit that
+// changes exactly one file.
+//
+// Staging/unstaging a single hunk and branch switching are still follow-up
+// parts, not this one -- see the ticket for the full list.
 package git
 
 import (

@@ -173,20 +173,35 @@ func (p *statusPanel) SetFocus(focused bool) {
 func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 
 // ProcessKey adds F5 (refresh), Enter (diff, diff.go), Insert
-// (stage/unstage, stage.go) and Ctrl+K (commit, commit.go) on top of the
-// table's own navigation/sort/quick-search handling. None of the first
-// three is a letter key: QuickSearch claims printable characters while the
-// table is focused (plugins/proclist/panel.go avoids the same trap by
-// keying its own actions off F-keys) -- and that includes plain Space,
-// which is why staging is bound to Insert instead of the Space lazygit/tig
-// use, following the existing "mark an item" key of
+// (stage/unstage, stage.go), Ctrl+K (commit, commit.go) and Ctrl+E (log,
+// logview.go) on top of the table's own navigation/sort/quick-search
+// handling. None of the first three is a letter key: QuickSearch claims
+// printable characters while the table is focused (plugins/proclist/panel.go
+// avoids the same trap by keying its own actions off F-keys) -- and that
+// includes plain Space, which is why staging is bound to Insert instead of
+// the Space lazygit/tig use, following the existing "mark an item" key of
 // Far/Norton-Commander-style file panels (internal/panel/menukeys.go's
 // isAddItemKey) rather than a foreign tool's convention. F5/Enter are the
 // refresh and open gestures a file panel already uses -- this panel has no
 // file Copy or directory-enter of its own for either to collide with.
-// Commit is bound to Ctrl+K rather than a bare letter for the same
-// QuickSearch reason, and Ctrl+K is free: it is not one of f4's own
-// existing action hotkeys anywhere else in the application.
+// Commit and log are both bound to Ctrl+<letter> rather than a bare letter
+// for the same QuickSearch reason.
+//
+// Ctrl+E, not the more mnemonic Ctrl+L ("Log") or Ctrl+G ("Git"): this
+// panel is itself one of PanelsFrame's AltPanels (internal/panel/plugins.go
+// stores the PluginPanelInstance wrapping it exactly there), and Ctrl+L is
+// already global Shell-area Panel.InfoPanel, which the frame's own
+// ProcessKey (internal/panel/frame.go) deliberately lets fall through past
+// *any* focused AltPanel -- info, quick view, or a panel plugin like this
+// one -- precisely so Ctrl+L still opens an info panel on the *other* side
+// no matter what the active side is showing. Claiming Ctrl+L here for
+// something unrelated would break that fallthrough while this panel is
+// open. Ctrl+G is likewise already global Files-area File.ApplyCommand.
+// Ctrl+E has no such claim anywhere in the application (checked with
+// `grep DefaultKeys` across the whole tree, the same check that justified
+// Ctrl+K in commit.go) and, unlike Ctrl+I/Ctrl+J, is not a letter whose
+// Ctrl form collides with a control character (Tab/Line Feed) some
+// terminals may not even deliver distinguishably from the key itself.
 func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
 		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
@@ -210,9 +225,15 @@ func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
 				return true
 			}
 		}
-		if ctrl && !alt && !shift && e.VirtualKeyCode == vtinput.VK_K {
-			p.showCommitDialog()
-			return true
+		if ctrl && !alt && !shift {
+			switch e.VirtualKeyCode {
+			case vtinput.VK_K:
+				p.showCommitDialog()
+				return true
+			case vtinput.VK_E:
+				p.showLog()
+				return true
+			}
 		}
 	}
 	return p.table.ProcessKey(e)
