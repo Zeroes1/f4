@@ -592,6 +592,7 @@ Action.App.ProcList.Desc=Open a live list of running processes in the active pan
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Player.Desc=Toggle the audio player panel
+Action.Panel.Tree.Desc=Toggle the directory tree panel
 Action.Settings.MacKeyboard=&Mac keyboard
 Action.Settings.MacKeyboard.Desc=Use the macOS editing chords: Cmd for line and document edges, Opt for word navigation
 Action.Panel.GroupByNone=Group by: Off
@@ -826,6 +827,7 @@ Menu.Shell.Options=&Options
 Menu.Terminal.File=&File
 Menu.ProxySettings=&Proxy settings
 Menu.Panel.Player=&Player
+Menu.Panel.Tree=&Tree
 Menu.Terminal.Options=&Options
 
 RemoteCmd.Title=Remote command
@@ -1404,6 +1406,8 @@ Player.MoveRefused=The playlist keeps references only; use F5 to add tracks. F6 
 Player.LocalOnly=Only files from a local file system can be added to the playlist for now.
 Player.NothingAdded=No audio files were found in the selection.
 Player.NeedFFmpeg=ffmpeg is needed to play %s files and it is not installed.
+
+TreePanel.Title= Tree
 
 MediaInfo.LanguageCode=en
 MediaInfo.Menu=&Media information

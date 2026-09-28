@@ -1919,6 +1919,18 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.Tree",
+		Area:        "Shell",
+		Label:       "Tree",
+		LabelKey:    "Menu.Panel.Tree",
+		Description: "Toggle the directory tree panel",
+		DescKey:     "Action.Panel.Tree.Desc",
+		DefaultKeys: []string{"CtrlT"},
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			pf.ToggleAltPanel("tree", func(src *panel.FileSystemPanel) panel.AltPanel { return panel.NewTreePanel(src) })
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.SplitLeft",
 		Area:        "Shell",
 		Label:       "Move Split Left",

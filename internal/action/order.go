@@ -151,6 +151,7 @@ var actionMenuOrder = []string{
 	"Panel.InfoPanel",
 	"Panel.QuickView",
 	"Panel.Player",
+	"Panel.Tree",
 	"Panel.SplitLeft",
 	"Panel.SplitRight",
 	"Panel.SplitUp",

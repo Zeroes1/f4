@@ -592,6 +592,7 @@ Action.App.ProcList.Desc=Открыть живой список процессо
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
 Action.Panel.Player.Desc=Показать или скрыть панель аудиоплеера
+Action.Panel.Tree.Desc=Показать или скрыть панель дерева каталогов
 Action.Settings.MacKeyboard=Клавиатура &Mac
 Action.Settings.MacKeyboard.Desc=Раскладка macOS для правки текста: Cmd — начало и конец строки и файла, Opt — переходы по словам
 Action.Panel.GroupByNone=Группировать по: Выключено
@@ -826,6 +827,7 @@ Menu.Shell.Options=&Настройки
 Menu.Terminal.File=&Файл
 Menu.ProxySettings=Настройки &прокси
 Menu.Panel.Player=&Плеер
+Menu.Panel.Tree=&Дерево
 Menu.Terminal.Options=&Параметры
 
 RemoteCmd.Title=Команда на сервере
@@ -1404,6 +1406,8 @@ Player.MoveRefused=Плейлист хранит только ссылки; до
 Player.LocalOnly=Пока в плейлист можно добавлять только файлы с локальной файловой системы.
 Player.NothingAdded=В выделении нет аудиофайлов.
 Player.NeedFFmpeg=Для воспроизведения файлов %s нужен ffmpeg, а он не установлен.
+
+TreePanel.Title= Дерево
 
 MediaInfo.LanguageCode=ru
 MediaInfo.Menu=&Информация о медиа

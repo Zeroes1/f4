@@ -1,0 +1,192 @@
+package panel
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
+)
+
+// newBareTreePanel builds a TreePanel rooted directly at root (bypassing
+// NewTreePanel's volume-root + revealPath logic), for deterministic,
+// filesystem-root-independent tests of the flat-list splice mechanics
+// (expandAt/collapseAt/spliceChildren).
+func newBareTreePanel(root string) *TreePanel {
+	t := &TreePanel{
+		root:  root,
+		items: []treeItem{{name: root, path: root, depth: 0, parentIndex: -1, expandable: true, collapsed: true}},
+	}
+	t.Table = vtui.NewTable(0, 0, 1, 1, []vtui.TableColumn{{Title: "Name"}})
+	return t
+}
+
+// TestTreeExpandCollapse_SpliceLogic drives expandAt/collapseAt directly
+// against a small real directory tree and checks the flat list's shape
+// (depth, parentIndex, collapsed) after each step -- the mechanics f4#1602's
+// tracking comment asked to model on far2l's own flat TreeItem list rather
+// than a nested structure.
+func TestTreeExpandCollapse_SpliceLogic(t *testing.T) {
+	root := t.TempDir()
+	childA := filepath.Join(root, "childA")
+	childB := filepath.Join(root, "childB")
+	grandchild := filepath.Join(childA, "grandchild")
+	if err := os.MkdirAll(grandchild, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Mkdir(childB, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	tp := newBareTreePanel(root)
+	tp.expandAt(0)
+
+	if len(tp.items) != 3 {
+		t.Fatalf("after expanding root, items = %d, want 3 (root, childA, childB): %+v", len(tp.items), tp.items)
+	}
+	if tp.items[0].collapsed {
+		t.Error("root should be marked expanded after expandAt")
+	}
+	if tp.items[1].name != "childA" || tp.items[1].depth != 1 || tp.items[1].parentIndex != 0 {
+		t.Errorf("items[1] = %+v, want childA at depth 1, parentIndex 0", tp.items[1])
+	}
+	if tp.items[2].name != "childB" || tp.items[2].depth != 1 || tp.items[2].parentIndex != 0 {
+		t.Errorf("items[2] = %+v, want childB at depth 1, parentIndex 0", tp.items[2])
+	}
+	if tp.items[1].last[0] {
+		t.Error("childA is not the last sibling; last[0] should be false")
+	}
+	if !tp.items[2].last[0] {
+		t.Error("childB is the last sibling; last[0] should be true")
+	}
+
+	// Expand childA (index 1): grandchild is spliced in right after it, and
+	// childB's index must shift from 2 to 3.
+	tp.expandAt(1)
+	if len(tp.items) != 4 {
+		t.Fatalf("after expanding childA, items = %d, want 4: %+v", len(tp.items), tp.items)
+	}
+	if tp.items[2].name != "grandchild" || tp.items[2].depth != 2 || tp.items[2].parentIndex != 1 {
+		t.Errorf("items[2] = %+v, want grandchild at depth 2, parentIndex 1", tp.items[2])
+	}
+	if tp.items[3].name != "childB" || tp.items[3].parentIndex != 0 {
+		t.Errorf("items[3] = %+v, want childB with parentIndex fixed up to 0", tp.items[3])
+	}
+
+	// Collapsing childA removes grandchild and restores childB's index.
+	tp.collapseAt(1)
+	if len(tp.items) != 3 {
+		t.Fatalf("after collapsing childA, items = %d, want 3: %+v", len(tp.items), tp.items)
+	}
+	if !tp.items[1].collapsed {
+		t.Error("childA should be marked collapsed again")
+	}
+	if tp.items[2].name != "childB" || tp.items[2].parentIndex != 0 {
+		t.Errorf("items[2] = %+v, want childB with parentIndex restored to 0", tp.items[2])
+	}
+
+	// childB has no subdirectories: expanding it must flip expandable to
+	// false instead of leaving a dead "+" marker.
+	tp.expandAt(2)
+	if tp.items[2].expandable {
+		t.Error("childB has no subdirectories; expandAt should have cleared expandable")
+	}
+}
+
+// TestNewTreePanel_RootsAtVolumeAndRevealsCwd checks NewTreePanel's actual
+// construction path: rooted at the current volume (not just the source
+// panel's directory) and pre-expanded down to it, with the cursor left on
+// the source directory's own row.
+func TestNewTreePanel_RootsAtVolumeAndRevealsCwd(t *testing.T) {
+	root := t.TempDir()
+	fsp := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
+	waitForLoad(t, fsp)
+
+	tp := NewTreePanel(fsp)
+	wantPath := fsp.Vfs.GetPath() // canonical form (e.g. macOS resolves /tmp -> /private/tmp)
+
+	if got, want := tp.root, treeVolumeRoot(wantPath); got != want {
+		t.Errorf("tree root = %q, want %q (the volume root, not just the source directory)", got, want)
+	}
+	idx := tp.cursorIndex()
+	if idx < 0 {
+		t.Fatal("cursor should land on a real row after construction")
+	}
+	if got := filepath.Clean(tp.items[idx].path); got != filepath.Clean(wantPath) {
+		t.Errorf("cursor path = %q, want %q (the source panel's own directory)", got, wantPath)
+	}
+}
+
+// TestTreePanel_RightLeftExpandCollapse drives Right/Left through
+// ProcessKey, the same path a real keypress takes, and checks they toggle
+// expansion instead of falling through to the underlying table.
+func TestTreePanel_RightLeftExpandCollapse(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "child"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	tp := newBareTreePanel(root)
+	tp.syncRows()
+
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RIGHT}) {
+		t.Fatal("Right should be consumed by the tree")
+	}
+	if len(tp.items) != 2 {
+		t.Fatalf("after Right on root, items = %d, want 2 (root, child)", len(tp.items))
+	}
+	if tp.items[0].collapsed {
+		t.Error("root should be expanded after Right")
+	}
+
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_LEFT}) {
+		t.Fatal("Left should be consumed by the tree")
+	}
+	if len(tp.items) != 1 {
+		t.Fatalf("after Left on root, items = %d, want 1 (collapsed back to just root)", len(tp.items))
+	}
+}
+
+// TestTreePanel_EnterNavigatesSourceAndCloses drives the tree's Enter
+// handler directly: it must move the source panel to the highlighted
+// directory (the same round trip bookmarks_dialog.go's Enter performs via
+// NavigateToBookmark) and then close itself via ToggleAltPanel.
+func TestTreePanel_EnterNavigatesSourceAndCloses(t *testing.T) {
+	pf := setupMockPanelsFrame(t)
+	vtui.FrameManager.Push(pf)
+	t.Cleanup(func() { vtui.FrameManager.RemoveFrame(pf) })
+
+	root := t.TempDir()
+	child := filepath.Join(root, "child")
+	if err := os.Mkdir(child, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	src := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
+	waitForLoad(t, src)
+	pf.Panels[pf.ActiveIdx] = src
+
+	tp := newBareTreePanel(root)
+	tp.src = src
+	tp.expandAt(0)
+	tp.syncRows()
+	tp.Table.SelectPos = 1 // the only child row
+	opp := 1 - pf.ActiveIdx
+	pf.AltPanels[opp] = tp
+
+	if got := tp.items[1].path; got != child {
+		t.Fatalf("precondition: selected row path = %q, want %q", got, child)
+	}
+
+	if !tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN}) {
+		t.Fatal("Enter on a directory row should be consumed by the tree")
+	}
+
+	if got := src.Vfs.GetPath(); got != child {
+		t.Errorf("source panel path = %q, want %q", got, child)
+	}
+	if pf.AltPanels[opp] != nil {
+		t.Errorf("tree should have closed itself, AltPanels[%d] = %v", opp, pf.AltPanels[opp])
+	}
+}
