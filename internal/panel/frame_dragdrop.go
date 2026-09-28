@@ -243,6 +243,9 @@ func (pf *PanelsFrame) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
 	if ev.Phase == vtui.DragDrop && !ev.Payload.HasFiles() {
 		return vtui.DropNone
 	}
+	if action, handled := pf.terminalDropTarget(ev); handled {
+		return action
+	}
 	info, ok := pf.resolveDropTarget(ev.X, ev.Y)
 	if !ok || !VfsAcceptsDrop(info.fs) {
 		if ev.Phase != vtui.DragOver {
