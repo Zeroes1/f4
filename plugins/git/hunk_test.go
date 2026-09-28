@@ -165,18 +165,18 @@ func TestBuildPatchShiftsKeptHunksAndDropsModeChange(t *testing.T) {
 	fp := &filePatch{
 		header: []string{"diff --git a/f b/f", "old mode 100644", "new mode 100755", "index 1..2", "--- a/f", "+++ b/f"},
 		hunks: []*diffHunk{
-			{oldStart: 1, oldCount: 5, newStart: 1, newCount: 7, lines: []string{"+A", "+B"}},
-			{oldStart: 22, oldCount: 7, newStart: 24, newCount: 7, lines: []string{"-25", "+X"}, selected: true},
+			testHunk(1, 5, 1, 7, " 1", " 2", "+A", "+B", " 3", " 4", " 5"),
+			testHunk(22, 7, 24, 7, " 22", " 23", " 24", "-25", "+X", " 26", " 27", " 28"),
 		},
 	}
-	got := buildPatch(fp)
-	want := "diff --git a/f b/f\nindex 1..2\n--- a/f\n+++ b/f\n@@ -22,7 +22,7 @@\n-25\n+X\n"
-	if got != want {
+	fp.hunks[1].pickAll(true)
+	want := "diff --git a/f b/f\nindex 1..2\n--- a/f\n+++ b/f\n@@ -22,7 +22,7 @@\n 22\n 23\n 24\n-25\n+X\n 26\n 27\n 28\n"
+	if got := mustBuildPatch(t, fp); got != want {
 		t.Errorf("buildPatch =\n%s\nwant\n%s", got, want)
 	}
 
-	fp.hunks[1].selected = false
-	if got := buildPatch(fp); got != "" {
+	fp.hunks[1].pickAll(false)
+	if got := mustBuildPatch(t, fp); got != "" {
 		t.Errorf("buildPatch with nothing selected = %q, want empty", got)
 	}
 }
@@ -199,14 +199,14 @@ func TestHunkViewStagesOnlyThePickedHunk(t *testing.T) {
 		v.ProcessKey(key(vtinput.VK_DOWN))
 	}
 	row, ok := v.cursorRow()
-	if !ok || !row.header || row.hunk != v.patch.hunks[1] {
+	if !ok || !row.header() || row.hunk != v.patch.hunks[1] {
 		t.Fatalf("cursor is not on the second hunk's @@ line: %+v", row)
 	}
 	if !v.ProcessKey(key(vtinput.VK_INSERT)) {
 		t.Fatal("Insert was not claimed")
 	}
-	if v.patch.hunks[0].selected || !v.patch.hunks[1].selected {
-		t.Fatalf("selection = %v/%v, want false/true", v.patch.hunks[0].selected, v.patch.hunks[1].selected)
+	if v.patch.hunks[0].anyPicked() || !v.patch.hunks[1].allPicked() {
+		t.Fatalf("selection = %v/%v, want false/true", v.patch.hunks[0].anyPicked(), v.patch.hunks[1].allPicked())
 	}
 	if !v.ProcessKey(key(vtinput.VK_RETURN)) {
 		t.Fatal("Enter was not claimed")
@@ -240,7 +240,7 @@ func TestHunkViewInSubdirectory(t *testing.T) {
 
 	// Insert on the first hunk picks it and jumps to the second.
 	v.ProcessKey(key(vtinput.VK_INSERT))
-	if row, _ := v.cursorRow(); row.hunk != v.patch.hunks[1] || !row.header {
+	if row, _ := v.cursorRow(); row.hunk != v.patch.hunks[1] || !row.header() {
 		t.Errorf("Insert did not move the cursor to the next hunk")
 	}
 	v.ProcessKey(key(vtinput.VK_F2))
@@ -321,14 +321,15 @@ func TestBuildPatchStagedShiftsOldSide(t *testing.T) {
 		staged: true,
 		header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
 		hunks: []*diffHunk{
-			{oldStart: 1, oldCount: 5, newStart: 1, newCount: 7, lines: []string{"+A", "+B"}},
-			{oldStart: 22, oldCount: 7, newStart: 24, newCount: 7, lines: []string{"-25", "+X"}, selected: true},
+			testHunk(1, 5, 1, 7, " 1", " 2", "+A", "+B", " 3", " 4", " 5"),
+			testHunk(22, 7, 24, 7, " 22", " 23", " 24", "-25", "+X", " 26", " 27", " 28"),
 		},
 	}
+	fp.hunks[1].pickAll(true)
 	// The first hunk stays in the index, so the kept one's "-a" moves
 	// forward by its two lines; "+c" already counts lines of the index.
-	want := "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n@@ -24,7 +24,7 @@\n-25\n+X\n"
-	if got := buildPatch(fp); got != want {
+	want := "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n@@ -24,7 +24,7 @@\n 22\n 23\n 24\n-25\n+X\n 26\n 27\n 28\n"
+	if got := mustBuildPatch(t, fp); got != want {
 		t.Errorf("buildPatch =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -358,10 +359,10 @@ func TestHunkViewUnstagesOnlyThePickedHunk(t *testing.T) {
 		v.ProcessKey(key(vtinput.VK_DOWN))
 	}
 	v.ProcessKey(key(vtinput.VK_INSERT))
-	if v.patch.hunks[0].selected || !v.patch.hunks[1].selected {
-		t.Fatalf("selection = %v/%v, want false/true", v.patch.hunks[0].selected, v.patch.hunks[1].selected)
+	if v.patch.hunks[0].anyPicked() || !v.patch.hunks[1].allPicked() {
+		t.Fatalf("selection = %v/%v, want false/true", v.patch.hunks[0].anyPicked(), v.patch.hunks[1].allPicked())
 	}
-	if patch := buildPatch(v.patch); !strings.Contains(patch, "@@ -24,7 +24,7 @@") {
+	if patch := mustBuildPatch(t, v.patch); !strings.Contains(patch, "@@ -24,7 +24,7 @@") {
 		t.Errorf("unstage patch does not carry the shifted hunk header:\n%s", patch)
 	}
 	if !v.ProcessKey(key(vtinput.VK_RETURN)) {
@@ -489,5 +490,298 @@ func TestUnstageHunkViewScreenDump(t *testing.T) {
 	t.Log("\n" + text)
 	if !strings.Contains(text, "Unstage hunks: f.txt") || !strings.Contains(text, "@@ -22,7 +24,7 @@") {
 		t.Errorf("screen misses the title or the second hunk:\n%s", text)
+	}
+}
+
+// testHunk builds a diffHunk from its header numbers and body lines, with
+// nothing picked.
+func testHunk(oldStart, oldCount, newStart, newCount int, lines ...string) *diffHunk {
+	return &diffHunk{oldStart: oldStart, oldCount: oldCount, newStart: newStart, newCount: newCount, lines: lines, picked: make([]bool, len(lines))}
+}
+
+func mustBuildPatch(t *testing.T, fp *filePatch) string {
+	t.Helper()
+	patch, err := buildPatch(fp)
+	if err != nil {
+		t.Fatalf("buildPatch: %v", err)
+	}
+	return patch
+}
+
+// pickLines picks the body lines of h with the given indexes.
+func pickLines(h *diffHunk, idx ...int) {
+	for _, i := range idx {
+		h.picked[i] = true
+	}
+}
+
+// TestBuildPatchPicksSingleLines checks the rebuilt hunks and their
+// headers for a few picks of single lines, in both directions. The first
+// hunk replaces "2" with "X" and "Y" (one line longer); the second hunk,
+// picked whole, has to move by whatever the rebuilt first hunk changes.
+func TestBuildPatchPicksSingleLines(t *testing.T) {
+	const head = "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n"
+	for _, tc := range []struct {
+		name   string
+		staged bool
+		pick   []int // lines of the first hunk
+		want   string
+	}{
+		{"stage +Y", false, []int{3},
+			"@@ -1,3 +1,4 @@\n 1\n 2\n+Y\n 3\n@@ -20,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
+		{"stage -2", false, []int{1},
+			"@@ -1,3 +1,2 @@\n 1\n-2\n 3\n@@ -20,3 +19,3 @@\n 20\n-21\n+Z\n 22\n"},
+		{"unstage +Y", true, []int{3},
+			"@@ -1,3 +1,4 @@\n 1\n X\n+Y\n 3\n@@ -20,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
+		{"unstage -2", true, []int{1},
+			"@@ -1,5 +1,4 @@\n 1\n-2\n X\n Y\n 3\n@@ -22,3 +21,3 @@\n 20\n-21\n+Z\n 22\n"},
+	} {
+		fp := &filePatch{
+			staged: tc.staged,
+			header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
+			hunks: []*diffHunk{
+				testHunk(1, 3, 1, 4, " 1", "-2", "+X", "+Y", " 3"),
+				testHunk(20, 3, 21, 3, " 20", "-21", "+Z", " 22"),
+			},
+		}
+		pickLines(fp.hunks[0], tc.pick...)
+		fp.hunks[1].pickAll(true)
+		if got := mustBuildPatch(t, fp); got != head+tc.want {
+			t.Errorf("%s: buildPatch =\n%s\nwant\n%s", tc.name, got, head+tc.want)
+		}
+	}
+}
+
+func TestBuildPatchRefusesUnrepresentablePicks(t *testing.T) {
+	// A new file: its one hunk is picked whole or not at all.
+	fp := &filePatch{
+		header: []string{"diff --git a/n b/n", "new file mode 100644", "index 0000000..1", "--- /dev/null", "+++ b/n"},
+		hunks:  []*diffHunk{testHunk(0, 0, 1, 2, "+one", "+two")},
+	}
+	pickLines(fp.hunks[0], 0)
+	if _, err := buildPatch(fp); !errors.Is(err, errWholeFileOnly) {
+		t.Errorf("part of a new file: error = %v, want errWholeFileOnly", err)
+	}
+	fp.hunks[0].pickAll(true)
+	if _, err := buildPatch(fp); err != nil {
+		t.Errorf("a new file picked whole: %v", err)
+	}
+
+	// "b" loses its missing newline and "c" follows it. Keeping the old
+	// "b" (no newline) while adding lines after it has no file behind it.
+	fp = &filePatch{
+		header: []string{"diff --git a/f b/f", "index 1..2 100644", "--- a/f", "+++ b/f"},
+		hunks: []*diffHunk{testHunk(1, 2, 1, 3,
+			" a", "-b", "\\ No newline at end of file", "+b", "+c", "\\ No newline at end of file")},
+	}
+	pickLines(fp.hunks[0], 3, 4)
+	if _, err := buildPatch(fp); !errors.Is(err, errNoNewlineInside) {
+		t.Errorf("old last line kept before new lines: error = %v, want errNoNewlineInside", err)
+	}
+	fp.hunks[0].pickAll(false)
+	pickLines(fp.hunks[0], 1, 3) // just give "b" its newline
+	want := "diff --git a/f b/f\nindex 1..2 100644\n--- a/f\n+++ b/f\n@@ -1,2 +1,2 @@\n a\n-b\n\\ No newline at end of file\n+b\n"
+	if got := mustBuildPatch(t, fp); got != want {
+		t.Errorf("buildPatch =\n%s\nwant\n%s", got, want)
+	}
+}
+
+// moveTo puts the HunkView cursor on row pos (rows counted from the top:
+// the first hunk's "@@" line is 0).
+func moveTo(t *testing.T, v *HunkView, pos int) {
+	t.Helper()
+	for v.table.SelectPos < pos {
+		before := v.table.SelectPos
+		v.ProcessKey(key(vtinput.VK_DOWN))
+		if v.table.SelectPos == before {
+			t.Fatalf("cursor stuck at row %d, wanted row %d", before, pos)
+		}
+	}
+	for v.table.SelectPos > pos {
+		before := v.table.SelectPos
+		v.ProcessKey(key(vtinput.VK_UP))
+		if v.table.SelectPos == before {
+			t.Fatalf("cursor stuck at row %d, wanted row %d", before, pos)
+		}
+	}
+}
+
+// In twoHunkRepo's diff (both directions) the rows are:
+//
+//	0 @@ first hunk   1 " 1"  2 " 2"  3 "+A"  4 "+B"  5 " 3"  6 " 4"  7 " 5"
+//	8 @@ second hunk  9 " 22" 10 " 23" 11 " 24" 12 "-25" 13 "+X" ...
+const (
+	rowA     = 3
+	rowB     = 4
+	rowMinus = 12
+	rowX     = 13
+)
+
+// halfPickedContent is the file twoHunkRepo starts from with "A" inserted
+// and "X" added after "25" (which stays): what staging "+A" and "+X"
+// alone, or unstaging "+B" and "-25" alone, leaves in the index.
+func halfPickedContent() string {
+	return numbered(1, 2) + "A\n" + numbered(3, 25) + "X\n" + numbered(26, 30)
+}
+
+// TestHunkViewStagesSingleLines picks single lines of both hunks on a
+// real repository: "+A" (not "+B") of the first hunk and "+X" (not "-25")
+// of the second. The second hunk's "+" start then moves by one line, not
+// by the first hunk's two, and "-25" has to become context.
+func TestHunkViewStagesSingleLines(t *testing.T) {
+	repo := twoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksForOnlyEntry(t, p)
+
+	moveTo(t, v, rowA)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	if v.table.SelectPos != rowB {
+		t.Errorf("Insert on a line moved the cursor to row %d, want %d", v.table.SelectPos, rowB)
+	}
+	if got := v.patch.hunks[0].headerLine(); !strings.HasSuffix(got, " [1/2]") {
+		t.Errorf("half-picked hunk header = %q, want a [1/2] suffix", got)
+	}
+	if row, _ := v.cursorRow(); row.IsSelected() {
+		t.Error("the unpicked +B row is painted as picked")
+	}
+	moveTo(t, v, rowX)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	if n := v.patch.selectedCount(); n != 2 {
+		t.Fatalf("hunks with picked lines = %d, want 2", n)
+	}
+	if patch := mustBuildPatch(t, v.patch); !strings.Contains(patch, "@@ -22,7 +23,8 @@") || !strings.Contains(patch, "\n 25\n+X\n") {
+		t.Errorf("stage patch does not carry the rebuilt second hunk:\n%s", patch)
+	}
+	v.ProcessKey(key(vtinput.VK_RETURN))
+	if !v.IsDone() {
+		t.Fatal("the view did not close after staging")
+	}
+
+	if got := runRealGit(t, repo, "show", ":f.txt"); got != halfPickedContent() {
+		t.Errorf("index content after staging lines:\n%s", got)
+	}
+	unstaged := runRealGit(t, repo, "diff")
+	if !strings.Contains(unstaged, "\n+B\n") || !strings.Contains(unstaged, "\n-25\n") ||
+		strings.Contains(unstaged, "+A") || strings.Contains(unstaged, "+X") {
+		t.Errorf("worktree diff should hold just +B and -25:\n%s", unstaged)
+	}
+}
+
+// TestHunkViewUnstagesSingleLines is the other direction on the same
+// file: everything staged, then "+B" and "-25" taken back out -- the index
+// ends up where TestHunkViewStagesSingleLines left it. Here "+A" and "+X"
+// become context, "-25" puts the line back, and the second hunk's "-"
+// start moves by the one line "+B" took out.
+func TestHunkViewUnstagesSingleLines(t *testing.T) {
+	repo := stagedTwoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksOf(t, p, true)
+
+	moveTo(t, v, rowB)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	moveTo(t, v, rowMinus)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	if v.table.SelectPos != rowX {
+		t.Errorf("Insert on a line moved the cursor to row %d, want %d", v.table.SelectPos, rowX)
+	}
+	if patch := mustBuildPatch(t, v.patch); !strings.Contains(patch, "@@ -23,8 +24,7 @@") || !strings.Contains(patch, "\n-25\n X\n") {
+		t.Errorf("unstage patch does not carry the rebuilt second hunk:\n%s", patch)
+	}
+	v.ProcessKey(key(vtinput.VK_F2))
+	if !v.IsDone() {
+		t.Fatal("the view did not close after unstaging")
+	}
+
+	if got := runRealGit(t, repo, "show", ":f.txt"); got != halfPickedContent() {
+		t.Errorf("index content after unstaging lines:\n%s", got)
+	}
+	unstaged := runRealGit(t, repo, "diff")
+	if !strings.Contains(unstaged, "\n+B\n") || !strings.Contains(unstaged, "\n-25\n") ||
+		strings.Contains(unstaged, "+A") || strings.Contains(unstaged, "+X") {
+		t.Errorf("worktree diff should hold just +B and -25:\n%s", unstaged)
+	}
+}
+
+// TestHunkViewLineAndHunkToggleTogether: Insert on the "@@" line of a
+// half-picked hunk picks the rest of it, and again drops it whole.
+func TestHunkViewLineAndHunkToggleTogether(t *testing.T) {
+	repo := twoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksForOnlyEntry(t, p)
+	h := v.patch.hunks[0]
+
+	moveTo(t, v, rowA)
+	v.ProcessKey(key(vtinput.VK_SPACE))
+	moveTo(t, v, 0)
+	v.ProcessKey(key(vtinput.VK_SPACE))
+	if !h.allPicked() {
+		t.Fatal("Space on the @@ line of a half-picked hunk did not pick it whole")
+	}
+	if v.table.SelectPos != 8 {
+		t.Errorf("cursor at row %d after a hunk toggle, want the next @@ line (8)", v.table.SelectPos)
+	}
+	moveTo(t, v, 1) // a context line toggles the hunk as well
+	v.ProcessKey(key(vtinput.VK_SPACE))
+	if h.anyPicked() {
+		t.Error("Space on a context line of a picked hunk did not drop it")
+	}
+}
+
+// TestHunkViewStagesAroundMissingNewline: the committed file ends in "b"
+// with no newline, the worktree has "b\nc" (again no newline). Staging
+// "-b" and "+b" alone gives "b" its newline and nothing more -- the
+// marker after the unpicked "+c" has to go with it.
+func TestHunkViewStagesAroundMissingNewline(t *testing.T) {
+	repo := realGitRepo(t)
+	path := filepath.Join(repo, "f.txt")
+	writeRepoFile(t, path, "a\nb")
+	runRealGit(t, repo, "add", "-A")
+	runRealGit(t, repo, "commit", "-q", "-m", "initial")
+	writeRepoFile(t, path, "a\nb\nc")
+
+	p := openStatusPanelIn(t, repo)
+	v := openHunksForOnlyEntry(t, p)
+	h := v.patch.hunks[0]
+	want := []string{" a", "-b", "\\ No newline at end of file", "+b", "+c", "\\ No newline at end of file"}
+	if strings.Join(h.lines, "|") != strings.Join(want, "|") {
+		t.Fatalf("hunk lines = %q, want %q", h.lines, want)
+	}
+	moveTo(t, v, 2) // "-b"
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	moveTo(t, v, 4) // "+b"
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	v.ProcessKey(key(vtinput.VK_RETURN))
+	if !v.IsDone() {
+		t.Fatal("the view did not close after staging")
+	}
+	if got := runRealGit(t, repo, "show", ":f.txt"); got != "a\nb\n" {
+		t.Errorf("index content = %q, want %q", got, "a\nb\n")
+	}
+}
+
+// TestHunkViewLinePickScreenDump draws the view with "+A" of the first
+// hunk and "+X" of the second picked; run it with -v to see the screen.
+func TestHunkViewLinePickScreenDump(t *testing.T) {
+	repo := twoHunkRepo(t, "f.txt")
+	p := openStatusPanelIn(t, repo)
+	v := openHunksForOnlyEntry(t, p)
+	v.SetPosition(0, 0, 59, 21)
+	moveTo(t, v, rowA)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+	moveTo(t, v, rowX)
+	v.ProcessKey(key(vtinput.VK_INSERT))
+
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(60, 22)
+	v.Show(scr)
+	var b strings.Builder
+	scr.Dump(&b)
+	text := b.String()
+	if i := strings.Index(text, "--- CELL METADATA"); i >= 0 {
+		text = text[:i]
+	}
+	t.Log("\n" + text)
+	if !strings.Contains(text, "@@ -1,5 +1,7 @@ [1/2]") || !strings.Contains(text, "@@ -22,7 +24,7 @@ [1/2]") {
+		t.Errorf("screen misses the [1/2] marks of the half-picked hunks:\n%s", text)
 	}
 }

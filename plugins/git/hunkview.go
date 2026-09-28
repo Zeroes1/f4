@@ -13,20 +13,39 @@ import (
 	"github.com/unxed/vtui"
 )
 
-// hunkLineRow is one line of HunkView's list: a hunk's "@@" line or one of
-// its body lines. Every row of a hunk points at that same *diffHunk, so
-// IsSelected -- vtui.Table's SelectableRow hook, the one a file panel's
-// marked files use -- paints the whole hunk in the "selected" color the
-// moment it is toggled, with no per-row bookkeeping.
+// hunkLineRow is one line of HunkView's list: a hunk's "@@" line (line
+// -1) or one of its body lines (the index into diffHunk.lines). Every row
+// of a hunk points at that same *diffHunk and reads the picks from there,
+// so IsSelected -- vtui.Table's SelectableRow hook, the one a file panel's
+// marked files use -- repaints the moment a line or the hunk is toggled,
+// with no per-row bookkeeping: a "+"/"-" row is painted as "selected" when
+// that line is picked, the "@@" and context rows when the whole hunk is.
 type hunkLineRow struct {
-	hunk   *diffHunk
-	text   string
-	header bool
+	hunk *diffHunk
+	line int
 }
 
-func (r hunkLineRow) GetCellText(int) string { return r.text }
+func (r hunkLineRow) header() bool { return r.line < 0 }
 
-func (r hunkLineRow) IsSelected() bool { return r.hunk.selected }
+// changeLine reports whether the row is a "+" or "-" line, the rows that
+// can be picked one by one.
+func (r hunkLineRow) changeLine() bool {
+	return !r.header() && isChangeLine(r.hunk.lines[r.line])
+}
+
+func (r hunkLineRow) GetCellText(int) string {
+	if r.header() {
+		return r.hunk.headerLine()
+	}
+	return displayDiffLine(r.hunk.lines[r.line])
+}
+
+func (r hunkLineRow) IsSelected() bool {
+	if r.changeLine() {
+		return r.hunk.picked[r.line]
+	}
+	return r.hunk.allPicked()
+}
 
 // displayDiffLine makes one raw diff line fit a table cell: a tab becomes
 // four spaces and a CRLF file's trailing '\r' is dropped. Only the shown
@@ -36,10 +55,13 @@ func displayDiffLine(line string) string {
 }
 
 // HunkView is F4 on the git status panel: the unstaged changes of one file
-// as a list of hunks, `git add -p` style. Insert or Space picks or drops
-// the hunk under the cursor (and moves on to the next hunk), Enter or F2
-// stages the picked hunks with `git apply --cached` and closes, Esc or F10
-// closes without staging anything.
+// as a list of hunks, `git add -p` style. Insert or Space on a hunk's "@@"
+// line or on one of its context lines picks or drops the whole hunk (and
+// moves on to the next hunk); on a "+" or "-" line it picks or drops just
+// that line (and moves one line down), which is how a hunk is split -- the
+// line-level staging GUI clients offer, `git add -p`'s "s" and "e" in one.
+// Enter or F2 stages what is picked with `git apply --cached` and closes,
+// Esc or F10 closes without staging anything.
 //
 // Shift+F4 opens the same view over the file's staged changes (a patch
 // with staged set, `git reset -p` style): the keys are the same, and Enter
@@ -88,9 +110,9 @@ func newHunkView(dir, path string, patch *filePatch, onStaged func()) *HunkView 
 
 	var rows []vtui.TableRow
 	for _, h := range patch.hunks {
-		rows = append(rows, hunkLineRow{hunk: h, text: h.headerLine(), header: true})
-		for _, line := range h.lines {
-			rows = append(rows, hunkLineRow{hunk: h, text: displayDiffLine(line)})
+		rows = append(rows, hunkLineRow{hunk: h, line: -1})
+		for i := range h.lines {
+			rows = append(rows, hunkLineRow{hunk: h, line: i})
 		}
 	}
 	table.SetRows(rows)
@@ -141,8 +163,8 @@ func (v *HunkView) GetKeyLabels() *vtui.KeySet {
 	}
 }
 
-// ProcessKey: Esc/F10 close; Insert/Space toggle the hunk under the
-// cursor; Enter/F2 stage (or unstage) the picked hunks. Everything else is
+// ProcessKey: Esc/F10 close; Insert/Space toggle the line or the hunk
+// under the cursor; Enter/F2 stage (or unstage) what is picked. Everything else is
 // table navigation.
 func (v *HunkView) ProcessKey(e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown {
@@ -157,7 +179,7 @@ func (v *HunkView) ProcessKey(e *vtinput.InputEvent) bool {
 	if mods == 0 {
 		switch e.VirtualKeyCode {
 		case vtinput.VK_INSERT, vtinput.VK_SPACE:
-			v.toggleHunk()
+			v.toggle()
 			return true
 		case vtinput.VK_RETURN, vtinput.VK_F2:
 			v.stageSelected()
@@ -185,26 +207,37 @@ func (v *HunkView) cursorRow() (hunkLineRow, bool) {
 	return row, ok
 }
 
-// toggleHunk flips the hunk under the cursor and moves the cursor to the
-// next hunk's "@@" line, the way Insert marks a file and steps down in a
-// file panel -- so Insert, Insert, ... walks through the file hunk by hunk.
-// On the last hunk the cursor stays put.
-func (v *HunkView) toggleHunk() {
+// toggle flips what is under the cursor. On a "+" or "-" line that is the
+// line alone, and the cursor steps one row down, the way Insert marks a
+// file and steps down in a file panel. On the "@@" line or a context line
+// it is the whole hunk -- picked whole unless it already is, dropped whole
+// if it is -- and the cursor moves to the next hunk's "@@" line, so Insert,
+// Insert, ... walks through the file hunk by hunk. On the last row (or the
+// last hunk) the cursor stays put.
+func (v *HunkView) toggle() {
 	row, ok := v.cursorRow()
 	if !ok {
 		return
 	}
-	row.hunk.selected = !row.hunk.selected
-	for pos := v.table.SelectPos + 1; pos < v.table.ItemCount; pos++ {
-		idx := v.table.RowAt(pos)
-		if idx < 0 || idx >= len(v.table.Rows) {
-			continue
-		}
-		next, ok := v.table.Rows[idx].(hunkLineRow)
-		if ok && next.header && next.hunk != row.hunk {
-			v.table.SelectPos = pos
+	if row.changeLine() {
+		row.hunk.picked[row.line] = !row.hunk.picked[row.line]
+		if v.table.SelectPos+1 < v.table.ItemCount {
+			v.table.SelectPos++
 			v.table.EnsureVisible()
-			break
+		}
+	} else {
+		row.hunk.pickAll(!row.hunk.allPicked())
+		for pos := v.table.SelectPos + 1; pos < v.table.ItemCount; pos++ {
+			idx := v.table.RowAt(pos)
+			if idx < 0 || idx >= len(v.table.Rows) {
+				continue
+			}
+			next, ok := v.table.Rows[idx].(hunkLineRow)
+			if ok && next.header() && next.hunk != row.hunk {
+				v.table.SelectPos = pos
+				v.table.EnsureVisible()
+				break
+			}
 		}
 	}
 	if vtui.FrameManager != nil {
@@ -212,11 +245,11 @@ func (v *HunkView) toggleHunk() {
 	}
 }
 
-// stageSelected applies the picked hunks to the index -- or, for staged
-// hunks, takes them out of it -- and closes the view. With nothing picked
-// it only says so; a failed apply (the file changed on disk or in the
-// index since the view was opened, say) keeps the view open with git's
-// own message.
+// stageSelected applies the picked lines to the index -- or, for staged
+// ones, takes them out of it -- and closes the view. With nothing picked
+// it only says so; a pick buildPatch cannot turn into a patch, or a failed
+// apply (the file changed on disk or in the index since the view was
+// opened, say), keeps the view open with the reason.
 func (v *HunkView) stageSelected() {
 	n := v.patch.selectedCount()
 	if n == 0 {
@@ -224,6 +257,14 @@ func (v *HunkView) stageSelected() {
 		return
 	}
 	if err := applyFilePatch(context.Background(), v.dir, v.patch); err != nil {
+		switch {
+		case errors.Is(err, errWholeFileOnly):
+			toast.Show(i18n.Msg("GitHunks.WholeFileOnly"), 3e9)
+			return
+		case errors.Is(err, errNoNewlineInside):
+			toast.Show(i18n.Msg("GitHunks.NoNewlineInside"), 3e9)
+			return
+		}
 		toast.Show(fmt.Sprintf(v.msg("GitHunks.ApplyFailed", "GitHunks.UnapplyFailed"), err), 3e9)
 		return
 	}

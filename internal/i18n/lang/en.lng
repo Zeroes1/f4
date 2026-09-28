@@ -748,7 +748,7 @@ GitDiff.CompareFailed=Failed to build the diff: %v
 
 GitHunks.PanelTitle=Stage hunks: %s (%d of %d picked)
 GitHunks.Stage=Stage
-GitHunks.NothingSelected=Pick at least one hunk with Insert or Space first
+GitHunks.NothingSelected=Pick at least one hunk or line with Insert or Space first
 GitHunks.ApplyFailed=git apply --cached failed: %s
 GitHunks.Staged=Staged %d of %d hunks of %s
 GitHunks.NoHunks=%s has no unstaged text changes to stage in parts (an untracked file is staged whole with Insert)
@@ -758,6 +758,8 @@ GitHunks.Unstage=Unstage
 GitHunks.UnapplyFailed=git apply --cached -R failed: %s
 GitHunks.Unstaged=Unstaged %d of %d hunks of %s
 GitHunks.NoStagedHunks=%s has no staged text changes to unstage in parts (a staged rename is unstaged whole with Insert)
+GitHunks.WholeFileOnly=A new or deleted file can only be picked whole: pick its hunk on the @@ line
+GitHunks.NoNewlineInside=These lines cannot be picked apart: the last line of the file has no trailing newline and would end up in the middle of it
 
 GitLog.ColumnHash=Hash
 GitLog.ColumnAuthor=Author

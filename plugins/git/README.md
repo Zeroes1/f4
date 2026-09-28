@@ -309,11 +309,34 @@ archive tools (f4#609) rather than linking a Go git implementation.
   untracked. A staged rename is not offered in parts (the diff of the new
   path alone reads as an added file): Insert unstages it whole.
 
-## What is deliberately not here yet
+## Part 14: picking single lines inside a hunk (F4 and Shift+F4)
 
-Splitting a hunk into smaller ones and picking single lines: each is its
-own follow-up part of f4#659, on top of the same `filePatch`/`buildPatch`
-pair.
+- In `HunkView` (both directions) **Insert**/**Space** on a `+` or `-`
+  line picks or drops that line alone and moves the cursor one line down;
+  on the `@@` line or a context line it still picks or drops the whole
+  hunk (a half-picked hunk is picked whole first) and jumps to the next
+  hunk. A picked line is painted in the "selected" color; the `@@` and
+  context lines are painted only while the whole hunk is picked, and a
+  half-picked hunk's `@@` line ends in `[picked/changed]`.
+- This covers splitting a hunk as well (`git add -p`'s `s`): picking the
+  lines of one run of changes between context lines stages just that run.
+- `buildPatch` rebuilds each hunk with picked lines the way `git add -p`'s
+  `e` asks the user to edit it by hand. The side that is the index now
+  (`-` when staging, `+` when unstaging, since that patch is applied with
+  `-R`) keeps every line: its unpicked changed lines become context. The
+  other side's unpicked lines are dropped, together with a
+  `\ No newline at end of file` marker after them. Both counts of the `@@`
+  line are recounted, and the start of the side that is not the index is
+  moved by the line-count change of the rebuilt hunks before it.
+- Two picks cannot become a patch and are refused with a toast, nothing
+  applied: part of a hunk of a new or deleted file (that would turn the
+  creation or deletion into a modification -- pick it whole), and a pick
+  that would keep a last line without a trailing newline in the middle of
+  the file.
+- Tests on real repositories (`hunk_test.go`) stage and unstage single
+  lines of two hunks where the second one has to move by the rebuilt first
+  one, check the index with `git show :f.txt`, and stage around a missing
+  final newline.
 
 ## Design notes
 
