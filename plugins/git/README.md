@@ -26,11 +26,25 @@ archive tools (f4#609) rather than linking a Go git implementation.
   error as a toast (`internal/panel/plugins.go`'s existing
   `PanelProvider.Open` error handling) -- nothing extra to build here.
 
+## Part 2: diffing a changed file (`diff.go`)
+
+- **Enter** on a listed entry opens a side-by-side diff (`internal/diffview`,
+  f4#613) of that one file: its `HEAD` content on the left, its current
+  working-tree content on the right -- the exact same widget
+  `internal/app/compare_content_ui.go` already uses for f4's plain "Compare
+  files by content", per the scope split agreed in f4#613.
+- A file with no `HEAD` version yet (new/untracked, or an unborn branch) just
+  shows an empty left side, so the whole file appears inserted -- the same
+  shape `git diff --no-index /dev/null <file>` would produce. A file deleted
+  from the worktree since the panel last loaded shows the mirror image: an
+  empty right side. A rename or copy diffs the old name's `HEAD` content
+  against the new name's worktree content.
+- Same guards as "Compare files by content": a side over 8 MiB, or one that
+  looks binary (a NUL byte), is refused with a message instead of diffed.
+
 ## What is deliberately not here yet
 
-Everything else the ticket asks for: diffing a changed file (reusing
-`internal/diffview`/`internal/textdiff`, f4#613 -- see that ticket for how
-the scope was split between the two), staging/unstaging a hunk or a whole
+Everything else the ticket asks for: staging/unstaging a hunk or a whole
 file, commit (with an editor for the message), log, and branch
 switching/creation. Each is its own atomic follow-up part of f4#659, not
 this one.
@@ -52,3 +66,12 @@ this one.
   keep them either, on the principle that an unused, untested field is the
   wrong thing to carry around. A later part that wants them only has to add
   the two lines back.
+- `headFileContent` (`diff.go`) runs `git show HEAD:./<path>`, never bare
+  `HEAD:<path>` -- per `gitrevisions(7)`, a path after the colon is resolved
+  relative to the repository's top level unless it starts with `./` or
+  `../`, in which case it is resolved relative to the current directory
+  instead. Since every git invocation here runs with `dir` (a possible
+  subdirectory of the repository) as its working directory, and
+  `entry.Path`/`entry.OrigPath` come from `git status` reported the same way
+  relative to that same `dir`, the `./` prefix is required for the two to
+  agree on what the path means.

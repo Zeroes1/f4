@@ -8,10 +8,15 @@
 // status view, in the same "view first, act later" order plugins/proclist
 // took for f4#312. It registers one vfs.PanelProvider ("f4.gitstatus") that
 // lists `git status --porcelain=v2`'s changed, unmerged and untracked paths
-// for the active panel's current directory, with F5 to refresh. Diffing a
-// changed file (reusing internal/diffview/internal/textdiff, f4#613),
-// staging/unstaging, commit, log and branch switching are follow-up parts,
-// not this one -- see the ticket for the full list.
+// for the active panel's current directory, with F5 to refresh.
+//
+// v2 (f4#659 part 2 of N, diff.go) adds Enter on a listed entry: a
+// side-by-side HEAD-vs-worktree diff of that one file, reusing
+// internal/diffview/internal/textdiff exactly as internal/app's own
+// "Compare files by content" does (f4#613).
+//
+// Staging/unstaging, commit, log and branch switching are still follow-up
+// parts, not this one -- see the ticket for the full list.
 package git
 
 import (

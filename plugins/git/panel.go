@@ -172,25 +172,32 @@ func (p *statusPanel) SetFocus(focused bool) {
 
 func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 
-// ProcessKey adds F5 (refresh) on top of the table's own navigation/sort/
-// quick-search handling. F5 rather than a letter key: QuickSearch claims
-// printable characters while the table is focused (plugins/proclist/panel.go
-// avoids the same trap by keying its own actions off F-keys), and F5 is the
-// refresh gesture Windows Explorer and most browsers already use -- this
-// panel has no file Copy of its own for F5 to collide with.
+// ProcessKey adds F5 (refresh) and Enter (diff, diff.go) on top of the
+// table's own navigation/sort/quick-search handling. Neither is a letter
+// key: QuickSearch claims printable characters while the table is focused
+// (plugins/proclist/panel.go avoids the same trap by keying its own actions
+// off F-keys), and F5/Enter are the refresh and open gestures a file panel
+// already uses -- this panel has no file Copy or directory-enter of its own
+// for either to collide with.
 func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
-	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown && e.VirtualKeyCode == vtinput.VK_F5 {
+	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
 		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
 		alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
 		shift := e.ControlKeyState&vtinput.ShiftPressed != 0
 		if !ctrl && !alt && !shift {
-			if err := p.reload(); err != nil {
-				toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.RefreshFailed"), err), 3e9)
+			switch e.VirtualKeyCode {
+			case vtinput.VK_F5:
+				if err := p.reload(); err != nil {
+					toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.RefreshFailed"), err), 3e9)
+				}
+				if vtui.FrameManager != nil {
+					vtui.FrameManager.Redraw()
+				}
+				return true
+			case vtinput.VK_RETURN:
+				p.showDiff()
+				return true
 			}
-			if vtui.FrameManager != nil {
-				vtui.FrameManager.Redraw()
-			}
-			return true
 		}
 	}
 	return p.table.ProcessKey(e)

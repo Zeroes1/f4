@@ -657,6 +657,9 @@ GitStatus.PanelTitle=Статус git: %s (%d)
 GitStatus.Detached=отделённый HEAD
 GitStatus.NoPath=Нет каталога активной панели для запуска git status
 GitStatus.RefreshFailed=Не удалось обновить статус git: %s
+GitDiff.ReadFailed=Не удалось прочитать %s: %v
+GitDiff.TooLarge=Этот файл слишком велик или слишком сильно отличается, чтобы построить diff в этой версии.
+GitDiff.CompareFailed=Не удалось построить diff: %v
 
 Editor.GotoTitle=Перейти к позиции
 Editor.GotoLine=Строка:
