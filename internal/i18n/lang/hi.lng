@@ -444,6 +444,17 @@ Queue.BtnClear=पूर्ण कार्यों को सा&फ़ कर
 
 Session.Title= सत्र चुनें
 
+AI.ReviewTitle= पैच समीक्षा 
+AI.ReviewColFile=फ़ाइल
+AI.ReviewColAction=क्रिया
+AI.ReviewColStatus=स्थिति
+AI.ReviewColLocator=क्या खोजा
+AI.ReviewOK=लागू होगा
+AI.ReviewSkipped=पहले से लागू
+AI.ReviewFailed=त्रुटि
+AI.ReviewTotals=परीक्षण रन: %d लागू होंगे, %d पहले से लागू, %d विफल। कुछ भी नहीं लिखा गया।
+AI.ReviewBtnClose=बं&द करें
+
 SettingsCenter.AltNumberSwitchesTabs.Description=कार्यस्थल चयन के लिए  रिजर्व Alt+number शॉर्टकट।
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number टैब स्विच करता है
 SettingsCenter.AlwaysShowMenuBar.Description=मुख्य मेनू बार को केवल सक्रिय होने पर दिखाने के बजाय दृश्यमान रखें।

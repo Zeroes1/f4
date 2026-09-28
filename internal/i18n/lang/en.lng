@@ -2206,6 +2206,16 @@ AI.PatchFailed=[!] FAIL: The patch was not applied.
 AI.BtnViewLog=&View log
 AI.BtnAttachReport=Attach &report
 AI.PatchReportAttached=afailed.md was attached to the dialog
+AI.ReviewTitle= Patch review 
+AI.ReviewColFile=File
+AI.ReviewColAction=Action
+AI.ReviewColStatus=Status
+AI.ReviewColLocator=Searched for
+AI.ReviewOK=will apply
+AI.ReviewSkipped=already applied
+AI.ReviewFailed=fails
+AI.ReviewTotals=Dry run: %d to apply, %d already applied, %d failing. Nothing was written.
+AI.ReviewBtnClose=&Close
 AI.SpecDownloading=Downloading the ap specification...
 AI.SpecAttached=ap.md was attached and the model is now asked to answer with ap patches.
 

@@ -782,6 +782,17 @@ Queue.BtnClear=Hazır olanları &temizle
 
 Session.Title= Seans seçin
 
+AI.ReviewTitle= Yama incelemesi 
+AI.ReviewColFile=Dosya
+AI.ReviewColAction=Eylem
+AI.ReviewColStatus=Durum
+AI.ReviewColLocator=Aranan
+AI.ReviewOK=uygulanacak
+AI.ReviewSkipped=zaten uygulanmış
+AI.ReviewFailed=hata
+AI.ReviewTotals=Deneme çalıştırması: %d uygulanacak, %d zaten uygulanmış, %d hatalı. Hiçbir şey yazılmadı.
+AI.ReviewBtnClose=&Kapat
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Çalışma alanı seçimi için Alt + sayı kısayollarını rezerve edin.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+sayı anahtarları sekmeleri
 SettingsCenter.AlwaysShowMenuBar.Description=Ana menü çubuğunu sadece etkinleştirildiğinde göstermek yerine görünür tutun.

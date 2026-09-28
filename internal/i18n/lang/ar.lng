@@ -739,6 +739,17 @@ Queue.BtnClear=مسح الم&كتمل
 
 Session.Title= تحديد الجلسة
 
+AI.ReviewTitle= مراجعة الرقعة 
+AI.ReviewColFile=الملف
+AI.ReviewColAction=الإجراء
+AI.ReviewColStatus=الحالة
+AI.ReviewColLocator=نص البحث
+AI.ReviewOK=سيطبق
+AI.ReviewSkipped=مطبق مسبقا
+AI.ReviewFailed=خطأ
+AI.ReviewTotals=تشغيل تجريبي: %d للتطبيق، %d مطبق مسبقا، %d فشل. لم يكتب أي شيء.
+AI.ReviewBtnClose=إ&غلاق
+
 SettingsCenter.AltNumberSwitchesTabs.Description=حجز اختصارات Alt+number لاختيار مساحة العمل.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number يقوم بتبديل علامات التبويب
 SettingsCenter.AlwaysShowMenuBar.Description=اجعل شريط القائمة الرئيسية مرئيًا بدلاً من إظهاره فقط عند تنشيطه.

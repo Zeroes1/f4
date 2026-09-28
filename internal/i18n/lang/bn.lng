@@ -782,6 +782,17 @@ Queue.BtnClear=সম্পন্ন জবসমূহ মুছে ফেল�
 
 Session.Title= সেশন নির্বাচন
 
+AI.ReviewTitle= প্যাচ পর্যালোচনা 
+AI.ReviewColFile=ফাইল
+AI.ReviewColAction=কাজ
+AI.ReviewColStatus=অবস্থা
+AI.ReviewColLocator=যা খোঁজা হয়েছে
+AI.ReviewOK=প্রয়োগ হবে
+AI.ReviewSkipped=আগেই প্রয়োগ করা
+AI.ReviewFailed=ত্রুটি
+AI.ReviewTotals=পরীক্ষামূলক চালনা: %d প্রয়োগ হবে, %d আগেই প্রয়োগ করা, %d ব্যর্থ। কিছুই লেখা হয়নি।
+AI.ReviewBtnClose=বন্ধ করুন (&C)
+
 SettingsCenter.AltNumberSwitchesTabs.Description=ওয়ার্কস্পেস নির্বাচনের জন্য Alt+number শর্টকাট রিজার্ভ করুন।
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number ট্যাব সুইচ করে
 SettingsCenter.AlwaysShowMenuBar.Description=শুধুমাত্র সক্রিয় করার সময় এটি দেখানোর পরিবর্তে প্রধান মেনু বারটি দৃশ্যমান রাখুন।

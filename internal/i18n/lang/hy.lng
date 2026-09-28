@@ -703,6 +703,17 @@ KeyBar.ViewerF7=Որոնում
 KeyBar.ViewerAltF8=Անցնել
 KeyBar.ViewerF10=Ելք
 
+AI.ReviewTitle= Կարկատանի վերանայում 
+AI.ReviewColFile=Ֆայլ
+AI.ReviewColAction=Գործողություն
+AI.ReviewColStatus=Վիճակ
+AI.ReviewColLocator=Ինչ էր փնտրվում
+AI.ReviewOK=կկիրառվի
+AI.ReviewSkipped=արդեն կիրառված
+AI.ReviewFailed=սխալ
+AI.ReviewTotals=Փորձնական գործարկում՝ %d կկիրառվի, %d արդեն կիրառված, %d սխալ։ Ոչինչ չի գրվել։
+AI.ReviewBtnClose=&Փակել
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Պահպանեք Alt+number դյուրանցումները աշխատանքային տարածքի ընտրության համար:
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number անջատում է ներդիրները
 SettingsCenter.AlwaysShowMenuBar.Description=Հիմնական ընտրացանկի սանդղակը տեսանելի պահեք՝ այն միայն ակտիվացված ժամանակ ցուցադրելու փոխարեն:

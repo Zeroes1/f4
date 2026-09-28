@@ -785,6 +785,17 @@ Queue.BtnClear=Vymazat &hotové
 
 Session.Title= Vybrat relaci
 
+AI.ReviewTitle= Kontrola záplaty 
+AI.ReviewColFile=Soubor
+AI.ReviewColAction=Akce
+AI.ReviewColStatus=Stav
+AI.ReviewColLocator=Hledáno
+AI.ReviewOK=použije se
+AI.ReviewSkipped=již použito
+AI.ReviewFailed=chyba
+AI.ReviewTotals=Zkušební běh: %d k použití, %d již použito, %d s chybou. Nic nebylo zapsáno.
+AI.ReviewBtnClose=&Zavřít
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Rezervovat Alt+number zkratky pro výběr pracovního prostoru.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number přepíná karty
 SettingsCenter.AlwaysShowMenuBar.Description=Udržujte hlavní panel nabídky viditelný, místo aby se zobrazoval pouze při aktivaci.

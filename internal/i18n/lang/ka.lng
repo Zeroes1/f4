@@ -782,6 +782,17 @@ Queue.BtnClear=გასუფთავება &შესრულებულ
 
 Session.Title= აირჩიეთ სესია
 
+AI.ReviewTitle= პაჩის მიმოხილვა 
+AI.ReviewColFile=ფაილი
+AI.ReviewColAction=მოქმედება
+AI.ReviewColStatus=სტატუსი
+AI.ReviewColLocator=რას ეძებდა
+AI.ReviewOK=გამოიყენება
+AI.ReviewSkipped=უკვე გამოყენებულია
+AI.ReviewFailed=შეცდომა
+AI.ReviewTotals=საცდელი გაშვება: %d გამოიყენება, %d უკვე გამოყენებულია, %d შეცდომით. არაფერი ჩაწერილა.
+AI.ReviewBtnClose=&დახურვა
+
 SettingsCenter.AltNumberSwitchesTabs.Description=შეინახეთ Alt+number მალსახმობები სამუშაო სივრცის არჩევისთვის.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number ცვლის ჩანართებს
 SettingsCenter.AlwaysShowMenuBar.Description=შეინახეთ მენიუს მთავარი ზოლი ხილული იმის ნაცვლად, რომ აჩვენოთ იგი მხოლოდ გააქტიურებისას.

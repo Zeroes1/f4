@@ -777,6 +777,17 @@ Queue.BtnClear=완료 항목 지우기(&D)
 
 Session.Title= 세션 선택
 
+AI.ReviewTitle= 패치 검토 
+AI.ReviewColFile=파일
+AI.ReviewColAction=동작
+AI.ReviewColStatus=상태
+AI.ReviewColLocator=찾은 내용
+AI.ReviewOK=적용 예정
+AI.ReviewSkipped=이미 적용됨
+AI.ReviewFailed=실패
+AI.ReviewTotals=시험 실행: 적용 예정 %d, 이미 적용됨 %d, 실패 %d. 아무것도 기록되지 않았습니다.
+AI.ReviewBtnClose=닫기(&C)
+
 SettingsCenter.AltNumberSwitchesTabs.Description=작업 공간 선택을 위해 Alt+number 바로 가기를 예약합니다.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number 스위치 탭
 SettingsCenter.AlwaysShowMenuBar.Description=활성화된 경우에만 기본 메뉴 표시줄을 표시하는 대신 표시되도록 유지합니다.

@@ -703,6 +703,17 @@ KeyBar.ViewerF7=查找
 KeyBar.ViewerAltF8=跳转
 KeyBar.ViewerF10=退出
 
+AI.ReviewTitle= 补丁审查 
+AI.ReviewColFile=文件
+AI.ReviewColAction=操作
+AI.ReviewColStatus=状态
+AI.ReviewColLocator=查找内容
+AI.ReviewOK=将应用
+AI.ReviewSkipped=已应用
+AI.ReviewFailed=失败
+AI.ReviewTotals=试运行：将应用 %d，已应用 %d，失败 %d。未写入任何内容。
+AI.ReviewBtnClose=关闭(&C)
+
 SettingsCenter.AltNumberSwitchesTabs.Description=为工作空间选择保留Alt+号码快捷方式.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+数量切换表格
 SettingsCenter.AlwaysShowMenuBar.Description=保持主要菜单 ⁇ 可见,而不是只显示在激活时.

@@ -782,6 +782,17 @@ Queue.BtnClear=Notīrīt &pabeigtos
 
 Session.Title= Izvēlēties sesiju
 
+AI.ReviewTitle= Ielāpa pārskats 
+AI.ReviewColFile=Fails
+AI.ReviewColAction=Darbība
+AI.ReviewColStatus=Statuss
+AI.ReviewColLocator=Meklēts
+AI.ReviewOK=tiks lietots
+AI.ReviewSkipped=jau lietots
+AI.ReviewFailed=kļūda
+AI.ReviewTotals=Izmēģinājums: tiks lietoti %d, jau lietoti %d, ar kļūdu %d. Nekas netika ierakstīts.
+AI.ReviewBtnClose=&Aizvērt
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Atbalsta Alt + numuru īstermiņa maršrutus darba telpas izvēlei.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt + numuru pārvēršanas tabs
 SettingsCenter.AlwaysShowMenuBar.Description=Izvēlnes josla vienmēr paliek redzama ekrānā. Nav nepieciešams to vispirms aktivizēt.

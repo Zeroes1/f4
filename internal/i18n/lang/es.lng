@@ -785,6 +785,17 @@ Queue.BtnClear=Limpiar &completadas
 
 Session.Title= Seleccionar sesión
 
+AI.ReviewTitle= Revisión del parche 
+AI.ReviewColFile=Archivo
+AI.ReviewColAction=Acción
+AI.ReviewColStatus=Estado
+AI.ReviewColLocator=Buscado
+AI.ReviewOK=se aplicará
+AI.ReviewSkipped=ya aplicado
+AI.ReviewFailed=falla
+AI.ReviewTotals=Prueba: %d por aplicar, %d ya aplicados, %d con error. No se escribió nada.
+AI.ReviewBtnClose=&Cerrar
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Reserva los accesos directos de Alt+number para la selección del espacio de trabajo.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number cambia pestañas
 SettingsCenter.AlwaysShowMenuBar.Description=Mantenga visible la barra de menú principal en lugar de mostrarla solo cuando esté activada.

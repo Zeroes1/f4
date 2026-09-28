@@ -706,6 +706,17 @@ KeyBar.ViewerF7=Keresés
 KeyBar.ViewerAltF8=Ugrás
 KeyBar.ViewerF10=Kilép
 
+AI.ReviewTitle= Javítás áttekintése 
+AI.ReviewColFile=Fájl
+AI.ReviewColAction=Művelet
+AI.ReviewColStatus=Állapot
+AI.ReviewColLocator=Keresett
+AI.ReviewOK=alkalmazva lesz
+AI.ReviewSkipped=már alkalmazva
+AI.ReviewFailed=hiba
+AI.ReviewTotals=Próbafuttatás: %d alkalmazható, %d már alkalmazva, %d hibás. Semmi sem lett kiírva.
+AI.ReviewBtnClose=&Bezárás
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Reserve Alt+number parancsikonok a munkaterület kiválasztásához.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number fülek kapcsolói
 SettingsCenter.AlwaysShowMenuBar.Description=Tartsa láthatóan a főmenüsort ahelyett, hogy csak aktivált állapotban jelenítse meg.

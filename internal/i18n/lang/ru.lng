@@ -2206,6 +2206,16 @@ AI.PatchFailed=[!] FAIL: Патч не был применён.
 AI.BtnViewLog=&Лог
 AI.BtnAttachReport=Прикрепить &отчёт
 AI.PatchReportAttached=afailed.md был прикреплён к диалогу
+AI.ReviewTitle= Ревью патча 
+AI.ReviewColFile=Файл
+AI.ReviewColAction=Действие
+AI.ReviewColStatus=Статус
+AI.ReviewColLocator=Что искали
+AI.ReviewOK=применится
+AI.ReviewSkipped=уже применено
+AI.ReviewFailed=ошибка
+AI.ReviewTotals=Холостой прогон: применится %d, уже применено %d, ошибок %d. Ничего не записано.
+AI.ReviewBtnClose=&Закрыть
 AI.SpecDownloading=Скачивание спецификации AP...
 AI.SpecAttached=ap.md был прикреплён, теперь модель будет генерировать AP-патчи.
 

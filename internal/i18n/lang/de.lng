@@ -785,6 +785,17 @@ Queue.BtnClear=Erledigte &löschen
 
 Session.Title= Sitzung auswählen
 
+AI.ReviewTitle= Patch-Prüfung 
+AI.ReviewColFile=Datei
+AI.ReviewColAction=Aktion
+AI.ReviewColStatus=Status
+AI.ReviewColLocator=Gesucht
+AI.ReviewOK=wird angewendet
+AI.ReviewSkipped=bereits angewendet
+AI.ReviewFailed=Fehler
+AI.ReviewTotals=Probelauf: %d anzuwenden, %d bereits angewendet, %d fehlerhaft. Nichts wurde geschrieben.
+AI.ReviewBtnClose=&Schließen
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Reservieren Sie Alt+number-Tastenkombinationen für die Arbeitsbereichsauswahl.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number wechselt die Registerkarten
 SettingsCenter.AlwaysShowMenuBar.Description=Lassen Sie die Hauptmenüleiste sichtbar, anstatt sie nur anzuzeigen, wenn sie aktiviert ist.

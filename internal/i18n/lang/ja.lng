@@ -777,6 +777,17 @@ Queue.BtnClear=完了をクリア(&D)
 
 Session.Title= セッションの選択
 
+AI.ReviewTitle= パッチのレビュー 
+AI.ReviewColFile=ファイル
+AI.ReviewColAction=操作
+AI.ReviewColStatus=状態
+AI.ReviewColLocator=検索対象
+AI.ReviewOK=適用予定
+AI.ReviewSkipped=適用済み
+AI.ReviewFailed=失敗
+AI.ReviewTotals=ドライラン: 適用予定 %d、適用済み %d、失敗 %d。何も書き込まれていません。
+AI.ReviewBtnClose=閉じる(&C)
+
 SettingsCenter.AltNumberSwitchesTabs.Description=ワークスペース選択用に Alt+number ショートカットを予約します。
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number タブを切り替えます
 SettingsCenter.AlwaysShowMenuBar.Description=メイン メニュー バーをアクティブ化したときのみ表示するのではなく、表示したままにします。

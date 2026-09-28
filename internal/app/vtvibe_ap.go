@@ -29,7 +29,9 @@ import (
 // aiRunPatcher below is what changed; everything about the confirmation
 // dialog and the result screen (aiApplyPatch, aiShowPatchResult) already
 // worked the same way regardless of what actually applies the patch, so
-// neither needed to change.
+// neither needed to change. A dry run that reached individual
+// modifications now ends on the review table instead (aiShowPatchReview,
+// vtvibe_ap_review.go).
 
 const (
 	vtvibeAPSpecURL = "https://raw.githubusercontent.com/unxed/ap/main/ap.md"
@@ -110,6 +112,7 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 // land, same as --dir did for the old ap.py subprocess.
 func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry bool) {
 	var output string
+	var mods []ap.ModificationResult
 	exitCode := 0
 
 	title := i18n.Msg("AI.PatchTitle")
@@ -134,6 +137,7 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 			var out strings.Builder
 			result := ap.Apply(patchPath, root, ap.Options{DryRun: dry, Out: &out})
 			output = out.String()
+			mods = result.ModificationResults
 			exitCode = aiPatchExitCode(result.Status)
 			return nil
 		},
@@ -145,6 +149,14 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 				return
 			}
 			pf.RefreshAll()
+			// A dry run that got as far as individual modifications
+			// ends on the review table (vtvibe_ap_review.go); a real
+			// run, or a dry run that failed before any modification,
+			// keeps the plain result message.
+			if dry && len(mods) > 0 {
+				aiShowPatchReview(pf, patch, root, mods, exitCode, output)
+				return
+			}
 			aiShowPatchResult(pf, root, dry, exitCode, output)
 		})
 }
@@ -230,14 +242,7 @@ func aiShowPatchResult(pf *panel.PanelsFrame, root string, dry bool, exitCode in
 
 		switch {
 		case hasOutput && code == viewLogIdx:
-			dir, err := os.MkdirTemp("", "vtvibe-ap-log-")
-			if err == nil {
-				logPath := filepath.Join(dir, "ap_output.log")
-				if os.WriteFile(logPath, []byte(output), 0600) == nil {
-					tempVfs := vfs.NewOSVFS(dir)
-					actionOpenViewer(pf, tempVfs, "ap_output.log")
-				}
-			}
+			aiViewPatchLog(pf, output)
 		case hasReport && code == attachReportIdx:
 			aiAttachFailureReport(reportPath)
 		}

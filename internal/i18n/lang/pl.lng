@@ -785,6 +785,17 @@ Queue.BtnClear=Wyczyść &ukończone
 
 Session.Title= Wybierz sesję
 
+AI.ReviewTitle= Przegląd łatki 
+AI.ReviewColFile=Plik
+AI.ReviewColAction=Akcja
+AI.ReviewColStatus=Stan
+AI.ReviewColLocator=Szukano
+AI.ReviewOK=zostanie zastosowana
+AI.ReviewSkipped=już zastosowana
+AI.ReviewFailed=błąd
+AI.ReviewTotals=Próba: %d do zastosowania, %d już zastosowanych, %d z błędem. Nic nie zapisano.
+AI.ReviewBtnClose=&Zamknij
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Zatrzymaj skrótki liczby Alt+ do wyboru przestrzeni roboczej.
 SettingsCenter.AltNumberSwitchesTabs.Label=Zakładki przełączników Alt+numer
 SettingsCenter.AlwaysShowMenuBar.Description=Trzymaj główny pasek menu widoczny zamiast wyświetlać go tylko w momencie aktywacji.

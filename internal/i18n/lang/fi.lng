@@ -782,6 +782,17 @@ Queue.BtnClear=Tyhjennä &valmiit
 
 Session.Title= Valitse istunto
 
+AI.ReviewTitle= Korjauksen tarkistus 
+AI.ReviewColFile=Tiedosto
+AI.ReviewColAction=Toiminto
+AI.ReviewColStatus=Tila
+AI.ReviewColLocator=Haettu
+AI.ReviewOK=otetaan käyttöön
+AI.ReviewSkipped=jo käytössä
+AI.ReviewFailed=virhe
+AI.ReviewTotals=Koeajo: %d otetaan käyttöön, %d jo käytössä, %d virheellistä. Mitään ei kirjoitettu.
+AI.ReviewBtnClose=&Sulje
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Varaa Alt+number-pikakuvakkeet työtilan valintaan.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number kytkimet
 SettingsCenter.AlwaysShowMenuBar.Description=Pidä päävalikkopalkki näkyvissä sen sijaan, että se näkyisi vain aktivoituna.

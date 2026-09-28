@@ -782,6 +782,17 @@ Queue.BtnClear=Išvalyti &atliktas
 
 Session.Title= Pasirinkite sesiją 
 
+AI.ReviewTitle= Pataisos peržiūra 
+AI.ReviewColFile=Failas
+AI.ReviewColAction=Veiksmas
+AI.ReviewColStatus=Būsena
+AI.ReviewColLocator=Ieškota
+AI.ReviewOK=bus pritaikyta
+AI.ReviewSkipped=jau pritaikyta
+AI.ReviewFailed=klaida
+AI.ReviewTotals=Bandomasis paleidimas: bus pritaikyta %d, jau pritaikyta %d, su klaida %d. Niekas neįrašyta.
+AI.ReviewBtnClose=&Uždaryti
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Pasirinkti Alt+ skaičių perjungimus darbo erdvės pasirinkimui.
 SettingsCenter.AltNumberSwitchesTabs.Label="Alt+number switches" įrankos
 SettingsCenter.AlwaysShowMenuBar.Description=Laikykite pagrindinį menio juostą matomą, o ne tik aktyvuojant jį.

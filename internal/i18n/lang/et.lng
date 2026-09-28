@@ -782,6 +782,17 @@ Queue.BtnClear=Puhasta &tehtud
 
 Session.Title= Vali seanss
 
+AI.ReviewTitle= Paiga ülevaatus 
+AI.ReviewColFile=Fail
+AI.ReviewColAction=Toiming
+AI.ReviewColStatus=Olek
+AI.ReviewColLocator=Otsiti
+AI.ReviewOK=rakendub
+AI.ReviewSkipped=juba rakendatud
+AI.ReviewFailed=viga
+AI.ReviewTotals=Proovikäivitus: rakendub %d, juba rakendatud %d, vigaseid %d. Midagi ei kirjutatud.
+AI.ReviewBtnClose=&Sulge
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Reserve Alt+number otseteed tööruumi valimiseks.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number vahetab vahelehti
 SettingsCenter.AlwaysShowMenuBar.Description=Hoidke peamenüüriba nähtaval selle asemel, et seda kuvada ainult siis, kui see on aktiveeritud.

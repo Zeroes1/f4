@@ -785,6 +785,17 @@ Queue.BtnClear=Ачысціць &выкананыя
 
 Session.Title= Выберыце сесію
 
+AI.ReviewTitle= Прагляд патча 
+AI.ReviewColFile=Файл
+AI.ReviewColAction=Дзеянне
+AI.ReviewColStatus=Стан
+AI.ReviewColLocator=Што шукалі
+AI.ReviewOK=прыменіцца
+AI.ReviewSkipped=ужо прыменена
+AI.ReviewFailed=памылка
+AI.ReviewTotals=Халасты прагон: прыменіцца %d, ужо прыменена %d, памылак %d. Нічога не запісана.
+AI.ReviewBtnClose=&Закрыць
+
 SettingsCenter.AltNumberSwitchesTabs.Description=Зарэзерваваць цэтлікі Alt+number для выбару працоўнай прасторы.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number пераключае ўкладкі
 SettingsCenter.AlwaysShowMenuBar.Description=Захоўвайце панэль галоўнага меню бачнай, а не паказвайце яе толькі пры актывацыі.

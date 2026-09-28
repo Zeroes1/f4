@@ -782,6 +782,17 @@ Queue.BtnClear=נקה &הושלמו
 
 Session.Title= בחר סשן
 
+AI.ReviewTitle= סקירת תיקון 
+AI.ReviewColFile=קובץ
+AI.ReviewColAction=פעולה
+AI.ReviewColStatus=מצב
+AI.ReviewColLocator=מה חיפשנו
+AI.ReviewOK=יוחל
+AI.ReviewSkipped=כבר הוחל
+AI.ReviewFailed=שגיאה
+AI.ReviewTotals=הרצת ניסיון: %d יוחלו, %d כבר הוחלו, %d נכשלו. דבר לא נכתב.
+AI.ReviewBtnClose=ס&גירה
+
 SettingsCenter.AltNumberSwitchesTabs.Description=שמור קיצורי Alt+number לבחירת סביבת עבודה.
 SettingsCenter.AltNumberSwitchesTabs.Label=Alt+number מחליף כרטיסיות
 SettingsCenter.AlwaysShowMenuBar.Description=השאר את שורת התפריטים הראשית גלויה במקום להציג אותה רק כאשר היא מופעלת.
