@@ -204,13 +204,43 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - `--amend` and a commit signature/author override remain out of scope --
   see the ticket for the remaining list.
 
+## Part 10: creating and deleting branches (`branchview.go`)
+
+- **Insert** on the branch list opens a single-line
+  `internal/dialog.FileInputBox` prompt for a new branch's name -- the same
+  dialog part 4 first built its own one-line commit prompt from, before
+  part 9 replaced that one with a multi-line editor; a branch name is
+  always one line, so there is no reason to reach for the heavier widget
+  here. Confirming it runs plain `git branch <name>`, not `git switch -c
+  <name>`: creating a branch and switching to it are two separate gestures
+  this panel already keeps apart (switching is Enter, part 7), and leaving
+  the checked-out branch untouched is the safer default -- nothing stops a
+  user who does want to switch from pressing Enter on the freshly created
+  entry right afterward. A blank name (confirming the dialog without typing
+  anything) is rejected with a toast before any git command runs, the same
+  way part 4's blank commit message was.
+- **Delete/F8** on the branch list deletes the branch under the cursor,
+  after a Yes/No-style confirmation (`vtui.ShowMessageOn`) -- the same
+  "confirm, then act on button 0" shape
+  `internal/plughost/permissions_ui.go`'s own Revoke button already uses
+  for its own irreversible action. It runs `git branch -d <name>` (the safe
+  delete), never `-D`: git itself refuses `-d` when the branch has commits
+  not reachable from any other ref ("not fully merged"), and that refusal
+  surfaces here as git's own message, the same way every other failed
+  command in this plugin already reports its own. The branch checked out
+  right now is refused outright, with its own toast, before a confirmation
+  dialog even opens -- git would refuse it anyway, and there is nothing
+  useful about asking the user to confirm an operation that cannot succeed.
+- Both reload the branch list afterward (so a newly created or deleted
+  branch shows up or disappears immediately), the same point-in-time
+  refresh F5 already gives this list.
+
 ## What is deliberately not here yet
 
 Everything else the ticket asks for: staging/unstaging a single hunk within
 a file (needs f4#613's diff widget to pick the hunk, and f4#613 is itself
-still open), a per-file diff for a multi-file commit in the log view, and
-creating or deleting a branch from this list. Each is its own atomic
-follow-up part of f4#659, not this one.
+still open), and a per-file diff for a multi-file commit in the log view.
+Each is its own atomic follow-up part of f4#659, not this one.
 
 ## Design notes
 

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/toast"
@@ -162,16 +164,23 @@ func (bv *BranchView) SetPosition(x1, y1, x2, y2 int) {
 	bv.table.SetPosition(ix1, iy1, ix2, iy2)
 }
 
+// GetKeyLabels puts the new F8 delete gesture (deleteBranch below) on the
+// bar at its own slot, the same F8 slot F8/Del already share on an ordinary
+// file panel. Insert (newBranch below) gets no slot here, the same as
+// Insert's own stage/unstage gesture on the status panel itself
+// (panel.go/stage.go): neither is an F-key, and this bar only ever labels
+// F1..F10.
 func (bv *BranchView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
-		Normal: vtui.KeyBarLabels{"", "", "", "", i18n.Msg("GitBranch.Refresh"), "", "", "", "", i18n.Msg("GitBranch.Close")},
+		Normal: vtui.KeyBarLabels{"", "", "", "", i18n.Msg("GitBranch.Refresh"), "", "", i18n.Msg("GitBranch.Delete"), "", i18n.Msg("GitBranch.Close")},
 	}
 }
 
 // ProcessKey handles Esc/F10 (close, unconditionally -- the same modifier-
-// agnostic close LogView.ProcessKey gives its own Esc/F10), F5 (refresh) and
-// Enter (switch, switchBranch below), then falls through to the table for
-// navigation and QuickSearch, the same layering LogView.ProcessKey
+// agnostic close LogView.ProcessKey gives its own Esc/F10), F5 (refresh),
+// Enter (switch, switchBranch below), Insert (create, newBranch below) and
+// Delete/F8 (delete, deleteBranch below), then falls through to the table
+// for navigation and QuickSearch, the same layering LogView.ProcessKey
 // (logview.go) uses for its own extra keys.
 func (bv *BranchView) ProcessKey(e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown {
@@ -197,6 +206,12 @@ func (bv *BranchView) ProcessKey(e *vtinput.InputEvent) bool {
 			return true
 		case vtinput.VK_RETURN:
 			bv.switchBranch()
+			return true
+		case vtinput.VK_INSERT:
+			bv.newBranch()
+			return true
+		case vtinput.VK_DELETE, vtinput.VK_F8:
+			bv.deleteBranch()
 			return true
 		}
 	}
@@ -254,6 +269,120 @@ func (bv *BranchView) switchBranch() {
 		}
 	}
 	toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.SwitchDone"), entry.Name), 3e9)
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
+// newBranch is Insert on the branch list -- the same "Insert opens a prompt
+// over the entry under the cursor" gesture the status panel's own Insert
+// (stage.go's toggleStage) uses for a different purpose, free here because
+// BranchView has no staging concept of its own to shadow. It opens a
+// single-line internal/dialog.FileInputBox for the new branch's name, the
+// same dialog commit.go's showCommitDialog built its own one-line prompt
+// from before part 9 replaced it with a multi-line editor -- a branch name
+// is always one line, so there is no reason to reach for that heavier
+// widget here.
+//
+// This deliberately runs plain `git branch <name>`, not `git switch -c
+// <name>`: creating a branch and switching to it are two different
+// gestures a Far/TC-style git panel keeps apart (switching already has its
+// own dedicated Enter, switchBranch above), and leaving the currently
+// checked-out branch untouched is the safer default for a first-time
+// keypress -- nothing here stops a user who does want to switch from just
+// pressing Enter on the freshly created entry right after.
+func (bv *BranchView) newBranch() {
+	dialog.FileInputBox(i18n.Msg("GitBranch.NewTitle"), i18n.Msg("GitBranch.NewPrompt"), "", bv.onNewBranchEntered)
+}
+
+// onNewBranchEntered is newBranch's FileInputBox OnOk callback, split out on
+// its own so a test can drive the "blank name" and "run git branch" paths
+// directly, the same split showCommitDialog already keeps from
+// onCommitMessageEntered (commit.go). Cancelling the dialog never calls
+// this at all (FileInputBox's own Cancel button skips onOk), so a blank
+// name here only ever means the field itself was left empty on Ok.
+func (bv *BranchView) onNewBranchEntered(name string) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		toast.Show(i18n.Msg("GitBranch.NewNameEmpty"), 3e9)
+		return
+	}
+
+	output, err := runGitIn(context.Background(), bv.dir, "branch", name)
+	if err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.NewFailed"), firstLine(string(output), err)), 3e9)
+		return
+	}
+
+	if err := bv.reload(); err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.RefreshFailed"), err), 3e9)
+	}
+	toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.NewDone"), name), 3e9)
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
+// deleteBranch is Delete/F8 on the branch list, the same pair of keys an
+// ordinary file panel already binds to its own delete (internal/app/actions.go's
+// actionDelete/actionDeleteWithDisposition). The branch under the cursor
+// checked out right now is refused outright, with a toast rather than a
+// silent no-op -- git itself already refuses this ("error: Cannot delete
+// branch '<name>' checked out at ..."), but catching it here first means a
+// clearer message and, more importantly, no confirmation dialog opened for
+// an operation that was never going to succeed.
+//
+// Anything else asks for confirmation first via vtui.ShowMessageOn, the
+// same "OnResult, code 0 is the destructive button" shape
+// internal/plughost/permissions_ui.go's own Revoke button and
+// plugins/visren/dialog.go's clearUndoLog use for their own irreversible
+// actions -- deleting a branch, even a safe `-d` delete, is exactly that
+// kind of action a stray keypress should not be able to trigger unconfirmed.
+//
+// `-d`, never `-D`: a safe delete, which git itself refuses when the branch
+// has commits not reachable from any other ref or upstream ("branch is not
+// fully merged") -- exactly the guard rail the ticket asks this to keep,
+// surfaced as git's own error on failure the same way every other command
+// in this plugin already reports its own.
+func (bv *BranchView) deleteBranch() {
+	entry, ok := bv.selectedEntry()
+	if !ok {
+		return
+	}
+	if entry.Current {
+		toast.Show(i18n.Msg("GitBranch.DeleteCurrent"), 3e9)
+		return
+	}
+
+	confirm := vtui.ShowMessageOn(bv, i18n.Msg("GitBranch.DeleteTitle"),
+		fmt.Sprintf(i18n.Msg("GitBranch.DeleteConfirm"), entry.Name),
+		[]string{i18n.Msg("GitBranch.DeleteButton"), i18n.Msg("vtui.Cancel")})
+	if confirm == nil {
+		return
+	}
+	confirm.OnResult = func(code int) {
+		if code != 0 {
+			return
+		}
+		bv.runDeleteBranch(entry.Name)
+	}
+}
+
+// runDeleteBranch is deleteBranch's confirmed action, split out on its own
+// the same way onNewBranchEntered above is split from newBranch: a test can
+// drive the actual `git branch -d` path directly, without going through
+// vtui.ShowMessageOn's own modal plumbing to reach it.
+func (bv *BranchView) runDeleteBranch(name string) {
+	output, err := runGitIn(context.Background(), bv.dir, "branch", "-d", name)
+	if err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.DeleteFailed"), firstLine(string(output), err)), 3e9)
+		return
+	}
+
+	if err := bv.reload(); err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.RefreshFailed"), err), 3e9)
+	}
+	toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.DeleteDone"), name), 3e9)
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}

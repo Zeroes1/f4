@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -238,6 +239,278 @@ func TestStatusPanelCtrlSOpensBranches(t *testing.T) {
 	if !controller.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_S,
 		ControlKeyState: vtinput.LeftCtrlPressed}) {
 		t.Fatal("Ctrl+S was not claimed")
+	}
+}
+
+func TestBranchViewInsertOpensNewBranchDialogWithoutCallingGitYet(t *testing.T) {
+	withFakeGit(t, "* main\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return []byte("* main\n"), nil
+	}
+
+	if !bv.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_INSERT}) {
+		t.Fatal("plain Insert was not claimed")
+	}
+	if calls != 0 {
+		t.Fatalf("git invocations right after Insert = %d, want 0 (the name dialog is still waiting for input)", calls)
+	}
+	if _, ok := vtui.FrameManager.GetTopFrame().(*dialog.FileDialog); !ok {
+		t.Fatalf("top frame after Insert is %T, want *dialog.FileDialog (the new-branch prompt)", vtui.FrameManager.GetTopFrame())
+	}
+}
+
+func TestOnNewBranchEnteredRejectsBlankName(t *testing.T) {
+	withFakeGit(t, "* main\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return nil, nil
+	}
+
+	for _, blank := range []string{"", "   ", "\t\n"} {
+		bv.onNewBranchEntered(blank)
+	}
+	if calls != 0 {
+		t.Fatalf("git invocations for a blank branch name = %d, want 0", calls)
+	}
+}
+
+func TestOnNewBranchEnteredTrimsAndCreatesBranch(t *testing.T) {
+	withFakeGit(t, "* main\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var branchArgs []string
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		if len(args) > 2 && args[2] == "branch" && len(args) == 4 {
+			branchArgs = args
+			return nil, nil
+		}
+		// bv.reload runs after a successful create.
+		return []byte("* main\n  feature\n"), nil
+	}
+
+	bv.onNewBranchEntered("  feature  ")
+
+	want := []string{"-c", "core.quotepath=false", "branch", "feature"}
+	if !reflect.DeepEqual(branchArgs, want) {
+		t.Fatalf("branch args = %v, want %v", branchArgs, want)
+	}
+	if len(bv.table.Rows) != 2 {
+		t.Fatalf("rows after creating a branch = %d, want 2 (reloaded)", len(bv.table.Rows))
+	}
+}
+
+func TestOnNewBranchEnteredFailureLeavesListUntouched(t *testing.T) {
+	withFakeGit(t, "* main\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var reloadCalls int
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		if len(args) > 2 && args[2] == "branch" && len(args) == 4 {
+			return []byte("fatal: a branch named 'feature' already exists\n"), errors.New("exit status 128")
+		}
+		reloadCalls++
+		return []byte("* main\n"), nil
+	}
+
+	bv.onNewBranchEntered("feature")
+
+	if reloadCalls != 0 {
+		t.Fatalf("reload invocations after a failed create = %d, want 0 (no reload on failure)", reloadCalls)
+	}
+	if len(bv.table.Rows) != 1 {
+		t.Fatalf("rows after a failed create = %d, want 1 (unchanged)", len(bv.table.Rows))
+	}
+}
+
+func TestBranchViewDeleteAndF8ClaimTheDeleteGesture(t *testing.T) {
+	for _, key := range []uint16{vtinput.VK_DELETE, vtinput.VK_F8} {
+		withFakeGit(t, "* main\n  feature\n", nil)
+
+		bv, err := newBranchView("/repo", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bv.table.SelectPos = 1 // "feature", not the current branch.
+
+		if !bv.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: key}) {
+			t.Fatalf("key %d was not claimed", key)
+		}
+	}
+}
+
+func TestDeleteBranchOnTheCurrentBranchNeverOpensAConfirmDialog(t *testing.T) {
+	withFakeGit(t, "* main\n  feature\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bv.table.SelectPos = 0 // "main", the current branch (branchEntry.Current).
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return nil, nil
+	}
+	before := vtui.FrameManager.GetTopFrame()
+
+	bv.deleteBranch()
+
+	if calls != 0 {
+		t.Fatalf("git invocations for deleting the current branch = %d, want 0", calls)
+	}
+	if after := vtui.FrameManager.GetTopFrame(); after != before {
+		t.Fatalf("deleteBranch on the current branch pushed a new frame (%T), want the guard to toast and return", after)
+	}
+}
+
+func TestDeleteBranchWithNoRowsIsANoOp(t *testing.T) {
+	withFakeGit(t, "", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return nil, nil
+	}
+	before := vtui.FrameManager.GetTopFrame()
+
+	bv.deleteBranch()
+
+	if calls != 0 {
+		t.Fatalf("git invocations from deleteBranch with nothing selected = %d, want 0", calls)
+	}
+	if after := vtui.FrameManager.GetTopFrame(); after != before {
+		t.Fatalf("deleteBranch with nothing selected pushed a new frame (%T), want it to just return", after)
+	}
+}
+
+func TestDeleteBranchConfirmedRunsGitBranchDAndReloads(t *testing.T) {
+	withFakeGit(t, "* main\n  feature\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bv.table.SelectPos = 1 // "feature", not the current branch.
+
+	var deleteArgs []string
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		// Both the delete itself and bv.reload's own `git branch --list`
+		// afterward share args[2] == "branch" -- args[3] tells them apart.
+		if len(args) > 3 && args[2] == "branch" && args[3] == "-d" {
+			deleteArgs = args
+			return []byte("Deleted branch feature (was abc1234).\n"), nil
+		}
+		// bv.reload runs after a successful delete.
+		return []byte("* main\n"), nil
+	}
+
+	bv.deleteBranch()
+
+	confirm, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok || confirm.OnResult == nil {
+		t.Fatalf("top frame after deleteBranch is %T, want the *vtui.Window confirm dialog", vtui.FrameManager.GetTopFrame())
+	}
+	confirm.OnResult(0) // The dialog's first button ("&Delete").
+
+	want := []string{"-c", "core.quotepath=false", "branch", "-d", "feature"}
+	if !reflect.DeepEqual(deleteArgs, want) {
+		t.Fatalf("delete args = %v, want %v", deleteArgs, want)
+	}
+	if len(bv.table.Rows) != 1 {
+		t.Fatalf("rows after delete = %d, want 1 (reloaded)", len(bv.table.Rows))
+	}
+}
+
+func TestDeleteBranchCancelledNeverCallsGit(t *testing.T) {
+	withFakeGit(t, "* main\n  feature\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bv.table.SelectPos = 1
+
+	var calls int
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return nil, nil
+	}
+
+	bv.deleteBranch()
+
+	confirm, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok || confirm.OnResult == nil {
+		t.Fatalf("top frame after deleteBranch is %T, want the *vtui.Window confirm dialog", vtui.FrameManager.GetTopFrame())
+	}
+	confirm.OnResult(1) // The dialog's second button (vtui.Cancel).
+
+	if calls != 0 {
+		t.Fatalf("git invocations after cancelling the delete confirmation = %d, want 0", calls)
+	}
+}
+
+func TestDeleteBranchFailureLeavesTheListUntouched(t *testing.T) {
+	withFakeGit(t, "* main\n  feature\n", nil)
+
+	bv, err := newBranchView("/repo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bv.table.SelectPos = 1
+
+	var reloadCalls int
+	execGit = func(_ context.Context, _ string, args []string) ([]byte, error) {
+		// Both the delete itself and bv.reload's own `git branch --list`
+		// afterward share args[2] == "branch" -- args[3] tells them apart.
+		if len(args) > 3 && args[2] == "branch" && args[3] == "-d" {
+			return []byte("error: The branch 'feature' is not fully merged.\n"), errors.New("exit status 1")
+		}
+		reloadCalls++
+		return []byte("* main\n  feature\n"), nil
+	}
+
+	bv.deleteBranch()
+
+	confirm, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok || confirm.OnResult == nil {
+		t.Fatalf("top frame after deleteBranch is %T, want the *vtui.Window confirm dialog", vtui.FrameManager.GetTopFrame())
+	}
+	confirm.OnResult(0)
+
+	if reloadCalls != 0 {
+		t.Fatalf("reload invocations after a failed delete = %d, want 0 (no reload on failure)", reloadCalls)
+	}
+	if len(bv.table.Rows) != 2 {
+		t.Fatalf("rows after a failed delete = %d, want 2 (unchanged)", len(bv.table.Rows))
 	}
 }
 
