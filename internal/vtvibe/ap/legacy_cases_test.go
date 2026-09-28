@@ -340,9 +340,9 @@ var legacyCases = []legacyCase{
 		// run_tests.py: 65_strict_rejects_missing_header / patches/65_strict_rejects_missing_header.ap -
 		// same patch text as 62, but strict mode requires an explicit
 		// AP header and refuses to auto-detect the patch ID.
-		name:   "65_strict_rejects_missing_header_strict_mode_requires_an_explicit_AP_header",
-		strict: true,
-		patch:  "# This patch completely lacks the AP 3.1 header\n62a00062 FILE\ntolerant.txt\n\n62a00062 CREATE\n62a00062 content\nWorks!\n",
+		name:         "65_strict_rejects_missing_header_strict_mode_requires_an_explicit_AP_header",
+		strict:       true,
+		patch:        "# This patch completely lacks the AP 3.1 header\n62a00062 FILE\ntolerant.txt\n\n62a00062 CREATE\n62a00062 content\nWorks!\n",
 		expectStatus: StatusFailed,
 		expectError:  ErrInvalidPatchFile,
 	},

@@ -114,4 +114,3 @@ func TestApplyDryRunStillReportsFailures(t *testing.T) {
 		t.Fatalf("afailed.md was not written on a dry run: %v", err)
 	}
 }
-
