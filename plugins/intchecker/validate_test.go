@@ -199,6 +199,9 @@ func TestRunValidateSortsEveryFileIntoAVerdict(t *testing.T) {
 	if reporter.lastTotal != 100 || !reporter.files["sub/d.txt"] {
 		t.Fatalf("progress = %+v", reporter)
 	}
+	if reporter.lastSpeed == "" {
+		t.Fatalf("progress speed/time text is empty")
+	}
 }
 
 func TestRunValidateFindsBackslashNames(t *testing.T) {

@@ -347,6 +347,7 @@ func runValidate(ctx context.Context, job validateJob, reporter progressReporter
 	var done int64
 	buf := make([]byte, hashBufferSize)
 	next := 0 // index into inputs, which follow located's statusOK rows
+	speed := newProgressSpeed()
 	for _, loc := range located {
 		if loc.Status != statusOK {
 			res.add(loc.Name, loc.Status, loc.Err)
@@ -356,7 +357,7 @@ func runValidate(ctx context.Context, job validateJob, reporter progressReporter
 		next++
 		report := func(fileDone int64) {
 			totalText := fmt.Sprintf(vtui.Msg("IntChecker.ProgressFiles"), next, len(inputs))
-			reporter.UpdateTransfer(verifying, in.entry.Name, percent(fileDone, in.size), totalText, percent(done+fileDone, total), "")
+			reporter.UpdateTransfer(verifying, in.entry.Name, percent(fileDone, in.size), totalText, percent(done+fileDone, total), speed.text(done+fileDone, total))
 		}
 		report(0)
 		sum, read, err := hashFile(ctx, job.fs, in.path, job.file.Algorithm, buf, report)
