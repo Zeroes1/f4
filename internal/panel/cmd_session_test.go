@@ -353,6 +353,57 @@ func TestCmdSessionTwoQueuedLinesEachNeedTheirOwnPrompt(t *testing.T) {
 	})
 }
 
+// f4#1376's Host-mode report survived #1608's fix above: with no Far.exe
+// involved at all, a plain `cls` typed at f4's own command line on a cold
+// shell still wedged f4 in "Terminal (executing)" forever. The field debug
+// logs (build 321a594, both the with- and without-overlay captures, and the
+// same shape for `rar` and for launching Far itself) show why: when the
+// directory sync's line and the typed line both complete fast enough that
+// their two prompts cross the pipe closer together than cmdPromptSettleDelay
+// -- exactly what a cold cmd.exe that took its time to come up in the first
+// place does once it is finally up and answering -- handleMark's timer
+// replacement means only the second mark's settle ever runs; the first
+// mark's settle was still scheduled, never got its own look at the screen,
+// and (before this fix) retiring exactly one line per settle call then left
+// the first line's pendingLines slot stuck at 1 with no further mark ever
+// going to arrive to retire it. The field log's own trace of this:
+// "prompt 3 settled one of the outstanding lines (sent=1 children=[]), 1
+// left", and then nothing else, ever, for the rest of the capture.
+func TestCmdSessionBurstOfPromptsRetiresEveryOutstandingLine(t *testing.T) {
+	forEachBuild(t, func(t *testing.T, sim *cmdShellSim) {
+		// Both lines are typed before the shell has printed anything at all,
+		// exactly as syncPTYDirectory's ping and the user's typed command can
+		// be on a cold shell (same setup as
+		// TestCmdSessionTwoQueuedLinesEachNeedTheirOwnPrompt above).
+		sim.pf.CmdSession.noteSent() // the directory sync ping
+		sim.pf.Executing = true
+		sim.pf.ReturnToPanels = true
+		sim.pf.ShowPanels = false
+		sim.pf.CmdSession.noteSent() // "cd /d ... & cls", typed right after
+
+		mark := func() {
+			sim.feed("\x1b]133;A\x1b\\" + promptText + "\x1b]133;B\x1b\\")
+		}
+
+		sim.feed("Microsoft Windows [Version 10.0]\r\n\r\n")
+		// All three prompts -- the shell's own startup one, the sync line's,
+		// and cls's -- cross the pipe back to back, with nothing giving
+		// handleMark's timer a chance to fire for any but the last one, the
+		// way the field's cold, then suddenly answering, shell did.
+		mark()
+		sim.feed("cd /d \"C:\\work\" & rem f4_sync\r\n\r\n")
+		mark()
+		sim.feed("cd /d \"C:\\work\" & cls\r\n\r\n")
+		mark()
+
+		sim.wait(settledWithin)
+		sim.expectExecuting(false, "after a burst of prompts answered both outstanding lines")
+		if !sim.pf.ShowPanels {
+			t.Errorf("[%s] panels did not come back after the burst settled (f4#1376)", sim.build.name)
+		}
+	})
+}
+
 // The directory sync is a typed line like any other: no second sync may be
 // typed until its prompt has settled.
 func TestCmdSessionSyncWaitsForPrompt(t *testing.T) {
