@@ -939,6 +939,17 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { ShowCompareFoldersDialog(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.CompareFilesByContent",
+		Area:        "Shell",
+		Label:       "Compare Files by Content",
+		LabelKey:    "Menu.Commands.CompareFilesByContent",
+		Description: "Show a line-by-line, side-by-side comparison of the two files under the cursor",
+		DescKey:     "Action.Panel.CompareFilesByContent.Desc",
+		MenuPath:    "Commands",
+		Visible:     panelCanCompareFilesByContent,
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCompareFilesByContent(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.SyncDirs",
 		Area:        "Shell",
 		Label:       "Synchronize Dirs",
