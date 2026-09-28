@@ -1119,11 +1119,11 @@ func openEditorInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 			return nil
 		}, func(err error) {
 			if err != nil {
-				switch {
-				case err == context.Canceled:
-				case err == errCannotEditDirectory:
+				switch err {
+				case context.Canceled:
+				case errCannotEditDirectory:
 					vtui.ShowMessage(" Error ", "Cannot edit a directory.", []string{"&Ok"})
-				case err == os.ErrInvalid:
+				case os.ErrInvalid:
 					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets, Devices).", []string{"&Ok"})
 				default:
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
@@ -1684,11 +1684,11 @@ func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, force
 			return err
 		}, func(err error) {
 			if err != nil {
-				switch {
-				case err == context.Canceled:
-				case err == errCannotViewDirectory:
+				switch err {
+				case context.Canceled:
+				case errCannotViewDirectory:
 					vtui.ShowMessage(" Error ", "Cannot view a directory.", []string{"&Ok"})
-				case err == os.ErrInvalid:
+				case os.ErrInvalid:
 					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets).", []string{"&Ok"})
 				default:
 					vtui.DebugLog("PANELS: Failed to open vv for %s: %v", path, err)

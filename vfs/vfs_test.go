@@ -111,7 +111,8 @@ func TestReadFileHeadNilContextDefaultsToBackground(t *testing.T) {
 		n := copy(p, "hi")
 		return n, nil
 	}}
-	got, err := ReadFileHead(nil, v, "/f", 10)
+	var nilCtx context.Context // typed nil: this test exercises the nil-ctx fallback on purpose
+	got, err := ReadFileHead(nilCtx, v, "/f", 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
