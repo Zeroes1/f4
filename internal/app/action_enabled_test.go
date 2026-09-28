@@ -6,6 +6,7 @@ import (
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -169,6 +170,7 @@ func TestActivePanelHasSelectionTarget_NoPanelsFrame(t *testing.T) {
 func TestFileCopyMoveEnabled(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
 
 	pf := paneltest.SetupMockPanelsFrame(t)
 	defer pf.Close()
@@ -194,7 +196,17 @@ func TestFileCopyMoveEnabled(t *testing.T) {
 
 	// A player panel opposite: F6 (move) must stay disabled regardless of
 	// the source, and F5 (copy) only for a non-local source.
-	pf.AltPanels[1-pf.ActiveIdx] = &panel.PlayerPanel{}
+	//
+	// The player panel is built through the same panel.NewPlayerPanel
+	// constructor actionCopyMove/ToggleAltPanel use in production, not a
+	// bare &panel.PlayerPanel{} literal: PlayerPanel.Close (called on every
+	// AltPanel by PanelsFrame.Close, including the deferred pf.Close below
+	// and paneltest.SwapFrameManager's own cleanup) unconditionally closes
+	// its unexported stop channel, which panics with "close of nil channel"
+	// on a zero-value PlayerPanel that never went through the constructor
+	// (found via PR #1613's Test (linux/amd64) job, which is where this
+	// literal actually ran Close() for the first time).
+	pf.AltPanels[1-pf.ActiveIdx] = panel.NewPlayerPanel(fsp)
 	if fileCopyMoveEnabled(true)() {
 		t.Error("Move must stay disabled with a player panel opposite (Player.MoveRefused)")
 	}
@@ -205,6 +217,24 @@ func TestFileCopyMoveEnabled(t *testing.T) {
 	fsp.Vfs = vfs.NewNullVFS(0)
 	if fileCopyMoveEnabled(false)() {
 		t.Error("Copy from a non-local filesystem must disable with a player panel opposite (Player.LocalOnly)")
+	}
+
+	// The tree (Ctrl+T) focused in the active slot, with the player panel
+	// from above still sitting in the opposite slot: F5/F6 must target the
+	// tree's highlighted node and stay enabled, exactly as with no player
+	// opposite at all. fileCopyMoveEnabled and actionCopyMove both check
+	// treeCopyMoveTarget before ever looking at the opposite slot's
+	// PlayerPanel, so the two f4#1356/f4#1602 "part 3" checks act on
+	// mutually exclusive destinations and must not suppress one another.
+	fsp.Vfs = vfs.NewOSVFS(t.TempDir())
+	tp := panel.NewTreePanel(fsp)
+	tp.SetFocus(true)
+	pf.AltPanels[pf.ActiveIdx] = tp
+	if !fileCopyMoveEnabled(false)() {
+		t.Error("Copy should stay enabled with the tree focused even though a player panel occupies the opposite slot")
+	}
+	if !fileCopyMoveEnabled(true)() {
+		t.Error("Move should stay enabled with the tree focused even though a player panel occupies the opposite slot (Player.MoveRefused must not apply to a tree destination)")
 	}
 }
 
