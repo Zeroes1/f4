@@ -590,7 +590,7 @@ Action.App.SQLite.Desc=Open the SQLite client on the database under the cursor
 Action.App.ProcList=Process list
 Action.App.ProcList.Desc=Open a live list of running processes in the active panel slot
 ; --- Git ---
-Action.App.GitStatus=Git status
+Action.App.GitStatus=Gi&t status
 Action.App.GitStatus.Desc=Open the working tree status of the active panel's git repository
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator

@@ -225,6 +225,12 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"proclist.(*procListPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
 	},
+	"git.(*statusPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the git status panel forwards raw input to its own vtui.Table; Enter/Insert/Ctrl+K/Ctrl+E are the panel's own diff, stage-or-unstage, commit and log commands, and the panel itself is reached through the plugin-owned PluginPanelInstance surface Action.App.GitStatus opens, the same split proclist_actions.go uses for plugins/proclist (f4#659 part 1 of N)",
+	},
+	"git.(*LogView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this read-only commit-log screen, opened with Ctrl+E on the status panel that Action.App.GitStatus reaches; F5/Enter/close are local screen primitives, and navigation/quick-search fall through to its table (f4#659 part 5 of N)",
+	},
 }
 
 var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
