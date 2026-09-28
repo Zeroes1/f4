@@ -29,10 +29,10 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			Location:       vfs.PluginCommandPanel,
 			Label:          "Integrity &checker",
 			LabelKey:       "IntChecker.Menu",
-			Description:    "Generate checksum files (SFV, MD5, SHA) for the selected files",
+			Description:    "Generate and verify checksum files (SFV, MD5, SHA)",
 			DescriptionKey: "IntChecker.Command.Desc",
-			SearchKeys:     []string{"IntChecker.Generate"},
-			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv"},
+			SearchKeys:     []string{"IntChecker.Generate", "IntChecker.Validate"},
+			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv", "verify"},
 			Enabled:        canRun,
 			Run:            p.showMenu,
 		})
@@ -61,18 +61,22 @@ func canRun(app vfs.App) bool {
 	return app.GetActivePanelVFS() != nil
 }
 
-// Menu items, in the order showMenu lists them. "Validate files" joins the
-// menu in the next step of f4#1623.
+// Menu items, in the order showMenu lists them.
 const (
 	menuGenerate = iota
+	menuValidate
 )
 
 func (p *Plugin) showMenu(app vfs.App) {
 	app.Menu(vtui.Msg("IntChecker.Title"), []string{
 		vtui.Msg("IntChecker.Generate"),
+		vtui.Msg("IntChecker.Validate"),
 	}, func(idx int) {
-		if idx == menuGenerate {
+		switch idx {
+		case menuGenerate:
 			showGenerateDialog(app)
+		case menuValidate:
+			showValidate(app)
 		}
 	})
 }

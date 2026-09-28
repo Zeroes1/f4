@@ -148,10 +148,11 @@ func TestSelectedFileNamesDropsParentEntry(t *testing.T) {
 	}
 }
 
-func TestMenuOffersGenerateHashes(t *testing.T) {
+func TestMenuOffersGenerateAndValidate(t *testing.T) {
 	app := &appMock{}
 	NewPlugin().showMenu(app)
-	if len(app.menu) != 1 || app.menu[menuGenerate] != vtui.Msg("IntChecker.Generate") {
+	if len(app.menu) != 2 || app.menu[menuGenerate] != vtui.Msg("IntChecker.Generate") ||
+		app.menu[menuValidate] != vtui.Msg("IntChecker.Validate") {
 		t.Fatalf("menu = %q", app.menu)
 	}
 }

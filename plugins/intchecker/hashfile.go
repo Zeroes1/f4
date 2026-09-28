@@ -1,15 +1,16 @@
 // Package intchecker is f4's integrity checker: it generates checksum files
-// (.sfv, .md5, .sha1, .sha256, .sha384, .sha512) for panel files and, in later
-// steps, validates files against them. It follows the IntChecker plugin for
-// Far Manager (https://github.com/lazyhamster/IntChecker), as requested in
+// (.sfv, .md5, .sha1, .sha256, .sha384, .sha512) for panel files and
+// validates files against them. It follows the IntChecker plugin for Far
+// Manager (https://github.com/lazyhamster/IntChecker), as requested in
 // f4#1623.
 //
-// The feature is built in atomic steps. This one covers "Generate hashes"
-// with an algorithm choice and the "Single file" output for the marked files
-// (or the file under the cursor) of the current directory. Still to come:
-// "Validate files", the other output modes (separate hash files, per
-// directory, display), recursion into directories, absolute paths, the file
-// mask filter and the output encoding.
+// The feature is built in atomic steps. Done: "Generate hashes" with an
+// algorithm choice and the "Single file" output for the marked files (or the
+// file under the cursor) of the current directory, and "Validate files" for
+// the checksum file under the cursor or one the user names, asking for the
+// directory when the listed files are not found. Still to come: the other
+// output modes (separate hash files, per directory, display), recursion into
+// directories, absolute paths, the file mask filter and the output encoding.
 //
 // Invariants:
 //   - The checksum file is written only after every selected file has been
@@ -21,6 +22,11 @@
 //   - Hash files use the formats other tools read: "<hex> *<name>" (GNU
 //     coreutils binary mode, what md5sum -c / sha256sum -c and IntChecker
 //     accept) and "<name> <CRC32>" for SFV. They are UTF-8 with LF line ends.
+//   - Validation only reads. The algorithm comes from the checksum file's
+//     extension and, when that is missing or does not fit, from the digest
+//     length. Every listed file ends up OK, mismatched, not found or
+//     unreadable; when none is found at all, the user is asked for the
+//     directory instead of getting a report that lists them all as missing.
 //   - Hashing goes through the standard library (hash/crc32, crypto/*), which
 //     already uses the CPU's hardware acceleration where there is one.
 package intchecker
