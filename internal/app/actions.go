@@ -1661,7 +1661,17 @@ func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, force
 		if tryOpenImageViewer(pf, v, path) {
 			return
 		}
+		if tryOpenMarkdownViewer(pf, v, path) {
+			return
+		}
 	}
+	openPlainViewer(pf, v, path, forceHex)
+}
+
+// openPlainViewer is the ordinary text/hex viewer, without the detour through
+// the viewers for particular file types above. The Markdown view's F4 lands
+// here, since going back through openViewerInternalMode would only reopen it.
+func openPlainViewer(pf *panel.PanelsFrame, v vfs.VFS, path string, forceHex bool) {
 	if fileops.IsLocalOSVFS(v) {
 		// Same reasoning as openEditorInternal's identical branch (f4#1411):
 		// the old bare vtui.RunAsync here showed nothing while v.Open's sudo
