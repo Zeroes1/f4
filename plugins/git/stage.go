@@ -40,12 +40,20 @@ const (
 // for this path yet) or '?' (untracked, nothing in the index at all) means
 // the toggle key should stage; any other letter (M, A, D, R, C, ...) means
 // something is already staged, so the toggle key should unstage it.
+//
+// parseStatus (status.go) actually reads `git status --porcelain=v2` output,
+// not the `--short` (v1) format the paragraph above describes: v2's "1 "/"2 "
+// (ordinary/rename) lines spell that same "nothing staged" state as '.'
+// rather than a space (git-status(1)'s "Porcelain Format Version 2": XY uses
+// "." for an unmodified side). So both placeholders are accepted here --
+// '.' for what parseStatus actually produces, ' ' for the `--short` spelling
+// this function's own tests (and its doc comment) are written against.
 func stageActionFor(entry statusEntry) stageAction {
 	if unmergedXY[entry.XY] || len(entry.XY) != 2 {
 		return stageActionAdd
 	}
 	switch entry.XY[0] {
-	case ' ', '?':
+	case ' ', '.', '?':
 		return stageActionAdd
 	default:
 		return stageActionRestore
