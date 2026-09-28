@@ -16,9 +16,12 @@
 // real ISO9660 image, builds its whole directory tree from a GetItem walk
 // (ObserverVFS in vfs.go), and lets a panel browse it and read files out of
 // it -- with no observer.ini, no module selection beyond that one hardcoded
-// module, no password support, and no cancellation beyond what ctx already
-// gives every VFS call. Those remain later, separate parts; see
-// status/1563.md in the accounting repository for what is next.
+// module, and no cancellation beyond what ctx already gives every VFS
+// call. Those remain later, separate parts; see status/1563.md in the
+// accounting repository for what is next. Part 7 (password.go) already
+// closed one item off that list: OpenStorage returning
+// SOR_PASSWORD_REQUIRED now drives the same interactive password retry loop
+// plugins/archive/password.go gives ArchiveVFS, instead of a bare error.
 //
 // What parts 1-4 already provide, and part 5 builds on unchanged, is:
 //

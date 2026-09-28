@@ -4,9 +4,10 @@ package observer
 // f4#1563's first slice of actually browsing an Observer-module container
 // from a panel. It is deliberately simple next to plugins/archive.ArchiveVFS
 // (plugins/archive/vfs.go): read-only, one module instance per opened
-// storage with no lazy re-open on a dropped handle, no password retry, no
-// nested-archive materialization lease, no nested SFX probing. What it does
-// share with ArchiveVFS is the representation of "a path inside a
+// storage with no lazy re-open on a dropped handle, no nested-archive
+// materialization lease, no nested SFX probing. Password retry for
+// SOR_PASSWORD_REQUIRED (password.go) is one thing it does share with
+// ArchiveVFS; another is the representation of "a path inside a
 // container": the container's own host/parent path, doubling as this VFS's
 // synthetic root, with an inner slash-separated path appended under it
 // (containerPathJoin/containerRelativePath below, mirroring
@@ -163,16 +164,16 @@ func newObserverVFS(ctx context.Context, parent vfs.VFS, arcPath string, wasmByt
 	if _, err := mod.LoadSubModule(""); err != nil {
 		return fail(err)
 	}
-	res, err := mod.OpenStorage(StorageOpenParams{FilePath: "/" + guestName})
+	// openStorageWithPasswordPrompt (password.go) retries OpenStorage with a
+	// password for as long as the module answers SOR_PASSWORD_REQUIRED,
+	// asking the user through the same dialog plugins/archive uses for its
+	// own archives; see that file's own doc comment for why this is
+	// considerably simpler than plugins/archive's per-member retry logic.
+	res, err := openStorageWithPasswordPrompt(ctx, mod, guestName, "/"+guestName)
 	if err != nil {
 		return fail(err)
 	}
-	switch res.Code {
-	case SORPasswordRequired:
-		return fail(fmt.Errorf("observer: %s is password-protected (not supported yet, see f4#1563)", guestName))
-	case SORSuccess:
-		// fall through
-	default:
+	if res.Code != SORSuccess {
 		return fail(fmt.Errorf("observer: module did not recognize %s", guestName))
 	}
 

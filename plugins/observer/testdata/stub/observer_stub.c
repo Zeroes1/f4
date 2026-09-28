@@ -1,5 +1,5 @@
 // observer_stub.c is f4's own, from-scratch test fixture for
-// plugins/observer (f4#1563, parts 1 and 3 of N). It is not a port of any
+// plugins/observer (f4#1563, parts 1, 3 and 7 of N). It is not a port of any
 // real Observer module, is licensed the same as the rest of f4 (see
 // LICENSE, not Observer's LGPL/GPL), and knows no archive format: it exists
 // only to answer the Observer API v6 ABI slice plugins/observer drives
@@ -15,12 +15,21 @@
 //     read the probed file's actual bytes, not just trust whatever the host
 //     claims about them in the Data head; and
 //   - the "observer.progress" host import round-trips a value back to the
-//     module.
+//     module; and
+//   - a module that returns SOR_PASSWORD_REQUIRED (2) is driven correctly by
+//     the host's password retry loop (part 7, password.go): a probe file
+//     starting with kMagicPassword instead of kMagic needs
+//     StorageOpenParams.Password to equal kTestPassword, and answers
+//     SOR_PASSWORD_REQUIRED again for anything else, real Observer modules
+//     having no separate "wrong password" code to report instead.
 //
 // It always calls SOR_INVALID_FILE (0) for a file that does not start with
-// kMagic below, and SOR_SUCCESS (1) for one that does -- decided by
-// actually opening FilePath through the mounted WASI filesystem and reading
-// its first bytes, not from the inline Data head.
+// kMagic or kMagicPassword below, SOR_SUCCESS (1) for one that starts with
+// kMagic (or with kMagicPassword and the right password), and
+// SOR_PASSWORD_REQUIRED (2) for one that starts with kMagicPassword and the
+// wrong password -- decided by actually opening FilePath through the
+// mounted WASI filesystem and reading its first bytes, not from the inline
+// Data head.
 //
 // Built only in CI by scripts/build_observer_test_wasm.sh (wasi-sdk); see
 // that script for the exact compiler flags this file depends on
@@ -39,6 +48,37 @@
 // Kept in sync with the magic plugins/observer's tests write to the front of
 // the "recognized" probe file (observer_test.go).
 static const unsigned char kMagic[8] = {'F', '4', 'O', 'B', 'S', 'V', '0', '1'};
+
+// kMagicPassword marks a probe file as this stub's fake password-protected
+// container (part 7, password_test.go): OpenStorage answers SOR_SUCCESS for
+// it only when given kTestPassword, and SOR_PASSWORD_REQUIRED otherwise --
+// on the first attempt with no password at all, and again on any retry with
+// the wrong one, exactly as a real Observer module would (API v6 has no
+// separate "wrong password" code, see StorageOpenResult in ModuleDef.h).
+static const unsigned char kMagicPassword[8] = {'F', '4', 'O', 'B', 'S', 'V', 'P', '1'};
+
+// kTestPassword is the one password kMagicPassword's fake container accepts.
+static const char kTestPassword[] = "f4test-secret";
+
+#define SOR_PASSWORD_REQUIRED 2
+
+// password_matches reports whether the narrow, NUL-terminated C string at
+// pw_ptr (StorageOpenParams.Password, never wide -- unlike FilePath) equals
+// expected. A NULL pointer (no password given at all) matches only the
+// empty expected string.
+static int password_matches(uint32_t pw_ptr, const char *expected) {
+	if (pw_ptr == 0) {
+		return expected[0] == '\0';
+	}
+	const char *pw = (const char *)(uintptr_t)pw_ptr;
+	size_t i = 0;
+	for (; expected[i] != '\0'; i++) {
+		if (pw[i] != expected[i]) {
+			return 0;
+		}
+	}
+	return pw[i] == '\0';
+}
 
 __attribute__((import_module("observer"), import_name("progress")))
 extern int32_t observer_progress(int32_t signal_context, int64_t bytes_done);
@@ -171,13 +211,19 @@ int32_t f4observer_open_storage(uint32_t params_ptr, uint32_t storage_out_ptr, u
 	}
 
 	int matched = 0;
+	int needs_password = 0;
 	if (path[0] != 0) {
 		int fd = open(path, O_RDONLY);
 		if (fd >= 0) {
 			unsigned char head[sizeof(kMagic)];
 			ssize_t n = read(fd, head, sizeof(head));
-			if (n == (ssize_t)sizeof(kMagic) && memcmp(head, kMagic, sizeof(kMagic)) == 0) {
-				matched = 1;
+			if (n == (ssize_t)sizeof(kMagic)) {
+				if (memcmp(head, kMagic, sizeof(kMagic)) == 0) {
+					matched = 1;
+				} else if (memcmp(head, kMagicPassword, sizeof(kMagicPassword)) == 0) {
+					matched = 1;
+					needs_password = 1;
+				}
 			}
 			close(fd);
 		}
@@ -185,6 +231,10 @@ int32_t f4observer_open_storage(uint32_t params_ptr, uint32_t storage_out_ptr, u
 
 	if (!matched) {
 		return 0; // SOR_INVALID_FILE
+	}
+
+	if (needs_password && !password_matches(params->Password, kTestPassword)) {
+		return SOR_PASSWORD_REQUIRED;
 	}
 
 	g_last_progress_result = observer_progress(0, (int64_t)params->DataSize);

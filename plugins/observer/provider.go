@@ -7,8 +7,12 @@ package observer
 // all. The ticket's own design (see the comment thread on f4#1563 and
 // status/1563.md in the accounting repository) sketches a much larger
 // provider -- observer.ini-driven module selection by mask/signature,
-// passwords, cancellation beyond ctx, PlugRing distribution -- all of that
-// is deliberately left for later, atomic parts. What is here is real, not a
+// cancellation beyond ctx, PlugRing distribution -- all of that is
+// deliberately left for later, atomic parts. Password retry for
+// SOR_PASSWORD_REQUIRED landed in part 7 (see password.go); CanOpen below
+// treats it the same as SOR_SUCCESS -- recognized, just locked -- so Enter
+// still reaches Open, which is where the user is actually asked, not this
+// cheap probe. What is here is real, not a
 // stub: a genuine unmodified isoimg.wasm (built the way
 // scripts/build_isoimg_test_wasm.sh already does for the existing
 // plugins/observer tests) opens a real ISO image and the resulting tree is
@@ -140,7 +144,11 @@ func (p *Provider) CanOpen(ctx context.Context, parent vfs.VFS, path string) boo
 // OpenStorage) to answer "does isoimg recognize this file", then tears
 // everything down -- CanOpen has no tree to keep and no ExtractItem to make,
 // so it does not pay for WithExtractDir the way newObserverVFS's real Open
-// does.
+// does. It never passes a password: SOR_PASSWORD_REQUIRED counts as
+// recognized here too (see below), so CanOpen stays a cheap, non-interactive
+// probe and never itself pops the password dialog -- newObserverVFS's
+// openStorageWithPasswordPrompt (password.go) is what actually asks, once
+// Open is called.
 func probeIsoimg(ctx context.Context, parent vfs.VFS, path string, wasmBytes []byte) (bool, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -173,11 +181,18 @@ func probeIsoimg(ctx context.Context, parent vfs.VFS, path string, wasmBytes []b
 	if err != nil {
 		return false, err
 	}
-	if res.Code != SORSuccess {
+	switch res.Code {
+	case SORSuccess:
+		_ = mod.CloseStorage(res.Storage)
+		return true, nil
+	case SORPasswordRequired:
+		// Recognized, just locked -- there is no open storage handle to
+		// close here (OpenStorage never got past the password check), and
+		// nothing to ask the user: that is Open's job, not this probe's.
+		return true, nil
+	default:
 		return false, nil
 	}
-	_ = mod.CloseStorage(res.Storage)
-	return true, nil
 }
 
 // Open builds an ObserverVFS rooted on path, driving the full sequence
