@@ -110,8 +110,10 @@ unconditional, matching how narrowly this plugin scopes everything else.
   `plugins/mediainfo/settings.go` persists its own settings
   (`settings.go`/`config_dialog.go`). A changed refresh interval applies to
   an already-open panel within one refresh cycle; a changed column selection
-  applies the next time the panel is opened (rebuilding the table's columns
-  live is more than this ticket asked for). At least one column must always
+  applies to an already-open panel as soon as the dialog closes
+  (`procListPanel.syncColumns`: the sort column and direction and the
+  process under the cursor are kept; if the sorted column was hidden, the
+  default CPU% sort takes over). At least one column must always
   stay visible -- `Settings.validate` refuses to save a configuration that
   would leave none.
 

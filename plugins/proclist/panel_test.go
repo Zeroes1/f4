@@ -217,3 +217,83 @@ func TestPanelKeysDeclaresEveryProcListGesture(t *testing.T) {
 		t.Errorf("Ctrl+F8 declared = %v, want %v (suspendResumeSupported)", !suspendResumeSupported, suspendResumeSupported)
 	}
 }
+
+// TestColumnSelectionAppliesToAnOpenPanel covers f4#312 (Zeroes1's point 4):
+// a visible-columns change saved through ProcList.Config reaches an
+// already-open panel on its next redraw, keeping the sorted column (or
+// falling back to the default sort when that column was hidden) and the
+// process under the cursor.
+func TestColumnSelectionAppliesToAnOpenPanel(t *testing.T) {
+	store := &settingsStore{current: DefaultSettings()}
+	controller, err := newProcListPanel(vfs.PanelContext{Bounds: [4]int{0, 0, 79, 19}}, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = controller.Close() }()
+	p := controller.(*procListPanel)
+	scr := vtui.NewSilentScreenBuf()
+	p.Show(scr)
+	if len(p.table.Columns) != len(allColumnSpecs) {
+		t.Fatalf("open panel has %d columns, want all %d", len(p.table.Columns), len(allColumnSpecs))
+	}
+	if p.table.ItemCount > 1 {
+		p.table.SelectPos = 1
+	}
+	before, ok := p.selectedSample()
+	if !ok {
+		t.Fatal("no process under the cursor with the real process list loaded")
+	}
+
+	setColumns := func(keys ...string) {
+		store.mu.Lock()
+		store.current.VisibleColumns = keys
+		store.mu.Unlock()
+		p.Show(scr)
+	}
+	checkCursor := func(step string) {
+		t.Helper()
+		if after, ok := p.selectedSample(); !ok || after.pid != before.pid {
+			t.Fatalf("%s: cursor moved from pid %d to %d (ok=%v)", step, before.pid, after.pid, ok)
+		}
+	}
+
+	// CPU% stays visible: the sort stays on it, now at display index 1.
+	setColumns("pid", "cpu")
+	if len(p.table.Columns) != 2 || len(p.specs) != 2 || p.specs[1].id != colCPU {
+		t.Fatalf("after [pid cpu]: %d columns, specs %#v", len(p.table.Columns), p.specs)
+	}
+	if p.table.SortColumn != 1 || p.table.SortAscending {
+		t.Fatalf("after [pid cpu]: sort = %d asc=%v, want 1 (CPU%%) descending", p.table.SortColumn, p.table.SortAscending)
+	}
+	row := p.table.Rows[p.table.RowAt(p.table.SelectPos)].(procRow)
+	if got, want := row.GetCellText(1), formatCPUPercent(row.s.cpuPercent); got != want {
+		t.Fatalf("after [pid cpu]: column 1 renders %q, want the CPU%% cell %q", got, want)
+	}
+	checkCursor("after [pid cpu]")
+
+	// A user-chosen sort survives a change that keeps its column.
+	p.table.SetSort(0, true)
+	// SetSort itself keeps the display position, not the process: re-read
+	// which process the cursor is on now.
+	if before, ok = p.selectedSample(); !ok {
+		t.Fatal("no process under the cursor after re-sorting")
+	}
+	setColumns("pid", "name", "mem")
+	if p.table.SortColumn != 0 || !p.table.SortAscending {
+		t.Fatalf("after [pid name mem]: sort = %d asc=%v, want 0 (PID) ascending", p.table.SortColumn, p.table.SortAscending)
+	}
+	checkCursor("after [pid name mem]")
+
+	// Hiding the sorted column falls back to the default sort (CPU%, or the
+	// first column when CPU% is hidden too), descending.
+	setColumns("name", "mem")
+	if p.table.SortColumn != 0 || p.table.SortAscending || p.specs[0].id != colName {
+		t.Fatalf("after [name mem]: sort = %d asc=%v specs %#v, want 0 (Name) descending", p.table.SortColumn, p.table.SortAscending, p.specs)
+	}
+	checkCursor("after [name mem]")
+
+	// An unchanged selection is a no-op.
+	if p.syncColumns() {
+		t.Fatal("syncColumns reported a change with the selection unchanged")
+	}
+}
