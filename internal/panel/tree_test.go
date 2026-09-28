@@ -377,7 +377,9 @@ func TestTreeCollapse_ForgetsCachedDescendants(t *testing.T) {
 	root := t.TempDir()
 	other := filepath.Join(root, "other")
 	deep := filepath.Join(other, "deep")
-	if err := os.MkdirAll(deep, 0o700); err != nil {
+	// deep needs a subdirectory of its own: expandAt marks a childless
+	// directory non-expandable and never caches it.
+	if err := os.MkdirAll(filepath.Join(deep, "leaf"), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 
@@ -434,7 +436,9 @@ func TestNewTreePanel_ResumesExpandedBranchesAcrossInstances(t *testing.T) {
 	config.App.TreeRootWholeVolume = false // root the tree at its own directory, not the OS volume root
 
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "other", "deep"), 0o700); err != nil {
+	// "leaf" keeps deep expandable: expandAt never caches a childless
+	// directory, so an empty deep could never be resumed expanded.
+	if err := os.MkdirAll(filepath.Join(root, "other", "deep", "leaf"), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
 

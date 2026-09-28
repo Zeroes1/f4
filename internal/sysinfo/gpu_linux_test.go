@@ -149,14 +149,14 @@ func TestLookupPCINameEmptyVendor(t *testing.T) {
 }
 
 func TestLookupPCINameUnknownVendor(t *testing.T) {
-	// "ffff" is reserved by the PCI-SIG and is never assigned to a real
-	// vendor, so it cannot appear in either
+	// "zzzz" is not a hex id at all, so it cannot appear in either
 	// /usr/share/hwdata/pci.ids or /usr/share/misc/pci.ids on any real
-	// system — this exercises the full path-search loop (both candidate
-	// files opened or skipped) down to the final "not found" return,
-	// regardless of whether either file happens to exist on the runner.
-	if got := lookupPCIName("ffff", "ffff"); got != "" {
-		t.Errorf("lookupPCIName(ffff, ffff) = %q, want empty for a reserved/unassigned vendor id", got)
+	// system (unlike the reserved "ffff", which pci.ids does list as
+	// "Illegal Vendor ID") -- this exercises the full path-search loop (both
+	// candidate files opened or skipped) down to the final "not found"
+	// return, regardless of whether either file happens to exist on the runner.
+	if got := lookupPCIName("zzzz", "zzzz"); got != "" {
+		t.Errorf("lookupPCIName(zzzz, zzzz) = %q, want empty for a vendor id no pci.ids lists", got)
 	}
 }
 

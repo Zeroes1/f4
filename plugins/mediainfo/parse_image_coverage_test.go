@@ -73,7 +73,7 @@ func TestParseJPEGMetaExifXMPAndIPTC(t *testing.T) {
 	xmpPayload := []byte("http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta/>")
 
 	inserted := append(jpegSegment(0xe1, exifPayload), jpegSegment(0xe1, xmpPayload)...)
-	inserted = append(inserted, jpegSegment(0xed, []byte{0}))
+	inserted = append(inserted, jpegSegment(0xed, []byte{0})...)
 
 	full := append([]byte{0xff, 0xd8}, inserted...)
 	full = append(full, base[2:]...)

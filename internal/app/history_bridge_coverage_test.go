@@ -485,7 +485,10 @@ func TestActionViewerEditorHistory_EscAndPlainF10CleanUpWithoutClosing(t *testin
 			pf, _, dir := setupHistoryBridgeTestPanel(t)
 			menu, _ := openHistoryBridgeMenu(t, pf, filepath.Join(dir, "a.txt"))
 
-			handled := menu.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: tc.key})
+			// Ask our OnKeyDown directly: menu.ProcessKey would report the key
+			// handled, because the VMenu's own default Escape/F10 handling
+			// (closing the dialog) takes over exactly when ours declines it.
+			handled := menu.OnKeyDown(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: tc.key})
 			if handled {
 				t.Fatalf("%s was reported as handled by the viewer/editor history action", tc.name)
 			}

@@ -290,7 +290,7 @@ func TestEditPanelViewModeRejectsBadColumnsWithoutClosing(t *testing.T) {
 	if errWin == dlg {
 		t.Fatal("bad input closed the edit dialog instead of reporting an error on top of it")
 	}
-	_, _, err := TextToViewSettings("ZZ", "")
+	_, err := TextToViewSettings("ZZ", "")
 	wantText := panelModeErrorText(err)
 	if !strings.Contains(errWin.GetTitle(), i18n.Msg("Panel.Modes.Title")) {
 		t.Errorf("error dialog title = %q, want it to mention %q", errWin.GetTitle(), i18n.Msg("Panel.Modes.Title"))
