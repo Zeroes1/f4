@@ -3114,11 +3114,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 						// putting the shell into PS2 continuation, where it
 						// would sit swallowing everything typed next.
 						sqCmd := ShellSingleQuote(cmd)
+						wrapped := terminal.ManagedForegroundCommand(sqCmd)
 						if path != "" {
 							sqPath := strings.ReplaceAll(path, "'", "'\\''")
-							fullWireCmd = fmt.Sprintf(" set +H; cd '%s' && { trap \"printf ''\" INT; printf \"\\033]133;C\\007\"; eval %s ; FARVTRESULT=$?; printf \"\\033]133;D\\007\"; trap - INT; (exit $FARVTRESULT); }\r", sqPath, sqCmd)
+							fullWireCmd = fmt.Sprintf(" set +H; cd '%s' && %s\r", sqPath, wrapped)
 						} else {
-							fullWireCmd = fmt.Sprintf(" { trap \"printf ''\" INT; printf \"\\033]133;C\\007\"; eval %s ; FARVTRESULT=$?; printf \"\\033]133;D\\007\"; trap - INT; (exit $FARVTRESULT); }\r", sqCmd)
+							fullWireCmd = fmt.Sprintf(" %s\r", wrapped)
 						}
 						pf.BeginManagedExecution()
 						pf.ReturnToPanels = pf.ShowPanels
