@@ -28,6 +28,13 @@ type Options struct {
 	// would otherwise go to Out (successes, "[TOLERANT] ..." notes,
 	// idempotency skips, the structural-balance warning).
 	Silent bool
+	// DryRun computes the same write plan (and, on partial failure, the
+	// same afailed.ap/afailed.md as a real run) but never touches
+	// projectDir: the reference's --dry-run (§ CLI) skips only the OS
+	// write phase, nothing about validation or reporting. When !Silent,
+	// Out gets one line per planned change instead of the write actually
+	// happening.
+	DryRun bool
 	// Out receives progress/warning text when !Silent. Defaults to
 	// io.Discard.
 	Out io.Writer
@@ -58,7 +65,7 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 	if out == nil {
 		out = io.Discard
 	}
-	e := &engine{strict: opts.Strict, silent: opts.Silent, out: out, projectDir: projectDir}
+	e := &engine{strict: opts.Strict, silent: opts.Silent, dryRun: opts.DryRun, out: out, projectDir: projectDir}
 	e.afailedMDPath = filepath.Join(projectDir, "afailed.md")
 
 	patchBytes, _ := os.ReadFile(patchFile)
@@ -101,11 +108,13 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 		e.printf("         A briefing for the generating model is in %s\n", e.afailedMDPath)
 	}
 
-	if res := e.commit(); res != nil {
+	if e.dryRun {
+		e.reportDryRun()
+	} else if res := e.commit(); res != nil {
 		return res
 	}
 
-	if len(e.failedChangesOutput) == 0 && pathExists(e.afailedMDPath) {
+	if !e.dryRun && len(e.failedChangesOutput) == 0 && pathExists(e.afailedMDPath) {
 		_ = os.Remove(e.afailedMDPath)
 	}
 
@@ -124,6 +133,7 @@ func Apply(patchFile, projectDir string, opts Options) *Result {
 type engine struct {
 	strict     bool
 	silent     bool
+	dryRun     bool
 	out        io.Writer
 	projectDir string
 
@@ -247,6 +257,35 @@ func (e *engine) commit() *Result {
 		}
 	}
 	return nil
+}
+
+// reportDryRun prints one summary line per planned change instead of
+// applying it, the DryRun counterpart of commit(). It mirrors the
+// reference's "--- DRY RUN: planned changes ---" block (kind and path per
+// op), but without the reference's per-file unified diff: the caller
+// already has the confirmation dialog's own file list, and a paragraph of
+// diff text does not fit a modal message box any better than this does.
+func (e *engine) reportDryRun() {
+	if len(e.writePlan) == 0 {
+		return
+	}
+	e.printf("\n--- DRY RUN: planned changes ---\n")
+	for _, op := range e.writePlan {
+		switch op.kind {
+		case opDeletePath:
+			e.printf("delete %s\n", op.relPath)
+		case opRename:
+			newRel, err := filepath.Rel(e.projectDir, op.newPath)
+			if err != nil {
+				newRel = op.newPath
+			}
+			e.printf("rename %s -> %s\n", op.relPath, newRel)
+		case opCreateDir:
+			e.printf("create dir %s\n", op.relPath)
+		case opWrite:
+			e.printf("write %s\n", op.relPath)
+		}
+	}
 }
 
 // --- per-FILE-block dispatch --------------------------------------------
