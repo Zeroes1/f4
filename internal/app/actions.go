@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -40,6 +41,16 @@ import (
 )
 
 const openingProgressDelay = 250 * time.Millisecond
+
+// errCannotEditDirectory and errCannotViewDirectory are sentinels the
+// editor/viewer opening workers below return for a directory target, so the
+// completion callback can show the same dedicated message a local open
+// always has, instead of the generic "Failed to open file:" wrapper other
+// errors get.
+var (
+	errCannotEditDirectory = errors.New("cannot edit a directory")
+	errCannotViewDirectory = errors.New("cannot view a directory")
+)
 
 // editorHeaderIsBinary: NUL in the header means binary — text in any codepage
 // (cp1251 included, which the viewer's utf8 check would call binary) has none.
@@ -1073,35 +1084,53 @@ func openEditorInternal(pf *panel.PanelsFrame, v vfs.VFS, path string) {
 		return
 	}
 	if fileops.IsLocalOSVFS(v) {
-		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			var f vfs.ReadAtCloser
-			if v != nil {
-				if stat, errStat := v.Stat(ctx.Context, path); errStat == nil && stat.IsDir {
-					ctx.RunOnUI(func() {
-						vtui.ShowMessage(" Error ", "Cannot edit a directory.", []string{"&Ok"})
-					})
-					return
-				}
-				var err error
-				f, err = v.Open(ctx.Context, path)
-				if err != nil {
-					if os.IsNotExist(err) {
-						f = nil
-					} else {
-						ctx.RunOnUI(func() {
-							if err == os.ErrInvalid {
-								vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets, Devices).", []string{"&Ok"})
-							} else {
-								vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
-							}
-						})
-						return
-					}
-				}
+		// Same delayed "Opening..." dialog the non-local branch below already
+		// shows, not the old bare vtui.RunAsync with no dialog at all: a local
+		// open normally returns well inside openingProgressDelay so nothing
+		// appears, exactly as before, but v.Open falling back to the sudo
+		// helper for a file this process cannot read on its own can sit for a
+		// long time on a slow PAM prompt (e.g. a fingerprint reader retrying)
+		// with that old path silent throughout -- no dialog, and unlike
+		// entering a sudo-only directory (navigateElevatedDirectoryAsync's
+		// spinner), no title-bar indicator either (f4#1411). The
+		// ProgressCallback wired into ctx below lets OSVFS.Open say
+		// "Requesting sudo access..." the moment it actually reaches that
+		// fallback, same channel a remote VFS already uses to report its own
+		// progress into this dialog.
+		var f vfs.ReadAtCloser
+		pf.RunProgressTaskAfter(openingProgressDelay, " Opening... ", "Preparing to edit file...", false, func(ctx context.Context, update func(msg string, percent int)) error {
+			if v == nil {
+				return nil
 			}
-			ctx.RunOnUI(func() {
-				showEditor(pf, v, path, f)
-			})
+			update("Opening file...", -1)
+			if stat, errStat := v.Stat(ctx, path); errStat == nil && stat.IsDir {
+				return errCannotEditDirectory
+			}
+			ctx = context.WithValue(ctx, vfs.ProgressKey, vfs.ProgressCallback(update))
+			var err error
+			f, err = v.Open(ctx, path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					f = nil
+					return nil
+				}
+				return err
+			}
+			return nil
+		}, func(err error) {
+			if err != nil {
+				switch {
+				case err == context.Canceled:
+				case err == errCannotEditDirectory:
+					vtui.ShowMessage(" Error ", "Cannot edit a directory.", []string{"&Ok"})
+				case err == os.ErrInvalid:
+					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets, Devices).", []string{"&Ok"})
+				default:
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
+				}
+				return
+			}
+			showEditor(pf, v, path, f)
 		})
 		return
 	}
@@ -1634,29 +1663,40 @@ func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, force
 		}
 	}
 	if fileops.IsLocalOSVFS(v) {
-		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		// Same reasoning as openEditorInternal's identical branch (f4#1411):
+		// the old bare vtui.RunAsync here showed nothing while v.Open's sudo
+		// fallback could sit on a slow PAM prompt, so route through the same
+		// delayed "Opening..." dialog and ProgressCallback wiring the
+		// non-local branch below already uses. A fast local open (the common
+		// case) still finishes well inside openingProgressDelay, so nothing
+		// appears, same as before.
+		var vv *viewer.ViewerView
+		pf.RunProgressTaskAfter(openingProgressDelay, " Opening... ", "Preparing to open file...", false, func(ctx context.Context, update func(msg string, percent int)) error {
+			update("Opening file...", -1)
 			if v != nil {
-				if stat, err := v.Stat(ctx.Context, path); err == nil && stat.IsDir {
-					ctx.RunOnUI(func() {
-						vtui.ShowMessage(" Error ", "Cannot view a directory.", []string{"&Ok"})
-					})
-					return
+				if stat, err := v.Stat(ctx, path); err == nil && stat.IsDir {
+					return errCannotViewDirectory
 				}
 			}
-
-			vv, err := viewer.NewViewerView(ctx.Context, v, path)
-			ctx.RunOnUI(func() {
-				if err == nil {
-					showViewerMode(pf, vv, path, forceHex)
-				} else {
+			ctx = context.WithValue(ctx, vfs.ProgressKey, vfs.ProgressCallback(update))
+			var err error
+			vv, err = viewer.NewViewerView(ctx, v, path)
+			return err
+		}, func(err error) {
+			if err != nil {
+				switch {
+				case err == context.Canceled:
+				case err == errCannotViewDirectory:
+					vtui.ShowMessage(" Error ", "Cannot view a directory.", []string{"&Ok"})
+				case err == os.ErrInvalid:
+					vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets).", []string{"&Ok"})
+				default:
 					vtui.DebugLog("PANELS: Failed to open vv for %s: %v", path, err)
-					if err == os.ErrInvalid {
-						vtui.ShowMessage(" Error ", "Cannot open special files (Named Pipes, Sockets).", []string{"&Ok"})
-					} else {
-						vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
-					}
+					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to open file:\n%v", err), []string{"&Ok"})
 				}
-			})
+				return
+			}
+			showViewerMode(pf, vv, path, forceHex)
 		})
 		return
 	}
