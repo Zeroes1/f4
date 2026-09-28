@@ -2,7 +2,9 @@ package terminal
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/unxed/vtui"
 )
@@ -15,6 +17,17 @@ import (
 // the insert/delete-line and scroll-down CSI commands, and the parser's
 // intermediate-byte / DCS state transitions. managed_exec.go/test are
 // untouched, per the current moratorium on that file.
+
+// charQuote renders a ViewCell.Char (vtui.CharInfo.Char, a uint64 by field
+// type but always a decoded Unicode code point in practice) as a quoted rune
+// for Fatalf messages, without an unchecked uint64->rune conversion.
+func charQuote(c uint64) string {
+	if c > utf8.MaxRune {
+		return strconv.FormatUint(c, 10)
+	}
+	// #nosec G115 -- range-checked above: c <= utf8.MaxRune fits in a rune.
+	return strconv.QuoteRune(rune(c))
+}
 
 // --- Kitty keyboard protocol progressive enhancement flags (CSI ... u) ---
 //
@@ -419,8 +432,8 @@ func TestAnsiParser_HandleEsc_IndexScrollsAtBottomMargin(t *testing.T) {
 		t.Fatalf("Index at bottom margin: CursorY=%d, want 2 (clamped)", tv.CursorY)
 	}
 	if tv.Lines[0][0].Char != 'B' || tv.Lines[1][0].Char != 'C' || tv.Lines[2][0].Char != ' ' {
-		t.Fatalf("Index at bottom margin: rows=%q/%q/%q, want B/C/blank",
-			rune(tv.Lines[0][0].Char), rune(tv.Lines[1][0].Char), rune(tv.Lines[2][0].Char))
+		t.Fatalf("Index at bottom margin: rows=%s/%s/%s, want B/C/blank",
+			charQuote(tv.Lines[0][0].Char), charQuote(tv.Lines[1][0].Char), charQuote(tv.Lines[2][0].Char))
 	}
 }
 
@@ -440,8 +453,8 @@ func TestAnsiParser_HandleEsc_ReverseIndexScrollsAtTopMargin(t *testing.T) {
 		t.Fatalf("Reverse Index at top margin: CursorY=%d, want 0 (clamped)", tv.CursorY)
 	}
 	if tv.Lines[0][0].Char != ' ' || tv.Lines[1][0].Char != 'A' || tv.Lines[2][0].Char != 'B' {
-		t.Fatalf("Reverse Index at top margin: rows=%q/%q/%q, want blank/A/B",
-			rune(tv.Lines[0][0].Char), rune(tv.Lines[1][0].Char), rune(tv.Lines[2][0].Char))
+		t.Fatalf("Reverse Index at top margin: rows=%s/%s/%s, want blank/A/B",
+			charQuote(tv.Lines[0][0].Char), charQuote(tv.Lines[1][0].Char), charQuote(tv.Lines[2][0].Char))
 	}
 }
 
@@ -475,7 +488,7 @@ func TestAnsiParser_HandleEsc_RISResetsToInitialState(t *testing.T) {
 		t.Fatalf("RIS: scroll region=[%d,%d], want [0,%d]", tv.ScrollTop, tv.ScrollBottom, tv.Height-1)
 	}
 	if tv.Lines[1][2].Char != ' ' {
-		t.Fatalf("RIS: screen not cleared, Lines[1][2]=%q", rune(tv.Lines[1][2].Char))
+		t.Fatalf("RIS: screen not cleared, Lines[1][2]=%s", charQuote(tv.Lines[1][2].Char))
 	}
 }
 
@@ -491,7 +504,7 @@ func TestAnsiParser_HandleEsc_KeypadModesAreNoOpsAndDoNotWedgeTheParser(t *testi
 	p.Process([]byte("\x1b=\x1b>Z"))
 
 	if tv.Lines[0][0].Char != 'Z' {
-		t.Fatalf("after keypad no-ops: Lines[0][0]=%q, want 'Z'", rune(tv.Lines[0][0].Char))
+		t.Fatalf("after keypad no-ops: Lines[0][0]=%s, want 'Z'", charQuote(tv.Lines[0][0].Char))
 	}
 }
 
@@ -610,7 +623,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1b(BZ"))
 
 		if tv.Lines[0][0].Char != 'Z' {
-			t.Fatalf("after ESC ( B: Lines[0][0]=%q, want 'Z'", rune(tv.Lines[0][0].Char))
+			t.Fatalf("after ESC ( B: Lines[0][0]=%s, want 'Z'", charQuote(tv.Lines[0][0].Char))
 		}
 	})
 
@@ -626,7 +639,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1bP\x1b\\C")) // ESC P, aborted by ESC, then ST, then 'C'
 
 		if tv.Lines[0][0].Char != 'C' {
-			t.Fatalf("after aborted DCS: Lines[0][0]=%q, want 'C'", rune(tv.Lines[0][0].Char))
+			t.Fatalf("after aborted DCS: Lines[0][0]=%s, want 'C'", charQuote(tv.Lines[0][0].Char))
 		}
 	})
 
@@ -642,7 +655,7 @@ func TestAnsiParser_EscIntermediateAndDCSStateTransitionsReturnToGround(t *testi
 		p.Process([]byte("\x1bP0phello\x07B"))
 
 		if tv.Lines[0][0].Char != 'B' {
-			t.Fatalf("after BEL-terminated DCS: Lines[0][0]=%q, want 'B'", rune(tv.Lines[0][0].Char))
+			t.Fatalf("after BEL-terminated DCS: Lines[0][0]=%s, want 'B'", charQuote(tv.Lines[0][0].Char))
 		}
 	})
 }
