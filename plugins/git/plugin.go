@@ -19,8 +19,12 @@
 // (git add) or unstage (git restore --staged) that whole file, whichever
 // applies, then reload the panel.
 //
-// Staging/unstaging a single hunk, commit, log and branch switching are
-// still follow-up parts, not this one -- see the ticket for the full list.
+// v4 (f4#659 part 4 of N, commit.go) adds Ctrl+K: a one-line commit message
+// prompt over whatever Insert has already staged, then `git commit -m`.
+// Nothing staged shows a toast instead of opening the dialog.
+//
+// Staging/unstaging a single hunk, log and branch switching are still
+// follow-up parts, not this one -- see the ticket for the full list.
 package git
 
 import (

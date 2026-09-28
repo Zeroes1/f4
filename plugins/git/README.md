@@ -75,11 +75,33 @@ archive tools (f4#609) rather than linking a Go git implementation.
   the panel untouched and shows the failure as a toast, the same way a
   failed F5 refresh already does.
 
+## Part 4: committing staged changes (`commit.go`)
+
+- **Ctrl+K** opens a one-line commit message prompt over whatever Insert
+  (part 3) has already staged, reusing `internal/dialog.FileInputBox` -- the
+  same single-line input dialog `internal/app/actions.go`'s Rename command
+  already builds its own prompt from -- rather than composing a new
+  `vtui.Window`/`vtui.Edit` pair from scratch for the same shape of dialog.
+  Confirming it runs `git commit -m "<message>"` over the index and reloads
+  the panel; a leading/trailing-whitespace-only message is rejected the same
+  way an empty one is, with a toast, before any commit runs.
+- Nothing staged means nothing for `git commit` to record: pressing Ctrl+K
+  with an empty index shows a toast ("nothing staged to commit") instead of
+  opening a dialog the user would only have to cancel.
+- Ctrl+K, not a bare letter: this table's `QuickSearch` claims every
+  printable character while focused (the same reason Insert, not Space, was
+  chosen for staging in part 3), and Ctrl+K is not already one of f4's own
+  action hotkeys anywhere else in the application.
+- Deliberately minimal for this first cut: a single-line message only (no
+  multi-line body, no `--amend`, no commit signature/author override). Those
+  are their own follow-up parts if and when they turn out to be needed --
+  see the ticket.
+
 ## What is deliberately not here yet
 
 Everything else the ticket asks for: staging/unstaging a single hunk within
-a file (needs f4#613's diff widget to pick the hunk), commit (with an editor
-for the message), log, and branch switching/creation. Each is its own atomic
+a file (needs f4#613's diff widget to pick the hunk), a multi-line commit
+message editor, log, and branch switching/creation. Each is its own atomic
 follow-up part of f4#659, not this one.
 
 ## Design notes
