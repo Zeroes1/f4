@@ -12,7 +12,10 @@ package observer
 // SOR_PASSWORD_REQUIRED landed in part 7 (see password.go); CanOpen below
 // treats it the same as SOR_SUCCESS -- recognized, just locked -- so Enter
 // still reaches Open, which is where the user is actually asked, not this
-// cheap probe. What is here is real, not a
+// cheap probe. Part 8 closed the ArchiveEnterExcludeMask-shaped gap the
+// design also named: PanelEnterAllowed below lets ObserverEnterExcludeMask
+// hold ordinary Enter back from a recognized container while Ctrl+PgDn keeps
+// opening it, the way plugins/archive already does. What is here is real, not a
 // stub: a genuine unmodified isoimg.wasm (built the way
 // scripts/build_isoimg_test_wasm.sh already does for the existing
 // plugins/observer tests) opens a real ISO image and the resulting tree is
@@ -26,8 +29,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/filemask"
 	"github.com/unxed/f4/vfs"
 )
+
+// Provider also implements vfs.PanelEnterPolicyProvider (see
+// PanelEnterAllowed below), the same optional capability
+// plugins/multiarc.Provider and plugins/archive.ArchiveProvider assert for
+// themselves.
+var _ vfs.PanelEnterPolicyProvider = (*Provider)(nil)
 
 // isoimgModuleFileName is the file Provider looks for in its modules
 // directory. Observer modules are never embedded in the f4 binary (see
@@ -120,6 +131,42 @@ func baseName(parent vfs.VFS, path string) string {
 		return base
 	}
 	return path
+}
+
+// PanelEnterAllowed is ArchiveProvider.PanelEnterAllowed's counterpart for
+// Observer containers (f4#1563): ObserverEnterExcludeMask names files Enter
+// must leave to their extension association even though a Provider module
+// recognizes them, and Ctrl+PgDn keeps opening them regardless, the same
+// deliberate escape hatch plugins/archive gives self-extracting archives and
+// masked documents. Unlike ArchiveProvider there is no self-extracting-exe
+// case to also guard here: isoimg, the only module Provider drives so far
+// (see the package comment), never is itself a program Enter would
+// otherwise run, so the mask is the whole policy.
+func (p *Provider) PanelEnterAllowed(ctx context.Context, parent vfs.VFS, path string) bool {
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	if _, isLocal := parent.(*vfs.OSVFS); !isLocal {
+		// Off the local file system there is no association and no system
+		// opener for Enter to be held back in favour of, exactly the
+		// reasoning ArchiveProvider.PanelEnterAllowed uses for the same
+		// case.
+		return true
+	}
+	return !observerEnterBarredByMask(baseName(parent, path))
+}
+
+// observerEnterBarredByMask reports whether the configured mask claims this
+// name for its association, mirroring plugins/archive.enterBarredByMask.
+// An empty mask (the default -- see config.ObserverEnterExcludeMask) bars
+// nothing, which is the setting a user writes when they want Enter to follow
+// the content and only the content.
+func observerEnterBarredByMask(name string) bool {
+	mask := strings.TrimSpace(config.App.ObserverEnterExcludeMask)
+	if mask == "" {
+		return false
+	}
+	return filemask.Match(name, mask, true)
 }
 
 func (p *Provider) CanOpen(ctx context.Context, parent vfs.VFS, path string) bool {

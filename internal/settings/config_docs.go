@@ -74,6 +74,8 @@ var configOptionExtraDocs = map[string]string{
 	"Interface.FallbackLanguage": "Language of the interface strings the interface language does not translate, tried before English.",
 	"Panel.ArchiveEnterExcludeMask": "Files Enter does not open as an archive even when their content is one, such as office documents and e-books, which are ZIP inside. " +
 		"A far2l file mask: \"|\" starts the exceptions to it.",
+	"Panel.ObserverEnterExcludeMask": "Files Enter does not open as an Observer container (an ISO image, for the one module f4 drives so far) even when their content is one. " +
+		"Ctrl+PgDn still opens them. A far2l file mask: \"|\" starts the exceptions to it. Empty by default.",
 	"Panel.DriveMenuOptions": "The drive menu options as a bit mask, one bit per option of Settings Center, Drive chooser. Bits:",
 	"Panel.ConsoleOverlayUI": "The older form of the console style, read only while ConsoleMode is \"host\": 1 is the host console with f4's overlay, 0 without it. " +
 		"ConsoleMode now names the style itself: own, far or mc.",
