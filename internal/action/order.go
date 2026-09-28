@@ -151,6 +151,7 @@ var actionMenuOrder = []string{
 	"Panel.TogglePassivePanel",
 	"Panel.InfoPanel",
 	"Panel.QuickView",
+	"Panel.AutoFilter",
 	"Panel.Player",
 	"Panel.Tree",
 	"Panel.SplitLeft",

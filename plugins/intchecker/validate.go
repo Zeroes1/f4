@@ -263,6 +263,7 @@ type validateJob struct {
 	hashPath string // the checksum file, for messages
 	dir      string // where the listed relative names are looked up
 	file     ChecksumFile
+	encoding fileEncoding // what the file was read as, for the dialog
 }
 
 // validateResult is what a run found, in checksum file order.

@@ -162,3 +162,96 @@ func TestStatusPanelTitleShowsDetachedHead(t *testing.T) {
 		t.Fatalf("title() = %q, want it to include the change count", panel.title())
 	}
 }
+
+// TestStatusPanelDeclaresEveryKeyThroughPanelKeys pins the keys the status
+// panel hands the host's shared panel-key primitive (vfs.PanelKeyProvider,
+// f4#312): every gesture is declared with a handler, F5 carries a keybar
+// caption, and Enter/Insert are disabled -- yet still consumed, as they
+// always were -- while there is no entry under the cursor.
+func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
+	withFakeGit(t, "# branch.head main\n", nil)
+
+	controller, err := newStatusPanel(vfs.PanelContext{Current: vfs.PanelState{Path: "/repo"}, Bounds: [4]int{0, 0, 39, 19}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = controller.Close() }()
+	kp, ok := controller.(vfs.PanelKeyProvider)
+	if !ok {
+		t.Fatalf("%T does not implement vfs.PanelKeyProvider", controller)
+	}
+
+	type chord struct {
+		vk    uint16
+		ctrl  bool
+		shift bool
+	}
+	keys := map[chord]vfs.PanelKey{}
+	for _, k := range kp.PanelKeys() {
+		if k.Run == nil {
+			t.Errorf("key %#x/%#x has no handler", k.VK, k.Mods)
+		}
+		if k.Mods&^(vtinput.LeftCtrlPressed|vtinput.ShiftPressed) != 0 {
+			t.Errorf("key %#x declares unexpected modifiers %#x", k.VK, k.Mods)
+		}
+		c := chord{k.VK, k.Mods&vtinput.LeftCtrlPressed != 0, k.Mods&vtinput.ShiftPressed != 0}
+		if _, dup := keys[c]; dup {
+			t.Errorf("key %+v declared twice", c)
+		}
+		keys[c] = k
+	}
+	shiftF4 := chord{vtinput.VK_F4, false, true}
+	f8 := chord{vtinput.VK_F8, false, false}
+	for _, want := range []chord{
+		{vtinput.VK_F5, false, false}, {vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false},
+		{vtinput.VK_F4, false, false}, shiftF4, f8, {vtinput.VK_K, true, false}, {vtinput.VK_E, true, false}, {vtinput.VK_S, true, false},
+	} {
+		if _, ok := keys[want]; !ok {
+			t.Errorf("missing declared key %+v", want)
+		}
+	}
+	if keys[chord{vtinput.VK_F5, false, false}].Label == "" {
+		t.Error("F5 has no keybar caption")
+	}
+	if keys[chord{vtinput.VK_F4, false, false}].Label == "" {
+		t.Error("F4 has no keybar caption")
+	}
+	if keys[shiftF4].Label == "" {
+		t.Error("Shift+F4 has no keybar caption")
+	}
+	if keys[f8].Label == "" {
+		t.Error("F8 has no keybar caption")
+	}
+
+	// Empty list: nothing under the cursor for Enter or Insert to act on.
+	for _, c := range []chord{{vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false}, {vtinput.VK_F4, false, false}, shiftF4, f8} {
+		k := keys[c]
+		if k.Enabled == nil || k.Enabled() {
+			t.Errorf("key %+v should be disabled on an empty list", c)
+		}
+	}
+	calls := 0
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		calls++
+		return []byte("# branch.head main\n"), nil
+	}
+	if !controller.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_INSERT}) {
+		t.Fatal("Insert on an empty list must still be consumed")
+	}
+	if calls != 0 {
+		t.Fatalf("Insert on an empty list ran git %d time(s)", calls)
+	}
+
+	// One entry under the cursor enables both.
+	execGit = func(context.Context, string, []string) ([]byte, error) {
+		return []byte("# branch.head main\n? one.txt\n"), nil
+	}
+	if !controller.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F5}) {
+		t.Fatal("plain F5 was not claimed")
+	}
+	for _, k := range kp.PanelKeys() {
+		if (k.VK == vtinput.VK_RETURN || k.VK == vtinput.VK_INSERT || k.VK == vtinput.VK_F4 || k.VK == vtinput.VK_F8) && k.Enabled != nil && !k.Enabled() {
+			t.Errorf("key %#x should be enabled with an entry under the cursor", k.VK)
+		}
+	}
+}

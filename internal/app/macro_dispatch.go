@@ -56,6 +56,17 @@ func macroCurrentArea() string {
 	return "Other"
 }
 
+// pluginPanelStandsDown reports whether the hotkey that resolved to
+// actionName must yield to a panel plugin owning the keyboard in the panels
+// frame on top (panel.PanelsFrame.PluginPanelStandsDown).
+func pluginPanelStandsDown(actionName string) bool {
+	if vtui.FrameManager == nil {
+		return false
+	}
+	pf, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame)
+	return ok && pf.PluginPanelStandsDown(actionName)
+}
+
 // menuBarRaisedOver reports a main menu bar that is up without a dropdown over
 // top, the frame that shows it. vtui's frame manager hands such a bar every key
 // the EventFilter lets through (the menu interception in dispatchEvent, under
@@ -260,6 +271,12 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 			if strings.EqualFold(actionName, "none") {
 				return true // Intercept and silence (explicitly unbound)
 			}
+			// A panel plugin owns the keyboard and this binding acts on the
+			// file panel hidden under it: hand the key to the frame, which
+			// routes it to the plugin's ProcessKey (vfs.PanelKeyProvider).
+			if pluginPanelStandsDown(actionName) {
+				return false
+			}
 			vtui.DebugLog("HOTKEY: Executing action %s for %s in area %s", actionName, keyStr, currentArea)
 			// A configured binding owns the event even when its action cannot
 			// currently run. Letting the same key fall through to the frame
@@ -302,6 +319,11 @@ func macroLookupHotkey(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	}
 	if strings.EqualFold(actionName, "none") {
 		return true
+	}
+	// Same stand-down as in Filter: an injected key (a keybar click) must
+	// not reach a file action the plugin panel has hidden either.
+	if pluginPanelStandsDown(actionName) {
+		return false
 	}
 	vtui.DebugLog("HOTKEY: Injected %s → action %s in area %s", keyStr, actionName, area)
 	// The injected path has the same ownership rule as Filter: once a

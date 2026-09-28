@@ -39,6 +39,11 @@ var architectureLayers = map[string]int{
 	// wired to call it yet.
 	"internal/winex11drag": 0,
 
+	// #1604: dragging files out of f4 in a Windows console into other
+	// applications, Burlak's tool-window technique. A leaf over vtui; the
+	// Windows console session installs it.
+	"internal/wincondrag": 0,
+
 	// Checked conversions, shared by seven packages. Zero imports of ours.
 	"internal/numeric": 0,
 
@@ -164,6 +169,10 @@ var architectureLayers = map[string]int{
 	// tell a window from a TTY, and the viewer's URL model to underline a link
 	// under the mouse. Nothing below layer 3 imports it.
 	"internal/terminal": 3,
+
+	// The wire codec of the far2l drag-and-drop protocol: byte layouts only,
+	// standard library only, so any layer may use it; the terminal wires it.
+	"internal/terminal/far2ldnd": 0,
 
 	// media reads the terminal's graphics protocols and the viewer's title bar,
 	// so it is layer 3 beside them, not the 1 the plan assigned.

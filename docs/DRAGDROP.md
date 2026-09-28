@@ -5,7 +5,12 @@ lives in vtui (see its DRAGDROP.md); this file is the f4 side and the
 roadmap.
 
 Only graphical backends can do this. Terminals have no protocol for it, so
-in a terminal nothing registers and nothing changes.
+in a terminal nothing registers and nothing changes -- with one exception:
+the Windows console (conhost, OpenConsole, Windows Terminal) can drag files
+out, into Explorer, a browser or a chat window (#1604). f4 lays an invisible
+window of its own over the console for the length of the drag, the technique
+of the Far plugin Burlak; see `internal/wincondrag`. Dropping into the
+console is not covered.
 
 ## What works now
 

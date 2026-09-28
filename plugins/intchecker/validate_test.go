@@ -319,7 +319,7 @@ func TestStartValidateReportsResult(t *testing.T) {
 	writeTestFile(t, dir, "list.sfv", "a.txt 352441C2\n")
 	app := &taskAppMock{messages: make(chan string, 1)}
 	fs := vfs.NewOSVFS(dir)
-	startValidate(app, fs, filepath.Join(dir, "list.sfv"), dir)
+	startValidate(app, fs, filepath.Join(dir, "list.sfv"), dir, autoDetectEncoding)
 	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.AllOK"), 1); got != want {
 		t.Fatalf("message = %q, want %q", got, want)
 	}
@@ -330,11 +330,11 @@ func TestStartValidateReportsUnreadableChecksumFile(t *testing.T) {
 	writeTestFile(t, dir, "empty.md5", "")
 	app := &taskAppMock{messages: make(chan string, 1)}
 	fs := vfs.NewOSVFS(dir)
-	startValidate(app, fs, filepath.Join(dir, "empty.md5"), dir)
+	startValidate(app, fs, filepath.Join(dir, "empty.md5"), dir, autoDetectEncoding)
 	if got, want := <-app.messages, fmt.Sprintf(vtui.Msg("IntChecker.NoChecksums"), filepath.Join(dir, "empty.md5")); got != want {
 		t.Fatalf("message = %q, want %q", got, want)
 	}
-	startValidate(app, fs, filepath.Join(dir, "empty.md5"), filepath.Join(dir, "nope"))
+	startValidate(app, fs, filepath.Join(dir, "empty.md5"), filepath.Join(dir, "nope"), autoDetectEncoding)
 	if got := <-app.messages; got != fmt.Sprintf(vtui.Msg("IntChecker.DirNotFound"), filepath.Join(dir, "nope")) {
 		t.Fatalf("message = %q", got)
 	}
@@ -354,7 +354,7 @@ func TestStartValidateAsksForDirectoryWhenNothingIsFound(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, dir, "list.md5", abcDigests[AlgMD5]+" *elsewhere.txt\n")
 	app := &taskAppMock{messages: make(chan string, 1)}
-	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir)
+	startValidate(app, vfs.NewOSVFS(dir), filepath.Join(dir, "list.md5"), dir, autoDetectEncoding)
 	if _, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window); !ok {
 		t.Fatalf("top frame = %T, want the directory dialog", vtui.FrameManager.GetTopFrame())
 	}
@@ -373,12 +373,13 @@ func TestValidateDialogDump(t *testing.T) {
 		i18n.InitLang(lang, "en", "")
 		for _, note := range []string{"", vtui.Msg("IntChecker.FilesNotFound")} {
 			scr := initValidateTestScreen(t)
-			d := newValidateDialog(note, "/home/user/photos.md5", "/mnt/cdrom")
+			d := newValidateDialog(note, "/home/user/photos.md5", "/mnt/cdrom", autoDetectEncoding)
 			d.win.Show(scr)
 			var dump bytes.Buffer
 			scr.Dump(&dump)
 			text, _, _ := strings.Cut(dump.String(), "--- CELL METADATA")
-			for _, want := range []string{"/home/user/photos.md5", "/mnt/cdrom", strings.ReplaceAll(vtui.Msg("IntChecker.ValidateTitle"), "&", "")} {
+			for _, want := range []string{"/home/user/photos.md5", "/mnt/cdrom", strings.ReplaceAll(vtui.Msg("IntChecker.ValidateTitle"), "&", ""),
+				strings.ReplaceAll(vtui.Msg("IntChecker.FileEncoding"), "&", "") + " " + vtui.Msg("IntChecker.EncodingAuto")} {
 				if !strings.Contains(text, want) {
 					t.Errorf("%s dump lacks %q:\n%s", lang, want, text)
 				}

@@ -85,6 +85,13 @@ func shouldCheck() bool {
 }
 
 func CheckForUpdates(pf *panel.PanelsFrame, manual bool) {
+	checkForUpdates(pf, manual, false)
+}
+
+// checkForUpdates is CheckForUpdates for a caller that knows the user has just
+// picked a different channel: moving from nightly to stable then offers the
+// stable release even when it is older than the running build (#1218).
+func checkForUpdates(pf *panel.PanelsFrame, manual, switchedChannel bool) {
 	if !manual && !shouldCheck() {
 		return
 	}
@@ -95,7 +102,9 @@ func CheckForUpdates(pf *panel.PanelsFrame, manual bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cand, err := update.Check(ctx, updateSettings(), currentBuild())
+	cfg := updateSettings()
+	cfg.SwitchedChannel = switchedChannel
+	cand, err := update.Check(ctx, cfg, currentBuild())
 	if err != nil {
 		reportUpdateError(manual, err.Error())
 		return
@@ -121,7 +130,7 @@ func CheckForUpdates(pf *panel.PanelsFrame, manual bool) {
 	}
 
 	vtui.FrameManager.PostTask(func() {
-		msg := fmt.Sprintf("An update is available: %s\n\nDo you want to download and install it now?", cand.DisplayVersion)
+		msg := updatePromptText(cand)
 		dlg := vtui.ShowMessage(" Auto Update ", msg, []string{"&Yes", "&No"})
 		dlg.OnResult = func(code int) {
 			if code == 0 {
@@ -137,6 +146,16 @@ func CheckForUpdates(pf *panel.PanelsFrame, manual bool) {
 			sessionDismissedUpdateKey = cand.UpdateKey
 		}
 	})
+}
+
+// updatePromptText words the offer. A stable release offered after a move
+// from nightly can be older than the running build, and the user should know
+// that before agreeing to it.
+func updatePromptText(cand update.Candidate) string {
+	if cand.OlderThanRunning {
+		return fmt.Sprintf("The stable channel offers %s.\nIt is older than the build you are running.\n\nDo you want to download and install it now?", cand.DisplayVersion)
+	}
+	return fmt.Sprintf("An update is available: %s\n\nDo you want to download and install it now?", cand.DisplayVersion)
 }
 
 func reportUpdateError(manual bool, msg string) {

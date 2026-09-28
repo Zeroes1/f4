@@ -1245,6 +1245,14 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	}
 	previousEventFilter := vtui.FrameManager.EventFilter
 	vtui.FrameManager.EventFilter = func(e *vtinput.InputEvent) bool {
+		// The lone-Alt detector must see every event before anything can
+		// consume it: an Alt+F7 the hotkey dispatcher takes still spoils
+		// the Alt tap (#1131).
+		if panel.LoneAltTap(e) {
+			if pf, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame); ok && pf.HandleLoneAlt() {
+				return true
+			}
+		}
 		if panel.HandleTranslatorMouseEvent(e) {
 			return true
 		}

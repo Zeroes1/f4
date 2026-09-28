@@ -47,7 +47,7 @@ func (r branchRow) GetCellText(col int) string {
 	}
 }
 
-// BranchView is Ctrl+S on the status panel (panel.go's ProcessKey): a
+// BranchView is Ctrl+S on the status panel (panel.go's PanelKeys): a
 // read-only list of the repository's local branches, built from the same
 // vtui.BorderedFrame+vtui.Table pair LogView (logview.go) composes for the
 // commit log. Like LogView, and unlike statusPanel itself, it is not a
@@ -388,7 +388,7 @@ func (bv *BranchView) runDeleteBranch(name string) {
 	}
 }
 
-// showBranches is Ctrl+S on the status panel (panel.go's ProcessKey doc
+// showBranches is Ctrl+S on the status panel (panel.go's PanelKeys doc
 // comment explains why Ctrl+S: it is free, and already precedent for a
 // view-local "S" gesture -- internal/media/image_view.go's own Ctrl+S
 // toggles its slide show the same way, scoped to that view alone, never a

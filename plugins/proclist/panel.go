@@ -228,11 +228,10 @@ type procListPanel struct {
 // test, and any future caller that does not care) falls back to
 // DefaultSettings() through settingsStore.snapshot's own nil-safe zero
 // value, so this never needs its own separate "no settings" branch.
-// Visible columns are resolved once, here -- unlike RefreshInterval (below),
-// which loop() re-reads every tick, rebuilding vtui.Table's columns live
-// while the panel is open is a bigger change than this ticket asked for, so
-// a changed column selection only takes effect the next time the panel is
-// opened.
+// Visible columns are resolved here for the first snapshot and then
+// re-checked by syncColumns on every Show and every refresh, so a column
+// selection changed through ProcList.Config applies to an already-open
+// panel as soon as the dialog closes (f4#312, Zeroes1's point 4).
 func newProcListPanel(ctx vfs.PanelContext, store *settingsStore) (vfs.PanelController, error) {
 	settings := store.snapshot()
 	specs := columnSpecsForKeys(settings.VisibleColumns)
@@ -284,10 +283,9 @@ func newProcListPanel(ctx vfs.PanelContext, store *settingsStore) (vfs.PanelCont
 
 // refreshInterval re-reads Settings.RefreshInterval on every tick (loop,
 // below), so a change made through ProcList.Config while this panel is
-// already open takes effect within one refresh cycle -- unlike the
-// visible-columns half of the same setting, which newProcListPanel captures
-// once at Open time (see its own comment). store.snapshot is nil-safe, so
-// this needs no separate guard for a panel built with a nil store.
+// already open takes effect within one refresh cycle (the visible-columns
+// half of the same setting is syncColumns' job). store.snapshot is nil-safe,
+// so this needs no separate guard for a panel built with a nil store.
 func (p *procListPanel) refreshInterval() time.Duration {
 	if d := p.store.snapshot().refreshInterval(); d > 0 {
 		return d
@@ -329,6 +327,7 @@ func (p *procListPanel) runOnUI(fn func()) {
 // it through a task posted to RunOnUI, never directly from the background
 // goroutine.
 func (p *procListPanel) applySamples(samples []sample) {
+	p.syncColumns()
 	rows := make([]vtui.TableRow, len(samples))
 	seen := make(map[int]bool, len(samples))
 	for i, s := range samples {
@@ -347,6 +346,85 @@ func (p *procListPanel) applySamples(samples []sample) {
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}
+}
+
+// sameColumnIDs reports whether a and b show the same columns in the same
+// order -- all syncColumns needs to know, since a columnSpec's rendering is
+// fixed by its id.
+func sameColumnIDs(a, b []columnSpec) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].id != b[i].id {
+			return false
+		}
+	}
+	return true
+}
+
+// syncColumns applies Settings.VisibleColumns to an already-open panel: when
+// ProcList.Config saved a different selection, the table gets the new
+// columns, every current row is re-bound to them (procRow resolves a display
+// column through its specs), the sort stays on the same column and
+// direction if that column is still shown (otherwise it falls back to
+// newProcListPanel's own default), and the cursor stays on the same process.
+// It runs on the UI goroutine only (Show and applySamples) and is a no-op
+// while the selection is unchanged, so calling it on every redraw is cheap.
+// It reports whether the columns changed.
+func (p *procListPanel) syncColumns() bool {
+	specs := columnSpecsForKeys(p.store.snapshot().VisibleColumns)
+	if sameColumnIDs(specs, p.specs) {
+		return false
+	}
+
+	sortID := -1
+	if c := p.table.SortColumn; c >= 0 && c < len(p.specs) {
+		sortID = p.specs[c].id
+	}
+	selected, hadSelection := p.selectedSample()
+
+	sortCol, ascending := -1, p.table.SortAscending
+	if sortID >= 0 {
+		for i, c := range specs {
+			if c.id == sortID {
+				sortCol = i
+				break
+			}
+		}
+		if sortCol < 0 {
+			if idx, ok := defaultSortDisplayIndex(specs); ok {
+				sortCol, ascending = idx, false
+			}
+		}
+	}
+
+	p.specs = specs
+	p.table.Columns = procListColumns(specs)
+	rows := make([]vtui.TableRow, 0, len(p.table.Rows))
+	for _, r := range p.table.Rows {
+		if pr, ok := r.(procRow); ok {
+			rows = append(rows, procRow{s: pr.s, specs: specs})
+		}
+	}
+	p.table.SortColumn = sortCol
+	p.table.SortAscending = ascending
+	p.table.SetRows(rows)
+
+	if hadSelection {
+		for pos := 0; pos < p.table.ItemCount; pos++ {
+			idx := p.table.RowAt(pos)
+			if idx < 0 || idx >= len(p.table.Rows) {
+				continue
+			}
+			if pr, ok := p.table.Rows[idx].(procRow); ok && pr.s.pid == selected.pid {
+				p.table.SelectPos = pos
+				p.table.EnsureVisible()
+				break
+			}
+		}
+	}
+	return true
 }
 
 func (p *procListPanel) SetPosition(x1, y1, x2, y2 int) {
@@ -379,38 +457,39 @@ func (p *procListPanel) SetFocus(focused bool) {
 
 func (p *procListPanel) IsFocused() bool { return p.table.IsFocused() }
 
-// ProcessKey adds f4#312 part 3's process management, and part 4's F3
-// details view (showDetails, details.go), on top of the table's own
-// navigation/sort/quick-search handling: F3 details (a read-only snapshot,
-// FAR3's own F3 gesture), F8 kill (with confirmation, confirmKill in
-// actions.go), Shift+F1/F2 lower/raise priority (FAR3's own bindings for the
-// same thing), and Ctrl+F8 suspend/resume toggle -- new in f4, not in FAR3,
-// and only offered where suspendResumeSupported is true (linux/darwin; not
-// Windows, which has no supported API for it). Unmatched keys, including
-// Ctrl+F8 where unsupported, fall through to the table exactly as before
-// this change.
+var _ vfs.PanelKeyProvider = (*procListPanel)(nil)
+
+// PanelKeys declares this panel's own keys through the host's shared
+// panel-plugin key primitive (vfs.PanelKeyProvider, f4#312): F3 details (a
+// read-only snapshot, FAR3's own F3 gesture; showDetails, details.go), F8
+// kill (with confirmation, confirmKill in actions.go), Shift+F1/F2
+// lower/raise priority (FAR3's own bindings for the same thing), and Ctrl+F8
+// suspend/resume toggle -- new in f4, not in FAR3, and declared only where
+// suspendResumeSupported is true (linux/darwin; not Windows, which has no
+// supported API for it). Declaring them, rather than switching on them in
+// ProcessKey, is what makes the host run them ahead of the file panel's own
+// F3/F8/Shift+F1/F2 bindings and put their captions on the keybar.
+func (p *procListPanel) PanelKeys() []vfs.PanelKey {
+	keys := []vfs.PanelKey{
+		{VK: vtinput.VK_F3, Label: i18n.Msg("ProcList.KeyBar.Details"), Run: p.showDetails},
+		{VK: vtinput.VK_F8, Label: i18n.Msg("ProcList.KeyBar.Kill"), Run: p.confirmKill},
+		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityDown"), Run: func() { p.adjustPriority(false) }},
+		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityUp"), Run: func() { p.adjustPriority(true) }},
+	}
+	if suspendResumeSupported {
+		keys = append(keys, vfs.PanelKey{VK: vtinput.VK_F8, Mods: vtinput.LeftCtrlPressed, Label: i18n.Msg("ProcList.KeyBar.Suspend"), Run: p.toggleSuspend})
+	}
+	return keys
+}
+
+// ProcessKey routes the declared PanelKeys first -- the host normally
+// dispatches them before the key ever gets here, but a host without the
+// PanelKeyProvider hook (and this package's tests) still reaches them --
+// and hands everything else to the table's own navigation/sort/quick-search
+// handling.
 func (p *procListPanel) ProcessKey(e *vtinput.InputEvent) bool {
-	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
-		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
-		alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
-		shift := e.ControlKeyState&vtinput.ShiftPressed != 0
-		switch {
-		case e.VirtualKeyCode == vtinput.VK_F3 && !ctrl && !alt && !shift:
-			p.showDetails()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F8 && !ctrl && !alt && !shift:
-			p.confirmKill()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F8 && ctrl && !alt && !shift && suspendResumeSupported:
-			p.toggleSuspend()
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F1 && shift && !ctrl && !alt:
-			p.adjustPriority(false)
-			return true
-		case e.VirtualKeyCode == vtinput.VK_F2 && shift && !ctrl && !alt:
-			p.adjustPriority(true)
-			return true
-		}
+	if vfs.DispatchPanelKey(p.PanelKeys(), e) {
+		return true
 	}
 	return p.table.ProcessKey(e)
 }
@@ -446,6 +525,7 @@ func (p *procListPanel) GetSelectedName() string {
 func (p *procListPanel) SetContext(vfs.PanelContext) {}
 
 func (p *procListPanel) Show(scr *vtui.ScreenBuf) {
+	p.syncColumns()
 	p.frame.SetTitle(fmt.Sprintf(i18n.Msg("ProcList.PanelTitle"), p.table.ItemCount))
 	p.frame.Show(scr)
 	p.table.Show(scr)

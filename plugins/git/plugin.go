@@ -40,8 +40,11 @@
 // have a subject line, a blank line, and a longer body -- the "editor for
 // commit messages" the ticket asked for from the start.
 //
-// Staging/unstaging a single hunk is still a follow-up part, not this one --
-// see the ticket for the full list.
+// Parts 12-14 (hunk.go/hunkview.go) add F4 and Shift+F4: stage or unstage
+// part of a file, hunk by hunk or line by line (`git add -p` and
+// `git reset -p`). Part 15 adds F8 on the same view: discard picked hunks
+// or lines of the working file (`git checkout -p`), after a confirmation.
+// See README.md for what each part does and the ticket for what is left.
 package git
 
 import (
@@ -53,7 +56,7 @@ import (
 )
 
 // panelProviderID is also the ID plughost.RegisterPanelProvider derives its
-// auto-generated "Open Git status" command ID from: "panel." + this ID,
+// auto-generated "Git status" command ID from: "panel." + this ID,
 // lowercased (internal/plughost/panel_providers.go). internal/app's own
 // menu row and hotkey (git_actions.go) call that derived command by ID,
 // duplicated there as a constant for the same reason

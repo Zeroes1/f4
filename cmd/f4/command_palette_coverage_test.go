@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 58
+const commandPaletteF4Surfaces = 60
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -97,6 +97,12 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"app.(*calendarTable).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the calendar dialog's day grid captures PgUp/PgDn/Ctrl+PgUp/Ctrl+PgDn/Home locally to page the month/year and jump to today; Panel.Calendar is its registered entry point",
+	},
+	"app.(*aiReviewTable).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the ap patch review dialog's table captures Space/Ins locally to switch the edit under the cursor on and off Enter/F3 to show that edit's diff and F8 to reject it with a reason for the model's next message; the dialog is reached from the AI panel's dry run, and neither means anything outside it",
+	},
+	"app.(*markdownView).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the formatted Markdown view is a read-only frame F3 opens on a Markdown file in place of the text viewer; F3/F10 close it and F4 goes back to the text view, local to it like the text viewer's own mode switch, and scrolling is HelpView's",
 	},
 	"editor.(*EditorView).ProcessKey": {
 		class: paletteAuditActionArea, rationale: "editor commands are registered actions; raw text and cursor editing remain local primitives",
@@ -233,6 +239,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"git.(*BranchView).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local branch list, opened with Ctrl+S on the status panel that Action.App.GitStatus reaches; F5/Enter/Insert/Delete/F8/close are local screen primitives (switch, create, delete branch) and navigation/quick-search fall through to its table, the same split LogView already uses (f4#659 part 7 of N)",
+	},
+	"git.(*HunkView).ProcessKey": {
+		class: paletteAuditPluginLocal, rationale: "the git plugin owns this per-file hunk picker, opened with F4 (or Shift+F4 for staged hunks, F8 to discard worktree hunks) on the status panel that Action.App.GitStatus reaches; Insert/Space (pick a hunk or line), Enter/F2 (stage, unstage or -- after a confirmation -- discard the picked lines) and close are local screen primitives and navigation falls through to its table, the same split LogView/BranchView/LogDiffFilesView already use (f4#659 parts 12-15 of N)",
 	},
 	"git.(*LogDiffFilesView).ProcessKey": {
 		class: paletteAuditPluginLocal, rationale: "the git plugin owns this local changed-file picker, opened with Enter on a LogView commit that changed more than one path; Enter/close are local screen primitives (pick one path and diff it) and navigation/quick-search fall through to its table, the same split LogView/BranchView already use (f4#659 part 11 of N)",

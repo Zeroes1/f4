@@ -19,6 +19,15 @@ archive tools (f4#609) rather than linking a Go git implementation.
   refresh: unlike ProcList's live `/proc` view, a git status is a
   point-in-time snapshot the user asks for, not something that needs a
   ticker.
+- The panel's own keys (F5 here, and Enter, Insert, Ctrl+K, Ctrl+E and
+  Ctrl+S from the parts below) are declared through the host's shared
+  panel-plugin key primitive (`PanelKeys`, `vfs.PanelKeyProvider`; see
+  `docs/PLUGINS.md`, "Panel-only plugins"), not switched on in `ProcessKey`.
+  That makes them win over the file panel's own F5/Insert/Enter while the
+  status panel has the focus and puts **F5 Refresh** on the keybar (the
+  other keys have no keybar row). Enter and Insert are disabled -- consumed,
+  nothing runs -- while the list is empty; Ctrl+K stays enabled with nothing
+  staged so it can still say so in a toast.
 - Sortable by either column (click a header) and has type-to-filter
   (`vtui.Table.QuickSearch`).
 - If the active panel's directory is not inside a git repository (or `git`
@@ -253,13 +262,109 @@ archive tools (f4#609) rather than linking a Go git implementation.
   for -- `commitChangedFiles`'s own doc comment) still shows a toast instead
   of an empty list: there is nothing to pick from either way.
 
-## What is deliberately not here yet
+## Part 12: staging part of a file, hunk by hunk (`hunk.go`, `hunkview.go`)
 
-Staging/unstaging a single hunk within a file: it needs f4#613's diff
-widget to pick the hunk, not just show a whole file's diff, and f4#613 is
-itself still open (the "Compare files by content" side-by-side view it
-introduced, f4#1605, is not the hunk-picking part that gesture would need).
-This is its own atomic follow-up part of f4#659, blocked on that ticket.
+- **F4** on a status-panel entry (keybar: **Hunks**) opens `HunkView`, the
+  file's *unstaged* changes (`git diff`, index vs. worktree -- what
+  `git add -p` offers) as a list of hunks: each hunk's `@@` line followed
+  by its `-`/`+`/context lines.
+- **Insert** or **Space** picks the hunk under the cursor (or drops it
+  again) and moves the cursor to the next hunk's `@@` line, so repeated
+  Insert walks the file hunk by hunk; picked hunks are painted in the
+  "selected" color a marked file has in a file panel, and the title counts
+  them. **Enter** or **F2** stages the picked hunks and returns to the
+  status panel, reloaded, with the cursor on the same file (now `MM` if
+  some changes remain unstaged). **Esc**/**F10** return without staging.
+- Staging rebuilds a patch from the file header and the picked hunks only
+  and hands it to `git apply --cached`. The `+` start of each kept hunk is
+  shifted back by the line-count change of every hunk left out before it,
+  the same adjustment `git add -p` makes; a mode change is left out of the
+  patch (Insert still stages the whole file, mode included). `git apply`
+  runs at the repository root, because from a subdirectory it silently
+  skips root-relative patch paths outside that subdirectory.
+- The diff is taken with color, external diff drivers and textconv turned
+  off and with the standard `a/`/`b/` prefixes forced, so user settings
+  (`diff.noprefix`, `diff.mnemonicPrefix`, `diff.relative`, ...) cannot
+  produce text `git apply` would not read back.
+- An untracked file, a binary file or a mode-only change has no hunks to
+  offer: F4 says so in a toast, and Insert remains the way to stage it.
+
+## Part 13: unstaging part of a file, hunk by hunk (Shift+F4)
+
+- **Shift+F4** on a status-panel entry (Shift keybar row: **Unstage**)
+  opens the same `HunkView` over the file's *staged* changes
+  (`git diff --cached`, HEAD vs. index -- what `git reset -p` offers). The
+  keys are the same as for F4; **Enter**/**F2** takes the picked hunks out
+  of the index (the worktree is not touched) and returns to the reloaded
+  status panel.
+- A separate key rather than F4 guessing the direction from the status: an
+  `MM` file has hunks on both sides, and either may be the one wanted.
+  Shift+F4 is "edit a new file" in a file panel, which means nothing here.
+- Unstaging applies the patch of the picked hunks in reverse
+  (`git apply --cached -R`, at the repository root, same diff flags). Here
+  the `+` side describes the index as it is, and the `-` start of each kept
+  hunk is shifted forward by the line-count change of every hunk left out
+  (and so left in the index) before it.
+- A staged new file is a single hunk; unstaging it leaves the file
+  untracked. A staged rename is not offered in parts (the diff of the new
+  path alone reads as an added file): Insert unstages it whole.
+
+## Part 14: picking single lines inside a hunk (F4 and Shift+F4)
+
+- In `HunkView` (both directions) **Insert**/**Space** on a `+` or `-`
+  line picks or drops that line alone and moves the cursor one line down;
+  on the `@@` line or a context line it still picks or drops the whole
+  hunk (a half-picked hunk is picked whole first) and jumps to the next
+  hunk. A picked line is painted in the "selected" color; the `@@` and
+  context lines are painted only while the whole hunk is picked, and a
+  half-picked hunk's `@@` line ends in `[picked/changed]`.
+- This covers splitting a hunk as well (`git add -p`'s `s`): picking the
+  lines of one run of changes between context lines stages just that run.
+- `buildPatch` rebuilds each hunk with picked lines the way `git add -p`'s
+  `e` asks the user to edit it by hand. The side that is the index now
+  (`-` when staging, `+` when unstaging, since that patch is applied with
+  `-R`) keeps every line: its unpicked changed lines become context. The
+  other side's unpicked lines are dropped, together with a
+  `\ No newline at end of file` marker after them. Both counts of the `@@`
+  line are recounted, and the start of the side that is not the index is
+  moved by the line-count change of the rebuilt hunks before it.
+- Two picks cannot become a patch and are refused with a toast, nothing
+  applied: part of a hunk of a new or deleted file (that would turn the
+  creation or deletion into a modification -- pick it whole), and a pick
+  that would keep a last line without a trailing newline in the middle of
+  the file.
+- Tests on real repositories (`hunk_test.go`) stage and unstage single
+  lines of two hunks where the second one has to move by the rebuilt first
+  one, check the index with `git show :f.txt`, and stage around a missing
+  final newline.
+
+## Part 15: discarding part of the working file (F8)
+
+- **F8** on a status-panel entry (keybar: **Discard**) opens the same
+  `HunkView` over the file's unstaged changes (`git diff`, index vs.
+  worktree -- what `git checkout -p` offers). Picking hunks and single
+  lines works as with F4. **Enter**/**F2** first asks: "Discard N changed
+  lines (k of n hunks) from the working file ...? This cannot be undone."
+  Only **Discard** goes on; Cancel or Esc leaves the file, the index and
+  the picks as they were.
+- F8 because it is the destructive key of a Far-style keybar -- Delete in
+  a file panel and in the branch list (Part 7); the caption says
+  "Discard", since the file itself stays.
+- The picked lines are taken out of the working file with `git apply -R`
+  (no `--cached`: the index is not touched), which puts back what the
+  index has there -- not HEAD, so staged changes stay in the file too.
+  The patch is rebuilt the way it is for unstaging: the `+` side is the
+  working file as it is and keeps every line (unpicked `+` lines become
+  context), the `-` side takes the picked lines only, and the `-` start of
+  each kept hunk moves by the line-count change of the rebuilt hunks
+  before it. `git apply` changes nothing if the file no longer matches.
+- A file deleted from the working tree is one hunk: discarding it whole
+  brings the file back; part of it is refused before the question, as are
+  the other picks `buildPatch` cannot represent.
+- Tests on real repositories (`hunk_discard_test.go`) check the working
+  file's bytes after discarding single lines of two hunks (the second one
+  found a line higher), a whole hunk from a subdirectory, a change on top
+  of staged lines, a deleted file, and that cancelling changes nothing.
 
 ## Design notes
 

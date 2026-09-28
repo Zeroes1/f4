@@ -172,15 +172,46 @@ func (p *statusPanel) SetFocus(focused bool) {
 
 func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 
-// ProcessKey adds F5 (refresh), Enter (diff, diff.go), Insert
-// (stage/unstage, stage.go), Ctrl+K (commit, commit.go), Ctrl+E (log,
-// logview.go) and Ctrl+S (branches, branchview.go) on top of the table's own
-// navigation/sort/quick-search handling. None of the first three is a
-// letter key: QuickSearch claims
-// printable characters while the table is focused (plugins/proclist/panel.go
-// avoids the same trap by keying its own actions off F-keys) -- and that
-// includes plain Space, which is why staging is bound to Insert instead of
-// the Space lazygit/tig use, following the existing "mark an item" key of
+var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
+
+// PanelKeys declares this panel's own keys through the host's shared
+// panel-plugin key primitive (vfs.PanelKeyProvider, f4#312): F5 (refresh),
+// Enter (diff, diff.go), Insert (stage/unstage, stage.go), Ctrl+K (commit,
+// commit.go), Ctrl+E (log, logview.go) and Ctrl+S (branches,
+// branchview.go). Declaring them, rather than switching on them in
+// ProcessKey, is what makes the host run them ahead of the file panel's own
+// bindings for the same keys (F5 Copy, Insert mark, Enter open) and puts
+// F5's caption on the keybar; the other keys have no keybar row to show.
+//
+// F4 (hunks, hunkview.go) stages part of a file, `git add -p` style. It
+// takes over the file panel's F4 Edit -- this panel edits no files, and
+// "edit what goes into the index" is the nearest reading of F4 here -- and,
+// being an F-key, gets a keybar caption, so the feature can be found
+// without reading docs. Shift+F4 is its reverse, unstaging part of a file
+// (`git reset -p`), with its own caption on the Shift keybar row: a
+// separate key rather than F4 guessing the direction from the XY status,
+// because an "MM" file has hunks on both sides and either may be wanted.
+// Shift+F4 is the file panel's "edit a new file", which has no meaning
+// here either.
+//
+// F8 (hunks again, hunkview.go) throws picked hunks or lines of the
+// working file away, `git checkout -p` style, after a confirmation. F8 is
+// Delete in a file panel and in this plugin's own branch list
+// (branchview.go) -- the destructive key of the Far-style keybar, and this
+// is the one destructive thing this panel does to a file; its keybar
+// caption says "Discard", not "Delete", because the file itself stays.
+//
+// Enter, Insert, F4, Shift+F4 and F8 act on the entry under the cursor, so they are disabled
+// while the list is empty: the key is still consumed, exactly as before,
+// and nothing runs. Ctrl+K stays enabled with nothing staged on purpose --
+// showCommitDialog answers that case with its own "Nothing staged to
+// commit" toast, which a silently disabled key would swallow.
+//
+// None of the first three is a letter key: QuickSearch claims printable
+// characters while the table is focused (plugins/proclist/panel.go avoids
+// the same trap by keying its own actions off F-keys) -- and that includes
+// plain Space, which is why staging is bound to Insert instead of the Space
+// lazygit/tig use, following the existing "mark an item" key of
 // Far/Norton-Commander-style file panels (internal/panel/menukeys.go's
 // isAddItemKey) rather than a foreign tool's convention. F5/Enter are the
 // refresh and open gestures a file panel already uses -- this panel has no
@@ -212,47 +243,51 @@ func (p *statusPanel) IsFocused() bool { return p.table.IsFocused() }
 // Panel.ToggleKeyBar and, per internal/keymap/remap.go's own note, is also
 // the kind of chord a terminal multiplexer like tmux may claim before it
 // ever reaches f4 -- one more reason not to reach for it here).
+func (p *statusPanel) PanelKeys() []vfs.PanelKey {
+	return []vfs.PanelKey{
+		{VK: vtinput.VK_F5, Label: i18n.Msg("GitStatus.KeyBar.Refresh"), Run: p.refresh},
+		{VK: vtinput.VK_RETURN, Run: p.showDiff, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F4, Label: i18n.Msg("GitStatus.KeyBar.Hunks"), Run: p.showHunks, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.UnstageHunks"), Run: p.showStagedHunks, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_F8, Label: i18n.Msg("GitStatus.KeyBar.DiscardHunks"), Run: p.showDiscardHunks, Enabled: p.hasSelectedEntry},
+		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
+		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
+		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},
+	}
+}
+
+// ProcessKey routes the declared PanelKeys first -- the host normally
+// dispatches them before the key ever gets here, but a host without the
+// PanelKeyProvider hook (and this package's tests) still reaches them --
+// and hands everything else to the table's own navigation/sort/quick-search
+// handling.
 func (p *statusPanel) ProcessKey(e *vtinput.InputEvent) bool {
-	if e != nil && e.Type == vtinput.KeyEventType && e.KeyDown {
-		ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
-		alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
-		shift := e.ControlKeyState&vtinput.ShiftPressed != 0
-		if !ctrl && !alt && !shift {
-			switch e.VirtualKeyCode {
-			case vtinput.VK_F5:
-				if err := p.reload(); err != nil {
-					toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.RefreshFailed"), err), 3e9)
-				}
-				if vtui.FrameManager != nil {
-					vtui.FrameManager.Redraw()
-				}
-				return true
-			case vtinput.VK_RETURN:
-				p.showDiff()
-				return true
-			case vtinput.VK_INSERT:
-				p.toggleStage()
-				return true
-			}
-		}
-		if ctrl && !alt && !shift {
-			switch e.VirtualKeyCode {
-			case vtinput.VK_K:
-				p.showCommitDialog()
-				return true
-			case vtinput.VK_E:
-				p.showLog()
-				return true
-			case vtinput.VK_S:
-				p.showBranches()
-				return true
-			}
-		}
+	if vfs.DispatchPanelKey(p.PanelKeys(), e) {
+		return true
 	}
 	return p.table.ProcessKey(e)
 }
 
+// refresh is F5: re-run git status, reporting a failure as a toast and
+// keeping the old rows.
+func (p *statusPanel) refresh() {
+	if err := p.reload(); err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.RefreshFailed"), err), 3e9)
+	}
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
 func (p *statusPanel) ProcessMouse(e *vtinput.InputEvent) bool { return p.table.ProcessMouse(e) }
+
+// hasSelectedEntry is the Enabled predicate of the keys that act on the
+// entry under the cursor (Enter, Insert, F4, Shift+F4, F8).
+func (p *statusPanel) hasSelectedEntry() bool {
+	_, ok := p.selectedEntry()
+	return ok
+}
 
 func (p *statusPanel) selectedEntry() (statusEntry, bool) {
 	idx := p.table.RowAt(p.table.SelectPos)

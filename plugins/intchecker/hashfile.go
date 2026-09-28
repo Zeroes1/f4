@@ -4,24 +4,30 @@
 // Manager (https://github.com/lazyhamster/IntChecker), as requested in
 // f4#1623.
 //
-// The feature is built in atomic steps. Done: "Generate hashes" with an
-// algorithm choice and the "Single file" output for the marked files (or the
-// file under the cursor) of the current directory, and "Validate files" for
+// It offers "Generate hashes" with an algorithm choice for the marked files
+// (or the file under the cursor), recursion into the marked directories,
+// relative or absolute paths, a file mask filter and all four outputs -- a
+// single file, a separate "<file><ext>" per file, one "<directory name><ext>"
+// per directory ("sub/sub.md5" for the files of sub), and a window with the
+// list that copies it to the clipboard or saves it -- and "Validate files" for
 // the checksum file under the cursor or one the user names, asking for the
-// directory when the listed files are not found. Still to come: the other
-// output modes (separate hash files, per directory, display), recursion into
-// directories, absolute paths, the file mask filter and the output encoding.
+// directory when the listed files are not found. The checksum file encoding is
+// chosen when generating (UTF-8, UTF-8 with BOM, the system ANSI or OEM
+// codepage) and when validating (detected by default, like the viewer does).
 //
 // Invariants:
-//   - The checksum file is written only after every selected file has been
+//   - Checksum files are written only after every selected file has been
 //     read. A cancelled or failed run leaves no half-written checksum file
-//     behind, and an existing one is replaced only after the user agreed.
+//     behind, and existing ones are replaced only after the user agreed (or
+//     kept, when the user chose to skip them).
 //   - Files that could not be read are left out of the checksum file and
 //     reported to the user; one unreadable file does not throw away the
 //     hashes of the others.
 //   - Hash files use the formats other tools read: "<hex> *<name>" (GNU
 //     coreutils binary mode, what md5sum -c / sha256sum -c and IntChecker
-//     accept) and "<name> <CRC32>" for SFV. They are UTF-8 with LF line ends.
+//     accept) and "<name> <CRC32>" for SFV, with LF line ends. They are
+//     UTF-8 unless the user picks another encoding; a name that encoding
+//     cannot store is left out and reported, never written mangled.
 //   - Validation only reads. The algorithm comes from the checksum file's
 //     extension and, when that is missing or does not fit, from the digest
 //     length. Every listed file ends up OK, mismatched, not found or

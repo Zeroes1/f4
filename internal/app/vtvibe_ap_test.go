@@ -122,6 +122,7 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 	patch := &vtvibe.Patch{
 		ID: "aa000001",
 		Text: "aa000001 AP 3.2\n\naa000001 FILE\na.txt\n\n" +
+			"aa000001 REPLACE\naa000001 snippet\nline1\naa000001 content\nLINE1\n\n" +
 			"aa000001 REPLACE\naa000001 snippet\nline2\naa000001 content\nLINE2\n",
 	}
 
@@ -170,16 +171,18 @@ func TestAIRunPatcherAppliesAndDryRuns(t *testing.T) {
 		t.Fatal("aiRunPatcher never reported a result")
 	}
 
-	aiRunPatcher(pf, patch, root, true)
+	aiRunPatcher(pf, patch, root, true, nil)
 	waitForResult()
 	if got, err := os.ReadFile(target); err != nil || string(got) != "line1\nline2\n" {
 		t.Fatalf("dry run changed the file: %q, %v", got, err)
 	}
 
-	aiRunPatcher(pf, patch, root, false)
+	// Only the second REPLACE is checked (the review screen's Options.Only):
+	// the first one must stay unapplied.
+	aiRunPatcher(pf, patch, root, false, map[ap.ModKey]bool{{FilePath: "a.txt", ModIdx: 1}: true})
 	waitForResult()
 	if got, err := os.ReadFile(target); err != nil || string(got) != "line1\nLINE2\n" {
-		t.Fatalf("applied file = %q, %v; want the patch to have landed", got, err)
+		t.Fatalf("applied file = %q, %v; want only the checked modification to have landed", got, err)
 	}
 }
 

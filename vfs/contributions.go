@@ -149,8 +149,100 @@ type PanelController interface {
 	Close() error
 }
 
+// PanelKey is one key a panel plugin binds while its panel has the focus.
+// It is the single, shared key/keybar primitive for every PanelProvider
+// (f4#312): a plugin declares *what* its keys do and how they are captioned,
+// and the host owns *how* that reaches the user -- dispatch order, the
+// keybar, and which of f4's own panel bindings stand down meanwhile -- the
+// same way for all panel plugins, instead of each plugin hand-rolling a
+// ProcessKey switch and leaving the file panel's F-key captions and actions
+// live underneath it.
+//
+// VK is a vtinput virtual key code; Mods uses the same vtinput modifier bits
+// Host.RegisterGlobalHotkey does, and matching compares only whether Ctrl,
+// Alt and Shift are held (left and right variants are equivalent; lock and
+// enhanced-key bits are ignored). Label is the keybar caption, already
+// localized; it is shown only for F1..F12 with no modifier or exactly one of
+// Shift, Ctrl or Alt, and an empty Label binds the key without a caption.
+// Run is called on the UI goroutine. Enabled is optional: when it reports
+// false the caption is dimmed and the key is still consumed (and Run not
+// called), matching how f4's own configured hotkeys own a key even when
+// their action cannot currently run.
+type PanelKey struct {
+	VK      uint16
+	Mods    vtinput.ControlKeyState
+	Label   string
+	Run     func()
+	Enabled func() bool
+}
+
+// Matches reports whether e is a key-down event for k. Non-key events and
+// key-up events never match.
+func (k PanelKey) Matches(e *vtinput.InputEvent) bool {
+	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != k.VK {
+		return false
+	}
+	return panelKeyMods(e.ControlKeyState) == panelKeyMods(k.Mods)
+}
+
+// panelKeyMods folds left/right modifier variants together and drops lock
+// and enhanced-key bits, so a declaration and an event compare on intent.
+func panelKeyMods(m vtinput.ControlKeyState) vtinput.ControlKeyState {
+	var out vtinput.ControlKeyState
+	if m&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 {
+		out |= vtinput.LeftCtrlPressed
+	}
+	if m&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0 {
+		out |= vtinput.LeftAltPressed
+	}
+	if m&vtinput.ShiftPressed != 0 {
+		out |= vtinput.ShiftPressed
+	}
+	return out
+}
+
+// PanelKeyProvider is the optional PanelController extension that declares
+// PanelKeys. The host calls PanelKeys on the UI goroutine every time it
+// dispatches a key or draws the keybar, so a plugin may return a different
+// set as its state changes (a key that only exists on some platforms simply
+// is not in the slice there). It should be cheap and must not block.
+//
+// While a panel plugin has the focus in the active slot, the host
+// guarantees, whether or not the controller implements this interface:
+//
+//   - a declared key runs its PanelKey before any global plugin hotkey or
+//     configured f4 hotkey, including keys injected by a keybar click;
+//   - f4 bindings that act on the file panel's cursor or selection (the
+//     File.* actions and the group-selection keys) and global plugin
+//     hotkeys stand down; the key reaches the controller's ProcessKey
+//     instead, and is dropped if the controller does not claim it;
+//   - the file panel hidden under the plugin never receives keys;
+//   - the keybar shows the declared captions, the file-panel captions are
+//     blank, and every other f4 binding (Help, menus, panel toggles, quit,
+//     ...) keeps its caption and its key.
+type PanelKeyProvider interface {
+	PanelKeys() []PanelKey
+}
+
+// DispatchPanelKey runs the first key in keys that matches e and reports
+// whether one did. A disabled match is consumed without running. It is the
+// host's own dispatcher, exported so a controller (or its tests) can route
+// the same declarations through ProcessKey when hosted without it.
+func DispatchPanelKey(keys []PanelKey, e *vtinput.InputEvent) bool {
+	for _, k := range keys {
+		if !k.Matches(e) {
+			continue
+		}
+		if k.Run != nil && (k.Enabled == nil || k.Enabled()) {
+			k.Run()
+		}
+		return true
+	}
+	return false
+}
+
 // PanelProvider describes a panel-only plugin contribution. The host exposes
-// an automatically searchable "Open <Title>" command for every provider.
+// an automatically searchable command for every provider, labelled with Title.
 // Open is called on the UI goroutine and should construct controls quickly;
 // long-running work belongs in the existing task APIs.
 type PanelProvider struct {

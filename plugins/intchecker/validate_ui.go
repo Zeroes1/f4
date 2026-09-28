@@ -22,10 +22,10 @@ func showValidate(app vfs.App) {
 	if name := app.GetSelectedName(); name != "" && name != ".." && isChecksumFileName(name) {
 		// Reading and stat'ing may be slow on a remote panel, so they
 		// run off the UI goroutine; app.Message waits there, too.
-		go startValidate(app, fs, fs.Join(dir, name), dir)
+		go startValidate(app, fs, fs.Join(dir, name), dir, autoDetectEncoding)
 		return
 	}
-	openValidateDialog(app, fs, "", "", "")
+	openValidateDialog(app, fs, "", "", "", autoDetectEncoding)
 }
 
 // validateDialog asks for the checksum file and the directory to check.
@@ -33,13 +33,15 @@ type validateDialog struct {
 	win      *vtui.Window
 	editFile *vtui.Edit
 	editDir  *vtui.Edit
+	encoding *encodingCombo
 	btnOK    *vtui.Button
 }
 
 // newValidateDialog builds the dialog. note, when not empty, is shown on top
 // and moves the focus to the directory: it explains why the dialog came back.
-func newValidateDialog(note, hashText, dirText string) *validateDialog {
-	width, height := 70, 11
+// enc is the checksum file encoding to preselect.
+func newValidateDialog(note, hashText, dirText string, enc fileEncoding) *validateDialog {
+	width, height := 70, 13
 	if note != "" {
 		height += 2
 	}
@@ -50,6 +52,8 @@ func newValidateDialog(note, hashText, dirText string) *validateDialog {
 	lblFile := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.ChecksumFile"), d.editFile)
 	d.editDir = vtui.NewEdit(0, 0, width-6, dirText)
 	lblDir := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FilesDir"), d.editDir)
+	d.encoding = newEncodingCombo(24, readEncodingChoices(), enc)
+	lblEncoding := vtui.NewLabel(0, 0, vtui.Msg("IntChecker.FileEncoding"), d.encoding.box)
 	d.btnOK = vtui.NewButton(0, 0, vtui.Msg("vtui.Ok"))
 	d.btnOK.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, vtui.Msg("vtui.Cancel"))
@@ -61,7 +65,7 @@ func newValidateDialog(note, hashText, dirText string) *validateDialog {
 		d.win.AddItem(txtNote)
 		vbox.Add(txtNote, vtui.Margins{}, vtui.AlignLeft)
 	}
-	for _, item := range []vtui.UIElement{lblFile, d.editFile, lblDir, d.editDir, d.btnOK, btnCancel} {
+	for _, item := range []vtui.UIElement{lblFile, d.editFile, lblDir, d.editDir, lblEncoding, d.encoding.box, d.btnOK, btnCancel} {
 		d.win.AddItem(item)
 	}
 	top := 0
@@ -72,6 +76,11 @@ func newValidateDialog(note, hashText, dirText string) *validateDialog {
 	vbox.Add(d.editFile, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(lblDir, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(d.editDir, vtui.Margins{}, vtui.AlignFill)
+	encodingRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	encodingRow.Spacing = 1
+	encodingRow.Add(lblEncoding, vtui.Margins{}, vtui.AlignLeft)
+	encodingRow.Add(d.encoding.box, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(encodingRow, vtui.Margins{Top: 1}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -86,9 +95,9 @@ func newValidateDialog(note, hashText, dirText string) *validateDialog {
 	return d
 }
 
-func openValidateDialog(app vfs.App, fs vfs.VFS, note, hashText, dirText string) {
+func openValidateDialog(app vfs.App, fs vfs.VFS, note, hashText, dirText string, enc fileEncoding) {
 	panelDir := fs.GetPath()
-	d := newValidateDialog(note, hashText, dirText)
+	d := newValidateDialog(note, hashText, dirText, enc)
 	d.btnOK.OnClick = func() {
 		hashPath, dir, ok := resolveValidateInput(fs, panelDir, d.editFile.GetText(), d.editDir.GetText())
 		if !ok {
@@ -96,7 +105,7 @@ func openValidateDialog(app vfs.App, fs vfs.VFS, note, hashText, dirText string)
 			return
 		}
 		d.win.Close()
-		go startValidate(app, fs, hashPath, dir)
+		go startValidate(app, fs, hashPath, dir, d.encoding.selected())
 	}
 	vtui.FrameManager.Push(d.win)
 }
@@ -122,10 +131,10 @@ func resolveValidateInput(fs vfs.VFS, panelDir, hashText, dirText string) (hashP
 	return resolve(hashText), dir, true
 }
 
-// startValidate loads the checksum file and runs the check with a progress
-// dialog. It waits for message answers, so it must not run on the UI
-// goroutine.
-func startValidate(app vfs.App, fs vfs.VFS, hashPath, dir string) {
+// startValidate loads the checksum file, decodes it as enc says (see
+// decodeChecksumFile) and runs the check with a progress dialog. It waits for
+// message answers, so it must not run on the UI goroutine.
+func startValidate(app vfs.App, fs vfs.VFS, hashPath, dir string, enc fileEncoding) {
 	title := vtui.Msg("IntChecker.Title")
 	ok := []string{vtui.Msg("vtui.Ok")}
 	ctx := context.Background()
@@ -138,12 +147,17 @@ func startValidate(app vfs.App, fs vfs.VFS, hashPath, dir string) {
 		app.Message(title, fmt.Sprintf(vtui.Msg("IntChecker.ReadChecksumError"), hashPath, err), ok)
 		return
 	}
-	file, err := ParseHashFile(fs.Base(hashPath), data)
+	text, _, err := decodeChecksumFile(data, enc.Codepage)
+	if err != nil {
+		app.Message(title, fmt.Sprintf(vtui.Msg("IntChecker.ReadChecksumError"), hashPath, err), ok)
+		return
+	}
+	file, err := ParseHashFile(fs.Base(hashPath), text)
 	if err != nil {
 		app.Message(title, parseErrorText(hashPath, err), ok)
 		return
 	}
-	job := validateJob{fs: fs, hashPath: hashPath, dir: dir, file: file}
+	job := validateJob{fs: fs, hashPath: hashPath, dir: dir, file: file, encoding: enc}
 	var res validateResult
 	app.RunAdvancedProgressTask(vtui.Msg("IntChecker.ValidateTitle"), false, func(ctx context.Context, reporter vfs.TaskReporter) error {
 		var err error
@@ -173,7 +187,7 @@ func finishValidate(app vfs.App, job validateJob, res validateResult, err error)
 	case errors.Is(err, context.Canceled):
 		go app.Message(title, vtui.Msg("IntChecker.ValidateCancelled"), ok)
 	case errors.Is(err, errAllMissing):
-		openValidateDialog(app, job.fs, vtui.Msg("IntChecker.FilesNotFound"), job.hashPath, job.dir)
+		openValidateDialog(app, job.fs, vtui.Msg("IntChecker.FilesNotFound"), job.hashPath, job.dir, job.encoding)
 	case err != nil:
 		go app.Message(title, err.Error(), ok)
 	default:

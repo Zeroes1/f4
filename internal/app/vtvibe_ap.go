@@ -99,9 +99,9 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 	dlg.OnResult = func(code int) {
 		switch code {
 		case 0:
-			aiRunPatcher(pf, patch, root, false)
+			aiRunPatcher(pf, patch, root, false, nil)
 		case 1:
-			aiRunPatcher(pf, patch, root, true)
+			aiRunPatcher(pf, patch, root, true, nil)
 		}
 	}
 }
@@ -109,8 +109,10 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 // aiRunPatcher writes the patch to a temporary file and applies it with the
 // native Go patcher (internal/vtvibe/ap). The patch file itself never
 // touches the target folder: projectDir is what decides where the changes
-// land, same as --dir did for the old ap.py subprocess.
-func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry bool) {
+// land, same as --dir did for the old ap.py subprocess. only is passed
+// through as ap.Options.Only: nil runs the whole patch, anything else only
+// the modifications the review screen left checked.
+func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry bool, only map[ap.ModKey]bool) {
 	var output string
 	var mods []ap.ModificationResult
 	exitCode := 0
@@ -135,7 +137,7 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 
 			update(i18n.Msg("AI.PatchRunning"), -1)
 			var out strings.Builder
-			result := ap.Apply(patchPath, root, ap.Options{DryRun: dry, Out: &out})
+			result := ap.Apply(patchPath, root, ap.Options{DryRun: dry, Only: only, Out: &out})
 			output = out.String()
 			mods = result.ModificationResults
 			exitCode = aiPatchExitCode(result.Status)

@@ -516,3 +516,19 @@ Loop:
 		t.Errorf("Executable replacement failed. Got %q, want 'new_binary'", string(content))
 	}
 }
+
+// #1218: a stable release offered after a move from nightly may be older than
+// the running build, and the prompt says so instead of calling it an update.
+func TestUpdatePromptTextNamesOlderStableRelease(t *testing.T) {
+	older := updatePromptText(update.Candidate{DisplayVersion: "v0.3.0-beta", NeedsUpdate: true, OlderThanRunning: true})
+	if !strings.Contains(older, "v0.3.0-beta") || !strings.Contains(older, "older than the build you are running") {
+		t.Fatalf("older stable prompt = %q", older)
+	}
+	if strings.Contains(older, "An update is available") {
+		t.Fatalf("older stable release called an update: %q", older)
+	}
+	newer := updatePromptText(update.Candidate{DisplayVersion: "v0.4.0", NeedsUpdate: true})
+	if !strings.HasPrefix(newer, "An update is available: v0.4.0") {
+		t.Fatalf("update prompt = %q", newer)
+	}
+}

@@ -30,10 +30,12 @@ an F9 "Plugin configuration" entry for visible columns and refresh interval.
 - Sortable by any column (click a header; default sort is CPU%
   descending) and has type-to-filter (`Table.QuickSearch`) across all
   columns.
-- Reachable from the plugin menu/command palette ("Open ProcList", added
+- Reachable from the plugin menu/command palette ("ProcList", added
   automatically by `RegisterPanelProvider`) and from **Commands -> Process
   list** / **Ctrl+Alt+R**, on every platform `Supported()` reports `true`
   for.
+- **Esc** closes the panel and returns to the file panel (it clears an
+  active quick-search filter first, and a non-empty command line first).
 
 ## Process management (f4#312 part 3 of 4)
 
@@ -69,6 +71,15 @@ FAR3 does not have at all:
   portable, privilege-free way to read "is this process currently stopped"
   either, the same gap that keeps this out of the table as a column.
 
+All of these keys (and F3 below) are declared through the host's shared
+panel-plugin key primitive (`PanelKeys`, `vfs.PanelKeyProvider`; see
+`docs/PLUGINS.md`, "Panel-only plugins"), not switched on in `ProcessKey`.
+That is what makes them win over the file panel's own F3/F8/Shift+F1/F2
+while ProcList has the focus, makes the file panel's other file actions
+(F4, F5, F6, ...) stand down instead of acting on the file hidden under the
+list, and puts their captions on the keybar. Ctrl+F8 is declared only where
+suspend/resume exists, so it has no caption on Windows.
+
 None of the three needs a setting to turn off: kill's confirmation is
 unconditional, matching how narrowly this plugin scopes everything else.
 
@@ -99,8 +110,10 @@ unconditional, matching how narrowly this plugin scopes everything else.
   `plugins/mediainfo/settings.go` persists its own settings
   (`settings.go`/`config_dialog.go`). A changed refresh interval applies to
   an already-open panel within one refresh cycle; a changed column selection
-  applies the next time the panel is opened (rebuilding the table's columns
-  live is more than this ticket asked for). At least one column must always
+  applies to an already-open panel as soon as the dialog closes
+  (`procListPanel.syncColumns`: the sort column and direction and the
+  process under the cursor are kept; if the sorted column was hidden, the
+  default CPU% sort takes over). At least one column must always
   stay visible -- `Settings.validate` refuses to save a configuration that
   would leave none.
 

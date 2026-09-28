@@ -1972,6 +1972,12 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── wincon_test.go
     │   │   ├── windowlongptr_32.go
     │   │   └── windowlongptr_64.go
+    │   ├── wincondrag
+    │   │   ├── backend_other.go
+    │   │   ├── backend_windows.go
+    │   │   ├── doc.go
+    │   │   ├── logic.go
+    │   │   └── logic_test.go
     │   └── winex11drag
     │       ├── display.go
     │       ├── display_test.go
