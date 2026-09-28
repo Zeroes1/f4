@@ -59,7 +59,7 @@ func (r logRow) GetCellText(col int) string {
 	}
 }
 
-// LogView is Ctrl+E on the status panel (panel.go's ProcessKey): a read-only
+// LogView is Ctrl+E on the status panel (panel.go's PanelKeys): a read-only
 // list of the repository's last logMaxCount commits, built from the same
 // vtui.BorderedFrame+vtui.Table pair newStatusPanel (panel.go) composes for
 // the working-tree status. Unlike the status panel, though, it is not a
@@ -234,7 +234,7 @@ func (lv *LogView) Show(scr *vtui.ScreenBuf) {
 	lv.table.Show(scr)
 }
 
-// showLog is Ctrl+E on the status panel (panel.go's ProcessKey doc comment
+// showLog is Ctrl+E on the status panel (panel.go's PanelKeys doc comment
 // explains why Ctrl+E, and not Ctrl+L or a bare letter): opens a LogView of this
 // repository's recent commit history on top of the status panel, the same
 // "push a screen" gesture showDiff (diff.go) already uses for Enter.

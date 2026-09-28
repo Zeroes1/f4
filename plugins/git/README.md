@@ -19,6 +19,15 @@ archive tools (f4#609) rather than linking a Go git implementation.
   refresh: unlike ProcList's live `/proc` view, a git status is a
   point-in-time snapshot the user asks for, not something that needs a
   ticker.
+- The panel's own keys (F5 here, and Enter, Insert, Ctrl+K, Ctrl+E and
+  Ctrl+S from the parts below) are declared through the host's shared
+  panel-plugin key primitive (`PanelKeys`, `vfs.PanelKeyProvider`; see
+  `docs/PLUGINS.md`, "Panel-only plugins"), not switched on in `ProcessKey`.
+  That makes them win over the file panel's own F5/Insert/Enter while the
+  status panel has the focus and puts **F5 Refresh** on the keybar (the
+  other keys have no keybar row). Enter and Insert are disabled -- consumed,
+  nothing runs -- while the list is empty; Ctrl+K stays enabled with nothing
+  staged so it can still say so in a toast.
 - Sortable by either column (click a header) and has type-to-filter
   (`vtui.Table.QuickSearch`).
 - If the active panel's directory is not inside a git repository (or `git`

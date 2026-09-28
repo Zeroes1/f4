@@ -715,6 +715,7 @@ GitStatus.ColumnStatus=Status
 GitStatus.ColumnPath=Path
 GitStatus.PanelTitle=Git status: %s (%d)
 GitStatus.Detached=detached HEAD
+GitStatus.KeyBar.Refresh=Refresh
 GitStatus.NoPath=No active panel directory to run git status in
 GitStatus.RefreshFailed=Git status refresh failed: %s
 GitStatus.StageFailed=git add failed: %s

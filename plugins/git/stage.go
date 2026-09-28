@@ -77,7 +77,7 @@ func stagePathsFor(entry statusEntry) []string {
 }
 
 // toggleStage runs the stage/unstage command for the entry under the cursor
-// (Insert, panel.go's ProcessKey) and reloads the panel, keeping the cursor
+// (Insert, panel.go's PanelKeys) and reloads the panel, keeping the cursor
 // on the same path so repeatedly toggling one file, or stepping down the
 // list and toggling several, does not keep jumping the cursor back to the
 // top of a re-sorted table.

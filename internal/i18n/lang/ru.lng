@@ -715,6 +715,7 @@ GitStatus.ColumnStatus=Статус
 GitStatus.ColumnPath=Путь
 GitStatus.PanelTitle=Статус git: %s (%d)
 GitStatus.Detached=отделённый HEAD
+GitStatus.KeyBar.Refresh=Обновить
 GitStatus.NoPath=Нет каталога активной панели для запуска git status
 GitStatus.RefreshFailed=Не удалось обновить статус git: %s
 GitStatus.StageFailed=Не удалось выполнить git add: %s

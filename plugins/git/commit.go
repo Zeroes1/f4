@@ -46,7 +46,7 @@ func (p *statusPanel) hasStagedChanges() bool {
 	return false
 }
 
-// showCommitDialog is Ctrl+K on the status panel (panel.go's ProcessKey): a
+// showCommitDialog is Ctrl+K on the status panel (panel.go's PanelKeys): a
 // commit message prompt over whatever Insert (stage.go) has already staged.
 // Part 4 first built this from internal/dialog.FileInputBox, the same
 // single-line input dialog internal/app/actions.go's actionRename builds its
