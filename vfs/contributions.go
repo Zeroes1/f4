@@ -51,7 +51,19 @@ type PluginCommand struct {
 	// "Shift+F4"). The plugin remains responsible for registering the hotkey.
 	Shortcut string
 	Visible  func(App) bool
-	Run      func(App)
+	// Enabled, when set, decides whether the command can actually run right
+	// now, without removing it from the menu the way Visible does: a
+	// generated menu item stays on screen dimmed instead of disappearing
+	// (BuildMenuBarItems sets vtui.MenuItem.Disabled from it), and
+	// ExecutePluginCommand refuses the call before Run ever runs. This
+	// mirrors the Visible/Enabled split action.Action already uses (see
+	// internal/action/registry.go) and exists for the same reason: f4#1356's
+	// "shows an error dialog instead of a disabled control" class of bug
+	// (for example ID3 Tag Editor on a non-MP3 file, or Media Information on
+	// a directory). Left nil, a command behaves exactly as it did before
+	// this field existed -- enabled whenever Visible admits it.
+	Enabled func(App) bool
+	Run     func(App)
 }
 
 // CommandPrefixRegistration controls a registered command-line prefix. An

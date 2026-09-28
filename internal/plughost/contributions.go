@@ -271,6 +271,13 @@ func ExecutePluginCommand(location vfs.PluginCommandLocation, id string, app vfs
 	if command.Visible != nil && !command.Visible(app) {
 		return false
 	}
+	// An Enabled()==false command is refused here regardless of how the
+	// call arrived (menu click or command palette, both funnel through
+	// this function) -- the same choke point RunAction gives
+	// action.Action.Enabled, and for the same reason (f4#1356).
+	if command.Enabled != nil && !command.Enabled(app) {
+		return false
+	}
 	command.Run(app)
 	return true
 }

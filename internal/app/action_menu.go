@@ -115,7 +115,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		m.items = append(m.items, item)
 	}
 
-	appendPluginCommand := func(command vfs.PluginCommand) {
+	appendPluginCommand := func(command vfs.PluginCommand, app vfs.App) {
 		m := menus[command.MenuPath]
 		if m == nil {
 			title := i18n.Msg("Menu." + area + "." + command.MenuPath)
@@ -139,7 +139,11 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 			}
 		}
 		m.items = append(m.items, vtui.MenuItem{
-			Text:     text,
+			Text: text,
+			// ExecutePluginCommand re-checks Enabled itself (same rationale
+			// as the core-action comment above): this flag only decides how
+			// the row looks and whether vtui lets the click through at all.
+			Disabled: command.Enabled != nil && !command.Enabled(app),
 			Shortcut: panel.PluginCommandShortcut(command),
 			UserData: history.MenuHistoryItemKey("plugin:" + command.ID),
 			OnClick: func() {
@@ -177,7 +181,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 		if pf := panel.FindPanelsFrameAnyScreen(); pf != nil {
 			for _, command := range plughost.PluginCommandsSnapshot(vfs.PluginCommandPanel, pf) {
 				if command.MenuPath != "" {
-					appendPluginCommand(command)
+					appendPluginCommand(command, pf)
 				}
 			}
 		}
