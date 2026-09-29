@@ -248,6 +248,24 @@ func (fp *filePatch) deleted() bool {
 	return false
 }
 
+// created reports whether the patch creates the file ("--- /dev/null").
+func (fp *filePatch) created() bool {
+	for _, line := range fp.header {
+		if line == "--- /dev/null" {
+			return true
+		}
+	}
+	return false
+}
+
+// partialAllowed reports whether a patch that creates or deletes the file may
+// have its hunk picked in part: an untracked file (staging creates the index
+// entry from the picked lines), a deleted file, and a new file being
+// unstaged (the index keeps it with the unpicked lines).
+func (fp *filePatch) partialAllowed() bool {
+	return fp.untracked || fp.deleted() || (fp.created() && fp.mode == modeUnstage)
+}
+
 // wholeFile reports whether the patch creates or deletes the file.
 func (fp *filePatch) wholeFile() bool {
 	for _, line := range fp.header {
@@ -352,7 +370,8 @@ func parseFilePatch(diff string) (*filePatch, error) {
 // must not take it along with them (Insert still stages the whole file, mode included).
 //
 // A patch that creates the file only takes its hunk whole
-// (errWholeFileOnly). A deleted file may be picked in part: unstaging and
+// (errWholeFileOnly), except when unstaging (see partialCreation). A deleted
+// file may be picked in part: unstaging and
 // discarding apply the patch in reverse, and a deletion of just the picked
 // lines, reversed, re-creates the file with those lines as it is; staging
 // deletes the picked lines only, so with some line left out the patch is
@@ -373,8 +392,28 @@ func buildPatch(fp *filePatch) (string, error) {
 			}
 		}
 	}
+	// Unstaging some lines of a staged new file: the index keeps the file
+	// with the lines left unpicked, so the patch, applied in reverse, is a
+	// modification of it ("new file mode" dropped, "--- /dev/null" replaced
+	// by the "+++ b/" path as "--- a/").
+	partialCreation := false
+	if fp.created() && fp.mode == modeUnstage {
+		for _, h := range fp.hunks {
+			if h.anyPicked() && !h.allPicked() {
+				partialCreation = true
+			}
+		}
+	}
 	var b strings.Builder
 	for _, line := range fp.header {
+		if partialCreation {
+			if strings.HasPrefix(line, "new file mode ") {
+				continue
+			}
+			if line == "--- /dev/null" {
+				line = "--- " + strings.Replace(headerNewPath(fp.header), "b/", "a/", 1)
+			}
+		}
 		if strings.HasPrefix(line, "old mode ") || strings.HasPrefix(line, "new mode ") {
 			continue
 		}
@@ -396,7 +435,7 @@ func buildPatch(fp *filePatch) (string, error) {
 		if !h.anyPicked() {
 			continue
 		}
-		if !h.allPicked() && fp.wholeFile() && !fp.untracked && !fp.deleted() {
+		if !h.allPicked() && fp.wholeFile() && !fp.partialAllowed() {
 			return "", errWholeFileOnly
 		}
 		lines, oldN, newN, err := h.pickedBody(fp.mode.reverse())
@@ -423,6 +462,16 @@ func headerOldPath(header []string) string {
 	for _, line := range header {
 		if strings.HasPrefix(line, "--- ") {
 			return strings.TrimPrefix(line, "--- ")
+		}
+	}
+	return ""
+}
+
+// headerNewPath returns the rest of the "+++ " line of a file header.
+func headerNewPath(header []string) string {
+	for _, line := range header {
+		if strings.HasPrefix(line, "+++ ") {
+			return strings.TrimPrefix(line, "+++ ")
 		}
 	}
 	return ""

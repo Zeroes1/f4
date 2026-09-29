@@ -518,3 +518,16 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - Tests (`hunk_deleted_test.go`): the patch text for each mode, a quoted
   path, and F4, Shift+F4 and F8 on real repositories, checking the index
   and the working file.
+
+## Part 26: unstaging single lines of a staged new file
+
+- Shift+F4 on a file staged as new (`A `) can now take back just the picked
+  lines: the index keeps the file with the unpicked ones. The patch, applied
+  in reverse, is written as a modification (`new file mode` dropped,
+  `--- /dev/null` replaced by the `+++ b/` path as `--- a/`, the unpicked
+  lines context); with every line picked it stays a creation, and the file
+  becomes untracked as before.
+- Staging (F4, F8) a part of the added file of a real diff (intent-to-add)
+  is still refused with `errWholeFileOnly`.
+- Tests (`hunk_new_test.go`): the patch text, and Shift+F4 on a real
+  repository checking the index and the working file.
