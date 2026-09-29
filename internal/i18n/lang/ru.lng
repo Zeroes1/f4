@@ -801,6 +801,14 @@ GitStatus.DeleteUntrackedConfirm=Удалить %s с диска?\n\nGit его 
 GitStatus.DeleteUntrackedButton=&Удалить
 GitStatus.DeleteUntrackedFailed=Не удалось удалить %s: %s
 
+SvcMgr.ColumnName=Имя
+SvcMgr.ColumnDisplay=Отображаемое имя
+SvcMgr.ColumnState=Состояние
+SvcMgr.ColumnPID=PID
+SvcMgr.PanelTitle=Службы (%d)
+SvcMgr.RefreshFailed=Не удалось прочитать список служб: %v
+SvcMgr.KeyBar.Refresh=Обновить
+
 PanelPlugin.KeyBar.Close=Закрыть
 
 GitDiff.ReadFailed=Не удалось прочитать %s: %v

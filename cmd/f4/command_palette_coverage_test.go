@@ -234,6 +234,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"proclist.(*procListPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
 	},
+	"svcmgr.(*servicesPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the Windows services panel forwards raw input to its own vtui.Table; F5 reloads the list, and sorting, quick-search and cursor movement are local table primitives; the panel is reached through the plugin-owned PluginPanelInstance surface (f4#311 part 1)",
+	},
 	"git.(*statusPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the git status panel forwards raw input to its own vtui.Table; Enter/Insert/Ctrl+K/Ctrl+E are the panel's own diff, stage-or-unstage, commit and log commands, and the panel itself is reached through the plugin-owned PluginPanelInstance surface Action.App.GitStatus opens, the same split proclist_actions.go uses for plugins/proclist (f4#659 part 1 of N)",
 	},

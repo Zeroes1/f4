@@ -1,0 +1,56 @@
+//go:build windows
+
+package svcmgr
+
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
+
+// listServices asks the Service Control Manager for every Win32 service in any
+// state. The manager is opened with the enumerate right only -- the mgr
+// package's Connect asks for all access, which a user without administrator
+// rights does not get -- and the answer comes in one buffer that grows while
+// the call reports ERROR_MORE_DATA.
+func listServices() ([]service, error) {
+	manager, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_ENUMERATE_SERVICE)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = windows.CloseServiceHandle(manager) }()
+
+	var buf []byte
+	var needed, returned, resume uint32
+	for {
+		var first *byte
+		if len(buf) > 0 {
+			first = &buf[0]
+		}
+		err := windows.EnumServicesStatusEx(manager, windows.SC_ENUM_PROCESS_INFO,
+			windows.SERVICE_WIN32, windows.SERVICE_STATE_ALL,
+			first, uint32(len(buf)), &needed, &returned, &resume, nil)
+		if err == nil {
+			break
+		}
+		if err != windows.ERROR_MORE_DATA || needed == 0 {
+			return nil, err
+		}
+		buf = make([]byte, len(buf)+int(needed))
+		resume = 0
+	}
+	if returned == 0 {
+		return nil, nil
+	}
+	entries := unsafe.Slice((*windows.ENUM_SERVICE_STATUS_PROCESS)(unsafe.Pointer(&buf[0])), int(returned))
+	out := make([]service, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, service{
+			Name:    windows.UTF16PtrToString(e.ServiceName),
+			Display: windows.UTF16PtrToString(e.DisplayName),
+			State:   e.ServiceStatusProcess.CurrentState,
+			PID:     e.ServiceStatusProcess.ProcessId,
+		})
+	}
+	return out, nil
+}

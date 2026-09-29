@@ -16,6 +16,7 @@ import (
 	observerplugin "github.com/unxed/f4/plugins/observer"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
+	"github.com/unxed/f4/plugins/svcmgr"
 	"github.com/unxed/f4/plugins/visren"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -166,6 +167,8 @@ func (pm *PluginManager) loadInternal() {
 		// backend_default_lite.go).
 		sqliteplugin.NewPlugin(),
 		proclist.NewPlugin(config.GetF4ConfigDir()),
+		// Windows service list (f4#311 part 1): registers nothing off Windows.
+		svcmgr.NewPlugin(),
 		// Git status view (f4#659 part 1 of N): wraps the host's own `git`
 		// binary, no platform gate at this layer -- gitplugin.Available()
 		// (internal/app/git_actions.go's Visible check) covers "git is
