@@ -2,6 +2,7 @@ package netfox
 
 import (
 	"context"
+	"strings"
 	"testing"
 )
 
@@ -52,4 +53,19 @@ func TestSFTPURIProviderRootPathCoverageBatch33(t *testing.T) {
 
 func TestSFTPURIProviderNestedPathCoverageBatch33(t *testing.T) {
 	assertSFTPURIErrorBatch33(t, "sftp://alice:secret@127.0.0.1:1/home/alice")
+}
+
+// TestSCPURIProviderIsTheSFTPBackendUnderAnotherScheme (f4#187): scp:// is
+// answered by the SFTP provider, and its errors name the scheme the user typed.
+func TestSCPURIProviderIsTheSFTPBackendUnderAnotherScheme(t *testing.T) {
+	provider := &sftpURIProvider{alias: "scp"}
+	if got := provider.Scheme(); got != "scp" {
+		t.Fatalf("scheme = %q, want scp", got)
+	}
+	if _, err := provider.OpenURI(context.Background(), nil, "scp:///tmp"); err == nil || !strings.Contains(err.Error(), "scp: no host") {
+		t.Errorf("hostless scp URL error = %v, want \"scp: no host\"", err)
+	}
+	if _, err := provider.OpenURI(context.Background(), nil, "://"); err == nil || !strings.Contains(err.Error(), "scp:") {
+		t.Errorf("malformed scp URL error = %v, want the scp: prefix", err)
+	}
 }

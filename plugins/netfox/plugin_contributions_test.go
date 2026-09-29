@@ -100,8 +100,9 @@ func TestNetFoxPluginRegistersContextualPanelCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if host.uriCalls != 1 {
-		t.Fatalf("URI registrations = %d, want 1", host.uriCalls)
+	// sftp:// and scp:// (the same SFTP backend under two schemes).
+	if host.uriCalls != 2 {
+		t.Fatalf("URI registrations = %d, want 2", host.uriCalls)
 	}
 	if host.driveName != "NetFox" || host.driveFactory == nil {
 		t.Fatalf("drive registration = %q, hasFactory=%t", host.driveName, host.driveFactory != nil)

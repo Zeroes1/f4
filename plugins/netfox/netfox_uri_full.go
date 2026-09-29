@@ -15,5 +15,9 @@ func registerOptionalURIProviders(api vfs.HostAPI) error {
 	if err := api.RegisterURIProvider(&sftpURIProvider{}); err != nil {
 		return fmt.Errorf("NetFox: register sftp URI provider: %w", err)
 	}
+	// scp:// opens the same SFTP backend (f4#187), see sftpURIProvider.
+	if err := api.RegisterURIProvider(&sftpURIProvider{alias: "scp"}); err != nil {
+		return fmt.Errorf("NetFox: register scp URI provider: %w", err)
+	}
 	return nil
 }
