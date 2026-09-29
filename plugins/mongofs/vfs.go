@@ -449,7 +449,8 @@ func (v *mongoVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error)
 	}
 	tempPath := file.Name()
 	text := toJSON(doc, "  ") + "\n"
-	if _, err := io.WriteString(file, text); err == nil {
+	_, err = io.WriteString(file, text)
+	if err == nil {
 		_, err = file.Seek(0, io.SeekStart)
 	}
 	if err != nil {

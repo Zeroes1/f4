@@ -123,9 +123,9 @@ func (f *fakeServer) serve(c net.Conn) {
 		}
 		reply := f.handle(cmd, &authed, &scram)
 		body, _ := reply.encode()
-		msg := appendInt32(nil, int32(21+len(body)))
+		msg := appendInt32(nil, int32(21+len(body))) // #nosec G115 -- a test message is small
 		msg = appendInt32(msg, 1)
-		msg = appendInt32(msg, int32(binary.LittleEndian.Uint32(head[4:])))
+		msg = appendInt32(msg, int32(binary.LittleEndian.Uint32(head[4:]))) // #nosec G115 -- echoing a request id
 		msg = appendInt32(msg, opMsg)
 		msg = appendInt32(msg, 0)
 		msg = append(msg, 0)

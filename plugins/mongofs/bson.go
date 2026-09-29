@@ -80,7 +80,7 @@ func appendCString(b []byte, s string) []byte {
 }
 
 func appendInt32(b []byte, v int32) []byte {
-	return binary.LittleEndian.AppendUint32(b, uint32(v))
+	return binary.LittleEndian.AppendUint32(b, uint32(v)) // #nosec G115 -- two's complement is what BSON stores
 }
 
 // encode writes a document.
@@ -93,7 +93,7 @@ func (d bsonD) encode() ([]byte, error) {
 		}
 	}
 	out = append(out, 0)
-	binary.LittleEndian.PutUint32(out, uint32(len(out)))
+	binary.LittleEndian.PutUint32(out, uint32(len(out))) // #nosec G115 -- a command is small
 	return out, nil
 }
 
