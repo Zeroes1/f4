@@ -2059,7 +2059,7 @@ func actionExecute(pf *panel.PanelsFrame, v vfs.VFS, dir, name, path string) {
 						}
 						pf.NoteLocalShellLineSent(activePty)
 					}
-					pf.ShowPanels = false
+					pf.HidePanelsForCommand()
 				}
 			})
 		} else {

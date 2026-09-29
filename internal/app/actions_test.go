@@ -698,6 +698,46 @@ func TestActionExecute_PtyCommandFormatting(t *testing.T) {
 	}
 }
 
+// TestActionExecute_HostModeHandsScreenToHostConsole is the regression for
+// #1672: Enter on a runnable file (Far.exe in the panel) wrote the command to
+// the PTY and hid the panels, but in ShellModeHost never entered the host
+// console. The host terminal was then never asked the child's queries, so Far
+// Manager sat on its banner waiting for a DA reply nobody sent. The same
+// program typed on the command line worked, because that path did enter it.
+func TestActionExecute_HostModeHandsScreenToHostConsole(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShellMode = terminal.ShellModeHost
+
+	tmp := t.TempDir()
+	fileName := "app.exe"
+	if runtime.GOOS != "windows" {
+		fileName = "app.sh"
+	}
+	filePath := filepath.Join(tmp, fileName)
+	if err := os.WriteFile(filePath, []byte("#!/bin/sh\nexit 0"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	actionExecute(pf, vfs.NewOSVFS(tmp), tmp, fileName, filePath)
+
+	timeout := time.After(2 * time.Second)
+	for pf.ShowPanels {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-timeout:
+			t.Fatal("Timeout waiting for execution task")
+		}
+	}
+	if !pf.IsHostConsoleActive() {
+		t.Fatal("running a file from the panel in ShellModeHost must enter the host console, or the child's queries are never answered")
+	}
+}
+
 func TestActionExecute_HistoryQuoting(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := paneltest.SetupMockPanelsFrame(t)

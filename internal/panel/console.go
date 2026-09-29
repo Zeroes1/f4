@@ -465,6 +465,21 @@ func (pf *PanelsFrame) handleHostConsoleTab(e *vtinput.InputEvent) bool {
 	return true
 }
 
+// HidePanelsForCommand hides the panels because a command was just written to
+// the shell's PTY, and in ShellModeHost hands the physical screen to the host
+// console with it. Every place that starts a command in the PTY must end with
+// this call, not with a bare ShowPanels = false: without EnterHostConsole the
+// host console is never marked active, so the host terminal is never asked
+// the child's queries (DA, DECRQM, colour palette) and the child waits on
+// replies nobody sends. Far Manager started by Enter on Far.exe hung on its
+// banner that way, while the same program typed on the command line ran (#1672).
+func (pf *PanelsFrame) HidePanelsForCommand() {
+	pf.ShowPanels = false
+	if pf.ShellMode == terminal.ShellModeHost {
+		pf.EnterHostConsole()
+	}
+}
+
 // enterHostConsole switches the physical terminal to the primary screen and activates
 // live passthrough of terminal.PTY output directly to the host console.
 func (pf *PanelsFrame) EnterHostConsole() {

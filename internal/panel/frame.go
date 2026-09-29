@@ -3426,10 +3426,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			if pf.SearchFirstMode() && !config.App.SearchCommandStayFocused {
 				pf.SetCommandLineFocus(false)
 			}
-			pf.ShowPanels = false
-			if pf.ShellMode == terminal.ShellModeHost {
-				pf.EnterHostConsole()
-			}
+			pf.HidePanelsForCommand()
 			return true
 		} else if pf.SearchFirstMode() && pf.CommandLineFocused && pf.ShowPanels {
 			// An empty command line must not activate the selected panel item.
