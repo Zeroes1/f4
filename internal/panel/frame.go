@@ -4518,6 +4518,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		return true
 	case appcmd.CmSwapPanels:
 		pf.Panels[0], pf.Panels[1] = pf.Panels[1], pf.Panels[0]
+		pf.swapPluginPanels()
 		pf.ActiveIdx = 1 - pf.ActiveIdx
 		if pf.Wide {
 			pf.WidePanel = 1 - pf.WidePanel
