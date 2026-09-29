@@ -38,6 +38,11 @@ present a press on an unmarked file still only moves the cursor, so the old
 mouse behaviour is kept. Only copy is offered, and only from a local panel - an
 archive or a network panel says so in a toast instead.
 
+`DragOutModifier` in `[Panel]` (f4:config; `ctrl`, `alt` or `shift`, empty by
+default) starts a drag out only while that key is held, as Far Manager with the
+Burlak plugin does. The gesture stays armed while the key is up, so pressing it
+after the button still starts the drag (unxed/f4#1604).
+
 Under the gogpu backend a drop works as well, with two differences gogpu's
 own API imposes: it always copies, because gogpu tells us neither what the
 source allows nor which modifiers are held, and nothing happens before the

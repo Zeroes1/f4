@@ -415,10 +415,30 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 	if pf.DragOut.cursorOnly && pf.DragOut.Panel.pointerInsideRows(mx, my) {
 		return false
 	}
+	// The gesture stays armed while the modifier is not held, so pressing it
+	// after the button (Ctrl+click marks a file) still starts the drag.
+	if !DragOutModifierHeld(config.App.DragOutModifier, e.ControlKeyState) {
+		return false
+	}
 	panel, names := pf.DragOut.Panel, pf.DragOut.Names
 	pf.DragOut = dragOutState{}
 	vtui.DebugLog("DND: drag out gesture triggered at %d,%d", mx, my)
 	return pf.StartDragOut(panel, names)
+}
+
+// DragOutModifierHeld reports whether the key a drag out is tied to
+// (DragOutModifier: "", "ctrl", "alt" or "shift") is down in a mouse event's
+// control key state. With no modifier configured a drag always may start.
+func DragOutModifierHeld(modifier string, state vtinput.ControlKeyState) bool {
+	switch modifier {
+	case "ctrl":
+		return state&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
+	case "alt":
+		return state&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
+	case "shift":
+		return state&vtinput.ShiftPressed != 0
+	}
+	return true
 }
 
 // dragOutNames decides what a left press on entry idx would drag out of the

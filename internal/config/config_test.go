@@ -49,6 +49,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.TerminalCtrlNWorkspace = false
 	App.ConsoleMode = "host"
 	App.ConsoleOverlayUI = true
+	App.DragOutModifier = "ctrl"
 	App.WorkspaceTabMode = int(vtui.WorkspaceTabsNever)
 	App.WorkspaceTabsOverlay = false
 	App.CtrlTabShowsMenu = true
@@ -189,6 +190,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if !App.ConsoleOverlayUI {
 		t.Error("LoadConfig failed to restore ConsoleOverlayUI")
+	}
+	if App.DragOutModifier != "ctrl" {
+		t.Errorf("LoadConfig failed to restore DragOutModifier: got %q", App.DragOutModifier)
 	}
 	if App.ApplyCommandParallelism != 0 {
 		t.Errorf("ApplyCommandParallelism = %d, want Unlimited (0)", App.ApplyCommandParallelism)
@@ -881,6 +885,14 @@ func TestConfig_MouseWheelRoundTrip(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("wheel config field %d: expected %d, got %d", i, want[i], got[i])
+		}
+	}
+}
+
+func TestNormalizeDragOutModifier(t *testing.T) {
+	for in, want := range map[string]string{"": "", "Ctrl": "ctrl", " ALT ": "alt", "shift": "shift", "meta": "", "1": ""} {
+		if got := NormalizeDragOutModifier(in); got != want {
+			t.Errorf("NormalizeDragOutModifier(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

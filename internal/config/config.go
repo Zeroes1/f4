@@ -486,6 +486,7 @@ type F4Config struct {
 	CursorOvertypeShape      string // caret in overtype mode, same names
 	CursorBlink              bool
 	ConsoleMode              string // "own" | "host" (default "own")
+	DragOutModifier          string // "" | "ctrl" | "alt" | "shift": a drag out of a panel starts only while this key is held (default "", f4:config)
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
 	UseWinescape             bool   // Windows only: let the file layer use libwinescape where it is available (default true)
 	AnnounceKittyTerm        bool   // introduce the built-in terminal as kitty, so that image tools use the graphics protocol
@@ -716,6 +717,7 @@ var App = F4Config{
 	CursorBlink:              true,
 	ConsoleMode:              "own",
 	ConsoleOverlayUI:         false,
+	DragOutModifier:          "",
 	UseWinescape:             true,
 	AnnounceKittyTerm:        true,
 	CommandLineAutoComplete:  true,
@@ -980,6 +982,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.CursorBlink = merged.GetString("Panel", "CursorBlink", "1") != "0"
 	cfg.ConsoleMode = merged.GetString("Panel", "ConsoleMode", "own")
 	cfg.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
+	cfg.DragOutModifier = NormalizeDragOutModifier(merged.GetString("Panel", "DragOutModifier", ""))
 	cfg.UseWinescape = merged.GetString("Panel", "UseWinescape", "1") != "0"
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
 	cfg.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
@@ -1314,6 +1317,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "CursorOvertypeShape = %s\n", NormalizeCursorShape(cfg.CursorOvertypeShape, "block"))
 	fmt.Fprintf(&sb, "CursorBlink = %d\n", map[bool]int{true: 1, false: 0}[cfg.CursorBlink])
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
+	fmt.Fprintf(&sb, "DragOutModifier = %s\n", NormalizeDragOutModifier(cfg.DragOutModifier))
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
 	fmt.Fprintf(&sb, "UseWinescape = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseWinescape])
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
@@ -1871,4 +1875,14 @@ func ApplyProxySettings() {
 		User: App.ProxyUser,
 		Pass: App.ProxyPass,
 	})
+}
+
+// NormalizeDragOutModifier maps a settings value to one of "", "ctrl", "alt"
+// and "shift"; anything else means no modifier is required.
+func NormalizeDragOutModifier(v string) string {
+	switch v = strings.ToLower(strings.TrimSpace(v)); v {
+	case "ctrl", "alt", "shift":
+		return v
+	}
+	return ""
 }

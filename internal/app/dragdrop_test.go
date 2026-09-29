@@ -271,3 +271,29 @@ loop:
 		}
 	}
 }
+
+func TestDragOutModifierHeld(t *testing.T) {
+	ctrl := vtinput.ControlKeyState(vtinput.LeftCtrlPressed)
+	alt := vtinput.ControlKeyState(vtinput.RightAltPressed)
+	shift := vtinput.ControlKeyState(vtinput.ShiftPressed)
+	cases := []struct {
+		modifier string
+		state    vtinput.ControlKeyState
+		want     bool
+	}{
+		{"", 0, true},
+		{"", ctrl, true},
+		{"ctrl", 0, false},
+		{"ctrl", ctrl, true},
+		{"ctrl", alt | shift, false},
+		{"alt", alt, true},
+		{"alt", ctrl, false},
+		{"shift", shift, true},
+		{"shift", 0, false},
+	}
+	for _, c := range cases {
+		if got := panel.DragOutModifierHeld(c.modifier, c.state); got != c.want {
+			t.Errorf("DragOutModifierHeld(%q, %#x) = %v, want %v", c.modifier, uint32(c.state), got, c.want)
+		}
+	}
+}
