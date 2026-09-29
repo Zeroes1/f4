@@ -45,7 +45,7 @@ package plughost
 // matching when either changes.
 //
 // The value stays an honest "not installable yet" placeholder until a tagged
-// release actually carries cloudfox-plugin-{os}-{arch}.tar.gz assets: as of
+// release actually carries cloudfox-plugin-{os}-{arch}.tgz assets: as of
 // part 3, plugring-manifest.json's URL resolves against
 // releases/latest/download/, and no release has shipped that asset yet, so
 // installing this entry today 404s. Wiring the download/install path
@@ -62,7 +62,7 @@ const cloudFoxPlugRingVersion = "0.0.0-part3-published-not-installable"
 //
 // Same "not installable yet" caveat as cloudFoxPlugRingVersion: nothing
 // about landing this first-party entry makes
-// android-plugin-{os}-{arch}.tar.gz actually exist on a tagged release.
+// android-plugin-{os}-{arch}.tgz actually exist on a tagged release.
 const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 
 // iosPlugRingVersion mirrors plugins/ios/cmd/ios-plugin/plugring-manifest.json's
@@ -73,7 +73,7 @@ const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 // code sharing. Keep them matching when either changes.
 //
 // The value stays an honest "not installable yet" placeholder until a
-// tagged release actually carries ios-plugin-{os}-{arch}.tar.gz assets:
+// tagged release actually carries ios-plugin-{os}-{arch}.tgz assets:
 // plugring-manifest.json's URL resolves against releases/latest/download/
 // (f4#1178 part 2), and no release has shipped that asset yet, so
 // installing this entry today 404s. Wiring the download/install path (this
@@ -98,7 +98,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry from in PlugRingItemProblem. See build-cloudfox-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/cloudfox-plugin-{os}-{arch}.tar.gz",
+			URL:        "https://github.com/unxed/f4/releases/latest/download/cloudfox-plugin-{os}-{arch}.tgz",
 			Entrypoint: "cloudfox-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
@@ -116,7 +116,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry documents above. See build-android-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/android-plugin-{os}-{arch}.tar.gz",
+			URL:        "https://github.com/unxed/f4/releases/latest/download/android-plugin-{os}-{arch}.tgz",
 			Entrypoint: "android-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
@@ -136,7 +136,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry from in PlugRingItemProblem. See build-ios-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/ios-plugin-{os}-{arch}.tar.gz",
+			URL:        "https://github.com/unxed/f4/releases/latest/download/ios-plugin-{os}-{arch}.tgz",
 			Entrypoint: "ios-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},

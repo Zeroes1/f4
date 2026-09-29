@@ -252,3 +252,18 @@ func TestMergeFirstPartyPlugRingItemsAppendsAndDedupsByID(t *testing.T) {
 		t.Fatalf("len(noCollision) = %d, want %d", len(noCollision), want)
 	}
 }
+
+// TestFirstPartyArchivesAreNotTakenForF4 pins #1656. The updater of every f4
+// released before that fix took the first release asset whose name ends with
+// "-<os>-<arch>.tar.gz" (or .zip/.7z on Windows) for f4's own archive, and
+// GitHub lists assets by name: android-plugin-linux-amd64.tar.gz came first,
+// was installed in f4's place, and left f4 on its old build. Those updaters
+// cannot be fixed any more, so the first-party plugins are published under an
+// extension none of them looks for.
+func TestFirstPartyArchivesAreNotTakenForF4(t *testing.T) {
+	for _, entry := range FirstPartyPlugRingItems() {
+		if !strings.HasSuffix(entry.URL, "-{os}-{arch}.tgz") {
+			t.Errorf("%s: url = %q, want a .tgz archive per {os}-{arch}", entry.ID, entry.URL)
+		}
+	}
+}
