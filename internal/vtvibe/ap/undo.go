@@ -40,8 +40,8 @@ func (e *UndoConflictError) Error() string {
 // Undo is the journal of one real Apply that wrote something: for every
 // path the patch touched, what was there before (file bytes and permission
 // bits, a whole directory tree, a symlink, or nothing at all) and a hash of
-// what the patch left there. It lives in memory only; §7.4's on-disk
-// .vtvibe/undo/ snapshots are not implemented yet.
+// what the patch left there. It lives in memory; SaveUndo (undo_disk.go) also
+// writes it to .vtvibe/undo/ so it survives a restart.
 //
 // A touched path is recorded at the highest level the patch changed: a
 // write into a directory the patch had to create is recorded as that
@@ -52,6 +52,7 @@ type Undo struct {
 	projectDir string
 	entries    []undoEntry
 	reverted   bool
+	dir        string // on-disk snapshot (undo_disk.go), "" when none
 }
 
 type undoEntry struct {
@@ -133,7 +134,13 @@ func (u *Undo) Revert() error {
 		return &UndoConflictError{Paths: changed}
 	}
 	u.reverted = true
-	return u.restore()
+	err = u.restore()
+	if u.dir != "" {
+		// Spent, whatever came of the restore: it cannot be tried again.
+		_ = os.RemoveAll(u.dir)
+		u.dir = ""
+	}
+	return err
 }
 
 // restore writes every recorded "before" state back without any check - the
