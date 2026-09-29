@@ -389,7 +389,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── I18N.md
     │   ├── IDEAS.md
     │   ├── IMAGES_PLAN.md
-    │   ├── issue-561-solutions.md
     │   ├── ISSUES
     │   │   ├── ISSUE_1400_PANEL_MODES.md
     │   │   ├── ISSUE_722_COPY_ACCESS_RIGHTS.md
@@ -397,7 +396,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── KEYMAP.md
     │   ├── L10N_REPORT_GUIDE.md
     │   ├── LUA.md
-    │   ├── LUNOBOT
     │   │   ├── 1187.md
     │   │   ├── 1196.md
     │   │   ├── 1218.md
