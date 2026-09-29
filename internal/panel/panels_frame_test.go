@@ -2841,6 +2841,58 @@ func TestPanelsFrame_QuitConfirmation_Cancel(t *testing.T) {
 		t.Error("Application shut down even after exit was canceled")
 	}
 }
+
+// A held Ctrl+W queues its repeats in the event channel while the exit
+// confirmation is up; each queued repeat re-emits CmQuit. Without a guard
+// every repeat stacked another copy of the dialog, so the user had to press
+// Cancel once per queued event.
+func TestPanelsFrame_QuitConfirmation_NoDuplicateOnRepeat(t *testing.T) {
+	fm := vtui.FrameManager
+	fm.Init(vtui.NewSilentScreenBuf())
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	fm.Push(pf)
+
+	oldConfirm := config.App.ConfirmExit
+	config.App.ConfirmExit = true
+	t.Cleanup(func() { config.App.ConfirmExit = oldConfirm })
+
+	pf.HandleCommand(vtui.CmQuit, nil)
+	top := fm.GetTopFrame()
+	if top == nil || top.GetTitle() != i18n.Msg("Quit.Title") {
+		t.Fatal("Quit dialog didn't appear")
+	}
+	if !QuitConfirmationOpen() {
+		t.Fatal("QuitConfirmationOpen() = false while the dialog is up")
+	}
+
+	// Queued repeats of a held Ctrl+W re-emit CmQuit while the dialog is up.
+	for i := 0; i < 5; i++ {
+		pf.HandleCommand(vtui.CmQuit, nil)
+	}
+	if got := fm.GetTopFrame(); got != top {
+		t.Errorf("repeated CmQuit stacked a duplicate dialog: top %q, want the original", got.GetTitle())
+	}
+
+	// Real cancel path: Esc/Cancel sets the exit code and marks the dialog done.
+	top.SetExitCode(-1)
+	if QuitConfirmationOpen() {
+		t.Error("QuitConfirmationOpen() still true after the dialog was dismissed")
+	}
+
+	// The guard must not stick: a fresh CmQuit opens a new confirmation.
+	pf.HandleCommand(vtui.CmQuit, nil)
+	if got := fm.GetTopFrame(); got == nil || got.GetTitle() != i18n.Msg("Quit.Title") {
+		t.Fatal("CmQuit after cancel didn't open a new confirmation")
+	}
+	got := fm.GetTopFrame()
+	got.SetExitCode(-1)
+
+	if fm.IsShutdown() {
+		t.Error("Application shut down even after exit was canceled")
+	}
+}
+
 func TestPanelsFrame_DriveMenu_OtherPanel(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	theme.SetDefaultF4Palette()
