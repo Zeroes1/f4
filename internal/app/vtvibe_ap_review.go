@@ -300,11 +300,18 @@ type aiReviewTable struct {
 	onToggle    func(idx int)
 	onReject    func(idx int)
 	onOpen      func(idx int)
+	onUndo      func()
 	onViewPatch func()
 	onCtrlTab   func()
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
+	if aiReviewIsCtrlZ(e) {
+		if t.onUndo != nil {
+			t.onUndo()
+		}
+		return true
+	}
 	if e != nil && e.KeyDown && e.VirtualKeyCode == vtinput.VK_TAB &&
 		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 {
 		if t.onCtrlTab != nil {
@@ -406,6 +413,7 @@ type aiReviewDiffPane struct {
 	message   string // shown instead of lines, e.g. AI.ReviewNoDiff
 	topPos    int
 	onCtrlTab func()
+	onUndo    func()
 }
 
 func newAIReviewDiffPane(w, h int) *aiReviewDiffPane {
@@ -458,6 +466,12 @@ func (p *aiReviewDiffPane) clampTop() {
 // see that type's comment); while focused, the pane scrolls instead of
 // moving anything in the table it no longer has the cursor on.
 func (p *aiReviewDiffPane) ProcessKey(e *vtinput.InputEvent) bool {
+	if aiReviewIsCtrlZ(e) {
+		if p.onUndo != nil {
+			p.onUndo()
+		}
+		return true
+	}
 	if e == nil || !e.KeyDown {
 		return false
 	}
@@ -666,6 +680,8 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	if patch != nil {
 		table.onViewPatch = func() { aiViewPatchText(pf, patch.Text) }
 	}
+	table.onUndo = func() { aiUndoPatch(pf) }
+	diffPane.onUndo = table.onUndo
 	table.onCtrlTab = func() { dlg.SetFocusedItem(diffPane) }
 	diffPane.onCtrlTab = func() { dlg.SetFocusedItem(table) }
 
@@ -836,4 +852,17 @@ func aiViewPatchText(pf *panel.PanelsFrame, text string) {
 	if os.WriteFile(filepath.Join(dir, "patch.ap"), []byte(text), 0600) == nil {
 		actionOpenViewer(pf, vfs.NewOSVFS(dir), "patch.ap")
 	}
+}
+
+// aiReviewIsCtrlZ is Ctrl+Z (either Ctrl, no Alt or Shift): undo the newest
+// applied patch from the review screen, as in the AI panel (docs/VTVIBE.md
+// §7.4). It is answered by the table and the diff pane alike, so it works
+// whichever of them has the focus.
+func aiReviewIsCtrlZ(e *vtinput.InputEvent) bool {
+	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != vtinput.VK_Z {
+		return false
+	}
+	const ctrl = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed
+	const others = vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed
+	return e.ControlKeyState&ctrl != 0 && e.ControlKeyState&others == 0
 }
