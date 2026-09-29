@@ -74,12 +74,12 @@ func (p *statusPanel) showCommitDialog() {
 
 // onCommitDialogOk is the commit dialog's OnOk: a plain commit needs
 // something staged, an amend does not.
-func (p *statusPanel) onCommitDialogOk(message string, amend bool) {
+func (p *statusPanel) onCommitDialogOk(message string, amend, signoff bool) {
 	if !amend && !p.hasStagedChanges() {
 		toast.Show(i18n.Msg("GitStatus.NothingToCommit"), 3e9)
 		return
 	}
-	p.onCommitMessageEnteredAmend(message, amend)
+	p.onCommitMessageEnteredOpts(message, amend, signoff)
 }
 
 // headCommitMessage is the full message of the last commit, or "" when the
@@ -111,7 +111,7 @@ func headCommitMessage(dir string) string {
 // the same split showCommitDialog already kept between itself (the trigger)
 // and onCommitMessageEntered (the pure decision) before this part.
 func showCommitMessageEditor(initial string, onOk func(string)) {
-	showCommitMessageEditorEx(initial, "", func(message string, _ bool) {
+	showCommitMessageEditorEx(initial, "", func(message string, _, _ bool) {
 		if onOk != nil {
 			onOk(message)
 		}
@@ -123,9 +123,10 @@ func showCommitMessageEditor(initial string, onOk func(string)) {
 // "Amend the previous commit" checkbox. Checking it while the field is
 // empty (or still holds the message it filled in itself) loads the last
 // commit's message into the field, the way `git commit --amend` opens it in
-// $EDITOR; unchecking takes that message out again. onOk gets the field's
-// text and whether the box was checked.
-func showCommitMessageEditorEx(initial, headMessage string, onOk func(message string, amend bool)) {
+// $EDITOR; unchecking takes that message out again. The dialog also has an
+// "Add Signed-off-by" checkbox (f4#659 part 19: `git commit --signoff`).
+// onOk gets the field's text and whether each box was checked.
+func showCommitMessageEditorEx(initial, headMessage string, onOk func(message string, amend, signoff bool)) {
 	if vtui.FrameManager == nil {
 		return
 	}
@@ -152,9 +153,7 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 	// plugins/envman/dialogs.go's own MultiLineEdit field leaves below
 	// itself for the Save/Cancel row.
 	editHeight := dlg.Y2 - y - 4
-	if headMessage != "" {
-		editHeight-- // one more row for the amend checkbox above the buttons
-	}
+	editHeight-- // one more row for the amend and sign-off checkboxes above the buttons
 	if editHeight < 3 {
 		editHeight = 3
 	}
@@ -176,6 +175,10 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 		}
 		dlg.AddItem(amend)
 	}
+
+	// Sign-off shares the row of the amend box, to its right.
+	signoff := vtui.NewCheckbox(x+34, dlg.Y2-4, i18n.Msg("GitStatus.CommitSignoff"), false)
+	dlg.AddItem(signoff)
 
 	okButton := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	cancelButton := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
@@ -199,7 +202,7 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 	// the message's own line breaks.
 	okButton.OnClick = func() {
 		if onOk != nil {
-			onOk(edit.GetText(), amend != nil && amend.State != 0)
+			onOk(edit.GetText(), amend != nil && amend.State != 0, signoff.State != 0)
 		}
 		dlg.SetExitCode(1)
 	}
@@ -229,12 +232,18 @@ func (p *statusPanel) onCommitMessageEntered(message string) {
 // can amend: amend runs `git commit --amend` (the staged changes are folded
 // into the last commit and its message is replaced by the one entered).
 func (p *statusPanel) onCommitMessageEnteredAmend(message string, amend bool) {
+	p.onCommitMessageEnteredOpts(message, amend, false)
+}
+
+// onCommitMessageEnteredOpts adds `--signoff` (a Signed-off-by trailer with
+// the committer's identity) to onCommitMessageEnteredAmend.
+func (p *statusPanel) onCommitMessageEnteredOpts(message string, amend, signoff bool) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		toast.Show(i18n.Msg("GitStatus.CommitMessageEmpty"), 3e9)
 		return
 	}
-	p.runCommitAmend(message, amend)
+	p.runCommitOpts(message, amend, signoff)
 }
 
 // runCommit runs `git commit -m message` over the currently staged changes
@@ -252,10 +261,19 @@ func (p *statusPanel) runCommit(message string) {
 
 // runCommitAmend is runCommit with git's --amend switch (f4#659 part 17).
 func (p *statusPanel) runCommitAmend(message string, amend bool) {
-	args := []string{"commit", "-m", message}
+	p.runCommitOpts(message, amend, false)
+}
+
+// runCommitOpts is runCommitAmend with git's --signoff switch (f4#659 part 19).
+func (p *statusPanel) runCommitOpts(message string, amend, signoff bool) {
+	args := []string{"commit"}
 	if amend {
-		args = []string{"commit", "--amend", "-m", message}
+		args = append(args, "--amend")
 	}
+	if signoff {
+		args = append(args, "--signoff")
+	}
+	args = append(args, "-m", message)
 	output, err := runGitIn(context.Background(), p.dir, args...)
 	if err != nil {
 		toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.CommitFailed"), firstLine(string(output), err)), 3e9)
