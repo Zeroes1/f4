@@ -151,3 +151,38 @@ func TestRPCPanelKeyDeclarationIsCapped(t *testing.T) {
 		t.Fatal("an unchanged declaration was reported as a change")
 	}
 }
+
+func TestRPCPanelHelpKeyFromDescriptor(t *testing.T) {
+	transport := &rpcPanelKeysTransport{
+		openKeys: &RPCPanelOpenResponse{
+			Document: []byte(`{"vuiVersion":1,"root":{"type":"Window"}}`),
+			HasKeys:  true,
+			Keys:     []RPCPanelKey{{VK: vtinput.VK_F5, Label: "Run"}},
+		},
+	}
+	host := &rpcPanelCoverageHost{luaTestHostAPI: newLuaTestHostAPI()}
+	registrations := &PluginSessionRegistrations{}
+	t.Cleanup(registrations.Unregister)
+	descriptors := []PluginPanelDescriptor{{ID: "helped", Title: "Helped", Help: "# Help", LocalizedHelp: map[string]string{"xx": "# Aide"}}}
+	if err := RegisterRPCPluginPanels(host, transport, "plugin", descriptors, registrations); err != nil {
+		t.Fatalf("register panel: %v", err)
+	}
+	controller, err := host.panels[0].Open(vfs.PanelContext{})
+	if err != nil {
+		t.Fatalf("open panel: %v", err)
+	}
+	panel := controller.(*rpcVUIPanel)
+	keys := panel.PanelKeys()
+	if len(keys) != 2 || keys[0].VK != vtinput.VK_F1 || keys[1].VK != vtinput.VK_F5 {
+		t.Fatalf("keys = %+v, want the help key ahead of the declared F5", keys)
+	}
+	// A declared plain F1 keeps the key.
+	panel.setKeys([]RPCPanelKey{{VK: vtinput.VK_F1, Label: "Own"}})
+	if keys := panel.PanelKeys(); len(keys) != 1 || keys[0].Label != "Own" {
+		t.Fatalf("declared F1 was replaced: %+v", keys)
+	}
+	// A panel without help is untouched.
+	if rpcPanelHelpKey(PluginPanelDescriptor{ID: "x", Title: "X"}) != nil {
+		t.Fatal("a descriptor without help produced a key")
+	}
+}

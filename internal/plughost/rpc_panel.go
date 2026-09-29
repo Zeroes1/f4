@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -18,6 +19,13 @@ type PluginPanelDescriptor struct {
 	ID          string
 	Title       string
 	Description string
+	// Help is the panel's help, Markdown, shown on F1 in f4's Markdown
+	// viewer (f4#272). LocalizedHelp maps language codes to translations and
+	// wins over Help when it has the interface language (or its fallbacks).
+	// A panel that declares its own F1 key keeps it; one without any help
+	// leaves F1 to the global Help binding.
+	Help          string
+	LocalizedHelp map[string]string
 }
 
 type RPCPanelOpenRequest struct {
@@ -120,6 +128,7 @@ func RegisterRPCPluginPanels(
 				if err != nil {
 					return nil, err
 				}
+				panel.help = rpcPanelHelpKey(descriptor)
 				if response.HasKeys {
 					panel.setKeys(response.Keys)
 				}
@@ -154,6 +163,21 @@ type rpcVUIPanel struct {
 	closed   bool
 	keysDecl []RPCPanelKey
 	keys     []vfs.PanelKey
+	// help is the F1 key made from the descriptor's help text, nil without one.
+	help *vfs.PanelKey
+}
+
+// rpcPanelHelpKey is the F1 key of a panel whose descriptor carries help.
+func rpcPanelHelpKey(descriptor PluginPanelDescriptor) *vfs.PanelKey {
+	if strings.TrimSpace(descriptor.Help) == "" && len(descriptor.LocalizedHelp) == 0 {
+		return nil
+	}
+	key := vfs.PanelHelpKey(i18n.Msg("KeyBar.F1"),
+		func() string { return descriptor.Title },
+		func() string {
+			return pluginCommandDisplayText("", descriptor.LocalizedHelp, descriptor.Help)
+		})
+	return &key
 }
 
 func newRPCVUIPanel(sess PluginTransport, id string, document []byte) (*rpcVUIPanel, error) {
@@ -234,7 +258,16 @@ func (p *rpcVUIPanel) PanelKeys() []vfs.PanelKey {
 	if p.closed {
 		return nil
 	}
-	return p.keys
+	if p.help == nil {
+		return p.keys
+	}
+	for _, key := range p.keys {
+		if key.VK == vtinput.VK_F1 && key.Mods == 0 {
+			return p.keys
+		}
+	}
+	// A fresh slice: p.keys is shared with the caller of an earlier call.
+	return append([]vfs.PanelKey{*p.help}, p.keys...)
 }
 
 // setKeys installs a declaration received from the plugin and reports whether

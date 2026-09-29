@@ -102,8 +102,14 @@ route the same declarations from its own `ProcessKey`.
 RPC plugins declare panel descriptors in the structured `Plugin.Init` result:
 
 ```text
-Panels: [{ ID, Title, Description }]
+Panels: [{ ID, Title, Description, Help, LocalizedHelp }]
 ```
+
+`Help` is optional Markdown shown on F1 in f4's Markdown viewer, titled with the
+panel's `Title`; `LocalizedHelp` maps language codes to translations and wins when
+it has the interface language (then its fallback languages, then `en`). F1 is
+captioned on the keybar. A panel that declares its own F1 key keeps it, and a panel
+without help leaves F1 to f4's global Help.
 
 The host then uses these calls lazily:
 
