@@ -599,7 +599,12 @@ func init() { aiReviewRunPatcher = aiRunPatcher }
 func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, mods []ap.ModificationResult, exitCode int, output string) *vtui.Window {
 	scrW := vtui.FrameManager.GetScreenSize()
 	scrH := vtui.FrameManager.GetScreenHeight()
-	dlgW := min(max(scrW-4, 60), 100)
+	// The review is a screen of its own -- level 0 of the navigation, docs/
+	// VTVIBE.md §7.3 -- not a modal box over the AI panel: it fills the
+	// workspace above the key bar, so the reader can leave it for the editor
+	// (Enter opens the file there) and come back to it by switching screens.
+	top := vtui.FrameManager.WorkspaceTopInset()
+	dlgW := scrW
 	// diffH is the permanent diff pane's height, under the table rather
 	// than beside it: aiReviewTable's columns need most of inner's width to
 	// stay readable (File/Locator are MinWidth 12 each, and go narrower
@@ -609,11 +614,13 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	// its usual width and the pane gets its own scrollable rows below it.
 	diffH := min(max(scrH/4, 6), 14)
 	minH := 16 + diffH
-	dlgH := min(max(len(mods)+12+diffH, minH), max(scrH-2, minH))
+	dlgH := max(scrH-1-top, minH)
 	inner := dlgW - 4
 
 	dlg := vtui.NewCenteredDialog(dlgW, dlgH, i18n.Msg("AI.ReviewTitle"))
 	dlg.ShowClose = true
+	dlg.Modal = false
+	dlg.SetPosition(0, top, dlgW-1, top+dlgH-1)
 
 	statusW := runewidth.StringWidth(i18n.Msg("AI.ReviewColStatus"))
 	for _, s := range []ap.ModStatus{ap.ModOK, ap.ModSkipped, ap.ModFailed, ap.ModExcluded} {
@@ -798,7 +805,7 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		dlg.AddItem(b)
 	}
 
-	vtui.FrameManager.Push(dlg)
+	vtui.FrameManager.AddScreen(dlg)
 	return dlg
 }
 
