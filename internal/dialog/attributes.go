@@ -58,6 +58,10 @@ type unixAttributesEdit struct {
 	// setATime writes the access time the Accessed field holds (f4#1404).
 	setATime bool
 	atime    time.Time
+	// setBTime writes the creation time the Created field holds, where the
+	// platform can set one (macOS; vfs.OSVFS.SupportsSetBTime).
+	setBTime bool
+	btime    time.Time
 	// mode holds the new mode bits, keepMode the bits each object keeps.
 	mode     uint32
 	keepMode uint32
@@ -82,6 +86,9 @@ func applyUnixAttributesToOne(ctx context.Context, v vfs.VFS, path string, item 
 	}
 	if edit.setATime {
 		item.ATime = edit.atime
+	}
+	if edit.setBTime {
+		item.BTime, item.SetBTime = edit.btime, true
 	}
 	item.UnixMode = (item.UnixMode & edit.keepMode) | (edit.mode &^ edit.keepMode)
 	if err := v.SetAttributes(ctx, path, item); err != nil {
@@ -703,12 +710,30 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 	dlg.AddItem(editMTime)
 	mainVBox.Add(rowTime, vtui.Margins{Top: 0}, vtui.AlignFill)
 
-	// Created/Accessed/Changed rows, in that order (f4#1404). Created and
-	// Changed are read-only: Unix has no portable way to set birth/change
-	// time at all. Accessed is editable, below.
+	// Created/Accessed/Changed rows, in that order (f4#1404). Changed is
+	// read-only: no OS lets a program set the status-change time. Created is
+	// editable only where the platform can set a birth time (macOS) and for a
+	// real local file system; elsewhere it is shown and cannot be changed.
+	// Accessed is editable, below.
 	var rowCreated, rowAccessed, rowChanged *vtui.HBoxLayout
+	var editCreated *vtui.Edit
+	initialCreated := ""
 	if showCreated {
-		rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 66, 2, i18n.Msg("Attributes.Created"), createdText)
+		if osv, ok := v.(*vfs.OSVFS); ok && osv.SupportsSetBTime() {
+			if !multiple {
+				initialCreated = createdText
+			}
+			editCreated = vtui.NewEdit(0, 0, 20, initialCreated)
+			lblCreated := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Created")), vtui.Palette[vtui.ColDialogText])
+			rowCreated = vtui.NewHBoxLayout(0, 0, 66, 1)
+			rowCreated.Add(lblCreated, vtui.Margins{Left: 2, Right: 1}, vtui.AlignLeft)
+			rowCreated.Add(editCreated, vtui.Margins{}, vtui.AlignLeft)
+			dlg.AddItem(lblCreated)
+			dlg.AddItem(editCreated)
+			mainVBox.Add(rowCreated, vtui.Margins{Top: 0}, vtui.AlignFill)
+		} else {
+			rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 66, 2, i18n.Msg("Attributes.Created"), createdText)
+		}
 	}
 	// Accessed is editable (f4#1404): utimensat takes it together with the
 	// modification time, which OSVFS.SetAttributes already passes on. Like
@@ -922,6 +947,16 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 					return
 				}
 				edit.atime, edit.setATime = t, true
+			}
+		}
+		if editCreated != nil {
+			if text := editCreated.GetText(); text != initialCreated {
+				t, err := time.ParseInLocation(attributesTimeFormat, text, time.Local)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Attributes.MTimeInvalidError"), i18n.Msg("Attributes.MTimeFormatHint")), []string{"&Ok"})
+					return
+				}
+				edit.btime, edit.setBTime = t, true
 			}
 		}
 		edit.mode, edit.keepMode = unixModeEdit(editOctal.GetText(), allChecks)
