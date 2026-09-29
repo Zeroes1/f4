@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -16,6 +17,9 @@ import (
 var execGit = func(ctx context.Context, dir string, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- "git" is our own literal, args are our own literals plus a host path.
 	cmd.Dir = dir
+	// A prompt for a password (fetch/pull/push over https) would wait on a
+	// terminal nobody sees; fail instead and let git say why.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

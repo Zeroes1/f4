@@ -432,3 +432,20 @@ archive tools (f4#609) rather than linking a Go git implementation.
   nothing staged shows the toast without a dialog.
 - `showCommitMessageEditor` keeps its signature and shows no checkbox;
   `showCommitMessageEditorEx` is the amend-aware variant the panel uses.
+
+## Part 20: fetch, pull and push (`remote.go`)
+
+- **Shift+F5** runs `git fetch`, **Shift+F6** `git pull --ff-only`, **Shift+F7**
+  `git push` (after a confirmation: it publishes commits). They sit on the
+  Shift row of the keybar with their own captions, the same row Shift+F4
+  (unstage hunks) uses.
+- All three run off the UI goroutine (`vtui.RunAsync`); the panel reloads
+  afterwards and a toast shows git's first output line. A failure -- no
+  upstream, authentication, diverged history -- is an error dialog with git's
+  first line.
+- Pull is fast-forward only, so it never creates a merge commit or leaves a
+  conflicted tree; diverged history is reported and merging is left to the
+  user's own tools. Merge and stash are not part of this panel yet.
+- `execGit` now sets `GIT_TERMINAL_PROMPT=0` for every call: a password prompt
+  over https would wait on a terminal nobody sees. Use a credential helper or
+  an SSH agent for remotes that need authentication.
