@@ -89,7 +89,7 @@
             EOF
             chmod +x $out/bin/f4-gui
           '' + lib.optionalString (!ttyOnly && pkgs.stdenv.hostPlatform.isLinux) ''
-            install -Dm644 packaging/linux/f4.desktop -t $out/share/applications
+            install -Dm644 packaging/linux/org.unxed.f4.desktop -t $out/share/applications
             for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
               install -Dm644 internal/gui/assets/icon/generated/f4-''${size}.png \
                 $out/share/icons/hicolor/''${size}x''${size}/apps/io.github.unxed.f4.png

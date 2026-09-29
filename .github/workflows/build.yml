@@ -246,7 +246,7 @@ jobs:
         # Add freedesktop launch metadata and the application icon to Linux archives.
         if [ "$GOOS" = "linux" ]; then
           mkdir -p build/share/applications
-          cp packaging/linux/f4.desktop build/share/applications/
+          cp packaging/linux/org.unxed.f4.desktop build/share/applications/
           for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
             icon_dir="build/share/icons/hicolor/${size}x${size}/apps"
             mkdir -p "$icon_dir"
@@ -500,7 +500,7 @@ jobs:
 
           if [ "$GOOS" = "linux" ]; then
             mkdir -p "$BUILD_DIR/share/applications"
-            cp packaging/linux/f4.desktop "$BUILD_DIR/share/applications/"
+            cp packaging/linux/org.unxed.f4.desktop "$BUILD_DIR/share/applications/"
             for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
               icon_dir="$BUILD_DIR/share/icons/hicolor/${size}x${size}/apps"
               mkdir -p "$icon_dir"

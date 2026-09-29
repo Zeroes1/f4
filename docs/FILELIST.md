@@ -2235,7 +2235,7 @@ Every file tracked in the repository. Regenerate with
     ├── .mcp.json
     ├── packaging
     │   ├── linux
-    │   │   └── f4.desktop
+    │   │   └── org.unxed.f4.desktop
     │   ├── macos
     │   │   └── Info.plist
     │   └── nix

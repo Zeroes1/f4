@@ -5,7 +5,6 @@ Name=f4
 GenericName=File Manager
 Comment=Far Manager / far2l-style file manager
 Exec=f4 --gui
-TryExec=f4
 Icon=io.github.unxed.f4
 StartupWMClass=org.unxed.f4
 Terminal=false
