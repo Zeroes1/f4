@@ -21,6 +21,7 @@
 | **Solaris** (experimental) | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-solaris-amd64.tar.gz) |
 | **Linux (lite)** ([details](#-lite-build)) | .tar.gz | [amd64](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-amd64.tar.gz) / [armv7l](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-arm.tar.gz) / [mipsle](https://github.com/unxed/f4/releases/download/nightly/f4-lite-linux-mipsle.tar.gz) |
 | **Windows (lite)** ([details](#-lite-build)) | .tar.gz | [x64](https://github.com/unxed/f4/releases/download/nightly/f4-lite-windows-amd64.tar.gz) |
+| **Experimental ports** | — | [Redox, GNU Hurd, Haiku](#-experimental-redox-gnu-hurd-haiku) |
 
 *These builds are automated and represent the current state of the `main` branch.*
 
