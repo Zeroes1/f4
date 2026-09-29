@@ -67,7 +67,17 @@ func (p *statusPanel) showCommitDialog() {
 		return
 	}
 
-	showCommitMessageEditor("", p.onCommitMessageEntered)
+	showCommitMessageEditorEx("", headCommitMessage(p.dir), p.onCommitMessageEnteredAmend)
+}
+
+// headCommitMessage is the full message of the last commit, or "" when the
+// repository has none yet (nothing to amend) or git could not say.
+func headCommitMessage(dir string) string {
+	output, err := runGitIn(context.Background(), dir, "log", "-1", "--format=%B")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 // showCommitMessageEditor builds and opens the Ctrl+K commit message
@@ -89,6 +99,21 @@ func (p *statusPanel) showCommitDialog() {
 // the same split showCommitDialog already kept between itself (the trigger)
 // and onCommitMessageEntered (the pure decision) before this part.
 func showCommitMessageEditor(initial string, onOk func(string)) {
+	showCommitMessageEditorEx(initial, "", func(message string, _ bool) {
+		if onOk != nil {
+			onOk(message)
+		}
+	})
+}
+
+// showCommitMessageEditorEx is showCommitMessageEditor plus git's --amend
+// (f4#659 part 17): when headMessage is not empty the dialog also offers an
+// "Amend the previous commit" checkbox. Checking it while the field is
+// empty (or still holds the message it filled in itself) loads the last
+// commit's message into the field, the way `git commit --amend` opens it in
+// $EDITOR; unchecking takes that message out again. onOk gets the field's
+// text and whether the box was checked.
+func showCommitMessageEditorEx(initial, headMessage string, onOk func(message string, amend bool)) {
 	if vtui.FrameManager == nil {
 		return
 	}
@@ -115,12 +140,30 @@ func showCommitMessageEditor(initial string, onOk func(string)) {
 	// plugins/envman/dialogs.go's own MultiLineEdit field leaves below
 	// itself for the Save/Cancel row.
 	editHeight := dlg.Y2 - y - 4
+	if headMessage != "" {
+		editHeight-- // one more row for the amend checkbox above the buttons
+	}
 	if editHeight < 3 {
 		editHeight = 3
 	}
 	edit := vtui.NewMultiLineEdit(x, y, width-4, editHeight, initial)
 	edit.SetGrowMode(vtui.GrowAll)
 	dlg.AddItem(edit)
+
+	var amend *vtui.Checkbox
+	if headMessage != "" {
+		amend = vtui.NewCheckbox(x, dlg.Y2-4, i18n.Msg("GitStatus.CommitAmend"), false)
+		amend.OnChange = func(state int) {
+			text := strings.TrimSpace(edit.GetText())
+			switch {
+			case state != 0 && text == "":
+				edit.SetText(headMessage)
+			case state == 0 && text == headMessage:
+				edit.SetText("")
+			}
+		}
+		dlg.AddItem(amend)
+	}
 
 	okButton := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	cancelButton := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
@@ -144,7 +187,7 @@ func showCommitMessageEditor(initial string, onOk func(string)) {
 	// the message's own line breaks.
 	okButton.OnClick = func() {
 		if onOk != nil {
-			onOk(edit.GetText())
+			onOk(edit.GetText(), amend != nil && amend.State != 0)
 		}
 		dlg.SetExitCode(1)
 	}
@@ -167,12 +210,19 @@ func showCommitMessageEditor(initial string, onOk func(string)) {
 // that is blank throughout (including one that is only whitespace/newlines)
 // is rejected the same way a blank one-line message already was.
 func (p *statusPanel) onCommitMessageEntered(message string) {
+	p.onCommitMessageEnteredAmend(message, false)
+}
+
+// onCommitMessageEnteredAmend is onCommitMessageEntered for the dialog that
+// can amend: amend runs `git commit --amend` (the staged changes are folded
+// into the last commit and its message is replaced by the one entered).
+func (p *statusPanel) onCommitMessageEnteredAmend(message string, amend bool) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		toast.Show(i18n.Msg("GitStatus.CommitMessageEmpty"), 3e9)
 		return
 	}
-	p.runCommit(message)
+	p.runCommitAmend(message, amend)
 }
 
 // runCommit runs `git commit -m message` over the currently staged changes
@@ -182,11 +232,19 @@ func (p *statusPanel) onCommitMessageEntered(message string) {
 // straight to the git process by exec.Cmd's own argv, never through a shell,
 // so an embedded "\n" needs no escaping and git records it verbatim (minus
 // its own commit.cleanup=strip trimming, the same cleanup a message typed
-// into $EDITOR would get). --amend and a commit signature/author override
-// are deliberately still out of scope -- see the ticket for the remaining
-// list.
+// into $EDITOR would get). --amend is runCommitAmend below; a commit
+// signature/author override is still out of scope -- see the ticket.
 func (p *statusPanel) runCommit(message string) {
-	output, err := runGitIn(context.Background(), p.dir, "commit", "-m", message)
+	p.runCommitAmend(message, false)
+}
+
+// runCommitAmend is runCommit with git's --amend switch (f4#659 part 17).
+func (p *statusPanel) runCommitAmend(message string, amend bool) {
+	args := []string{"commit", "-m", message}
+	if amend {
+		args = []string{"commit", "--amend", "-m", message}
+	}
+	output, err := runGitIn(context.Background(), p.dir, args...)
 	if err != nil {
 		toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.CommitFailed"), firstLine(string(output), err)), 3e9)
 		return

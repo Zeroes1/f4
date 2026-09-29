@@ -210,8 +210,8 @@ archive tools (f4#609) rather than linking a Go git implementation.
   exactly the convention a multi-line message needs to keep. A message that
   is blank throughout is rejected with the same toast an empty single-line
   one already was.
-- `--amend` and a commit signature/author override remain out of scope --
-  see the ticket for the remaining list.
+- `--amend` is part 17; a commit signature/author override remains out of
+  scope -- see the ticket for the remaining list.
 
 ## Part 10: creating and deleting branches (`branchview.go`)
 
@@ -414,3 +414,18 @@ archive tools (f4#609) rather than linking a Go git implementation.
   `entry.Path`/`entry.OrigPath` come from `git status` reported the same way
   relative to that same `dir`, the `./` prefix is required for the two to
   agree on what the path means.
+
+## Part 17: amending the last commit (Ctrl+K)
+
+- The Ctrl+K commit dialog gets an **Amend the previous commit** checkbox
+  whenever the repository already has a commit (`headCommitMessage`,
+  `git log -1 --format=%B`). Checking it while the message field is empty
+  loads the last commit's message into it, as `git commit --amend` does in
+  `$EDITOR`; unchecking it takes that message out again if it was not edited.
+- Ok then runs `git commit --amend -m <message>` (`runCommitAmend`): the
+  staged changes are folded into the last commit and its message is replaced.
+  Without the box nothing changes: `runCommit` is `git commit -m`.
+- Ctrl+K still shows "nothing staged" instead of the dialog when the index is
+  empty, so a message-only amend needs something staged for now.
+- `showCommitMessageEditor` keeps its signature and shows no checkbox;
+  `showCommitMessageEditorEx` is the amend-aware variant the panel uses.
