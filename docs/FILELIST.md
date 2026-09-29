@@ -369,7 +369,6 @@ Every file tracked in the repository. Regenerate with
     ├── docs
     │   ├── ARCHIVE_DEPENDENCIES.md
     │   ├── COLORS.md
-    │   ├── CONPTY_FUTURE_IDEAS.md
     │   ├── CONPTY_GATE_REQUIREMENTS.md
     │   ├── CONPTY_GATE_STATUS.md
     │   ├── CONPTY_LINE_WRAP_FINDINGS.md
@@ -387,7 +386,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── HIGHLIGHTING.md
     │   ├── HIGHLIGHT.md
     │   ├── I18N.md
-    │   ├── IDEAS.md
     │   ├── IMAGES_PLAN.md
     │   ├── ISSUES
     │   │   ├── ISSUE_1400_PANEL_MODES.md
