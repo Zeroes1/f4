@@ -347,7 +347,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── COLORS.md
     │   ├── CONPTY_GATE_REQUIREMENTS.md
     │   ├── CONPTY_GATE_STATUS.md
-    │   ├── CONPTY_LINE_WRAP_FINDINGS.md
     │   ├── CONPTY_NATIVE_AGENT.md
     │   ├── CONPTY_NATIVE_AUDIT.md
     │   ├── CONPTY_NATIVE_PROBE.md
@@ -362,7 +361,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── HIGHLIGHTING.md
     │   ├── HIGHLIGHT.md
     │   ├── I18N.md
-    │   ├── IMAGES_PLAN.md
     │   ├── ISSUES
     │   │   ├── ISSUE_1400_PANEL_MODES.md
     │   │   ├── ISSUE_722_COPY_ACCESS_RIGHTS.md
@@ -383,7 +381,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── PINNED_CONSOLE.md
     │   ├── PINNED_HOST_FACTS.md
     │   ├── PLAYER.md
-    │   ├── PLUGIN_PLAN.md
     │   ├── PLUGINS.md
     │   ├── PLUGRING.md
     │   ├── PORTABILITY_BSD.md

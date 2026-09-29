@@ -11,7 +11,7 @@ text below predates this and still says MP3 in places.
 The entry point for the player work. Written so that it can be continued
 with nothing but the repository at hand. Related reading:
 
-- `IMAGES_PLAN.md` — the same kind of document for pictures; the rules in
+- unxed/f4#1685 — the same kind of document for pictures; the rules in
   its section 1 (tests with every patch, English commit messages, nothing
   copied from far2l) apply here unchanged.
 - unxed/f4#1680 — the far2l extensions / FISH+ transport ideas that the "over
@@ -158,7 +158,7 @@ In rough order of value per hour:
 7. **M3U import/export** so a playlist folder can be shared; `F5` of an
    `.m3u` file should expand into a folder.
 8. **Cover art** in the control block when the terminal has a graphics
-   protocol — the image pipeline from `IMAGES_PLAN.md` already caches
+   protocol — the image pipeline from unxed/f4#1685 already caches
    decoded pictures; ID3 APIC frames are what `id3-go` exposes.
 
 ## 4. Over the network — thoughts for later
