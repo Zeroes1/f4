@@ -525,6 +525,29 @@ func (p *procListPanel) GetSelectedName() string {
 
 func (p *procListPanel) SetContext(vfs.PanelContext) {}
 
+// SavePanelState and RestorePanelState let a bookmark return to the process
+// name under the cursor (vfs.PanelStateProvider). Process ids do not survive a
+// restart, so the name is the only stable handle; when no row carries it (the
+// list has not filled in yet, or the process is gone) the cursor stays put.
+func (p *procListPanel) SavePanelState() string { return p.GetSelectedName() }
+
+func (p *procListPanel) RestorePanelState(state string) {
+	if state == "" {
+		return
+	}
+	for pos := 0; pos < p.table.ItemCount; pos++ {
+		idx := p.table.RowAt(pos)
+		if idx < 0 || idx >= len(p.table.Rows) {
+			continue
+		}
+		if pr, ok := p.table.Rows[idx].(procRow); ok && pr.s.name == state {
+			p.table.SelectPos = pos
+			p.table.EnsureVisible()
+			return
+		}
+	}
+}
+
 func (p *procListPanel) Show(scr *vtui.ScreenBuf) {
 	p.syncColumns()
 	p.frame.SetTitle(fmt.Sprintf(i18n.Msg("ProcList.PanelTitle"), p.table.ItemCount))

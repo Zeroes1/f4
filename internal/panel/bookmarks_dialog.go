@@ -221,6 +221,10 @@ func (d *BookmarksDialog) RowText(slot int) string {
 	if path == "" {
 		path = i18n.Msg("Bookmarks.EmptySlot")
 	}
+	if id, ok := bookmarkPanelProviderID(d.Set[slot]); ok {
+		// A plugin-panel bookmark also opens that plugin over the folder.
+		path += "  [" + id + "]"
+	}
 	return fmt.Sprintf("%s %d   %s", i18n.Msg("Bookmarks.RowPrefix"), slot, dialog.EscapeAmpersand(path))
 }
 
