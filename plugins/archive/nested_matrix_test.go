@@ -9,6 +9,7 @@ import (
 
 	"github.com/dsnet/compress/bzip2"
 	"github.com/klauspost/compress/zstd"
+	"github.com/unxed/xz"
 )
 
 // nestedCodec is one compressed-TAR flavour of the nesting chain.
@@ -27,6 +28,15 @@ var nestedCodecs = []nestedCodec{
 	{".tar.bz2", func(t *testing.T, tarData []byte) []byte {
 		var buf bytes.Buffer
 		zw, err := bzip2.NewWriter(&buf, &bzip2.WriterConfig{Level: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		mustWrite(t, zw, tarData)
+		return buf.Bytes()
+	}},
+	{".tar.xz", func(t *testing.T, tarData []byte) []byte {
+		var buf bytes.Buffer
+		zw, err := xz.NewWriter(&buf)
 		if err != nil {
 			t.Fatal(err)
 		}

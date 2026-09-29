@@ -138,7 +138,7 @@ require (
 	github.com/unxed/par2 v0.1.3 // indirect
 	github.com/unxed/winkeys v0.1.1
 	github.com/unxed/xkb-go v0.1.9 // indirect
-	github.com/unxed/xz v0.1.47 // indirect
+	github.com/unxed/xz v0.1.47
 	github.com/unxed/zipcharset v0.1.5 // indirect
 	github.com/unxed/zlib4go v0.1.16 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
