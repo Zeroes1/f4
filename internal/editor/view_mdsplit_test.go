@@ -56,3 +56,28 @@ func TestMarkdownSplitClickMovesCursor(t *testing.T) {
 		t.Error("a right click moved the cursor")
 	}
 }
+
+// The preview follows the cursor by the same proportion, straight to the row
+// (no wheel steps), never past the row it was asked for.
+func TestMarkdownSplitScrollFollowsCursor(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	var doc strings.Builder
+	for i := 0; i < 80; i++ {
+		fmt.Fprintf(&doc, "paragraph %d\n\n", i)
+	}
+	ev := NewEditorView(piecetable.New([]byte(doc.String())), nil, "notes.md")
+	defer ev.Close()
+	ev.ResizeConsole(80, 25)
+	ev.ToggleMarkdownSplit()
+	view := ev.mdSplit.view
+	if got := view.ScrollTop(); got != 0 {
+		t.Fatalf("scroll with the cursor on the first line = %d", got)
+	}
+	ev.CursorLine = 80
+	ev.syncMarkdownSplitScroll()
+	want := 80 * len(view.CurrentTopic().Lines) / ev.Li.LineCount()
+	if got := view.ScrollTop(); got <= 0 || got > want {
+		t.Fatalf("scroll with the cursor in the middle = %d, want 1..%d", got, want)
+	}
+}

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/mdmath"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -92,8 +91,8 @@ func (ev *EditorView) refreshMarkdownSplit() {
 }
 
 // syncMarkdownSplitScroll scrolls the preview to the same relative place as
-// the cursor, with the wheel the viewer already understands: it has no API
-// for an absolute scroll position.
+// the cursor. The preview keeps no map from its rows to source lines, so the
+// place is a proportion: line N of L is row N*R/L of R.
 func (ev *EditorView) syncMarkdownSplitScroll() {
 	st := ev.mdSplit
 	if st == nil || st.view == nil || st.view.CurrentTopic() == nil || ev.Li == nil {
@@ -104,14 +103,7 @@ func (ev *EditorView) syncMarkdownSplitScroll() {
 	if total <= 0 || rows <= 0 {
 		return
 	}
-	target := ev.CursorLine * rows / total
-	step := vtui.WheelLinesPerNotch()
-	if step < 1 {
-		step = 1
-	}
-	for i := 0; i < target/step; i++ {
-		st.view.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, WheelDirection: -1})
-	}
+	st.view.SetScrollTop(ev.CursorLine * rows / total)
 }
 
 // scheduleMarkdownSplit restarts the pause timer after a key, so the preview
@@ -183,10 +175,7 @@ func (ev *EditorView) markdownSplitClick(e *vtinput.InputEvent) bool {
 	if mx < tx1 || mx > tx2 || my < ty1 || my > ty2 {
 		return false
 	}
-	scroll, ok := dialog.HelpViewScrollTop(st.view)
-	if !ok {
-		return false
-	}
+	scroll := st.view.ScrollTop()
 	row := my - ty1
 	if row >= topic.StickyRows {
 		row += scroll
