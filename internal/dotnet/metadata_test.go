@@ -165,7 +165,7 @@ func wrapPE(metadata []byte, clr bool) []byte {
 	le.PutUint32(image[secOff+20:], rawOff)
 	le.PutUint32(image[rawOff:], corSize)
 	le.PutUint32(image[rawOff+8:], virtAddr+metaOff)
-	le.PutUint32(image[rawOff+12:], uint32(len(metadata)))
+	le.PutUint32(image[rawOff+12:], uint32(len(metadata))) //nolint:gosec // test data
 	copy(image[rawOff+corSize:], metadata)
 	return image
 }
