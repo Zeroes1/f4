@@ -280,6 +280,10 @@ type windowsAttributesEdit struct {
 	// setATime writes the access time the Accessed field holds (f4#1404).
 	setATime bool
 	atime    time.Time
+	// setBTime writes the creation time the Created field holds, where the
+	// platform can set one (vfs.OSVFS.SupportsSetBTime; f4#1404).
+	setBTime bool
+	btime    time.Time
 	// winAttrs holds the new ordinary flags, keepWinAttrs the ordinary flags
 	// each object keeps.
 	winAttrs     uint32
@@ -299,6 +303,9 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 		}
 		if edit.setATime {
 			item.ATime = edit.atime
+		}
+		if edit.setBTime {
+			item.BTime, item.SetBTime = edit.btime, true
 		}
 		if edit.setUnixMode {
 			item.UnixMode = edit.unixMode
@@ -1058,12 +1065,31 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	mainVBox.Add(rowTime, vtui.Margins{Top: 1}, vtui.AlignFill)
 
 	var rowCreated, rowAccessed *vtui.HBoxLayout
+	// Created is editable where the platform can set a creation time (native
+	// Windows), and only for a real local file system; elsewhere it is shown
+	// and cannot be changed. Like Accessed it is blank for a multiple
+	// selection, and a field left untouched changes nothing.
+	var editCreated *vtui.Edit
+	initialCreated := ""
 	if showCreated {
-		rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 54, 0, i18n.Msg("Attributes.Created"), createdText)
+		if osv, ok := v.(*vfs.OSVFS); ok && osv.SupportsSetBTime() {
+			if !multiple {
+				initialCreated = createdText
+			}
+			editCreated = vtui.NewEdit(0, 0, 20, initialCreated)
+			lblCreated := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Created")), vtui.Palette[vtui.ColDialogText])
+			rowCreated = vtui.NewHBoxLayout(0, 0, 54, 1)
+			rowCreated.Add(lblCreated, vtui.Margins{Right: 1}, vtui.AlignLeft)
+			rowCreated.Add(editCreated, vtui.Margins{}, vtui.AlignLeft)
+			dlg.AddItem(lblCreated)
+			dlg.AddItem(editCreated)
+			mainVBox.Add(rowCreated, vtui.Margins{Top: 0}, vtui.AlignFill)
+		} else {
+			rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 54, 0, i18n.Msg("Attributes.Created"), createdText)
+		}
 	}
 	// Accessed is editable (f4#1404), like Last write; blank for a multiple
-	// selection, and a field left untouched changes nothing. Created stays
-	// read-only.
+	// selection, and a field left untouched changes nothing.
 	var editAccessed *vtui.Edit
 	initialAccessed := ""
 	if showAccessed {
@@ -1184,6 +1210,16 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 					return
 				}
 				edit.atime, edit.setATime = nt, true
+			}
+		}
+		if editCreated != nil {
+			if text := editCreated.GetText(); text != initialCreated {
+				nt, err := time.ParseInLocation(attributesTimeFormat, text, time.Local)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Attributes.MTimeInvalidError"), i18n.Msg("Attributes.MTimeFormatHint")), []string{"&Ok"})
+					return
+				}
+				edit.btime, edit.setBTime = nt, true
 			}
 		}
 
