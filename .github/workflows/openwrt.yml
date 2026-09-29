@@ -15,13 +15,15 @@ permissions:
 
 jobs:
   build:
-    name: Lite (${{ matrix.name }})
+    name: ${{ matrix.profile }} (${{ matrix.target.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
+        # extralite implies lite (see docs/OPENWRT.md for what it leaves out).
+        profile: [lite, extralite]
+        target:
           - {name: mipsle-softfloat, goarch: mipsle, extra: "GOMIPS=softfloat"}
           - {name: arm-v7, goarch: arm, extra: "GOARM=7"}
           - {name: arm64, goarch: arm64, extra: "GOARM64=v8.0"}
@@ -41,26 +43,27 @@ jobs:
       - name: Build
         env:
           GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
+          GOARCH: ${{ matrix.target.goarch }}
           CGO_ENABLED: "0"
-          EXTRA: ${{ matrix.extra }}
-          NAME: ${{ matrix.name }}
+          EXTRA: ${{ matrix.target.extra }}
+          NAME: ${{ matrix.profile }}-linux-${{ matrix.target.name }}
+          TAGS: ${{ matrix.profile == 'extralite' && 'lite,extralite' || 'lite' }}
         run: |
           mkdir -p dist
-          env "$EXTRA" go build -tags lite,vtui_noebiten,vtui_nogogpu -trimpath -ldflags "-s -w" -o "dist/f4-lite-linux-$NAME" ./cmd/f4
+          env "$EXTRA" go build -tags "$TAGS,vtui_noebiten,vtui_nogogpu" -trimpath -ldflags "-s -w" -o "dist/f4-$NAME" ./cmd/f4
           {
-            echo "### f4 lite, linux/$NAME"
+            echo "### f4 $NAME"
             echo
             echo '```'
-            ls -l "dist/f4-lite-linux-$NAME" | awk '{print $5, $9}'
-            sha256sum "dist/f4-lite-linux-$NAME"
+            echo "$(stat -c %s "dist/f4-$NAME") bytes"
+            sha256sum "dist/f4-$NAME"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Smoke check (native build only)
-        if: matrix.goarch == 'amd64'
+        if: matrix.target.goarch == 'amd64'
         run: |
-          python3 scripts/openwrt_smoke.py dist/f4-lite-linux-amd64 | tee smoke.txt
+          python3 scripts/openwrt_smoke.py "dist/f4-${{ matrix.profile }}-linux-amd64" | tee smoke.txt
           {
             echo "### Smoke check"
             echo
@@ -72,6 +75,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: f4-lite-linux-${{ matrix.name }}
-          path: dist/f4-lite-linux-${{ matrix.name }}
+          name: f4-${{ matrix.profile }}-linux-${{ matrix.target.name }}
+          path: dist/f4-${{ matrix.profile }}-linux-${{ matrix.target.name }}
           if-no-files-found: error
