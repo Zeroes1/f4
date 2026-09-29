@@ -167,8 +167,8 @@ func TestShowPanelModesMenuOpensAtActiveMode(t *testing.T) {
 func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
 	t.Helper()
 	children := dlg.GetChildren()
-	if len(children) != 11 {
-		t.Fatalf("dialog has %d children, want 11", len(children))
+	if len(children) != 15 {
+		t.Fatalf("dialog has %d children, want 15", len(children))
 	}
 	var assertOk bool
 	if editTypes, assertOk = children[3].(*vtui.Edit); !assertOk {
@@ -177,17 +177,17 @@ func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidth
 	if editWidths, assertOk = children[5].(*vtui.Edit); !assertOk {
 		t.Fatalf("children[5] = %T, want *vtui.Edit", children[5])
 	}
-	if fullScreen, assertOk = children[6].(*vtui.Checkbox); !assertOk {
-		t.Fatalf("children[6] = %T, want *vtui.Checkbox", children[6])
+	if fullScreen, assertOk = children[10].(*vtui.Checkbox); !assertOk {
+		t.Fatalf("children[10] = %T, want *vtui.Checkbox", children[10])
 	}
-	if ok, assertOk = children[7].(*vtui.Button); !assertOk {
-		t.Fatalf("children[7] = %T, want *vtui.Button", children[7])
+	if ok, assertOk = children[11].(*vtui.Button); !assertOk {
+		t.Fatalf("children[11] = %T, want *vtui.Button", children[11])
 	}
-	if reset, assertOk = children[8].(*vtui.Button); !assertOk {
-		t.Fatalf("children[8] = %T, want *vtui.Button", children[8])
+	if reset, assertOk = children[12].(*vtui.Button); !assertOk {
+		t.Fatalf("children[12] = %T, want *vtui.Button", children[12])
 	}
-	if cancel, assertOk = children[9].(*vtui.Button); !assertOk {
-		t.Fatalf("children[9] = %T, want *vtui.Button", children[9])
+	if cancel, assertOk = children[13].(*vtui.Button); !assertOk {
+		t.Fatalf("children[13] = %T, want *vtui.Button", children[13])
 	}
 	return
 }

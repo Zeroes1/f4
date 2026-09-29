@@ -3186,9 +3186,14 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 				rightStr = runewidth.Truncate(rightStr, availW, "")
 			}
 
-			p.DrawString(fp.X1+1, fp.Y2-1, nameStr, attrInfo)
-			if rightStr != "" {
-				p.DrawString(fp.X2-runewidth.StringWidth(rightStr), fp.Y2-1, rightStr, attrInfo)
+			if line, custom := fp.statusLineText(e, (fp.X2-1)-(fp.X1+1)+1); custom {
+				// The mode has its own status columns (f4#410).
+				p.DrawString(fp.X1+1, fp.Y2-1, line, attrInfo)
+			} else {
+				p.DrawString(fp.X1+1, fp.Y2-1, nameStr, attrInfo)
+				if rightStr != "" {
+					p.DrawString(fp.X2-runewidth.StringWidth(rightStr), fp.Y2-1, rightStr, attrInfo)
+				}
 			}
 		}
 	}

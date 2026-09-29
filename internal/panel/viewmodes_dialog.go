@@ -106,7 +106,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	types, widths := ViewSettingsToText(settings.Columns)
 
 	const width = 64
-	const height = 15
+	const height = 20
 	dlg := vtui.NewCenteredDialog(width, height, " "+panelViewModeName(key)+" ")
 	dlg.ShowClose = true
 
@@ -117,6 +117,9 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	builtinName := i18n.Msg(panelViewModeNameKeys[key])
 	editTypes := vtui.NewEdit(0, 0, width-6, types)
 	editWidths := vtui.NewEdit(0, 0, width-6, widths)
+	statusTypes, statusWidths := ViewSettingsToText(settings.StatusColumns)
+	editStatusTypes := vtui.NewEdit(0, 0, width-6, statusTypes)
+	editStatusWidths := vtui.NewEdit(0, 0, width-6, statusWidths)
 	chkFullScreen := vtui.NewCheckbox(0, 0, i18n.Msg("Panel.Modes.FullScreen"), false)
 	if settings.FullScreen {
 		chkFullScreen.State = 1
@@ -128,6 +131,8 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	btnColumns := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.EditColumns"))
 	lblName := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.Name"), editName)
 	lblTypes := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnTypes"), editTypes)
+	lblStatusTypes := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.StatusColumnTypes"), editStatusTypes)
+	lblStatusWidths := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.StatusColumnWidths"), editStatusWidths)
 	lblWidths := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnWidths"), editWidths)
 
 	dlg.AddItem(lblName)
@@ -136,6 +141,10 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	dlg.AddItem(editTypes)
 	dlg.AddItem(lblWidths)
 	dlg.AddItem(editWidths)
+	dlg.AddItem(lblStatusTypes)
+	dlg.AddItem(editStatusTypes)
+	dlg.AddItem(lblStatusWidths)
+	dlg.AddItem(editStatusWidths)
 	dlg.AddItem(chkFullScreen)
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnReset)
@@ -149,6 +158,10 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	vbox.Add(editTypes, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(lblWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editWidths, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblStatusTypes, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(editStatusTypes, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblStatusWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(editStatusWidths, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(chkFullScreen, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	btnRow := vtui.NewHBoxLayout(0, 0, width-6, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
@@ -193,7 +206,16 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 		if name == builtinName {
 			name = ""
 		}
-		changed := &PanelViewSettings{Name: name, Columns: columns, FullScreen: chkFullScreen.State != 0}
+		// Empty status columns keep the built-in status line (f4#410).
+		var status []PanelColumn
+		if strings.TrimSpace(editStatusTypes.GetText()) != "" {
+			status, err = TextToViewSettings(editStatusTypes.GetText(), editStatusWidths.GetText())
+			if err != nil {
+				vtui.ShowMessageOn(dlg, " "+i18n.Msg("Panel.Modes.Title")+" ", panelModeErrorText(err), []string{"&Ok"})
+				return
+			}
+		}
+		changed := &PanelViewSettings{Name: name, Columns: columns, FullScreen: chkFullScreen.State != 0, StatusColumns: status}
 		finish(changed, false)
 	}
 

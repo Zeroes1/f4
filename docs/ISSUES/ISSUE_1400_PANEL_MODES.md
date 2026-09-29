@@ -14,6 +14,14 @@ far2l's column syntax (`mix/panelmix.cpp`) and width distribution
   to the built-in definition. A name given here (f4#410) replaces the built-in
   one in the list and in the Left and Right menus; leaving the built-in name
   keeps it following the interface language.
+- **Status line columns** (f4#410): the mode dialog has *Status line column
+  types* and *widths*, the far2l status columns of a mode, written as
+  `StatusColumns` and `StatusColumnWidths` in `panel_modes.ini`. When the
+  status line under the panel is switched on (`ShowPanelFileInfo`) and the
+  mode has status columns, the line shows the entry under the cursor in
+  those columns, laid out like the panel's (`FileSystemPanel.statusLineText`,
+  one blank cell between columns, sizes right aligned). Empty (the default)
+  keeps f4's own line: the name, then the size and date.
 - **Columns...** in the mode dialog opens the columns as a list, one column
   per row with its type, header name and width (f4#410): Insert adds a column
   after the cursor from a menu of types, Delete removes one, Ctrl+Up and
@@ -95,8 +103,6 @@ built-in ones are written, and the file is removed when none do.
 
 ## Not done yet
 
-- The status line (`ShowPanelFileInfo`) keeps its own layout; far2l's status
-  columns per mode are not implemented.
 - far2l's per-mode case conversion and extension alignment are not
   implemented; extension alignment stays the global setting.
 - Descriptions (`Z`) and custom columns (`C0`..`C19`) are not available: f4
