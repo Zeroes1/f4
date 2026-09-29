@@ -1,6 +1,7 @@
 package update
 
 import (
+	"debug/buildinfo"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -55,12 +56,19 @@ type generation struct {
 // one whenever pickAsset or editionAssetSuffixes changes what it picks: the
 // builds released before the change keep the old rule for good. The last one
 // is the current code.
+//
+// Only the current code knows the Windows 7/8/8.1 build ("windows7"). Every
+// earlier one of those builds (published from 2026-08-20) asks for the
+// regular windows/amd64 archive, exactly as a regular build does, so no
+// asset name can serve them their own; they are the regular windows/amd64
+// flavor here, and they install a build that does not start on their system
+// until reinstalled by hand.
 var generations = []generation{
 	{
 		// No .7z, no Termux name, no musl, no lite edition.
 		who: "f4 v0.1.2-alpha and v0.1.3-alpha",
 		suffixes: func(f flavor) []string {
-			if f.lite || f.libc != "" || f.goos == "android" {
+			if f.lite || f.libc != "" || f.goos == "android" || f.goos == "windows7" {
 				return nil
 			}
 			if f.goos == "windows" {
@@ -72,7 +80,7 @@ var generations = []generation{
 	{
 		who: "f4 v0.2.0-beta to v0.3.0-beta and nightlies before 2026-09-27",
 		suffixes: func(f flavor) []string {
-			if f.lite {
+			if f.lite || f.goos == "windows7" {
 				return nil
 			}
 			return assetSuffixes(f.goos, f.goarch, f.libc)
@@ -86,7 +94,7 @@ var generations = []generation{
 		// builds say "no suitable build found" until reinstalled by hand.
 		who: "f4 nightlies from 2026-09-27 to the #1656 fix",
 		suffixes: func(f flavor) []string {
-			if f.lite && f.goos == "windows" {
+			if (f.lite && f.goos == "windows") || f.goos == "windows7" {
 				return nil
 			}
 			return editionAssetSuffixes(f.lite, f.goos, f.goarch, f.libc)
@@ -130,6 +138,8 @@ var installedFlavors = []flavor{
 	// The legacy (ReactOS/XP) build; f4-legacy-windows-386.zip is its own.
 	{goos: "windows", goarch: "386"},
 	{goos: "windows", goarch: "amd64", lite: true},
+	// The Windows 7/8/8.1 build, f4-windows7-amd64.zip (see releaseOS).
+	{goos: "windows7", goarch: "amd64"},
 	{goos: "darwin", goarch: "amd64"},
 	{goos: "darwin", goarch: "arm64"},
 	{goos: "freebsd", goarch: "amd64"},
@@ -153,6 +163,12 @@ type ReleaseArchive struct {
 	Kind string
 	// Executable is the file it has to replace.
 	Executable string
+	// GOOS and GOARCH are what the executable must be built for, and Edition
+	// the build tag of the edition its name promises ("lite", "win7",
+	// "go2xp" for the legacy build), empty for the regular edition. The
+	// release check reads them back from the executable's build information;
+	// an empty GOOS skips that.
+	GOOS, GOARCH, Edition string
 }
 
 // ReleaseAudit is what AuditRelease found.
@@ -169,7 +185,14 @@ type ReleaseAudit struct {
 // edition; taking anything else, or nothing where the current code finds an
 // archive, is a problem.
 func AuditRelease(names []string) ReleaseAudit {
-	names = slices.Sorted(slices.Values(names))
+	return AuditListedRelease(slices.Sorted(slices.Values(names)))
+}
+
+// AuditListedRelease is AuditRelease over names in the order given, for a
+// published release read back from the GitHub API: the order by name is
+// what the API does, not what it promises, and the builds take the first
+// match in whatever order it is.
+func AuditListedRelease(names []string) ReleaseAudit {
 	flavors := slices.Clone(installedFlavors)
 	for _, name := range names {
 		if f, ok := publishedFlavor(name); ok && !slices.Contains(flavors, f) {
@@ -205,14 +228,14 @@ func AuditRelease(names []string) ReleaseAudit {
 			}
 			if !seen[name] {
 				seen[name] = true
-				audit.Archives = append(audit.Archives, ReleaseArchive{Name: name, Kind: kind, Executable: archiveExecutable(name, f)})
+				audit.Archives = append(audit.Archives, releaseArchive(name, kind, f))
 			}
 		}
 	}
 	return audit
 }
 
-// pick is the generation's choice among names, which are sorted.
+// pick is the generation's choice among names, in the order the API lists them.
 func (g generation) pick(names, suffixes []string) (name, kind string) {
 	for _, suffix := range suffixes {
 		for _, n := range names {
@@ -248,7 +271,8 @@ func acceptedArchives(names, suffixes []string) []string {
 // publishedFlavor reads the platform from the name of an archive of f4, so a
 // platform added to the release is checked without being listed above.
 // Names that are not "f4-[lite-]<os>-[musl-]<arch>.<tar.gz|zip|7z>" -- the
-// macOS .app.zip, the Termux .deb, f4-windows7-amd64.zip -- say nothing.
+// macOS .app.zip, the Termux .deb -- say nothing. <os> is the name releaseOS
+// gives: a GOOS, "termux" for Android, or "windows7".
 func publishedFlavor(name string) (flavor, bool) {
 	rest, ok := strings.CutPrefix(name, releaseAssetPrefix)
 	if !ok {
@@ -282,17 +306,17 @@ func publishedFlavor(name string) (flavor, bool) {
 	case "legacy-windows":
 		f.goos = "windows"
 	}
-	if !knownGOOS[f.goos] || !knownGOARCH[f.goarch] {
+	if !knownAssetOS[f.goos] || !knownGOARCH[f.goarch] {
 		return flavor{}, false
 	}
 	return f, true
 }
 
 var (
-	knownGOOS = map[string]bool{
+	knownAssetOS = map[string]bool{
 		"aix": true, "android": true, "darwin": true, "dragonfly": true, "freebsd": true,
 		"illumos": true, "ios": true, "linux": true, "netbsd": true, "openbsd": true,
-		"plan9": true, "solaris": true, "windows": true,
+		"plan9": true, "solaris": true, "windows": true, "windows7": true,
 	}
 	knownGOARCH = map[string]bool{
 		"386": true, "amd64": true, "arm": true, "arm64": true, "loong64": true,
@@ -301,13 +325,38 @@ var (
 	}
 )
 
+// releaseArchive describes an archive a build of flavor f takes. What the
+// executable in it must be built for comes from the archive's own name: a
+// musl build may take the regular Linux archive.
+func releaseArchive(name, kind string, f flavor) ReleaseArchive {
+	a := ReleaseArchive{Name: name, Kind: kind, Executable: archiveExecutable(name, f)}
+	own, ok := publishedFlavor(name)
+	if !ok {
+		return a
+	}
+	a.GOOS, a.GOARCH = own.goos, own.goarch
+	switch {
+	case own.lite:
+		a.Edition = "lite"
+	case own.goos == "windows7":
+		a.GOOS, a.Edition = "windows", "win7"
+	case strings.HasPrefix(name, releaseAssetPrefix+"legacy-"):
+		a.Edition = "go2xp"
+	}
+	return a
+}
+
+// editionTags are the build tags that make an edition. A build carries the
+// one its archive's name promises, and none of the others.
+var editionTags = []string{"lite", "win7", "go2xp"}
+
 // archiveExecutable is the file an archive has to replace: f4, f4.exe, and
 // for the legacy Windows build the f4-legacy.exe its archive holds.
 func archiveExecutable(name string, f flavor) string {
 	switch {
 	case strings.HasPrefix(name, releaseAssetPrefix+"legacy-"):
 		return "f4-legacy.exe"
-	case f.goos == "windows":
+	case f.goos == "windows" || f.goos == "windows7":
 		return "f4.exe"
 	}
 	return "f4"
@@ -315,7 +364,8 @@ func archiveExecutable(name string, f flavor) string {
 
 // CheckReleaseArchive unpacks a release archive the way the updater does,
 // over a stand-in for the executable it names, and fails unless the
-// executable was replaced.
+// executable was replaced by a build for the platform and edition the
+// archive's name promises.
 func CheckReleaseArchive(data []byte, a ReleaseArchive) error {
 	dir, err := os.MkdirTemp("", "f4-release-check-*")
 	if err != nil {
@@ -326,5 +376,39 @@ func CheckReleaseArchive(data []byte, a ReleaseArchive) error {
 	if err := os.WriteFile(exe, []byte("installed f4"), 0o755); err != nil { // #nosec G306 -- the stand-in is an executable the archive must replace.
 		return err
 	}
-	return installOver(exe, data, a.Kind)
+	if err := installOver(exe, data, a.Kind); err != nil {
+		return err
+	}
+	if a.GOOS == "" {
+		return nil
+	}
+	return checkBuild(exe, a)
+}
+
+// checkBuild compares the executable's build information with what the
+// archive promises: the wrong platform does not start, and the wrong edition
+// takes its users with it into another update channel.
+func checkBuild(exe string, a ReleaseArchive) error {
+	info, err := buildinfo.ReadFile(exe)
+	if err != nil {
+		return fmt.Errorf("%s carries no Go build information: %w", a.Executable, err)
+	}
+	settings := map[string]string{}
+	for _, s := range info.Settings {
+		settings[s.Key] = s.Value
+	}
+	if settings["GOOS"] != a.GOOS || settings["GOARCH"] != a.GOARCH {
+		return fmt.Errorf("%s is built for %s/%s, not %s/%s", a.Executable, settings["GOOS"], settings["GOARCH"], a.GOOS, a.GOARCH)
+	}
+	tags := strings.Split(settings["-tags"], ",")
+	for _, tag := range editionTags {
+		if slices.Contains(tags, tag) != (tag == a.Edition) {
+			want := "the regular edition"
+			if a.Edition != "" {
+				want = "-tags " + a.Edition
+			}
+			return fmt.Errorf("%s is built with -tags %q, the archive's name wants %s", a.Executable, settings["-tags"], want)
+		}
+	}
+	return nil
 }

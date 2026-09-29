@@ -32,7 +32,8 @@ func targz(t *testing.T, name, body string) []byte {
 
 // A release directory holding only the Linux and macOS amd64 archives fails
 // on every other platform, and names the plugin archive older builds would
-// install in f4's place; what it does hold is unpacked and passes.
+// install in f4's place. What it does hold is unpacked, and refused because
+// the "f4" in it is not a Go build for its platform.
 func TestRunReportsWhatInstalledBuildsWouldMisread(t *testing.T) {
 	dir := t.TempDir()
 	for name, entry := range map[string]string{
@@ -51,7 +52,7 @@ func TestRunReportsWhatInstalledBuildsWouldMisread(t *testing.T) {
 	for _, want := range []string{
 		"::error::no archive of f4 for windows/amd64",
 		"on darwin/amd64 would install android-plugin-darwin-amd64.tar.gz",
-		"ok: f4-linux-amd64.tar.gz replaces f4",
+		"::error::f4-linux-amd64.tar.gz: f4 carries no Go build information",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -68,5 +69,29 @@ func TestRunRefusesAnArchiveWithoutTheExecutable(t *testing.T) {
 	run([]string{dir}, &out)
 	if !strings.Contains(out.String(), "::error::f4-linux-amd64.tar.gz: the update archive did not replace") {
 		t.Errorf("an archive without f4 passed:\n%s", out.String())
+	}
+}
+
+// -listed replays a published release in the order the API returned it.
+func TestRunListedReplaysTheAPIOrder(t *testing.T) {
+	listed := filepath.Join(t.TempDir(), "assets.txt")
+	if err := os.WriteFile(listed, []byte("f4-lite-linux-amd64.tar.gz\nf4-linux-amd64.tar.gz\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if got := run([]string{"-listed", listed}, &out); got != 1 {
+		t.Fatalf("run(-listed) = %d, want 1\n%s", got, out.String())
+	}
+	if !strings.Contains(out.String(), "on linux/amd64 would install f4-lite-linux-amd64.tar.gz") {
+		t.Errorf("the listed order was not replayed:\n%s", out.String())
+	}
+}
+
+func TestRunRejectsBadArguments(t *testing.T) {
+	for _, args := range [][]string{nil, {"a", "b"}, {"-listed", "x", "dir"}, {"-nope"}} {
+		var out bytes.Buffer
+		if got := run(args, &out); got != 2 {
+			t.Errorf("run(%q) = %d, want 2", args, got)
+		}
 	}
 }
