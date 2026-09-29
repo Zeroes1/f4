@@ -138,7 +138,7 @@ func HandleHelpSearchHotkey(e *vtinput.InputEvent) bool {
 
 	if (e.VirtualKeyCode == vtinput.VK_F3 && !ctrl && !alt) ||
 		(e.VirtualKeyCode == vtinput.VK_RETURN && ctrl && !alt) {
-		if markdown && !(CurrentHelpSearch != nil && CurrentHelpSearch.Frame == frame && len(CurrentHelpSearch.Matches) > 0) {
+		if markdown && (CurrentHelpSearch == nil || CurrentHelpSearch.Frame != frame || len(CurrentHelpSearch.Matches) == 0) {
 			// Nothing to step through: F3 is the viewer's "close", and the
 			// view itself answers it.
 			return false

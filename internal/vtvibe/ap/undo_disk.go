@@ -59,18 +59,18 @@ func SaveUndo(u *Undo, keep int) error {
 		return nil
 	}
 	root := filepath.Join(u.projectDir, undoRelDir)
-	if err := os.MkdirAll(root, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o750); err != nil {
 		return err
 	}
 	// The snapshots hold copies of project files; keep them out of version
 	// control without touching the project's own ignore rules.
 	ignore := filepath.Join(u.projectDir, ".vtvibe", ".gitignore")
 	if _, err := os.Lstat(ignore); errors.Is(err, fs.ErrNotExist) {
-		_ = os.WriteFile(ignore, []byte("*\n"), 0o644)
+		_ = os.WriteFile(ignore, []byte("*\n"), 0o600)
 	}
 	stamp := time.Now().UTC().Format("20060102T150405.000000000Z")
 	dir := filepath.Join(root, stamp)
-	if err := os.Mkdir(dir, 0o755); err != nil {
+	if err := os.Mkdir(dir, 0o750); err != nil {
 		return err
 	}
 	if err := u.writeDisk(dir); err != nil {
@@ -86,7 +86,7 @@ func SaveUndo(u *Undo, keep int) error {
 
 func (u *Undo) writeDisk(dir string) error {
 	blobs := filepath.Join(dir, "blobs")
-	if err := os.Mkdir(blobs, 0o755); err != nil {
+	if err := os.Mkdir(blobs, 0o750); err != nil {
 		return err
 	}
 	n := 0

@@ -2215,17 +2215,17 @@ func (pf *PanelsFrame) pollManagedExecutionDebounce() {
 		pf.managedExecIdleStreak = 0
 		return
 	}
+	active := pf.GetActivePTY()
+	// Noted even inside the guard window: a command that started and was
+	// stopped within it has still been seen busy.
+	if active != nil && active.IsBusy() {
+		pf.managedExecSawBusy = true
+	}
 	if time.Since(pf.managedExecStartedAt) < managedExecStartGuard {
 		pf.managedExecIdleStreak = 0
 		return
 	}
-	active := pf.GetActivePTY()
-	if active == nil {
-		pf.managedExecIdleStreak = 0
-		return
-	}
-	if active.IsBusy() {
-		pf.managedExecSawBusy = true
+	if active == nil || active.IsBusy() {
 		pf.managedExecIdleStreak = 0
 		return
 	}
