@@ -62,8 +62,9 @@ type statusPanel struct {
 	table *vtui.Table
 	dir   string // repository-relative directory git status ran in; also this panel's identity for GetSelectedName's callers.
 
-	branch   string
-	detached bool
+	branch    string
+	detached  bool
+	hasCommit bool // the repository has at least one commit (something to amend)
 }
 
 // newStatusPanel is a vfs.PanelProvider.Open callback: dir comes from
@@ -118,6 +119,7 @@ func (p *statusPanel) reload() error {
 	result := parseStatus(output)
 	p.branch = result.Branch
 	p.detached = result.Detached
+	p.hasCommit = result.HasCommit
 
 	rows := make([]vtui.TableRow, len(result.Entries))
 	for i, entry := range result.Entries {

@@ -425,7 +425,10 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - Ok then runs `git commit --amend -m <message>` (`runCommitAmend`): the
   staged changes are folded into the last commit and its message is replaced.
   Without the box nothing changes: `runCommit` is `git commit -m`.
-- Ctrl+K still shows "nothing staged" instead of the dialog when the index is
-  empty, so a message-only amend needs something staged for now.
+- With an empty index Ctrl+K still opens the dialog when the repository has a
+  commit (`statusResult.HasCommit`, from `# branch.oid`): amend then just
+  rewords the last commit. A plain commit with nothing staged answers "nothing
+  staged to commit" as before, and Ctrl+K in a repository with no commit and
+  nothing staged shows the toast without a dialog.
 - `showCommitMessageEditor` keeps its signature and shows no checkbox;
   `showCommitMessageEditorEx` is the amend-aware variant the panel uses.

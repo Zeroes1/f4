@@ -14,7 +14,7 @@ func TestParseStatusCleanRepoOnMain(t *testing.T) {
 		"# branch.ab +0 -0\n"
 
 	got := parseStatus([]byte(output))
-	want := statusResult{Branch: "main"}
+	want := statusResult{Branch: "main", HasCommit: true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parseStatus(clean) = %+v, want %+v", got, want)
 	}

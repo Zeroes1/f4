@@ -62,12 +62,24 @@ func (p *statusPanel) hasStagedChanges() bool {
 // this shows a toast instead, the same guard actionMkDir and friends skip
 // only because they have no equivalent "there is nothing to do" case.
 func (p *statusPanel) showCommitDialog() {
-	if !p.hasStagedChanges() {
+	// With an empty index the dialog still opens when there is a commit to
+	// amend: amending only rewords it, so it needs nothing staged.
+	if !p.hasStagedChanges() && !p.hasCommit {
 		toast.Show(i18n.Msg("GitStatus.NothingToCommit"), 3e9)
 		return
 	}
 
-	showCommitMessageEditorEx("", headCommitMessage(p.dir), p.onCommitMessageEnteredAmend)
+	showCommitMessageEditorEx("", headCommitMessage(p.dir), p.onCommitDialogOk)
+}
+
+// onCommitDialogOk is the commit dialog's OnOk: a plain commit needs
+// something staged, an amend does not.
+func (p *statusPanel) onCommitDialogOk(message string, amend bool) {
+	if !amend && !p.hasStagedChanges() {
+		toast.Show(i18n.Msg("GitStatus.NothingToCommit"), 3e9)
+		return
+	}
+	p.onCommitMessageEnteredAmend(message, amend)
 }
 
 // headCommitMessage is the full message of the last commit, or "" when the
