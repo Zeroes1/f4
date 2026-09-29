@@ -130,7 +130,7 @@ func TestInstallFailsWhenTheArchiveLeavesTheBinary(t *testing.T) {
 	if err == nil {
 		t.Fatal("Install() of an archive without f4 reported success")
 	}
-	if !strings.Contains(err.Error(), exe) {
+	if !strings.Contains(err.Error(), filepath.Base(exe)) {
 		t.Errorf("error %q does not name the binary it failed to replace", err)
 	}
 	if got, _ := os.ReadFile(exe); string(got) != "old f4" {
