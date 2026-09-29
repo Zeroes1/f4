@@ -621,6 +621,15 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCalcDirSizeAtCursor(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "File.AssemblyInfo",
+		Area:        "Shell",
+		Label:       "Assembly Info",
+		LabelKey:    "Action.File.AssemblyInfo",
+		Description: "Show the identity, references, types and resources of a .NET assembly",
+		DescKey:     "Action.File.AssemblyInfo.Desc",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionAssemblyInfo(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "File.Edit",
 		Area:        "Shell",
 		Label:       "Edit",

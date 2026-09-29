@@ -716,6 +716,8 @@ Action.Panel.GroupByModeText=Группировать по: Тип / режим 
 Action.Panel.GroupByKind=Группировать по: Вид объекта
 Action.Panel.GroupByHidden=Группировать по: Скрытый
 Action.Panel.GroupByExecutable=Группировать по: Исполняемый
+Action.File.AssemblyInfo=&Сборка .NET: сведения
+Action.File.AssemblyInfo.Desc=Показать имя, ссылки, типы и ресурсы сборки .NET под курсором
 
 ProcList.ColumnPID=PID
 ProcList.ColumnName=Имя
@@ -3884,3 +3886,15 @@ Group.Month9=Сентябрь
 Group.Month10=Октябрь
 Group.Month11=Ноябрь
 Group.Month12=Декабрь
+
+DotNet.NotAssembly=%s не является сборкой .NET
+DotNet.ReadFailed=Не удалось прочитать %s: %v
+DotNet.Assembly=Сборка:
+DotNet.Culture=культура
+DotNet.Module=Модуль .NET без манифеста сборки.
+DotNet.Runtime=Версия метаданных среды выполнения:
+DotNet.References=Ссылки
+DotNet.Types=Типы
+DotNet.GlobalNamespace=(глобальное пространство имён)
+DotNet.Resources=Ресурсы
+DotNet.More=... и ещё %d

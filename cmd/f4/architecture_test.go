@@ -102,6 +102,10 @@ var architectureLayers = map[string]int{
 	// ```mermaid blocks of a Markdown document. A leaf over the standard library.
 	"internal/mermaid": 0,
 
+	// The reader of .NET assembly metadata: pure Go over debug/pe, with the
+	// report text taken from internal/i18n.
+	"internal/dotnet": 1,
+
 	// Where f4 keeps the indexes of the tar archives it opened: paths and file
 	// names only, so the archive plugin and the file operations can share it.
 	"internal/tarindexcache": 0,

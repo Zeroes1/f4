@@ -36,6 +36,7 @@ var actionMenuOrder = []string{
 	"Debug.ScreenDump",
 	"File.View",
 	"File.ViewHex",
+	"File.AssemblyInfo",
 	"File.Edit",
 	"File.New",
 	"File.ApplyCommand",

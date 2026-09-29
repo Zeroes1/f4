@@ -716,6 +716,8 @@ Action.Panel.GroupByModeText=Group by: VFS type / mode
 Action.Panel.GroupByKind=Group by: Object kind
 Action.Panel.GroupByHidden=Group by: Hidden
 Action.Panel.GroupByExecutable=Group by: Executable
+Action.File.AssemblyInfo=&Assembly info (.NET)
+Action.File.AssemblyInfo.Desc=Show the identity, references, types and resources of the .NET assembly under the cursor
 
 ProcList.ColumnPID=PID
 ProcList.ColumnName=Name
@@ -3884,3 +3886,15 @@ Group.Month9=September
 Group.Month10=October
 Group.Month11=November
 Group.Month12=December
+
+DotNet.NotAssembly=%s is not a .NET assembly
+DotNet.ReadFailed=Cannot read %s: %v
+DotNet.Assembly=Assembly:
+DotNet.Culture=culture
+DotNet.Module=A .NET module without an assembly manifest.
+DotNet.Runtime=Runtime metadata version:
+DotNet.References=References
+DotNet.Types=Types
+DotNet.GlobalNamespace=(global namespace)
+DotNet.Resources=Resources
+DotNet.More=... and %d more
