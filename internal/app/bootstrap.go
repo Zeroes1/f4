@@ -1247,6 +1247,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	}
 	panel.InstallTerminalOfferHandler(terminal.RealDNDClient())
 	terminalDNDStop = startTerminalDNDBinding(terminal.RealDNDClient(), vtui.Far2lNegotiated)
+	panel.EnableTreeExpandPersistence(filepath.Join(config.GetF4ConfigDir(), "tree_expanded.txt"))
 	previousEventFilter := vtui.FrameManager.EventFilter
 	vtui.FrameManager.EventFilter = func(e *vtinput.InputEvent) bool {
 		// INPUT_DND (unxed/f4#1628) is the one far2l "f2l" event

@@ -26,17 +26,9 @@ import (
 // (volume- or cwd-rooted, see TreeRootWholeVolume) tree happened to reach
 // it.
 //
-// Deliberately process-lifetime, not persisted to disk (settings.ini/
-// f4:config): the owner's own tracking comment on f4#1602 named this exact
-// fork -- in-memory for the session vs. surviving a process restart --
-// without resolving it, and neither the ticket body nor any later comment
-// picked a side (see f4#1602 for the open follow-up question about
-// promoting this to a persisted cache instead). In-memory is the smaller,
-// reversible choice: it already fixes the concrete, observed loss (open,
-// drill in, close, reopen -- back to square one, all inside one run of f4),
-// adds no on-disk format to design, version, migrate or invalidate against
-// renamed/removed directories, and can still be layered with persistence
-// later without changing this cache's own keying or call sites.
+// It is the working copy; tree_persist.go mirrors it to a file so that it
+// also survives a restart of f4 (the owner's answer on f4#1602: as far2l
+// does), once the application has named that file.
 var (
 	treeExpandCacheMu sync.Mutex
 	treeExpandCache   = map[string]struct{}{}
@@ -52,6 +44,7 @@ func rememberTreeExpanded(path string) {
 	treeExpandCacheMu.Lock()
 	treeExpandCache[path] = struct{}{}
 	treeExpandCacheMu.Unlock()
+	treeExpandChanged()
 }
 
 // forgetTreeExpanded is rememberTreeExpanded's inverse, called by collapseAt
@@ -64,6 +57,7 @@ func forgetTreeExpanded(path string) {
 	treeExpandCacheMu.Lock()
 	delete(treeExpandCache, path)
 	treeExpandCacheMu.Unlock()
+	treeExpandChanged()
 }
 
 // treeExpandedSnapshot returns every path treeExpandCache currently holds,
@@ -72,6 +66,7 @@ func forgetTreeExpanded(path string) {
 // cache right back (through expandAt's own rememberTreeExpanded calls),
 // which would race with ranging over the same map directly.
 func treeExpandedSnapshot() []string {
+	treeLoadPersisted()
 	treeExpandCacheMu.Lock()
 	defer treeExpandCacheMu.Unlock()
 	paths := make([]string, 0, len(treeExpandCache))
