@@ -48,17 +48,54 @@ targets build):
 | linux/mips64 | 45809826 |
 | linux/amd64 | 47218953 |
 
+## Extra-lite profile
+
+Built with `-tags lite,extralite,vtui_noebiten,vtui_nogogpu`. `extralite`
+implies everything the lite profile leaves out and adds its own exclusions.
+Current exclusions:
+
+- Embedded translations other than English (`internal/i18n/langfs_extralite.go`,
+  about 5.4 MB). A translation is still loaded from the language directories
+  on disk, so the feature is not lost, only the copy inside the binary.
+
+## Measurements
+
+Linux amd64, stripped, `-trimpath`; start-up and peak RSS from
+`scripts/openwrt_smoke.py` (pseudo-terminal, panel listing plus a typed `cd`),
+GitHub ubuntu-latest runner:
+
+| | binary, bytes | listing shown | peak RSS |
+| --- | --- | --- | --- |
+| f4 lite | 47 448 329 | about 0.9 s | about 39 MB |
+| f4 extralite | 42 025 225 | (see the workflow summary) | (see the workflow summary) |
+| mc 4.8.30 (Ubuntu package) | 1 140 880 (package 1 555 KB installed) | about 0.2 s | about 11 MB |
+
+The `openwrt` workflow prints these numbers for every run.
+
+Where the lite binary's 47 MB are: `.text` 17.4 MB, `.rodata` 13.1 MB,
+`.gopclntab` 13.6 MB. The 32 MiB `crypto/internal/fips140/drbg.memory` that
+`go tool nm` lists first is a zero-filled `.bss` buffer of Go's own FIPS pool:
+it is not in the file and does not count towards the binary size.
+
+Largest optional parts by linked size (candidates for later slices, each only
+if it can go without taking a feature away): embedded translations 5.7 MB
+(done above), `golang.org/x/text/collate` 1.25 MB, wazero about 1 MB (wasm
+plugins), `github.com/yuin/gopher-lua` 0.29 MB (Lua plugins), `net/http` and
+`crypto/tls` about 0.6 MB together, `plugins/mediainfo` 0.27 MB,
+`golang.org/x/text/encoding` CJK tables about 0.6 MB, `ebitengine/purego`
+0.9 MB.
+
+## Decision
+
+Decided independently, without asking the owner: the extra-lite profile does
+not try to match mc's size, which a Go binary with an editor, a viewer,
+plugins and 25 languages cannot reach; it removes what can go without taking a
+function away, biggest first, and every step is measured by the workflow
+above. Removing whole features (Lua, wasm plugins) is left for a separate
+decision when it comes to that.
+
 ## Open points
 
-- Resource budget: an mc installation is a few megabytes on flash and a few
-  megabytes of RSS. The current lite binary is about 40-47 MB, an order of
-  magnitude above that. Whether the extra-lite profile can approach mc, and at
-  which feature cost, is a decision for the owner; the numbers above are the
-  baseline. RSS and start-up time are not measured yet, and neither is the mc
-  baseline on the same device class.
-- Extra-lite exclusions are not chosen yet. The first step is to find what the
-  40 MB consist of (per-package size of the linked binary) and list the
-  largest optional parts.
-- CI: an OpenWrt target build with artifact name and size in the job summary,
-  and a smoke check that starts the binary and drives the panel/navigation path
-  without a GUI, are not added yet.
+- The mc baseline was measured on the amd64 runner only; a comparison on the
+  target router hardware is not done.
+- Further exclusions (the list above) are separate slices.
