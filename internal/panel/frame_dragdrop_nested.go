@@ -76,7 +76,13 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		}
 		vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
 		go fileops.ExecuteFileOpAt(src, dst, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
-			closeOffer(far2ldnd.CloseProcessed)
+			reason := far2ldnd.CloseProcessed
+			if src.Cancelled() {
+				reason = far2ldnd.CloseCancelled
+			}
+			// On the UI goroutine here: the reply of CLOSE is delivered by the
+			// same loop, so it must not be waited for from it.
+			go closeOffer(reason)
 			vtui.FrameManager.PostTask(func() {
 				pf.RefreshAll()
 				vtui.FrameManager.Redraw()
