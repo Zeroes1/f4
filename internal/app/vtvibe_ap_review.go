@@ -297,9 +297,11 @@ func aiReviewTotals(mods []ap.ModificationResult) string {
 // ordinary vtui.Table keys.
 type aiReviewTable struct {
 	*vtui.Table
-	onToggle  func(idx int)
-	onReject  func(idx int)
-	onCtrlTab func()
+	onToggle    func(idx int)
+	onReject    func(idx int)
+	onOpen      func(idx int)
+	onViewPatch func()
+	onCtrlTab   func()
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
@@ -319,15 +321,21 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 				t.MoveSelection(1)
 			}
 			return true
-		case vtinput.VK_RETURN, vtinput.VK_F3:
-			// Both swallowed, on purpose, rather than left unhandled: the
-			// diff pane already shows the row under the cursor without a
-			// keypress (f4#1606 step e), so neither key opens anything any
-			// more, but Enter must still not fall through to the group and
-			// trigger the dialog's default button (usually "Apply") just
-			// because the table has focus. docs/VTVIBE.md §7.3 reserves
-			// both for the future level-0 screen (Enter into the real
-			// file, F3 the whole .ap) - not this step.
+		case vtinput.VK_RETURN:
+			// Enter opens the file at the edit (docs/VTVIBE.md §7.3). It is
+			// swallowed even when there is nothing to open, so that it never
+			// falls through to the group and presses the dialog's default
+			// button (usually "Apply") just because the table has focus.
+			if t.onOpen != nil {
+				t.onOpen(t.RowAt(t.SelectPos))
+			}
+			return true
+		case vtinput.VK_F3:
+			// F3 shows the whole patch, as the AI panel's log button shows
+			// the patcher's output.
+			if t.onViewPatch != nil {
+				t.onViewPatch()
+			}
 			return true
 		case vtinput.VK_F8:
 			if t.onReject != nil {
@@ -650,6 +658,14 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		}
 		vtui.FrameManager.Redraw()
 	}
+	table.onOpen = func(idx int) {
+		if idx >= 0 && idx < len(mods) {
+			aiOpenReviewedFile(pf, root, mods[idx])
+		}
+	}
+	if patch != nil {
+		table.onViewPatch = func() { aiViewPatchText(pf, patch.Text) }
+	}
 	table.onCtrlTab = func() { dlg.SetFocusedItem(diffPane) }
 	diffPane.onCtrlTab = func() { dlg.SetFocusedItem(table) }
 
@@ -779,5 +795,45 @@ func aiViewPatchLog(pf *panel.PanelsFrame, output string) {
 	logPath := filepath.Join(dir, "ap_output.log")
 	if os.WriteFile(logPath, []byte(output), 0600) == nil {
 		actionOpenViewer(pf, vfs.NewOSVFS(dir), "ap_output.log")
+	}
+}
+
+// aiOpenReviewedFile opens the file a modification edits in the editor, on the
+// line where the edit starts (its Preview), as a screen of its own above the
+// review: closing the editor comes back to the review with its checks as they
+// were. A file that is not there (a CREATE not yet applied, a deleted file)
+// is reported rather than opened as an empty one.
+func aiOpenReviewedFile(pf *panel.PanelsFrame, root string, m ap.ModificationResult) {
+	if m.FilePath == "" {
+		return
+	}
+	full := filepath.Join(root, filepath.FromSlash(m.FilePath))
+	if st, err := os.Stat(full); err != nil || st.IsDir() {
+		vtui.ShowMessage(" "+i18n.Msg("AI.ReviewTitle")+" ", fmt.Sprintf(i18n.Msg("AI.ReviewNoFile"), m.FilePath), []string{"&Ok"})
+		return
+	}
+	v := vfs.NewOSVFS(filepath.Dir(full))
+	name := filepath.Base(full)
+	_, already := findOpenedEditor(v, name)
+	actionOpenEditor(pf, v, name)
+	if already >= 0 || m.Preview == nil || m.Preview.StartLine < 1 {
+		return
+	}
+	if ev, idx := findOpenedEditor(v, name); ev != nil && idx >= 0 {
+		ev.TargetLine = m.Preview.StartLine - 1
+		ev.TargetPos = 0
+		ev.TargetTopRow = 0
+		ev.TargetLeft = 0
+	}
+}
+
+// aiViewPatchText shows the whole patch in the viewer.
+func aiViewPatchText(pf *panel.PanelsFrame, text string) {
+	dir, err := os.MkdirTemp("", "vtvibe-ap-patch-")
+	if err != nil {
+		return
+	}
+	if os.WriteFile(filepath.Join(dir, "patch.ap"), []byte(text), 0600) == nil {
+		actionOpenViewer(pf, vfs.NewOSVFS(dir), "patch.ap")
 	}
 }
