@@ -16,7 +16,8 @@ import (
 // remote command, says hello with BootstrapNative and from then on talks to it
 // exactly as it talks to helper.sh. It is the first step of using f4 as the
 // remote server (unxed/f4#1680); only the session commands are served so far --
-// noop, pwd, ping, feats and exit -- and every other command of the protocol
+// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink and isdirs,
+// which answer in the "find" listing format -- and every other command of the protocol
 // answers "unknown command" after its path lines have been read, so a client
 // that has probed the banner's features never desynchronises the stream.
 type Server struct {
@@ -28,7 +29,7 @@ type Server struct {
 
 // serverFeatures is what a Server announces when none is set: the native
 // marker, which tells a client that no shell tool is behind the answers.
-var serverFeatures = []string{"native"}
+var serverFeatures = []string{"native", "mode:find"}
 
 // pathLines is how many path lines follow the request line of each command of
 // the protocol, which is what a server has to consume to stay in step with a
@@ -38,7 +39,7 @@ var pathLines = map[string]int{
 	"noop": 0, "pwd": 0, "ping": 1, "feats": 0, "exit": 0, "enum": 1, "info": 1, "linfo": 1,
 	"rdlink": 1, "read": 1, "trunc": 1, "mkdir": 1, "rm": 1, "rmdir": 1, "rmtree": 1,
 	"mv": 2, "cp": 2, "mklink": 2, "chmod": 1, "chown": 1, "utime": 1, "grep": 2, "lidx": 1,
-	"jpoll": 0, "jkill": 0, "jdrop": 0, "jlist": 0, "mode": 0, "rmode": 0, "wmode": 0,
+	"jpoll": 0, "jkill": 0, "jdrop": 0, "jlist": 0, "isdirs": 0, "mode": 0, "rmode": 0, "wmode": 0,
 }
 
 // errUnrecoverable ends a session whose stream a server can no longer follow.
@@ -84,6 +85,14 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 			return fmt.Errorf("fishplus: bad request id %q", id)
 		}
 		count, known := pathLines[cmd]
+		if cmd == "isdirs" {
+			n, ok := atoiArg(fields[2:], 0)
+			if !ok {
+				_ = end0(w, token, id, "err", "bad path count")
+				return errUnrecoverable
+			}
+			count, known = n, true
+		}
 		paths := make([]string, 0, count)
 		for i := 0; i < count; i++ {
 			p, err := readServerPath(in)
@@ -92,12 +101,19 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 			}
 			paths = append(paths, p)
 		}
-		end := func(status, msg string) error {
-			if msg != "" {
-				msg = " " + msg
+		end := func(status, msg string) error { return end0(w, token, id, status, msg) }
+		// reply sends payload lines and then the terminator: ok, or err with
+		// the reason when the operation failed.
+		reply := func(lines []string, opErr error) error {
+			if opErr != nil {
+				return end("err", errText(opErr))
 			}
-			_, err := fmt.Fprintf(w, ".%s %s %s%s\n", token, id, status, msg)
-			return err
+			for _, l := range lines {
+				if _, err := fmt.Fprintf(w, "%s\n", l); err != nil {
+					return err
+				}
+			}
+			return end("ok", "")
 		}
 		switch cmd {
 		case "noop":
@@ -121,6 +137,17 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 			if _, err = fmt.Fprintf(w, "%d %s\n", ProtocolVersion, strings.Join(feats, " ")); err == nil {
 				err = end("ok", "")
 			}
+		case "info", "linfo":
+			lines, opErr := infoLines(paths[0], cmd == "info")
+			err = reply(lines, opErr)
+		case "enum":
+			lines, opErr := enumLines(paths[0])
+			err = reply(lines, opErr)
+		case "rdlink":
+			target, opErr := os.Readlink(paths[0])
+			err = reply([]string{target}, opErr)
+		case "isdirs":
+			err = reply(isdirsLines(paths), nil)
 		case "exit":
 			return end("ok", "")
 		default:
@@ -136,6 +163,14 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 			return err
 		}
 	}
+}
+
+func end0(w io.Writer, token, id, status, msg string) error {
+	if msg != "" {
+		msg = " " + msg
+	}
+	_, err := fmt.Fprintf(w, ".%s %s %s%s\n", token, id, status, msg)
+	return err
 }
 
 func readServerLine(in *bufio.Reader) (string, error) {

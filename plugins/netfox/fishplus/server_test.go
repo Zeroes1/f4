@@ -2,8 +2,11 @@ package fishplus
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -58,9 +61,9 @@ func TestServerNativeSession(t *testing.T) {
 	}
 	// A command the server does not implement is refused after its path lines
 	// were read, and the session stays usable.
-	resp, err = sess.ExecPath(ctx, "info", "/nowhere")
+	resp, err = sess.ExecPath(ctx, "mkdir", "/nowhere")
 	if err != nil || resp.OK() || !strings.Contains(resp.Msg, "unknown command") {
-		t.Fatalf("info = %#v, %v, want an unknown command error", resp, err)
+		t.Fatalf("mkdir = %#v, %v, want an unknown command error", resp, err)
 	}
 	if err := sess.Noop(ctx); err != nil {
 		t.Fatalf("noop after a refused command: %v", err)
@@ -100,5 +103,75 @@ func TestServerRejectsABadHelloAndAnUnfollowableRequest(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), ".tok 1 err unknown command") {
 		t.Fatalf("the refusal was not sent: %q", out.String())
+	}
+}
+
+func TestServerFileSystemCommands(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a file.txt"), []byte("hello"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".hidden"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	haveLinks := os.Symlink("sub", filepath.Join(root, "link")) == nil
+
+	sess, _ := serverSession(t, &Server{Dir: root})
+	if err := sess.HandshakeWithOptions(ctx, HandshakeOptions{Bootstrap: BootstrapNative}); err != nil {
+		t.Fatal(err)
+	}
+	if sess.Features().ListingMode() != "find" {
+		t.Fatalf("listing mode = %q, want find", sess.Features().ListingMode())
+	}
+	c := NewClient(sess)
+
+	entries, err := c.Enum(ctx, root)
+	if err != nil {
+		t.Fatalf("enum: %v", err)
+	}
+	byName := map[string]Entry{}
+	for _, e := range entries {
+		byName[e.Name] = e
+	}
+	if f, ok := byName["a file.txt"]; !ok || !f.IsRegular() || f.Size != 5 || (runtime.GOOS != "windows" && f.Perm() != 0o640) {
+		t.Errorf("a file.txt = %#v", f)
+	}
+	if d, ok := byName["sub"]; !ok || !d.IsDir() {
+		t.Errorf("sub = %#v", d)
+	}
+	if _, ok := byName[".hidden"]; !ok {
+		t.Error("hidden entries must be listed")
+	}
+	if haveLinks {
+		if l, ok := byName["link"]; !ok || !l.IsSymlink() || !l.TargetIsDir {
+			t.Errorf("link = %#v, want a symlink to a directory", l)
+		}
+		if target, err := c.ReadLink(ctx, filepath.Join(root, "link")); err != nil || target != "sub" {
+			t.Errorf("ReadLink = %q, %v", target, err)
+		}
+		if e, err := c.Stat(ctx, filepath.Join(root, "link")); err != nil || !e.IsDir() {
+			t.Errorf("Stat through a link = %#v, %v, want a directory", e, err)
+		}
+		if e, err := c.Lstat(ctx, filepath.Join(root, "link")); err != nil || !e.IsSymlink() {
+			t.Errorf("Lstat of a link = %#v, %v, want the link", e, err)
+		}
+	}
+	if e, err := c.Stat(ctx, filepath.Join(root, "a file.txt")); err != nil || e.Size != 5 || e.Name != "a file.txt" {
+		t.Errorf("Stat = %#v, %v", e, err)
+	}
+	if _, err := c.Stat(ctx, filepath.Join(root, "missing")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Stat of a missing path = %v, want os.ErrNotExist", err)
+	}
+	if _, err := c.Stat(ctx, "relative"); err == nil {
+		t.Error("a relative path must be refused")
+	}
+	dirs, err := c.TargetDirs(ctx, []string{root, filepath.Join(root, "a file.txt"), filepath.Join(root, "missing")})
+	if err != nil || len(dirs) != 3 || !dirs[0] || dirs[1] || dirs[2] {
+		t.Errorf("TargetDirs = %v, %v, want [true false false]", dirs, err)
 	}
 }
