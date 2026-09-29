@@ -119,13 +119,17 @@ func (s *DNDProxySource) ReadAt(itemID uint64, p []byte, off uint64) (int, bool,
 // and releases the parent's offer, once. The CLOSE goes out on its own
 // goroutine, because the terminal calls Close with its state locked and the
 // reply comes through the same event loop.
-func (s *DNDProxySource) Close() {
+func (s *DNDProxySource) Close() { s.CloseWith(far2ldnd.CloseProcessed) }
+
+// CloseWith is Close with the reason the parent's offer is released for: a
+// child that never took the offer at all releases it as rejected.
+func (s *DNDProxySource) CloseWith(reason uint8) {
 	s.once.Do(func() {
 		s.cancel()
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), dndProxyCloseTimeout)
 			defer cancel()
-			_ = s.client.Close(ctx, s.offer, far2ldnd.CloseProcessed)
+			_ = s.client.Close(ctx, s.offer, reason)
 		}()
 	})
 }
