@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -275,20 +276,33 @@ func TestHunkViewTogglesBackAndRefusesEmptySelection(t *testing.T) {
 	}
 }
 
-func TestHunksOfUntrackedFileAreNotOffered(t *testing.T) {
+// An untracked file has no `git diff`, but its lines can be picked from a
+// diff against /dev/null (f4#659 part 24): the view opens with one hunk, and
+// staging a picked line creates the index entry with just that line.
+func TestHunksOfUntrackedFileAreOffered(t *testing.T) {
 	repo := realGitRepo(t)
-	writeRepoFile(t, filepath.Join(repo, "new.txt"), "hello\n")
+	writeRepoFile(t, filepath.Join(repo, "new.txt"), "one\ntwo\nthree\n")
 	p := openStatusPanelIn(t, repo)
 	entry, ok := p.selectedEntry()
 	if !ok {
 		t.Fatal("no entry")
 	}
-	if _, err := p.openHunkView(entry, modeStage); !errors.Is(err, errNoHunks) {
-		t.Errorf("openHunkView(untracked) error = %v, want errNoHunks", err)
+	v, err := p.openHunkView(entry, modeStage)
+	if err != nil {
+		t.Fatalf("openHunkView(untracked) error = %v", err)
 	}
-	// F4 through the panel's own keys: consumed, only a toast.
-	if !p.ProcessKey(key(vtinput.VK_F4)) {
-		t.Error("F4 was not claimed")
+	if len(v.patch.hunks) != 1 {
+		t.Fatalf("hunks = %d, want 1", len(v.patch.hunks))
+	}
+	pickLines(v.patch.hunks[0], 1) // the "two" line only
+	if err := applyFilePatch(context.Background(), repo, v.patch); err != nil {
+		t.Fatalf("applyFilePatch: %v", err)
+	}
+	if got := runRealGit(t, repo, "show", ":new.txt"); got != "two\n" {
+		t.Errorf("index content = %q, want %q", got, "two\n")
+	}
+	if got := readRepoFile(t, filepath.Join(repo, "new.txt")); got != "one\ntwo\nthree\n" {
+		t.Errorf("working file changed: %q", got)
 	}
 }
 

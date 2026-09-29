@@ -485,3 +485,17 @@ archive tools (f4#609) rather than linking a Go git implementation.
   never left half merged; resolving conflicts is left to the user's own tools.
 - The current branch cannot be merged into itself. After a merge the branch
   list and the status panel reload.
+
+## Part 24: picking lines of an untracked file (`hunk.go`, `hunkview.go`)
+
+- **F4** on an untracked file (`??`) opens the hunk view too: `git diff` shows
+  nothing for such a file, so `loadUntrackedFilePatch` takes the patch from
+  `git diff --no-index /dev/null <file>` (exit status 1 is the normal outcome
+  there) and makes the header paths relative to the repository root.
+- Staging picked lines creates the index entry with just those lines; the
+  working file is left as it is, so the file shows as added and modified
+  afterwards. The added file of a real diff (a file already staged, or
+  intent-to-add) still can only be picked whole (`errWholeFileOnly`): only a
+  patch marked `untracked` may be picked in part. An untracked directory
+  (`dir/`) is still staged whole with Insert. A deleted file still can only be
+  picked whole.

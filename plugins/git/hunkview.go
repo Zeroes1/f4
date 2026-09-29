@@ -387,7 +387,15 @@ func (p *statusPanel) openHunkView(entry statusEntry, mode hunkMode) (*HunkView,
 	if mode == modeUnstage && entry.OrigPath != "" {
 		return nil, errNoHunks
 	}
-	patch, err := loadFilePatch(context.Background(), p.dir, entry.Path, mode)
+	var patch *filePatch
+	var err error
+	if mode == modeStage && entry.XY == "??" && !strings.HasSuffix(entry.Path, "/") {
+		// An untracked file has no `git diff`; its lines are picked from a
+		// diff against /dev/null (f4#659 part 24).
+		patch, err = loadUntrackedFilePatch(context.Background(), p.dir, entry.Path)
+	} else {
+		patch, err = loadFilePatch(context.Background(), p.dir, entry.Path, mode)
+	}
 	if err != nil {
 		return nil, err
 	}

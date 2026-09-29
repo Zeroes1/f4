@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,8 +13,7 @@ import (
 
 // errNoHunks is what loadFilePatch reports for a path whose diff has
 // nothing to stage (or unstage) piece by piece: no changes on that side at
-// all, an untracked file (`git diff` does not show those -- Insert stages
-// them whole), a binary file, or a change of the file mode alone.
+// all, a binary file, or a change of the file mode alone.
 var errNoHunks = errors.New("no text hunks")
 
 // errWholeFileOnly is what buildPatch reports for a hunk picked only in
@@ -201,6 +201,11 @@ type filePatch struct {
 	header []string
 	hunks  []*diffHunk
 	mode   hunkMode
+	// untracked marks the patch of an untracked file (loadUntrackedFilePatch):
+	// the file is not in the index at all, so staging some of its lines simply
+	// creates the index entry with those lines; buildPatch lets them be picked
+	// in part, which it refuses for the added file of a real diff.
+	untracked bool
 }
 
 // lineSide is '-' or '+' for a changed line and ' ' for a context line
@@ -357,7 +362,7 @@ func buildPatch(fp *filePatch) (string, error) {
 		if !h.anyPicked() {
 			continue
 		}
-		if !h.allPicked() && fp.wholeFile() {
+		if !h.allPicked() && fp.wholeFile() && !fp.untracked {
 			return "", errWholeFileOnly
 		}
 		lines, oldN, newN, err := h.pickedBody(fp.mode.reverse())
@@ -423,6 +428,45 @@ func loadFilePatch(ctx context.Context, dir, path string, mode hunkMode) (*fileP
 		return nil, err
 	}
 	fp.mode = mode
+	return fp, nil
+}
+
+// loadUntrackedFilePatch is loadFilePatch for an untracked file (f4#659):
+// `git diff` shows nothing for it, so the patch is taken against /dev/null
+// with `git diff --no-index`, which exits with status 1 when the files differ
+// -- that is the normal outcome here, not a failure. The header paths are
+// made relative to the repository root, where applyFilePatch runs `git apply`.
+// Staging picks creates the file in the index with just the picked lines; the
+// working file stays as it is.
+func loadUntrackedFilePatch(ctx context.Context, dir, path string) (*filePatch, error) {
+	prefixOut, err := runGitIn(ctx, dir, "rev-parse", "--show-prefix")
+	if err != nil {
+		return nil, errors.New(firstLine(string(prefixOut), err))
+	}
+	prefix := strings.TrimRight(string(prefixOut), "\r\n")
+	out, err := runGitIn(ctx, dir, "diff", "--no-index", "--no-color", "--no-ext-diff", "--no-textconv",
+		"--src-prefix=a/", "--dst-prefix=b/", "-U3", "--", "/dev/null", path)
+	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || len(out) == 0 {
+			return nil, errors.New(firstLine(string(out), err))
+		}
+	}
+	fp, err := parseFilePatch(string(out))
+	if err != nil {
+		return nil, err
+	}
+	full := prefix + path
+	for i, line := range fp.header {
+		switch {
+		case strings.HasPrefix(line, "diff --git "):
+			fp.header[i] = "diff --git a/" + full + " b/" + full
+		case strings.HasPrefix(line, "+++ b/"):
+			fp.header[i] = "+++ b/" + full
+		}
+	}
+	fp.mode = modeStage
+	fp.untracked = true
 	return fp, nil
 }
 
