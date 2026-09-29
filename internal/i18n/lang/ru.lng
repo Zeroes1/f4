@@ -808,6 +808,14 @@ SvcMgr.ColumnPID=PID
 SvcMgr.PanelTitle=Службы (%d)
 SvcMgr.RefreshFailed=Не удалось прочитать список служб: %v
 SvcMgr.KeyBar.Refresh=Обновить
+SvcMgr.KeyBar.Start=Запуск
+SvcMgr.KeyBar.Stop=Стоп
+SvcMgr.KeyBar.Pause=Пауза
+SvcMgr.ActionFailed=%s: %v
+SvcMgr.CannotPause=%s: состояние «%s»; приостановить можно только работающую службу, продолжить — только приостановленную
+SvcMgr.StopTitle=Остановка службы
+SvcMgr.StopConfirm=Остановить службу %s? Зависящие от неё службы тоже остановятся.
+SvcMgr.StopButton=&Остановить
 
 PanelPlugin.KeyBar.Close=Закрыть
 

@@ -61,6 +61,7 @@ type servicesPanel struct {
 	frame *vtui.BorderedFrame
 	table *vtui.Table
 	list  func() ([]service, error)
+	ctl   controller
 }
 
 func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs.PanelController, error) {
@@ -78,7 +79,7 @@ func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs
 	table.ColorItemSelectTextIdx = theme.ColPanelSelectedText
 	table.SetSort(colDisplay, true)
 
-	p := &servicesPanel{frame: frame, table: table, list: list}
+	p := &servicesPanel{frame: frame, table: table, list: list, ctl: serviceController}
 	p.SetFocus(false)
 	p.SetPosition(ctx.Bounds[0], ctx.Bounds[1], ctx.Bounds[2], ctx.Bounds[3])
 	if err := p.reload(); err != nil {
@@ -168,12 +169,23 @@ func (p *servicesPanel) IsFocused() bool { return p.table.IsFocused() }
 
 var _ vfs.PanelKeyProvider = (*servicesPanel)(nil)
 
-// PanelKeys declares F5 (reload). It is an F-key rather than a letter because
-// QuickSearch claims printable characters while the table has the focus.
+// PanelKeys declares F5 (reload) and, on the Shift row, Start (Shift+F1), Stop
+// (Shift+F2, after a confirmation) and Pause/Resume (Shift+F3, whichever the
+// service's state calls for). They are F-keys rather than letters because
+// QuickSearch claims printable characters while the table has the focus, and
+// they act on the service under the cursor, so they stand down on an empty list.
 func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 	return []vfs.PanelKey{
 		{VK: vtinput.VK_F5, Label: i18n.Msg("SvcMgr.KeyBar.Refresh"), Run: p.refresh},
+		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Start"), Run: p.start, Enabled: p.hasSelected},
+		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Stop"), Run: p.confirmStop, Enabled: p.hasSelected},
+		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
 	}
+}
+
+func (p *servicesPanel) hasSelected() bool {
+	_, ok := p.selectedService()
+	return ok
 }
 
 func (p *servicesPanel) ProcessKey(e *vtinput.InputEvent) bool {
@@ -193,6 +205,60 @@ func (p *servicesPanel) refresh() {
 	}
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
+	}
+}
+
+// run applies one action to the service under the cursor, reports a failure
+// as a toast, and reloads the list either way so the new (often still
+// pending) state shows.
+func (p *servicesPanel) run(action func(name string) error) {
+	svc, ok := p.selectedService()
+	if !ok {
+		return
+	}
+	if err := action(svc.Name); err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("SvcMgr.ActionFailed"), svc.Name, err), 3e9)
+	}
+	p.refresh()
+}
+
+func (p *servicesPanel) start() { p.run(p.ctl.Start) }
+
+// confirmStop asks before stopping: a stopped service takes whatever depends
+// on it down with it.
+func (p *servicesPanel) confirmStop() {
+	svc, ok := p.selectedService()
+	if !ok || vtui.FrameManager == nil {
+		return
+	}
+	confirm := vtui.ShowMessageEx(i18n.Msg("SvcMgr.StopTitle"),
+		fmt.Sprintf(i18n.Msg("SvcMgr.StopConfirm"), svc.Name),
+		[]string{i18n.Msg("SvcMgr.StopButton"), i18n.Msg("vtui.Cancel")}, vtui.MessageWarn)
+	if confirm == nil {
+		return
+	}
+	confirm.OnResult = func(code int) {
+		if code == 0 {
+			p.run(p.ctl.Stop)
+		}
+	}
+}
+
+// pauseOrResume pauses a running service and resumes a paused one; in any
+// other state it says so instead of sending a control the service would
+// refuse.
+func (p *servicesPanel) pauseOrResume() {
+	svc, ok := p.selectedService()
+	if !ok {
+		return
+	}
+	switch svc.State {
+	case stateRunning:
+		p.run(p.ctl.Pause)
+	case statePaused:
+		p.run(p.ctl.Resume)
+	default:
+		toast.Show(fmt.Sprintf(i18n.Msg("SvcMgr.CannotPause"), svc.Name, stateName(svc.State)), 3e9)
 	}
 }
 

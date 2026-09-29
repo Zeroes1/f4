@@ -808,6 +808,14 @@ SvcMgr.ColumnPID=PID
 SvcMgr.PanelTitle=Services (%d)
 SvcMgr.RefreshFailed=Cannot read the service list: %v
 SvcMgr.KeyBar.Refresh=Refresh
+SvcMgr.KeyBar.Start=Start
+SvcMgr.KeyBar.Stop=Stop
+SvcMgr.KeyBar.Pause=Pause
+SvcMgr.ActionFailed=%s: %v
+SvcMgr.CannotPause=%s is %s: only a running service can be paused and only a paused one resumed
+SvcMgr.StopTitle=Stop service
+SvcMgr.StopConfirm=Stop the service %s? Services that depend on it stop too.
+SvcMgr.StopButton=&Stop
 
 PanelPlugin.KeyBar.Close=Close
 

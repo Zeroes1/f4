@@ -189,3 +189,81 @@ func TestListServicesOffWindows(t *testing.T) {
 		t.Errorf("listServices error = %v, want errUnsupported", err)
 	}
 }
+
+type fakeController struct {
+	calls []string
+	err   error
+}
+
+func (c *fakeController) Start(n string) error  { c.calls = append(c.calls, "start "+n); return c.err }
+func (c *fakeController) Stop(n string) error   { c.calls = append(c.calls, "stop "+n); return c.err }
+func (c *fakeController) Pause(n string) error  { c.calls = append(c.calls, "pause "+n); return c.err }
+func (c *fakeController) Resume(n string) error { c.calls = append(c.calls, "resume "+n); return c.err }
+
+func TestPanelActionsActOnTheServiceUnderTheCursor(t *testing.T) {
+	services := []service{
+		{Name: "Run", Display: "A", State: stateRunning, PID: 3},
+		{Name: "Stopped", Display: "B", State: stateStopped},
+		{Name: "Paused", Display: "C", State: statePaused, PID: 4},
+	}
+	var listErr error
+	p := openFake(t, &services, &listErr)
+	ctl := &fakeController{}
+	p.ctl = ctl
+
+	p.selectByName("Run")
+	p.pauseOrResume()
+	p.selectByName("Paused")
+	p.pauseOrResume()
+	p.selectByName("Stopped")
+	p.start()
+	p.run(p.ctl.Stop)
+	p.pauseOrResume() // a stopped service: nothing is sent
+	want := []string{"pause Run", "resume Paused", "start Stopped", "stop Stopped"}
+	if len(ctl.calls) != len(want) {
+		t.Fatalf("calls = %v, want %v", ctl.calls, want)
+	}
+	for i := range want {
+		if ctl.calls[i] != want[i] {
+			t.Errorf("call %d = %q, want %q", i, ctl.calls[i], want[i])
+		}
+	}
+
+	// A failing action is reported and the list is still reloaded.
+	ctl.err = errors.New("access denied")
+	before := len(ctl.calls)
+	services = append(services, service{Name: "New", Display: "D", State: stateRunning})
+	p.start()
+	if len(ctl.calls) != before+1 || p.table.ItemCount != 4 {
+		t.Errorf("after a failed action: calls %d (want %d), rows %d (want 4)", len(ctl.calls), before+1, p.table.ItemCount)
+	}
+}
+
+func TestPanelActionsNeedAService(t *testing.T) {
+	var services []service
+	var err error
+	p := openFake(t, &services, &err)
+	ctl := &fakeController{}
+	p.ctl = ctl
+	p.start()
+	p.pauseOrResume()
+	p.confirmStop()
+	if len(ctl.calls) != 0 || p.hasSelected() {
+		t.Errorf("an empty list ran %v", ctl.calls)
+	}
+	if got := len(p.PanelKeys()); got != 4 {
+		t.Errorf("panel keys = %d, want 4", got)
+	}
+}
+
+func TestPlatformControllerOffWindows(t *testing.T) {
+	if Supported() {
+		t.Skip("this OS has a service manager")
+	}
+	c := platformController{}
+	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x")} {
+		if !errors.Is(err, errUnsupported) {
+			t.Errorf("action %d error = %v, want errUnsupported", i, err)
+		}
+	}
+}
