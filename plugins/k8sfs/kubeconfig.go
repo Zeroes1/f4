@@ -72,9 +72,11 @@ type execSpec struct {
 
 // apiEndpoint is what a kubeconfig context resolves to.
 type apiEndpoint struct {
-	server string // https://host:port
-	token  string
-	tls    *tls.Config
+	server  string // https://host:port
+	token   string
+	tls     *tls.Config
+	exec    *execSpec // credentials to fetch from a helper program, see resolveExec
+	baseDir string    // where a relative helper path is resolved from
 }
 
 // kubeconfigPath is where the config lives: the first entry of KUBECONFIG, or
