@@ -65,6 +65,11 @@ type statusPanel struct {
 	branch    string
 	detached  bool
 	hasCommit bool // the repository has at least one commit (something to amend)
+
+	// expanded holds the untracked directories ("dir/", as parseStatus
+	// reports them) shown as the files inside them, so that a file of one
+	// can be opened in the hunk view line by line (f4#659 part 27).
+	expanded map[string]bool
 }
 
 // newStatusPanel is a vfs.PanelProvider.Open callback: dir comes from
@@ -117,6 +122,7 @@ func (p *statusPanel) reload() error {
 		return errors.New(firstLine(string(output), err))
 	}
 	result := parseStatus(output)
+	result.Entries = p.expandUntrackedDirs(result.Entries)
 	p.branch = result.Branch
 	p.detached = result.Detached
 	p.hasCommit = result.HasCommit

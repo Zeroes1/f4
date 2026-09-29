@@ -352,6 +352,12 @@ func (p *statusPanel) showHunksOf(mode hunkMode) {
 	if !ok {
 		return
 	}
+	if mode == modeStage && entry.XY == "??" && strings.HasSuffix(entry.Path, "/") {
+		// An untracked directory is one row with no lines of its own: F4
+		// lists the files inside it, and F4 on one of them picks lines.
+		p.expandUntrackedDir(entry)
+		return
+	}
 	v, err := p.openHunkView(entry, mode)
 	if err != nil {
 		if errors.Is(err, errNoHunks) {

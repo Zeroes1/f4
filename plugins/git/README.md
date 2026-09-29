@@ -531,3 +531,15 @@ archive tools (f4#609) rather than linking a Go git implementation.
   is still refused with `errWholeFileOnly`.
 - Tests (`hunk_new_test.go`): the patch text, and Shift+F4 on a real
   repository checking the index and the working file.
+
+## Part 27: F4 on an untracked directory lists its files
+
+- An untracked directory is one row (`?? d/`) with no lines of its own. F4
+  on it now turns the row into one `??` row per file inside (`git ls-files
+  --others --exclude-standard -z`), cursor on the first; F4 on a file opens
+  the line picker of part 24. The directory stays expanded across reloads
+  (`statusPanel.expanded`). Insert on the directory row still stages all of
+  it at once.
+- Tests (`untracked_dir_test.go`): the listing, staging two lines of the
+  first file on a real repository (the other file stays untracked), and a
+  directory with no files staying a single row.
