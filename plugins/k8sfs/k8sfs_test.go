@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -260,17 +261,69 @@ func TestParseEndpoint(t *testing.T) {
 	}
 
 	cases := map[string]string{
-		"exec plugin": strings.Replace(sampleKubeconfig, "{token: abc}", "{exec: {command: gke-gcloud-auth-plugin}}", 1),
-		"no context":  strings.Replace(sampleKubeconfig, "current-context: dev", "current-context: zz", 1),
-		"no cluster":  strings.Replace(sampleKubeconfig, "cluster: c1,", "cluster: zz,", 1),
-		"bad server":  strings.Replace(sampleKubeconfig, "https://k8s.example:6443/", "nohost", 1),
-		"bad CA data": strings.Replace(sampleKubeconfig, "insecure-skip-tls-verify: true", "certificate-authority-data: '!!'", 1),
-		"not yaml":    "{{{",
+		"auth provider":        strings.Replace(sampleKubeconfig, "{token: abc}", "{auth-provider: {name: gcp}}", 1),
+		"exec without command": strings.Replace(sampleKubeconfig, "{token: abc}", "{exec: {apiVersion: v1}}", 1),
+		"no context":           strings.Replace(sampleKubeconfig, "current-context: dev", "current-context: zz", 1),
+		"no cluster":           strings.Replace(sampleKubeconfig, "cluster: c1,", "cluster: zz,", 1),
+		"bad server":           strings.Replace(sampleKubeconfig, "https://k8s.example:6443/", "nohost", 1),
+		"bad CA data":          strings.Replace(sampleKubeconfig, "insecure-skip-tls-verify: true", "certificate-authority-data: '!!'", 1),
+		"not yaml":             "{{{",
 	}
 	for name, cfg := range cases {
 		if _, err := parseEndpoint([]byte(cfg), t.TempDir()); !errors.Is(err, errUnsupported) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+func TestExecCredential(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the helper here is a shell script")
+	}
+	dir := t.TempDir()
+	helper := filepath.Join(dir, "helper.sh")
+	script := "#!/bin/sh\necho \"$KUBERNETES_EXEC_INFO\" | grep -q ExecCredential || exit 3\n" +
+		"echo \"{\\\"status\\\":{\\\"token\\\":\\\"$TOKEN_FROM_ENV-$1\\\"}}\"\n"
+	if err := os.WriteFile(helper, []byte(script), 0o700); err != nil { // #nosec G306 -- a test helper that must be executable
+		t.Fatal(err)
+	}
+	cfg := strings.Replace(sampleKubeconfig, "{token: abc}",
+		"{exec: {apiVersion: client.authentication.k8s.io/v1, command: ./helper.sh, args: [arg1], env: [{name: TOKEN_FROM_ENV, value: envtok}]}}", 1)
+	ep, err := parseEndpoint([]byte(cfg), dir)
+	if err != nil || ep.exec == nil || ep.token != "" {
+		t.Fatalf("parse: %+v, %v", ep, err)
+	}
+	if err := ep.resolveExec(context.Background()); err != nil || ep.token != "envtok-arg1" {
+		t.Fatalf("resolveExec: token %q, %v", ep.token, err)
+	}
+
+	cfgPath := filepath.Join(dir, "config")
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if ep, err := loadEndpoint(cfgPath); err != nil || ep.token != "envtok-arg1" {
+		t.Fatalf("loadEndpoint: %+v, %v", ep, err)
+	}
+
+	for name, script := range map[string]string{
+		"exits nonzero":   "#!/bin/sh\necho boom >&2\nexit 2\n",
+		"prints garbage":  "#!/bin/sh\necho nope\n",
+		"prints nothing":  "#!/bin/sh\necho '{\"status\":{}}'\n",
+		"bad certificate": "#!/bin/sh\necho '{\"status\":{\"clientCertificateData\":\"x\",\"clientKeyData\":\"y\"}}'\n",
+	} {
+		if err := os.WriteFile(helper, []byte(script), 0o700); err != nil { // #nosec G306 -- a test helper that must be executable
+			t.Fatal(err)
+		}
+		bad, err := parseEndpoint([]byte(cfg), dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := bad.resolveExec(context.Background()); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+	if err := (&apiEndpoint{}).resolveExec(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

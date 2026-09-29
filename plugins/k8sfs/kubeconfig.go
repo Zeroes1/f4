@@ -1,15 +1,19 @@
 package k8sfs
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -40,7 +44,7 @@ type kubeconfig struct {
 			ClientCertificateData string         `yaml:"client-certificate-data"`
 			ClientKey             string         `yaml:"client-key"`
 			ClientKeyData         string         `yaml:"client-key-data"`
-			Exec                  map[string]any `yaml:"exec"`
+			Exec                  *execSpec      `yaml:"exec"`
 			AuthProvider          map[string]any `yaml:"auth-provider"`
 		} `yaml:"user"`
 	} `yaml:"users"`
@@ -51,6 +55,19 @@ type kubeconfig struct {
 			User    string `yaml:"user"`
 		} `yaml:"context"`
 	} `yaml:"contexts"`
+}
+
+// execSpec is a kubeconfig "exec" credential plugin: a program that prints the
+// credentials (the way gke-gcloud-auth-plugin or aws eks get-token do).
+type execSpec struct {
+	APIVersion string   `yaml:"apiVersion"`
+	Command    string   `yaml:"command"`
+	Args       []string `yaml:"args"`
+	Env        []struct {
+		Name  string `yaml:"name"`
+		Value string `yaml:"value"`
+	} `yaml:"env"`
+	InstallHint string `yaml:"installHint"`
 }
 
 // apiEndpoint is what a kubeconfig context resolves to.
@@ -89,7 +106,16 @@ func loadEndpoint(configPath string) (*apiEndpoint, error) {
 		}
 		return nil, err
 	}
-	return parseEndpoint(raw, filepath.Dir(configPath))
+	ep, err := parseEndpoint(raw, filepath.Dir(configPath))
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	defer cancel()
+	if err := ep.resolveExec(ctx); err != nil {
+		return nil, err
+	}
+	return ep, nil
 }
 
 func parseEndpoint(raw []byte, baseDir string) (*apiEndpoint, error) {
@@ -143,8 +169,14 @@ func parseEndpoint(raw []byte, baseDir string) (*apiEndpoint, error) {
 		if u.Name != userName {
 			continue
 		}
-		if len(u.User.Exec) > 0 || len(u.User.AuthProvider) > 0 {
-			return nil, fmt.Errorf("%w: user %q gets credentials from a helper program, which is not supported yet; use a token or a client certificate", errUnsupported, userName)
+		if len(u.User.AuthProvider) > 0 {
+			return nil, fmt.Errorf("%w: user %q uses the removed auth-provider mechanism; use an exec credential plugin, a token or a client certificate", errUnsupported, userName)
+		}
+		if u.User.Exec != nil {
+			if u.User.Exec.Command == "" {
+				return nil, fmt.Errorf("%w: user %q has an exec section without a command", errUnsupported, userName)
+			}
+			ep.exec, ep.baseDir = u.User.Exec, baseDir
 		}
 		ep.token = u.User.Token
 		if ep.token == "" && u.User.TokenFile != "" {
@@ -195,4 +227,64 @@ func fileOrData(baseDir, file, data string) ([]byte, error) {
 		return os.ReadFile(resolve(baseDir, file)) // #nosec G304 -- named by the user's kubeconfig
 	}
 	return nil, nil
+}
+
+// execTimeout bounds the credential helper.
+const execTimeout = 30 * time.Second
+
+// resolveExec runs the credential helper the kubeconfig names, once, and takes
+// the token or client certificate it prints. The helper is what the user's own
+// kubeconfig asks to run, as with kubectl; it gets no stdin and no terminal, so
+// one that needs to prompt fails with its own message.
+func (ep *apiEndpoint) resolveExec(ctx context.Context) error {
+	spec := ep.exec
+	if spec == nil {
+		return nil
+	}
+	command := spec.Command
+	if strings.ContainsAny(command, `/\`) {
+		command = resolve(ep.baseDir, command)
+	}
+	info, _ := json.Marshal(map[string]any{
+		"apiVersion": spec.APIVersion, "kind": "ExecCredential", "spec": map[string]any{"interactive": false},
+	})
+	cmd := exec.CommandContext(ctx, command, spec.Args...) // #nosec G204 -- the user's own kubeconfig names the helper, as it does for kubectl
+	cmd.Env = append(os.Environ(), "KUBERNETES_EXEC_INFO="+string(info))
+	for _, e := range spec.Env {
+		cmd.Env = append(cmd.Env, e.Name+"="+e.Value)
+	}
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		hint := strings.TrimSpace(stderr.String())
+		if hint == "" {
+			hint = spec.InstallHint
+		}
+		return fmt.Errorf("k8sfs: the credential helper %q failed: %w: %s", spec.Command, err, hint)
+	}
+	var cred struct {
+		Status struct {
+			Token                 string `json:"token"`
+			ClientCertificateData string `json:"clientCertificateData"`
+			ClientKeyData         string `json:"clientKeyData"`
+		} `json:"status"`
+	}
+	if err := json.Unmarshal(out, &cred); err != nil {
+		return fmt.Errorf("k8sfs: the credential helper %q printed something that is not an ExecCredential: %w", spec.Command, err)
+	}
+	if t := cred.Status.Token; t != "" {
+		ep.token = t
+	}
+	if cred.Status.ClientCertificateData != "" && cred.Status.ClientKeyData != "" {
+		pair, err := tls.X509KeyPair([]byte(cred.Status.ClientCertificateData), []byte(cred.Status.ClientKeyData))
+		if err != nil {
+			return fmt.Errorf("k8sfs: the credential helper %q gave a bad client certificate: %w", spec.Command, err)
+		}
+		ep.tls.Certificates = []tls.Certificate{pair}
+	}
+	if ep.token == "" && len(ep.tls.Certificates) == 0 {
+		return fmt.Errorf("k8sfs: the credential helper %q gave neither a token nor a client certificate", spec.Command)
+	}
+	return nil
 }
