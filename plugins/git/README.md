@@ -495,16 +495,14 @@ archive tools (f4#609) rather than linking a Go git implementation.
   there) and makes the header paths relative to the repository root.
 - Staging picked lines creates the index entry with just those lines; the
   working file is left as it is, so the file shows as added and modified
-  afterwards. The added file of a real diff (a file already staged, or
-  intent-to-add) still can only be picked whole (`errWholeFileOnly`): only a
-  patch marked `untracked` may be picked in part. An untracked directory
-  (`dir/`) is still staged whole with Insert.
+  afterwards. An untracked directory (`dir/`) is expanded into its files
+  with F4 (part 27); Insert on it stages it whole.
 
 ## Part 25: single lines of a deleted file
 
 - A file deleted from the working tree (F4, F8) or staged as deleted
-  (Shift+F4) can be picked line by line; `buildPatch` no longer answers
-  `errWholeFileOnly` for it (`filePatch.deleted`).
+  (Shift+F4) can be picked line by line; `buildPatch` no longer refuses
+  part of it (`filePatch.deleted`).
 - Unstaging (Shift+F4) and discarding (F8) apply the patch in reverse, and
   the deletion of just the picked lines, reversed, re-creates the file with
   exactly those lines -- in the index or in the working tree; the patch
@@ -527,8 +525,10 @@ archive tools (f4#609) rather than linking a Go git implementation.
   `--- /dev/null` replaced by the `+++ b/` path as `--- a/`, the unpicked
   lines context); with every line picked it stays a creation, and the file
   becomes untracked as before.
-- Staging (F4, F8) a part of the added file of a real diff (intent-to-add)
-  is still refused with `errWholeFileOnly`.
+- Part 28 extends this to a file added with `git add -N` (intent-to-add):
+  F4 stages just the picked lines (the patch stays a creation, as for an
+  untracked file) and F8 removes just the picked lines from the working
+  file (written as a modification, like the unstaging above).
 - Tests (`hunk_new_test.go`): the patch text, and Shift+F4 on a real
   repository checking the index and the working file.
 

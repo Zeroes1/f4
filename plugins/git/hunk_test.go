@@ -567,18 +567,14 @@ func TestBuildPatchPicksSingleLines(t *testing.T) {
 }
 
 func TestBuildPatchRefusesUnrepresentablePicks(t *testing.T) {
-	// A new file: its one hunk is picked whole or not at all.
+	// A new file may be picked in part too (its lines are the added ones).
 	fp := &filePatch{
 		header: []string{"diff --git a/n b/n", "new file mode 100644", "index 0000000..1", "--- /dev/null", "+++ b/n"},
 		hunks:  []*diffHunk{testHunk(0, 0, 1, 2, "+one", "+two")},
 	}
 	pickLines(fp.hunks[0], 0)
-	if _, err := buildPatch(fp); !errors.Is(err, errWholeFileOnly) {
-		t.Errorf("part of a new file: error = %v, want errWholeFileOnly", err)
-	}
-	fp.hunks[0].pickAll(true)
 	if _, err := buildPatch(fp); err != nil {
-		t.Errorf("a new file picked whole: %v", err)
+		t.Errorf("part of a new file: %v", err)
 	}
 
 	// "b" loses its missing newline and "c" follows it. Keeping the old

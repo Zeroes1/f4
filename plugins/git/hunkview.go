@@ -311,8 +311,6 @@ func (v *HunkView) runApply() {
 // whether err was one of those refusals.
 func (v *HunkView) showPatchError(err error) bool {
 	switch {
-	case errors.Is(err, errWholeFileOnly):
-		toast.Show(i18n.Msg("GitHunks.WholeFileOnly"), 3e9)
 	case errors.Is(err, errNoNewlineInside):
 		toast.Show(i18n.Msg("GitHunks.NoNewlineInside"), 3e9)
 	default:

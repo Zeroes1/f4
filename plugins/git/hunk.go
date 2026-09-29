@@ -16,13 +16,6 @@ import (
 // all, a binary file, or a change of the file mode alone.
 var errNoHunks = errors.New("no text hunks")
 
-// errWholeFileOnly is what buildPatch reports for a hunk picked only in
-// part when the patch adds the whole file ("--- /dev/null"; a deleted file
-// can be picked in part, see filePatch.deleted): a partial selection there would have to turn the
-// creation or deletion into an ordinary modification, which is a different
-// header, not just different hunk lines. Such a hunk is picked whole.
-var errWholeFileOnly = errors.New("a new file can only be picked whole")
-
 // errNoNewlineInside is what buildPatch reports when the picked lines
 // would leave a line marked "\ No newline at end of file" in the middle
 // of one side of the rebuilt hunk -- the last line of a file without a
@@ -258,24 +251,6 @@ func (fp *filePatch) created() bool {
 	return false
 }
 
-// partialAllowed reports whether a patch that creates or deletes the file may
-// have its hunk picked in part: an untracked file (staging creates the index
-// entry from the picked lines), a deleted file, and a new file being
-// unstaged (the index keeps it with the unpicked lines).
-func (fp *filePatch) partialAllowed() bool {
-	return fp.untracked || fp.deleted() || (fp.created() && fp.mode == modeUnstage)
-}
-
-// wholeFile reports whether the patch creates or deletes the file.
-func (fp *filePatch) wholeFile() bool {
-	for _, line := range fp.header {
-		if line == "--- /dev/null" || line == "+++ /dev/null" {
-			return true
-		}
-	}
-	return false
-}
-
 var hunkHeaderRE = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$`)
 
 // parseRange turns the start and optional count of one side of a hunk
@@ -369,8 +344,10 @@ func parseFilePatch(diff string) (*filePatch, error) {
 // is not a line the user picked, so staging (or discarding) a few lines
 // must not take it along with them (Insert still stages the whole file, mode included).
 //
-// A patch that creates the file only takes its hunk whole
-// (errWholeFileOnly), except when unstaging (see partialCreation). A deleted
+// A patch that creates or deletes the file may be picked in part. Staging
+// picked lines of an intent-to-add file creates its index content from them,
+// as for an untracked file; unstaging or discarding write the patch as a
+// modification (see partialCreation). A deleted
 // file may be picked in part: unstaging and
 // discarding apply the patch in reverse, and a deletion of just the picked
 // lines, reversed, re-creates the file with those lines as it is; staging
@@ -392,12 +369,13 @@ func buildPatch(fp *filePatch) (string, error) {
 			}
 		}
 	}
-	// Unstaging some lines of a staged new file: the index keeps the file
-	// with the lines left unpicked, so the patch, applied in reverse, is a
-	// modification of it ("new file mode" dropped, "--- /dev/null" replaced
+	// Unstaging or discarding some lines of a new file (staged, or
+	// intent-to-add in the working tree): the index (or the working file)
+	// keeps the file with the lines left unpicked, so the patch, applied in
+	// reverse, is a modification of it ("new file mode" dropped, "--- /dev/null" replaced
 	// by the "+++ b/" path as "--- a/").
 	partialCreation := false
-	if fp.created() && fp.mode == modeUnstage {
+	if fp.created() && fp.mode != modeStage {
 		for _, h := range fp.hunks {
 			if h.anyPicked() && !h.allPicked() {
 				partialCreation = true
@@ -434,9 +412,6 @@ func buildPatch(fp *filePatch) (string, error) {
 	for _, h := range fp.hunks {
 		if !h.anyPicked() {
 			continue
-		}
-		if !h.allPicked() && fp.wholeFile() && !fp.partialAllowed() {
-			return "", errWholeFileOnly
 		}
 		lines, oldN, newN, err := h.pickedBody(fp.mode.reverse())
 		if err != nil {
