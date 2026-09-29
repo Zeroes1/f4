@@ -275,3 +275,94 @@ func TestRunCLIFailsOnInstall(t *testing.T) {
 		t.Fatalf("RunCLI(install failure) = %d, want 1", got)
 	}
 }
+
+// #1656, end to end: v0.3.0-beta on the nightly channel. The release lists
+// android-plugin-linux-amd64.tar.gz first; the update must install f4's own
+// archive and record f4's asset as the installed nightly.
+func TestRunCLIInstallsF4RatherThanAPluginArchive(t *testing.T) {
+	oldAPI, oldOS, oldArch, oldProxy := APIURL, CurrentOS, CurrentArch, netproxy.Global()
+	t.Cleanup(func() {
+		APIURL, CurrentOS, CurrentArch = oldAPI, oldOS, oldArch
+		netproxy.SetGlobal(oldProxy)
+	})
+	CurrentOS, CurrentArch = "linux", "amd64"
+	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
+	exe := installFixture(t)
+
+	pluginArchive := targz(t, map[string]string{"android-plugin": "a plugin"})
+	f4Archive := targz(t, map[string]string{"f4": "nightly f4"})
+	baseURL := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/android-plugin-linux-amd64.tar.gz":
+			_, _ = w.Write(pluginArchive)
+		case "/f4-linux-amd64.tar.gz":
+			_, _ = w.Write(f4Archive)
+		default:
+			_ = json.NewEncoder(w).Encode(Release{
+				TagName: "nightly",
+				Body:    "Automated pre-release build of the latest main branch. Commit: 1c2e8c8. Built on: 2026-09-29 00:11:43",
+				Assets: []Asset{
+					{Name: "android-plugin-linux-amd64.tar.gz", BrowserDownloadURL: baseURL + "/android-plugin-linux-amd64.tar.gz", UpdatedAt: "2026-09-29T00:23:07Z"},
+					{Name: "f4-linux-amd64.tar.gz", BrowserDownloadURL: baseURL + "/f4-linux-amd64.tar.gz", UpdatedAt: "2026-09-29T00:23:13Z"},
+				},
+			})
+		}
+	}))
+	defer server.Close()
+	baseURL = server.URL
+	APIURL = server.URL
+
+	var saved Settings
+	build := Build{Version: "v0.3.0-beta", IsRelease: true, TimeText: "2026-09-26T22:41:49Z"}
+	if got := RunCLI("", Settings{Channel: ChannelNightly, LastVersion: "v0.3.0-beta"}, build, func(s Settings) { saved = s }); got != 0 {
+		t.Fatalf("RunCLI() = %d, want 0", got)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "nightly f4" {
+		t.Errorf("binary = %q, want the nightly's", got)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(exe), "android-plugin")); err == nil {
+		t.Error("the plugin's archive was unpacked next to f4")
+	}
+	if saved.LastVersion != "2026-09-29T00:23:13Z" {
+		t.Errorf("LastVersion = %q, want f4's asset time", saved.LastVersion)
+	}
+}
+
+// An archive that does not replace f4 must not be recorded as installed:
+// LastVersion is what later checks trust, and it kept #1656's old binary
+// "already up to date" for good.
+func TestRunCLIDoesNotRecordAnArchiveThatLeftF4(t *testing.T) {
+	oldAPI, oldOS, oldArch, oldProxy := APIURL, CurrentOS, CurrentArch, netproxy.Global()
+	t.Cleanup(func() {
+		APIURL, CurrentOS, CurrentArch = oldAPI, oldOS, oldArch
+		netproxy.SetGlobal(oldProxy)
+	})
+	CurrentOS, CurrentArch = "linux", "amd64"
+	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
+	installFixture(t)
+
+	archive := targz(t, map[string]string{"README": "no binary here"})
+	archiveURL := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/archive" {
+			_, _ = w.Write(archive)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(Release{
+			TagName: "nightly",
+			Assets:  []Asset{{Name: "f4-linux-amd64.tar.gz", BrowserDownloadURL: archiveURL, UpdatedAt: "2026-09-29T00:23:13Z"}},
+		})
+	}))
+	defer server.Close()
+	archiveURL = server.URL + "/archive"
+	APIURL = server.URL
+
+	saves := 0
+	if got := RunCLI("", Settings{Channel: ChannelNightly}, Build{}, func(Settings) { saves++ }); got != 1 {
+		t.Fatalf("RunCLI() = %d, want 1", got)
+	}
+	if saves != 0 {
+		t.Errorf("settings saved %d times, want none", saves)
+	}
+}

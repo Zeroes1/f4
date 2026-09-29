@@ -182,3 +182,83 @@ func TestUpdateAssetSuffixes_LiteWindowsIsZipOnly(t *testing.T) {
 		t.Errorf("lite windows suffixes = %v, want [-lite-windows-amd64.zip]", got)
 	}
 }
+
+// nightly20260929Assets is the asset list of the nightly of 2026-09-29
+// (1c2e8c8) in the order the GitHub API returns it, by name. Since f4#1178
+// the plugins are published beside f4, and their names end with the same
+// "-<os>-<arch>.tar.gz".
+func nightly20260929Assets() []Asset {
+	names := []string{
+		"android-plugin-darwin-amd64.tar.gz",
+		"android-plugin-linux-amd64.tar.gz",
+		"android-plugin-linux-arm64.tar.gz",
+		"android-plugin-windows-amd64.tar.gz",
+		"cloudfox-plugin-darwin-amd64.tar.gz",
+		"cloudfox-plugin-linux-amd64.tar.gz",
+		"cloudfox-plugin-linux-arm64.tar.gz",
+		"cloudfox-plugin-windows-amd64.tar.gz",
+		"f4-darwin-amd64.app.zip",
+		"f4-darwin-amd64.tar.gz",
+		"f4-darwin-arm64.app.zip",
+		"f4-darwin-arm64.tar.gz",
+		"f4-legacy-windows-386.zip",
+		"f4-linux-386.tar.gz",
+		"f4-linux-amd64.tar.gz",
+		"f4-linux-arm64.tar.gz",
+		"f4-linux-musl-amd64.tar.gz",
+		"f4-lite-linux-amd64.tar.gz",
+		"f4-lite-windows-amd64.zip",
+		"f4-termux-arm64.tar.gz",
+		"f4-windows-amd64.zip",
+		"f4-windows7-amd64.zip",
+		"ios-plugin-darwin-amd64.tar.gz",
+		"ios-plugin-linux-amd64.tar.gz",
+		"ios-plugin-linux-arm64.tar.gz",
+		"ios-plugin-windows-amd64.tar.gz",
+	}
+	assets := make([]Asset, len(names))
+	for i, name := range names {
+		assets[i] = Asset{Name: name, BrowserDownloadURL: "https://example/" + name}
+	}
+	return assets
+}
+
+// #1656: android-plugin-linux-amd64.tar.gz sorts before f4-linux-amd64.tar.gz
+// and ends with the same suffix, so it was what every Linux and macOS updater
+// downloaded. The update then "succeeded" without touching f4.
+func TestPickAssetTakesF4NotAPluginArchive(t *testing.T) {
+	tests := []struct {
+		name   string
+		lite   bool
+		goos   string
+		goarch string
+		libc   string
+		want   string
+	}{
+		{name: "linux amd64", goos: "linux", goarch: "amd64", want: "f4-linux-amd64.tar.gz"},
+		{name: "linux arm64", goos: "linux", goarch: "arm64", want: "f4-linux-arm64.tar.gz"},
+		{name: "linux musl", goos: "linux", goarch: "amd64", libc: "musl", want: "f4-linux-musl-amd64.tar.gz"},
+		{name: "darwin amd64", goos: "darwin", goarch: "amd64", want: "f4-darwin-amd64.tar.gz"},
+		{name: "lite linux", lite: true, goos: "linux", goarch: "amd64", want: "f4-lite-linux-amd64.tar.gz"},
+		{name: "termux", goos: "android", goarch: "arm64", want: "f4-termux-arm64.tar.gz"},
+		{name: "windows", goos: "windows", goarch: "amd64", want: "f4-windows-amd64.zip"},
+		// The legacy build's own archive is named apart, and still found.
+		{name: "legacy windows 386", goos: "windows", goarch: "386", want: "f4-legacy-windows-386.zip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url, _, _ := pickAsset(nightly20260929Assets(), editionAssetSuffixes(tt.lite, tt.goos, tt.goarch, tt.libc))
+			if want := "https://example/" + tt.want; url != want {
+				t.Errorf("picked %q, want %q", url, want)
+			}
+		})
+	}
+}
+
+// A release whose only matching archive is a plugin's has nothing for f4.
+func TestPickAssetRefusesAPluginOnlyRelease(t *testing.T) {
+	assets := []Asset{{Name: "cloudfox-plugin-linux-amd64.tar.gz", BrowserDownloadURL: "https://example/cloudfox"}}
+	if url, _, _ := pickAsset(assets, assetSuffixes("linux", "amd64", "")); url != "" {
+		t.Errorf("picked %q from a release without f4", url)
+	}
+}
