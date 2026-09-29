@@ -149,6 +149,18 @@ type PanelController interface {
 	Close() error
 }
 
+// PanelStateProvider is the optional PanelController extension that lets a
+// bookmark (unxed/f4#1669) return to more than the panel's directory. The host
+// stores what SavePanelState returns in the bookmark and hands it back to
+// RestorePanelState right after it opens the panel again. The state is an
+// opaque single-line string owned by the plugin (for example the name of the
+// selected entry); it may be stale or foreign by then, so RestorePanelState
+// must ignore what it does not understand. Both are called on the UI goroutine.
+type PanelStateProvider interface {
+	SavePanelState() string
+	RestorePanelState(state string)
+}
+
 // PanelKey is one key a panel plugin binds while its panel has the focus.
 // It is the single, shared key/keybar primitive for every PanelProvider
 // (f4#312): a plugin declares *what* its keys do and how they are captioned,

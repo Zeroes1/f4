@@ -2,11 +2,13 @@ package panel
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/internal/toast"
+	"github.com/unxed/f4/vfs"
 )
 
 // A bookmark of a panel-plugin location (M-Commander parity, unxed/f4#1669).
@@ -47,6 +49,10 @@ func (pf *PanelsFrame) BookmarkForPanel(fsp *FileSystemPanel) Bookmark {
 		}
 		if inst, ok := pf.AltPanels[slot].(*PluginPanelInstance); ok && inst != nil && inst.providerID != "" {
 			b.Plugin = bookmarkPanelPluginPrefix + inst.providerID
+			if saver, ok := inst.controller.(vfs.PanelStateProvider); ok {
+				// bookmarks.ini values are one line: escape what a state may hold.
+				b.PluginData = url.QueryEscape(saver.SavePanelState())
+			}
 		}
 		break
 	}
@@ -57,10 +63,22 @@ func (pf *PanelsFrame) BookmarkForPanel(fsp *FileSystemPanel) Bookmark {
 // panel it has just navigated. A provider that is not registered (the plugin
 // is disabled or not installed here) leaves the directory in place and says
 // so instead of failing silently.
-func (pf *PanelsFrame) openBookmarkPanelProvider(providerID string) {
+func (pf *PanelsFrame) openBookmarkPanelProvider(providerID, state string) {
 	if _, ok := plughost.LookupPanelProvider(providerID); !ok {
 		toast.Show(fmt.Sprintf(i18n.Msg("Bookmarks.PanelPluginUnavailable"), providerID), 3e9)
 		return
 	}
 	OpenRegisteredPanelProvider(pf, providerID)
+	if state == "" {
+		return
+	}
+	inst, ok := pf.AltPanels[pf.ActiveIdx].(*PluginPanelInstance)
+	if !ok || inst == nil || inst.providerID == "" {
+		return
+	}
+	if restorer, ok := inst.controller.(vfs.PanelStateProvider); ok {
+		if decoded, err := url.QueryUnescape(state); err == nil {
+			restorer.RestorePanelState(decoded)
+		}
+	}
 }

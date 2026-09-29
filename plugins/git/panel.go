@@ -330,6 +330,17 @@ func (p *statusPanel) GetSelectedName() string {
 
 func (p *statusPanel) SetContext(vfs.PanelContext) {}
 
+// SavePanelState and RestorePanelState let a bookmark return to the entry
+// under the cursor (vfs.PanelStateProvider); an entry that has left git status
+// since is simply not found and the cursor stays where the panel put it.
+func (p *statusPanel) SavePanelState() string { return p.GetSelectedName() }
+
+func (p *statusPanel) RestorePanelState(state string) {
+	if state != "" {
+		p.restoreSelectionByPath(state)
+	}
+}
+
 func (p *statusPanel) Show(scr *vtui.ScreenBuf) {
 	p.frame.SetTitle(p.title())
 	p.frame.Show(scr)

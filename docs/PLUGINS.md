@@ -97,6 +97,15 @@ declares keys or not:
 * the keybar shows the declared captions, blanks the file-panel captions and
   keeps every other f4 binding (Help, menus, panel toggles); F10 is captioned as closing the panel.
 
+A folder bookmark taken while a panel plugin covers the directory remembers
+that plugin (`Plugin=f4-panel:<provider ID>` in `bookmarks.ini`) and opens it
+again over the directory. A controller that also implements
+`vfs.PanelStateProvider` (`SavePanelState`/`RestorePanelState`, an opaque
+one-line string such as the selected entry) gets its state stored in the
+bookmark's `PluginData` and handed back after the panel reopens; state it does
+not recognise must be ignored. A provider that is not registered on the
+machine leaves the directory open and shows a message.
+
 `vfs.DispatchPanelKey` is the host's dispatcher, exported so a controller can
 route the same declarations from its own `ProcessKey`.
 

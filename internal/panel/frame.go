@@ -6291,7 +6291,7 @@ func (pf *PanelsFrame) NavigateToBookmark(fsp *FileSystemPanel, bookmark Bookmar
 		return moved
 	}
 	if moved {
-		pf.openBookmarkPanelProvider(providerID)
+		pf.openBookmarkPanelProvider(providerID, bookmark.PluginData)
 	}
 	return moved
 }
