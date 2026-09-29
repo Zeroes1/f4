@@ -2,8 +2,9 @@
 // (f4#1668, part 1), so a panel can refresh itself instead of waiting for
 // the user to press Ctrl+R.
 //
-// Where the OS can report changes -- inotify on Linux -- Watch uses that;
-// everywhere else, and where inotify is unavailable or out of watches, it
+// Where the OS can report changes -- inotify on Linux, kqueue on macOS and the
+// BSDs, a change-notification handle on Windows -- Watch uses that; on any
+// other OS, and where the mechanism is unavailable or out of watches, it
 // falls back to comparing a snapshot of the directory (names, sizes and
 // modification times) once per PollInterval.
 //

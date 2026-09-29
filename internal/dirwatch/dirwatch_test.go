@@ -106,14 +106,14 @@ func watchAndTouch(t *testing.T, opts Options, wantNative bool) {
 	}
 	defer w.Close()
 	if wantNative && !w.Native() {
-		t.Skip("inotify unavailable here")
+		t.Skip("no OS notifications available here")
 	}
 	if !wantNative && w.Native() {
 		t.Fatal("ForcePolling still used the native watcher")
 	}
 
 	time.Sleep(50 * time.Millisecond)
-	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if !waitCount(t, &calls, 1, 5*time.Second) {
@@ -133,8 +133,10 @@ func TestWatchPollingReportsChanges(t *testing.T) {
 }
 
 func TestWatchNativeReportsChanges(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("native watching is Linux-only")
+	switch runtime.GOOS {
+	case "linux", "windows", "darwin", "freebsd", "netbsd", "openbsd", "dragonfly":
+	default:
+		t.Skip("no native watcher on this OS")
 	}
 	watchAndTouch(t, Options{Quiet: 10 * time.Millisecond}, true)
 }
@@ -163,7 +165,7 @@ func TestWatchRejectsBadArguments(t *testing.T) {
 		t.Error("missing directory accepted")
 	}
 	file := filepath.Join(dir, "f")
-	if err := os.WriteFile(file, nil, 0o644); err != nil {
+	if err := os.WriteFile(file, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Watch(file, Options{}, func() {}); err == nil {
@@ -185,11 +187,11 @@ func TestOptionsDefaults(t *testing.T) {
 func TestSnapshotSeesSizeAndVanishing(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "a")
-	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s1 := snapshot(dir)
-	if err := os.WriteFile(f, []byte("xyz"), 0o644); err != nil {
+	if err := os.WriteFile(f, []byte("xyz"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if snapshot(dir) == s1 {

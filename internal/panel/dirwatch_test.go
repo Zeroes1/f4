@@ -53,7 +53,7 @@ func TestPanelDirWatchFollowsThePanel(t *testing.T) {
 		t.Fatalf("watched path = %q, want %q", got, dir1)
 	}
 	pd.sync(fsp, func() { calls.Add(1) }) // same directory: nothing restarts
-	if err := os.WriteFile(filepath.Join(dir1, "a"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir1, "a"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	waitTrue(t, "a change in the first directory", func() bool { return calls.Load() >= 1 })
@@ -64,7 +64,7 @@ func TestPanelDirWatchFollowsThePanel(t *testing.T) {
 		t.Fatalf("watched path after moving = %q, want %q", got, dir2)
 	}
 	before := calls.Load()
-	if err := os.WriteFile(filepath.Join(dir2, "b"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir2, "b"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	waitTrue(t, "a change in the second directory", func() bool { return calls.Load() > before })
@@ -94,7 +94,7 @@ func TestWatchedPanelShowsANewFile(t *testing.T) {
 	t.Cleanup(swapFrameManager(t))
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "keep.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "keep.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	fsp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewOSVFS(dir))
@@ -106,7 +106,7 @@ func TestWatchedPanelShowsANewFile(t *testing.T) {
 	pf.dirWatch[0].opts = fastWatch
 	t.Cleanup(pf.dirWatch[0].stop)
 	pf.syncDirWatches()
-	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("x"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,7 +119,10 @@ func TestWatchedPanelShowsANewFile(t *testing.T) {
 		return false
 	}
 	deadline := time.Now().Add(5 * time.Second)
-	for !(has() && !fsp.IsLoading) && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		if has() && !fsp.IsLoading {
+			break
+		}
 		select {
 		case task := <-vtui.FrameManager.TaskChan:
 			task()

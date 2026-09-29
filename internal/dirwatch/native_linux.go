@@ -34,6 +34,7 @@ func newNativeSource(dir string) (*rawSource, error) {
 		defer close(finished)
 		defer func() { _ = unix.Close(fd) }()
 		buf := make([]byte, 16*unix.SizeofInotifyEvent+4096)
+		// #nosec G115 -- fd is a small non-negative descriptor from inotify_init1.
 		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
 		for {
 			select {
