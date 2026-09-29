@@ -4742,6 +4742,10 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 	dlg.AddItem(lbl)
 
 	pb := vtui.NewProgressBar(0, 0, 46)
+	// The bar stays hidden until the worker reports a real percentage: a task
+	// that only shows a status line (Opening..., Requesting sudo access...)
+	// has nothing for it to indicate, and an empty bar reads as stuck (f4#1411).
+	pb.SetVisible(false)
 	dlg.AddItem(pb)
 
 	lblHint := vtui.NewText(0, 0, i18n.Msg("Op.SwitchHint"), vtui.Palette[vtui.ColDialogText])
@@ -4838,6 +4842,7 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 					lbl.SetText(safeMsg)
 				}
 				if percent >= 0 {
+					pb.SetVisible(true)
 					pb.SetPercent(percent)
 					dlg.SetProgress(percent)
 				}
