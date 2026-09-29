@@ -4234,11 +4234,42 @@ func (pf *PanelsFrame) GetPaths() (string, string) {
 	return l, r
 }
 
+// QuitConfirmationOpen reports whether the exit confirmation dialog is already
+// on the active screen stack. A held Ctrl+W keeps auto-repeating while that
+// dialog is up and the repeats are already queued in the event channel: each
+// one re-emits CmQuit, and without this check every repeat used to push
+// another copy of the dialog, so the user had to press Cancel once per queued
+// event.
+func QuitConfirmationOpen() bool {
+	fm := vtui.FrameManager
+	if fm == nil {
+		return false
+	}
+	title := i18n.Msg("Quit.Title")
+	if top := fm.GetTopFrame(); top != nil && !top.IsDone() && top.GetTitle() == title {
+		return true
+	}
+	if fm.ActiveIdx < 0 || fm.ActiveIdx >= len(fm.Screens) || fm.Screens[fm.ActiveIdx] == nil {
+		return false
+	}
+	for _, f := range fm.Screens[fm.ActiveIdx].Frames {
+		if f != nil && !f.IsDone() && f.GetTitle() == title {
+			return true
+		}
+	}
+	return false
+}
+
 // HandleCommand intercepts global commands (like CmQuit or appcmd.CmCopy)
 // sent by menus or other views.
 func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 	switch cmd {
 	case vtui.CmQuit:
+		// The confirmation is already up: consume the repeat instead of
+		// stacking a duplicate dialog for every queued Ctrl+W event.
+		if QuitConfirmationOpen() {
+			return true
+		}
 		active := 0
 		if fileops.GlobalQueueManager != nil {
 			active = fileops.GlobalQueueManager.ActiveTasksCount()
