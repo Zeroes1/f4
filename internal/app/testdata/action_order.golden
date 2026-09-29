@@ -300,6 +300,7 @@ AI.Setup
 AI.Help
 AI.AttachAPSpec
 AI.ListModels
+Panel.CalcDirSize
 Settings.Category.navigation
 Settings.Open
 Settings.Category.appearance
