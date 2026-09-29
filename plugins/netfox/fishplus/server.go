@@ -16,7 +16,7 @@ import (
 // remote command, says hello with BootstrapNative and from then on talks to it
 // exactly as it talks to helper.sh. It is the first step of using f4 as the
 // remote server (unxed/f4#1680); only the session commands are served so far --
-// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink and isdirs,
+// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink, isdirs and read,
 // which answer in the "find" listing format -- and every other command of the protocol
 // answers "unknown command" after its path lines have been read, so a client
 // that has probed the banner's features never desynchronises the stream.
@@ -29,7 +29,7 @@ type Server struct {
 
 // serverFeatures is what a Server announces when none is set: the native
 // marker, which tells a client that no shell tool is behind the answers.
-var serverFeatures = []string{"native", "mode:find"}
+var serverFeatures = []string{"native", "mode:find", "read:ddbytes"}
 
 // pathLines is how many path lines follow the request line of each command of
 // the protocol, which is what a server has to consume to stay in step with a
@@ -148,6 +148,30 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 			err = reply([]string{target}, opErr)
 		case "isdirs":
 			err = reply(isdirsLines(paths), nil)
+		case "read":
+			off, okOff := atoiArg(fields[2:], 0)
+			length, okLen := atoiArg(fields[2:], 1)
+			if !okOff || !okLen {
+				err = end("err", "bad range")
+				break
+			}
+			size, data, opErr := readRange(paths[0], int64(off), int64(length))
+			if opErr != nil {
+				err = end("err", errText(opErr))
+				break
+			}
+			if _, err = fmt.Fprintf(w, "S %d\n", size); err != nil {
+				break
+			}
+			if len(data) > 0 {
+				if _, err = fmt.Fprintf(w, "#%d\n", len(data)); err != nil {
+					break
+				}
+				if _, err = w.Write(data); err != nil {
+					break
+				}
+			}
+			err = end("ok", "")
 		case "exit":
 			return end("ok", "")
 		default:

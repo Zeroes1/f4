@@ -1,6 +1,7 @@
 package fishplus
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -169,6 +170,26 @@ func TestServerFileSystemCommands(t *testing.T) {
 	}
 	if _, err := c.Stat(ctx, "relative"); err == nil {
 		t.Error("a relative path must be refused")
+	}
+	big := make([]byte, 700*1024+13) // more than two chunks
+	for i := range big {
+		big[i] = byte(i * 7)
+	}
+	bigPath := filepath.Join(root, "big.bin")
+	if err := os.WriteFile(bigPath, big, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := c.ReadFile(ctx, bigPath); err != nil || !bytes.Equal(got, big) {
+		t.Errorf("ReadFile = %d bytes, %v, want the %d bytes of the file", len(got), err, len(big))
+	}
+	if part, size, err := c.Read(ctx, bigPath, 100, 50); err != nil || size != int64(len(big)) || !bytes.Equal(part, big[100:150]) {
+		t.Errorf("Read(100, 50) = %d bytes, size %d, %v", len(part), size, err)
+	}
+	if part, _, err := c.Read(ctx, bigPath, int64(len(big))+10, 5); err != nil || len(part) != 0 {
+		t.Errorf("Read past the end = %d bytes, %v, want none", len(part), err)
+	}
+	if _, _, err := c.Read(ctx, root, 0, 10); err == nil {
+		t.Error("reading a directory must fail")
 	}
 	dirs, err := c.TargetDirs(ctx, []string{root, filepath.Join(root, "a file.txt"), filepath.Join(root, "missing")})
 	if err != nil || len(dirs) != 3 || !dirs[0] || dirs[1] || dirs[2] {

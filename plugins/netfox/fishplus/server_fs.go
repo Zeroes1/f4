@@ -2,6 +2,7 @@ package fishplus
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -143,4 +144,44 @@ func atoiArg(args []string, i int) (int, bool) {
 	}
 	n, err := strconv.Atoi(args[i])
 	return n, err == nil && n >= 0
+}
+
+// readRange answers read: the size the file has now and the bytes of the range
+// that exist. A length of zero means "to the end", and one longer than
+// MaxReadLen is cut to it, so that a bad request cannot make the server load a
+// whole disk.
+func readRange(p string, off, length int64) (size int64, data []byte, err error) {
+	p, err = cleanAbs(p)
+	if err != nil {
+		return 0, nil, err
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return 0, nil, err
+	}
+	if fi.IsDir() {
+		return 0, nil, fmt.Errorf("read %s: is a directory", p)
+	}
+	size = fi.Size()
+	if off >= size {
+		return size, nil, nil
+	}
+	n := size - off
+	if length > 0 && length < n {
+		n = length
+	}
+	if n > MaxReadLen {
+		n = MaxReadLen
+	}
+	data = make([]byte, n)
+	got, err := f.ReadAt(data, off)
+	if err != nil && err != io.EOF {
+		return size, nil, err
+	}
+	return size, data[:got], nil
 }
