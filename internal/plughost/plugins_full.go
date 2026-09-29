@@ -6,6 +6,7 @@ import (
 	"github.com/unxed/f4/plugins/archive"
 	"github.com/unxed/f4/plugins/dockerfs"
 	"github.com/unxed/f4/plugins/k8sfs"
+	"github.com/unxed/f4/plugins/mongofs"
 	"github.com/unxed/f4/plugins/netfox"
 )
 
@@ -37,5 +38,8 @@ func optionalVFSPlugins() []Plugin {
 		// Kubernetes namespaces, pods and containers as a read-only drive
 		// (f4#1663); the API server over the standard library and x/net.
 		k8sfs.NewPlugin(),
+		// MongoDB databases, collections and documents as a read-only drive
+		// (f4#1663); the wire protocol is spoken directly, no driver.
+		mongofs.NewPlugin(),
 	}
 }
