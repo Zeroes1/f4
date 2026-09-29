@@ -261,8 +261,11 @@ type Panel interface {
 // PanelsFrame is the main frame of the f4 manager, containing left and right panels.
 type PanelsFrame struct {
 	vtui.BaseFrame
-	Panels  [2]Panel
-	DragOut dragOutState
+	Panels [2]Panel
+	// dirWatch keeps each side's listing fresh while the directory changes
+	// on disk (f4#1668).
+	dirWatch [2]panelDirWatch
+	DragOut  dragOutState
 	// externalUIRunner is normally nil, which selects the real desktop
 	// launcher. Tests install a per-frame recorder instead of spawning native
 	// Explorer/association windows.
@@ -1662,6 +1665,9 @@ func (pf *PanelsFrame) Close() {
 	pf.PtyMutex.Lock()
 	defer pf.PtyMutex.Unlock()
 	pf.Closed = true
+	for i := range pf.dirWatch {
+		pf.dirWatch[i].stop()
+	}
 
 	for _, p := range pf.Panels {
 		if fsp, ok := p.(*FileSystemPanel); ok && fsp != nil {
@@ -2078,6 +2084,14 @@ func (pf *PanelsFrame) TerminalOwnsKeyboard() bool {
 	return pf.TermView == nil || pf.TermView.UseAltScreen || pf.IsPtyBusy()
 }
 
+// hostDefaultColors reports whether the mirror of the host console that f4
+// draws beside a hidden panel takes the host terminal's default colours
+// (HostConsoleDefaultColors, #1675). Only the host modes have such a mirror
+// of a console that is really the terminal's own.
+func (pf *PanelsFrame) hostDefaultColors() bool {
+	return config.App.HostConsoleDefaultColors && pf.ShellMode == terminal.ShellModeHost
+}
+
 func (pf *PanelsFrame) IsPtyBusy() bool {
 	active := pf.GetActivePTY()
 	if active == nil {
@@ -2294,6 +2308,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		return
 	}
 	pf.pollManagedExecutionDebounce()
+	pf.syncDirWatches()
 	isBusy := pf.IsPtyBusy()
 
 	// 1. Dynamic Layout Adjustment
@@ -2361,6 +2376,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		}
 		pf.TermView.SetVisible(hasTerminalArea)
 		if hasTerminalArea {
+			pf.TermView.DefaultColors = pf.hostDefaultColors()
 			pf.TermView.Show(scr)
 		}
 		idx := pf.WidePanel
@@ -2377,6 +2393,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		// vertically (Ctrl+Up) and the terminal shows through below it.
 		if !pf.ShowLeftPanel || !pf.ShowRightPanel || pf.LeftHeightDecrement > 0 || pf.RightHeightDecrement > 0 {
 			pf.TermView.SetVisible(true)
+			pf.TermView.DefaultColors = pf.hostDefaultColors()
 			pf.TermView.Show(scr)
 		} else {
 			pf.TermView.SetVisible(false)
@@ -2918,8 +2935,11 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	// In Far-style host console with an overlay, route editing keys to CommandLine first
-	if !pf.ShowPanels && pf.ShellMode == terminal.ShellModeHost && pf.OverlayLines() > 0 {
+	// In Far-style host console with an overlay, route editing keys to CommandLine first.
+	// Only while the shell is idle: a running program (pkzipc waiting for a
+	// command, Far) owns the keyboard, and the overlay's command line must not
+	// swallow what is typed for it (#1674).
+	if !pf.ShowPanels && pf.ShellMode == terminal.ShellModeHost && pf.OverlayLines() > 0 && !pf.TerminalOwnsKeyboard() {
 		if pf.handleHostConsoleTab(e) {
 			return true
 		}
@@ -2999,7 +3019,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			}
 			if isBookmarkSave {
 				if fsp := pf.GetActivePanel(); fsp != nil {
-					set[slot] = Bookmark{Path: fsp.Vfs.GetPath()}
+					set[slot] = pf.BookmarkForPanel(fsp)
 					if err := SaveBookmarks(File, set); err != nil {
 						vtui.DebugLog("BOOKMARKS: save %q failed: %v", File, err)
 					}
@@ -3653,7 +3673,7 @@ func (pf *PanelsFrame) hiddenConsoleCommandLineOwnsInput() bool {
 	// the edit control, otherwise Enter can execute text that was never drawn.
 	switch pf.ShellMode {
 	case terminal.ShellModeHost:
-		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.IsHostConsoleActive()
+		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.IsHostConsoleActive() && !pf.TerminalOwnsKeyboard()
 	case terminal.ShellModeSimpleInline:
 		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.ConsoleViewActive()
 	default:
@@ -4517,6 +4537,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		return true
 	case appcmd.CmSwapPanels:
 		pf.Panels[0], pf.Panels[1] = pf.Panels[1], pf.Panels[0]
+		pf.swapPluginPanels()
 		pf.ActiveIdx = 1 - pf.ActiveIdx
 		if pf.Wide {
 			pf.WidePanel = 1 - pf.WidePanel
@@ -4741,6 +4762,10 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 	dlg.AddItem(lbl)
 
 	pb := vtui.NewProgressBar(0, 0, 46)
+	// The bar stays hidden until the worker reports a real percentage: a task
+	// that only shows a status line (Opening..., Requesting sudo access...)
+	// has nothing for it to indicate, and an empty bar reads as stuck (f4#1411).
+	pb.SetVisible(false)
 	dlg.AddItem(pb)
 
 	lblHint := vtui.NewText(0, 0, i18n.Msg("Op.SwitchHint"), vtui.Palette[vtui.ColDialogText])
@@ -4837,6 +4862,7 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 					lbl.SetText(safeMsg)
 				}
 				if percent >= 0 {
+					pb.SetVisible(true)
 					pb.SetPercent(percent)
 					dlg.SetProgress(percent)
 				}
@@ -6266,7 +6292,25 @@ func (pf *PanelsFrame) SwitchToVFS(fsp *FileSystemPanel, newVFS vfs.VFS) {
 	}
 }
 func (pf *PanelsFrame) NavigateToBookmark(fsp *FileSystemPanel, bookmark Bookmark) bool {
-	return pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	providerID, hasProvider := bookmarkPanelProviderID(bookmark)
+	if !hasProvider {
+		return pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	}
+	// A panel-plugin bookmark: go to the directory it covered (when it kept
+	// one), then open the plugin panel over it. A directory that is still
+	// being mounted asynchronously has no panel to cover yet, so only the
+	// directory is restored then.
+	if fsp == nil {
+		return false
+	}
+	moved := bookmark.Path == "" || pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	if fsp.ProviderOpenTask != nil {
+		return moved
+	}
+	if moved {
+		pf.openBookmarkPanelProvider(providerID, bookmark.PluginData)
+	}
+	return moved
 }
 
 // syncPassivePanel opens the active panel's directory in the passive panel,

@@ -221,6 +221,10 @@ func (d *BookmarksDialog) RowText(slot int) string {
 	if path == "" {
 		path = i18n.Msg("Bookmarks.EmptySlot")
 	}
+	if id, ok := bookmarkPanelProviderID(d.Set[slot]); ok {
+		// A plugin-panel bookmark also opens that plugin over the folder.
+		path += "  [" + id + "]"
+	}
 	return fmt.Sprintf("%s %d   %s", i18n.Msg("Bookmarks.RowPrefix"), slot, dialog.EscapeAmpersand(path))
 }
 
@@ -255,13 +259,14 @@ func (d *BookmarksDialog) size() (int, int) {
 	return w, h
 }
 
-// saveCurrentDir records the active panel's directory in the slot.
+// saveCurrentDir records the active panel's location in the slot: its
+// directory and, when a panel plugin covers it, that plugin's identity.
 func (d *BookmarksDialog) saveCurrentDir(slot int) {
 	fsp := d.Pf.GetActivePanel()
-	if fsp == nil || slot < 0 {
+	if fsp == nil || slot < 0 || slot >= len(d.Set) {
 		return
 	}
-	d.Set.SetCurrentDir(slot, fsp.Vfs.GetPath())
+	d.Set[slot] = d.Pf.BookmarkForPanel(fsp)
 	d.persist()
 }
 

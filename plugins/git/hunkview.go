@@ -311,8 +311,6 @@ func (v *HunkView) runApply() {
 // whether err was one of those refusals.
 func (v *HunkView) showPatchError(err error) bool {
 	switch {
-	case errors.Is(err, errWholeFileOnly):
-		toast.Show(i18n.Msg("GitHunks.WholeFileOnly"), 3e9)
 	case errors.Is(err, errNoNewlineInside):
 		toast.Show(i18n.Msg("GitHunks.NoNewlineInside"), 3e9)
 	default:
@@ -350,6 +348,12 @@ func (p *statusPanel) showDiscardHunks() {
 func (p *statusPanel) showHunksOf(mode hunkMode) {
 	entry, ok := p.selectedEntry()
 	if !ok {
+		return
+	}
+	if mode == modeStage && entry.XY == "??" && strings.HasSuffix(entry.Path, "/") {
+		// An untracked directory is one row with no lines of its own: F4
+		// lists the files inside it, and F4 on one of them picks lines.
+		p.expandUntrackedDir(entry)
 		return
 	}
 	v, err := p.openHunkView(entry, mode)

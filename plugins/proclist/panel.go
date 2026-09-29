@@ -471,6 +471,7 @@ var _ vfs.PanelKeyProvider = (*procListPanel)(nil)
 // F3/F8/Shift+F1/F2 bindings and put their captions on the keybar.
 func (p *procListPanel) PanelKeys() []vfs.PanelKey {
 	keys := []vfs.PanelKey{
+		vfs.PanelHelpKey(i18n.Msg("KeyBar.F1"), func() string { return i18n.Msg("ProcList.HelpTitle") }, func() string { return i18n.Msg("ProcList.Help") }),
 		{VK: vtinput.VK_F3, Label: i18n.Msg("ProcList.KeyBar.Details"), Run: p.showDetails},
 		{VK: vtinput.VK_F8, Label: i18n.Msg("ProcList.KeyBar.Kill"), Run: p.confirmKill},
 		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityDown"), Run: func() { p.adjustPriority(false) }},
@@ -523,6 +524,29 @@ func (p *procListPanel) GetSelectedName() string {
 }
 
 func (p *procListPanel) SetContext(vfs.PanelContext) {}
+
+// SavePanelState and RestorePanelState let a bookmark return to the process
+// name under the cursor (vfs.PanelStateProvider). Process ids do not survive a
+// restart, so the name is the only stable handle; when no row carries it (the
+// list has not filled in yet, or the process is gone) the cursor stays put.
+func (p *procListPanel) SavePanelState() string { return p.GetSelectedName() }
+
+func (p *procListPanel) RestorePanelState(state string) {
+	if state == "" {
+		return
+	}
+	for pos := 0; pos < p.table.ItemCount; pos++ {
+		idx := p.table.RowAt(pos)
+		if idx < 0 || idx >= len(p.table.Rows) {
+			continue
+		}
+		if pr, ok := p.table.Rows[idx].(procRow); ok && pr.s.name == state {
+			p.table.SelectPos = pos
+			p.table.EnsureVisible()
+			return
+		}
+	}
+}
 
 func (p *procListPanel) Show(scr *vtui.ScreenBuf) {
 	p.syncColumns()

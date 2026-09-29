@@ -322,34 +322,10 @@ Every file tracked in the repository. Regenerate with
     │   ├── ARCHITECTURE.md
     │   ├── config.yaml
     │   ├── DESCRIPTION.md
-    │   ├── plans
-    │   │   └── feature-restructure-into-internal-packages
-    │   │       ├── HANDOFF.md
-    │   │       ├── index.md
-    │   │       ├── phase-01-baseline-and-barriers.md
-    │   │       ├── phase-02-repository-root.md
-    │   │       ├── phase-03-subsystems.md
-    │   │       ├── phase-04-shared-primitives.md
-    │   │       ├── phase-05-leaf-packages.md
-    │   │       ├── phase-06-hosts-and-services.md
-    │   │       ├── phase-07-view-and-terminal.md
-    │   │       ├── phase-08-fileops-and-editor.md
-    │   │       ├── phase-09-panel-and-cmdline.md
-    │   │       ├── phase-10-composition-root.md
-    │   │       ├── phase-11-ci-and-docs.md
-    │   │       └── PR-BODY.md
     │   └── rules
     │       └── base.md
     ├── .ai-factory.json
     ├── artifacts
-    │   ├── native-openconsole-probe.json
-    │   ├── native-openconsole-probe.json.sessions
-    │   │   ├── 121x40.raw
-    │   │   ├── 1x1.raw
-    │   │   └── 80x25.raw
-    │   ├── native-openconsole-probe-static.json
-    │   ├── native-openconsole-probe-static.json.sessions
-    │   │   └── 80x25.raw
     │   └── README.md
     ├── cmd
     │   └── f4
@@ -369,10 +345,8 @@ Every file tracked in the repository. Regenerate with
     ├── docs
     │   ├── ARCHIVE_DEPENDENCIES.md
     │   ├── COLORS.md
-    │   ├── CONPTY_FUTURE_IDEAS.md
     │   ├── CONPTY_GATE_REQUIREMENTS.md
     │   ├── CONPTY_GATE_STATUS.md
-    │   ├── CONPTY_LINE_WRAP_FINDINGS.md
     │   ├── CONPTY_NATIVE_AGENT.md
     │   ├── CONPTY_NATIVE_AUDIT.md
     │   ├── CONPTY_NATIVE_PROBE.md
@@ -387,8 +361,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── HIGHLIGHTING.md
     │   ├── HIGHLIGHT.md
     │   ├── I18N.md
-    │   ├── IDEAS.md
-    │   ├── IMAGES_PLAN.md
     │   ├── ISSUES
     │   │   ├── ISSUE_1400_PANEL_MODES.md
     │   │   ├── ISSUE_722_COPY_ACCESS_RIGHTS.md
@@ -409,7 +381,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── PINNED_CONSOLE.md
     │   ├── PINNED_HOST_FACTS.md
     │   ├── PLAYER.md
-    │   ├── PLUGIN_PLAN.md
     │   ├── PLUGINS.md
     │   ├── PLUGRING.md
     │   ├── PORTABILITY_BSD.md
@@ -420,7 +391,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── SPREADSHEET.md
     │   ├── SYNC_DIRS.md
     │   ├── TERMINAL.md
-    │   ├── TEST_OPTIMIZATION_PLAN.md
     │   ├── TTYX.md
     │   ├── UPSTREAM.md
     │   ├── USER_MENU.md
@@ -2235,7 +2205,7 @@ Every file tracked in the repository. Regenerate with
     ├── .mcp.json
     ├── packaging
     │   ├── linux
-    │   │   └── f4.desktop
+    │   │   └── org.unxed.f4.desktop
     │   ├── macos
     │   │   └── Info.plist
     │   └── nix

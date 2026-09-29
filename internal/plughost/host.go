@@ -120,6 +120,13 @@ func newHostMethods(api vfs.HostAPI, back PluginTransport, name string, bridge *
 	methods["Host.GetVersion"] = func(data msgpack.RawMessage) (any, error) {
 		return api.GetVersion(), nil
 	}
+	// Host.Language is the interface language for a plugin that localizes its
+	// own dialogs and messages (f4#272): the codes to try in order, the
+	// interface language first, then its fallback, then "en". The language can
+	// change while f4 runs, so a plugin asks when it builds a text, not once.
+	methods["Host.Language"] = func(data msgpack.RawMessage) (any, error) {
+		return pluginCommandLanguageCandidates(), nil
+	}
 	methods["Host.RunAction"] = func(data msgpack.RawMessage) (any, error) {
 		var req string
 		msgpack.Unmarshal(data, &req)

@@ -144,6 +144,9 @@ type streamArchiveFS struct {
 	fsys   fs.FS
 	source *streamReaderAtSeeker
 	cancel context.CancelFunc
+	// view is the decompressed stream a gzip'd TAR is read through, closed
+	// with the filesystem (nil when the source is read as it is).
+	view io.Closer
 
 	closeOnce sync.Once
 	closeErr  error
@@ -164,6 +167,9 @@ func (s *streamArchiveFS) setContext(ctx context.Context) { s.source.setContext(
 func (s *streamArchiveFS) Close() error {
 	s.closeOnce.Do(func() {
 		s.cancel()
+		if s.view != nil {
+			_ = s.view.Close()
+		}
 		s.closeErr = s.source.source.Close()
 	})
 	return s.closeErr
@@ -205,6 +211,19 @@ func openReaderBackedArchiveFS(ctx context.Context, parent vfs.VFS, archivePath,
 
 	lifetimeCtx, cancel := context.WithCancel(context.Background())
 	reader := &streamReaderAtSeeker{source: source, ctx: ctx}
+
+	// A gzip'd TAR is read through a random-access view of its decompressed
+	// bytes: a seek in it resumes from a checkpoint, where the generic path
+	// would decompress the member again from its beginning each time.
+	if view, viewName := openGzipTarView(ctx, reader, source.Size(), displayName); view != nil {
+		fsys, err := archives.FileSystem(lifetimeCtx, viewName, view)
+		if err == nil {
+			reader.setContext(lifetimeCtx)
+			return &streamArchiveFS{fsys: fsys, source: reader, cancel: cancel, view: view}, "tar", nil
+		}
+		_ = view.Close()
+	}
+
 	format, _, err := archives.Identify(ctx, displayName, reader)
 	if err != nil {
 		cancel()

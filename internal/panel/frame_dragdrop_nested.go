@@ -44,6 +44,10 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		closeOffer(far2ldnd.CloseRejected)
 		return
 	}
+	if pf.offerIsForTerminal(ev) {
+		pf.proxyOfferToTerminal(client, ev, granted.MaxChunk, closeOffer)
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), dndOfferTimeout)
 	src, err := NewDropSourceVFS(ctx, client, ev.Offer, granted.MaxChunk)
 	cancel()
@@ -76,13 +80,73 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		}
 		vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
 		go fileops.ExecuteFileOpAt(src, dst, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
-			closeOffer(far2ldnd.CloseProcessed)
+			reason := far2ldnd.CloseProcessed
+			if src.Cancelled() {
+				reason = far2ldnd.CloseCancelled
+			}
+			// On the UI goroutine here: the reply of CLOSE is delivered by the
+			// same loop, so it must not be waited for from it.
+			go closeOffer(reason)
 			vtui.FrameManager.PostTask(func() {
 				pf.RefreshAll()
 				vtui.FrameManager.Redraw()
 			})
 		})
 	})
+}
+
+// offerIsForTerminal reports whether an offer received from the outer terminal
+// was dropped on the built-in terminal of these panels and a program in it
+// takes drops itself: then the drop is the program's, once, and no panel is
+// offered the same files (spec v0.2 § 11). It needs the UI goroutine's view of
+// the layout, so it asks for it; a UI that does not answer means "no".
+func (pf *PanelsFrame) offerIsForTerminal(ev far2ldnd.Event) bool {
+	if pf.TermView == nil || !ev.PositionKnown() {
+		return false
+	}
+	answer := make(chan bool, 1)
+	vtui.FrameManager.PostTask(func() {
+		tv := pf.TermView
+		if tv == nil || !tv.DropBound() {
+			answer <- false
+			return
+		}
+		if _, onPanel := pf.resolveDropTarget(int(ev.X), int(ev.Y)); onPanel {
+			answer <- false
+			return
+		}
+		x1, y1, x2, y2 := tv.GetPosition()
+		answer <- int(ev.X) >= x1 && int(ev.X) <= x2 && int(ev.Y) >= y1 && int(ev.Y) <= y2
+	})
+	select {
+	case ok := <-answer:
+		return ok
+	case <-time.After(dndOfferTimeout):
+		return false
+	}
+}
+
+// proxyOfferToTerminal hands the offer on to the program in the built-in
+// terminal: the child gets an offer of its own whose files are read from the
+// outer one on demand (terminal.DNDProxySource), with the event's cell moved
+// into the child's coordinates. The outer offer is released when the child's
+// ends, or at once when the child cannot take it.
+func (pf *PanelsFrame) proxyOfferToTerminal(client *terminal.DNDClient, ev far2ldnd.Event, maxChunk uint32, closeOffer func(uint8)) {
+	ctx, cancel := context.WithTimeout(context.Background(), dndOfferTimeout)
+	src, err := terminal.NewDNDProxySource(ctx, client, ev.Offer, maxChunk)
+	cancel()
+	if err != nil {
+		vtui.DebugLog("DND: cannot list the offer for the terminal: %v", err)
+		closeOffer(far2ldnd.CloseFailed)
+		return
+	}
+	tv := pf.TermView
+	x1, y1, _, _ := tv.GetPosition()
+	known := ev.Flags&far2ldnd.EventModifiersKnown != 0
+	if _, err := tv.OfferDrop(src, int(ev.X)-x1, int(ev.Y)-y1, ev.Modifiers, known); err != nil {
+		vtui.DebugLog("DND: the terminal refused the offer: %v", err)
+		src.CloseWith(far2ldnd.CloseRejected)
+	}
 }
 
 // nestedDropTarget picks the destination of an offered drop, on the UI

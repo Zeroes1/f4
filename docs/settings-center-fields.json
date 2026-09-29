@@ -341,6 +341,16 @@
   },
   {
     "category": "panels",
+    "description": "Re-read a panel showing a local directory when files appear, vanish or change there, keeping the cursor and selection. Uses the system's change notifications where available and periodic comparison elsewhere; archives, plugin and remote panels are never watched.",
+    "group": "Directory loading",
+    "id": "WatchDirectories",
+    "kind": "boolean",
+    "label": "Refresh panels when files change",
+    "timing": "live",
+    "unavailable": ""
+  },
+  {
+    "category": "panels",
     "description": "Include locally collected CPU and GPU sections when the information provider does not supply authoritative information.",
     "group": "Information panels",
     "id": "InfoPanelCPUGPU",
@@ -737,6 +747,16 @@
     "kind": "boolean",
     "label": "Show cursor crosshair",
     "timing": "live",
+    "unavailable": ""
+  },
+  {
+    "category": "editor",
+    "description": "Draw control characters as one-cell symbols such as ␀ and ␛ in newly opened editors, instead of a placeholder. The Editor > Options toggle changes it for one editor.",
+    "group": "Visual aids",
+    "id": "EditorShowControlChars",
+    "kind": "boolean",
+    "label": "Show control characters",
+    "timing": "new editors",
     "unavailable": ""
   },
   {

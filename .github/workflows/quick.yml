@@ -42,6 +42,10 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+  # The vendorHash job below starts a run of this workflow by hand on the
+  # commit it pushes: a push made with GITHUB_TOKEN triggers no other workflow,
+  # but workflow_dispatch is the exception.
+  workflow_dispatch:
 
 # lunobot/staging is one linear branch every bot lands on, often faster than a
 # run takes. Cancelling there would starve it: no run would ever finish. With
@@ -258,3 +262,103 @@ jobs:
         with:
           version: v2.13.1
           args: --config .golangci-strict.yml
+
+  # Keeps flake.nix's vendorHash in sync with go.mod/go.sum on lunobot/staging,
+  # so that no worker has to edit flake.nix by hand after a dependency change.
+  # build.yml's nix-vendor-hash job does the same for main and reports it on
+  # pull requests (a train is one), but a train cut from staging would carry a
+  # go.mod change without its hash and go red. Here, after such a change lands
+  # in staging:
+  #
+  #   - the hash is checked whenever go.mod or go.sum differ from main, not only
+  #     when this push changed them: a queued run replaced by a newer one is
+  #     cancelled with its jobs (see concurrency above), and the newer push may
+  #     not have touched go.mod itself;
+  #   - on a mismatch the corrected flake.nix is committed on top of the current
+  #     tip of lunobot/staging (a parallel land moves it; the push is retried
+  #     on a fresh tip), with Lunobot-Task: vendorhash-autosync and a
+  #     Fixes-Staging: trailer, which makes train.py tick wait for a green quick
+  #     on that tip before it cuts a train, so the train carries the fix;
+  #   - a push made with GITHUB_TOKEN starts no workflow, so this cannot loop,
+  #     and quick would never run on the fix. The job therefore dispatches quick
+  #     on staging itself; that run is a workflow_dispatch and skips this job.
+  nix-vendor-hash:
+    name: vendorHash matches go.mod/go.sum
+    if: github.event_name == 'push' && github.ref == 'refs/heads/lunobot/staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Do go.mod or go.sum differ from main?
+        id: relevant
+        run: |
+          set -euo pipefail
+          git fetch --quiet --depth=1 origin main
+          if git diff --quiet FETCH_HEAD HEAD -- go.mod go.sum; then
+            echo "go.mod and go.sum are the same as main's; nothing to check"
+            echo "relevant=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Nix
+        if: steps.relevant.outputs.relevant == 'yes'
+        uses: cachix/install-nix-action@v31
+
+      - name: Verify vendorHash
+        id: verify
+        if: steps.relevant.outputs.relevant == 'yes'
+        run: |
+          set -euo pipefail
+          if nix build --no-link .#f4.goModules 2> nix-build.log; then
+            echo "vendorHash in flake.nix matches go.mod/go.sum"
+            exit 0
+          fi
+          cat nix-build.log
+          got="$(sed -n 's/^ *got: *\(sha256-[A-Za-z0-9+\/=]*\)$/\1/p' nix-build.log | tail -n1)"
+          if [ -z "$got" ]; then
+            echo "::error::nix build failed for a reason other than a vendorHash mismatch"
+            exit 1
+          fi
+          echo "got=$got" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the corrected vendorHash to lunobot/staging
+        if: steps.verify.outputs.got != ''
+        env:
+          GOT: ${{ steps.verify.outputs.got }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin lunobot/staging
+            git checkout --quiet -B vendorhash-autosync FETCH_HEAD
+            sed -i "s|vendorHash = \"[^\"]*\"|vendorHash = \"$GOT\"|" flake.nix
+            if git diff --quiet flake.nix; then
+              echo "flake.nix already carries $GOT on the current tip"
+              exit 0
+            fi
+            git add flake.nix
+            git commit --quiet -F - <<EOF
+          build(nix): update vendorHash [ci]
+
+          Lunobot-Task: vendorhash-autosync
+          Fixes-Staging: $RUN_URL
+
+          Проверить:
+          EOF
+            if git push --quiet origin HEAD:refs/heads/lunobot/staging; then
+              gh workflow run quick.yml --repo "$GITHUB_REPOSITORY" --ref lunobot/staging
+              exit 0
+            fi
+            echo "push raced with another land (attempt $attempt); retrying on the new tip"
+            sleep $((attempt * 3))
+          done
+          echo "::error::could not push the vendorHash update after 5 attempts"
+          exit 1

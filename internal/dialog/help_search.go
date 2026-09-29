@@ -326,6 +326,11 @@ func helpViewScrollTop(frame vtui.Frame) (int, bool) {
 	return nestedHelpInt(reflect.ValueOf(frame), "scrollTop")
 }
 
+// HelpViewScrollTop reports how many scrolling rows of the topic are above the
+// top of a help view's text (sticky header rows not counted). ok is false when
+// frame is not a help view.
+func HelpViewScrollTop(frame vtui.Frame) (int, bool) { return helpViewScrollTop(frame) }
+
 func nestedHelpInt(value reflect.Value, name string) (int, bool) {
 	for value.IsValid() && (value.Kind() == reflect.Pointer || value.Kind() == reflect.Interface) {
 		if value.IsNil() {

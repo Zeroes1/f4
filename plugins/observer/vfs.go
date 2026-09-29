@@ -469,9 +469,9 @@ func (v *ObserverVFS) Rename(ctx context.Context, oldpath, newpath string) error
 }
 
 func (v *ObserverVFS) GetCapabilities() vfs.VFSCapabilities {
-	// HasRandomAccess is true because Open below always hands back a real
-	// extracted file (vfs.TempFileWrapper over a real os.File), which does
-	// support ReadAt properly -- see the ABI limitation this package's own
+	// HasRandomAccess is true because Open below hands back the extracted
+	// file (growingFile over a real os.File, readable while it is still being
+	// written), which does support ReadAt properly -- see the ABI limitation this package's own
 	// doc.go documents (ExtractItem always writes the whole item first,
 	// there is no partial read in API v6 to expose here instead).
 	return vfs.VFSCapabilities{HasRandomAccess: true}
@@ -502,34 +502,43 @@ func (v *ObserverVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, err
 	}
 
 	v.mu.Lock()
-	defer v.mu.Unlock()
-	if v.closed {
+	closed, modErr := v.closed, v.mod.Err()
+	v.mu.Unlock()
+	if closed {
 		return nil, errors.New("observer: VFS is closed")
 	}
-	if err := v.mod.Err(); err != nil {
-		return nil, err
+	if modErr != nil {
+		return nil, modErr
 	}
 
 	destName := fmt.Sprintf("item-%d", n.itemIndex)
-	code, err := v.mod.ExtractItem(v.storage, ExtractItemParams{ItemIndex: n.itemIndex, DestName: destName})
-	if err != nil {
-		return nil, err
-	}
-	if code != SERSuccess {
-		return nil, fmt.Errorf("observer: extracting %s: code %d", p, code)
-	}
-
 	hostPath := filepath.Join(v.tempDir, destName)
-	f, err := os.Open(hostPath) //nolint:gosec // G304: hostPath is built from this instance's own private tempDir + a name this function chose, never from user input.
-	if err != nil {
-		return nil, err
-	}
-	stat, err := f.Stat()
-	if err != nil {
-		_ = f.Close()
-		return nil, err
-	}
-	return &vfs.TempFileWrapper{File: f, SizeVal: stat.Size(), TempPath: hostPath}, nil
+	itemIndex := n.itemIndex
+
+	// The extraction runs in the background and the caller reads the file as
+	// it grows (growing_file.go), so a nested archive can start on the member
+	// before the module has written all of it. The module is one wasm
+	// instance, so the extraction holds mu for its whole run, exactly as the
+	// synchronous call did.
+	gf := newGrowingFile(hostPath, n.size)
+	go func() {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		if v.closed {
+			gf.finish(errors.New("observer: VFS is closed"))
+			return
+		}
+		if err := v.mod.Err(); err != nil {
+			gf.finish(err)
+			return
+		}
+		code, err := v.mod.ExtractItem(v.storage, ExtractItemParams{ItemIndex: itemIndex, DestName: destName})
+		if err == nil && code != SERSuccess {
+			err = fmt.Errorf("observer: extracting %s: code %d", p, code)
+		}
+		gf.finish(err)
+	}()
+	return gf, nil
 }
 
 func (v *ObserverVFS) Create(ctx context.Context, path string) (io.WriteCloser, error) {

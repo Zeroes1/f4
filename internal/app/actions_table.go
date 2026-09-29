@@ -606,6 +606,20 @@ func init() {
 		DefaultKeys: []string{"AltF3"},
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFileHex(pf) }),
 	})
+	// Ctrl+Space: the size of the folder under the cursor, in any VFS -- an
+	// archive included, where the scan walks the archive's own listing and
+	// extracts nothing (M-Commander parity, f4#1670). F3 on a folder does the
+	// same; this is the key that does nothing else.
+	registerAction(action.Action{
+		Name:        "Panel.CalcDirSize",
+		Area:        "Shell",
+		Label:       "Calculate folder size",
+		LabelKey:    "Action.Panel.CalcDirSize",
+		Description: "Calculate the size of the folder under the cursor",
+		DescKey:     "Action.Panel.CalcDirSize.Desc",
+		DefaultKeys: []string{"CtrlSpace:NoTerminalApp"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCalcDirSizeAtCursor(pf) }),
+	})
 	registerAction(action.Action{
 		Name:        "File.Edit",
 		Area:        "Shell",
@@ -2806,6 +2820,23 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.AmountInWords",
+		Area:        "Editor",
+		Label:       "Amount in words",
+		LabelKey:    "Action.Editor.AmountInWords",
+		Description: "Replace the selected number or amount of money (1234.56 rub, $12.50, 99 EUR) with it written in words",
+		DescKey:     "Action.Editor.AmountInWords.Desc",
+		MenuPath:    "Edit",
+		Handler: withEditor(func(ev *editor.EditorView) {
+			result, err := ev.AmountInWordsSelection()
+			if err != nil {
+				vtui.ShowMessage(i18n.Msg("Editor.AmountInWords.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			toast.Show(result, 2*time.Second)
+		}),
+	})
+	registerAction(action.Action{
 		Name:                "Editor.SortLines",
 		Area:                "Editor",
 		Label:               "Sort lines",
@@ -3078,6 +3109,17 @@ func init() {
 		MenuPath:    "Options",
 		Checked:     editorState(func(ev *editor.EditorView) bool { return ev.ShowWhitespaces }),
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowWhitespaces = !ev.ShowWhitespaces }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ShowControlChars",
+		Area:        "Editor",
+		Label:       "Show Control Characters",
+		LabelKey:    "Action.Editor.ShowControlChars",
+		Description: "Toggle visible control characters",
+		DescKey:     "Action.Editor.ShowControlChars.Desc",
+		MenuPath:    "Options",
+		Checked:     editorState(func(ev *editor.EditorView) bool { return ev.ShowControlChars }),
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowControlChars = !ev.ShowControlChars }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.CodepageNext",

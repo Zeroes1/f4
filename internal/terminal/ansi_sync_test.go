@@ -139,3 +139,36 @@ func TestWindowsSyncTrackedEchoIsCutOnce(t *testing.T) {
 		t.Errorf("row 1 = %q, want the second copy kept", got)
 	}
 }
+
+// The two line feeds cmd.exe prints behind the echo of f4's directory-sync
+// line each scroll a console whose cursor is on the bottom row, although the
+// line itself is cut out: every panel toggle that changed the directory moved
+// the console up (#1673). The stream below is the one from the reporter's
+// log, split into the same reads.
+func TestWindowsSyncEchoDoesNotScrollTheBottomRow(t *testing.T) {
+	tv, p, _ := syncEnv(t)
+	p.TrackWindowsSyncEcho()
+	p.Process([]byte("\x1b[1;1Hdir output\x1b[24;1HC:\\F4>"))
+	p.ExpectWindowsSyncEcho()
+	p.Process([]byte("\x1b[24;8Hcd /d \"C:\\tmp\" & rem f4_sync\x1b[24;81H"))
+	p.Process([]byte("\x1b[24;81H\r\n"))
+	p.Process([]byte("\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x1b\\"))
+	p.Process([]byte("\r\n"))
+	p.Process([]byte("\x1b]133;A\x1b\\C:\\F4>\x1b]133;B\x1b\\"))
+
+	if got := syncRow(tv, 0); got != "dir output" {
+		t.Errorf("row 0 = %q, want the console left where it was", got)
+	}
+	if got := syncRow(tv, 22); got != "" {
+		t.Errorf("row 22 = %q, want it empty", got)
+	}
+	if got := syncRow(tv, 23); got != "C:\\F4>" {
+		t.Errorf("row 23 = %q, want the prompt back on its row", got)
+	}
+
+	// Only those two line feeds are exempt: Enter at the prompt scrolls.
+	p.Process([]byte("\r\n"))
+	if got := syncRow(tv, 0); got != "" {
+		t.Errorf("row 0 after Enter = %q, want it scrolled off", got)
+	}
+}

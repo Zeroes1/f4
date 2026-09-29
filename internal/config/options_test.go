@@ -66,6 +66,13 @@ func TestWithOptionReadsTheValueBackLikeLoadConfig(t *testing.T) {
 	if next := WithOption(cfg, "Panel", "ArchiveTarIndexCache", "0"); next.ArchiveTarIndexCache {
 		t.Error("Panel/ArchiveTarIndexCache = 0 was not honoured")
 	}
+	// Watching local directories for changes is on unless the key turns it off (#1668).
+	if !cfg.WatchDirectories {
+		t.Error("WatchDirectories is off by default")
+	}
+	if next := WithOption(cfg, "Panel", "WatchDirectories", "0"); next.WatchDirectories {
+		t.Error("Panel/WatchDirectories = 0 was not honoured")
+	}
 	// Preferring ratarmount is opt-in: off unless the user turns it on (#251).
 	if cfg.ArchiveUseRatarmountIfAvailable {
 		t.Error("ArchiveUseRatarmountIfAvailable is on by default")

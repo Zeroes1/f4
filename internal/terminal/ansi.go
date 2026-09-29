@@ -96,6 +96,16 @@ const maxSyncEchoArms = 4
 
 // WindowsSyncCommandPrefix is how every line f4 types into cmd.exe to follow
 // the panel's directory begins: cd /d "path" & command.
+// syncScrollLineFeeds is how many line feeds cmd.exe prints after the echo of
+// a line f4 typed for the directory sync: the one that ends the line and the
+// blank one in front of the next prompt (#1673).
+const syncScrollLineFeeds = 2
+
+// syncScrollGuardParam marks the private CSI ... z that exciseWindowsSync
+// leaves after an excised echo, so that the view learns about it in stream
+// order. It never comes out of a child: the parser produces it itself.
+const syncScrollGuardParam = 9713
+
 var WindowsSyncCommandPrefix = []byte(`cd /d "`)
 
 var (
@@ -252,6 +262,7 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 			}
 
 			end := tokenEnd
+			lineEnds := syncScrollLineFeeds
 			switch data[end] {
 			case '\r':
 				if end+1 == len(data) {
@@ -262,8 +273,10 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 				if data[end] == '\n' {
 					end++
 				}
+				lineEnds--
 			case '\n':
 				end++
+				lineEnds--
 			}
 
 			vtui.DebugLog("ANSI_PARSER: Excising background Windows CD sync")
@@ -272,6 +285,11 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 			// command already reached the screen goes with it.
 			skip = 0
 			visible = append(visible, []byte("\r\x1b[2K")...)
+			// cmd still ends the line and prints a blank one before the
+			// prompt, and each of those line feeds scrolls a console whose
+			// cursor is on the bottom row. The erase above already put the
+			// prompt's row back, so tell the view to keep those scrolls out.
+			visible = append(visible, fmt.Appendf(nil, "\x1b[%d;%dz", syncScrollGuardParam, lineEnds)...)
 			data = data[end:]
 			continue
 		}
@@ -576,6 +594,10 @@ func (p *AnsiParser) handleCSI(cmd byte) {
 				consumed := p.handleSGR(args, i)
 				i += consumed
 			}
+		}
+	case 'z':
+		if len(args) == 2 && args[0] == syncScrollGuardParam {
+			p.term.SuppressSyncScroll(args[1])
 		}
 	case 'H', 'f':
 		row, col := 1, 1

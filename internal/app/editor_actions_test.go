@@ -63,6 +63,22 @@ func TestEditorCalculateExpressionActionReplacesSelectionWithResult(t *testing.T
 	}
 }
 
+func TestEditorAmountInWordsActionReplacesSelection(t *testing.T) {
+	ev := newActionTestEditor(t, "5 руб")
+	vtui.FrameManager.Push(ev)
+	ev.SelActive = true
+	ev.SelAnchorOffset = 0
+	ev.CursorLine = 0
+	ev.CursorPos = len("5 руб")
+
+	if !RunAction("Editor.AmountInWords") {
+		t.Fatal("Editor.AmountInWords did not run on the editor")
+	}
+	if got, want := ev.GetText(), "пять рублей"; got != want {
+		t.Fatalf("text after Editor.AmountInWords = %q, want %q", got, want)
+	}
+}
+
 func TestEditorSortLinesAction(t *testing.T) {
 	sortAction, ok := GetAction("Editor.SortLines")
 	if !ok {

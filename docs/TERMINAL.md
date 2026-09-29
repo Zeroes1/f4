@@ -119,7 +119,7 @@ Before finalizing the `f4` architecture, we analyzed the source code of the most
     re-wraps the primary screen and `GridHistory` (`reflowResizeLocked` in
     `internal/terminal/view_reflow.go`) for the local shell on Unix, and on
     Windows when the shell runs in the downloaded ConPTY package, which passes
-    long lines through (`CONPTY_LINE_WRAP_FINDINGS.md`). Only rows the view
+    long lines through (unxed/f4#1687). Only rows the view
     wrapped itself are joined; a line the stream ended stays ended at every
     width. Output of remote shells, the in-box ConPTY and the alternate screen
     are not reflowed. A height-only change never reflows: it moves rows
@@ -368,7 +368,7 @@ Read this list before concluding that something is broken.
     cursor rule above, a shell prompt that lands on the last row of an image is
     invisible rather than punched through. Fixing it properly means either a
     negative z index, which vtui cannot express yet (see the entry in
-    `IMAGES_PLAN.md` section 8), or per-row image slices of the kind Windows
+    unxed/f4#1685 section 8), or per-row image slices of the kind Windows
     Terminal keeps.
 *   **No byte of child output is ever held back, and that shapes a heuristic.**
     `exciseWindowsSync` hides the background `cd` command that keeps the panel

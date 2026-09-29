@@ -66,8 +66,8 @@ func TestAIShowPatchReviewListsEveryModification(t *testing.T) {
 	}
 	patch := &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}
 	dlg := aiShowPatchReview(nil, patch, root, aiReviewTestMods(), 2, "patcher output")
-	if top := vtui.FrameManager.GetTopFrame(); top != vtui.Frame(dlg) {
-		t.Fatalf("top frame = %T, want the review dialog", top)
+	if !aiReviewIsTop(dlg) {
+		t.Fatalf("top frame = %T, want the review dialog", vtui.FrameManager.GetTopFrame())
 	}
 
 	text := aiScreenText(t, scr, dlg)
@@ -230,6 +230,49 @@ func TestAIReviewSelection(t *testing.T) {
 	}
 }
 
+// aiReviewIsTop reports whether dlg's review screen is the frame on top.
+func aiReviewIsTop(dlg *vtui.Window) bool {
+	s, ok := vtui.FrameManager.GetTopFrame().(*aiReviewScreen)
+	return ok && s.Window == dlg
+}
+
+// TestAIShowPatchReviewResize: a resized terminal gets the review laid out
+// again over the whole workspace, and what the reader has done stays.
+func TestAIShowPatchReviewResize(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 24)
+	vtui.FrameManager.Init(scr)
+
+	dlg := aiShowPatchReview(nil, &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}, t.TempDir(), aiReviewTestMods(), 2, "")
+	table := aiReviewTableOf(t, dlg)
+	pane := aiReviewPaneOf(t, dlg)
+	table.ProcessKey(aiKey(vtinput.VK_SPACE, ' '))
+	sel := table.SelectPos
+
+	for _, size := range [][2]int{{140, 40}, {80, 30}} {
+		w, h := size[0], size[1]
+		scr.AllocBuf(w, h)
+		vtui.FrameManager.GetTopFrame().ResizeConsole(w, h)
+		_, y1, x2, y2 := dlg.GetPosition()
+		if x2 != w-1 || y2 != h-2 || y1 < 0 {
+			t.Errorf("%dx%d: review at y %d..%d, right edge %d; want it to fill the workspace", w, h, y1, y2, x2)
+		}
+		if _, _, px2, _ := pane.GetPosition(); px2 > x2 {
+			t.Errorf("%dx%d: diff pane's right edge %d is outside the dialog (%d)", w, h, px2, x2)
+		}
+		if _, py1, _, py2 := pane.GetPosition(); py2-py1+1 != min(max(h/4, 6), 14) || py2 > y2 {
+			t.Errorf("%dx%d: diff pane rows %d..%d", w, h, py1, py2)
+		}
+		if table.SelectPos != sel {
+			t.Errorf("%dx%d: the table's cursor moved from %d to %d", w, h, sel, table.SelectPos)
+		}
+		if text := aiScreenText(t, scr, dlg); !strings.Contains(text, i18n.Msg("AI.ReviewTitle")) {
+			t.Errorf("%dx%d: title missing after the re-layout:\n%s", w, h, text)
+		}
+	}
+}
+
 // aiReviewTableOf finds the review table in the dialog.
 func aiReviewTableOf(t *testing.T, w *vtui.Window) *aiReviewTable {
 	t.Helper()
@@ -387,9 +430,9 @@ func TestAIShowPatchReviewAfterExclusion(t *testing.T) {
 
 // TestAIShowPatchReviewDiff: the diff pane under the table is permanent
 // (f4#1606 step e) and always shows the row under the cursor's own edit,
-// without Enter; Enter and F3 do nothing now (that used to open the same
-// fragment as a modal internal/diffview screen, f4#1606 8/N), and Ctrl+Tab
-// moves the keyboard focus onto the pane and back instead.
+// without Enter (that used to open the same fragment as a modal
+// internal/diffview screen, f4#1606 8/N), and Tab moves the keyboard focus
+// onto the pane and back.
 func TestAIShowPatchReviewDiff(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	scr := vtui.NewSilentScreenBuf()
@@ -467,7 +510,7 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 			t.Fatalf("key %d not handled by the review table", vk)
 		}
 	}
-	if dlg.IsDone() || calls != 0 || vtui.FrameManager.GetTopFrame() != vtui.Frame(dlg) {
+	if dlg.IsDone() || calls != 0 || !aiReviewIsTop(dlg) {
 		t.Fatal("Enter or F3 closed the review, ran the patcher, or opened another screen")
 	}
 
@@ -480,7 +523,7 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 		t.Errorf("pane does not show %q:\n%s", i18n.Msg("AI.ReviewNoDiff"), text)
 	}
 
-	// Ctrl+Tab moves the keyboard focus onto the pane and back; while it
+	// Tab moves the keyboard focus onto the pane and back; while it
 	// has focus, arrow keys scroll it instead of moving the table's cursor.
 	if !table.ProcessKey(aiKey(vtinput.VK_UP, 0)) { // back to the row with a diff
 		t.Fatal("Up not handled by the review table")
@@ -490,13 +533,18 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 	}
 	ctrlTab := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
 		VirtualKeyCode: vtinput.VK_TAB, ControlKeyState: vtinput.LeftCtrlPressed}
-	if !table.ProcessKey(ctrlTab) {
-		t.Fatal("Ctrl+Tab not handled by the review table")
+	tab := aiKey(vtinput.VK_TAB, 0)
+	table.ProcessKey(ctrlTab)
+	if dlg.GetFocusedItem() != table {
+		t.Fatal("Ctrl+Tab must stay with the workspace switcher, not the review's focus switch")
+	}
+	if !table.ProcessKey(tab) {
+		t.Fatal("Tab not handled by the review table")
 	}
 	if got := dlg.GetFocusedItem(); got != pane {
-		t.Fatalf("Ctrl+Tab on the table did not focus the pane (focus = %T)", got)
+		t.Fatalf("Tab on the table did not focus the pane (focus = %T)", got)
 	}
-	t.Logf("review screen, diff pane focused after Ctrl+Tab:\n%s", aiScreenText(t, scr, dlg))
+	t.Logf("review screen, diff pane focused after Tab:\n%s", aiScreenText(t, scr, dlg))
 	selBefore := table.SelectPos
 	if !pane.ProcessKey(aiKey(vtinput.VK_DOWN, 0)) {
 		t.Fatal("Down not handled by the focused pane")
@@ -507,11 +555,11 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 	if table.SelectPos != selBefore {
 		t.Error("scrolling the pane moved the table's cursor")
 	}
-	if !pane.ProcessKey(ctrlTab) {
-		t.Fatal("Ctrl+Tab not handled by the pane")
+	if !pane.ProcessKey(tab) {
+		t.Fatal("Tab not handled by the pane")
 	}
 	if got := dlg.GetFocusedItem(); got != table {
-		t.Fatalf("Ctrl+Tab on the pane did not return focus to the table (focus = %T)", got)
+		t.Fatalf("Tab on the pane did not return focus to the table (focus = %T)", got)
 	}
 }
 

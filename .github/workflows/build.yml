@@ -246,7 +246,7 @@ jobs:
         # Add freedesktop launch metadata and the application icon to Linux archives.
         if [ "$GOOS" = "linux" ]; then
           mkdir -p build/share/applications
-          cp packaging/linux/f4.desktop build/share/applications/
+          cp packaging/linux/org.unxed.f4.desktop build/share/applications/
           for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
             icon_dir="build/share/icons/hicolor/${size}x${size}/apps"
             mkdir -p "$icon_dir"
@@ -500,7 +500,7 @@ jobs:
 
           if [ "$GOOS" = "linux" ]; then
             mkdir -p "$BUILD_DIR/share/applications"
-            cp packaging/linux/f4.desktop "$BUILD_DIR/share/applications/"
+            cp packaging/linux/org.unxed.f4.desktop "$BUILD_DIR/share/applications/"
             for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
               icon_dir="$BUILD_DIR/share/icons/hicolor/${size}x${size}/apps"
               mkdir -p "$icon_dir"
@@ -2755,10 +2755,10 @@ jobs:
         echo "BUILD_TIME=$(date -u -d "@$(git show -s --format='%ct' HEAD)" +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_ENV"
 
     # Download into dist/, NOT artifacts/. This job checks the repository out,
-    # and artifacts/ is a tracked directory holding the ConPTY audit evidence
-    # (see artifacts/README.md). Downloading on top of it merged that evidence
-    # with the build output, and the publish step below then uploaded the
-    # committed native-openconsole-probe*.json files as nightly release assets.
+    # and artifacts/ is a tracked directory (see artifacts/README.md). It once
+    # held the ConPTY audit evidence, and downloading on top of it merged that
+    # evidence with the build output, so the publish step below uploaded the
+    # native-openconsole-probe*.json files as nightly release assets.
     # Collecting that data is a manual job -- conpty-probe.yml, workflow_dispatch
     # only -- so nothing in the automatic pipeline should be publishing it.
     - name: Download all artifacts

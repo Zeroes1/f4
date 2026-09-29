@@ -55,6 +55,7 @@ Plugins can colorize files in the text editor dynamically.
 ### D. Host Callbacks (Plugin -> Host)
 Because F4-RPC is a full-duplex protocol, plugins can call back into `f4` at any time:
 *   `Host.Log` / `Host.Message` / `Host.InputBox` / `Host.Menu`: Standard UI and debugging interactions.
+*   `Host.Language`: returns the language codes to try, in order (the interface language, its fallback, then `en`), for a plugin that localizes its own dialogs and messages, the way command labels are localized. The language can change at run time, so ask when building a text.
 *   `Host.RunAction`: Triggers any internal f4 semantic action (e.g., `Editor.Save`, `Panel.Swap`).
 *   `Host.RunProgressTask` / `Host.UpdateProgress`: Safely offloads long-running plugin operations to f4's background job manager, displaying a progress dialog to the user with standard Cancel functionality.
 *   `Host.AskOverwrite` / `Host.AskError`: Invokes f4's native, rich collision/error dialogs (Retry, Skip, Overwrite All, etc.) during mutations.
@@ -96,14 +97,29 @@ declares keys or not:
 * the keybar shows the declared captions, blanks the file-panel captions and
   keeps every other f4 binding (Help, menus, panel toggles); F10 is captioned as closing the panel.
 
+A folder bookmark taken while a panel plugin covers the directory remembers
+that plugin (`Plugin=f4-panel:<provider ID>` in `bookmarks.ini`) and opens it
+again over the directory. A controller that also implements
+`vfs.PanelStateProvider` (`SavePanelState`/`RestorePanelState`, an opaque
+one-line string such as the selected entry) gets its state stored in the
+bookmark's `PluginData` and handed back after the panel reopens; state it does
+not recognise must be ignored. A provider that is not registered on the
+machine leaves the directory open and shows a message.
+
 `vfs.DispatchPanelKey` is the host's dispatcher, exported so a controller can
 route the same declarations from its own `ProcessKey`.
 
 RPC plugins declare panel descriptors in the structured `Plugin.Init` result:
 
 ```text
-Panels: [{ ID, Title, Description }]
+Panels: [{ ID, Title, Description, Help, LocalizedHelp }]
 ```
+
+`Help` is optional Markdown shown on F1 in f4's Markdown viewer, titled with the
+panel's `Title`; `LocalizedHelp` maps language codes to translations and wins when
+it has the interface language (then its fallback languages, then `en`). F1 is
+captioned on the keybar. A panel that declares its own F1 key keeps it, and a panel
+without help leaves F1 to f4's global Help.
 
 The host then uses these calls lazily:
 

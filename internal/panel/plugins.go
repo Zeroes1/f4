@@ -147,6 +147,13 @@ func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 	if vfs.DispatchPanelKey(p.PanelKeys(), e) {
 		return true
 	}
+	// Ctrl+PgUp is asked before the controller: a list-like plugin panel
+	// (ProcList) reads it as "page up" and consumes it, so it never reached the
+	// close check below (f4#312). A key the controller declares still won above.
+	if e != nil && e.VirtualKeyCode == vtinput.VK_PRIOR && isPluginPanelCloseKey(e) {
+		p.Close()
+		return true
+	}
 	if p.controller.ProcessKey(e) {
 		return true
 	}
@@ -414,4 +421,35 @@ func (pf *PanelsFrame) pluginPanelKeyLabels(inst *PluginPanelInstance, fallbacks
 		}
 	}
 	return set
+}
+
+// swapPluginPanels moves panel plugins (ProcList and the others) to the other
+// side together with the file panels, on Ctrl+U: their AltPanels slot and the
+// slot they remember for themselves change sides, so a plugin shown on the
+// right stays with the panel that was on the right (f4#312). Other alternative
+// panels (quick view, chat, player) are bound to their position and are left
+// where they are; when one of them shares the pair with a plugin panel, nothing
+// moves.
+func (pf *PanelsFrame) swapPluginPanels() {
+	var inst [2]*PluginPanelInstance
+	found := false
+	for i := range inst {
+		switch a := pf.AltPanels[i].(type) {
+		case nil:
+		case *PluginPanelInstance:
+			inst[i] = a
+			found = true
+		default:
+			return
+		}
+	}
+	if !found {
+		return
+	}
+	pf.AltPanels[0], pf.AltPanels[1] = pf.AltPanels[1], pf.AltPanels[0]
+	for i, a := range inst {
+		if a != nil {
+			a.slot = 1 - i
+		}
+	}
 }

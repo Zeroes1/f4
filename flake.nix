@@ -47,7 +47,7 @@
           # Must track go.mod/go.sum: after a dependency change nix build
           # fails with "hash mismatch in fixed-output derivation ... got:
           # sha256-...", and that got: value is the new vendorHash.
-          vendorHash = "sha256-frPZ+7mbThNrwG7E8HO//EOfQA3hbuRVRrTIzCVQUFs=";
+          vendorHash = "sha256-tOuDDFOvikm2DJRNdFOO//b+hDgRD/V4TWP8QWW/S4U=";
 
           subPackages = [ "cmd/f4" ];
           tags = lib.optionals ttyOnly [ "tty_only" "vtui_noebiten" "vtui_nogogpu" ];
@@ -89,7 +89,7 @@
             EOF
             chmod +x $out/bin/f4-gui
           '' + lib.optionalString (!ttyOnly && pkgs.stdenv.hostPlatform.isLinux) ''
-            install -Dm644 packaging/linux/f4.desktop -t $out/share/applications
+            install -Dm644 packaging/linux/org.unxed.f4.desktop -t $out/share/applications
             for size in 16 24 28 30 32 36 42 48 56 64 128 256 512 1024; do
               install -Dm644 internal/gui/assets/icon/generated/f4-''${size}.png \
                 $out/share/icons/hicolor/''${size}x''${size}/apps/io.github.unxed.f4.png

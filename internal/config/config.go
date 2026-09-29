@@ -486,7 +486,9 @@ type F4Config struct {
 	CursorOvertypeShape      string // caret in overtype mode, same names
 	CursorBlink              bool
 	ConsoleMode              string // "own" | "host" (default "own")
+	DragOutModifier          string // "" | "ctrl" | "alt" | "shift": a drag out of a panel starts only while this key is held (default "", f4:config)
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
+	HostConsoleDefaultColors bool   // Host modes: draw the console mirror shown beside a hidden panel in the terminal's own default colours (default false, f4:config)
 	UseWinescape             bool   // Windows only: let the file layer use libwinescape where it is available (default true)
 	AnnounceKittyTerm        bool   // introduce the built-in terminal as kitty, so that image tools use the graphics protocol
 	CommandLineAutoComplete  bool
@@ -520,6 +522,10 @@ type F4Config struct {
 	// cache so that opening it again is instant. Off rebuilds the index every
 	// time, which is slower and never out of date (#1187).
 	ArchiveTarIndexCache bool
+	// WatchDirectories refreshes a panel showing a local directory when the
+	// files in it change on disk, via inotify where available and periodic
+	// comparison elsewhere (f4#1668). Off leaves refreshing to the user.
+	WatchDirectories bool
 	// ArchiveUseRatarmountIfAvailable opts in to using the user's own
 	// external `ratarmount` (https://github.com/mxmlnkn/ratarmount), when it
 	// is found on PATH, as a faster tar-index backend instead of f4's own
@@ -534,6 +540,7 @@ type F4Config struct {
 	EditorTabSize                   int
 	EditorUseEditorConfig           bool
 	EditorCrosshair                 bool
+	EditorShowControlChars          bool
 	EditorMarkOccurrences           bool
 	UseExternalEditor               bool
 	ExternalEditorCommand           string
@@ -716,6 +723,8 @@ var App = F4Config{
 	CursorBlink:              true,
 	ConsoleMode:              "own",
 	ConsoleOverlayUI:         false,
+	DragOutModifier:          "",
+	HostConsoleDefaultColors: false,
 	UseWinescape:             true,
 	AnnounceKittyTerm:        true,
 	CommandLineAutoComplete:  true,
@@ -737,6 +746,7 @@ var App = F4Config{
 	// refuses to sink into on Enter "even while its really archive", plus
 	// .epub, which f4 issue #1184 named and far2l's list does not.
 	ArchiveTarIndexCache:            true,
+	WatchDirectories:                true,
 	ArchiveUseRatarmountIfAvailable: false,
 	ArchiveEnterExcludeMask:         "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub",
 	ObserverEnterExcludeMask:        "",
@@ -746,6 +756,7 @@ var App = F4Config{
 	EditorTabSize:                   4,
 	EditorUseEditorConfig:           true,
 	EditorCrosshair:                 false,
+	EditorShowControlChars:          false,
 	EditorMarkOccurrences:           true,
 	UseExternalEditor:               false,
 	ExternalEditorCommand:           "",
@@ -980,6 +991,8 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.CursorBlink = merged.GetString("Panel", "CursorBlink", "1") != "0"
 	cfg.ConsoleMode = merged.GetString("Panel", "ConsoleMode", "own")
 	cfg.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
+	cfg.DragOutModifier = NormalizeDragOutModifier(merged.GetString("Panel", "DragOutModifier", ""))
+	cfg.HostConsoleDefaultColors = merged.GetString("Panel", "HostConsoleDefaultColors", "0") == "1"
 	cfg.UseWinescape = merged.GetString("Panel", "UseWinescape", "1") != "0"
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
 	cfg.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
@@ -1082,6 +1095,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.EditorAutoComplete = merged.GetString("Editor", "AutoComplete", "1") == "1"
 	cfg.EditorAutoCompleteMask = merged.GetString("Editor", "AutoCompleteMask", "*.go;*.c;*.cpp;*.h;*.hpp;*.py;*.js;*.ts;*.rs;*.java;*.sh;*.txt;*.md;*.html;*.css;*.json")
 	cfg.ArchiveTarIndexCache = merged.GetString("Panel", "ArchiveTarIndexCache", "1") == "1"
+	cfg.WatchDirectories = merged.GetString("Panel", "WatchDirectories", "1") == "1"
 	cfg.ArchiveUseRatarmountIfAvailable = merged.GetString("Panel", "ArchiveUseRatarmountIfAvailable", "0") == "1"
 	cfg.ArchiveEnterExcludeMask = merged.GetString("Panel", "ArchiveEnterExcludeMask", "*.docx,*.docm,*.dotx,*.dotm,*.xlsx,*.xlsm,*.xltx,*.xltm,*.xlsb,*.xlam,*.pptx,*.pptm,*.potx,*.potm,*.ppam,*.ppsx,*.ppsm,*.sldx,*.sldm,*.thmx,*.odt,*.ods,*.odp,*.epub")
 	cfg.ObserverEnterExcludeMask = merged.GetString("Panel", "ObserverEnterExcludeMask", "")
@@ -1092,6 +1106,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.EditorCursorBeyondEOL = merged.GetString("Editor", "CursorBeyondEOL", "0") == "1"
 	cfg.EditorUseEditorConfig = merged.GetString("Editor", "UseEditorConfig", "1") == "1"
 	cfg.EditorCrosshair = merged.GetString("Editor", "Crosshair", "0") == "1"
+	cfg.EditorShowControlChars = merged.GetString("Editor", "ShowControlChars", "0") == "1"
 	cfg.EditorMarkOccurrences = merged.GetString("Editor", "MarkOccurrences", "1") == "1"
 	cfg.EditorAutodetectCodePage = merged.GetString("Editor", "AutodetectCodePage", "1") == "1"
 	cfg.EditorMemoryMap = merged.GetString("Editor", "MemoryMap", "1") == "1"
@@ -1294,6 +1309,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ArchiveEnterExcludeMask = %s\n", cfg.ArchiveEnterExcludeMask)
 	fmt.Fprintf(&sb, "ObserverEnterExcludeMask = %s\n", cfg.ObserverEnterExcludeMask)
 	fmt.Fprintf(&sb, "ArchiveTarIndexCache = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveTarIndexCache])
+	fmt.Fprintf(&sb, "WatchDirectories = %d\n", map[bool]int{true: 1, false: 0}[cfg.WatchDirectories])
 	fmt.Fprintf(&sb, "ArchiveUseRatarmountIfAvailable = %d\n", map[bool]int{true: 1, false: 0}[cfg.ArchiveUseRatarmountIfAvailable])
 	fmt.Fprintf(&sb, "ShowHiddenFiles = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowHiddenFiles])
 	fmt.Fprintf(&sb, "ShowDirPrefix = %d\n", map[bool]int{true: 1, false: 0}[cfg.ShowDirPrefix])
@@ -1314,7 +1330,9 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "CursorOvertypeShape = %s\n", NormalizeCursorShape(cfg.CursorOvertypeShape, "block"))
 	fmt.Fprintf(&sb, "CursorBlink = %d\n", map[bool]int{true: 1, false: 0}[cfg.CursorBlink])
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
+	fmt.Fprintf(&sb, "DragOutModifier = %s\n", NormalizeDragOutModifier(cfg.DragOutModifier))
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
+	fmt.Fprintf(&sb, "HostConsoleDefaultColors = %d\n", map[bool]int{true: 1, false: 0}[cfg.HostConsoleDefaultColors])
 	fmt.Fprintf(&sb, "UseWinescape = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseWinescape])
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
 	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])
@@ -1395,6 +1413,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "CursorBeyondEOL = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCursorBeyondEOL])
 	fmt.Fprintf(&sb, "UseEditorConfig = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorUseEditorConfig])
 	fmt.Fprintf(&sb, "Crosshair = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCrosshair])
+	fmt.Fprintf(&sb, "ShowControlChars = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorShowControlChars])
 	fmt.Fprintf(&sb, "MarkOccurrences = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorMarkOccurrences])
 	fmt.Fprintf(&sb, "TabSize = %d\n", cfg.EditorTabSize)
 	fmt.Fprintf(&sb, "UseExternalEditor = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseExternalEditor])
@@ -1871,4 +1890,14 @@ func ApplyProxySettings() {
 		User: App.ProxyUser,
 		Pass: App.ProxyPass,
 	})
+}
+
+// NormalizeDragOutModifier maps a settings value to one of "", "ctrl", "alt"
+// and "shift"; anything else means no modifier is required.
+func NormalizeDragOutModifier(v string) string {
+	switch v = strings.ToLower(strings.TrimSpace(v)); v {
+	case "ctrl", "alt", "shift":
+		return v
+	}
+	return ""
 }

@@ -1,10 +1,16 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/terminal"
+	"github.com/unxed/f4/vfs"
 	"testing"
 
 	"github.com/unxed/f4/internal/macro"
@@ -505,4 +511,70 @@ func topFrameType() vtui.FrameType {
 		return -1
 	}
 	return top.GetType()
+}
+
+// f4#1670: Ctrl+Space sizes the folder under the cursor.
+func TestCtrlSpace_BoundToCalcDirSize(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	if got, want := hm.Bindings["Shell"]["CtrlSpace"], "Panel.CalcDirSize:NoTerminalApp"; got != want {
+		t.Errorf("Shell/CtrlSpace = %q, want %q", got, want)
+	}
+}
+
+func TestActionCalcDirSizeAtCursor(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "d", "sub"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "d", "sub", "f.bin"), []byte("1234567"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	fsp := pf.GetActivePanel()
+	fsp.Vfs = vfs.NewOSVFS(tmp)
+	if err := fsp.Vfs.SetPath(tmp); err != nil {
+		t.Fatal(err)
+	}
+	dir := &panel.FileEntry{VFSItem: vfs.VFSItem{Name: "d", IsDir: true}}
+	file := &panel.FileEntry{VFSItem: vfs.VFSItem{Name: "x.txt"}}
+	fsp.Entries = []*panel.FileEntry{file, dir}
+
+	// A file under the cursor: nothing starts.
+	fsp.SetCursorIndex(0)
+	actionCalcDirSizeAtCursor(pf)
+	select {
+	case <-vtui.FrameManager.TaskChan:
+		t.Fatal("Ctrl+Space on a file started a scan")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// A folder: its size is worked out from what is inside it.
+	fsp.SetCursorIndex(1)
+	actionCalcDirSizeAtCursor(pf)
+	deadline := time.After(10 * time.Second)
+	for !dir.SizeCalculated {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("the folder size was never calculated")
+		}
+	}
+	if dir.Size != 7 {
+		t.Errorf("folder size = %d, want 7", dir.Size)
+	}
+}
+
+// f4#1670: a folder size that misses files of unknown size says so.
+func TestUnknownSizeNote(t *testing.T) {
+	if got := unknownSizeNote(vfs.OpStats{Bytes: 10, Files: 3}); got != "" {
+		t.Errorf("all sizes known, got note %q", got)
+	}
+	got := unknownSizeNote(vfs.OpStats{Files: 3, UnknownSizeFiles: 2})
+	if !strings.Contains(got, "2") {
+		t.Errorf("note %q does not carry the count of files without a size", got)
+	}
 }

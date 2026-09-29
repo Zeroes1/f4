@@ -193,6 +193,7 @@ Editor.Base64Menu
 Editor.Base64Encode
 Editor.Base64Decode
 Editor.CalculateExpression
+Editor.AmountInWords
 Editor.SortLines
 Editor.ToggleOvertype
 Editor.Search
@@ -204,6 +205,7 @@ Editor.WordWrap
 Editor.HexMode
 Editor.DisasmMode
 Editor.ShowWhitespaces
+Editor.ShowControlChars
 Editor.CodepageNext
 Editor.CodepageMenu
 Editor.ConvertCodepage
@@ -300,6 +302,7 @@ AI.Setup
 AI.Help
 AI.AttachAPSpec
 AI.ListModels
+Panel.CalcDirSize
 Settings.Category.navigation
 Settings.Open
 Settings.Category.appearance

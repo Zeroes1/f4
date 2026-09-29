@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/unxed/f4/internal/dialog"
+	"github.com/unxed/f4/internal/mdmath"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -77,7 +79,7 @@ func (ev *EditorView) refreshMarkdownSplit() {
 		return
 	}
 	name := filepath.Base(ev.FilePath)
-	view := vtui.NewMarkdownView(name, strings.ReplaceAll(text, "\r\n", "\n"))
+	view := vtui.NewMarkdownView(name, mdmath.Prepare(strings.ReplaceAll(text, "\r\n", "\n")))
 	view.Modal = false
 	view.ShowClose = false
 	view.SetTitle(" " + name + " ")
@@ -142,6 +144,10 @@ func (ev *EditorView) showMarkdownSplit(scr *vtui.ScreenBuf) {
 }
 
 // markdownSplitMouse hands a mouse event on the preview half to the preview.
+// A left click on the preview's text moves the editor's cursor to the matching
+// place (markdownSplitClick); everything else - the wheel, a row with a link,
+// the scroll bar - is the preview's own. A click has to be answered here first:
+// the window under the preview would take it as the start of a drag.
 func (ev *EditorView) markdownSplitMouse(e *vtinput.InputEvent) bool {
 	if ev.mdSplit == nil || ev.mdSplit.view == nil || e.Type != vtinput.MouseEventType {
 		return false
@@ -151,5 +157,50 @@ func (ev *EditorView) markdownSplitMouse(e *vtinput.InputEvent) bool {
 	if mx < x1 || mx > x2 || my < y1 || my > y2 {
 		return false
 	}
+	if ev.markdownSplitClick(e) {
+		return true
+	}
 	return ev.mdSplit.view.ProcessMouse(e)
+}
+
+// markdownSplitClick puts the cursor where the clicked preview row sits in the
+// text. The preview keeps no map from its rows back to source lines, so the
+// place is the same proportion syncMarkdownSplitScroll goes by the other way:
+// row N of R is line N*L/R of L. The preview itself stays where it is, so the
+// text does not move under the pointer.
+func (ev *EditorView) markdownSplitClick(e *vtinput.InputEvent) bool {
+	st := ev.mdSplit
+	if st == nil || st.view == nil || ev.Li == nil || !vtui.IsMousePress(e) ||
+		e.ButtonState&vtinput.FromLeft1stButtonPressed == 0 {
+		return false
+	}
+	topic := st.view.CurrentTopic()
+	if topic == nil || len(topic.Lines) == 0 {
+		return false
+	}
+	tx1, ty1, tx2, ty2 := st.view.TextArea()
+	mx, my := int(e.MouseX), int(e.MouseY)
+	if mx < tx1 || mx > tx2 || my < ty1 || my > ty2 {
+		return false
+	}
+	scroll, ok := dialog.HelpViewScrollTop(st.view)
+	if !ok {
+		return false
+	}
+	row := my - ty1
+	if row >= topic.StickyRows {
+		row += scroll
+	}
+	row = max(0, min(row, len(topic.Lines)-1))
+	for _, link := range topic.Links {
+		if link.Line == row {
+			return false // a row with a link: the preview follows or selects it
+		}
+	}
+	total := ev.Li.LineCount()
+	if total <= 0 {
+		return false
+	}
+	ev.gotoLinePosition(row*total/len(topic.Lines)+1, 1)
+	return true
 }

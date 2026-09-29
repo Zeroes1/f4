@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/unxed/f4/internal/terminal/far2ldnd"
@@ -50,7 +51,14 @@ type DropSourceVFS struct {
 	items    []dropSourceItem
 	byName   map[string]*dropSourceItem
 	cwd      string
+	// cancelled is set when a read ended because the copy was cancelled, so
+	// the offer can be closed with CloseCancelled rather than CloseProcessed.
+	cancelled atomic.Bool
 }
+
+// Cancelled reports whether the user cancelled a copy that was reading this
+// offer.
+func (s *DropSourceVFS) Cancelled() bool { return s.cancelled.Load() }
 
 // NewDropSourceVFS lists the offer and builds the VFS. maxChunk is the
 // max_chunk the binding was granted; a read is never longer. Items without a
@@ -263,12 +271,19 @@ func (f *dropSourceFile) ReadAt(ctx context.Context, p []byte, off int64) (int, 
 	return n, err
 }
 
+func (s *DropSourceVFS) noteCancel(err error) {
+	if errors.Is(err, context.Canceled) {
+		s.cancelled.Store(true)
+	}
+}
+
 // readLocked fills p from off in chunks of at most max_chunk, stopping at
 // EOF. It leaves pos after the bytes read.
 func (f *dropSourceFile) readLocked(ctx context.Context, p []byte, off uint64) (int, error) {
 	total := 0
 	for total < len(p) {
 		if err := ctx.Err(); err != nil {
+			f.s.noteCancel(err)
 			return total, err
 		}
 		want := len(p) - total
@@ -277,6 +292,7 @@ func (f *dropSourceFile) readLocked(ctx context.Context, p []byte, off uint64) (
 		}
 		reply, err := f.s.client.Read(ctx, f.s.offer, f.it.entry.ItemID, off+uint64(total), uint32(want)) //nolint:gosec // want <= max_chunk
 		if err != nil {
+			f.s.noteCancel(err)
 			f.pos = off + uint64(total)
 			return total, err
 		}

@@ -47,6 +47,10 @@ var architectureLayers = map[string]int{
 	// Checked conversions, shared by seven packages. Zero imports of ours.
 	"internal/numeric": 0,
 
+	// f4#1463: numbers and amounts of money in words (Russian, English). Pure
+	// text in, text out; imports nothing of ours.
+	"internal/numwords": 0,
+
 	// The --install/--self-install CLI command. Standalone: it copies the
 	// running executable and edits a shell profile, importing nothing else
 	// of ours.
@@ -90,6 +94,14 @@ var architectureLayers = map[string]int{
 	// Menu hotkeys made distinct once a menu is built. A leaf over vtui only.
 	"internal/menuhotkeys": 0,
 
+	// LaTeX formulas of a Markdown document to Unicode text: a leaf over the
+	// standard library, run before the text reaches the Markdown viewer.
+	"internal/mdmath": 0,
+
+	// Mermaid flowcharts to plain Unicode text; mdmath calls it for the
+	// ```mermaid blocks of a Markdown document. A leaf over the standard library.
+	"internal/mermaid": 0,
+
 	// Where f4 keeps the indexes of the tar archives it opened: paths and file
 	// names only, so the archive plugin and the file operations can share it.
 	"internal/tarindexcache": 0,
@@ -97,6 +109,10 @@ var architectureLayers = map[string]int{
 	// The frame watchdog: a leaf that imports nothing of ours, so any view
 	// can mark its frame and the root can arm it from a command line switch.
 	"internal/stallwatch": 0,
+
+	// Change notification for one local directory (inotify, or polling): a
+	// leaf that imports nothing of ours, so the panels can use it.
+	"internal/dirwatch": 0,
 
 	// The shared primitives: a notification channel and the history store.
 	// Both are leaves and both take what they cannot reach as a seam —

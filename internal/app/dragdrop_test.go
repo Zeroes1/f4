@@ -271,3 +271,40 @@ loop:
 		}
 	}
 }
+
+func TestDragOutModifierHeld(t *testing.T) {
+	ctrl := vtinput.ControlKeyState(vtinput.LeftCtrlPressed)
+	alt := vtinput.ControlKeyState(vtinput.RightAltPressed)
+	shift := vtinput.ControlKeyState(vtinput.ShiftPressed)
+	cases := []struct {
+		modifier string
+		state    vtinput.ControlKeyState
+		want     bool
+	}{
+		{"", 0, true},
+		{"", ctrl, true},
+		{"ctrl", 0, false},
+		{"ctrl", ctrl, true},
+		{"ctrl", alt | shift, false},
+		{"alt", alt, true},
+		{"alt", ctrl, false},
+		{"shift", shift, true},
+		{"shift", 0, false},
+	}
+	for _, c := range cases {
+		if got := panel.DragOutModifierHeld(c.modifier, c.state); got != c.want {
+			t.Errorf("DragOutModifierHeld(%q, %#x) = %v, want %v", c.modifier, uint32(c.state), got, c.want)
+		}
+	}
+}
+
+func TestDragOutStartsInsideRowsOnlyWithAModifier(t *testing.T) {
+	if panel.DragOutStartsInsideRows("") {
+		t.Error("with no modifier a drag inside the rows still belongs to the cursor")
+	}
+	for _, m := range []string{"ctrl", "alt", "shift"} {
+		if !panel.DragOutStartsInsideRows(m) {
+			t.Errorf("with %q held the drag must start on the first move", m)
+		}
+	}
+}

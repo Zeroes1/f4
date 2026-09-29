@@ -94,10 +94,16 @@ unconditional, matching how narrowly this plugin scopes everything else.
   cheaply-available-only, not necessarily on par with Linux:
   - **Linux**: the real thing, straight out of `/proc/[pid]/cmdline`,
     `/proc/[pid]/environ` and `/proc/[pid]/fd` (each entry's symlink target).
-  - **Windows**: only the executable's own full path
-    (`QueryFullProcessImageName`) -- the true command line and any open
-    handle listing both need undocumented NT APIs this plugin already
-    refuses elsewhere (see "What it deliberately does not do").
+  - **Windows**: the command line and the environment, read out of the
+    target's PEB (`NtQueryInformationProcess` for its address,
+    `ReadProcessMemory` for the process parameters -- the structure layout is
+    undocumented but stable since Windows 7; 64-bit targets from 64-bit f4
+    only, and a process f4 may not open reports the error in its section);
+    when that fails the command line falls back to the executable's own full
+    path (`QueryFullProcessImageName`). The open-files section stays
+    unavailable: a handle enumeration needs `NtQuerySystemInformation` and
+    `NtQueryObject`, which can hang on pipes (see "What it deliberately does
+    not do").
   - **macOS**: also only the executable's own full path (libproc's
     `proc_pidpath`) -- environment and open files would need a hand-parsed
     `sysctl KERN_PROCARGS2` buffer or a second libproc struct

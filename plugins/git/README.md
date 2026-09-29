@@ -329,8 +329,9 @@ archive tools (f4#609) rather than linking a Go git implementation.
   line are recounted, and the start of the side that is not the index is
   moved by the line-count change of the rebuilt hunks before it.
 - Two picks cannot become a patch and are refused with a toast, nothing
-  applied: part of a hunk of a new or deleted file (that would turn the
-  creation or deletion into a modification -- pick it whole), and a pick
+  applied: part of a hunk of a new file (that would turn the creation into
+  a modification -- pick it whole; a deleted file can be picked in part, see
+  Part 25), and a pick
   that would keep a last line without a trailing newline in the middle of
   the file.
 - Tests on real repositories (`hunk_test.go`) stage and unstage single
@@ -494,8 +495,51 @@ archive tools (f4#609) rather than linking a Go git implementation.
   there) and makes the header paths relative to the repository root.
 - Staging picked lines creates the index entry with just those lines; the
   working file is left as it is, so the file shows as added and modified
-  afterwards. The added file of a real diff (a file already staged, or
-  intent-to-add) still can only be picked whole (`errWholeFileOnly`): only a
-  patch marked `untracked` may be picked in part. An untracked directory
-  (`dir/`) is still staged whole with Insert. A deleted file still can only be
-  picked whole.
+  afterwards. An untracked directory (`dir/`) is expanded into its files
+  with F4 (part 27); Insert on it stages it whole.
+
+## Part 25: single lines of a deleted file
+
+- A file deleted from the working tree (F4, F8) or staged as deleted
+  (Shift+F4) can be picked line by line; `buildPatch` no longer refuses
+  part of it (`filePatch.deleted`).
+- Unstaging (Shift+F4) and discarding (F8) apply the patch in reverse, and
+  the deletion of just the picked lines, reversed, re-creates the file with
+  exactly those lines -- in the index or in the working tree; the patch
+  keeps its `deleted file mode` header.
+- Staging (F4) removes the picked lines from the index copy: with a line
+  left out the patch is written as a modification (`deleted file mode`
+  dropped, `+++ /dev/null` replaced by the `--- a/` path as `+++ b/`, the
+  unpicked lines context), so the file stays in the index with the unpicked
+  lines while the working tree stays without it. Picked whole, the deletion
+  stays a deletion. A new file of a real diff is still picked whole only.
+- Tests (`hunk_deleted_test.go`): the patch text for each mode, a quoted
+  path, and F4, Shift+F4 and F8 on real repositories, checking the index
+  and the working file.
+
+## Part 26: unstaging single lines of a staged new file
+
+- Shift+F4 on a file staged as new (`A `) can now take back just the picked
+  lines: the index keeps the file with the unpicked ones. The patch, applied
+  in reverse, is written as a modification (`new file mode` dropped,
+  `--- /dev/null` replaced by the `+++ b/` path as `--- a/`, the unpicked
+  lines context); with every line picked it stays a creation, and the file
+  becomes untracked as before.
+- Part 28 extends this to a file added with `git add -N` (intent-to-add):
+  F4 stages just the picked lines (the patch stays a creation, as for an
+  untracked file) and F8 removes just the picked lines from the working
+  file (written as a modification, like the unstaging above).
+- Tests (`hunk_new_test.go`): the patch text, and Shift+F4 on a real
+  repository checking the index and the working file.
+
+## Part 27: F4 on an untracked directory lists its files
+
+- An untracked directory is one row (`?? d/`) with no lines of its own. F4
+  on it now turns the row into one `??` row per file inside (`git ls-files
+  --others --exclude-standard -z`), cursor on the first; F4 on a file opens
+  the line picker of part 24. The directory stays expanded across reloads
+  (`statusPanel.expanded`). Insert on the directory row still stages all of
+  it at once.
+- Tests (`untracked_dir_test.go`): the listing, staging two lines of the
+  first file on a real repository (the other file stays untracked), and a
+  directory with no files staying a single row.
