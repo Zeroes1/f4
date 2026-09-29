@@ -1258,8 +1258,15 @@ func setupUI(firstRunStyle func() (string, bool)) {
 		// The lone-Alt detector must see every event before anything can
 		// consume it: an Alt+F7 the hotkey dispatcher takes still spoils
 		// the Alt tap (#1131).
+		// The tap acts after a short grace period, so an Alt release that
+		// only ends an Alt+Tab or Alt+Enter does nothing (#1131).
 		if panel.LoneAltTap(e) {
-			if pf, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame); ok && pf.HandleLoneAlt() {
+			if pf, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame); ok && pf.CanHandleLoneAlt() {
+				panel.ScheduleLoneAlt(func() {
+					if top, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame); ok && top == pf {
+						pf.HandleLoneAlt()
+					}
+				})
 				return true
 			}
 		}

@@ -33,10 +33,39 @@ import (
 // loneAltMaxHold is how long Alt may stay down and still count as a tap.
 const loneAltMaxHold = 700 * time.Millisecond
 
+// loneAltGrace is how long a completed tap waits before it acts. Windows'
+// classic Alt+Tab (AltTabSettings=1) and Alt+Enter (fullscreen) hand the
+// window over only after Alt has been released, so the release reaches f4
+// first and looks exactly like a lone tap; the focus loss or the size change
+// that shows it was not one arrives a moment later. The tap acts only if
+// nothing of the kind arrived in this time (#1131).
+var loneAltGrace = 250 * time.Millisecond
+
+// loneAltTerminalSize reads the terminal size a tap is checked against;
+// tests replace it.
+var loneAltTerminalSize = func() (int, int) {
+	w, h, err := vtui.GetTerminalSize()
+	if err != nil {
+		return 0, 0
+	}
+	return w, h
+}
+
+// loneAltPost runs a deferred tap on the UI goroutine; tests replace it.
+var loneAltPost = func(f func()) {
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.PostTask(f)
+	}
+}
+
 type loneAltTracker struct {
 	mu    sync.Mutex
 	armed bool
 	since time.Time
+	// gen changes with every event that could show a tap was really part of
+	// a chord or a window switch; a deferred tap that finds it changed drops.
+	gen          uint64
+	sizeW, sizeH int // terminal size when Alt went down
 }
 
 var loneAlt loneAltTracker
@@ -53,6 +82,10 @@ func (t *loneAltTracker) observe(e *vtinput.InputEvent, now time.Time) bool {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// Anything but pointer motion voids a tap still waiting out loneAltGrace.
+	if e.Type != vtinput.MouseEventType || e.ButtonState != 0 || e.WheelDirection != 0 {
+		t.gen++
+	}
 	switch e.Type {
 	case vtinput.KeyEventType:
 		if !isAltKey(e.VirtualKeyCode) {
@@ -71,6 +104,7 @@ func (t *loneAltTracker) observe(e *vtinput.InputEvent, now time.Time) bool {
 			if !t.armed {
 				t.armed = true
 				t.since = now
+				t.sizeW, t.sizeH = loneAltTerminalSize()
 			}
 			return false
 		}
@@ -97,10 +131,32 @@ func LoneAltTap(e *vtinput.InputEvent) bool {
 	return loneAlt.observe(e, time.Now())
 }
 
-// HandleLoneAlt reacts to a lone Alt tap: with the autofilter enabled it
-// opens the filter on the active panel, or closes it when it is open.
-func (pf *PanelsFrame) HandleLoneAlt() bool {
-	if !config.App.PanelAutoFilter {
+// ScheduleLoneAlt runs fire on the UI goroutine loneAltGrace after a tap
+// that LoneAltTap just reported, unless an event arrived meanwhile that
+// shows the tap was really the end of a window switch (focus lost) or of a
+// chord, or the terminal changed size (Alt+Enter toggling fullscreen).
+func ScheduleLoneAlt(fire func()) {
+	loneAlt.mu.Lock()
+	gen, w, h := loneAlt.gen, loneAlt.sizeW, loneAlt.sizeH
+	loneAlt.mu.Unlock()
+	time.AfterFunc(loneAltGrace, func() {
+		loneAlt.mu.Lock()
+		same := loneAlt.gen == gen
+		loneAlt.mu.Unlock()
+		if !same {
+			return
+		}
+		if nw, nh := loneAltTerminalSize(); nw != w || nh != h {
+			return
+		}
+		loneAltPost(fire)
+	})
+}
+
+// CanHandleLoneAlt reports whether a lone Alt tap would act on this frame,
+// so the caller knows whether to swallow the release.
+func (pf *PanelsFrame) CanHandleLoneAlt() bool {
+	if !config.App.PanelAutoFilter || pf == nil || !pf.ShowPanels {
 		return false
 	}
 	// A raised menu bar owns the keyboard.
@@ -108,6 +164,15 @@ func (pf *PanelsFrame) HandleLoneAlt() bool {
 		if menu := vtui.FrameManager.GetActiveMenuBar(); menu != nil && menu.Active {
 			return false
 		}
+	}
+	return true
+}
+
+// HandleLoneAlt reacts to a lone Alt tap: with the autofilter enabled it
+// opens the filter on the active panel, or closes it when it is open.
+func (pf *PanelsFrame) HandleLoneAlt() bool {
+	if !pf.CanHandleLoneAlt() {
+		return false
 	}
 	return pf.ToggleAutoFilter()
 }

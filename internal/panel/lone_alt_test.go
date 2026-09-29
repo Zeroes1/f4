@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -117,5 +118,60 @@ func TestPanelsFrameLoneAltTogglesFilterWhenEnabled(t *testing.T) {
 	}
 	if !pf.ShowPanels {
 		t.Fatal("Esc closing the filter also hid the panels")
+	}
+}
+
+// f4 #1131: with AltTabSettings=1 (classic Alt+Tab) and with Alt+Enter, the
+// Alt release reaches f4 before the focus loss or the size change that shows
+// it was no tap. A completed tap acts only if nothing of the kind follows
+// within loneAltGrace.
+func TestScheduleLoneAltActsOnlyIfNothingFollows(t *testing.T) {
+	oldGrace, oldSize, oldPost := loneAltGrace, loneAltTerminalSize, loneAltPost
+	t.Cleanup(func() { loneAltGrace, loneAltTerminalSize, loneAltPost = oldGrace, oldSize, oldPost })
+	loneAltGrace = 30 * time.Millisecond
+	loneAltPost = func(f func()) { f() }
+	var mu sync.Mutex
+	w, h := 80, 25
+	loneAltTerminalSize = func() (int, int) { mu.Lock(); defer mu.Unlock(); return w, h }
+
+	altDown := altKey(true, vtinput.VK_MENU, vtinput.LeftAltPressed)
+	altUp := altKey(false, vtinput.VK_MENU, 0)
+	tap := func(between ...func()) chan struct{} {
+		fired := make(chan struct{}, 1)
+		loneAlt.mu.Lock()
+		loneAlt.armed = false
+		loneAlt.mu.Unlock()
+		LoneAltTap(altDown)
+		if !LoneAltTap(altUp) {
+			t.Fatal("the release did not complete a tap")
+		}
+		ScheduleLoneAlt(func() { fired <- struct{}{} })
+		for _, f := range between {
+			f()
+		}
+		return fired
+	}
+	acted := func(c chan struct{}) bool {
+		select {
+		case <-c:
+			return true
+		case <-time.After(300 * time.Millisecond):
+			return false
+		}
+	}
+
+	if !acted(tap()) {
+		t.Error("an undisturbed tap did not act")
+	}
+	if acted(tap(func() { LoneAltTap(&vtinput.InputEvent{Type: vtinput.FocusEventType}) })) {
+		t.Error("a focus loss right after the release (Alt+Tab) did not cancel the tap")
+	}
+	if acted(tap(func() { mu.Lock(); w = 120; mu.Unlock() })) {
+		t.Error("a size change after the release (Alt+Enter) did not cancel the tap")
+	}
+	if !acted(tap(func() {
+		LoneAltTap(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseEventFlags: vtinput.MouseMoved})
+	})) {
+		t.Error("pointer motion cancelled the tap")
 	}
 }
