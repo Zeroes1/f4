@@ -5,6 +5,7 @@ package plughost
 import (
 	"github.com/unxed/f4/plugins/archive"
 	"github.com/unxed/f4/plugins/dockerfs"
+	"github.com/unxed/f4/plugins/k8sfs"
 	"github.com/unxed/f4/plugins/netfox"
 )
 
@@ -33,5 +34,8 @@ func optionalVFSPlugins() []Plugin {
 		// Docker containers as a read-only drive (f4#1663); talks to the
 		// daemon over its unix socket with the standard library only.
 		dockerfs.NewPlugin(),
+		// Kubernetes namespaces, pods and containers as a read-only drive
+		// (f4#1663); the API server over the standard library and x/net.
+		k8sfs.NewPlugin(),
 	}
 }
