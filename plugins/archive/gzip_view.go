@@ -11,13 +11,14 @@ import (
 	"github.com/unxed/tar"
 )
 
-// gzipTarView is the decompressed bytes of a gzip'd TAR as an
-// archives.ReaderAtSeeker. tar.GzipReaderAt behind it keeps checkpoints, so
-// ReadAt and Seek anywhere cost at most one checkpoint interval; the tar reader
-// on top skips over file data by seeking, so opening one member of a large
-// tar.gz no longer decompresses everything before it every time (f4#1678).
+// gzipTarView is the decompressed bytes of a compressed TAR (gzip, zstd) as an
+// archives.ReaderAtSeeker. The random-access reader behind it (tar.GzipReaderAt,
+// tar.ZstdReaderAt) keeps checkpoints or frame boundaries, so ReadAt and Seek
+// anywhere cost at most one checkpoint interval or frame; the tar reader on top
+// skips over file data by seeking, so opening one member of a large tar.gz or
+// tar.zst no longer decompresses everything before it every time (f4#1678).
 type gzipTarView struct {
-	g    *tar.GzipReaderAt
+	g    decompressedReader
 	size int64
 
 	mu  sync.Mutex
@@ -63,6 +64,13 @@ func (v *gzipTarView) Seek(offset int64, whence int) (int64, error) {
 
 func (v *gzipTarView) Close() error { return v.g.Close() }
 
+// decompressedReader is what tar.GzipReaderAt and tar.ZstdReaderAt provide.
+type decompressedReader interface {
+	io.ReaderAt
+	io.Closer
+	Size() int64
+}
+
 // openGzipTarView returns the view and the name to open it under (the
 // display name without its gzip suffix), or nil when source is not a gzip whose
 // content is a TAR, in which case the caller reads it the ordinary way. It
@@ -80,6 +88,28 @@ func openGzipTarView(ctx context.Context, source io.ReaderAt, size int64, displa
 	if err != nil {
 		return nil, ""
 	}
+	return finishTarView(ctx, g, displayName)
+}
+
+// openZstdTarView is openGzipTarView for a zstd'd TAR.
+func openZstdTarView(ctx context.Context, source io.ReaderAt, size int64, displayName string) (*gzipTarView, string) {
+	if size < 8 {
+		return nil, ""
+	}
+	var magic [4]byte
+	if _, err := source.ReadAt(magic[:], 0); err != nil || magic != [4]byte{0x28, 0xb5, 0x2f, 0xfd} {
+		return nil, ""
+	}
+	z, err := tar.NewZstdReaderAt(source, size)
+	if err != nil {
+		return nil, ""
+	}
+	return finishTarView(ctx, z, displayName)
+}
+
+// finishTarView checks that the decompressed data starts like a TAR and runs
+// the stream to its end once, which teaches the reader the exact size.
+func finishTarView(ctx context.Context, g decompressedReader, displayName string) (*gzipTarView, string) {
 	var head [512]byte
 	if n, err := g.ReadAt(head[:], 0); n < len(head) || (err != nil && err != io.EOF) || string(head[257:262]) != "ustar" {
 		_ = g.Close()
@@ -107,8 +137,14 @@ func tarNameOf(name string) string {
 		return name[:len(name)-4] + ".tar"
 	case strings.HasSuffix(lower, ".tar.gz"):
 		return name[:len(name)-3]
+	case strings.HasSuffix(lower, ".tar.zst"):
+		return name[:len(name)-4]
+	case strings.HasSuffix(lower, ".tzst"):
+		return name[:len(name)-5] + ".tar"
 	case strings.HasSuffix(lower, ".gz"):
 		return name[:len(name)-3] + ".tar"
+	case strings.HasSuffix(lower, ".zst"):
+		return name[:len(name)-4] + ".tar"
 	}
 	return name + ".tar"
 }
