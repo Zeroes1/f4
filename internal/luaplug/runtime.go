@@ -32,6 +32,12 @@ const DefaultCallTimeout = 30 * time.Second
 // ErrClosed is returned once the runtime has been shut down.
 var ErrClosed = errors.New("luaplug: runtime is closed")
 
+// ErrInterrupted is returned by every entry into a runtime whose earlier call
+// hit its deadline. The interpreter was stopped at an arbitrary instruction --
+// halfway through updating a table, say -- so its state cannot be trusted and
+// the runtime is discarded rather than reused; the caller starts a new one.
+var ErrInterrupted = errors.New("luaplug: the runtime was interrupted by its call deadline and must be discarded")
+
 // Host is the plugin's view of f4. Method names are the F4-RPC ones, so an
 // embedded plugin and a subprocess plugin talk to the same surface.
 type Host interface {
@@ -62,9 +68,9 @@ type Options struct {
 	AllowUnsafeStdlib bool
 
 	// CallTimeout bounds one entry into the interpreter. Zero means
-	// DefaultCallTimeout. A runtime that has hit its timeout should be
-	// discarded rather than reused: the interpreter was interrupted at an
-	// arbitrary instruction.
+	// DefaultCallTimeout. A runtime that has hit its timeout is discarded
+	// rather than reused (ErrInterrupted): the interpreter was interrupted at
+	// an arbitrary instruction.
 	CallTimeout time.Duration
 }
 
@@ -81,9 +87,10 @@ type Runtime struct {
 	quit  chan struct{}
 	wg    sync.WaitGroup
 
-	workerID atomic.Int64
-	closed   atomic.Bool
-	once     sync.Once
+	workerID    atomic.Int64
+	closed      atomic.Bool
+	interrupted atomic.Bool
+	once        sync.Once
 
 	// The fields below belong to the worker goroutine only.
 	state    *lua.LState
@@ -154,6 +161,19 @@ func (r *Runtime) run(fn func(*lua.LState) error) (err error) {
 		defer cancel()
 		r.state.SetContext(ctx)
 		defer r.state.RemoveContext()
+		// Checked whatever the call returned: a plugin can catch the
+		// interruption with pcall and carry on, and the state is no better
+		// for it.
+		defer func() {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				r.interrupted.Store(true)
+				if err == nil {
+					err = ErrInterrupted
+				} else if !errors.Is(err, ErrInterrupted) {
+					err = fmt.Errorf("%w: %v", ErrInterrupted, err)
+				}
+			}
+		}()
 	}
 
 	r.depth++
@@ -166,6 +186,9 @@ func (r *Runtime) run(fn func(*lua.LState) error) (err error) {
 func (r *Runtime) Do(fn func(*lua.LState) error) error {
 	if r.closed.Load() {
 		return ErrClosed
+	}
+	if r.interrupted.Load() {
+		return ErrInterrupted
 	}
 	if goID() == r.workerID.Load() {
 		return r.run(fn)
@@ -184,6 +207,10 @@ func (r *Runtime) Do(fn func(*lua.LState) error) error {
 		return ErrClosed
 	}
 }
+
+// Interrupted reports whether a call hit its deadline. Such a runtime refuses
+// all further work with ErrInterrupted and should be closed and replaced.
+func (r *Runtime) Interrupted() bool { return r.interrupted.Load() }
 
 // LoadString compiles and runs a chunk. Running the plugin body is what
 // populates its handler table, so this is how a plugin is started.
