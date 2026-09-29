@@ -326,14 +326,6 @@ Every file tracked in the repository. Regenerate with
     │       └── base.md
     ├── .ai-factory.json
     ├── artifacts
-    │   ├── native-openconsole-probe.json
-    │   ├── native-openconsole-probe.json.sessions
-    │   │   ├── 121x40.raw
-    │   │   ├── 1x1.raw
-    │   │   └── 80x25.raw
-    │   ├── native-openconsole-probe-static.json
-    │   ├── native-openconsole-probe-static.json.sessions
-    │   │   └── 80x25.raw
     │   └── README.md
     ├── cmd
     │   └── f4

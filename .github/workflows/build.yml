@@ -2755,10 +2755,10 @@ jobs:
         echo "BUILD_TIME=$(date -u -d "@$(git show -s --format='%ct' HEAD)" +'%Y-%m-%d %H:%M:%S')" >> "$GITHUB_ENV"
 
     # Download into dist/, NOT artifacts/. This job checks the repository out,
-    # and artifacts/ is a tracked directory holding the ConPTY audit evidence
-    # (see artifacts/README.md). Downloading on top of it merged that evidence
-    # with the build output, and the publish step below then uploaded the
-    # committed native-openconsole-probe*.json files as nightly release assets.
+    # and artifacts/ is a tracked directory (see artifacts/README.md). It once
+    # held the ConPTY audit evidence, and downloading on top of it merged that
+    # evidence with the build output, so the publish step below uploaded the
+    # native-openconsole-probe*.json files as nightly release assets.
     # Collecting that data is a manual job -- conpty-probe.yml, workflow_dispatch
     # only -- so nothing in the automatic pipeline should be publishing it.
     - name: Download all artifacts
