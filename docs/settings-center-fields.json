@@ -751,6 +751,16 @@
   },
   {
     "category": "editor",
+    "description": "Draw control characters as one-cell symbols such as ␀ and ␛ in newly opened editors, instead of a placeholder. The Editor > Options toggle changes it for one editor.",
+    "group": "Visual aids",
+    "id": "EditorShowControlChars",
+    "kind": "boolean",
+    "label": "Show control characters",
+    "timing": "new editors",
+    "unavailable": ""
+  },
+  {
+    "category": "editor",
     "description": "Select no guide, a vertical guide, a horizontal guide, or both. Colorer can supply guide colors but the behavior is editor-wide.",
     "group": "Visual aids",
     "id": "EditorCrossMode",
