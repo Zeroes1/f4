@@ -24,6 +24,10 @@ import (
 // nothing but the user, like any other copy.
 const dndOfferTimeout = 30 * time.Second
 
+// dndAskTimeout is how long the question about an unknown drop position waits
+// for a person.
+const dndAskTimeout = 2 * time.Minute
+
 // ReceiveTerminalOffer handles one INPUT_DND event of client's binding. It
 // blocks while the offer is listed and must therefore run off the UI
 // goroutine (DNDClient.OnEvent already does); the copy is handed to the UI
@@ -44,7 +48,19 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		closeOffer(far2ldnd.CloseRejected)
 		return
 	}
-	if pf.offerIsForTerminal(ev) {
+	toTerminal := pf.offerIsForTerminal(ev)
+	if !toTerminal && !ev.PositionKnown() {
+		// The outer terminal did not say where the drop landed, and both a
+		// panel and a program in the built-in terminal could take it: ask.
+		switch pf.askUnknownDropTarget() {
+		case dropAskProgram:
+			toTerminal = true
+		case dropAskCancel:
+			closeOffer(far2ldnd.CloseRejected)
+			return
+		}
+	}
+	if toTerminal {
 		pf.proxyOfferToTerminal(client, ev, granted.MaxChunk, closeOffer)
 		return
 	}
@@ -126,6 +142,46 @@ func (pf *PanelsFrame) offerIsForTerminal(ev far2ldnd.Event) bool {
 	}
 }
 
+// Answers of askUnknownDropTarget.
+const (
+	dropAskPanel   = iota // copy into the panel (also: nothing to ask)
+	dropAskProgram        // give to the program in the built-in terminal
+	dropAskCancel
+)
+
+// askUnknownDropTarget decides where a drop of unknown position goes. With
+// no program in the built-in terminal taking drops there is nothing to choose
+// and the panels get it as before; otherwise the user is asked, and no answer
+// within dndAskTimeout means the panels, the behaviour without the question.
+func (pf *PanelsFrame) askUnknownDropTarget() int {
+	answer := make(chan int, 1)
+	vtui.FrameManager.PostTask(func() {
+		if pf.TermView == nil || !pf.TermView.DropBound() {
+			answer <- dropAskPanel
+			return
+		}
+		dlg := vtui.ShowMessage(" Drag and Drop ",
+			"The position of the drop is unknown.\nWhere should the files go?",
+			[]string{"&Panel", "P&rogram", "Cancel"})
+		dlg.OnResult = func(code int) {
+			switch code {
+			case 0:
+				answer <- dropAskPanel
+			case 1:
+				answer <- dropAskProgram
+			default:
+				answer <- dropAskCancel
+			}
+		}
+	})
+	select {
+	case a := <-answer:
+		return a
+	case <-time.After(dndAskTimeout):
+		return dropAskPanel
+	}
+}
+
 // proxyOfferToTerminal hands the offer on to the program in the built-in
 // terminal: the child gets an offer of its own whose files are read from the
 // outer one on demand (terminal.DNDProxySource), with the event's cell moved
@@ -141,9 +197,13 @@ func (pf *PanelsFrame) proxyOfferToTerminal(client *terminal.DNDClient, ev far2l
 		return
 	}
 	tv := pf.TermView
-	x1, y1, _, _ := tv.GetPosition()
+	x, y := -1, -1 // unknown stays unknown
+	if ev.PositionKnown() {
+		x1, y1, _, _ := tv.GetPosition()
+		x, y = int(ev.X)-x1, int(ev.Y)-y1
+	}
 	known := ev.Flags&far2ldnd.EventModifiersKnown != 0
-	if _, err := tv.OfferDrop(src, int(ev.X)-x1, int(ev.Y)-y1, ev.Modifiers, known); err != nil {
+	if _, err := tv.OfferDrop(src, x, y, ev.Modifiers, known); err != nil {
 		vtui.DebugLog("DND: the terminal refused the offer: %v", err)
 		src.CloseWith(far2ldnd.CloseRejected)
 	}
