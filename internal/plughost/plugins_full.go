@@ -4,6 +4,7 @@ package plughost
 
 import (
 	"github.com/unxed/f4/plugins/archive"
+	"github.com/unxed/f4/plugins/dockerfs"
 	"github.com/unxed/f4/plugins/netfox"
 )
 
@@ -29,5 +30,8 @@ func optionalVFSPlugins() []Plugin {
 	return []Plugin{
 		&archive.ArchivePlugin{},
 		&netfox.NetFoxPlugin{},
+		// Docker containers as a read-only drive (f4#1663); talks to the
+		// daemon over its unix socket with the standard library only.
+		dockerfs.NewPlugin(),
 	}
 }
