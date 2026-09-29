@@ -81,9 +81,11 @@ def main():
         if listed is not None and not sent_nav:
             time.sleep(0.5)
             mark = len(out)
-            os.write(fd, b"\x1b[B")  # Down: onto "subdir" (directories first)
+            # The command line takes the same "cd" in f4 and in mc; cursor keys
+            # differ between terminal modes, a typed command does not.
+            os.write(fd, b"cd subdir")
             time.sleep(0.3)
-            os.write(fd, b"\r")      # Enter: go into it
+            os.write(fd, b"\r")
             sent_nav = True
             nav_from = mark
         if sent_nav and not navigated and b"inner.txt" in out[nav_from:]:
