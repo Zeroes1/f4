@@ -111,6 +111,11 @@ func drivePanelsFrameShowUntil(t *testing.T, pf *PanelsFrame, scr *vtui.ScreenBu
 func TestPanelsFrame_ManagedExecutionDebounce_JobControlStopFreesKeyboard(t *testing.T) {
 	pf, p, scr := newManagedExecDebounceFrame(t)
 
+	// Every wait here returns the moment its condition holds; the generous
+	// bound only matters on an overloaded runner (bash starting up and
+	// forking sleep took longer than the 5 s this used to allow).
+	const jobControlWaitTimeout = 20 * time.Second
+
 	// "sleep 30" stands in for the reported python3 REPL: a foreground
 	// program that blocks instead of returning, the shape #1603 is about.
 	wire := " " + terminal.ManagedForegroundCommand(ShellSingleQuote("sleep 30")) + "\r"
@@ -121,7 +126,7 @@ func TestPanelsFrame_ManagedExecutionDebounce_JobControlStopFreesKeyboard(t *tes
 		t.Fatalf("writing the managed command: %v", err)
 	}
 
-	if !drivePanelsFrameShowUntil(t, pf, scr, 5*time.Second, func() bool { return p.IsBusy() }) {
+	if !drivePanelsFrameShowUntil(t, pf, scr, jobControlWaitTimeout, func() bool { return p.IsBusy() }) {
 		t.Fatal("sleep never became the foreground job (IsBusy never went true)")
 	}
 	if !pf.TerminalOwnsKeyboard() {
@@ -138,7 +143,7 @@ func TestPanelsFrame_ManagedExecutionDebounce_JobControlStopFreesKeyboard(t *tes
 	// Ctrl+Z until the shell reclaims the terminal -- once sleep is stopped,
 	// further Ctrl+Z at bash's prompt are ignored by bash itself.
 	lastCtrlZ := time.Time{}
-	if !drivePanelsFrameShowUntil(t, pf, scr, 5*time.Second, func() bool {
+	if !drivePanelsFrameShowUntil(t, pf, scr, jobControlWaitTimeout, func() bool {
 		if !p.IsBusy() {
 			return true
 		}
@@ -157,12 +162,27 @@ func TestPanelsFrame_ManagedExecutionDebounce_JobControlStopFreesKeyboard(t *tes
 	// frame.go) is deliberately not instant; give it a generous window of
 	// further Show() polls before concluding it never fires -- that would
 	// be #1603 itself, regressed.
-	if !drivePanelsFrameShowUntil(t, pf, scr, 3*time.Second, func() bool { return !pf.Executing }) {
+	if !drivePanelsFrameShowUntil(t, pf, scr, jobControlWaitTimeout, func() bool { return !pf.Executing }) {
 		t.Fatal("pf.Executing never cleared after the job-control stop")
 	}
 
-	if pf.IsPtyBusy() {
-		t.Fatal("IsPtyBusy still true right after the job-control stop was debounced")
+	// The D marker can be what cleared pf.Executing (it is printed just
+	// before the wrapper's last statement, `(exit $FARVTRESULT)`). That
+	// statement is a subshell, which an interactive job-control shell runs as
+	// a foreground job of its own, so IsBusy() legitimately reads true for a
+	// few milliseconds after the marker (see the terminal package's
+	// JobControlStopReclaimsTerminal test). Let the shell get past it before
+	// asserting the terminal is idle, then check it stays that way.
+	if !drivePanelsFrameShowUntil(t, pf, scr, jobControlWaitTimeout, func() bool { return !pf.IsPtyBusy() }) {
+		t.Fatal("IsPtyBusy still true long after the job-control stop was debounced")
+	}
+	settled := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(settled) {
+		pf.Show(scr)
+		if pf.IsPtyBusy() {
+			t.Fatal("IsPtyBusy flipped back to true after the job-control stop was debounced")
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 	if pf.TerminalOwnsKeyboard() {
 		t.Fatal("keyboard was not handed back to f4 after the job-control stop")

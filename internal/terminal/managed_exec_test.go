@@ -100,13 +100,18 @@ func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 		t.Fatalf("writing the managed command: %v", err)
 	}
 
+	// The waits below return the moment their condition holds; the generous
+	// ptyStartupTimeout only matters on an overloaded runner, where bash
+	// starting up and forking sleep can take well over the 5 s this used to
+	// allow.
+	const ptyStartupTimeout = 20 * time.Second
 	var out strings.Builder
-	if !waitForPTYCondition(p, &out, 5*time.Second, func() bool {
+	if !waitForPTYCondition(p, &out, ptyStartupTimeout, func() bool {
 		return strings.Contains(out.String(), "\x1b]133;C\x07")
 	}) {
 		t.Fatalf("never saw the C marker; PTY output so far: %q", out.String())
 	}
-	if !waitForPTYCondition(p, &out, 5*time.Second, p.IsBusy) {
+	if !waitForPTYCondition(p, &out, ptyStartupTimeout, p.IsBusy) {
 		t.Fatalf("sleep never became the foreground job (IsBusy never went true); PTY output so far: %q", out.String())
 	}
 
@@ -122,7 +127,7 @@ func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 	// terminal (the panel-side test does the same): once sleep is stopped,
 	// nothing more is sent, and a stray one at bash's prompt is ignored.
 	var lastCtrlZ time.Time
-	if !waitForPTYCondition(p, &out, 10*time.Second, func() bool {
+	if !waitForPTYCondition(p, &out, ptyStartupTimeout, func() bool {
 		if !p.IsBusy() {
 			return true
 		}
@@ -158,7 +163,7 @@ func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 	if _, err := p.Write([]byte(" echo F4SET''TLED\r")); err != nil {
 		t.Fatalf("writing the settle sentinel: %v", err)
 	}
-	if !waitForPTYCondition(p, &out, 5*time.Second, func() bool {
+	if !waitForPTYCondition(p, &out, ptyStartupTimeout, func() bool {
 		return strings.Contains(out.String(), "F4SETTLED")
 	}) {
 		t.Fatalf("the shell never got back to reading input after the stop; PTY output so far: %q", out.String())
