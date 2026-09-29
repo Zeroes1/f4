@@ -55,6 +55,9 @@ type unixAttributesEdit struct {
 	gid      int
 	setMTime bool
 	mtime    time.Time
+	// setATime writes the access time the Accessed field holds (f4#1404).
+	setATime bool
+	atime    time.Time
 	// mode holds the new mode bits, keepMode the bits each object keeps.
 	mode     uint32
 	keepMode uint32
@@ -76,6 +79,9 @@ func applyUnixAttributesToOne(ctx context.Context, v vfs.VFS, path string, item 
 	}
 	if edit.setMTime {
 		item.MTime = edit.mtime
+	}
+	if edit.setATime {
+		item.ATime = edit.atime
 	}
 	item.UnixMode = (item.UnixMode & edit.keepMode) | (edit.mode &^ edit.keepMode)
 	if err := v.SetAttributes(ctx, path, item); err != nil {
@@ -684,16 +690,31 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 	dlg.AddItem(editMTime)
 	mainVBox.Add(rowTime, vtui.Margins{Top: 0}, vtui.AlignFill)
 
-	// Read-only Created/Accessed/Changed rows, in that order (f4#1404).
-	// Unlike M-Time these are never editable: Unix has no portable way to
-	// set birth/change time at all, and they exist purely so the reporter's
-	// "creation date, read-only" ask has somewhere to show.
+	// Created/Accessed/Changed rows, in that order (f4#1404). Created and
+	// Changed are read-only: Unix has no portable way to set birth/change
+	// time at all. Accessed is editable, below.
 	var rowCreated, rowAccessed, rowChanged *vtui.HBoxLayout
 	if showCreated {
 		rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 66, 2, i18n.Msg("Attributes.Created"), createdText)
 	}
+	// Accessed is editable (f4#1404): utimensat takes it together with the
+	// modification time, which OSVFS.SetAttributes already passes on. Like
+	// M-Time it stays blank for a multiple selection, and a field left
+	// untouched changes nothing.
+	var editAccessed *vtui.Edit
+	initialAccessed := ""
 	if showAccessed {
-		rowAccessed = attributesReadOnlyTimeRow(dlg, mainVBox, 66, 2, i18n.Msg("Attributes.Accessed"), accessedText)
+		if !multiple {
+			initialAccessed = accessedText
+		}
+		editAccessed = vtui.NewEdit(0, 0, 20, initialAccessed)
+		lblAccessed := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Accessed")), vtui.Palette[vtui.ColDialogText])
+		rowAccessed = vtui.NewHBoxLayout(0, 0, 66, 1)
+		rowAccessed.Add(lblAccessed, vtui.Margins{Left: 2, Right: 1}, vtui.AlignLeft)
+		rowAccessed.Add(editAccessed, vtui.Margins{}, vtui.AlignLeft)
+		dlg.AddItem(lblAccessed)
+		dlg.AddItem(editAccessed)
+		mainVBox.Add(rowAccessed, vtui.Margins{Top: 0}, vtui.AlignFill)
 	}
 	if showChanged {
 		rowChanged = attributesReadOnlyTimeRow(dlg, mainVBox, 66, 2, i18n.Msg("Attributes.Changed"), changedText)
@@ -879,6 +900,16 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 				return
 			}
 			edit.mtime, edit.setMTime = t, true
+		}
+		if editAccessed != nil {
+			if text := editAccessed.GetText(); text != initialAccessed {
+				t, err := time.ParseInLocation(attributesTimeFormat, text, time.Local)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Attributes.MTimeInvalidError"), i18n.Msg("Attributes.MTimeFormatHint")), []string{"&Ok"})
+					return
+				}
+				edit.atime, edit.setATime = t, true
+			}
 		}
 		edit.mode, edit.keepMode = unixModeEdit(editOctal.GetText(), allChecks)
 		recursive := cbRecursive != nil && cbRecursive.State == 1

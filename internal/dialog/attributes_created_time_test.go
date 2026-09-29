@@ -73,7 +73,6 @@ func TestAttributesDialog_UnixShowsCreatedAccessedChanged(t *testing.T) {
 		value string
 	}{
 		{i18n.Msg("Attributes.Created"), created.Format(attributesTimeFormat)},
-		{i18n.Msg("Attributes.Accessed"), accessed.Format(attributesTimeFormat)},
 		{i18n.Msg("Attributes.Changed"), changed.Format(attributesTimeFormat)},
 	} {
 		if !containsPrefix(texts, want.label) {
@@ -83,9 +82,24 @@ func TestAttributesDialog_UnixShowsCreatedAccessedChanged(t *testing.T) {
 			t.Errorf("dialog lacks the value %q; texts:\n%s", want.value, strings.Join(texts, "\n"))
 		}
 	}
+	// Accessed is the one editable one of the three (f4#1404): a label and an
+	// edit field holding the value.
+	if !containsPrefix(texts, i18n.Msg("Attributes.Accessed")) {
+		t.Errorf("dialog lacks an Accessed label; texts:\n%s", strings.Join(texts, "\n"))
+	}
+	var accessedEdit bool
+	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
+		if e, ok := el.(*vtui.Edit); ok && e.GetText() == accessed.Format(attributesTimeFormat) {
+			accessedEdit = true
+		}
+		return true
+	})
+	if !accessedEdit {
+		t.Errorf("no edit field holds the Accessed time %q", accessed.Format(attributesTimeFormat))
+	}
 
-	// These rows are read-only display: no extra Edit widgets, and M-Time
-	// stays the only editable time field (owner, group, octal, M-Time = 4).
+	// Created and Changed are read-only display: no Edit widgets for them;
+	// the edit fields are owner, group, octal, M-Time and Accessed = 5.
 	var edits int
 	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
 		if _, ok := el.(*vtui.Edit); ok {
@@ -93,8 +107,8 @@ func TestAttributesDialog_UnixShowsCreatedAccessedChanged(t *testing.T) {
 		}
 		return true
 	})
-	if edits != 4 {
-		t.Errorf("edit field count = %d, want 4 (owner, group, octal, M-Time); Created/Accessed/Changed must not be editable", edits)
+	if edits != 5 {
+		t.Errorf("edit field count = %d, want 5 (owner, group, octal, M-Time, Accessed); Created/Changed must not be editable", edits)
 	}
 }
 
