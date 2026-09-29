@@ -656,6 +656,8 @@ $Panel Navigation Keys
   Ctrl+Shift+= / Ctrl+Shift+- - Select / deselect by mask
   Alt+=         - Invert selection
   Numpad 5      - View file (also F3; Num Lock may be on or off)
+  Ctrl+Space    - Calculate the size of the folder under the cursor (archives too;
+                  F3 on a folder does the same)
 
 Extension selection is a standard Far Manager command. The main-keyboard
 aliases make it available without a numpad. Matching ignores case and uses
