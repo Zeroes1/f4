@@ -1,6 +1,8 @@
 package dockerfs
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -137,13 +139,21 @@ func (s pathStat) isDir() bool           { return s.fileMode().IsDir() }
 func (s pathStat) isSymlink() bool       { return s.fileMode()&os.ModeSymlink != 0 }
 
 func (c *client) do(ctx context.Context, method, endpoint string, query url.Values) (*http.Response, error) {
+	return c.send(ctx, method, endpoint, query, "", nil)
+}
+
+// send is do with a request body.
+func (c *client) send(ctx context.Context, method, endpoint string, query url.Values, contentType string, body io.Reader) (*http.Response, error) {
 	target := c.base + endpoint
 	if len(query) > 0 {
 		target += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, method, target, nil)
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, err
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -227,4 +237,95 @@ func (c *client) archive(ctx context.Context, id, p string) (io.ReadCloser, erro
 		return nil, err
 	}
 	return resp.Body, nil
+}
+
+// putArchive uploads a tar to a folder of the container. write fills the tar;
+// it runs while the request is being sent, so nothing is held in memory.
+func (c *client) putArchive(ctx context.Context, id, dir string, write func(*tar.Writer) error) error {
+	pr, pw := io.Pipe()
+	go func() {
+		tw := tar.NewWriter(pw)
+		err := write(tw)
+		if err == nil {
+			err = tw.Close()
+		}
+		_ = pw.CloseWithError(err)
+	}()
+	resp, err := c.send(ctx, http.MethodPut, "/containers/"+url.PathEscape(id)+"/archive",
+		url.Values{"path": {dir}}, "application/x-tar", pr)
+	if err != nil {
+		_ = pr.CloseWithError(err)
+		return err
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
+func (c *client) postJSON(ctx context.Context, endpoint string, in, out any) error {
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	resp, err := c.send(ctx, http.MethodPost, endpoint, nil, "application/json", bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+var errExecFailed = errors.New("the command failed in the container")
+
+// execTimeout bounds one rm or mv run inside a container.
+const execTimeout = 60 * time.Second
+
+// exec runs a command (no shell) in a running container and reports its exit
+// status. The output is not collected: the daemon has no delete or rename for
+// a container's files, so those are done with rm and mv, and a nonzero status
+// is all there is to say about them.
+func (c *client) exec(ctx context.Context, id string, cmd []string) error {
+	var created struct {
+		ID string `json:"Id"`
+	}
+	err := c.postJSON(ctx, "/containers/"+url.PathEscape(id)+"/exec",
+		map[string]any{"Cmd": cmd, "AttachStdout": false, "AttachStderr": false}, &created)
+	if err != nil {
+		return err
+	}
+	if err := c.postJSON(ctx, "/exec/"+url.PathEscape(created.ID)+"/start", map[string]any{"Detach": true}, nil); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(execTimeout)
+	for {
+		resp, err := c.do(ctx, http.MethodGet, "/exec/"+url.PathEscape(created.ID)+"/json", nil)
+		if err != nil {
+			return err
+		}
+		var state struct {
+			Running  bool `json:"Running"`
+			ExitCode int  `json:"ExitCode"`
+		}
+		err = json.NewDecoder(resp.Body).Decode(&state)
+		_ = resp.Body.Close()
+		if err != nil {
+			return err
+		}
+		if !state.Running {
+			if state.ExitCode != 0 {
+				return fmt.Errorf("%s %s: %w (exit status %d)", cmd[0], strings.Join(cmd[1:], " "), errExecFailed, state.ExitCode)
+			}
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("%s: timed out", cmd[0])
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }

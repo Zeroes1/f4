@@ -1,8 +1,12 @@
 # Docker panel (`plugins/dockerfs`)
 
-Part 1 of [f4#1663](https://github.com/unxed/f4/issues/1663): Docker containers as a read-only drive.
+[f4#1663](https://github.com/unxed/f4/issues/1663), Docker part: containers as a drive.
 
-Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all containers (running or not) as folders; inside one is that container's file system. F3, F5 and Enter work as on any panel; nothing can be changed yet.
+Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all containers (running or not) as folders; inside one is that container's file system. F3, F5 and Enter work as on any panel, in both directions:
+
+* **Copy into a container** (F5/F6 onto the panel) and **mkdir** upload a tar with `PUT /containers/{id}/archive`, the way `docker cp` does. They work on stopped containers too.
+* **Delete and rename** have no Engine API call, so they run `rm -rf` and `mv` inside the container (`POST /containers/{id}/exec`, no shell). That needs a *running* container with those tools in it (not a distroless image); otherwise the error says the command failed.
+* Not supported: changing attributes, and anything on the container list itself (creating, removing or renaming containers).
 
 ## Why this shape
 
@@ -17,7 +21,8 @@ Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all cont
 
 ## Limits of this part
 
-* Read-only (copy out, view). Copying into a container, mkdir, delete, rename come later.
+* Delete/rename need a running container with `rm`/`mv`; the reason of a failure is only the exit status.
+* Uploads go through a temporary file (a tar header needs the size up front).
 * The archive endpoint has no "one level only" mode: listing a folder streams the tar of everything under it. Listing `/` of a big image is slow, and after 400000 entries the listing stops and says it is partial.
 * The full build only. The lite build (see `internal/plughost/plugins_lite.go`) does not include it yet.
 

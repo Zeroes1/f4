@@ -39,17 +39,17 @@ var (
 	errLinkLoop      = errors.New("too many levels of symbolic links")
 )
 
-// readOnlyError is what every change made through the panel gets; it is
-// os.ErrPermission to the file operations that ask.
-type readOnlyError struct{}
+// unsupportedError is what an operation the Docker panel cannot do gets; it
+// is os.ErrPermission to the file operations that ask.
+type unsupportedError struct{}
 
-func (readOnlyError) Error() string {
-	return dockerText("Docker.PanelReadOnly",
-		"The Docker panel is read-only for now: copy files out with F5",
-		"Панель Docker пока только для чтения: файлы можно скопировать наружу клавишей F5")
+func (unsupportedError) Error() string {
+	return dockerText("Docker.NotSupported",
+		"The Docker panel cannot do this: containers themselves are not managed here, and file attributes cannot be changed",
+		"Панель Docker этого не умеет: самими контейнерами здесь не управляют, а атрибуты файлов изменить нельзя")
 }
 
-func (readOnlyError) Is(target error) bool { return target == os.ErrPermission }
+func (unsupportedError) Is(target error) bool { return target == os.ErrPermission }
 
 // listingTruncatedError ends a listing that hit maxScanEntries.
 type listingTruncatedError struct{}
@@ -492,18 +492,154 @@ func (c *ctxReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-func (v *dockerVFS) MkDir(context.Context, string) error          { return readOnlyError{} }
-func (v *dockerVFS) Remove(context.Context, string) error         { return readOnlyError{} }
-func (v *dockerVFS) Rename(context.Context, string, string) error { return readOnlyError{} }
-func (v *dockerVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
-	return readOnlyError{}
+// target resolves a path that must lie inside a container (not the container
+// list and not a container's own root).
+func (v *dockerVFS) target(ctx context.Context, p string) (cli *client, id, inner string, err error) {
+	abs, err := v.Abs(p)
+	if err != nil {
+		return nil, "", "", err
+	}
+	name, inner := split(abs)
+	if name == "" || inner == "/" {
+		return nil, "", "", unsupportedError{}
+	}
+	cli, err = v.clientFor()
+	if err != nil {
+		return nil, "", "", err
+	}
+	id, err = v.containerID(ctx, cli, name)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return cli, id, inner, nil
 }
-func (v *dockerVFS) Create(context.Context, string) (io.WriteCloser, error) {
-	return nil, readOnlyError{}
+
+// parentDir is the folder a new entry goes into, symlinks followed, checked to
+// be a folder.
+func parentDir(ctx context.Context, cli *client, id, inner string) (string, error) {
+	dir, st, err := follow(ctx, cli, id, path.Dir(inner))
+	if err != nil {
+		return "", err
+	}
+	if !st.isDir() {
+		return "", fmt.Errorf("%s: %w", path.Dir(inner), errNotADirectory)
+	}
+	return dir, nil
+}
+
+// MkDir uploads a tar holding the one folder, which is what `docker cp` does
+// for a copy into a container.
+func (v *dockerVFS) MkDir(ctx context.Context, p string) error {
+	cli, id, inner, err := v.target(ctx, p)
+	if err != nil {
+		return err
+	}
+	dir, err := parentDir(ctx, cli, id, inner)
+	if err != nil {
+		return err
+	}
+	return cli.putArchive(ctx, id, dir, func(tw *tar.Writer) error {
+		return tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeDir, Name: path.Base(inner) + "/", Mode: 0o755, ModTime: time.Now(),
+		})
+	})
+}
+
+// Remove and Rename: the Engine API cannot delete or move a container's files,
+// so they run rm and mv inside the container. That needs a running container
+// with those tools in it; when it has none, the error says what failed.
+func (v *dockerVFS) Remove(ctx context.Context, p string) error {
+	cli, id, inner, err := v.target(ctx, p)
+	if err != nil {
+		return err
+	}
+	return cli.exec(ctx, id, []string{"rm", "-rf", "--", inner})
+}
+
+func (v *dockerVFS) Rename(ctx context.Context, oldpath, newpath string) error {
+	cli, id, from, err := v.target(ctx, oldpath)
+	if err != nil {
+		return err
+	}
+	absTo, err := v.Abs(newpath)
+	if err != nil {
+		return err
+	}
+	nameTo, to := split(absTo)
+	oldAbs, _ := v.Abs(oldpath)
+	nameFrom, _ := split(oldAbs)
+	if nameTo != nameFrom || to == "/" {
+		return unsupportedError{}
+	}
+	return cli.exec(ctx, id, []string{"mv", "--", from, to})
+}
+
+func (v *dockerVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
+	return unsupportedError{}
+}
+
+// Create collects what is written in a temporary file and uploads it as a tar
+// when the writer is closed: a tar header needs the size up front, which a
+// stream of unknown length cannot give.
+func (v *dockerVFS) Create(ctx context.Context, p string) (io.WriteCloser, error) {
+	cli, id, inner, err := v.target(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	dir, err := parentDir(ctx, cli, id, inner)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.CreateTemp("", "f4-docker-up-*")
+	if err != nil {
+		return nil, err
+	}
+	return &uploadWriter{ctx: ctx, cli: cli, id: id, dir: dir, name: path.Base(inner), file: file}, nil
+}
+
+// uploadWriter is the writer Create returns.
+type uploadWriter struct {
+	ctx    context.Context
+	cli    *client
+	id     string
+	dir    string
+	name   string
+	file   *os.File
+	closed bool
+}
+
+func (w *uploadWriter) Write(p []byte) (int, error) { return w.file.Write(p) }
+
+func (w *uploadWriter) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+	tempPath := w.file.Name()
+	defer func() {
+		_ = w.file.Close()
+		_ = os.Remove(tempPath)
+	}()
+	size, err := w.file.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return w.cli.putArchive(w.ctx, w.id, w.dir, func(tw *tar.Writer) error {
+		if err := tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg, Name: w.name, Mode: 0o644, Size: size, ModTime: time.Now(),
+		}); err != nil {
+			return err
+		}
+		_, err := io.Copy(tw, w.file)
+		return err
+	})
 }
 
 func (v *dockerVFS) GetCapabilities() vfs.VFSCapabilities {
-	return vfs.VFSCapabilities{HasRandomAccess: true, HasUnixPermissions: true}
+	return vfs.VFSCapabilities{HasRandomAccess: true, HasUnixPermissions: true, HasWrite: true}
 }
 
 func (v *dockerVFS) Search(context.Context, string, string) (chan int64, error) { return nil, nil }

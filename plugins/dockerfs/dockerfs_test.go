@@ -13,6 +13,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,10 +27,59 @@ type fakeNode struct {
 	link string
 }
 
-// fakeDaemon answers the three Engine API calls the panel makes, over TCP.
-func fakeDaemon(t *testing.T, fsys map[string]fakeNode) *client {
+// fakeDocker is the state behind fakeDaemon.
+type fakeDocker struct {
+	mu    sync.Mutex
+	fsys  map[string]fakeNode
+	execs [][]string
+	// failExec makes every exec exit with status 1.
+	failExec bool
+}
+
+func (f *fakeDocker) node(p string) (fakeNode, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n, ok := f.fsys[p]
+	return n, ok
+}
+
+func (f *fakeDocker) setFail(v bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failExec = v
+}
+
+func (f *fakeDocker) ran() [][]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([][]string(nil), f.execs...)
+}
+
+// fakeDaemon answers the Engine API calls the panel makes, over TCP.
+func fakeDaemon(t *testing.T, fsys map[string]fakeNode) (*client, *fakeDocker) {
 	t.Helper()
+	state := &fakeDocker{fsys: fsys}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/containers/aaaaaaaaaaaaaaaa/exec", func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Cmd []string }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		state.mu.Lock()
+		state.execs = append(state.execs, req.Cmd)
+		state.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]string{"Id": "exec1"})
+	})
+	mux.HandleFunc("/exec/exec1/start", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/exec/exec1/json", func(w http.ResponseWriter, r *http.Request) {
+		code := 0
+		state.mu.Lock()
+		if state.failExec {
+			code = 1
+		}
+		state.mu.Unlock()
+		_ = json.NewEncoder(w).Encode(map[string]any{"Running": false, "ExitCode": code})
+	})
 	mux.HandleFunc("/containers/json", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]containerInfo{
 			{ID: "aaaaaaaaaaaaaaaa", Names: []string{"/web"}, Created: 1700000000},
@@ -38,6 +88,26 @@ func fakeDaemon(t *testing.T, fsys map[string]fakeNode) *client {
 	})
 	mux.HandleFunc("/containers/aaaaaaaaaaaaaaaa/archive", func(w http.ResponseWriter, r *http.Request) {
 		p := path.Clean(r.URL.Query().Get("path"))
+		if r.Method == http.MethodPut {
+			tr := tar.NewReader(r.Body)
+			for {
+				hdr, err := tr.Next()
+				if err != nil {
+					break
+				}
+				data, _ := io.ReadAll(tr)
+				node := fakeNode{mode: 0o644, data: string(data)}
+				if hdr.Typeflag == tar.TypeDir {
+					node = fakeNode{mode: os.ModeDir | 0o755}
+				}
+				state.mu.Lock()
+				state.fsys[path.Join(p, strings.TrimSuffix(hdr.Name, "/"))] = node
+				state.mu.Unlock()
+			}
+			return
+		}
+		state.mu.Lock()
+		defer state.mu.Unlock()
 		node, ok := fsys[p]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
@@ -97,7 +167,7 @@ func fakeDaemon(t *testing.T, fsys map[string]fakeNode) *client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return cli
+	return cli, state
 }
 
 func testFS() map[string]fakeNode {
@@ -127,7 +197,7 @@ func listNames(t *testing.T, v *dockerVFS, p string) map[string]vfs.VFSItem {
 }
 
 func TestDockerVFSBrowsesContainers(t *testing.T) {
-	cli := fakeDaemon(t, testFS())
+	cli, _ := fakeDaemon(t, testFS())
 	v := newDockerVFS(func() (*client, error) { return cli, nil })
 	defer func() { _ = v.Close() }()
 
@@ -159,7 +229,7 @@ func TestDockerVFSBrowsesContainers(t *testing.T) {
 }
 
 func TestDockerVFSStatSetPathAndOpen(t *testing.T) {
-	cli := fakeDaemon(t, testFS())
+	cli, _ := fakeDaemon(t, testFS())
 	v := newDockerVFS(func() (*client, error) { return cli, nil })
 	defer func() { _ = v.Close() }()
 	ctx := context.Background()
@@ -221,18 +291,85 @@ func (r readerAt) ReadAt(p []byte, off int64) (int, error) {
 	return r.f.ReadAt(context.Background(), p, off)
 }
 
-func TestDockerVFSIsReadOnly(t *testing.T) {
-	v := newDockerVFS(func() (*client, error) { return nil, errors.New("unused") })
+func TestDockerVFSWrites(t *testing.T) {
+	cli, state := fakeDaemon(t, testFS())
+	v := newDockerVFS(func() (*client, error) { return cli, nil })
+	defer func() { _ = v.Close() }()
 	ctx := context.Background()
-	errs := []error{
-		v.MkDir(ctx, "/x"), v.Remove(ctx, "/x"), v.Rename(ctx, "/x", "/y"),
-		v.SetAttributes(ctx, "/x", vfs.VFSItem{}),
+
+	w, err := v.Create(ctx, "/web/etc/motd")
+	if err != nil {
+		t.Fatal(err)
 	}
-	_, createErr := v.Create(ctx, "/x")
-	errs = append(errs, createErr)
+	if _, err := w.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("a second Close: %v", err)
+	}
+	if n, ok := state.node("/etc/motd"); !ok || n.data != "hello" {
+		t.Fatalf("uploaded file: %+v %v", n, ok)
+	}
+
+	// Through a symlinked folder.
+	w, err = v.Create(ctx, "/web/bin/tool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("x"))
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := state.node("/usr/bin/tool"); !ok {
+		t.Fatal("a file created through /bin should land in /usr/bin")
+	}
+
+	if err := v.MkDir(ctx, "/web/etc/conf.d"); err != nil {
+		t.Fatal(err)
+	}
+	if n, ok := state.node("/etc/conf.d"); !ok || !n.mode.IsDir() {
+		t.Fatalf("mkdir: %+v %v", n, ok)
+	}
+
+	if err := v.Remove(ctx, "/web/etc/motd"); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Rename(ctx, "/web/etc/hostname", "/web/etc/host"); err != nil {
+		t.Fatal(err)
+	}
+	ran := state.ran()
+	if len(ran) != 2 || strings.Join(ran[0], " ") != "rm -rf -- /etc/motd" || strings.Join(ran[1], " ") != "mv -- /etc/hostname /etc/host" {
+		t.Fatalf("commands run in the container: %v", ran)
+	}
+
+	state.setFail(true)
+	if err := v.Remove(ctx, "/web/etc/hostname"); !errors.Is(err, errExecFailed) {
+		t.Fatalf("a failing rm: %v", err)
+	}
+	state.setFail(false)
+
+	if _, err := v.Create(ctx, "/web/etc/hostname/x"); !errors.Is(err, errNotADirectory) {
+		t.Fatalf("Create under a file: %v", err)
+	}
+}
+
+func TestDockerVFSRefusesWhatItCannotDo(t *testing.T) {
+	cli, _ := fakeDaemon(t, testFS())
+	v := newDockerVFS(func() (*client, error) { return cli, nil })
+	defer func() { _ = v.Close() }()
+	ctx := context.Background()
+	_, createErr := v.Create(ctx, "/web")
+	errs := []error{
+		v.MkDir(ctx, "/"), v.MkDir(ctx, "/web"), v.Remove(ctx, "/web"), v.Remove(ctx, "/"),
+		v.Rename(ctx, "/web/etc", "/other/etc"), v.Rename(ctx, "/web/etc", "/web"),
+		v.SetAttributes(ctx, "/web/etc", vfs.VFSItem{}), createErr,
+	}
 	for i, err := range errs {
 		if !errors.Is(err, os.ErrPermission) || err.Error() == "" {
-			t.Errorf("mutation %d: %v", i, err)
+			t.Errorf("operation %d: %v", i, err)
 		}
 	}
 }

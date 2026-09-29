@@ -2,7 +2,7 @@
 // the folders at the top, and inside one is its own file system, read through
 // the Engine API's archive endpoint (the one `docker cp` uses).
 //
-// The panel is read-only for now. It needs a reachable daemon (unix socket or
+// It needs a reachable daemon (unix socket or
 // tcp:// DOCKER_HOST) and nothing else: no Docker CLI, no SDK, no CGO.
 package dockerfs
 
