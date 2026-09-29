@@ -2714,6 +2714,9 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		return true
 
 	case vtinput.VK_TAB:
+		if !ctrl && !alt && ev.shiftSelectedLines(shift) {
+			return true
+		}
 		if !shift && !ctrl && !alt {
 			ev.noteBufferEdit()
 			ev.saveUndo(opTyping)
