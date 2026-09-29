@@ -37,16 +37,17 @@ import (
 // always on screen, below the table: it shows the row under the cursor's
 // own edit (ap.ModificationResult.Preview, unified style - a line number
 // and a leading ' '/'-'/'+' the way "diff -u" marks context/removed/added
-// lines), and follows the cursor as it moves, no keypress needed. Ctrl+Tab
-// moves the keyboard focus to the pane and back to the table (both
-// aiReviewTable and aiReviewDiffPane answer it directly, ahead of
-// vtui.Group's own Tab handling, so it never reaches FrameManager's
-// workspace switcher); while the pane has focus, the arrow/paging keys
-// scroll it instead of moving the table's cursor. This replaced an earlier
-// cut (f4#1606 8/N) where Enter/F3 opened the same fragment in a modal
-// internal/diffview screen; that is gone now that the pane is permanent,
-// but the table still swallows Enter/F3 rather than let Enter fall through
-// to the dialog's default button (see aiReviewTable.ProcessKey).
+// lines), and follows the cursor as it moves, no keypress needed. Tab (or
+// Shift+Tab) moves the keyboard focus to the pane and back to the table
+// (both aiReviewTable and aiReviewDiffPane answer it directly, ahead of
+// vtui.Group's own Tab handling, which would walk on to the buttons; they
+// stay reachable by their hotkeys). Ctrl+Tab is left alone and switches
+// screens as anywhere else, the review being a screen of level 0. While the
+// pane has focus, the arrow/paging keys scroll it instead of moving the
+// table's cursor. Enter opens the file at the edit and F3 the whole patch
+// (docs/VTVIBE.md §7.3); the table swallows both even when there is
+// nothing to open, so Enter never falls through to the dialog's default
+// button (see aiReviewTable.ProcessKey).
 //
 // F8 rejects the edit under the cursor with a reason: it is left out like a
 // row switched off, and a line about it goes into the draft of the next
@@ -302,7 +303,7 @@ type aiReviewTable struct {
 	onOpen      func(idx int)
 	onUndo      func()
 	onViewPatch func()
-	onCtrlTab   func()
+	onTab       func()
 }
 
 func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
@@ -312,10 +313,9 @@ func (t *aiReviewTable) ProcessKey(e *vtinput.InputEvent) bool {
 		}
 		return true
 	}
-	if e != nil && e.KeyDown && e.VirtualKeyCode == vtinput.VK_TAB &&
-		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 {
-		if t.onCtrlTab != nil {
-			t.onCtrlTab()
+	if aiReviewIsTab(e) {
+		if t.onTab != nil {
+			t.onTab()
 		}
 		return true
 	}
@@ -402,18 +402,18 @@ func aiReviewBuildDiffLines(p *ap.Preview) []aiReviewDiffLine {
 // step e, replacing the Enter/F3 modal of 8/N): a read-only, scrollable
 // view of the table row under the cursor's own edit. setPreview is called
 // once at construction and again from the table's OnSelect, so the pane
-// always shows the current row without a keypress. Ctrl+Tab (see
+// always shows the current row without a keypress. Tab (see
 // aiReviewTable.ProcessKey and this type's own ProcessKey) moves the
 // dialog's keyboard focus onto the pane and back; while focused, the pane
 // scrolls with the same keys internal/diffview does.
 type aiReviewDiffPane struct {
 	vtui.ScreenObject
-	title     string
-	lines     []aiReviewDiffLine
-	message   string // shown instead of lines, e.g. AI.ReviewNoDiff
-	topPos    int
-	onCtrlTab func()
-	onUndo    func()
+	title   string
+	lines   []aiReviewDiffLine
+	message string // shown instead of lines, e.g. AI.ReviewNoDiff
+	topPos  int
+	onTab   func()
+	onUndo  func()
 }
 
 func newAIReviewDiffPane(w, h int) *aiReviewDiffPane {
@@ -461,8 +461,8 @@ func (p *aiReviewDiffPane) clampTop() {
 	}
 }
 
-// ProcessKey: Ctrl+Tab hands focus back to the table (answered here, ahead
-// of vtui.Group's own Tab handling, the same way aiReviewTable answers it -
+// ProcessKey: Tab hands focus back to the table (answered here, ahead of
+// vtui.Group's own Tab handling, the same way aiReviewTable answers it -
 // see that type's comment); while focused, the pane scrolls instead of
 // moving anything in the table it no longer has the cursor on.
 func (p *aiReviewDiffPane) ProcessKey(e *vtinput.InputEvent) bool {
@@ -475,14 +475,13 @@ func (p *aiReviewDiffPane) ProcessKey(e *vtinput.InputEvent) bool {
 	if e == nil || !e.KeyDown {
 		return false
 	}
-	ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
-	if ctrl && e.VirtualKeyCode == vtinput.VK_TAB {
-		if p.onCtrlTab != nil {
-			p.onCtrlTab()
+	if aiReviewIsTab(e) {
+		if p.onTab != nil {
+			p.onTab()
 		}
 		return true
 	}
-	if ctrl {
+	if e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 {
 		return false
 	}
 	h := max(p.viewHeight(), 1)
@@ -507,7 +506,7 @@ func (p *aiReviewDiffPane) ProcessKey(e *vtinput.InputEvent) bool {
 }
 
 // ProcessMouse gives the pane the same wheel scrolling internal/diffview
-// has; clicking it does nothing yet (moving focus there is Ctrl+Tab's job).
+// has; clicking it does nothing yet (moving focus there is Tab's job).
 func (p *aiReviewDiffPane) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.WheelDirection == 0 {
 		return false
@@ -689,8 +688,8 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	}
 	table.onUndo = func() { aiUndoPatch(pf) }
 	diffPane.onUndo = table.onUndo
-	table.onCtrlTab = func() { dlg.SetFocusedItem(diffPane) }
-	diffPane.onCtrlTab = func() { dlg.SetFocusedItem(table) }
+	table.onTab = func() { dlg.SetFocusedItem(diffPane) }
+	diffPane.onTab = func() { dlg.SetFocusedItem(table) }
 
 	totals := vtui.NewText(0, 0, aiReviewLabel(aiReviewTotals(mods), inner), 0)
 	checkedLabel := func() string {
@@ -865,6 +864,15 @@ func aiViewPatchText(pf *panel.PanelsFrame, text string) {
 // applied patch from the review screen, as in the AI panel (docs/VTVIBE.md
 // §7.4). It is answered by the table and the diff pane alike, so it works
 // whichever of them has the focus.
+// aiReviewIsTab reports a plain Tab or Shift+Tab press: the review's
+// list<->diff focus switch (docs/VTVIBE.md §7.3). Ctrl/Alt+Tab are not it -
+// Ctrl+Tab belongs to the workspace switcher.
+func aiReviewIsTab(e *vtinput.InputEvent) bool {
+	return e != nil && e.KeyDown && e.VirtualKeyCode == vtinput.VK_TAB &&
+		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
+			vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0
+}
+
 func aiReviewIsCtrlZ(e *vtinput.InputEvent) bool {
 	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != vtinput.VK_Z {
 		return false

@@ -387,9 +387,9 @@ func TestAIShowPatchReviewAfterExclusion(t *testing.T) {
 
 // TestAIShowPatchReviewDiff: the diff pane under the table is permanent
 // (f4#1606 step e) and always shows the row under the cursor's own edit,
-// without Enter; Enter and F3 do nothing now (that used to open the same
-// fragment as a modal internal/diffview screen, f4#1606 8/N), and Ctrl+Tab
-// moves the keyboard focus onto the pane and back instead.
+// without Enter (that used to open the same fragment as a modal
+// internal/diffview screen, f4#1606 8/N), and Tab moves the keyboard focus
+// onto the pane and back.
 func TestAIShowPatchReviewDiff(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
 	scr := vtui.NewSilentScreenBuf()
@@ -480,7 +480,7 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 		t.Errorf("pane does not show %q:\n%s", i18n.Msg("AI.ReviewNoDiff"), text)
 	}
 
-	// Ctrl+Tab moves the keyboard focus onto the pane and back; while it
+	// Tab moves the keyboard focus onto the pane and back; while it
 	// has focus, arrow keys scroll it instead of moving the table's cursor.
 	if !table.ProcessKey(aiKey(vtinput.VK_UP, 0)) { // back to the row with a diff
 		t.Fatal("Up not handled by the review table")
@@ -490,13 +490,18 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 	}
 	ctrlTab := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
 		VirtualKeyCode: vtinput.VK_TAB, ControlKeyState: vtinput.LeftCtrlPressed}
-	if !table.ProcessKey(ctrlTab) {
-		t.Fatal("Ctrl+Tab not handled by the review table")
+	tab := aiKey(vtinput.VK_TAB, 0)
+	table.ProcessKey(ctrlTab)
+	if dlg.GetFocusedItem() != table {
+		t.Fatal("Ctrl+Tab must stay with the workspace switcher, not the review's focus switch")
+	}
+	if !table.ProcessKey(tab) {
+		t.Fatal("Tab not handled by the review table")
 	}
 	if got := dlg.GetFocusedItem(); got != pane {
-		t.Fatalf("Ctrl+Tab on the table did not focus the pane (focus = %T)", got)
+		t.Fatalf("Tab on the table did not focus the pane (focus = %T)", got)
 	}
-	t.Logf("review screen, diff pane focused after Ctrl+Tab:\n%s", aiScreenText(t, scr, dlg))
+	t.Logf("review screen, diff pane focused after Tab:\n%s", aiScreenText(t, scr, dlg))
 	selBefore := table.SelectPos
 	if !pane.ProcessKey(aiKey(vtinput.VK_DOWN, 0)) {
 		t.Fatal("Down not handled by the focused pane")
@@ -507,11 +512,11 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 	if table.SelectPos != selBefore {
 		t.Error("scrolling the pane moved the table's cursor")
 	}
-	if !pane.ProcessKey(ctrlTab) {
-		t.Fatal("Ctrl+Tab not handled by the pane")
+	if !pane.ProcessKey(tab) {
+		t.Fatal("Tab not handled by the pane")
 	}
 	if got := dlg.GetFocusedItem(); got != table {
-		t.Fatalf("Ctrl+Tab on the pane did not return focus to the table (focus = %T)", got)
+		t.Fatalf("Tab on the pane did not return focus to the table (focus = %T)", got)
 	}
 }
 
