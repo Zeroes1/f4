@@ -1814,6 +1814,7 @@ Bookmarks.LoadError=Failed to load bookmarks:\n%v
 Bookmarks.SaveError=Failed to save bookmarks:\n%v
 Bookmarks.EditTitle= Edit bookmark path
 Bookmarks.EditPrompt=&Path:
+Bookmarks.PanelPluginUnavailable=Panel plugin "%s" is not available; opened the folder only
 
 KeyBar.F1=Help
 KeyBar.F2=Menu

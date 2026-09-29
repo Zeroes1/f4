@@ -3000,7 +3000,7 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			}
 			if isBookmarkSave {
 				if fsp := pf.GetActivePanel(); fsp != nil {
-					set[slot] = Bookmark{Path: fsp.Vfs.GetPath()}
+					set[slot] = pf.BookmarkForPanel(fsp)
 					if err := SaveBookmarks(File, set); err != nil {
 						vtui.DebugLog("BOOKMARKS: save %q failed: %v", File, err)
 					}
@@ -6272,7 +6272,25 @@ func (pf *PanelsFrame) SwitchToVFS(fsp *FileSystemPanel, newVFS vfs.VFS) {
 	}
 }
 func (pf *PanelsFrame) NavigateToBookmark(fsp *FileSystemPanel, bookmark Bookmark) bool {
-	return pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	providerID, hasProvider := bookmarkPanelProviderID(bookmark)
+	if !hasProvider {
+		return pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	}
+	// A panel-plugin bookmark: go to the directory it covered (when it kept
+	// one), then open the plugin panel over it. A directory that is still
+	// being mounted asynchronously has no panel to cover yet, so only the
+	// directory is restored then.
+	if fsp == nil {
+		return false
+	}
+	moved := bookmark.Path == "" || pf.NavigateToPath(fsp, ExpandPathEnv(bookmark.Path))
+	if fsp.ProviderOpenTask != nil {
+		return moved
+	}
+	if moved {
+		pf.openBookmarkPanelProvider(providerID)
+	}
+	return moved
 }
 
 // syncPassivePanel opens the active panel's directory in the passive panel,

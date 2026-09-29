@@ -1814,6 +1814,7 @@ Bookmarks.LoadError=Не удалось загрузить закладки:\n%v
 Bookmarks.SaveError=Не удалось сохранить закладки:\n%v
 Bookmarks.EditTitle= Изменить путь закладки
 Bookmarks.EditPrompt=&Путь:
+Bookmarks.PanelPluginUnavailable=Плагин панели "%s" недоступен; открыта только папка
 
 KeyBar.F1=Справка
 KeyBar.F2=Меню
