@@ -1780,6 +1780,8 @@ EnvMan.ErrorMacroArguments=Environment Manager macro call expects one string ope
 EnvMan.ErrorMacroType=Environment Manager macro operation must be a string
 EnvMan.ErrorMacroInteractive=macro operation requires the interactive Environment Manager UI
 EnvMan.ErrorMacroUnknown=unknown Environment Manager macro operation
+EnvMan.HelpTitle=Environment Manager
+EnvMan.Help=# Environment Manager\n\nNamed sets of environment variables (profiles) that f4 applies on top of the environment it started with. Enabled profiles are evaluated from top to bottom; a later assignment wins, and `NAME=` with an empty value removes the variable.\n\n## Keys\n\n- **Ins** - add a profile; **Del** - delete it\n- **F4** - edit the profile in the pane on the right; **Ctrl+Enter** saves, **Esc** cancels\n- **F5** - copy the profile\n- **Space** - enable or disable the profile\n- **Ctrl+Up** / **Ctrl+Down** - move the profile in the list\n- **F2** - plugin settings (ignored variables, editor, import from Far Manager 3 on Windows)\n- **F1** - this help; **Esc** closes the manager\n\n## Values\n\nEach line is `NAME=value`. `%NAME%` (and `$NAME`, `${NAME}` on Unix-like systems) expand to values set earlier; write `%%` or `$$` for a literal marker.\n\n## From the command line\n\n- `envman:` opens this manager\n- `envman:+Name`, `envman:-Name`, `envman:*Name` enable, disable or toggle a profile\n- `envman:<file` imports `NAME=value` lines, `envman:>file` exports the managed environment\n- `envman:e` shows the complete managed environment in the editor\n
 
 SQLite.LanguageCode=en
 SQLite.Title=SQLite
