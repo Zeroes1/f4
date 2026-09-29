@@ -322,22 +322,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── ARCHITECTURE.md
     │   ├── config.yaml
     │   ├── DESCRIPTION.md
-    │   ├── plans
-    │   │   └── feature-restructure-into-internal-packages
-    │   │       ├── HANDOFF.md
-    │   │       ├── index.md
-    │   │       ├── phase-01-baseline-and-barriers.md
-    │   │       ├── phase-02-repository-root.md
-    │   │       ├── phase-03-subsystems.md
-    │   │       ├── phase-04-shared-primitives.md
-    │   │       ├── phase-05-leaf-packages.md
-    │   │       ├── phase-06-hosts-and-services.md
-    │   │       ├── phase-07-view-and-terminal.md
-    │   │       ├── phase-08-fileops-and-editor.md
-    │   │       ├── phase-09-panel-and-cmdline.md
-    │   │       ├── phase-10-composition-root.md
-    │   │       ├── phase-11-ci-and-docs.md
-    │   │       └── PR-BODY.md
     │   └── rules
     │       └── base.md
     ├── .ai-factory.json
