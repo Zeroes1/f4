@@ -261,8 +261,11 @@ type Panel interface {
 // PanelsFrame is the main frame of the f4 manager, containing left and right panels.
 type PanelsFrame struct {
 	vtui.BaseFrame
-	Panels  [2]Panel
-	DragOut dragOutState
+	Panels [2]Panel
+	// dirWatch keeps each side's listing fresh while the directory changes
+	// on disk (f4#1668).
+	dirWatch [2]panelDirWatch
+	DragOut  dragOutState
 	// externalUIRunner is normally nil, which selects the real desktop
 	// launcher. Tests install a per-frame recorder instead of spawning native
 	// Explorer/association windows.
@@ -1662,6 +1665,9 @@ func (pf *PanelsFrame) Close() {
 	pf.PtyMutex.Lock()
 	defer pf.PtyMutex.Unlock()
 	pf.Closed = true
+	for i := range pf.dirWatch {
+		pf.dirWatch[i].stop()
+	}
 
 	for _, p := range pf.Panels {
 		if fsp, ok := p.(*FileSystemPanel); ok && fsp != nil {
@@ -2294,6 +2300,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		return
 	}
 	pf.pollManagedExecutionDebounce()
+	pf.syncDirWatches()
 	isBusy := pf.IsPtyBusy()
 
 	// 1. Dynamic Layout Adjustment
