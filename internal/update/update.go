@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -441,6 +442,17 @@ func Download(ctx context.Context, url string, progress func(percent int)) ([]by
 // downloading as well: an unreadable path is cheaper to learn about now than
 // after the megabytes.
 func TargetDir() (string, error) {
+	exePath, err := targetExecutable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(exePath), nil
+}
+
+// targetExecutable is the file an update has to replace: the running binary
+// with its symlinks resolved, because the archive is unpacked where the file
+// really is.
+func targetExecutable() (string, error) {
 	exePath, err := Executable()
 	if err != nil {
 		return "", fmt.Errorf("failed to get executable path: %w", err)
@@ -449,28 +461,66 @@ func TargetDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve symlinks for executable: %w", err)
 	}
-	return filepath.Dir(exePath), nil
+	return exePath, nil
 }
 
 // Install unpacks the archive over the running binary's directory,
-// escalating when permissions deny it.
+// escalating when permissions deny it, and fails when the binary itself was
+// not among what it unpacked.
 func Install(data []byte, archiveKind string) error {
-	exeDir, err := TargetDir()
+	exePath, err := targetExecutable()
 	if err != nil {
 		return err
+	}
+	exeDir := filepath.Dir(exePath)
+	before, err := statExecutable(exePath)
+	if err != nil {
+		return fmt.Errorf("failed to stat executable: %w", err)
 	}
 
 	if dirNeedsElevation(exeDir) {
 		vtui.DebugLog("UPDATER: %q is not writable, requesting UAC elevation", exeDir)
-		return runElevated(data, archiveKind)
+		err = runElevated(data, archiveKind)
+	} else {
+		err = extract(data, archiveKind, exeDir)
+		if err != nil && isPermissionError(err) {
+			vtui.DebugLog("UPDATER: extraction needs elevation, retrying through UAC: %v", err)
+			err = runElevated(data, archiveKind)
+		}
 	}
+	if err != nil {
+		return err
+	}
+	return checkReplaced(exePath, before)
+}
 
-	err = extract(data, archiveKind, exeDir)
-	if err != nil && isPermissionError(err) {
-		vtui.DebugLog("UPDATER: extraction needs elevation, retrying through UAC: %v", err)
-		return runElevated(data, archiveKind)
+// statExecutable reads the file's identity through an open handle. On Windows
+// os.Stat leaves the file ID to be read when os.SameFile asks for it, and by
+// then the path names the new file; a handle's Stat reads it at once.
+func statExecutable(path string) (os.FileInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		// Unreadable but present: the size and time still tell.
+		return os.Stat(path)
 	}
-	return err
+	defer func() { _ = f.Close() }()
+	return f.Stat()
+}
+
+// checkReplaced fails an install that left the running binary as it was.
+// Extraction writes every file anew, so an archive of f4 always replaces the
+// binary; an archive that did not was the wrong one. #1656: a plugin's
+// archive, unpacked next to f4, was reported as the update installed, and
+// the old binary then heard "already up to date" from every later check.
+func checkReplaced(path string, before os.FileInfo) error {
+	after, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("the update left no executable at %s: %w", path, err)
+	}
+	if os.SameFile(before, after) && after.ModTime().Equal(before.ModTime()) && after.Size() == before.Size() {
+		return fmt.Errorf("the update archive did not replace %s; the running build is still the installed one", path)
+	}
+	return nil
 }
 
 func extract(data []byte, archiveKind, destDir string) error {
@@ -538,8 +588,22 @@ func editionAssetSuffixes(lite bool, goos, goarch, libc string) []string {
 	return []string{fmt.Sprintf("-lite-%s-%s.tar.gz", goos, goarch)}
 }
 
-// pickAsset returns the first release asset whose name ends with one of the
-// suffixes, trying suffixes in order. Returns an empty url when nothing matches.
+// releaseAssetPrefix begins the name of every archive of f4 itself. A release
+// carries other archives beside them: the plugins f4#1178 publishes
+// (android-plugin-linux-amd64.tar.gz, cloudfox-plugin-..., ios-plugin-...)
+// end with the same "-<os>-<arch>.tar.gz".
+const releaseAssetPrefix = "f4-"
+
+// pickAsset returns the first release asset of f4 itself whose name ends
+// with one of the suffixes, trying suffixes in order. Returns an empty url
+// when nothing matches.
+//
+// Only names that begin with releaseAssetPrefix count. GitHub lists assets by
+// name, so android-plugin-linux-amd64.tar.gz comes before
+// f4-linux-amd64.tar.gz, and a suffix alone picked the plugin: the update
+// unpacked it next to f4, recorded the nightly as installed and left the old
+// binary running (#1656). f4-legacy-windows-386.zip still counts: it is the
+// legacy build's own archive.
 //
 // It skips a lite asset when matching a suffix that is not itself a lite
 // one: "-linux-amd64.tar.gz" matches f4-lite-linux-amd64.tar.gz too,
@@ -547,7 +611,7 @@ func editionAssetSuffixes(lite bool, goos, goarch, libc string) []string {
 func pickAsset(assets []Asset, suffixes []string) (url, updatedAt, kind string) {
 	for _, suffix := range suffixes {
 		for _, a := range assets {
-			if strings.HasSuffix(a.Name, suffix) && !strings.HasSuffix(a.Name, "-lite"+suffix) {
+			if strings.HasPrefix(a.Name, releaseAssetPrefix) && strings.HasSuffix(a.Name, suffix) && !strings.HasSuffix(a.Name, "-lite"+suffix) {
 				return a.BrowserDownloadURL, a.UpdatedAt, archiveKindForSuffix(suffix)
 			}
 		}

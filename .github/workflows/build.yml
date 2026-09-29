@@ -848,14 +848,20 @@ jobs:
     # named `cloudfox-plugin` would collide into one arbitrary binary instead
     # of publishing four platform assets. Second, the release asset name has
     # to be predictable for the manifest URL to resolve at all.
+    #
+    # .tgz, not .tar.gz (#1656): the updater of every f4 released before
+    # that fix takes the first asset whose name ends with
+    # "-<os>-<arch>.tar.gz", and GitHub lists assets by name, so
+    # cloudfox-plugin-linux-amd64.tar.gz would be installed in place of
+    # f4-linux-amd64.tar.gz. The PlugRing installer reads both extensions.
     - name: Package cloudfox-plugin
-      run: tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tar.gz" cloudfox-plugin
+      run: tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tgz" cloudfox-plugin
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/cloudfox/cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        path: plugins/cloudfox/cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
         retention-days: 7
 
   # f4#1178 Android plugin, part 1 of 4 (mirrors build-cloudfox-plugin above,
@@ -954,14 +960,16 @@ jobs:
     # literally named `android-plugin` would collide into one arbitrary
     # binary instead of publishing four platform assets; and the release
     # asset name has to be predictable for the manifest URL to resolve.
+    # .tgz, not .tar.gz, so that no updater already released takes it for
+    # f4's own archive: see the cloudfox-plugin package step (#1656).
     - name: Package android-plugin
-      run: tar -czvf "android-plugin-$GOOS-$GOARCH.tar.gz" android-plugin
+      run: tar -czvf "android-plugin-$GOOS-$GOARCH.tgz" android-plugin
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/android/android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        path: plugins/android/android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
         retention-days: 7
 
   # f4#1178 iOS plugin, part 1 of 4 (plan: issuecomment-5851326218 on #1178,
@@ -1048,14 +1056,16 @@ jobs:
     # named `ios-plugin` would collide into one arbitrary binary instead of
     # publishing four platform assets. Second, the release asset name has to
     # be predictable for the manifest URL to resolve at all.
+    # .tgz, not .tar.gz, so that no updater already released takes it for
+    # f4's own archive: see the cloudfox-plugin package step (#1656).
     - name: Package ios-plugin
-      run: tar -czvf "ios-plugin-$GOOS-$GOARCH.tar.gz" ios-plugin
+      run: tar -czvf "ios-plugin-$GOOS-$GOARCH.tgz" ios-plugin
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
         name: ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/ios/ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz
+        path: plugins/ios/ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
         retention-days: 7
 
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build

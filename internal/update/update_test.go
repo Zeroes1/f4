@@ -1,6 +1,14 @@
 package update
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +79,74 @@ func TestFormatBuildTimeUsesOneClockForVCSAndNightlyMetadata(t *testing.T) {
 	}
 	if got := FormatBuildTime("not a timestamp"); got != "not a timestamp" {
 		t.Fatalf("invalid timestamp = %q, want unchanged input", got)
+	}
+}
+
+// targz packs files, name to content, the way a release archive holds them.
+func targz(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	for _, name := range slices.Sorted(maps.Keys(files)) {
+		body := files[name]
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// installFixture puts an "old" f4 in a scratch directory and points the
+// updater at it.
+func installFixture(t *testing.T) string {
+	t.Helper()
+	exe := filepath.Join(t.TempDir(), "f4")
+	if err := os.WriteFile(exe, []byte("old f4"), 0o755); err != nil { // #nosec G306 -- the fixture stands for an executable binary.
+		t.Fatal(err)
+	}
+	oldExecutable := Executable
+	Executable = func() (string, error) { return exe, nil }
+	t.Cleanup(func() { Executable = oldExecutable })
+	return exe
+}
+
+// #1656: the updater downloaded android-plugin-linux-amd64.tar.gz in place of
+// f4's own archive, unpacked it next to f4 and reported the update installed.
+// An archive that leaves the running binary as it was is not an update.
+func TestInstallFailsWhenTheArchiveLeavesTheBinary(t *testing.T) {
+	exe := installFixture(t)
+
+	err := Install(targz(t, map[string]string{"android-plugin": "a plugin"}), "targz")
+	if err == nil {
+		t.Fatal("Install() of an archive without f4 reported success")
+	}
+	if !strings.Contains(err.Error(), exe) {
+		t.Errorf("error %q does not name the binary it failed to replace", err)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "old f4" {
+		t.Errorf("binary = %q, want it untouched", got)
+	}
+}
+
+// The new binary here has the old one's size and may share its modification
+// time on a coarse clock; the file being a new one is what tells.
+func TestInstallReplacesTheBinary(t *testing.T) {
+	exe := installFixture(t)
+
+	if err := Install(targz(t, map[string]string{"f4": "new f4", "lang/ru.lng": "x"}), "targz"); err != nil {
+		t.Fatalf("Install() = %v", err)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "new f4" {
+		t.Errorf("binary = %q, want the archive's", got)
 	}
 }
