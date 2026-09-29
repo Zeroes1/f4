@@ -37,6 +37,7 @@ var actionMenuOrder = []string{
 	"File.View",
 	"File.ViewHex",
 	"File.AssemblyInfo",
+	"File.PDFText",
 	"File.Edit",
 	"File.New",
 	"File.ApplyCommand",

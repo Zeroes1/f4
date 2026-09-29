@@ -718,6 +718,8 @@ Action.Panel.GroupByHidden=Группировать по: Скрытый
 Action.Panel.GroupByExecutable=Группировать по: Исполняемый
 Action.File.AssemblyInfo=&Сборка .NET: сведения
 Action.File.AssemblyInfo.Desc=Показать имя, ссылки, типы и ресурсы сборки .NET под курсором
+Action.File.PDFText=Текст &PDF
+Action.File.PDFText.Desc=Показать текст PDF-файла под курсором по страницам
 
 ProcList.ColumnPID=PID
 ProcList.ColumnName=Имя
@@ -3916,3 +3918,12 @@ DotNet.Types=Типы
 DotNet.GlobalNamespace=(глобальное пространство имён)
 DotNet.Resources=Ресурсы
 DotNet.More=... и ещё %d
+
+PDF.NotPDF=%s не является PDF-файлом
+PDF.Encrypted=%s зашифрован, текст прочитать нельзя
+PDF.ReadFailed=Не удалось прочитать %s: %v
+PDF.Pages=Страниц: %d
+PDF.Page=Страница %d
+PDF.NoText=На странице нет текста (возможно, это картинка).
+PDF.Lost=Символов, которые не удалось расшифровать: %d (показаны как U+FFFD).
+PDF.Truncated=Документ длинный, показана только его первая часть.

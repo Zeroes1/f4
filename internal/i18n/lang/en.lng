@@ -718,6 +718,8 @@ Action.Panel.GroupByHidden=Group by: Hidden
 Action.Panel.GroupByExecutable=Group by: Executable
 Action.File.AssemblyInfo=&Assembly info (.NET)
 Action.File.AssemblyInfo.Desc=Show the identity, references, types and resources of the .NET assembly under the cursor
+Action.File.PDFText=P&DF text
+Action.File.PDFText.Desc=Show the text of the PDF file under the cursor page by page
 
 ProcList.ColumnPID=PID
 ProcList.ColumnName=Name
@@ -3916,3 +3918,12 @@ DotNet.Types=Types
 DotNet.GlobalNamespace=(global namespace)
 DotNet.Resources=Resources
 DotNet.More=... and %d more
+
+PDF.NotPDF=%s is not a PDF file
+PDF.Encrypted=%s is encrypted; its text cannot be read
+PDF.ReadFailed=Cannot read %s: %v
+PDF.Pages=Pages: %d
+PDF.Page=Page %d
+PDF.NoText=No text on this page (it may be a picture).
+PDF.Lost=%d characters could not be decoded and are shown as U+FFFD.
+PDF.Truncated=The document is long; only the first part is shown.

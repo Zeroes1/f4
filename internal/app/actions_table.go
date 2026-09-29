@@ -628,6 +628,13 @@ func init() {
 		Description: "Show the identity, references, types and resources of a .NET assembly",
 		DescKey:     "Action.File.AssemblyInfo.Desc",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionAssemblyInfo(pf) }),
+		Name:        "File.PDFText",
+		Area:        "Shell",
+		Label:       "PDF Text",
+		LabelKey:    "Action.File.PDFText",
+		Description: "Show the text of the PDF file under the cursor page by page",
+		DescKey:     "Action.File.PDFText.Desc",
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionPDFText(pf) }),
 	})
 	registerAction(action.Action{
 		Name:        "File.Edit",

@@ -105,6 +105,8 @@ var architectureLayers = map[string]int{
 	// The reader of .NET assembly metadata: pure Go over debug/pe, with the
 	// report text taken from internal/i18n.
 	"internal/dotnet": 1,
+	// The PDF text reader: pure Go, the report text taken from internal/i18n.
+	"internal/pdftext": 1,
 
 	// Where f4 keeps the indexes of the tar archives it opened: paths and file
 	// names only, so the archive plugin and the file operations can share it.
