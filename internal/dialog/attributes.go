@@ -277,6 +277,9 @@ func ReplaceSymlinkTarget(ctx context.Context, v vfs.VFS, path, newTarget string
 type windowsAttributesEdit struct {
 	setMTime bool
 	mtime    time.Time
+	// setATime writes the access time the Accessed field holds (f4#1404).
+	setATime bool
+	atime    time.Time
 	// winAttrs holds the new ordinary flags, keepWinAttrs the ordinary flags
 	// each object keeps.
 	winAttrs     uint32
@@ -293,6 +296,9 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 		item := target.Item
 		if edit.setMTime {
 			item.MTime = edit.mtime
+		}
+		if edit.setATime {
+			item.ATime = edit.atime
 		}
 		if edit.setUnixMode {
 			item.UnixMode = edit.unixMode
@@ -1055,8 +1061,23 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	if showCreated {
 		rowCreated = attributesReadOnlyTimeRow(dlg, mainVBox, 54, 0, i18n.Msg("Attributes.Created"), createdText)
 	}
+	// Accessed is editable (f4#1404), like Last write; blank for a multiple
+	// selection, and a field left untouched changes nothing. Created stays
+	// read-only.
+	var editAccessed *vtui.Edit
+	initialAccessed := ""
 	if showAccessed {
-		rowAccessed = attributesReadOnlyTimeRow(dlg, mainVBox, 54, 0, i18n.Msg("Attributes.Accessed"), accessedText)
+		if !multiple {
+			initialAccessed = accessedText
+		}
+		editAccessed = vtui.NewEdit(0, 0, 20, initialAccessed)
+		lblAccessed := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Accessed")), vtui.Palette[vtui.ColDialogText])
+		rowAccessed = vtui.NewHBoxLayout(0, 0, 54, 1)
+		rowAccessed.Add(lblAccessed, vtui.Margins{Right: 1}, vtui.AlignLeft)
+		rowAccessed.Add(editAccessed, vtui.Margins{}, vtui.AlignLeft)
+		dlg.AddItem(lblAccessed)
+		dlg.AddItem(editAccessed)
+		mainVBox.Add(rowAccessed, vtui.Margins{Top: 0}, vtui.AlignFill)
 	}
 
 	btnSet := vtui.NewButton(0, 0, i18n.Msg("Attributes.BtnSet"))
@@ -1154,6 +1175,16 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 				return
 			}
 			edit.mtime, edit.setMTime = nt, true
+		}
+		if editAccessed != nil {
+			if text := editAccessed.GetText(); text != initialAccessed {
+				nt, err := time.ParseInLocation(attributesTimeFormat, text, time.Local)
+				if err != nil {
+					vtui.ShowMessage(" Error ", fmt.Sprintf(i18n.Msg("Attributes.MTimeInvalidError"), i18n.Msg("Attributes.MTimeFormatHint")), []string{"&Ok"})
+					return
+				}
+				edit.atime, edit.setATime = nt, true
+			}
 		}
 
 		// Real POSIX semantics apply on a genuine Unix build (runtime.GOOS
