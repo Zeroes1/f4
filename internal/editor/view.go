@@ -131,6 +131,12 @@ type EditorView struct {
 	// does not start and cancel a goroutine per keystroke.
 	indexResume *time.Timer
 
+	// mdSplit is the Markdown preview beside the editor (view_mdsplit.go),
+	// nil while it is off; lastW/lastH remember the size ResizeConsole was
+	// last given so the split can be laid out when it is switched.
+	mdSplit      *mdSplitState
+	lastW, lastH int
+
 	// searchSnapshot caches the assembled buffer one search pass works on,
 	// for the buffers that cannot be scanned in place. Every search used to
 	// rebuild it, which on a large file is the whole file copied again per
@@ -1527,6 +1533,7 @@ func (ev *EditorView) Show(scr *vtui.ScreenBuf) {
 		ev.GetMenuBar().Show(scr)
 	}
 	ev.DisplayObject(scr)
+	ev.showMarkdownSplit(scr)
 }
 
 func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
@@ -1995,6 +2002,7 @@ func (ev *EditorView) VetoActionKey(e *vtinput.InputEvent) bool {
 // top of the file, which is precisely where they did not want to be.
 func (ev *EditorView) ProcessKey(e *vtinput.InputEvent) bool {
 	defer stallwatch.Frame("editor.ProcessKey")()
+	defer ev.scheduleMarkdownSplit()
 	if ev.TargetLine == -1 {
 		return ev.processKeyInner(e)
 	}
@@ -3289,6 +3297,9 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.MouseEventType {
 		return false
 	}
+	if ev.markdownSplitMouse(e) {
+		return true
+	}
 	if e.ButtonState != 0 && ev.TargetLine != -1 {
 		ev.TargetLine = -1
 		ev.EnsureCursorVisible()
@@ -3593,6 +3604,12 @@ func (ev *EditorView) SetPosition(x1, y1, x2, y2 int) {
 }
 
 func (ev *EditorView) ResizeConsole(w, h int) {
+	ev.lastW, ev.lastH = w, h
+	ev.resizeConsoleFull(w, h)
+	ev.layoutMarkdownSplit(w)
+}
+
+func (ev *EditorView) resizeConsoleFull(w, h int) {
 	// Редактор в f4 занимает всё пространство до KeyBar (h-1)
 	top := vtui.FrameManager.WorkspaceTopInset()
 	if !config.App.AlwaysShowMenuBar || ev.menuBar == nil {

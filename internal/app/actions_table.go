@@ -2537,6 +2537,22 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { actionEditorMarkdownPreview(ev) }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.MarkdownSplit",
+		Area:        "Editor",
+		Label:       "Markdown preview beside the editor",
+		LabelKey:    "Action.Editor.MarkdownSplit",
+		Description: "Show or hide a live formatted Markdown preview in the right half of the editor",
+		DescKey:     "Action.Editor.MarkdownSplit.Desc",
+		DefaultKeys: []string{"AltShiftF3"},
+		MenuPath:    "File",
+		Enabled:     editorState(func(ev *editor.EditorView) bool { return isMarkdownFile(ev.FilePath) }),
+		Handler: withEditor(func(ev *editor.EditorView) {
+			if ev != nil && ev.Pt != nil && isMarkdownFile(ev.FilePath) {
+				ev.ToggleMarkdownSplit()
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Quit",
 		Area:        "Editor",
 		Label:       "Quit",
