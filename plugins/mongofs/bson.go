@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -141,6 +142,11 @@ func appendElement(b []byte, key string, v any) ([]byte, error) {
 		b = appendInt32(b, int32(len(x))) // #nosec G115 -- a command payload is small
 		b = append(b, 0)
 		return append(b, x...), nil
+	case bsonRaw:
+		if x.Type != tDecimal || len(x.Data) != 16 {
+			return nil, fmt.Errorf("mongofs: cannot encode a raw value of type 0x%02x", x.Type)
+		}
+		return append(add(x.Type), x.Data...), nil
 	case bsonD:
 		sub, err := x.encode()
 		if err != nil {
@@ -318,12 +324,26 @@ func writeJSON(sb *strings.Builder, v any, unit, cur string) {
 	case int32:
 		fmt.Fprint(sb, x)
 	case int64:
-		fmt.Fprint(sb, x)
-	case float64:
-		if math.IsNaN(x) || math.IsInf(x, 0) {
-			fmt.Fprintf(sb, `{"$numberDouble": %s}`, jsonQuote(fmt.Sprint(x)))
+		if x >= math.MinInt32 && x <= math.MaxInt32 {
+			// A plain number this small would read back as an int32.
+			fmt.Fprintf(sb, `{"$numberLong": "%d"}`, x)
 		} else {
 			fmt.Fprint(sb, x)
+		}
+	case float64:
+		switch {
+		case math.IsNaN(x):
+			sb.WriteString(`{"$numberDouble": "NaN"}`)
+		case math.IsInf(x, 1):
+			sb.WriteString(`{"$numberDouble": "Infinity"}`)
+		case math.IsInf(x, -1):
+			sb.WriteString(`{"$numberDouble": "-Infinity"}`)
+		default:
+			text := strconv.FormatFloat(x, 'g', -1, 64)
+			if !strings.ContainsAny(text, ".e") {
+				text += ".0" // so that it reads back as a double, not an int
+			}
+			sb.WriteString(text)
 		}
 	case objectID:
 		fmt.Fprintf(sb, `{"$oid": %q}`, x.hex())

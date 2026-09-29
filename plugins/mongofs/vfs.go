@@ -1,7 +1,10 @@
 package mongofs
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -37,9 +40,9 @@ var (
 type unsupportedError struct{}
 
 func (unsupportedError) Error() string {
-	return mongoText("Mongo.ReadOnly",
-		"The MongoDB panel is read-only: copy documents out with F5",
-		"Панель MongoDB только для чтения: документы можно скопировать наружу клавишей F5")
+	return mongoText("Mongo.NotSupported",
+		"The MongoDB panel cannot do this: documents can be edited, created and deleted and collections created, nothing else",
+		"Панель MongoDB этого не умеет: документы можно править, создавать и удалять, коллекции создавать, остального нельзя")
 }
 
 func (unsupportedError) Is(target error) bool { return target == os.ErrPermission }
@@ -457,18 +460,207 @@ func (v *mongoVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error)
 	return &vfs.TempFileWrapper{File: file, SizeVal: int64(len(text)), TempPath: tempPath}, nil
 }
 
-func (v *mongoVFS) MkDir(context.Context, string) error          { return unsupportedError{} }
-func (v *mongoVFS) Remove(context.Context, string) error         { return unsupportedError{} }
+// MkDir creates an empty collection; a database exists only once it holds one,
+// so there is nothing to create at the top.
+func (v *mongoVFS) MkDir(ctx context.Context, p string) error {
+	abs, err := v.Abs(p)
+	if err != nil {
+		return err
+	}
+	loc := parseLocation(abs)
+	if loc.depth != 2 {
+		return unsupportedError{}
+	}
+	_, err = v.run(ctx, loc.db, bsonD{{"create", loc.coll}})
+	return err
+}
+
+// Remove deletes one document. Dropping a collection or a database is not done
+// from a panel where one keypress deletes a selection.
+func (v *mongoVFS) Remove(ctx context.Context, p string) error {
+	abs, err := v.Abs(p)
+	if err != nil {
+		return err
+	}
+	loc := parseLocation(abs)
+	if loc.depth != 3 {
+		return unsupportedError{}
+	}
+	id, err := v.docID(loc)
+	if err != nil {
+		return err
+	}
+	reply, err := v.run(ctx, loc.db, bsonD{
+		{"delete", loc.coll}, {"deletes", []any{bsonD{{"q", bsonD{{"_id", id}}}, {"limit", int32(1)}}}},
+	})
+	if err != nil {
+		return err
+	}
+	if err := writeError(reply); err != nil {
+		return err
+	}
+	if n, _ := numberOf(reply.get("n")); n < 1 {
+		return fmt.Errorf("%s: %w", loc.doc, os.ErrNotExist)
+	}
+	return nil
+}
+
 func (v *mongoVFS) Rename(context.Context, string, string) error { return unsupportedError{} }
 func (v *mongoVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
 	return unsupportedError{}
 }
-func (v *mongoVFS) Create(context.Context, string) (io.WriteCloser, error) {
-	return nil, unsupportedError{}
+
+// docID is the _id a file name stands for.
+func (v *mongoVFS) docID(loc location) (any, error) {
+	v.mu.Lock()
+	id, ok := v.ids[loc.db+"/"+loc.coll+"/"+loc.doc]
+	v.mu.Unlock()
+	if ok {
+		return id, nil
+	}
+	if id, ok = idFromName(loc.doc); ok {
+		return id, nil
+	}
+	return nil, fmt.Errorf("%s: %w", loc.doc, os.ErrNotExist)
+}
+
+// writeError turns the writeErrors of an insert/update/delete reply into an error.
+func writeError(reply bsonD) error {
+	list, _ := reply.get("writeErrors").([]any)
+	for _, item := range list {
+		if d, ok := item.(bsonD); ok {
+			if msg, _ := d.get("errmsg").(string); msg != "" {
+				return fmt.Errorf("mongodb: %s", msg)
+			}
+		}
+	}
+	return nil
+}
+
+// maxDocumentSize is the largest document the panel takes back (MongoDB's own
+// limit is 16 MiB).
+const maxDocumentSize = 16 << 20
+
+// Create returns a writer that collects the text of a document and, on Close,
+// replaces the document of that name (or inserts it when there is none). The
+// text is the relaxed extended JSON the panel shows, so a document that was
+// opened, edited and saved keeps its types.
+func (v *mongoVFS) Create(ctx context.Context, p string) (io.WriteCloser, error) {
+	abs, err := v.Abs(p)
+	if err != nil {
+		return nil, err
+	}
+	loc := parseLocation(abs)
+	if loc.depth != 3 || !strings.HasSuffix(loc.doc, docSuffix) {
+		return nil, unsupportedError{}
+	}
+	return &docWriter{ctx: ctx, v: v, loc: loc}, nil
+}
+
+type docWriter struct {
+	ctx    context.Context
+	v      *mongoVFS
+	loc    location
+	buf    bytes.Buffer
+	closed bool
+}
+
+func (w *docWriter) Write(p []byte) (int, error) {
+	if w.buf.Len()+len(p) > maxDocumentSize {
+		return 0, errors.New("mongodb: the document is larger than 16 MiB")
+	}
+	return w.buf.Write(p)
+}
+
+func (w *docWriter) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+	return w.v.saveDocument(w.ctx, w.loc, w.buf.Bytes())
+}
+
+var errIDMismatch = errors.New("the _id in the text is not the one in the file name")
+
+func (v *mongoVFS) saveDocument(ctx context.Context, loc location, text []byte) error {
+	parsed, err := parseEJSON(text)
+	if err != nil {
+		return err
+	}
+	doc, ok := parsed.(bsonD)
+	if !ok {
+		return fmt.Errorf("%w: a document is a JSON object", errEJSON)
+	}
+	nameID, nameErr := v.docID(loc)
+	textID := doc.get("_id")
+	switch {
+	case textID != nil && nameErr == nil && !sameID(textID, nameID):
+		return fmt.Errorf("%s: %w", loc.doc, errIDMismatch)
+	case textID == nil && nameErr == nil:
+		doc = append(bsonD{{"_id", nameID}}, doc...)
+	case textID == nil:
+		doc = append(bsonD{{"_id", newObjectID()}}, doc...)
+	}
+	id := doc.get("_id")
+	exists := false
+	if _, err := v.document(ctx, location{db: loc.db, coll: loc.coll, doc: docFileName(id), depth: 3}); err == nil {
+		exists = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	var reply bsonD
+	if exists {
+		reply, err = v.run(ctx, loc.db, bsonD{
+			{"update", loc.coll},
+			{"updates", []any{bsonD{{"q", bsonD{{"_id", id}}}, {"u", doc}, {"upsert", false}}}},
+		})
+	} else {
+		reply, err = v.run(ctx, loc.db, bsonD{{"insert", loc.coll}, {"documents", []any{doc}}})
+	}
+	if err != nil {
+		return err
+	}
+	if err := writeError(reply); err != nil {
+		return err
+	}
+	v.mu.Lock()
+	v.ids[loc.db+"/"+loc.coll+"/"+docFileName(id)] = id
+	v.mu.Unlock()
+	return nil
+}
+
+// sameID compares two _id values; an int32 and an int64 of the same value are
+// the same id, because that is how a number in a file name and one in the text
+// meet.
+func sameID(a, b any) bool {
+	na, aok := integerOf(a)
+	nb, bok := integerOf(b)
+	if aok && bok {
+		return na == nb
+	}
+	return toJSON(a, "") == toJSON(b, "")
+}
+
+func integerOf(v any) (int64, bool) {
+	switch x := v.(type) {
+	case int32:
+		return int64(x), true
+	case int64:
+		return x, true
+	}
+	return 0, false
+}
+
+// newObjectID makes an id for a document saved under a name that is not one.
+func newObjectID() objectID {
+	var o objectID
+	binary.BigEndian.PutUint32(o[:4], uint32(time.Now().Unix())) // #nosec G115 -- seconds fit until 2106
+	_, _ = rand.Read(o[4:])
+	return o
 }
 
 func (v *mongoVFS) GetCapabilities() vfs.VFSCapabilities {
-	return vfs.VFSCapabilities{HasRandomAccess: true}
+	return vfs.VFSCapabilities{HasRandomAccess: true, HasWrite: true}
 }
 
 func (v *mongoVFS) Search(context.Context, string, string) (chan int64, error) { return nil, nil }

@@ -3,15 +3,19 @@ package mongofs
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/md5" // #nosec G501 -- SCRAM-SHA-1 is defined with MD5
 	"crypto/pbkdf2"
 	"crypto/rand"
+	"crypto/sha1" // #nosec G505 -- SCRAM-SHA-1 is defined with SHA-1
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"net/url"
@@ -41,16 +45,22 @@ type connConfig struct {
 	addr       string
 	user, pass string
 	authSource string
+	authMech   string // "" negotiates
 	useTLS     bool
+	srv        bool // addr is a mongodb+srv:// name still to be looked up
 }
 
 // parseURI reads mongodb://[user:pass@]host[:port][/db][?authSource=x&tls=true].
-// SRV strings and replica-set seed lists are not supported: the first host of
-// a list is used.
+// A mongodb+srv:// name is looked up when the connection is made (resolveSRV);
+// of a replica-set seed list the first host is used.
 func parseURI(raw string) (connConfig, error) {
 	rest, ok := strings.CutPrefix(raw, "mongodb://")
+	srv := false
 	if !ok {
-		return connConfig{}, fmt.Errorf("%w: use mongodb://host[:port]", errURI)
+		if rest, ok = strings.CutPrefix(raw, "mongodb+srv://"); !ok {
+			return connConfig{}, fmt.Errorf("%w: use mongodb://host[:port]", errURI)
+		}
+		srv = true
 	}
 	// A seed list ("h1:27017,h2:27017") is not a valid URL host, so the first
 	// host is cut out by hand before the rest is parsed.
@@ -64,6 +74,9 @@ func parseURI(raw string) (connConfig, error) {
 	}
 	host, _, _ := strings.Cut(hosts, ",")
 	u, err := url.Parse("mongodb://" + userinfo + host + tail)
+	if err == nil && srv && (strings.Contains(u.Host, ",") || strings.Contains(u.Host, ":")) {
+		return connConfig{}, fmt.Errorf("%w: a mongodb+srv:// name takes no port or host list", errURI)
+	}
 	if err != nil || u.Host == "" {
 		return connConfig{}, fmt.Errorf("%w: use mongodb://host[:port]", errURI)
 	}
@@ -72,7 +85,7 @@ func parseURI(raw string) (connConfig, error) {
 	} else {
 		host = u.Host
 	}
-	cfg := connConfig{addr: host, authSource: "admin"}
+	cfg := connConfig{addr: host, authSource: "admin", srv: srv, useTLS: srv}
 	if u.User != nil {
 		cfg.user = u.User.Username()
 		cfg.pass, _ = u.User.Password()
@@ -83,10 +96,47 @@ func parseURI(raw string) (connConfig, error) {
 	} else if db := strings.TrimPrefix(u.Path, "/"); db != "" && cfg.user != "" {
 		cfg.authSource = db
 	}
-	cfg.useTLS = q.Get("tls") == "true" || q.Get("ssl") == "true"
-	if mech := q.Get("authMechanism"); mech != "" && mech != "SCRAM-SHA-256" {
-		return connConfig{}, fmt.Errorf("%w: only SCRAM-SHA-256 authentication is supported", errURI)
+	for _, key := range []string{"tls", "ssl"} {
+		if v := q.Get(key); v != "" {
+			cfg.useTLS = v == "true"
+		}
 	}
+	switch mech := q.Get("authMechanism"); mech {
+	case "", "SCRAM-SHA-256", "SCRAM-SHA-1":
+		cfg.authMech = mech
+	default:
+		return connConfig{}, fmt.Errorf("%w: only SCRAM-SHA-256 and SCRAM-SHA-1 authentication are supported", errURI)
+	}
+	return cfg, nil
+}
+
+// lookupSRV and lookupTXT are the DNS calls a mongodb+srv:// name needs; tests
+// replace them.
+var (
+	lookupSRV = net.DefaultResolver.LookupSRV
+	lookupTXT = net.DefaultResolver.LookupTXT
+)
+
+// resolveSRV turns a mongodb+srv:// name into the first host:port its SRV
+// record names, and takes authSource from the TXT record when the string did
+// not give one.
+func resolveSRV(ctx context.Context, cfg connConfig, explicitAuthSource bool) (connConfig, error) {
+	if !cfg.srv {
+		return cfg, nil
+	}
+	_, addrs, err := lookupSRV(ctx, "mongodb", "tcp", cfg.addr)
+	if err != nil || len(addrs) == 0 {
+		return cfg, fmt.Errorf("%w: no SRV record for %s: %v", errURI, cfg.addr, err)
+	}
+	if txt, err := lookupTXT(ctx, cfg.addr); err == nil && !explicitAuthSource {
+		for _, rec := range txt {
+			if v, err := url.ParseQuery(rec); err == nil && v.Get("authSource") != "" {
+				cfg.authSource = v.Get("authSource")
+			}
+		}
+	}
+	cfg.addr = net.JoinHostPort(strings.TrimSuffix(addrs[0].Target, "."), strconv.Itoa(int(addrs[0].Port)))
+	cfg.srv = false
 	return cfg, nil
 }
 
@@ -97,6 +147,10 @@ type conn struct {
 }
 
 func dial(ctx context.Context, cfg connConfig) (*conn, error) {
+	cfg, err := resolveSRV(ctx, cfg, cfg.authSource != "admin")
+	if err != nil {
+		return nil, err
+	}
 	d := net.Dialer{Timeout: dialTimeout}
 	raw, err := d.DialContext(ctx, "tcp", cfg.addr)
 	if err != nil {
@@ -117,12 +171,17 @@ func dial(ctx context.Context, cfg connConfig) (*conn, error) {
 		raw = tc
 	}
 	c := &conn{c: raw}
-	if _, err := c.command(ctx, "admin", bsonD{{"isMaster", int32(1)}}); err != nil {
+	hello := bsonD{{"isMaster", int32(1)}}
+	if cfg.user != "" && cfg.authMech == "" {
+		hello = append(hello, bsonE{"saslSupportedMechs", cfg.authSource + "." + cfg.user})
+	}
+	reply, err := c.command(ctx, "admin", hello)
+	if err != nil {
 		_ = raw.Close()
 		return nil, err
 	}
 	if cfg.user != "" {
-		if err := c.authenticate(ctx, cfg); err != nil {
+		if err := c.authenticate(ctx, cfg, chooseMechanism(cfg, reply)); err != nil {
 			_ = raw.Close()
 			return nil, err
 		}
@@ -225,14 +284,55 @@ func numberOf(v any) (float64, bool) {
 	return 0, false
 }
 
-func mac(key []byte, msg string) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write([]byte(msg))
-	return h.Sum(nil)
+// scramVariant is what differs between SCRAM-SHA-256 and SCRAM-SHA-1.
+type scramVariant struct {
+	name    string
+	hash    func() hash.Hash
+	keyLen  int
+	prepare func(user, pass string) string // the password as it goes into PBKDF2
 }
 
-// authenticate runs SCRAM-SHA-256 (RFC 5802 / 7677 as MongoDB uses it).
-func (c *conn) authenticate(ctx context.Context, cfg connConfig) error {
+var (
+	scramSHA256 = scramVariant{"SCRAM-SHA-256", sha256.New, sha256.Size,
+		func(_, pass string) string { return pass }}
+	// SCRAM-SHA-1 is what servers before 4.0 (and users created for them)
+	// speak: the password is the hex MD5 of "user:mongo:password" and the hash
+	// SHA-1. MongoDB defines it that way, so the weak primitives are required.
+	scramSHA1 = scramVariant{"SCRAM-SHA-1", sha1.New, sha1.Size, // #nosec G505 -- the mechanism is defined with SHA-1
+		func(user, pass string) string {
+			sum := md5.Sum([]byte(user + ":mongo:" + pass)) // #nosec G401 G501 -- the mechanism is defined with MD5
+			return hex.EncodeToString(sum[:])
+		}}
+)
+
+// chooseMechanism picks the mechanism the connection string names, or the
+// strongest one the server says the user has, or SCRAM-SHA-256.
+func chooseMechanism(cfg connConfig, hello bsonD) scramVariant {
+	if cfg.authMech == "SCRAM-SHA-1" {
+		return scramSHA1
+	}
+	if cfg.authMech == "" {
+		list, _ := hello.get("saslSupportedMechs").([]any)
+		has256, has1 := false, false
+		for _, m := range list {
+			has256 = has256 || m == "SCRAM-SHA-256"
+			has1 = has1 || m == "SCRAM-SHA-1"
+		}
+		if has1 && !has256 {
+			return scramSHA1
+		}
+	}
+	return scramSHA256
+}
+
+func mac(h func() hash.Hash, key []byte, msg string) []byte {
+	m := hmac.New(h, key)
+	m.Write([]byte(msg))
+	return m.Sum(nil)
+}
+
+// authenticate runs SCRAM (RFC 5802 / 7677 as MongoDB uses it).
+func (c *conn) authenticate(ctx context.Context, cfg connConfig, v scramVariant) error {
 	nonceRaw := make([]byte, 24)
 	if _, err := rand.Read(nonceRaw); err != nil {
 		return err
@@ -242,7 +342,7 @@ func (c *conn) authenticate(ctx context.Context, cfg connConfig) error {
 	firstBare := "n=" + user + ",r=" + nonce
 
 	start, err := c.command(ctx, cfg.authSource, bsonD{
-		{"saslStart", int32(1)}, {"mechanism", "SCRAM-SHA-256"},
+		{"saslStart", int32(1)}, {"mechanism", v.name},
 		{"payload", []byte("n,," + firstBare)}, {"autoAuthorize", int32(1)},
 		{"options", bsonD{{"skipEmptyExchange", true}}},
 	})
@@ -256,15 +356,17 @@ func (c *conn) authenticate(ctx context.Context, cfg connConfig) error {
 	if err != nil || iterErr != nil || iter < 1 || !strings.HasPrefix(fields["r"], nonce) {
 		return fmt.Errorf("%w: bad server challenge", errAuth)
 	}
-	salted, err := pbkdf2.Key(sha256.New, cfg.pass, salt, iter, sha256.Size)
+	salted, err := pbkdf2.Key(v.hash, v.prepare(cfg.user, cfg.pass), salt, iter, v.keyLen)
 	if err != nil {
 		return err
 	}
-	clientKey := mac(salted, "Client Key")
-	stored := sha256.Sum256(clientKey)
+	clientKey := mac(v.hash, salted, "Client Key")
+	h := v.hash()
+	h.Write(clientKey)
+	stored := h.Sum(nil)
 	finalNoProof := "c=biws,r=" + fields["r"]
 	authMessage := firstBare + "," + serverFirst + "," + finalNoProof
-	sig := mac(stored[:], authMessage)
+	sig := mac(v.hash, stored, authMessage)
 	proof := make([]byte, len(clientKey))
 	for i := range proof {
 		proof[i] = clientKey[i] ^ sig[i]
@@ -279,7 +381,7 @@ func (c *conn) authenticate(ctx context.Context, cfg connConfig) error {
 		return fmt.Errorf("%w: %v", errAuth, err)
 	}
 	serverSig := parseSCRAM(payloadString(reply))["v"]
-	want := base64.StdEncoding.EncodeToString(mac(mac(salted, "Server Key"), authMessage))
+	want := base64.StdEncoding.EncodeToString(mac(v.hash, mac(v.hash, salted, "Server Key"), authMessage))
 	if subtle.ConstantTimeCompare([]byte(serverSig), []byte(want)) != 1 {
 		return fmt.Errorf("%w: the server did not prove it knows the password", errAuth)
 	}

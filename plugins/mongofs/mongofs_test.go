@@ -3,15 +3,16 @@ package mongofs
 import (
 	"context"
 	"crypto/pbkdf2"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,15 +30,38 @@ type fakeServer struct {
 	user     string
 	password string
 	cursors  int // getMore calls served
+	mechs    []string
+
+	mu    sync.Mutex
+	store map[string][]bsonD // collections changed since the start
+	extra []string           // collections created since the start
 }
 
 func (f *fakeServer) docs(coll string) []bsonD {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d, ok := f.store[coll]; ok {
+		return append([]bsonD(nil), d...)
+	}
+	return f.seed(coll)
+}
+
+func (f *fakeServer) put(coll string, docs []bsonD) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.store == nil {
+		f.store = map[string][]bsonD{}
+	}
+	f.store[coll] = docs
+}
+
+func (f *fakeServer) seed(coll string) []bsonD {
 	switch coll {
 	case "orders":
 		return []bsonD{
 			{{"_id", oidA}, {"total", 12.5}, {"paid", true}, {"note", "a <b> & c"},
 				{"when", time.Date(2026, 1, 2, 3, 4, 5, 6_000_000, time.UTC)},
-				{"lines", []any{int32(1), int64(1) << 40, nil}}, {"meta", bsonD{{"k", "v"}}},
+				{"lines", []any{int32(1), int64(1) << 40, int64(7), 3.0, nil}}, {"meta", bsonD{{"k", "v"}}},
 				{"blob", bsonBinary{Subtype: 0, Data: []byte("hi")}}, {"ts", bsonTimestamp{T: 7, I: 1}}},
 			{{"_id", "abc def"}, {"total", int32(3)}},
 			{{"_id", int32(42)}},
@@ -65,7 +89,7 @@ func startFake(t *testing.T, user, password string) *fakeServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &fakeServer{addr: ln.Addr().String(), user: user, password: password}
+	f := &fakeServer{addr: ln.Addr().String(), user: user, password: password, mechs: []string{"SCRAM-SHA-1", "SCRAM-SHA-256"}}
 	t.Cleanup(func() { _ = ln.Close() })
 	go func() {
 		for {
@@ -82,7 +106,7 @@ func startFake(t *testing.T, user, password string) *fakeServer {
 func (f *fakeServer) serve(c net.Conn) {
 	defer func() { _ = c.Close() }()
 	authed := f.user == ""
-	var scram struct{ firstBare, serverFirst string }
+	var scram scramState
 	for {
 		var head [16]byte
 		if _, err := io.ReadFull(c, head[:]); err != nil {
@@ -124,13 +148,31 @@ func cursorReply(ns string, id int64, key string, docs []bsonD) bsonD {
 	return bsonD{{"cursor", bsonD{{key, items}, {"id", id}, {"ns", ns}}}, {"ok", float64(1)}}
 }
 
-func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *struct{ firstBare, serverFirst string }) bsonD {
+// scramState is one SCRAM conversation as the fake server sees it.
+type scramState struct {
+	firstBare, serverFirst string
+	variant                scramVariant
+}
+
+func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *scramState) bsonD {
 	name := cmd[0].Key
 	db, _ := cmd.get("$db").(string)
 	switch name {
 	case "isMaster":
-		return bsonD{{"ismaster", true}, {"ok", float64(1)}}
+		reply := bsonD{{"ismaster", true}, {"ok", float64(1)}}
+		if cmd.get("saslSupportedMechs") != nil {
+			mechs := make([]any, len(f.mechs))
+			for i, m := range f.mechs {
+				mechs[i] = m
+			}
+			reply = append(reply, bsonE{"saslSupportedMechs", mechs})
+		}
+		return reply
 	case "saslStart":
+		scram.variant = scramSHA256
+		if cmd.get("mechanism") == "SCRAM-SHA-1" {
+			scram.variant = scramSHA1
+		}
 		payload := string(cmd.get("payload").(bsonBinary).Data)
 		scram.firstBare = strings.TrimPrefix(payload, "n,,")
 		nonce := parseSCRAM(scram.firstBare)["r"]
@@ -138,14 +180,19 @@ func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *struct{ firstBare, s
 		scram.serverFirst = "r=" + nonce + "srv,s=" + base64.StdEncoding.EncodeToString(salt) + ",i=4096"
 		return bsonD{{"conversationId", int32(1)}, {"done", false}, {"payload", []byte(scram.serverFirst)}, {"ok", float64(1)}}
 	case "saslContinue":
+		if len(cmd.get("payload").(bsonBinary).Data) == 0 { // the empty last exchange
+			return bsonD{{"conversationId", int32(1)}, {"done", true}, {"payload", []byte{}}, {"ok", float64(1)}}
+		}
+		v := scram.variant
 		payload := string(cmd.get("payload").(bsonBinary).Data)
 		fields := parseSCRAM(payload)
-		salted, _ := pbkdf2.Key(sha256.New, f.password, []byte("saltsalt"), 4096, 32)
+		salted, _ := pbkdf2.Key(v.hash, v.prepare(f.user, f.password), []byte("saltsalt"), 4096, v.keyLen)
 		noProof := payload[:strings.LastIndex(payload, ",p=")]
 		authMessage := scram.firstBare + "," + scram.serverFirst + "," + noProof
-		clientKey := mac(salted, "Client Key")
-		stored := sha256.Sum256(clientKey)
-		sig := mac(stored[:], authMessage)
+		clientKey := mac(v.hash, salted, "Client Key")
+		h := v.hash()
+		h.Write(clientKey)
+		sig := mac(v.hash, h.Sum(nil), authMessage)
 		proof, _ := base64.StdEncoding.DecodeString(fields["p"])
 		for i := range proof {
 			proof[i] ^= sig[i]
@@ -154,8 +201,9 @@ func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *struct{ firstBare, s
 			return fail("Authentication failed.")
 		}
 		*authed = true
-		v := base64.StdEncoding.EncodeToString(mac(mac(salted, "Server Key"), authMessage))
-		return bsonD{{"conversationId", int32(1)}, {"done", true}, {"payload", []byte("v=" + v)}, {"ok", float64(1)}}
+		serverSig := base64.StdEncoding.EncodeToString(mac(v.hash, mac(v.hash, salted, "Server Key"), authMessage))
+		// SHA-1 conversations end with an extra empty exchange.
+		return bsonD{{"conversationId", int32(1)}, {"done", v.name == "SCRAM-SHA-256"}, {"payload", []byte("v=" + serverSig)}, {"ok", float64(1)}}
 	}
 	if !*authed {
 		return fail("command " + name + " requires authentication")
@@ -168,7 +216,10 @@ func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *struct{ firstBare, s
 			return cursorReply(db+".$cmd.listCollections", 0, "firstBatch", nil)
 		}
 		var docs []bsonD
-		for _, n := range []string{"orders", "paged", "big", "system.views"} {
+		f.mu.Lock()
+		names := append([]string{"orders", "paged", "big", "system.views"}, f.extra...)
+		f.mu.Unlock()
+		for _, n := range names {
 			docs = append(docs, bsonD{{"name", n}})
 		}
 		return cursorReply("shop.$cmd.listCollections", 0, "firstBatch", docs)
@@ -211,6 +262,49 @@ func (f *fakeServer) handle(cmd bsonD, authed *bool, scram *struct{ firstBare, s
 		return cursorReply("shop.paged", id, "nextBatch", all[from:to])
 	case "killCursors":
 		return bsonD{{"ok", float64(1)}}
+	case "create":
+		f.mu.Lock()
+		f.extra = append(f.extra, cmd[0].Value.(string))
+		f.mu.Unlock()
+		return bsonD{{"ok", float64(1)}}
+	case "insert":
+		coll := cmd[0].Value.(string)
+		docs := f.docs(coll)
+		for _, item := range cmd.get("documents").([]any) {
+			d := item.(bsonD)
+			for _, have := range docs {
+				if toJSON(have.get("_id"), "") == toJSON(d.get("_id"), "") {
+					return bsonD{{"n", int32(0)}, {"writeErrors", []any{bsonD{{"errmsg", "E11000 duplicate key"}}}}, {"ok", float64(1)}}
+				}
+			}
+			docs = append(docs, d)
+		}
+		f.put(coll, docs)
+		return bsonD{{"n", int32(1)}, {"ok", float64(1)}}
+	case "update":
+		coll := cmd[0].Value.(string)
+		docs := f.docs(coll)
+		u := cmd.get("updates").([]any)[0].(bsonD)
+		want := toJSON(u.get("q").(bsonD).get("_id"), "")
+		for i, have := range docs {
+			if toJSON(have.get("_id"), "") == want {
+				docs[i] = u.get("u").(bsonD)
+				f.put(coll, docs)
+				return bsonD{{"n", int32(1)}, {"nModified", int32(1)}, {"ok", float64(1)}}
+			}
+		}
+		return bsonD{{"n", int32(0)}, {"ok", float64(1)}}
+	case "delete":
+		coll := cmd[0].Value.(string)
+		docs := f.docs(coll)
+		want := toJSON(cmd.get("deletes").([]any)[0].(bsonD).get("q").(bsonD).get("_id"), "")
+		for i, have := range docs {
+			if toJSON(have.get("_id"), "") == want {
+				f.put(coll, append(docs[:i:i], docs[i+1:]...))
+				return bsonD{{"n", int32(1)}, {"ok", float64(1)}}
+			}
+		}
+		return bsonD{{"n", int32(0)}, {"ok", float64(1)}}
 	}
 	return fail("no such command: " + name)
 }
@@ -347,7 +441,10 @@ func TestMongoVFSStatSetPathAndReadOnly(t *testing.T) {
 		t.Fatal("clone lost the path")
 	}
 	_, createErr := v.Create(ctx, "/x")
-	for i, err := range []error{v.MkDir(ctx, "/x"), v.Remove(ctx, "/x"), v.Rename(ctx, "/x", "/y"), v.SetAttributes(ctx, "/x", vfs.VFSItem{}), createErr} {
+	_, createColl := v.Create(ctx, "/shop/orders")
+	_, createNotJSON := v.Create(ctx, "/shop/orders/plain")
+	for i, err := range []error{v.MkDir(ctx, "/x"), v.MkDir(ctx, "/shop"), v.Remove(ctx, "/x"), v.Remove(ctx, "/shop/orders"),
+		v.Rename(ctx, "/x", "/y"), v.SetAttributes(ctx, "/x", vfs.VFSItem{}), createErr, createColl, createNotJSON} {
 		if !errors.Is(err, os.ErrPermission) || err.Error() == "" {
 			t.Errorf("mutation %d: %v", i, err)
 		}
@@ -360,19 +457,91 @@ func TestMongoVFSStatSetPathAndReadOnly(t *testing.T) {
 
 func TestSCRAMAuthentication(t *testing.T) {
 	f := startFake(t, "user=,x", "pässword")
-	v := newMongoVFS(connectTo(f, "user=,x", "pässword"))
-	if dbs, err := v.databases(context.Background()); err != nil || len(dbs) != 2 {
-		t.Fatalf("with the right password: %v, %v", dbs, err)
+	ctx := context.Background()
+	login := func(mech, user, pass string) error {
+		v := newMongoVFS(func(ctx context.Context) (*conn, error) {
+			return dial(ctx, connConfig{addr: f.addr, user: user, pass: pass, authSource: "admin", authMech: mech})
+		})
+		defer func() { _ = v.Close() }()
+		_, err := v.databases(ctx)
+		return err
 	}
-	_ = v.Close()
-
-	bad := newMongoVFS(connectTo(f, "user=,x", "wrong"))
-	if _, err := bad.databases(context.Background()); !errors.Is(err, errAuth) {
+	if err := login("", "user=,x", "pässword"); err != nil {
+		t.Fatalf("negotiated, the right password: %v", err)
+	}
+	if err := login("SCRAM-SHA-256", "user=,x", "pässword"); err != nil {
+		t.Fatalf("SHA-256: %v", err)
+	}
+	if err := login("SCRAM-SHA-1", "user=,x", "pässword"); err != nil {
+		t.Fatalf("SHA-1, the right password: %v", err)
+	}
+	f.mechs = []string{"SCRAM-SHA-1"} // an old user: the negotiation picks SHA-1
+	if err := login("", "user=,x", "pässword"); err != nil {
+		t.Fatalf("negotiated SHA-1: %v", err)
+	}
+	f.mechs = nil
+	if err := login("", "user=,x", "pässword"); err != nil {
+		t.Fatalf("no mechanisms listed, SHA-256 by default: %v", err)
+	}
+	if err := login("", "user=,x", "wrong"); !errors.Is(err, errAuth) {
 		t.Fatalf("with a wrong password: %v", err)
 	}
-	none := newMongoVFS(connectTo(f, "", ""))
-	if _, err := none.databases(context.Background()); err == nil || !strings.Contains(err.Error(), "authentication") {
+	if err := login("SCRAM-SHA-1", "user=,x", "wrong"); !errors.Is(err, errAuth) {
+		t.Fatalf("SHA-1 with a wrong password: %v", err)
+	}
+	if err := login("", "", ""); err == nil || !strings.Contains(err.Error(), "authentication") {
 		t.Fatalf("without credentials: %v", err)
+	}
+	if got := chooseMechanism(connConfig{}, bsonD{{"saslSupportedMechs", []any{"SCRAM-SHA-256", "SCRAM-SHA-1"}}}); got.name != "SCRAM-SHA-256" {
+		t.Fatalf("the strongest should win: %s", got.name)
+	}
+}
+
+func TestSRVResolution(t *testing.T) {
+	oldSRV, oldTXT := lookupSRV, lookupTXT
+	defer func() { lookupSRV, lookupTXT = oldSRV, oldTXT }()
+	lookupSRV = func(_ context.Context, service, proto, name string) (string, []*net.SRV, error) {
+		if service != "mongodb" || proto != "tcp" || name != "cluster0.example.net" {
+			return "", nil, errors.New("no such record")
+		}
+		return "", []*net.SRV{{Target: "shard-00.example.net.", Port: 27017}, {Target: "shard-01.example.net.", Port: 27017}}, nil
+	}
+	lookupTXT = func(context.Context, string) ([]string, error) {
+		return []string{"authSource=users&replicaSet=rs0"}, nil
+	}
+
+	cfg, err := parseURI("mongodb+srv://u:p@cluster0.example.net/")
+	if err != nil || !cfg.srv || !cfg.useTLS || cfg.addr != "cluster0.example.net" {
+		t.Fatalf("parse: %+v, %v", cfg, err)
+	}
+	got, err := resolveSRV(context.Background(), cfg, false)
+	if err != nil || got.addr != "shard-00.example.net:27017" || got.authSource != "users" || got.srv {
+		t.Fatalf("resolved: %+v, %v", got, err)
+	}
+	if got, _ := resolveSRV(context.Background(), cfg, true); got.authSource != "admin" {
+		t.Fatalf("an explicit authSource must win over TXT: %+v", got)
+	}
+	if got, _ := resolveSRV(context.Background(), connConfig{addr: "h:1"}, false); got.addr != "h:1" {
+		t.Fatalf("a plain address is left alone: %+v", got)
+	}
+	missing := cfg
+	missing.addr = "nowhere.example.net"
+	if _, err := resolveSRV(context.Background(), missing, false); !errors.Is(err, errURI) {
+		t.Fatalf("a missing SRV record: %v", err)
+	}
+	if _, err := dial(context.Background(), missing); !errors.Is(err, errURI) {
+		t.Fatalf("dial with a missing SRV record: %v", err)
+	}
+	if cfg, err := parseURI("mongodb+srv://h/?tls=false"); err != nil || cfg.useTLS {
+		t.Fatalf("tls=false: %+v, %v", cfg, err)
+	}
+	for _, bad := range []string{"mongodb+srv://h:27017/", "mongodb+srv://a,b/"} {
+		if _, err := parseURI(bad); !errors.Is(err, errURI) {
+			t.Errorf("parseURI(%q) = %v", bad, err)
+		}
+	}
+	if cfg, err := parseURI("mongodb://h/?authMechanism=SCRAM-SHA-1"); err != nil || cfg.authMech != "SCRAM-SHA-1" {
+		t.Fatalf("authMechanism: %+v, %v", cfg, err)
 	}
 }
 
@@ -421,7 +590,7 @@ func TestParseURI(t *testing.T) {
 	if cfg, _ := parseURI("mongodb://[::1]"); cfg.addr != "[::1]:27017" {
 		t.Fatalf("ipv6: %+v", cfg)
 	}
-	for _, bad := range []string{"", "http://x", "mongodb+srv://x", "mongodb://", "mongodb://h/?authMechanism=PLAIN"} {
+	for _, bad := range []string{"", "http://x", "mongodb://", "mongodb://h/?authMechanism=PLAIN"} {
 		if _, err := parseURI(bad); !errors.Is(err, errURI) {
 			t.Errorf("parseURI(%q) = %v", bad, err)
 		}
@@ -465,7 +634,7 @@ func TestPluginAndNaming(t *testing.T) {
 	if p.GetName() != "MongoDB" || p.Close() != nil || p.Init(nil) == nil {
 		t.Fatal("plugin identity")
 	}
-	t.Setenv("MONGODB_URI", "mongodb+srv://x")
+	t.Setenv("MONGODB_URI", "http://x")
 	if _, err := connectFromEnv(context.Background()); !errors.Is(err, errURI) {
 		t.Fatalf("connectFromEnv: %v", err)
 	}
@@ -494,3 +663,174 @@ func TestPluginAndNaming(t *testing.T) {
 		t.Errorf("location %+v", loc)
 	}
 }
+
+func writeDoc(t *testing.T, v *mongoVFS, p, text string) error {
+	t.Helper()
+	w, err := v.Create(context.Background(), p)
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, text); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return w.Close() // closing twice is harmless
+}
+
+func readDoc(t *testing.T, v *mongoVFS, p string) string {
+	t.Helper()
+	f, err := v.Open(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	data := make([]byte, f.Size())
+	_, _ = f.ReadAt(context.Background(), data, 0)
+	return string(data)
+}
+
+func TestMongoVFSEditsDocuments(t *testing.T) {
+	f := startFake(t, "", "")
+	v := newMongoVFS(connectTo(f, "", ""))
+	defer func() { _ = v.Close() }()
+	ctx := context.Background()
+	orders := "/shop/orders/"
+
+	// An opened document saved unchanged keeps every type, and one edited
+	// keeps the rest.
+	name := orders + oidA.hex() + ".json"
+	original := readDoc(t, v, name)
+	if err := writeDoc(t, v, name, original); err != nil {
+		t.Fatal(err)
+	}
+	if again := readDoc(t, v, name); again != original {
+		t.Fatalf("a save without edits changed the document:\n%s\n---\n%s", original, again)
+	}
+	for _, frag := range []string{`{"$numberLong": "7"}`, `3.0`, `1099511627776`} {
+		if !strings.Contains(original, frag) {
+			t.Errorf("the text should carry %q:\n%s", frag, original)
+		}
+	}
+	edited := strings.Replace(original, `"total": 12.5`, `"total": 99.25`, 1)
+	if err := writeDoc(t, v, name, edited); err != nil {
+		t.Fatal(err)
+	}
+	if got := readDoc(t, v, name); !strings.Contains(got, `"total": 99.25`) || !strings.Contains(got, `"paid": true`) {
+		t.Fatalf("after an edit:\n%s", got)
+	}
+
+	// A new document under an id-shaped name takes that id; under another name
+	// it gets a fresh one; a text with the wrong _id is refused.
+	if err := writeDoc(t, v, orders+"i_99.json", `{"x": 1, "y": {"$date": "2026-05-06T07:08:09.010Z"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if got := readDoc(t, v, orders+"i_99.json"); !strings.Contains(got, `"_id": {"$numberLong": "99"}`) || !strings.Contains(got, `2026-05-06T07:08:09.010Z`) {
+		t.Fatalf("a new document:\n%s", got)
+	}
+	if err := writeDoc(t, v, orders+"fresh.json", `{"x": 2}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeDoc(t, v, orders+"i_99.json", `{"_id": 5}`); !errors.Is(err, errIDMismatch) {
+		t.Fatalf("a wrong _id: %v", err)
+	}
+	if err := writeDoc(t, v, orders+"i_1.json", `{"_id": 1, "x": 1}`); err != nil {
+		t.Fatalf("a matching _id: %v", err)
+	}
+	for _, bad := range []string{`{`, `[1]`, `{"a": 1} {"b": 2}`, `{"_id": {"$oid": "zz"}}`, `{"a": {"$numberLong": "x"}}`} {
+		if err := writeDoc(t, v, orders+"i_2.json", bad); !errors.Is(err, errEJSON) {
+			t.Errorf("writeDoc(%q) = %v", bad, err)
+		}
+	}
+	// A compound id cannot be found again from its name once the listing is
+	// forgotten, so saving it inserts, and the server's refusal is reported.
+	if err := writeDoc(t, v, orders+"j_x.json", `{"_id": {"k": 1}}`); err != nil {
+		t.Fatal(err)
+	}
+	v.mu.Lock()
+	v.ids = map[string]any{}
+	v.mu.Unlock()
+	if err := writeDoc(t, v, orders+"j_x.json", `{"_id": {"k": 1}}`); err == nil || !strings.Contains(err.Error(), "duplicate") {
+		t.Fatalf("a duplicate insert: %v", err)
+	}
+
+	// Delete.
+	if err := v.Remove(ctx, name); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Remove(ctx, name); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a second delete: %v", err)
+	}
+	if err := v.Remove(ctx, orders+"nonsense"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a delete by an unreadable name: %v", err)
+	}
+	if _, err := v.Stat(ctx, name); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a deleted document: %v", err)
+	}
+
+	// New collection.
+	if err := v.MkDir(ctx, "/shop/fresh"); err != nil {
+		t.Fatal(err)
+	}
+	if colls, _ := names(t, v, "/shop"); !contains(colls, "fresh") {
+		t.Fatalf("collections after create: %v", colls)
+	}
+}
+
+func TestParseEJSON(t *testing.T) {
+	text := `{"a": {"$oid": "0102030405060708090a0b0c"}, "b": {"$numberInt": "5"}, "c": {"$numberDouble": "Infinity"},
+		"d": {"$numberDouble": "-Infinity"}, "e": {"$numberDouble": "NaN"}, "f": {"$numberDouble": "1.5"},
+		"g": {"$date": {"$numberLong": "1700000000000"}}, "h": {"$date": 5}, "i": {"$binary": {"base64": "AQI=", "subType": "80"}},
+		"j": {"$timestamp": {"t": 1, "i": 2}}, "k": {"$set": 1}, "l": [1, 2.5, 3000000000, "s", null, false], "m": 1e3}`
+	v, err := parseEJSON([]byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := v.(bsonD)
+	if doc.get("a") != oidA0() || doc.get("b") != int32(5) || doc.get("f") != 1.5 {
+		t.Fatalf("parsed: %+v", doc)
+	}
+	if b := doc.get("i").(bsonBinary); b.Subtype != 0x80 || string(b.Data) != "\x01\x02" {
+		t.Fatalf("binary: %+v", b)
+	}
+	if doc.get("j") != (bsonTimestamp{T: 1, I: 2}) || doc.get("m") != 1000.0 {
+		t.Fatalf("timestamp/exponent: %+v %+v", doc.get("j"), doc.get("m"))
+	}
+	if k, ok := doc.get("k").(bsonD); !ok || k[0].Key != "$set" {
+		t.Fatalf("a $-key that is not a wrapper stays a document: %+v", doc.get("k"))
+	}
+	l := doc.get("l").([]any)
+	if l[0] != int32(1) || l[1] != 2.5 || l[2] != int64(3000000000) {
+		t.Fatalf("array: %+v", l)
+	}
+	if !math.IsInf(doc.get("c").(float64), 1) || !math.IsInf(doc.get("d").(float64), -1) || !math.IsNaN(doc.get("e").(float64)) {
+		t.Fatal("non-finite doubles")
+	}
+
+	// Everything written by toJSON reads back to the same text.
+	raw, _ := bsonD{{"x", bsonRaw{Type: tDecimal, Data: make([]byte, 16)}}, {"n", int64(-2)}, {"z", 0.0}, {"big", 1e21}}.encode()
+	back, err := decodeDoc(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	once := toJSON(back, "")
+	parsed, err := parseEJSON([]byte(once))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if twice := toJSON(parsed, ""); twice != once {
+		t.Fatalf("round trip:\n%s\n%s", once, twice)
+	}
+	for _, bad := range []string{`{"a": {"$binary": {}}}`, `{"a": {"$timestamp": {}}}`, `{"a": {"$numberInt": "9999999999"}}`,
+		`{"a": {"$numberDouble": "x"}}`, `{"a": {"$date": "x"}}`, `{"a": {"$unsupported": {"type": 1, "hex": "00"}}}`, `{"a": 1e999}`, `}`} {
+		if _, err := parseEJSON([]byte(bad)); !errors.Is(err, errEJSON) {
+			t.Errorf("parseEJSON(%s) = %v", bad, err)
+		}
+	}
+	if _, err := (bsonD{{"x", bsonRaw{Type: 1}}}).encode(); err == nil {
+		t.Fatal("a raw value of another type should not encode")
+	}
+}
+
+func oidA0() objectID { return objectID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} }

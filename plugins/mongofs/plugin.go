@@ -4,7 +4,8 @@
 //
 // It speaks the wire protocol itself (OP_MSG, SCRAM-SHA-256), so there is no
 // driver dependency. The server is named by the MONGODB_URI environment
-// variable (default mongodb://127.0.0.1:27017). The panel is read-only.
+// variable (default mongodb://127.0.0.1:27017). Documents can be edited (F4),
+// created and deleted, and collections created; nothing else is changed.
 package mongofs
 
 import (
