@@ -1092,8 +1092,12 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 		key  string
 	}{{ViewModeBrief, "Brief"}, {ViewModeMedium, "Medium"}, {ViewModeDetailed, "Detailed"}, {ViewModeWide, "Wide"}}
 	for i, item := range modeItems {
-		pf.MenuBar.Items[0].SubItems[i].Text = getMenuText(lMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
-		pf.MenuBar.Items[4].SubItems[i].Text = getMenuText(rMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
+		label := menuhotkeys.Auto(i18n.Msg("Menu.Left." + item.key))
+		if name := PanelViewModeCustomName(item.mode); name != "" {
+			label = menuhotkeys.Auto(name)
+		}
+		pf.MenuBar.Items[0].SubItems[i].Text = getMenuText(lMode, item.mode, label)
+		pf.MenuBar.Items[4].SubItems[i].Text = getMenuText(rMode, item.mode, label)
 	}
 	// The rows for far2l's other six modes (f4#410) sit right after the four
 	// above; the sort rows follow the separator that ends the mode rows.

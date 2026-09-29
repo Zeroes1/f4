@@ -161,8 +161,10 @@ type PanelColumn struct {
 }
 
 // PanelViewSettings is far2l's PanelViewSettings: the columns of a mode and
-// whether it takes the whole screen.
+// whether it takes the whole screen. Name is the user's own name for the mode;
+// empty means the built-in name of the slot (f4#410).
 type PanelViewSettings struct {
+	Name       string
 	Columns    []PanelColumn
 	FullScreen bool
 }
@@ -410,6 +412,16 @@ func PanelViewModeSettings(mode ViewMode) PanelViewSettings {
 	return defaultPanelViewSettings[mode].clone()
 }
 
+// PanelViewModeCustomName is the name the user gave a mode, or "" when the
+// mode keeps the built-in name of its slot.
+func PanelViewModeCustomName(mode ViewMode) string {
+	ensurePanelViewModesLoaded()
+	if !mode.Valid() || panelViewModes.overrides[mode] == nil {
+		return ""
+	}
+	return panelViewModes.overrides[mode].Name
+}
+
 // PanelViewModeCustomized reports whether the user changed a mode.
 func PanelViewModeCustomized(mode ViewMode) bool {
 	ensurePanelViewModesLoaded()
@@ -475,7 +487,7 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 	}
 	defer f.Close()
 
-	type rawMode struct{ columns, widths, fullScreen string }
+	type rawMode struct{ name, columns, widths, fullScreen string }
 	var raw [PanelViewModeCount]*rawMode
 	var current *rawMode
 	scanner := bufio.NewScanner(f)
@@ -504,6 +516,8 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			continue
 		}
 		switch strings.TrimSpace(name) {
+		case "Name":
+			current.name = strings.TrimSpace(value)
 		case "Columns":
 			current.columns = strings.TrimSpace(value)
 		case "ColumnWidths":
@@ -525,7 +539,7 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			vtui.DebugLog("PANEL MODES: %s%d ignored: %v", panelModesSectionPrefix, key, err)
 			continue
 		}
-		overrides[viewMode] = &PanelViewSettings{Columns: columns, FullScreen: mode.fullScreen == "1"}
+		overrides[viewMode] = &PanelViewSettings{Name: mode.name, Columns: columns, FullScreen: mode.fullScreen == "1"}
 	}
 	return overrides, nil
 }
@@ -546,8 +560,11 @@ func savePanelViewModes(path string) error {
 		if settings.FullScreen {
 			fullScreen = 1
 		}
-		fmt.Fprintf(&buf, "[%s%d]\nColumns=%s\nColumnWidths=%s\nFullScreen=%d\n",
-			panelModesSectionPrefix, key, types, widths, fullScreen)
+		fmt.Fprintf(&buf, "[%s%d]\n", panelModesSectionPrefix, key)
+		if settings.Name != "" {
+			fmt.Fprintf(&buf, "Name=%s\n", settings.Name)
+		}
+		fmt.Fprintf(&buf, "Columns=%s\nColumnWidths=%s\nFullScreen=%d\n", types, widths, fullScreen)
 	}
 	if buf.Len() == 0 {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

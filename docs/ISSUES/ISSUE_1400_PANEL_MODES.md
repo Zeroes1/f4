@@ -10,8 +10,10 @@ far2l's column syntax (`mix/panelmix.cpp`) and width distribution
 - **Ctrl+0 .. Ctrl+9** select the ten modes. Ctrl+1..4 are the four modes f4
   always had and, until they are edited, draw exactly as before.
 - **Options → File panel modes** lists the ten modes. Enter opens a mode:
-  column types, column widths, *Full screen*, and *Reset* back to the built-in
-  definition. Closing the dialog returns to the list, as in far2l.
+  the mode's name, column types, column widths, *Full screen*, and *Reset* back
+  to the built-in definition. A name given here (f4#410) replaces the built-in
+  one in the list and in the Left and Right menus; leaving the built-in name
+  keeps it following the interface language. Closing the dialog returns to the list, as in far2l.
 - The **Left** and **Right** menus list all ten modes, the current one
   marked, and choose the mode for their own panel (f4#410). A mode reshaped in
   *File panel modes*, for instance to two stripes of a name and a size
@@ -71,8 +73,8 @@ the same mode.
 ## Storage
 
 Changed modes are written to `panel_modes.ini` beside `bookmarks.ini`, in
-far2l's sections: `[Panel/ViewModes/ModeN]` with `Columns`, `ColumnWidths`
-and `FullScreen`, where N is the Ctrl digit. Only modes that differ from the
+far2l's sections: `[Panel/ViewModes/ModeN]` with `Name` (only when the user
+named the mode), `Columns`, `ColumnWidths` and `FullScreen`, where N is the Ctrl digit. Only modes that differ from the
 built-in ones are written, and the file is removed when none do.
 
 ## Code
