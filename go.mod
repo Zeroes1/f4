@@ -29,7 +29,7 @@ require (
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.6
 	github.com/unxed/sevenzip v0.1.7
-	github.com/unxed/tar v0.1.137
+	github.com/unxed/tar v0.1.138
 	github.com/unxed/vtinput v0.1.9
 	github.com/unxed/vtui v0.1.382
 	github.com/unxed/zip v0.1.143
