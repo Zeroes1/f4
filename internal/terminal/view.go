@@ -99,6 +99,12 @@ type TerminalView struct {
 	Muted         bool
 	lastCharWasCR bool
 
+	// syncScrollBudget is how many scrolls caused by a line feed on the last
+	// row are still to be kept out after an excised directory-sync echo, and
+	// syncScrollUntil is when the budget lapses whatever happens (#1673).
+	syncScrollBudget int
+	syncScrollUntil  time.Time
+
 	// reflow makes a width change re-wrap the primary screen and GridHistory
 	// by the view's own wrap flags; see view_reflow.go. The owner sets it per
 	// session, because the flags only mean something when the stream delivers
@@ -477,6 +483,9 @@ func (tv *TerminalView) PutChar(r rune, attr uint64) {
 		return
 	}
 
+	if r != '\r' && r != '\n' {
+		tv.syncScrollBudget = 0
+	}
 	if r == '\r' {
 		// vtui.DebugLog("TERM_VIEW: CR (CursorX: %d -> 0)", tv.CursorX)
 		tv.CursorX = 0
@@ -559,9 +568,35 @@ func (tv *TerminalView) PutChar(r rune, attr uint64) {
 	tv.lastCharWasCR = false
 }
 
+// syncScrollWindow bounds how long after an excised sync echo the scrolls of
+// its two line feeds are still kept out.
+const syncScrollWindow = time.Second
+
+// SuppressSyncScroll keeps the next n line-feed scrolls off the screen. It is
+// called when f4 has cut the echo of its own directory-sync line out of the
+// stream: the echo's row is erased, cmd.exe then ends that line and prints a
+// blank one before the prompt, and on the bottom row each of those scrolls
+// the console up for output the user never sees -- so every panel toggle that
+// changed the directory moved the console one line up (#1673). The prompt is
+// drawn on the erased row instead, which is where ConPTY draws it too. Text
+// arriving ends the exemption; so does the time window.
+func (tv *TerminalView) SuppressSyncScroll(n int) {
+	tv.mu.Lock()
+	defer tv.mu.Unlock()
+	tv.syncScrollBudget = n
+	tv.syncScrollUntil = time.Now().Add(syncScrollWindow)
+}
+
 func (tv *TerminalView) newline() {
 	// vtui.DebugLog("TERM: newline at Y=%d (ScrollBottom=%d)", tv.CursorY, tv.ScrollBottom)
 	tv.CursorX = 0
+	if tv.syncScrollBudget > 0 && tv.CursorY == tv.ScrollBottom && !tv.UseAltScreen {
+		if time.Now().Before(tv.syncScrollUntil) {
+			tv.syncScrollBudget--
+			return
+		}
+		tv.syncScrollBudget = 0
+	}
 	tv.CursorY++
 	if tv.CursorY > tv.ScrollBottom {
 		tv.scrollUp(tv.ScrollTop, tv.ScrollBottom, 1)
