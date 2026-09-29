@@ -329,8 +329,9 @@ archive tools (f4#609) rather than linking a Go git implementation.
   line are recounted, and the start of the side that is not the index is
   moved by the line-count change of the rebuilt hunks before it.
 - Two picks cannot become a patch and are refused with a toast, nothing
-  applied: part of a hunk of a new or deleted file (that would turn the
-  creation or deletion into a modification -- pick it whole), and a pick
+  applied: part of a hunk of a new file (that would turn the creation into
+  a modification -- pick it whole; a deleted file can be picked in part, see
+  Part 25), and a pick
   that would keep a last line without a trailing newline in the middle of
   the file.
 - Tests on real repositories (`hunk_test.go`) stage and unstage single
@@ -497,5 +498,23 @@ archive tools (f4#609) rather than linking a Go git implementation.
   afterwards. The added file of a real diff (a file already staged, or
   intent-to-add) still can only be picked whole (`errWholeFileOnly`): only a
   patch marked `untracked` may be picked in part. An untracked directory
-  (`dir/`) is still staged whole with Insert. A deleted file still can only be
-  picked whole.
+  (`dir/`) is still staged whole with Insert.
+
+## Part 25: single lines of a deleted file
+
+- A file deleted from the working tree (F4, F8) or staged as deleted
+  (Shift+F4) can be picked line by line; `buildPatch` no longer answers
+  `errWholeFileOnly` for it (`filePatch.deleted`).
+- Unstaging (Shift+F4) and discarding (F8) apply the patch in reverse, and
+  the deletion of just the picked lines, reversed, re-creates the file with
+  exactly those lines -- in the index or in the working tree; the patch
+  keeps its `deleted file mode` header.
+- Staging (F4) removes the picked lines from the index copy: with a line
+  left out the patch is written as a modification (`deleted file mode`
+  dropped, `+++ /dev/null` replaced by the `--- a/` path as `+++ b/`, the
+  unpicked lines context), so the file stays in the index with the unpicked
+  lines while the working tree stays without it. Picked whole, the deletion
+  stays a deletion. A new file of a real diff is still picked whole only.
+- Tests (`hunk_deleted_test.go`): the patch text for each mode, a quoted
+  path, and F4, Shift+F4 and F8 on real repositories, checking the index
+  and the working file.

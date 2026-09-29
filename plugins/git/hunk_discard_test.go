@@ -185,8 +185,9 @@ func TestHunkViewDiscardCancelledChangesNothing(t *testing.T) {
 }
 
 // TestHunkViewDiscardRestoresADeletedFile: a file deleted from the working
-// tree is one deletion hunk; discarding it whole brings the file back,
-// while a part of it is refused before any question is asked.
+// tree is one deletion hunk; discarding it whole brings the file back. A
+// part of it is asked about like any other pick (cancelled here, the
+// picked lines go in TestHunkViewDiscardsPartOfADeletedFile).
 func TestHunkViewDiscardRestoresADeletedFile(t *testing.T) {
 	repo := realGitRepo(t)
 	path := filepath.Join(repo, "f.txt")
@@ -201,10 +202,9 @@ func TestHunkViewDiscardRestoresADeletedFile(t *testing.T) {
 	v := openHunksOf(t, p, modeDiscard)
 	moveTo(t, v, 1) // "-one" alone
 	v.ProcessKey(key(vtinput.VK_INSERT))
-	top := vtui.FrameManager.GetTopFrame()
-	v.ProcessKey(key(vtinput.VK_RETURN))
-	if vtui.FrameManager.GetTopFrame() != top {
-		t.Fatalf("a partial pick of a deleted file opened %T, want the refusal toast only", vtui.FrameManager.GetTopFrame())
+	discardConfirm(t, v).OnResult(1) // "Cancel"
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("cancelling brought the file back")
 	}
 
 	moveTo(t, v, 0)
