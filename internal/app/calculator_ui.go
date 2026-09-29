@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/unxed/f4/internal/editor"
+	"github.com/unxed/f4/internal/history"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/terminal"
@@ -12,7 +13,8 @@ import (
 // small dialog, reachable from the panels without an editor open, that
 // evaluates an arithmetic expression and can insert the result into the
 // active panel's command line or copy it to the clipboard (Copy reuses the
-// shared Copy.Btn label rather than a calculator-only string).
+// shared Copy.Btn label rather than a calculator-only string). Expressions that
+// evaluated successfully are kept in a history list (f4#1600).
 //
 // The actual math reuses editor.EvaluateArithmetic/FormatCalculatorResult,
 // the same engine f4#1463's "calculate selection" editor command already
@@ -39,6 +41,9 @@ func showCalculatorDialog() {
 
 	lblExpr := vtui.NewLabel(0, 0, i18n.Msg("Calculator.Prompt"), nil)
 	editExpr := vtui.NewEdit(0, 0, calcDialogWidth-8, "")
+	// Past expressions: the same history machinery as the other dialog inputs
+	// (Ctrl+E / Ctrl+X walk it, Ctrl+Down opens the list, persisted across runs).
+	history.AttachHistory(editExpr, history.CalculatorHistoryID)
 	lblExpr.FocusLink = editExpr
 	dlg.SetFocusedItem(editExpr)
 
@@ -57,6 +62,7 @@ func showCalculatorDialog() {
 		}
 		lastResult = v
 		haveResult = true
+		history.CommitHistory(editExpr, editExpr.GetText())
 		lblResult.SetText("= " + editor.FormatCalculatorResult(v))
 	}
 
