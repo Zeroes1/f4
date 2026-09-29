@@ -286,6 +286,9 @@ type PanelsFrame struct {
 	// debounce in pollManagedExecutionDebounce: see that method's doc comment.
 	managedExecStartedAt  time.Time
 	managedExecIdleStreak int
+	// managedExecSawBusy is set once PTY.IsBusy() has read true since arming:
+	// only then does a false reading mean "stopped" and not "not started yet".
+	managedExecSawBusy bool
 
 	MenuBar *vtui.MenuBar
 	CmdLine *cmdline.CommandLine
@@ -2158,6 +2161,13 @@ func (pf *PanelsFrame) BeginPromptDrivenExecution() {
 // below immediately, before it ever ran.
 const managedExecStartGuard = 300 * time.Millisecond
 
+// managedExecNeverBusyLimit bounds how long an execution that has never been
+// seen busy is still treated as "not started yet" (see
+// pollManagedExecutionDebounce); past it a false IsBusy() counts as a stop as
+// before, so a command that never claims the terminal cannot hold the
+// keyboard for good.
+const managedExecNeverBusyLimit = 10 * time.Second
+
 // managedExecIdleDebounceStreak is how many consecutive
 // pollManagedExecutionDebounce calls, past managedExecStartGuard, must see
 // PTY.IsBusy() false in a row before it is trusted as a real job-control
@@ -2170,6 +2180,7 @@ const managedExecIdleDebounceStreak = 3
 func (pf *PanelsFrame) armManagedExecDebounce() {
 	pf.managedExecStartedAt = time.Now()
 	pf.managedExecIdleStreak = 0
+	pf.managedExecSawBusy = false
 }
 
 // pollManagedExecutionDebounce is #1603's backstop for job-control stops
@@ -2209,7 +2220,21 @@ func (pf *PanelsFrame) pollManagedExecutionDebounce() {
 		return
 	}
 	active := pf.GetActivePTY()
-	if active == nil || active.IsBusy() {
+	if active == nil {
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	if active.IsBusy() {
+		pf.managedExecSawBusy = true
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	// The guard above is a fixed time, and on a loaded machine (or with a
+	// shell that is slow to read the line) the command can take longer than
+	// that to fork. Until the terminal has been seen busy at least once, a
+	// false reading is "not started yet", not "stopped": wait for it, up to
+	// managedExecNeverBusyLimit, after which the old reading applies.
+	if !pf.managedExecSawBusy && time.Since(pf.managedExecStartedAt) < managedExecNeverBusyLimit {
 		pf.managedExecIdleStreak = 0
 		return
 	}

@@ -113,11 +113,28 @@ func TestManagedForegroundCommand_JobControlStopReclaimsTerminal(t *testing.T) {
 	// Ctrl+Z: the exact control byte f4's own key dispatch already writes to
 	// the master for this key (confirmed reaching the PTY in the CI run
 	// cited in the #1603 comment thread).
-	if _, err := p.Write([]byte{0x1a}); err != nil {
-		t.Fatalf("sending Ctrl+Z: %v", err)
-	}
-
-	if !waitForPTYCondition(p, &out, 5*time.Second, func() bool { return !p.IsBusy() }) {
+	//
+	// IsBusy goes true as soon as bash hands the terminal to the child's
+	// process group, which can be before that child has reset SIGTSTP from
+	// the interactive shell's "ignore" back to default; a Ctrl+Z landing in
+	// that window is silently dropped, and under load the window is wide
+	// enough to hit. So keep re-sending Ctrl+Z until the shell reclaims the
+	// terminal (the panel-side test does the same): once sleep is stopped,
+	// nothing more is sent, and a stray one at bash's prompt is ignored.
+	var lastCtrlZ time.Time
+	if !waitForPTYCondition(p, &out, 10*time.Second, func() bool {
+		if !p.IsBusy() {
+			return true
+		}
+		if time.Since(lastCtrlZ) >= 250*time.Millisecond {
+			if _, err := p.Write([]byte{0x1a}); err != nil {
+				t.Errorf("sending Ctrl+Z: %v", err)
+				return true
+			}
+			lastCtrlZ = time.Now()
+		}
+		return false
+	}) {
 		t.Fatalf("shell never reclaimed the terminal after Ctrl+Z (IsBusy stayed true); PTY output so far: %q", out.String())
 	}
 
