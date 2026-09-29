@@ -15,7 +15,7 @@ import (
 // and out of order (f4#1678).
 func TestArchiveVFSNestedTarGzipMembersOutOfOrder(t *testing.T) {
 	ctx := context.Background()
-	rng := rand.New(rand.NewSource(5))
+	rng := rand.New(rand.NewSource(5)) // #nosec G404 -- a fixed seed makes the test data reproducible; no security decision uses it.
 	const members = 24
 	contents := make([][]byte, members)
 	var raw bytes.Buffer
