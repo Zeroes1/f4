@@ -13,7 +13,13 @@ far2l's column syntax (`mix/panelmix.cpp`) and width distribution
   the mode's name, column types, column widths, *Full screen*, and *Reset* back
   to the built-in definition. A name given here (f4#410) replaces the built-in
   one in the list and in the Left and Right menus; leaving the built-in name
-  keeps it following the interface language. Closing the dialog returns to the list, as in far2l.
+  keeps it following the interface language.
+- **Columns...** in the mode dialog opens the columns as a list, one column
+  per row with its type, header name and width (f4#410): Insert adds a column
+  after the cursor from a menu of types, Delete removes one, Ctrl+Up and
+  Ctrl+Down move one, F4 or Enter edits its width. OK writes the list back
+  into the *Column types* and *Column widths* fields, which the mode dialog
+  then validates as before; a type's modifiers (`SC`, `NM`) are kept as typed. Closing the dialog returns to the list, as in far2l.
 - The **Left** and **Right** menus list all ten modes, the current one
   marked, and choose the mode for their own panel (f4#410). A mode reshaped in
   *File panel modes*, for instance to two stripes of a name and a size

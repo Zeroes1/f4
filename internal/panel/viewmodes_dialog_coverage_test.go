@@ -163,12 +163,12 @@ func TestShowPanelModesMenuOpensAtActiveMode(t *testing.T) {
 
 // viewModeDialogWidgets picks the edit dialog's controls out by the fixed
 // order editPanelViewMode adds them in: name, type and width (label, edit each), full-screen
-// checkbox, then the three buttons.
+// checkbox, the three buttons, then the Columns... button.
 func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
 	t.Helper()
 	children := dlg.GetChildren()
-	if len(children) != 10 {
-		t.Fatalf("dialog has %d children, want 10", len(children))
+	if len(children) != 11 {
+		t.Fatalf("dialog has %d children, want 11", len(children))
 	}
 	var assertOk bool
 	if editTypes, assertOk = children[3].(*vtui.Edit); !assertOk {

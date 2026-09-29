@@ -179,6 +179,11 @@ Panel.Modes.ColumnTypes=&Column types
 Panel.Modes.ColumnWidths=Column &widths
 Panel.Modes.FullScreen=&Full screen
 Panel.Modes.Reset=&Reset
+Panel.Modes.EditColumns=Co&lumns...
+Panel.Modes.ColumnsTitle=Columns
+Panel.Modes.ColumnsHint=Ins add, Del remove, Ctrl+Up/Down move, F4 width
+Panel.Modes.AddColumn=Add column
+Panel.Modes.ColumnWidthPrompt=Width (0 = default, N% = share):
 Panel.Modes.BadColumnType=Unknown column type: "%s"
 Panel.Modes.BadColumnWidth=Invalid column width: "%s"
 Panel.Modes.NoColumns=Enter at least one column type

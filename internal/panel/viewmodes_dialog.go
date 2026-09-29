@@ -125,6 +125,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	btnOk.IsDefault = true
 	btnReset := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.Reset"))
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
+	btnColumns := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.EditColumns"))
 	lblName := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.Name"), editName)
 	lblTypes := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnTypes"), editTypes)
 	lblWidths := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnWidths"), editWidths)
@@ -139,6 +140,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnReset)
 	dlg.AddItem(btnCancel)
+	dlg.AddItem(btnColumns)
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+3, dlg.Y1+2, width-6, height-4)
 	vbox.Add(lblName, vtui.Margins{}, vtui.AlignLeft)
@@ -152,6 +154,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
 	btnRow.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
+	btnRow.Add(btnColumns, vtui.Margins{}, vtui.AlignTop)
 	btnRow.Add(btnReset, vtui.Margins{}, vtui.AlignTop)
 	btnRow.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
 	vbox.Add(btnRow, vtui.Margins{Top: 1}, vtui.AlignFill)
@@ -169,6 +172,14 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 		vtui.FrameManager.PostTask(func() { openPanelModesMenu(pf, pos) })
 	}
 	btnCancel.OnClick = func() { finish(nil, false) }
+	// The column list edits the two strings above in place (f4#410).
+	btnColumns.OnClick = func() {
+		showModeColumnsEditor(editTypes.GetText(), editWidths.GetText(), func(types, widths string) {
+			editTypes.SetText(types)
+			editWidths.SetText(widths)
+			vtui.FrameManager.Redraw()
+		})
+	}
 	btnReset.OnClick = func() { finish(nil, true) }
 	btnOk.OnClick = func() {
 		columns, err := TextToViewSettings(editTypes.GetText(), editWidths.GetText())
