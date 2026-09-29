@@ -30,6 +30,11 @@ type MacroManager struct {
 	// macros. Recorded macros keep working either way: this is a second
 	// backend, not a replacement.
 	Lua *LuaMacroEngine
+
+	// luaHost and luaDir are what the engine was last built from, so that an
+	// interrupted one can be rebuilt (RefreshInterruptedLua).
+	luaHost MacroHost
+	luaDir  string
 }
 
 func NewMacroManager(iniPath string) *MacroManager {

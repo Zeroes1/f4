@@ -220,6 +220,10 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 		}
 	}
 
+	// A macro that hit its deadline left the interpreter unusable; build a new
+	// one before offering it this key.
+	m.RefreshInterruptedLua()
+
 	// Recorded macros win over scripted ones, as they do in Far.
 	if m.Lua != nil && m.Lua.Trigger(currentArea, e) {
 		vtui.DebugLog("MACRO: Running Lua macro for %s in area %s", keyStr, currentArea)

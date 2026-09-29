@@ -24,6 +24,7 @@ func (m *MacroManager) LoadLuaMacros(host MacroHost, dir string) {
 // allowed to finish; closing that interpreter happens asynchronously so a
 // reload cannot deadlock while the old macro is waiting for the UI goroutine.
 func (m *MacroManager) ReloadLuaMacros(host MacroHost, dir string) (int, error) {
+	m.luaHost, m.luaDir = host, dir
 	Engine, err := NewLuaMacroEngine(host)
 	if err != nil {
 		return 0, fmt.Errorf("cannot start the Lua macro engine: %w", err)
@@ -46,4 +47,24 @@ func (m *MacroManager) ReloadLuaMacros(host MacroHost, dir string) (int, error) 
 		}()
 	}
 	return count, loadErr
+}
+
+// RefreshInterruptedLua replaces a Lua engine whose interpreter hit a call
+// deadline -- a macro that never returned -- with a fresh one built from disk.
+// The interrupted interpreter stopped at an arbitrary instruction and refuses
+// all further work (luaplug.ErrInterrupted), so without this one runaway macro
+// would silence every other macro until f4 restarted. It runs on the goroutine
+// that dispatches keys, before a key is offered to the engine, so the swap of
+// m.Lua races with nothing. It reports whether it rebuilt the engine.
+func (m *MacroManager) RefreshInterruptedLua() bool {
+	if m == nil || m.Lua == nil || !m.Lua.Interrupted() || m.luaHost == nil {
+		return false
+	}
+	vtui.DebugLog("MACRO: a Lua macro hit its deadline; rebuilding the macro engine")
+	count, err := m.ReloadLuaMacros(m.luaHost, m.luaDir)
+	if err != nil {
+		vtui.DebugLog("MACRO: rebuilding the macro engine: %v", err)
+	}
+	vtui.DebugLog("MACRO: %d Lua macro(s) loaded after the rebuild", count)
+	return true
 }

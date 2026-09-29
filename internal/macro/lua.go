@@ -22,7 +22,7 @@ const macroExitSentinel = "f4macro:exit"
 
 // macroCallTimeout bounds one macro. A macro is user code triggered by a key
 // press, so it gets far less rope than a plugin.
-const macroCallTimeout = 10 * time.Second
+var macroCallTimeout = 10 * time.Second
 
 // MacroPanelInfo is the panel state a macro can see, gathered in one shot.
 // Reading it costs a round trip to the UI goroutine, so it is fetched whole
@@ -445,6 +445,12 @@ func (e *LuaMacroEngine) WaitIdle(timeout time.Duration) bool {
 		time.Sleep(time.Millisecond)
 	}
 	return !e.running.Load()
+}
+
+// Interrupted reports whether a macro hit its call deadline, which leaves the
+// interpreter unusable (luaplug.ErrInterrupted).
+func (e *LuaMacroEngine) Interrupted() bool {
+	return e != nil && e.rt != nil && e.rt.Interrupted()
 }
 
 // Close releases the interpreter.
