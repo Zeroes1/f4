@@ -754,6 +754,7 @@ type archiveReadWrapper struct {
 	err          error
 	readPos      int64
 	streamReadAt bool
+	seq          seqMemberReader
 }
 
 func archiveFileCRC(info fs.FileInfo) (uint32, bool) {
@@ -816,21 +817,26 @@ func seekArchiveFile(file fs.File, offset int64) error {
 		return err
 	}
 
+	return discardArchiveBytes(file, offset)
+}
+
+// discardArchiveBytes reads and drops n bytes of file.
+func discardArchiveBytes(file fs.File, n int64) error {
 	discard := make([]byte, 32*1024)
-	for offset > 0 {
+	for n > 0 {
 		want := int64(len(discard))
-		if want > offset {
-			want = offset
+		if want > n {
+			want = n
 		}
-		n, err := file.Read(discard[:want])
-		offset -= int64(n)
+		got, err := file.Read(discard[:want])
+		n -= int64(got)
 		if err != nil {
-			if err == io.EOF && offset > 0 {
+			if err == io.EOF && n > 0 {
 				return io.ErrUnexpectedEOF
 			}
 			return err
 		}
-		if n == 0 {
+		if got == 0 {
 			return io.ErrUnexpectedEOF
 		}
 	}
@@ -854,6 +860,7 @@ func (w *archiveReadWrapper) Close() error {
 			w.tmpFile = nil
 		}
 		w.mu.Unlock()
+		w.seq.Close()
 		w.v.decrementActive()
 	})
 	return nil
@@ -1295,18 +1302,16 @@ func (w *archiveReadWrapper) readAtFromStream(ctx context.Context, p []byte, off
 	if fsys == nil {
 		return 0, errors.New("archive filesystem is unavailable")
 	}
-	file, err := fsys.Open(fsPath)
-	if err != nil {
-		return 0, v.memberReadError(err)
-	}
-	defer func() { _ = file.Close() }()
-	if err := seekArchiveFile(file, off); err != nil {
-		return 0, v.memberReadError(err)
-	}
-	n, err := io.ReadFull(file, p)
-	if err == io.ErrUnexpectedEOF || err == io.EOF {
-		err = io.EOF
-	}
+	w.seq.setOpen(func() (fs.File, error) {
+		v.mu.Lock()
+		current := v.fsys
+		v.mu.Unlock()
+		if current == nil {
+			return nil, errors.New("archive filesystem is unavailable")
+		}
+		return current.Open(fsPath)
+	})
+	n, err := w.seq.ReadAt(p, off)
 	return n, v.memberReadError(err)
 }
 
