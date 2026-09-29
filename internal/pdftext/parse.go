@@ -188,7 +188,7 @@ func (ps *parser) name() Name {
 	for ps.p < len(ps.b) && !isSpace(ps.b[ps.p]) && !isDelim(ps.b[ps.p]) {
 		c := ps.b[ps.p]
 		if c == '#' && ps.p+2 < len(ps.b) && unhex(ps.b[ps.p+1]) >= 0 && unhex(ps.b[ps.p+2]) >= 0 {
-			out = append(out, byte(unhex(ps.b[ps.p+1])<<4|unhex(ps.b[ps.p+2])))
+			out = append(out, byte(unhex(ps.b[ps.p+1])<<4|unhex(ps.b[ps.p+2]))) //nolint:gosec // bounded by the syntax being parsed
 			ps.p += 3
 			continue
 		}

@@ -49,7 +49,7 @@ func glyphRune(name Name) (rune, bool) {
 	}
 	if strings.HasPrefix(s, "uni") && len(s) == 7 {
 		if v, err := strconv.ParseUint(s[3:], 16, 32); err == nil {
-			return rune(v), true
+			return rune(v), true //nolint:gosec // bounded by the syntax being parsed
 		}
 	}
 	return 0, false
@@ -187,7 +187,7 @@ func parseCMap(data []byte) (map[uint32]string, int) {
 				}
 				for c := from; c <= to; c++ {
 					r := append([]rune(nil), base...)
-					r[len(r)-1] += rune(c - from)
+					r[len(r)-1] += rune(c - from) //nolint:gosec // bounded by the syntax being parsed
 					out[c] = string(r)
 				}
 			case Array:

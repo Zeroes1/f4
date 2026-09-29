@@ -287,12 +287,12 @@ func asciiHex(raw []byte) []byte {
 		if hi < 0 {
 			hi = v
 		} else {
-			out = append(out, byte(hi<<4|v))
+			out = append(out, byte(hi<<4|v)) //nolint:gosec // bounded by the syntax being parsed
 			hi = -1
 		}
 	}
 	if hi >= 0 {
-		out = append(out, byte(hi<<4))
+		out = append(out, byte(hi<<4)) //nolint:gosec // bounded by the syntax being parsed
 	}
 	return out
 }
