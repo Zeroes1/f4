@@ -1824,6 +1824,10 @@ func CreateDefaultHighlightIni(path string) {
 #    the examples below are of this kind. It has the same Mask and attribute
 #    keys and does not interfere with the colours.
 #
+# Sort groups are switched on by default for new panels. To turn them off for
+# a panel, clear Left/Right menu -> "Use sort groups"; f4 remembers the choice.
+# They only take effect while at least one Group is defined in this file.
+#
 # f4 reads this file at start: restart it after editing.
 
 [SortGroup_1]

@@ -1423,7 +1423,7 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Left", "ViewMode", "0"), "%d", &panel.LastLeftViewMode)
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Left", "SortMode", "0"), "%d", &panel.LastLeftSortMode)
 	panel.LastLeftSortRev = ini.GetString("Panel/Left", "SortReverse", "0") == "1"
-	panel.LastLeftSortGroups = ini.GetString("Panel/Left", "UseSortGroups", "0") == "1"
+	panel.LastLeftSortGroups = ini.GetString("Panel/Left", "UseSortGroups", "1") == "1"
 	panel.LastLeftSortNumeric = ini.GetString("Panel/Left", "SortNumeric", "0") == "1"
 	if _, err := fmt.Sscanf(ini.GetString("Panel/Left", "GroupBy", "0"), "%d", &panel.LastLeftGroupBy); err != nil {
 		panel.LastLeftGroupBy = panel.GroupNone
@@ -1438,7 +1438,7 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Right", "ViewMode", "0"), "%d", &panel.LastRightViewMode)
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Right", "SortMode", "0"), "%d", &panel.LastRightSortMode)
 	panel.LastRightSortRev = ini.GetString("Panel/Right", "SortReverse", "0") == "1"
-	panel.LastRightSortGroups = ini.GetString("Panel/Right", "UseSortGroups", "0") == "1"
+	panel.LastRightSortGroups = ini.GetString("Panel/Right", "UseSortGroups", "1") == "1"
 	panel.LastRightSortNumeric = ini.GetString("Panel/Right", "SortNumeric", "0") == "1"
 	if _, err := fmt.Sscanf(ini.GetString("Panel/Right", "GroupBy", "0"), "%d", &panel.LastRightGroupBy); err != nil {
 		panel.LastRightGroupBy = panel.GroupNone

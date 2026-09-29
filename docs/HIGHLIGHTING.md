@@ -282,7 +282,7 @@ unclassified files therefore just needs a larger number, e.g. `Group = 20000`.
 
 ### Using them
 
-Grouping is a per-panel switch, off by default, and the panel remembers it
+Grouping is a per-panel switch, on by default for new panels (a saved choice is kept), and the panel remembers it
 across restarts:
 
 * **Left**/**Right** menu → *Use sort groups*

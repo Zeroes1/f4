@@ -18,8 +18,8 @@ var (
 	LastRightSortMode    = 0
 	LastLeftSortRev      = false
 	LastRightSortRev     = false
-	LastLeftSortGroups   = false
-	LastRightSortGroups  = false
+	LastLeftSortGroups   = true
+	LastRightSortGroups  = true
 	LastLeftSortNumeric  = false
 	LastRightSortNumeric = false
 	LastShowPanels       = true
