@@ -58,8 +58,33 @@ func ResetHelpState() {
 	helpSearchFrameShown, helpZoomFrameShown = false, false
 }
 
+// markdownSearchFrame is a formatted Markdown view (f4#1625): a help-engine
+// window over a topic of its own, which is not in the global help engine and
+// whose title is the file's, so the "Help:" convention below cannot find it.
+// It offers the same type-to-search as Help and reuses its matching and
+// highlighting; what does not fit a file viewer (the zoom button, F5, F3
+// meaning "close" while nothing is being searched) is left out.
+type markdownSearchFrame interface {
+	MarkdownSearchTopic() *vtui.HelpTopic
+}
+
+func isMarkdownSearchFrame(frame vtui.Frame) bool {
+	_, ok := frame.(markdownSearchFrame)
+	return ok
+}
+
 func HelpTopicForFrame(frame vtui.Frame) (string, *vtui.HelpTopic, bool) {
-	if frame == nil || vtui.GlobalHelpEngine == nil {
+	if frame == nil {
+		return "", nil, false
+	}
+	if md, ok := frame.(markdownSearchFrame); ok {
+		topic := md.MarkdownSearchTopic()
+		if topic == nil {
+			return "", nil, false
+		}
+		return topic.Name, topic, true
+	}
+	if vtui.GlobalHelpEngine == nil {
 		return "", nil, false
 	}
 	title := strings.TrimSpace(frame.GetTitle())
@@ -92,8 +117,9 @@ func HandleHelpSearchHotkey(e *vtinput.InputEvent) bool {
 		return false
 	}
 
+	markdown := isMarkdownSearchFrame(frame)
 	if e.Type == vtinput.MouseEventType {
-		if helpZoomButtonHit(frame, e) {
+		if !markdown && helpZoomButtonHit(frame, e) {
 			ToggleHelpZoom(frame)
 			return true
 		}
@@ -105,13 +131,18 @@ func HandleHelpSearchHotkey(e *vtinput.InputEvent) bool {
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
-	if e.VirtualKeyCode == vtinput.VK_F5 && !shift && !ctrl && !alt {
+	if e.VirtualKeyCode == vtinput.VK_F5 && !shift && !ctrl && !alt && !markdown {
 		ToggleHelpZoom(frame)
 		return true
 	}
 
 	if (e.VirtualKeyCode == vtinput.VK_F3 && !ctrl && !alt) ||
 		(e.VirtualKeyCode == vtinput.VK_RETURN && ctrl && !alt) {
+		if markdown && (CurrentHelpSearch == nil || CurrentHelpSearch.Frame != frame || len(CurrentHelpSearch.Matches) == 0) {
+			// Nothing to step through: F3 is the viewer's "close", and the
+			// view itself answers it.
+			return false
+		}
 		MoveHelpSearch(frame, shift)
 		return true
 	}
@@ -228,6 +259,16 @@ func visibleHelpLine(line string) (string, bool) {
 	runes := []rune(line)
 	var out strings.Builder
 	for i := 0; i < len(runes); i++ {
+		// A Markdown topic escapes the characters that would be markup
+		// ('#', '~', '^') with a control character (vtui's helpLiteral): the
+		// one after it is text, and the escape itself is not drawn.
+		if runes[i] == '\x10' {
+			if i+1 < len(runes) {
+				i++
+				out.WriteRune(runes[i])
+			}
+			continue
+		}
 		switch runes[i] {
 		case '#':
 			continue
@@ -526,7 +567,7 @@ func RenderHelpFrame(scr *vtui.ScreenBuf, frame vtui.Frame) {
 	if currentHelpZoom != nil && currentHelpZoom.frame == frame {
 		helpZoomFrameShown = true
 	}
-	if enableHelpZoom(frame) {
+	if !isMarkdownSearchFrame(frame) && enableHelpZoom(frame) {
 		defer drawHelpWindowControls(scr, frame)
 	}
 
@@ -665,7 +706,11 @@ func drawHelpSearchTitle(scr *vtui.ScreenBuf, frame vtui.Frame, TopicName, Query
 	// exactly as they were before search became active.
 	baseAttr := scr.GetCell((x1+x2)/2, y1).Attributes
 	highlightAttr := vtui.SetRGBFore(baseAttr, vtui.GetRGBFore(vtui.Palette[vtui.ColHelpLink]))
-	cells := vtui.StringToCharInfo(" Help: "+TopicName+" [", baseAttr)
+	title := " Help: " + TopicName + " ["
+	if isMarkdownSearchFrame(frame) {
+		title = " " + strings.TrimSpace(frame.GetTitle()) + " ["
+	}
+	cells := vtui.StringToCharInfo(title, baseAttr)
 	cells = append(cells, vtui.StringToCharInfo(Query, highlightAttr)...)
 	cells = append(cells, vtui.StringToCharInfo("] ", baseAttr)...)
 	maxCells := x2 - x1 - 1

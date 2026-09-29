@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/viewer"
@@ -107,11 +108,25 @@ func (mv *markdownView) ProcessKey(e *vtinput.InputEvent) bool {
 func (mv *markdownView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
 		Normal: vtui.KeyBarLabels{
-			"", "", i18n.Msg("KeyBar.ViewerF3"), i18n.Msg("Viewer.ModeText"),
+			"", "", i18n.Msg("KeyBar.ViewerF3"), mv.sourceLabel(),
 			"", "", "", "", "", i18n.Msg("KeyBar.ViewerF10"),
 		},
 	}
 }
+
+// sourceLabel is F4's label: "Text" when there is a text viewer to go to, none
+// for the editor's preview, where F4 only closes.
+func (mv *markdownView) sourceLabel() string {
+	if mv.onSource == nil {
+		return ""
+	}
+	return i18n.Msg("Viewer.ModeText")
+}
+
+// MarkdownSearchTopic hands the topic the view shows (laid out for its
+// current width) to the type-to-search of the help windows
+// (dialog.HelpTopicForFrame): typing searches the formatted text.
+func (mv *markdownView) MarkdownSearchTopic() *vtui.HelpTopic { return mv.CurrentTopic() }
 
 // GetType keeps the view apart from help windows, which report TypeUser.
 func (mv *markdownView) GetType() vtui.FrameType { return vtui.TypeUser + 20 }
@@ -190,4 +205,27 @@ func actionSwitchViewerToMarkdown(vv *viewer.ViewerView) {
 	v, path := vv.VFS, vv.Path
 	vv.Close()
 	tryOpenMarkdownViewer(pf, v, path)
+}
+
+// actionEditorMarkdownPreview shows what the editor holds -- unsaved changes
+// included -- formatted, in a window of its own over the editor (f4#1625
+// step 3). It is a snapshot of the text at the moment of the call: close it
+// (F3/F10/Esc) and the editor is as it was; press the key again to see later
+// edits. Bound to Shift+F3 (Editor.MarkdownPreview).
+func actionEditorMarkdownPreview(ev *editor.EditorView) {
+	if ev == nil || ev.Pt == nil || !isMarkdownFile(ev.FilePath) {
+		return
+	}
+	pf := panel.FindPanelsFrameAnyScreen()
+	if pf == nil {
+		return
+	}
+	text := ev.GetText()
+	if len(text) > markdownViewMaxSize {
+		vtui.ShowMessage(" Markdown ", "The text is too large for the formatted Markdown view.", []string{"&Ok"})
+		return
+	}
+	mv := newMarkdownView(ev.Vfs, ev.FilePath, []byte(text))
+	mv.ResizeConsole(pf.LastW, pf.LastH)
+	vtui.FrameManager.AddScreen(mv)
 }

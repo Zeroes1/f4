@@ -14,6 +14,7 @@ const (
 	NewFolderHistoryID      = "NewFolder"
 	NewEditHistoryID        = "NewEdit"
 	ExternalEditorHistoryID = "ExternalEditor"
+	CalculatorHistoryID     = "Calculator"
 )
 
 // AttachHistory turns a plain dialog input into a history backed one, the

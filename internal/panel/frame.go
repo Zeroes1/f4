@@ -286,6 +286,9 @@ type PanelsFrame struct {
 	// debounce in pollManagedExecutionDebounce: see that method's doc comment.
 	managedExecStartedAt  time.Time
 	managedExecIdleStreak int
+	// managedExecSawBusy is set once PTY.IsBusy() has read true since arming:
+	// only then does a false reading mean "stopped" and not "not started yet".
+	managedExecSawBusy bool
 
 	MenuBar *vtui.MenuBar
 	CmdLine *cmdline.CommandLine
@@ -1092,8 +1095,12 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 		key  string
 	}{{ViewModeBrief, "Brief"}, {ViewModeMedium, "Medium"}, {ViewModeDetailed, "Detailed"}, {ViewModeWide, "Wide"}}
 	for i, item := range modeItems {
-		pf.MenuBar.Items[0].SubItems[i].Text = getMenuText(lMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
-		pf.MenuBar.Items[4].SubItems[i].Text = getMenuText(rMode, item.mode, menuhotkeys.Auto(i18n.Msg("Menu.Left."+item.key)))
+		label := menuhotkeys.Auto(i18n.Msg("Menu.Left." + item.key))
+		if name := PanelViewModeCustomName(item.mode); name != "" {
+			label = menuhotkeys.Auto(name)
+		}
+		pf.MenuBar.Items[0].SubItems[i].Text = getMenuText(lMode, item.mode, label)
+		pf.MenuBar.Items[4].SubItems[i].Text = getMenuText(rMode, item.mode, label)
 	}
 	// The rows for far2l's other six modes (f4#410) sit right after the four
 	// above; the sort rows follow the separator that ends the mode rows.
@@ -1469,7 +1476,9 @@ func (pf *PanelsFrame) InitPTY() {
 			inheritedEnvironmentGeneration := terminal.GlobalProcessEnvironment.CurrentGeneration()
 
 			shell := terminal.GetSystemShell()
-			if err := p.Run(shell); err != nil {
+			args := terminal.InteractiveShellArgs()
+			vtui.DebugLog("[FIX:login-shell] starting local shell %q with args %q", shell, args)
+			if err := p.Run(shell, args...); err != nil {
 				vtui.DebugLog("PTY: Failed to run shell: %v", err)
 				p.Close()
 				return
@@ -2152,6 +2161,13 @@ func (pf *PanelsFrame) BeginPromptDrivenExecution() {
 // below immediately, before it ever ran.
 const managedExecStartGuard = 300 * time.Millisecond
 
+// managedExecNeverBusyLimit bounds how long an execution that has never been
+// seen busy is still treated as "not started yet" (see
+// pollManagedExecutionDebounce); past it a false IsBusy() counts as a stop as
+// before, so a command that never claims the terminal cannot hold the
+// keyboard for good.
+const managedExecNeverBusyLimit = 10 * time.Second
+
 // managedExecIdleDebounceStreak is how many consecutive
 // pollManagedExecutionDebounce calls, past managedExecStartGuard, must see
 // PTY.IsBusy() false in a row before it is trusted as a real job-control
@@ -2164,6 +2180,7 @@ const managedExecIdleDebounceStreak = 3
 func (pf *PanelsFrame) armManagedExecDebounce() {
 	pf.managedExecStartedAt = time.Now()
 	pf.managedExecIdleStreak = 0
+	pf.managedExecSawBusy = false
 }
 
 // pollManagedExecutionDebounce is #1603's backstop for job-control stops
@@ -2198,12 +2215,26 @@ func (pf *PanelsFrame) pollManagedExecutionDebounce() {
 		pf.managedExecIdleStreak = 0
 		return
 	}
+	active := pf.GetActivePTY()
+	// Noted even inside the guard window: a command that started and was
+	// stopped within it has still been seen busy.
+	if active != nil && active.IsBusy() {
+		pf.managedExecSawBusy = true
+	}
 	if time.Since(pf.managedExecStartedAt) < managedExecStartGuard {
 		pf.managedExecIdleStreak = 0
 		return
 	}
-	active := pf.GetActivePTY()
 	if active == nil || active.IsBusy() {
+		pf.managedExecIdleStreak = 0
+		return
+	}
+	// The guard above is a fixed time, and on a loaded machine (or with a
+	// shell that is slow to read the line) the command can take longer than
+	// that to fork. Until the terminal has been seen busy at least once, a
+	// false reading is "not started yet", not "stopped": wait for it, up to
+	// managedExecNeverBusyLimit, after which the old reading applies.
+	if !pf.managedExecSawBusy && time.Since(pf.managedExecStartedAt) < managedExecNeverBusyLimit {
 		pf.managedExecIdleStreak = 0
 		return
 	}
@@ -2479,8 +2510,9 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 		return pluginPanel.ProcessKey(e)
 	}
 
-	// Plain F10 closes the panel plugin (the controller sees it first), so
-	// the window-level Quit on F10 does not take it (f4#312).
+	// Plain F10 and Ctrl+PgUp close the panel plugin (the controller sees
+	// them first), so the window-level Quit on F10 and the file panel's
+	// Panel.GoParent on Ctrl+PgUp do not take them (f4#312).
 	if pluginPanel != nil && isPluginPanelCloseKey(e) {
 		return pluginPanel.ProcessKey(e)
 	}

@@ -107,21 +107,30 @@ func (p *PluginPanelInstance) Show(scr *vtui.ScreenBuf) {
 	p.controller.Show(scr)
 }
 
-// isPluginPanelCloseKey reports a plain F10 key press. Under a panel plugin
-// F10 closes the panel and returns to the file panel, the same way Esc does
-// (f4#312, reviewer request). This deliberately takes the key from the
+// isPluginPanelCloseKey reports a plain F10 or Ctrl+PgUp key press. Under a
+// panel plugin F10 closes the panel and returns to the file panel, the same
+// way Esc does (f4#312, reviewer request), and Ctrl+PgUp does too: it is
+// "go up" on the file panel, and going up from a panel plugin's root leaves
+// the panel (owner decision on f4#312). This deliberately takes F10 from the
 // window-level App.Quit (F10 in the Shell area): a panel plugin is a
 // transient view over the file panel, and the project convention for such
 // transient views is that Esc/F10 close them (the viewer and editor close on
 // F10 as well), whereas an unintended quit of the whole file manager loses
 // the user's session. Quit stays reachable through Esc then F10 and the menu;
-// a controller that declares or handles F10 itself still wins.
+// a controller that declares or handles either key itself still wins.
 func isPluginPanelCloseKey(e *vtinput.InputEvent) bool {
-	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != vtinput.VK_F10 {
+	if e == nil || e.Type != vtinput.KeyEventType || !e.KeyDown {
 		return false
 	}
-	const mods = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed
-	return e.ControlKeyState&mods == 0
+	const ctrl = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed
+	const others = vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed
+	switch e.VirtualKeyCode {
+	case vtinput.VK_F10:
+		return e.ControlKeyState&(ctrl|others) == 0
+	case vtinput.VK_PRIOR:
+		return e.ControlKeyState&ctrl != 0 && e.ControlKeyState&others == 0
+	}
+	return false
 }
 
 func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
@@ -141,8 +150,8 @@ func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 	if p.controller.ProcessKey(e) {
 		return true
 	}
-	// F10 leaves the panel too (see isPluginPanelCloseKey); it is checked
-	// here as well so a keybar click, which is injected straight into
+	// F10 and Ctrl+PgUp leave the panel too (see isPluginPanelCloseKey); they
+	// are checked here as well so a keybar click, which is injected straight into
 	// ProcessKey, closes the panel just as the key does.
 	if isPluginPanelCloseKey(e) {
 		p.Close()

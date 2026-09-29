@@ -192,6 +192,8 @@ var actionMenuOrder = []string{
 	"Editor.Save",
 	"Editor.SaveAs",
 	"Editor.SwitchToViewer",
+	"Editor.MarkdownPreview",
+	"Editor.MarkdownSplit",
 	"Editor.Quit",
 	"Editor.Undo",
 	"Editor.Redo",

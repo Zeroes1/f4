@@ -221,3 +221,19 @@ func TestWorkspaceSessionRoundTripsSortNumericFlag(t *testing.T) {
 		t.Fatalf("numeric-sort flag did not survive the session round trip:\n got: %#v\nwant: %#v", got, states)
 	}
 }
+
+// A session that never stored the switch (a fresh profile) starts with sort
+// groups on, while an explicit "0" from an earlier choice is kept.
+func TestSortGroupsDefaultOnButSavedChoiceKept(t *testing.T) {
+	src := "[Workspaces]\nCount = 1\n[Workspace/0/Left]\nFolder = /l\n[Workspace/0/Right]\nFolder = /r\nUseSortGroups = 0\n"
+	got, _ := panel.LoadWorkspaceSessions(ini.Parse(strings.NewReader(src)))
+	if len(got) != 1 {
+		t.Fatalf("sessions = %d, want 1", len(got))
+	}
+	if !got[0].Left.UseSortGroups {
+		t.Fatal("a panel without a stored choice should start with sort groups on")
+	}
+	if got[0].Right.UseSortGroups {
+		t.Fatal("an explicitly stored UseSortGroups = 0 must be kept")
+	}
+}

@@ -146,6 +146,11 @@ func aiRunPatcher(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, dry b
 			// A real run that wrote something can be undone (Ctrl+Z in
 			// the AI panel, ai:undo, or Undo on the result right below).
 			aiPushUndo(undo)
+			// The journal is also kept on disk, so the patch can still be
+			// undone after f4 is restarted (aiUndoPatch loads it back).
+			if err := ap.SaveUndo(undo, aiUndoDepth); err != nil {
+				vtui.DebugLog("VTVIBE: undo snapshot not saved: %v", err)
+			}
 			// A dry run that got as far as individual modifications
 			// ends on the review table (vtvibe_ap_review.go); a real
 			// run, or a dry run that failed before any modification,

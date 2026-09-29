@@ -69,6 +69,9 @@ func aiDropUndo(u *ap.Undo) {
 func aiUndoPatch(pf *panel.PanelsFrame) {
 	u := aiTopUndo()
 	if u == nil {
+		u = aiLoadSavedUndos(pf)
+	}
+	if u == nil {
 		vtui.ShowMessage(i18n.Msg("AI.PatchTitle"), i18n.Msg("AI.UndoNothing"), []string{i18n.Msg("vtui.Ok")})
 		return
 	}
@@ -124,4 +127,23 @@ func aiPathList(paths []string) string {
 		s += "\n  " + fmt.Sprintf(i18n.Msg("AI.PatchMoreFiles"), len(paths)-len(shown))
 	}
 	return s
+}
+
+// aiLoadSavedUndos brings back the transactions an earlier f4 left in the
+// project's .vtvibe/undo/ when nothing is on the stack (a restart, or a
+// project this run has not patched), and returns the newest. The project is
+// the folder the next patch would be applied to.
+func aiLoadSavedUndos(pf *panel.PanelsFrame) *ap.Undo {
+	root, ok := aiPatchTargetDir(pf)
+	if !ok {
+		return nil
+	}
+	saved := ap.LoadSavedUndos(root)
+	if len(saved) > aiUndoDepth {
+		saved = saved[len(saved)-aiUndoDepth:]
+	}
+	for _, u := range saved {
+		aiPushUndo(u)
+	}
+	return aiTopUndo()
 }

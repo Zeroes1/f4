@@ -161,14 +161,22 @@ type PanelColumn struct {
 }
 
 // PanelViewSettings is far2l's PanelViewSettings: the columns of a mode and
-// whether it takes the whole screen.
+// whether it takes the whole screen. Name is the user's own name for the mode;
+// empty means the built-in name of the slot (f4#410).
 type PanelViewSettings struct {
+	Name       string
 	Columns    []PanelColumn
 	FullScreen bool
+	// StatusColumns are the columns of the status line under the panel when
+	// it is switched on (Options -> Panel settings -> Show status line), the
+	// far2l/Far3 "status columns" of a mode (f4#410). Empty keeps f4's own
+	// status line: the name of the entry under the cursor, its size and date.
+	StatusColumns []PanelColumn
 }
 
 func (s PanelViewSettings) clone() PanelViewSettings {
 	s.Columns = append([]PanelColumn(nil), s.Columns...)
+	s.StatusColumns = append([]PanelColumn(nil), s.StatusColumns...)
 	return s
 }
 
@@ -410,6 +418,16 @@ func PanelViewModeSettings(mode ViewMode) PanelViewSettings {
 	return defaultPanelViewSettings[mode].clone()
 }
 
+// PanelViewModeCustomName is the name the user gave a mode, or "" when the
+// mode keeps the built-in name of its slot.
+func PanelViewModeCustomName(mode ViewMode) string {
+	ensurePanelViewModesLoaded()
+	if !mode.Valid() || panelViewModes.overrides[mode] == nil {
+		return ""
+	}
+	return panelViewModes.overrides[mode].Name
+}
+
 // PanelViewModeCustomized reports whether the user changed a mode.
 func PanelViewModeCustomized(mode ViewMode) bool {
 	ensurePanelViewModesLoaded()
@@ -475,7 +493,7 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 	}
 	defer f.Close()
 
-	type rawMode struct{ columns, widths, fullScreen string }
+	type rawMode struct{ name, columns, widths, fullScreen, statusColumns, statusWidths string }
 	var raw [PanelViewModeCount]*rawMode
 	var current *rawMode
 	scanner := bufio.NewScanner(f)
@@ -504,10 +522,16 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			continue
 		}
 		switch strings.TrimSpace(name) {
+		case "Name":
+			current.name = strings.TrimSpace(value)
 		case "Columns":
 			current.columns = strings.TrimSpace(value)
 		case "ColumnWidths":
 			current.widths = strings.TrimSpace(value)
+		case "StatusColumns":
+			current.statusColumns = strings.TrimSpace(value)
+		case "StatusColumnWidths":
+			current.statusWidths = strings.TrimSpace(value)
 		case "FullScreen":
 			current.fullScreen = strings.TrimSpace(value)
 		}
@@ -525,7 +549,15 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			vtui.DebugLog("PANEL MODES: %s%d ignored: %v", panelModesSectionPrefix, key, err)
 			continue
 		}
-		overrides[viewMode] = &PanelViewSettings{Columns: columns, FullScreen: mode.fullScreen == "1"}
+		override := &PanelViewSettings{Name: mode.name, Columns: columns, FullScreen: mode.fullScreen == "1"}
+		if mode.statusColumns != "" {
+			if status, err := TextToViewSettings(mode.statusColumns, mode.statusWidths); err != nil {
+				vtui.DebugLog("PANEL MODES: %s%d status columns ignored: %v", panelModesSectionPrefix, key, err)
+			} else {
+				override.StatusColumns = status
+			}
+		}
+		overrides[viewMode] = override
 	}
 	return overrides, nil
 }
@@ -546,8 +578,15 @@ func savePanelViewModes(path string) error {
 		if settings.FullScreen {
 			fullScreen = 1
 		}
-		fmt.Fprintf(&buf, "[%s%d]\nColumns=%s\nColumnWidths=%s\nFullScreen=%d\n",
-			panelModesSectionPrefix, key, types, widths, fullScreen)
+		fmt.Fprintf(&buf, "[%s%d]\n", panelModesSectionPrefix, key)
+		if settings.Name != "" {
+			fmt.Fprintf(&buf, "Name=%s\n", settings.Name)
+		}
+		fmt.Fprintf(&buf, "Columns=%s\nColumnWidths=%s\nFullScreen=%d\n", types, widths, fullScreen)
+		if len(settings.StatusColumns) > 0 {
+			statusTypes, statusWidths := ViewSettingsToText(settings.StatusColumns)
+			fmt.Fprintf(&buf, "StatusColumns=%s\nStatusColumnWidths=%s\n", statusTypes, statusWidths)
+		}
 	}
 	if buf.Len() == 0 {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -834,7 +873,37 @@ func panelColumnSortMode(t PanelColumnType) (SortMode, bool) {
 
 // columnCellText renders entry e in table column col.
 func (fp *FileSystemPanel) columnCellText(e *FileEntry, col int) string {
-	column := fp.panelColumnAt(col)
+	return fp.cellText(e, fp.panelColumnAt(col))
+}
+
+// statusLineText renders the status line of a mode with its own status
+// columns for entry e, width cells wide (f4#410): the columns laid out the
+// way the panel's are, one blank cell between them, size columns right
+// aligned. It reports false for a mode without status columns, which keeps
+// the built-in status line.
+func (fp *FileSystemPanel) statusLineText(e *FileEntry, width int) (string, bool) {
+	settings := PanelViewModeSettings(fp.EffectiveViewMode())
+	if len(settings.StatusColumns) == 0 || width < 1 {
+		return "", false
+	}
+	layout := preparePanelLayout(settings.StatusColumns, width)
+	var line strings.Builder
+	for i, column := range layout.columns {
+		if i > 0 {
+			line.WriteByte(' ')
+		}
+		text := runewidth.Truncate(fp.cellText(e, column), column.Width, "")
+		if column.Type == SizeColumn || column.Type == PhysicalColumn {
+			line.WriteString(runewidth.FillLeft(text, column.Width))
+		} else {
+			line.WriteString(runewidth.FillRight(text, column.Width))
+		}
+	}
+	return line.String(), true
+}
+
+// cellText renders entry e in the given column.
+func (fp *FileSystemPanel) cellText(e *FileEntry, column PanelColumn) string {
 	switch column.Type {
 	case NameColumn:
 		if column.Flags&ColumnMark != 0 && column.Width > 1 {

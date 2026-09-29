@@ -113,7 +113,12 @@ type VFSItem struct {
 	// than this field is meant to make (f4#1404); OpenBSD, DragonFly,
 	// Solaris and illumos leave it unset for the same reason. Zero value
 	// with MetadataBTime unset means "not available", not "epoch".
-	BTime    time.Time
+	BTime time.Time
+	// SetBTime asks SetAttributes to write BTime as the creation time, where
+	// the platform can (OSVFS.SupportsSetBTime). Only an explicit edit of the
+	// Created field sets it: a plain item read from a listing carries a BTime
+	// too, and writing that back on every attribute change would be noise.
+	SetBTime bool
 	UnixMode uint32 // Raw numeric mode for chmod
 	Uid, Gid int    // Ownership
 	WinAttrs uint32 // Windows file attributes

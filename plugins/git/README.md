@@ -210,8 +210,8 @@ archive tools (f4#609) rather than linking a Go git implementation.
   exactly the convention a multi-line message needs to keep. A message that
   is blank throughout is rejected with the same toast an empty single-line
   one already was.
-- `--amend` and a commit signature/author override remain out of scope --
-  see the ticket for the remaining list.
+- `--amend` is part 17; a commit signature/author override remains out of
+  scope -- see the ticket for the remaining list.
 
 ## Part 10: creating and deleting branches (`branchview.go`)
 
@@ -414,3 +414,74 @@ archive tools (f4#609) rather than linking a Go git implementation.
   `entry.Path`/`entry.OrigPath` come from `git status` reported the same way
   relative to that same `dir`, the `./` prefix is required for the two to
   agree on what the path means.
+
+## Part 17: amending the last commit (Ctrl+K)
+
+- The Ctrl+K commit dialog gets an **Amend the previous commit** checkbox
+  whenever the repository already has a commit (`headCommitMessage`,
+  `git log -1 --format=%B`). Checking it while the message field is empty
+  loads the last commit's message into it, as `git commit --amend` does in
+  `$EDITOR`; unchecking it takes that message out again if it was not edited.
+- Ok then runs `git commit --amend -m <message>` (`runCommitAmend`): the
+  staged changes are folded into the last commit and its message is replaced.
+  Without the box nothing changes: `runCommit` is `git commit -m`.
+- With an empty index Ctrl+K still opens the dialog when the repository has a
+  commit (`statusResult.HasCommit`, from `# branch.oid`): amend then just
+  rewords the last commit. A plain commit with nothing staged answers "nothing
+  staged to commit" as before, and Ctrl+K in a repository with no commit and
+  nothing staged shows the toast without a dialog.
+- `showCommitMessageEditor` keeps its signature and shows no checkbox;
+  `showCommitMessageEditorEx` is the amend-aware variant the panel uses.
+
+## Part 20: fetch, pull and push (`remote.go`)
+
+- **Shift+F5** runs `git fetch`, **Shift+F6** `git pull --ff-only`, **Shift+F7**
+  `git push` (after a confirmation: it publishes commits). They sit on the
+  Shift row of the keybar with their own captions, the same row Shift+F4
+  (unstage hunks) uses.
+- All three run off the UI goroutine (`vtui.RunAsync`); the panel reloads
+  afterwards and a toast shows git's first output line. A failure -- no
+  upstream, authentication, diverged history -- is an error dialog with git's
+  first line.
+- Pull is fast-forward only, so it never creates a merge commit or leaves a
+  conflicted tree; diverged history is reported and merging is left to the
+  user's own tools. Merge and stash are not part of this panel yet.
+- `execGit` now sets `GIT_TERMINAL_PROMPT=0` for every call: a password prompt
+  over https would wait on a terminal nobody sees. Use a credential helper or
+  an SSH agent for remotes that need authentication.
+
+## Part 21: stash and unstash (`remote.go`)
+
+- **Shift+F2** runs `git stash push` (tracked changes go into the stash, the
+  working tree returns to HEAD) and **Shift+F3** runs `git stash pop` (the
+  newest stash comes back and is dropped). Same background run, reload and
+  toast/error dialog as fetch/pull/push; a pop that conflicts keeps the stash
+  and shows git's message. Untracked files are not stashed.
+
+## Part 22: author of a commit (`commit.go`)
+
+- The Ctrl+K commit dialog has an **Author** field. Empty keeps the configured
+  identity; "Name <email>" (or a name git finds among existing commits) is
+  passed as `git commit --author=...`, with or without `--amend`/`--signoff`.
+  An invalid value is git's own error in the failure toast.
+- The dialog's switches travel as one `commitOptions` value now.
+
+## F1: the plugin's own help (`help.go`, f4#272)
+
+- **F1** on the status panel opens the plugin's help -- a Markdown text in
+  vtui's Markdown viewer, the same window the F3 view of `.md` files uses. The
+  text is the language-file string `GitStatus.Help` (title `GitStatus.HelpTitle`),
+  so it follows the interface language; it lists every key of the panel.
+- No new host API: a plugin declares F1 among its `PanelKeys`
+  (`vfs.PanelKeyProvider`), which the host already runs ahead of the global
+  Help binding and puts on the keybar, and shows its own text this way.
+
+## Part 23: merging a branch (`branchview.go`)
+
+- **F6** on the branch list (Ctrl+S) merges the branch under the cursor into
+  the current one after a confirmation: `git merge --no-edit`. A merge that
+  stops -- conflicts, local changes in the way -- is undone with
+  `git merge --abort` at once and reported in an error dialog, so the tree is
+  never left half merged; resolving conflicts is left to the user's own tools.
+- The current branch cannot be merged into itself. After a merge the branch
+  list and the status panel reload.

@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -16,6 +17,9 @@ import (
 var execGit = func(ctx context.Context, dir string, args []string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", args...) // #nosec G204 -- "git" is our own literal, args are our own literals plus a host path.
 	cmd.Dir = dir
+	// A prompt for a password (fetch/pull/push over https) would wait on a
+	// terminal nobody sees; fail instead and let git say why.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -71,7 +75,10 @@ type statusResult struct {
 	// Branch is the current branch name, empty when Detached is true.
 	Branch   string
 	Detached bool
-	Entries  []statusEntry
+	// HasCommit is false in a repository with no commit yet (branch.oid is
+	// "(initial)"), and also when the output carries no branch.oid line.
+	HasCommit bool
+	Entries   []statusEntry
 }
 
 // parseStatus parses `git status --porcelain=v2 --branch` output. It is
@@ -98,8 +105,11 @@ func parseStatus(output []byte) statusResult {
 			} else {
 				res.Branch = head
 			}
+		case strings.HasPrefix(line, "# branch.oid "):
+			oid := strings.TrimPrefix(line, "# branch.oid ")
+			res.HasCommit = oid != "" && oid != "(initial)"
 		case strings.HasPrefix(line, "# "):
-			// Other header lines (branch.oid, branch.upstream, branch.ab):
+			// Other header lines ( branch.upstream, branch.ab):
 			// not needed by this version, see the doc comment above.
 		case strings.HasPrefix(line, "1 "):
 			if fields := splitNFields(line, 8); fields != nil {

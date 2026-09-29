@@ -2,15 +2,19 @@ package app
 
 import (
 	"github.com/unxed/f4/internal/editor"
+	"github.com/unxed/f4/internal/history"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/vtui"
 )
 
 // Built-in calculator (f4#384, an idea carried over from DOS Navigator): a
 // small dialog, reachable from the panels without an editor open, that
 // evaluates an arithmetic expression and can insert the result into the
-// active panel's command line.
+// active panel's command line or copy it to the clipboard (Copy reuses the
+// shared Copy.Btn label rather than a calculator-only string). Expressions that
+// evaluated successfully are kept in a history list (f4#1600).
 //
 // The actual math reuses editor.EvaluateArithmetic/FormatCalculatorResult,
 // the same engine f4#1463's "calculate selection" editor command already
@@ -18,7 +22,7 @@ import (
 // there is no file open to select an expression in, not a second
 // implementation of arithmetic parsing.
 
-const calcDialogWidth = 44
+const calcDialogWidth = 50 // wide enough for three buttons in longer locales (e.g. ru: Вставить, Копировать, Отмена)
 
 // calcDialogHeight must fit all four stacked items (prompt label, expression
 // edit, result label, button row) below the title and above the bottom
@@ -37,6 +41,9 @@ func showCalculatorDialog() {
 
 	lblExpr := vtui.NewLabel(0, 0, i18n.Msg("Calculator.Prompt"), nil)
 	editExpr := vtui.NewEdit(0, 0, calcDialogWidth-8, "")
+	// Past expressions: the same history machinery as the other dialog inputs
+	// (Ctrl+E / Ctrl+X walk it, Ctrl+Down opens the list, persisted across runs).
+	history.AttachHistory(editExpr, history.CalculatorHistoryID)
 	lblExpr.FocusLink = editExpr
 	dlg.SetFocusedItem(editExpr)
 
@@ -55,11 +62,13 @@ func showCalculatorDialog() {
 		}
 		lastResult = v
 		haveResult = true
+		history.CommitHistory(editExpr, editExpr.GetText())
 		lblResult.SetText("= " + editor.FormatCalculatorResult(v))
 	}
 
 	btnInsert := vtui.NewButton(0, 0, i18n.Msg("Calculator.BtnInsert"))
 	btnInsert.IsDefault = true
+	btnCopy := vtui.NewButton(0, 0, i18n.Msg("Copy.Btn"))
 	btnClose := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
 
 	editExpr.OnAction = func() { evaluate() }
@@ -68,6 +77,7 @@ func showCalculatorDialog() {
 	dlg.AddItem(editExpr)
 	dlg.AddItem(lblResult)
 	dlg.AddItem(btnInsert)
+	dlg.AddItem(btnCopy)
 	dlg.AddItem(btnClose)
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, calcDialogWidth-4, calcDialogHeight-4)
@@ -79,6 +89,7 @@ func showCalculatorDialog() {
 	hbox.HorizontalAlign = vtui.AlignCenter
 	hbox.Spacing = 2
 	hbox.Add(btnInsert, vtui.Margins{}, vtui.AlignTop)
+	hbox.Add(btnCopy, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnClose, vtui.Margins{}, vtui.AlignTop)
 	vbox.Add(hbox, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Apply()
@@ -91,6 +102,16 @@ func showCalculatorDialog() {
 		text := editor.FormatCalculatorResult(lastResult)
 		dlg.Close()
 		insertTextIntoCommandLine(text)
+	}
+	btnCopy.OnClick = func() {
+		evaluate()
+		if !haveResult {
+			return
+		}
+		text := editor.FormatCalculatorResult(lastResult)
+		dlg.Close()
+		// Async: the clipboard round trip can block on far2l IPC.
+		terminal.SetClipboardAsync(text)
 	}
 	btnClose.OnClick = func() { dlg.Close() }
 

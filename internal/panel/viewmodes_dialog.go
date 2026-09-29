@@ -4,15 +4,22 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/vtui"
 )
 
-// panelViewModeName is the menu name of the mode Ctrl+key selects.
+// panelViewModeName is the menu name of the mode Ctrl+key selects: the name
+// the user gave it in the mode dialog, else the built-in name of the slot.
 func panelViewModeName(key int) string {
 	if key < 0 || key >= PanelViewModeCount {
 		return ""
+	}
+	if mode, ok := ViewModeForKey(key); ok {
+		if name := PanelViewModeCustomName(mode); name != "" {
+			return name
+		}
 	}
 	return i18n.Msg(panelViewModeNameKeys[key])
 }
@@ -99,12 +106,20 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	types, widths := ViewSettingsToText(settings.Columns)
 
 	const width = 64
-	const height = 13
+	const height = 20
 	dlg := vtui.NewCenteredDialog(width, height, " "+panelViewModeName(key)+" ")
 	dlg.ShowClose = true
 
+	editName := vtui.NewEdit(0, 0, width-6, settings.Name)
+	if settings.Name == "" {
+		editName.SetText(i18n.Msg(panelViewModeNameKeys[key]))
+	}
+	builtinName := i18n.Msg(panelViewModeNameKeys[key])
 	editTypes := vtui.NewEdit(0, 0, width-6, types)
 	editWidths := vtui.NewEdit(0, 0, width-6, widths)
+	statusTypes, statusWidths := ViewSettingsToText(settings.StatusColumns)
+	editStatusTypes := vtui.NewEdit(0, 0, width-6, statusTypes)
+	editStatusWidths := vtui.NewEdit(0, 0, width-6, statusWidths)
 	chkFullScreen := vtui.NewCheckbox(0, 0, i18n.Msg("Panel.Modes.FullScreen"), false)
 	if settings.FullScreen {
 		chkFullScreen.State = 1
@@ -113,28 +128,46 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	btnOk.IsDefault = true
 	btnReset := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.Reset"))
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
+	btnColumns := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.EditColumns"))
+	lblName := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.Name"), editName)
 	lblTypes := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnTypes"), editTypes)
+	lblStatusTypes := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.StatusColumnTypes"), editStatusTypes)
+	lblStatusWidths := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.StatusColumnWidths"), editStatusWidths)
 	lblWidths := vtui.NewLabel(0, 0, i18n.Msg("Panel.Modes.ColumnWidths"), editWidths)
 
+	dlg.AddItem(lblName)
+	dlg.AddItem(editName)
 	dlg.AddItem(lblTypes)
 	dlg.AddItem(editTypes)
 	dlg.AddItem(lblWidths)
 	dlg.AddItem(editWidths)
+	dlg.AddItem(lblStatusTypes)
+	dlg.AddItem(editStatusTypes)
+	dlg.AddItem(lblStatusWidths)
+	dlg.AddItem(editStatusWidths)
 	dlg.AddItem(chkFullScreen)
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnReset)
 	dlg.AddItem(btnCancel)
+	dlg.AddItem(btnColumns)
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+3, dlg.Y1+2, width-6, height-4)
-	vbox.Add(lblTypes, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(lblName, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(editName, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblTypes, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editTypes, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(lblWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editWidths, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblStatusTypes, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(editStatusTypes, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(lblStatusWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(editStatusWidths, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(chkFullScreen, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	btnRow := vtui.NewHBoxLayout(0, 0, width-6, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
 	btnRow.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
+	btnRow.Add(btnColumns, vtui.Margins{}, vtui.AlignTop)
 	btnRow.Add(btnReset, vtui.Margins{}, vtui.AlignTop)
 	btnRow.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
 	vbox.Add(btnRow, vtui.Margins{Top: 1}, vtui.AlignFill)
@@ -152,6 +185,14 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 		vtui.FrameManager.PostTask(func() { openPanelModesMenu(pf, pos) })
 	}
 	btnCancel.OnClick = func() { finish(nil, false) }
+	// The column list edits the two strings above in place (f4#410).
+	btnColumns.OnClick = func() {
+		showModeColumnsEditor(editTypes.GetText(), editWidths.GetText(), func(types, widths string) {
+			editTypes.SetText(types)
+			editWidths.SetText(widths)
+			vtui.FrameManager.Redraw()
+		})
+	}
 	btnReset.OnClick = func() { finish(nil, true) }
 	btnOk.OnClick = func() {
 		columns, err := TextToViewSettings(editTypes.GetText(), editWidths.GetText())
@@ -159,11 +200,26 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 			vtui.ShowMessageOn(dlg, " "+i18n.Msg("Panel.Modes.Title")+" ", panelModeErrorText(err), []string{"&Ok"})
 			return
 		}
-		changed := &PanelViewSettings{Columns: columns, FullScreen: chkFullScreen.State != 0}
+		// A name left as the built-in one stays unnamed, so it keeps following
+		// the interface language.
+		name := strings.TrimSpace(editName.GetText())
+		if name == builtinName {
+			name = ""
+		}
+		// Empty status columns keep the built-in status line (f4#410).
+		var status []PanelColumn
+		if strings.TrimSpace(editStatusTypes.GetText()) != "" {
+			status, err = TextToViewSettings(editStatusTypes.GetText(), editStatusWidths.GetText())
+			if err != nil {
+				vtui.ShowMessageOn(dlg, " "+i18n.Msg("Panel.Modes.Title")+" ", panelModeErrorText(err), []string{"&Ok"})
+				return
+			}
+		}
+		changed := &PanelViewSettings{Name: name, Columns: columns, FullScreen: chkFullScreen.State != 0, StatusColumns: status}
 		finish(changed, false)
 	}
 
-	dlg.SetFocusedItem(editTypes)
+	dlg.SetFocusedItem(editName)
 	vtui.FrameManager.Push(dlg)
 }
 

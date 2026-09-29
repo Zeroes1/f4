@@ -332,6 +332,7 @@ func sudoStartupMode(args []string, askpassParent bool) (dispatcher string, askp
 // deviation recorded for Task 36.
 func Main() {
 	vtui.AppName = "f4"
+	vtui.AppID = "org.unxed.f4"
 	setProcessName()
 	// Before anything asks where the configuration lives: internal/config is a
 	// layer-0 leaf and cannot reach internal/update for the answer.
@@ -1243,6 +1244,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 			vtui.FrameManager.SwitchScreen(activeWorkspace)
 		}
 	}
+	panel.InstallTerminalOfferHandler(terminal.RealDNDClient())
 	previousEventFilter := vtui.FrameManager.EventFilter
 	vtui.FrameManager.EventFilter = func(e *vtinput.InputEvent) bool {
 		// INPUT_DND (unxed/f4#1628) is the one far2l "f2l" event
@@ -1423,7 +1425,7 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Left", "ViewMode", "0"), "%d", &panel.LastLeftViewMode)
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Left", "SortMode", "0"), "%d", &panel.LastLeftSortMode)
 	panel.LastLeftSortRev = ini.GetString("Panel/Left", "SortReverse", "0") == "1"
-	panel.LastLeftSortGroups = ini.GetString("Panel/Left", "UseSortGroups", "0") == "1"
+	panel.LastLeftSortGroups = ini.GetString("Panel/Left", "UseSortGroups", "1") == "1"
 	panel.LastLeftSortNumeric = ini.GetString("Panel/Left", "SortNumeric", "0") == "1"
 	if _, err := fmt.Sscanf(ini.GetString("Panel/Left", "GroupBy", "0"), "%d", &panel.LastLeftGroupBy); err != nil {
 		panel.LastLeftGroupBy = panel.GroupNone
@@ -1438,7 +1440,7 @@ func LoadSession() {
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Right", "ViewMode", "0"), "%d", &panel.LastRightViewMode)
 	_, _ = fmt.Sscanf(ini.GetString("Panel/Right", "SortMode", "0"), "%d", &panel.LastRightSortMode)
 	panel.LastRightSortRev = ini.GetString("Panel/Right", "SortReverse", "0") == "1"
-	panel.LastRightSortGroups = ini.GetString("Panel/Right", "UseSortGroups", "0") == "1"
+	panel.LastRightSortGroups = ini.GetString("Panel/Right", "UseSortGroups", "1") == "1"
 	panel.LastRightSortNumeric = ini.GetString("Panel/Right", "SortNumeric", "0") == "1"
 	if _, err := fmt.Sscanf(ini.GetString("Panel/Right", "GroupBy", "0"), "%d", &panel.LastRightGroupBy); err != nil {
 		panel.LastRightGroupBy = panel.GroupNone

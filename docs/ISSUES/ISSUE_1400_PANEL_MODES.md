@@ -10,8 +10,24 @@ far2l's column syntax (`mix/panelmix.cpp`) and width distribution
 - **Ctrl+0 .. Ctrl+9** select the ten modes. Ctrl+1..4 are the four modes f4
   always had and, until they are edited, draw exactly as before.
 - **Options → File panel modes** lists the ten modes. Enter opens a mode:
-  column types, column widths, *Full screen*, and *Reset* back to the built-in
-  definition. Closing the dialog returns to the list, as in far2l.
+  the mode's name, column types, column widths, *Full screen*, and *Reset* back
+  to the built-in definition. A name given here (f4#410) replaces the built-in
+  one in the list and in the Left and Right menus; leaving the built-in name
+  keeps it following the interface language.
+- **Status line columns** (f4#410): the mode dialog has *Status line column
+  types* and *widths*, the far2l status columns of a mode, written as
+  `StatusColumns` and `StatusColumnWidths` in `panel_modes.ini`. When the
+  status line under the panel is switched on (`ShowPanelFileInfo`) and the
+  mode has status columns, the line shows the entry under the cursor in
+  those columns, laid out like the panel's (`FileSystemPanel.statusLineText`,
+  one blank cell between columns, sizes right aligned). Empty (the default)
+  keeps f4's own line: the name, then the size and date.
+- **Columns...** in the mode dialog opens the columns as a list, one column
+  per row with its type, header name and width (f4#410): Insert adds a column
+  after the cursor from a menu of types, Delete removes one, Ctrl+Up and
+  Ctrl+Down move one, F4 or Enter edits its width. OK writes the list back
+  into the *Column types* and *Column widths* fields, which the mode dialog
+  then validates as before; a type's modifiers (`SC`, `NM`) are kept as typed. Closing the dialog returns to the list, as in far2l.
 - The **Left** and **Right** menus list all ten modes, the current one
   marked, and choose the mode for their own panel (f4#410). A mode reshaped in
   *File panel modes*, for instance to two stripes of a name and a size
@@ -71,8 +87,8 @@ the same mode.
 ## Storage
 
 Changed modes are written to `panel_modes.ini` beside `bookmarks.ini`, in
-far2l's sections: `[Panel/ViewModes/ModeN]` with `Columns`, `ColumnWidths`
-and `FullScreen`, where N is the Ctrl digit. Only modes that differ from the
+far2l's sections: `[Panel/ViewModes/ModeN]` with `Name` (only when the user
+named the mode), `Columns`, `ColumnWidths` and `FullScreen`, where N is the Ctrl digit. Only modes that differ from the
 built-in ones are written, and the file is removed when none do.
 
 ## Code
@@ -87,8 +103,6 @@ built-in ones are written, and the file is removed when none do.
 
 ## Not done yet
 
-- The status line (`ShowPanelFileInfo`) keeps its own layout; far2l's status
-  columns per mode are not implemented.
 - far2l's per-mode case conversion and extension alignment are not
   implemented; extension alignment stays the global setting.
 - Descriptions (`Z`) and custom columns (`C0`..`C19`) are not available: f4

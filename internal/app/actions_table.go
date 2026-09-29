@@ -2525,6 +2525,34 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { actionSwitchEditorToViewer(ev) }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.MarkdownPreview",
+		Area:        "Editor",
+		Label:       "Markdown preview",
+		LabelKey:    "Action.Editor.MarkdownPreview",
+		Description: "Show the text being edited as formatted Markdown, including unsaved changes",
+		DescKey:     "Action.Editor.MarkdownPreview.Desc",
+		DefaultKeys: []string{"ShiftF3"},
+		MenuPath:    "File",
+		Enabled:     editorState(func(ev *editor.EditorView) bool { return isMarkdownFile(ev.FilePath) }),
+		Handler:     withEditor(func(ev *editor.EditorView) { actionEditorMarkdownPreview(ev) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.MarkdownSplit",
+		Area:        "Editor",
+		Label:       "Markdown preview beside the editor",
+		LabelKey:    "Action.Editor.MarkdownSplit",
+		Description: "Show or hide a live formatted Markdown preview in the right half of the editor",
+		DescKey:     "Action.Editor.MarkdownSplit.Desc",
+		DefaultKeys: []string{"AltShiftF3"},
+		MenuPath:    "File",
+		Enabled:     editorState(func(ev *editor.EditorView) bool { return isMarkdownFile(ev.FilePath) }),
+		Handler: withEditor(func(ev *editor.EditorView) {
+			if ev != nil && ev.Pt != nil && isMarkdownFile(ev.FilePath) {
+				ev.ToggleMarkdownSplit()
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.Quit",
 		Area:        "Editor",
 		Label:       "Quit",

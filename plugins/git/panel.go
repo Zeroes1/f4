@@ -62,8 +62,9 @@ type statusPanel struct {
 	table *vtui.Table
 	dir   string // repository-relative directory git status ran in; also this panel's identity for GetSelectedName's callers.
 
-	branch   string
-	detached bool
+	branch    string
+	detached  bool
+	hasCommit bool // the repository has at least one commit (something to amend)
 }
 
 // newStatusPanel is a vfs.PanelProvider.Open callback: dir comes from
@@ -118,6 +119,7 @@ func (p *statusPanel) reload() error {
 	result := parseStatus(output)
 	p.branch = result.Branch
 	p.detached = result.Detached
+	p.hasCommit = result.HasCommit
 
 	rows := make([]vtui.TableRow, len(result.Entries))
 	for i, entry := range result.Entries {
@@ -248,6 +250,7 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // ever reaches f4 -- one more reason not to reach for it here).
 func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 	return []vfs.PanelKey{
+		{VK: vtinput.VK_F1, Label: i18n.Msg("KeyBar.F1"), Run: p.showHelp},
 		{VK: vtinput.VK_F5, Label: i18n.Msg("GitStatus.KeyBar.Refresh"), Run: p.refresh},
 		{VK: vtinput.VK_RETURN, Run: p.showDiff, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},
@@ -257,6 +260,11 @@ func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
 		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
 		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},
+		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Stash"), Run: p.showStash},
+		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.StashPop"), Run: p.showStashPop},
+		{VK: vtinput.VK_F5, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Fetch"), Run: p.showFetch},
+		{VK: vtinput.VK_F6, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Pull"), Run: p.showPull},
+		{VK: vtinput.VK_F7, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Push"), Run: p.showPush},
 	}
 }
 

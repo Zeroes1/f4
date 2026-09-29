@@ -11,12 +11,19 @@ package terminal
 // with DND/CLOSE. The wire format lives in far2ldnd; this file keeps the
 // state: the binding, the offers, their leases and read positions.
 //
-// Requests are served one at a time, in the order they arrived, by a worker
-// that exists only while there is something to serve. That is why the
-// terminal negotiates window=1: it never has two READs in flight, so it must
-// not advertise more (§ 7). The source is read outside the state lock, so a
-// slow source never stalls the GUI or the parser, and a revocation that
-// lands meanwhile turns the READ into -8.
+// Requests are taken in the order they arrived by a worker that exists only
+// while there is something to serve. LIST and READ are served concurrently, up
+// to the window the binding was granted (§ 7: the terminal grants at most
+// dndWindow, and never more than the program asked for); BIND and CLOSE are
+// barriers -- they wait for everything before them to finish and nothing
+// starts until they are done -- so a CLOSE really means "no read of this
+// offer is running any more" and a new BIND never overlaps the old binding's
+// reads. A sequential item is only ever read after the previous range came
+// back (the program's obligation, and checked by the offset rule in
+// dndRead), so concurrent READs are of different items or of random-access
+// ones. The source is read outside the state lock, so a slow source never
+// stalls the GUI or the parser, and a revocation that lands meanwhile turns
+// the READ into -8.
 
 import (
 	"crypto/rand"
@@ -59,7 +66,7 @@ var (
 // The terminal's own profile (§ 7).
 const (
 	dndFeatures    = far2ldnd.FeatureStream | far2ldnd.FeatureReference
-	dndWindow      = 1 // requests are served one at a time
+	dndWindow      = 4 // LIST/READ requests served at once, at most
 	dndIdleSeconds = 600
 	dndMaxOffers   = 8
 	dndQueueLimit  = 64 // requests waiting for the worker
@@ -85,7 +92,17 @@ type dndServer struct {
 	qmu     sync.Mutex
 	queue   [][]byte
 	running bool
+
+	// pmu guards inflight, the LIST/READ requests being served right now;
+	// pcond wakes the worker when one finishes.
+	pmu      sync.Mutex
+	pcond    *sync.Cond
+	inflight int
 }
+
+// dndReadTimeout bounds one DNDSource.ReadAt. It is a variable so that tests
+// can shorten it.
+var dndReadTimeout = 30 * time.Second
 
 type dndOffer struct {
 	src      DNDSource
@@ -317,11 +334,48 @@ func (tv *TerminalView) dndDrain() {
 	}
 }
 
-// dndServe answers one decoded DnD request.
+// dndWaitInflight blocks until fewer than limit LIST/READ requests are being
+// served (limit 1 with the barrier flag below means: none at all), then, for
+// a concurrent request, counts it in.
+func (d *dndServer) dndWaitInflight(limit int, count bool) {
+	d.pmu.Lock()
+	defer d.pmu.Unlock()
+	if d.pcond == nil {
+		d.pcond = sync.NewCond(&d.pmu)
+	}
+	for d.inflight >= limit {
+		d.pcond.Wait()
+	}
+	if count {
+		d.inflight++
+	}
+}
+
+func (d *dndServer) dndDone() {
+	d.pmu.Lock()
+	d.inflight--
+	if d.pcond != nil {
+		d.pcond.Broadcast()
+	}
+	d.pmu.Unlock()
+}
+
+// dndGrantedWindow is the window of the binding in force (1 before one).
+func (d *dndServer) dndGrantedWindow() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.bound && d.granted.Window > 0 {
+		return int(d.granted.Window)
+	}
+	return 1
+}
+
+// dndServe answers one decoded DnD request: LIST and READ on a goroutine of
+// their own while the granted window has room, BIND and CLOSE alone.
 func (tv *TerminalView) dndServe(stack []byte) {
+	d := &tv.dnd
 	rid, q, err := far2ldnd.DecodeRequest(stack)
 	if err != nil {
-		d := &tv.dnd
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		tv.dndErrorLocked(rid, far2ldnd.StatusFor(err), err.Error())
@@ -329,13 +383,23 @@ func (tv *TerminalView) dndServe(stack []byte) {
 	}
 	switch q := q.(type) {
 	case *far2ldnd.BindRequest:
+		d.dndWaitInflight(1, false)
 		tv.dndBind(rid, q)
-	case *far2ldnd.ListRequest:
-		tv.dndList(rid, q)
-	case *far2ldnd.ReadRequest:
-		tv.dndRead(rid, q)
 	case *far2ldnd.CloseRequest:
+		d.dndWaitInflight(1, false)
 		tv.dndClose(rid, q)
+	case *far2ldnd.ListRequest:
+		d.dndWaitInflight(d.dndGrantedWindow(), true)
+		go func() {
+			defer d.dndDone()
+			tv.dndList(rid, q)
+		}()
+	case *far2ldnd.ReadRequest:
+		d.dndWaitInflight(d.dndGrantedWindow(), true)
+		go func() {
+			defer d.dndDone()
+			tv.dndRead(rid, q)
+		}()
 	}
 }
 
@@ -378,7 +442,7 @@ func (tv *TerminalView) dndBind(rid uint8, q *far2ldnd.BindRequest) {
 		Version:     far2ldnd.Version,
 		Binding:     q.Binding,
 		MaxFrame:    min(q.MaxFrame, far2ldnd.DefaultMaxFrame),
-		Window:      dndWindow,
+		Window:      uint16(min(int(q.Window), dndWindow)), //nolint:gosec // at most dndWindow
 		IdleSeconds: dndIdleSeconds,
 		Features:    features,
 	}
@@ -489,7 +553,46 @@ func (tv *TerminalView) dndRead(rid uint8, q *far2ldnd.ReadRequest) {
 	// At most one chunk, into a bounded buffer, before the reply is built
 	// whole (§ 6.4).
 	buf := make([]byte, q.Length)
-	n, eof, err := o.src.ReadAt(q.ItemID, buf, q.Offset)
+	type readResult struct {
+		n   int
+		eof bool
+		err error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		n, eof, err := o.src.ReadAt(q.ItemID, buf, q.Offset)
+		done <- readResult{n, eof, err}
+	}()
+	timer := time.NewTimer(dndReadTimeout)
+	var res readResult
+	select {
+	case res = <-done:
+		timer.Stop()
+	case <-timer.C:
+		// A source that never returns must not hold the request worker, and
+		// with it every later request, for the whole idle time. The offer is
+		// revoked; the hung ReadAt keeps the source open (it must never be
+		// closed under a running read) and releases it when it returns.
+		d.mu.Lock()
+		if d.offers[q.Offer] == o {
+			delete(d.offers, q.Offer)
+		}
+		o.closed = true
+		tv.dndErrorLocked(rid, far2ldnd.StatusIOError, "DND source read timed out")
+		d.mu.Unlock()
+		go func() {
+			<-done
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			o.busy--
+			if o.busy == 0 && !o.released {
+				o.released = true
+				o.src.Close()
+			}
+		}()
+		return
+	}
+	n, eof, err := res.n, res.eof, res.err
 
 	d.mu.Lock()
 	defer d.mu.Unlock()

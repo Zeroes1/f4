@@ -452,14 +452,16 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 		}
 	}
 
-	// Enter and F3 do nothing now: no modal, no patcher call, and the row
-	// underneath does not even need a Preview (the "already applied" row
+	// With nothing wired to them (onOpen/onViewPatch are what open the file
+	// and the patch), Enter and F3 are still swallowed: no modal, no patcher
+	// call, and the row underneath does not even need a Preview (the "already applied" row
 	// has none). Down is a real key press (not MoveSelection), the same
 	// path OnSelect fires from - moving the cursor is what is supposed to
 	// refresh the pane here.
 	if !table.ProcessKey(aiKey(vtinput.VK_DOWN, 0)) {
 		t.Fatal("Down not handled by the review table")
 	}
+	table.onOpen, table.onViewPatch = nil, nil
 	for _, vk := range []uint16{vtinput.VK_RETURN, vtinput.VK_F3} {
 		if !table.ProcessKey(aiKey(vk, 0)) {
 			t.Fatalf("key %d not handled by the review table", vk)

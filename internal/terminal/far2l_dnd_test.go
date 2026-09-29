@@ -289,14 +289,14 @@ func oneFile(id uint64, flags uint16, data string) *memSource {
 
 const streamFlags = far2ldnd.ItemStream | far2ldnd.ItemSizeKnown
 
-// BIND grants limits no larger than asked and than its own profile, window 1
-// (requests are served one at a time), the lease, and only features both
-// sides know.
+// BIND grants limits no larger than asked and than its own profile, a window of
+// at most 4 (LIST/READ are served concurrently up to it), the lease, and only
+// features both sides know.
 func TestDNDBindNegotiates(t *testing.T) {
 	e := newDNDEnv(t)
 	q := &far2ldnd.BindRequest{Version: 1, Enable: true, Binding: dndBindingA, MaxFrame: 100000, MaxChunk: 100000, Window: 8, WantedFeatures: 7}
 	got := e.request(t, 5, q)
-	want := replyFrame(t, 5, &far2ldnd.BindReply{Version: 1, Binding: dndBindingA, MaxFrame: 65536, MaxChunk: 32768, Window: 1, IdleSeconds: 600, Features: 3})
+	want := replyFrame(t, 5, &far2ldnd.BindReply{Version: 1, Binding: dndBindingA, MaxFrame: 65536, MaxChunk: 32768, Window: 4, IdleSeconds: 600, Features: 3})
 	if got != want {
 		t.Fatalf("BIND reply\n got %q\nwant %q", got, want)
 	}
@@ -309,7 +309,7 @@ func TestDNDBindNegotiates(t *testing.T) {
 
 	// The same BIND again is idempotent; other parameters for the same
 	// binding are refused and change nothing.
-	if again := e.request(t, 6, q); again != replyFrame(t, 6, &far2ldnd.BindReply{Version: 1, Binding: dndBindingA, MaxFrame: 65536, MaxChunk: 32768, Window: 1, IdleSeconds: 600, Features: 3}) {
+	if again := e.request(t, 6, q); again != replyFrame(t, 6, &far2ldnd.BindReply{Version: 1, Binding: dndBindingA, MaxFrame: 65536, MaxChunk: 32768, Window: 4, IdleSeconds: 600, Features: 3}) {
 		t.Fatalf("repeated BIND: %q", again)
 	}
 	other := *q
@@ -728,10 +728,12 @@ func TestDNDIdleLease(t *testing.T) {
 	}
 }
 
-// Replies keep the order of the requests, even when they arrive in one read.
+// With window 1 the replies keep the order of the requests, even when they
+// arrive in one read (a larger window serves LIST/READ concurrently, and
+// replies then follow their RIDs, not their order).
 func TestDNDRepliesInOrder(t *testing.T) {
 	e := newDNDEnv(t)
-	e.bind(t, dndBindingA, 65536, 32768, far2ldnd.FeatureStream)
+	_ = mustReply(t, e.request(t, 30, &far2ldnd.BindRequest{Version: 1, Enable: true, Binding: dndBindingA, MaxFrame: 65536, MaxChunk: 32768, Window: 1, WantedFeatures: far2ldnd.FeatureStream}))
 	offer := e.offer(t, oneFile(1, streamFlags, "abc"))
 	var in bytes.Buffer
 	for rid := uint8(1); rid <= 20; rid++ {

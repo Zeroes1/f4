@@ -99,6 +99,9 @@ type DNDClient struct {
 	rmu     sync.Mutex              // guards pending and nextRID, separately from mu:
 	pending map[uint8]chan dndReply // HandleFrame must never wait on a caller
 	nextRID uint8
+	// freed is closed (and replaced) whenever a RID is retired, to wake the
+	// calls waiting for room in the window.
+	freed chan struct{}
 }
 
 // NewDNDClient makes a client that writes its request frames to out. out is
@@ -261,6 +264,7 @@ func (c *DNDClient) Close(ctx context.Context, offer far2ldnd.ID, reason uint8) 
 func (c *DNDClient) Shutdown() {
 	c.rmu.Lock()
 	c.pending = make(map[uint8]chan dndReply)
+	c.notifyFreedLocked()
 	c.rmu.Unlock()
 	c.mu.Lock()
 	c.bound, c.binding, c.granted = false, far2ldnd.ID{}, far2ldnd.BindReply{}
@@ -324,7 +328,17 @@ func (c *DNDClient) roundTrip(ctx context.Context, q far2ldnd.Request) (far2ldnd
 	if c.bridge != nil {
 		return c.bridge.roundTrip(ctx, q)
 	}
-	rid, ch, err := c.allocRID()
+	// The window bounds the requests the terminal has to hold at once (§ 7):
+	// a call beyond it waits for a reply to retire one rather than being
+	// dropped or answered -7. BIND itself is outside it -- there is no
+	// window before it is answered.
+	limit := 0
+	if _, isBind := q.(*far2ldnd.BindRequest); !isBind {
+		if granted, ok := c.Bound(); ok {
+			limit = int(granted.Window)
+		}
+	}
+	rid, ch, err := c.allocRIDInWindow(ctx, limit)
 	if err != nil {
 		return far2ldnd.ReplyFrame{}, err
 	}
@@ -390,7 +404,39 @@ func (c *DNDClient) allocRID() (uint8, chan dndReply, error) {
 func (c *DNDClient) freeRID(rid uint8) {
 	c.rmu.Lock()
 	delete(c.pending, rid)
+	c.notifyFreedLocked()
 	c.rmu.Unlock()
+}
+
+// notifyFreedLocked wakes every call waiting in allocRIDInWindow.
+func (c *DNDClient) notifyFreedLocked() {
+	if c.freed != nil {
+		close(c.freed)
+		c.freed = nil
+	}
+}
+
+// allocRIDInWindow is allocRID for a call that must not have more than limit
+// requests outstanding (limit <= 0: no bound). Cancelled ctx ends the wait;
+// nothing has been reserved by then, so nothing is left to retire.
+func (c *DNDClient) allocRIDInWindow(ctx context.Context, limit int) (uint8, chan dndReply, error) {
+	for {
+		c.rmu.Lock()
+		if limit <= 0 || len(c.pending) < limit {
+			c.rmu.Unlock()
+			return c.allocRID()
+		}
+		if c.freed == nil {
+			c.freed = make(chan struct{})
+		}
+		wait := c.freed
+		c.rmu.Unlock()
+		select {
+		case <-wait:
+		case <-ctx.Done():
+			return 0, nil, ctx.Err()
+		}
+	}
 }
 
 // deliver resolves rid's pending call, if this client has one, and retires
@@ -403,6 +449,7 @@ func (c *DNDClient) deliver(rid uint8, res dndReply) {
 	ch, ok := c.pending[rid]
 	if ok {
 		delete(c.pending, rid)
+		c.notifyFreedLocked()
 	}
 	c.rmu.Unlock()
 	if ok {
