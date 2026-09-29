@@ -98,6 +98,10 @@ var architectureLayers = map[string]int{
 	// can mark its frame and the root can arm it from a command line switch.
 	"internal/stallwatch": 0,
 
+	// Change notification for one local directory (inotify, or polling): a
+	// leaf that imports nothing of ours, so the panels can use it.
+	"internal/dirwatch": 0,
+
 	// The shared primitives: a notification channel and the history store.
 	// Both are leaves and both take what they cannot reach as a seam —
 	// history.SamePath and the config directory are set by the root.
