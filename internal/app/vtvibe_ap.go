@@ -84,6 +84,12 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 		body += "\n\n" + fmt.Sprintf(i18n.Msg("AI.PatchIgnored"), patch.Ignored)
 	}
 
+	if aiInGitWorkTree(root) {
+		// Only a suggestion (docs/VTVIBE.md §7.4): somebody else's repository
+		// is not ours to stash.
+		body += "\n\n" + i18n.Msg("AI.PatchGitHint")
+	}
+
 	dlg := vtui.ShowMessage(i18n.Msg("AI.PatchTitle"), body,
 		[]string{i18n.Msg("AI.BtnApplyPatch"), i18n.Msg("AI.BtnDryRun"), i18n.Msg("vtui.Cancel")})
 	dlg.OnResult = func(code int) {
@@ -93,6 +99,21 @@ func aiApplyPatch(pf *panel.PanelsFrame) {
 		case 1:
 			aiRunPatcher(pf, patch, root, true, nil)
 		}
+	}
+}
+
+// aiInGitWorkTree reports whether dir is inside a git working tree: a .git
+// (a directory, or a file for a worktree or submodule) in dir or above it.
+func aiInGitWorkTree(dir string) bool {
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false
+		}
+		dir = parent
 	}
 }
 

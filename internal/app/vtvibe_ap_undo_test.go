@@ -255,3 +255,22 @@ func TestAIChatPanelCtrlZUndoes(t *testing.T) {
 	aiUndoTestAssertRestored(t, root)
 	aiCloseTop()
 }
+
+// The apply confirmation mentions git only for a project that is under it.
+func TestAIInGitWorkTree(t *testing.T) {
+	plain := t.TempDir()
+	if aiInGitWorkTree(plain) {
+		t.Fatal("a plain temp dir reported as under git")
+	}
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(repo, "a", "b")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !aiInGitWorkTree(repo) || !aiInGitWorkTree(sub) {
+		t.Fatal("a folder with .git, or below one, not reported as under git")
+	}
+}

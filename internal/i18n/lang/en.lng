@@ -2330,6 +2330,7 @@ AI.PatchNoLocalDir=An ap patch can only be applied to a local folder. Open the t
 AI.PatchConfirm=Apply the patch from the answer to:\n%s\n\nFiles it touches (%d):
 AI.PatchMoreFiles=... and %d more
 AI.PatchIgnored=%d further patch block(s) used a different id and were left out.
+AI.PatchGitHint=The folder is under git. To keep the option of going back to how it is now, you can run "git stash push -u" in a terminal first; f4 does not do it for you.
 AI.BtnApplyPatch=&Apply
 AI.BtnDryRun=&Dry run
 AI.PatchRunning=Applying the patch...

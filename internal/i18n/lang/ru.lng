@@ -2330,6 +2330,7 @@ AI.PatchNoLocalDir=AP-патч можно применить только к л�
 AI.PatchConfirm=Применить патч из ответа к:\n%s\n\nЗатронутые файлы (%d):
 AI.PatchMoreFiles=... и ещё %d
 AI.PatchIgnored=%d других блоков патча с иным ID были проигнорированы.
+AI.PatchGitHint=Папка под git. Чтобы можно было вернуться к нынешнему состоянию, перед применением можно выполнить в терминале "git stash push -u"; f4 сам этого не делает.
 AI.BtnApplyPatch=&Применить
 AI.BtnDryRun=&Холостой прогон
 AI.PatchRunning=Применение патча...
