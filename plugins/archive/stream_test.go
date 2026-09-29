@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/dsnet/compress/bzip2"
 	"github.com/unxed/f4/vfs"
 )
 
@@ -74,6 +75,48 @@ func readArchiveMember(t *testing.T, v *ArchiveVFS, path string) []byte {
 		t.Fatalf("read %q: %v", path, err)
 	}
 	return data
+}
+
+func bzip2Bytes(t *testing.T, content []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw, err := bzip2.NewWriter(&buf, &bzip2.WriterConfig{Level: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(content); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestArchiveVFSNestedBzipPreservesMemberName(t *testing.T) {
+	ctx := context.Background()
+	outer, outerPath := openOuterArchive(t, map[string][]byte{
+		"sample1.bz2": bzip2Bytes(t, []byte("nested bzip content")),
+	})
+
+	innerPath := outer.Join(outerPath, "sample1.bz2")
+	inner, err := NewArchiveVFSContext(ctx, outer, innerPath)
+	if err != nil {
+		t.Fatalf("open bzip2 inside ZIP: %v", err)
+	}
+	t.Cleanup(func() { _ = inner.Close() })
+
+	var names []string
+	if err := inner.ReadDir(ctx, inner.GetPath(), func(items []vfs.VFSItem) {
+		for _, item := range items {
+			names = append(names, item.Name)
+		}
+	}); err != nil {
+		t.Fatalf("read nested bzip2: %v", err)
+	}
+	if len(names) != 1 || names[0] != "sample1" {
+		t.Fatalf("nested bzip2 listing = %v, want [sample1]", names)
+	}
 }
 
 // The same generic reader-backed path composes ZIP and compressed TAR in both
