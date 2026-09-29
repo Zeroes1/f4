@@ -259,6 +259,8 @@ func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_K, Mods: vtinput.LeftCtrlPressed, Run: p.showCommitDialog},
 		{VK: vtinput.VK_E, Mods: vtinput.LeftCtrlPressed, Run: p.showLog},
 		{VK: vtinput.VK_S, Mods: vtinput.LeftCtrlPressed, Run: p.showBranches},
+		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Stash"), Run: p.showStash},
+		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.StashPop"), Run: p.showStashPop},
 		{VK: vtinput.VK_F5, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Fetch"), Run: p.showFetch},
 		{VK: vtinput.VK_F6, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Pull"), Run: p.showPull},
 		{VK: vtinput.VK_F7, Mods: vtinput.ShiftPressed, Label: i18n.Msg("GitStatus.KeyBar.Push"), Run: p.showPush},

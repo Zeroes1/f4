@@ -449,3 +449,11 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - `execGit` now sets `GIT_TERMINAL_PROMPT=0` for every call: a password prompt
   over https would wait on a terminal nobody sees. Use a credential helper or
   an SSH agent for remotes that need authentication.
+
+## Part 21: stash and unstash (`remote.go`)
+
+- **Shift+F2** runs `git stash push` (tracked changes go into the stash, the
+  working tree returns to HEAD) and **Shift+F3** runs `git stash pop` (the
+  newest stash comes back and is dropped). Same background run, reload and
+  toast/error dialog as fetch/pull/push; a pop that conflicts keeps the stash
+  and shows git's message. Untracked files are not stashed.

@@ -26,6 +26,14 @@ import (
 // (GIT_TERMINAL_PROMPT=0, execGit): a prompt would sit invisibly behind the
 // panel; use a credential helper or an SSH agent.
 
+// showStash is Shift+F2: `git stash push` puts the tracked changes away (the
+// working tree goes back to HEAD); showStashPop is Shift+F3: `git stash pop`
+// brings the newest stash back. A pop that conflicts stays in the stash list
+// and git says so in the error dialog (f4#659 part 21).
+func (p *statusPanel) showStash() { p.runRemote("stash", "stash", "push") }
+
+func (p *statusPanel) showStashPop() { p.runRemote("stash pop", "stash", "pop") }
+
 func (p *statusPanel) showFetch() { p.runRemote("fetch", "fetch") }
 
 func (p *statusPanel) showPull() { p.runRemote("pull", "pull", "--ff-only") }
