@@ -69,7 +69,7 @@ func mermaidBlock(lines []string, at int, fence string) (block []string, last in
 		if !closesFence(strings.TrimSpace(lines[j]), fence) {
 			continue
 		}
-		text, converted := mermaid.Flowchart(strings.Join(lines[at+1:j], "\n"))
+		text, converted := mermaid.Convert(strings.Join(lines[at+1:j], "\n"))
 		if !converted {
 			return nil, at, false
 		}

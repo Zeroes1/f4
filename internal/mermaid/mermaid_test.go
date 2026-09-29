@@ -55,3 +55,50 @@ func TestFlowchartRefusals(t *testing.T) {
 		}
 	}
 }
+
+func TestSequence(t *testing.T) {
+	src := strings.Join([]string{
+		"%% a comment",
+		"sequenceDiagram",
+		"  autonumber",
+		"  participant A as Alice",
+		"  actor B",
+		"  A->>B: Hello",
+		"  activate B",
+		"  B-->>A: Hi back",
+		"  A-)B: async",
+		"  B--xA: lost;",
+		"  A->+B: plain",
+		"  Note over A,B: shared note",
+		"  Note right of B: side",
+		"  deactivate B",
+	}, "\n")
+	got, ok := Convert(src)
+	want := strings.Join([]string{
+		"1. Alice ──▶ B: Hello",
+		"2. B ┄┄▶ Alice: Hi back",
+		"3. Alice ──▷ B: async",
+		"4. B ┄┄✕ Alice: lost",
+		"5. Alice ─── B: plain",
+		"✎ Alice, B: shared note",
+		"✎ B: side",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("sequence:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	for name, bad := range map[string]string{
+		"loop":     "sequenceDiagram\nloop every minute\nA->>B: ping\nend",
+		"header":   "sequenceDiagram",
+		"garbage":  "sequenceDiagram\nA ~~ B",
+		"class":    "classDiagram\nclass A",
+		"nothing":  "%% only a comment",
+		"too long": "sequenceDiagram\n" + strings.Repeat("A->>B: x\n", MaxLines),
+	} {
+		if got, ok := Convert(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
+	}
+	if got, ok := Convert("graph TD\nA-->B"); !ok || got != "[A] ──▶ [B]" {
+		t.Errorf("Convert must hand flowcharts to Flowchart: %q %v", got, ok)
+	}
+}
