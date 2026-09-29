@@ -102,13 +102,13 @@ func isInt(s string) bool {
 func (ps *parser) value() (any, error) { return ps.valueAt(0) }
 
 func (ps *parser) valueAt(depth int) (any, error) {
-	if depth > maxDepth {
-		ps.p = len(ps.b) // give up on the rest: the nesting is hostile
-		return nil, errSyntax
-	}
 	ps.skipWS()
 	if ps.p >= len(ps.b) {
 		return nil, io.EOF
+	}
+	if depth > maxDepth {
+		ps.p = len(ps.b) // give up on the rest: the nesting is hostile
+		return nil, errSyntax
 	}
 	switch c := ps.b[ps.p]; {
 	case c == '/':
