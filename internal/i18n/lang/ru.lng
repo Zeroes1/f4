@@ -192,6 +192,7 @@ Panel.Modes.NoColumns=Укажите хотя бы один тип колонк�
 Panel.UpDir=Вверх
 Panel.Folder=Папка
 Panel.Symlink=Ссылка
+Panel.SizeUnknownFiles=В размер папки не вошло файлов с неизвестным размером: %d
 Panel.Junction=Связь
 Panel.SelectedInfo=Байт: %s, файлов: %d, папок: %d
 Panel.Base64.Title=Base64-файл

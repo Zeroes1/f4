@@ -192,6 +192,7 @@ Panel.Modes.NoColumns=Enter at least one column type
 Panel.UpDir=Up
 Panel.Folder=Folder
 Panel.Symlink=Symlink
+Panel.SizeUnknownFiles=%d file(s) of unknown size are not counted in this folder size
 Panel.Junction=Junction
 Panel.SelectedInfo=Bytes: %s, files: %d, folders: %d
 Panel.Base64.Title=File Base64

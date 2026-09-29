@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/unxed/f4/internal/keymap"
@@ -564,5 +565,16 @@ func TestActionCalcDirSizeAtCursor(t *testing.T) {
 	}
 	if dir.Size != 7 {
 		t.Errorf("folder size = %d, want 7", dir.Size)
+	}
+}
+
+// f4#1670: a folder size that misses files of unknown size says so.
+func TestUnknownSizeNote(t *testing.T) {
+	if got := unknownSizeNote(vfs.OpStats{Bytes: 10, Files: 3}); got != "" {
+		t.Errorf("all sizes known, got note %q", got)
+	}
+	got := unknownSizeNote(vfs.OpStats{Files: 3, UnknownSizeFiles: 2})
+	if !strings.Contains(got, "2") {
+		t.Errorf("note %q does not carry the count of files without a size", got)
 	}
 }

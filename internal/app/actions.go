@@ -2162,6 +2162,17 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 	}
 }
 
+// unknownSizeNote says so when the scanned folder held files whose size the
+// VFS could not tell (a stream-compressed archive entry without a size in its
+// header, say): their bytes are missing from the total, so the number shown is
+// a lower bound and must not pass for the exact size (f4#1670).
+func unknownSizeNote(stats vfs.OpStats) string {
+	if stats.UnknownSizeFiles <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(i18n.Msg("Panel.SizeUnknownFiles"), stats.UnknownSizeFiles)
+}
+
 // actionCalcDirSizeAtCursor is Ctrl+Space: it sizes the folder under the
 // cursor of the active file panel and does nothing on a file.
 func actionCalcDirSizeAtCursor(pf *panel.PanelsFrame) {
@@ -2206,6 +2217,9 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 		func(totalStats vfs.OpStats) {
 			entry.Size = totalStats.Bytes
 			entry.SizeCalculated = true
+			if note := unknownSizeNote(totalStats); note != "" {
+				toast.Show(note, 4*time.Second)
+			}
 			if fsp.SortMode == panel.SortSize || fsp.GroupBy == panel.GroupSize {
 				fsp.SortEntries()
 				// Keep cursor on the same item after re-sorting
