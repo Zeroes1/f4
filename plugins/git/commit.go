@@ -74,12 +74,12 @@ func (p *statusPanel) showCommitDialog() {
 
 // onCommitDialogOk is the commit dialog's OnOk: a plain commit needs
 // something staged, an amend does not.
-func (p *statusPanel) onCommitDialogOk(message string, amend, signoff bool) {
-	if !amend && !p.hasStagedChanges() {
+func (p *statusPanel) onCommitDialogOk(message string, opts commitOptions) {
+	if !opts.amend && !p.hasStagedChanges() {
 		toast.Show(i18n.Msg("GitStatus.NothingToCommit"), 3e9)
 		return
 	}
-	p.onCommitMessageEnteredOpts(message, amend, signoff)
+	p.onCommitMessageEnteredOpts(message, opts)
 }
 
 // headCommitMessage is the full message of the last commit, or "" when the
@@ -111,7 +111,7 @@ func headCommitMessage(dir string) string {
 // the same split showCommitDialog already kept between itself (the trigger)
 // and onCommitMessageEntered (the pure decision) before this part.
 func showCommitMessageEditor(initial string, onOk func(string)) {
-	showCommitMessageEditorEx(initial, "", func(message string, _, _ bool) {
+	showCommitMessageEditorEx(initial, "", func(message string, _ commitOptions) {
 		if onOk != nil {
 			onOk(message)
 		}
@@ -126,7 +126,7 @@ func showCommitMessageEditor(initial string, onOk func(string)) {
 // $EDITOR; unchecking takes that message out again. The dialog also has an
 // "Add Signed-off-by" checkbox (f4#659 part 19: `git commit --signoff`).
 // onOk gets the field's text and whether each box was checked.
-func showCommitMessageEditorEx(initial, headMessage string, onOk func(message string, amend, signoff bool)) {
+func showCommitMessageEditorEx(initial, headMessage string, onOk func(message string, opts commitOptions)) {
 	if vtui.FrameManager == nil {
 		return
 	}
@@ -153,7 +153,7 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 	// plugins/envman/dialogs.go's own MultiLineEdit field leaves below
 	// itself for the Save/Cancel row.
 	editHeight := dlg.Y2 - y - 4
-	editHeight-- // one more row for the amend and sign-off checkboxes above the buttons
+	editHeight -= 2 // rows for the author field and the amend and sign-off checkboxes above the buttons
 	if editHeight < 3 {
 		editHeight = 3
 	}
@@ -175,6 +175,13 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 		}
 		dlg.AddItem(amend)
 	}
+
+	// The author of the commit (`git commit --author`, f4#659 part 22): empty
+	// keeps the configured identity, otherwise "Name <email>" (or a name git
+	// can look up among the existing commits).
+	dlg.AddItem(vtui.NewText(x, dlg.Y2-5, i18n.Msg("GitStatus.CommitAuthor"), 0))
+	authorEdit := vtui.NewEdit(x+12, dlg.Y2-5, width-4-12, "")
+	dlg.AddItem(authorEdit)
 
 	// Sign-off shares the row of the amend box, to its right.
 	signoff := vtui.NewCheckbox(x+34, dlg.Y2-4, i18n.Msg("GitStatus.CommitSignoff"), false)
@@ -202,7 +209,11 @@ func showCommitMessageEditorEx(initial, headMessage string, onOk func(message st
 	// the message's own line breaks.
 	okButton.OnClick = func() {
 		if onOk != nil {
-			onOk(edit.GetText(), amend != nil && amend.State != 0, signoff.State != 0)
+			onOk(edit.GetText(), commitOptions{
+				amend:   amend != nil && amend.State != 0,
+				signoff: signoff.State != 0,
+				author:  strings.TrimSpace(authorEdit.GetText()),
+			})
 		}
 		dlg.SetExitCode(1)
 	}
@@ -232,18 +243,18 @@ func (p *statusPanel) onCommitMessageEntered(message string) {
 // can amend: amend runs `git commit --amend` (the staged changes are folded
 // into the last commit and its message is replaced by the one entered).
 func (p *statusPanel) onCommitMessageEnteredAmend(message string, amend bool) {
-	p.onCommitMessageEnteredOpts(message, amend, false)
+	p.onCommitMessageEnteredOpts(message, commitOptions{amend: amend})
 }
 
 // onCommitMessageEnteredOpts adds `--signoff` (a Signed-off-by trailer with
 // the committer's identity) to onCommitMessageEnteredAmend.
-func (p *statusPanel) onCommitMessageEnteredOpts(message string, amend, signoff bool) {
+func (p *statusPanel) onCommitMessageEnteredOpts(message string, opts commitOptions) {
 	message = strings.TrimSpace(message)
 	if message == "" {
 		toast.Show(i18n.Msg("GitStatus.CommitMessageEmpty"), 3e9)
 		return
 	}
-	p.runCommitOpts(message, amend, signoff)
+	p.runCommitOpts(message, opts)
 }
 
 // runCommit runs `git commit -m message` over the currently staged changes
@@ -261,17 +272,27 @@ func (p *statusPanel) runCommit(message string) {
 
 // runCommitAmend is runCommit with git's --amend switch (f4#659 part 17).
 func (p *statusPanel) runCommitAmend(message string, amend bool) {
-	p.runCommitOpts(message, amend, false)
+	p.runCommitOpts(message, commitOptions{amend: amend})
+}
+
+// commitOptions are the switches of the commit dialog beyond the message:
+// --amend, --signoff and --author (f4#659 parts 17, 19, 22).
+type commitOptions struct {
+	amend, signoff bool
+	author         string
 }
 
 // runCommitOpts is runCommitAmend with git's --signoff switch (f4#659 part 19).
-func (p *statusPanel) runCommitOpts(message string, amend, signoff bool) {
+func (p *statusPanel) runCommitOpts(message string, opts commitOptions) {
 	args := []string{"commit"}
-	if amend {
+	if opts.amend {
 		args = append(args, "--amend")
 	}
-	if signoff {
+	if opts.signoff {
 		args = append(args, "--signoff")
+	}
+	if opts.author != "" {
+		args = append(args, "--author="+opts.author)
 	}
 	args = append(args, "-m", message)
 	output, err := runGitIn(context.Background(), p.dir, args...)

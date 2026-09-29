@@ -457,3 +457,11 @@ archive tools (f4#609) rather than linking a Go git implementation.
   newest stash comes back and is dropped). Same background run, reload and
   toast/error dialog as fetch/pull/push; a pop that conflicts keeps the stash
   and shows git's message. Untracked files are not stashed.
+
+## Part 22: author of a commit (`commit.go`)
+
+- The Ctrl+K commit dialog has an **Author** field. Empty keeps the configured
+  identity; "Name <email>" (or a name git finds among existing commits) is
+  passed as `git commit --author=...`, with or without `--amend`/`--signoff`.
+  An invalid value is git's own error in the failure toast.
+- The dialog's switches travel as one `commitOptions` value now.
