@@ -12,6 +12,7 @@ require (
 	github.com/go-webgpu/goffi v0.6.3
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/hanwen/go-fuse/v2 v2.11.0
+	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/jezek/xgb v1.3.1
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/jlaffaye/ftp v0.2.0
@@ -78,6 +79,7 @@ require (
 require (
 	github.com/ebitengine/gomobile v0.0.0-20260211053922-3d992dae95d1 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
+	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.13.0.20260811162617-464c2ddfc34c // indirect
 	github.com/icza/bitio v1.1.0 // indirect

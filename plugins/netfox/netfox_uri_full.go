@@ -19,5 +19,10 @@ func registerOptionalURIProviders(api vfs.HostAPI) error {
 	if err := api.RegisterURIProvider(&sftpURIProvider{alias: "scp"}); err != nil {
 		return fmt.Errorf("NetFox: register scp URI provider: %w", err)
 	}
+	// smb:// opens a read-only SMB share browser (f4#188); the SMB client is
+	// linked in the full build only.
+	if err := api.RegisterURIProvider(&smbURIProvider{}); err != nil {
+		return fmt.Errorf("NetFox: register smb URI provider: %w", err)
+	}
 	return nil
 }
