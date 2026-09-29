@@ -87,6 +87,10 @@ type dndServer struct {
 	running bool
 }
 
+// dndReadTimeout bounds one DNDSource.ReadAt. It is a variable so that tests
+// can shorten it.
+var dndReadTimeout = 30 * time.Second
+
 type dndOffer struct {
 	src      DNDSource
 	entries  []far2ldnd.Entry // masked to the negotiated features
@@ -489,7 +493,46 @@ func (tv *TerminalView) dndRead(rid uint8, q *far2ldnd.ReadRequest) {
 	// At most one chunk, into a bounded buffer, before the reply is built
 	// whole (§ 6.4).
 	buf := make([]byte, q.Length)
-	n, eof, err := o.src.ReadAt(q.ItemID, buf, q.Offset)
+	type readResult struct {
+		n   int
+		eof bool
+		err error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		n, eof, err := o.src.ReadAt(q.ItemID, buf, q.Offset)
+		done <- readResult{n, eof, err}
+	}()
+	timer := time.NewTimer(dndReadTimeout)
+	var res readResult
+	select {
+	case res = <-done:
+		timer.Stop()
+	case <-timer.C:
+		// A source that never returns must not hold the request worker, and
+		// with it every later request, for the whole idle time. The offer is
+		// revoked; the hung ReadAt keeps the source open (it must never be
+		// closed under a running read) and releases it when it returns.
+		d.mu.Lock()
+		if d.offers[q.Offer] == o {
+			delete(d.offers, q.Offer)
+		}
+		o.closed = true
+		tv.dndErrorLocked(rid, far2ldnd.StatusIOError, "DND source read timed out")
+		d.mu.Unlock()
+		go func() {
+			<-done
+			d.mu.Lock()
+			defer d.mu.Unlock()
+			o.busy--
+			if o.busy == 0 && !o.released {
+				o.released = true
+				o.src.Close()
+			}
+		}()
+		return
+	}
+	n, eof, err := res.n, res.eof, res.err
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
