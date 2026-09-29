@@ -2,7 +2,7 @@ package git
 
 import (
 	"github.com/unxed/f4/internal/i18n"
-	"github.com/unxed/vtui"
+	"github.com/unxed/f4/vfs"
 )
 
 // showHelp is F1 on the status panel (f4#272): the plugin's own help, a
@@ -13,11 +13,5 @@ import (
 // F1 among its PanelKeys (vfs.PanelKeyProvider), which the host runs ahead of
 // the global Help binding, and shows its text this way.
 func (p *statusPanel) showHelp() {
-	if vtui.FrameManager == nil {
-		return
-	}
-	title := i18n.Msg("GitStatus.HelpTitle")
-	view := vtui.NewMarkdownView(title, i18n.Msg("GitStatus.Help"))
-	view.SetTitle(" " + title + " ")
-	vtui.FrameManager.Push(view)
+	vfs.ShowPanelHelp(i18n.Msg("GitStatus.HelpTitle"), i18n.Msg("GitStatus.Help"))
 }

@@ -471,6 +471,7 @@ var _ vfs.PanelKeyProvider = (*procListPanel)(nil)
 // F3/F8/Shift+F1/F2 bindings and put their captions on the keybar.
 func (p *procListPanel) PanelKeys() []vfs.PanelKey {
 	keys := []vfs.PanelKey{
+		vfs.PanelHelpKey(i18n.Msg("KeyBar.F1"), func() string { return i18n.Msg("ProcList.HelpTitle") }, func() string { return i18n.Msg("ProcList.Help") }),
 		{VK: vtinput.VK_F3, Label: i18n.Msg("ProcList.KeyBar.Details"), Run: p.showDetails},
 		{VK: vtinput.VK_F8, Label: i18n.Msg("ProcList.KeyBar.Kill"), Run: p.confirmKill},
 		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("ProcList.KeyBar.PriorityDown"), Run: func() { p.adjustPriority(false) }},
