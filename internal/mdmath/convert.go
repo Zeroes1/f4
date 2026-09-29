@@ -195,13 +195,13 @@ func script(up bool, arg string) string {
 
 func (c *converter) scriptArg() string {
 	c.skipSpaces()
-	switch r := c.peek(); {
-	case r == 0:
+	switch r := c.peek(); r {
+	case 0:
 		c.bad = true
 		return ""
-	case r == '{':
+	case '{':
 		return c.group()
-	case r == '\\':
+	case '\\':
 		return c.atom()
 	default:
 		c.i++
