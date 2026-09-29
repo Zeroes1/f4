@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/unxed/f4/internal/dialog"
+	"github.com/unxed/f4/internal/mdmath"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -78,7 +79,7 @@ func (ev *EditorView) refreshMarkdownSplit() {
 		return
 	}
 	name := filepath.Base(ev.FilePath)
-	view := vtui.NewMarkdownView(name, strings.ReplaceAll(text, "\r\n", "\n"))
+	view := vtui.NewMarkdownView(name, mdmath.Prepare(strings.ReplaceAll(text, "\r\n", "\n")))
 	view.Modal = false
 	view.ShowClose = false
 	view.SetTitle(" " + name + " ")

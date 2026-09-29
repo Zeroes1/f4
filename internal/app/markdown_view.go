@@ -23,6 +23,7 @@ import (
 
 	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/i18n"
+	"github.com/unxed/f4/internal/mdmath"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
@@ -64,7 +65,7 @@ func newMarkdownView(v vfs.VFS, path string, source []byte) *markdownView {
 		name = v.Base(path)
 	}
 	text := strings.ReplaceAll(string(source), "\r\n", "\n")
-	mv := &markdownView{HelpView: vtui.NewMarkdownView(name, text), vfs: v, path: path}
+	mv := &markdownView{HelpView: vtui.NewMarkdownView(name, mdmath.Prepare(text)), vfs: v, path: path}
 	// A file viewer, not a help popup: it has a workspace screen of its own
 	// and lets the reader switch away from it like any other viewer does.
 	mv.Modal = false

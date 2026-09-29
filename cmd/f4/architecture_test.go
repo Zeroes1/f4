@@ -90,6 +90,10 @@ var architectureLayers = map[string]int{
 	// Menu hotkeys made distinct once a menu is built. A leaf over vtui only.
 	"internal/menuhotkeys": 0,
 
+	// LaTeX formulas of a Markdown document to Unicode text: a leaf over the
+	// standard library, run before the text reaches the Markdown viewer.
+	"internal/mdmath": 0,
+
 	// Where f4 keeps the indexes of the tar archives it opened: paths and file
 	// names only, so the archive plugin and the file operations can share it.
 	"internal/tarindexcache": 0,
