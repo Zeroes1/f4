@@ -28,7 +28,7 @@ const (
 )
 
 // Version is a four-part assembly version.
-type Version struct{ Major, Minor, Build, Revision uint16 }
+type Version struct{ Major, Minor, Build, Revision int }
 
 func (v Version) String() string {
 	return fmt.Sprintf("%d.%d.%d.%d", v.Major, v.Minor, v.Build, v.Revision)
@@ -427,10 +427,10 @@ func fill(info *Info, t *tables) {
 	if t.rowCount[0x20] > 0 {
 		info.Name = t.str(t.cell(0x20, 1, 7))
 		info.Version = Version{
-			Major:    uint16(t.cell(0x20, 1, 1)),
-			Minor:    uint16(t.cell(0x20, 1, 2)),
-			Build:    uint16(t.cell(0x20, 1, 3)),
-			Revision: uint16(t.cell(0x20, 1, 4)),
+			Major:    int(t.cell(0x20, 1, 1)),
+			Minor:    int(t.cell(0x20, 1, 2)),
+			Build:    int(t.cell(0x20, 1, 3)),
+			Revision: int(t.cell(0x20, 1, 4)),
 		}
 		info.Culture = t.str(t.cell(0x20, 1, 8))
 	}
@@ -438,10 +438,10 @@ func fill(info *Info, t *tables) {
 		info.References = append(info.References, Ref{
 			Name: t.str(t.cell(0x23, row, 6)),
 			Version: Version{
-				Major:    uint16(t.cell(0x23, row, 0)),
-				Minor:    uint16(t.cell(0x23, row, 1)),
-				Build:    uint16(t.cell(0x23, row, 2)),
-				Revision: uint16(t.cell(0x23, row, 3)),
+				Major:    int(t.cell(0x23, row, 0)),
+				Minor:    int(t.cell(0x23, row, 1)),
+				Build:    int(t.cell(0x23, row, 2)),
+				Revision: int(t.cell(0x23, row, 3)),
 			},
 		})
 	}

@@ -10,13 +10,9 @@ import (
 
 type builder struct{ bytes.Buffer }
 
-func (b *builder) u16(v int) { _ = binary.Write(b, binary.LittleEndian, uint16(v)) }
-func (b *builder) u32(v int) { _ = binary.Write(b, binary.LittleEndian, uint32(v)) }
-func (b *builder) pad(to int) {
-	for b.Len()%to != 0 {
-		b.WriteByte(0)
-	}
-}
+// The builder writes small test values; the conversions cannot overflow.
+func (b *builder) u16(v int) { _ = binary.Write(b, binary.LittleEndian, uint16(v)) } //nolint:gosec // test data
+func (b *builder) u32(v int) { _ = binary.Write(b, binary.LittleEndian, uint32(v)) } //nolint:gosec // test data
 
 // heap builds a #Strings heap and hands out indexes into it.
 type heap struct {
@@ -163,9 +159,9 @@ func wrapPE(metadata []byte, clr bool) []byte {
 		le.PutUint32(image[optOff+96+14*8+4:], corSize)
 	}
 	copy(image[secOff:], ".text")
-	le.PutUint32(image[secOff+8:], uint32(corSize+len(metadata)))
+	le.PutUint32(image[secOff+8:], uint32(corSize+len(metadata))) //nolint:gosec // test data
 	le.PutUint32(image[secOff+12:], virtAddr)
-	le.PutUint32(image[secOff+16:], uint32(corSize+len(metadata)))
+	le.PutUint32(image[secOff+16:], uint32(corSize+len(metadata))) //nolint:gosec // test data
 	le.PutUint32(image[secOff+20:], rawOff)
 	le.PutUint32(image[rawOff:], corSize)
 	le.PutUint32(image[rawOff+8:], virtAddr+metaOff)
