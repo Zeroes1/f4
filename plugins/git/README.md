@@ -475,3 +475,13 @@ archive tools (f4#609) rather than linking a Go git implementation.
 - No new host API: a plugin declares F1 among its `PanelKeys`
   (`vfs.PanelKeyProvider`), which the host already runs ahead of the global
   Help binding and puts on the keybar, and shows its own text this way.
+
+## Part 23: merging a branch (`branchview.go`)
+
+- **F6** on the branch list (Ctrl+S) merges the branch under the cursor into
+  the current one after a confirmation: `git merge --no-edit`. A merge that
+  stops -- conflicts, local changes in the way -- is undone with
+  `git merge --abort` at once and reported in an error dialog, so the tree is
+  never left half merged; resolving conflicts is left to the user's own tools.
+- The current branch cannot be merged into itself. After a merge the branch
+  list and the status panel reload.

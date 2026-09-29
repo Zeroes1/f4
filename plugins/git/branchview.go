@@ -172,7 +172,7 @@ func (bv *BranchView) SetPosition(x1, y1, x2, y2 int) {
 // F1..F10.
 func (bv *BranchView) GetKeyLabels() *vtui.KeySet {
 	return &vtui.KeySet{
-		Normal: vtui.KeyBarLabels{"", "", "", "", i18n.Msg("GitBranch.Refresh"), "", "", i18n.Msg("GitBranch.Delete"), "", i18n.Msg("GitBranch.Close")},
+		Normal: vtui.KeyBarLabels{"", "", "", "", i18n.Msg("GitBranch.Refresh"), i18n.Msg("GitBranch.Merge"), "", i18n.Msg("GitBranch.Delete"), "", i18n.Msg("GitBranch.Close")},
 	}
 }
 
@@ -203,6 +203,9 @@ func (bv *BranchView) ProcessKey(e *vtinput.InputEvent) bool {
 			if vtui.FrameManager != nil {
 				vtui.FrameManager.Redraw()
 			}
+			return true
+		case vtinput.VK_F6:
+			bv.mergeBranch()
 			return true
 		case vtinput.VK_RETURN:
 			bv.switchBranch()
@@ -383,6 +386,64 @@ func (bv *BranchView) runDeleteBranch(name string) {
 		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.RefreshFailed"), err), 3e9)
 	}
 	toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.DeleteDone"), name), 3e9)
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
+// mergeBranch is F6 on the branch list (f4#659 part 23): merge the branch
+// under the cursor into the current one, after a confirmation. It runs
+// `git merge --no-edit`, so git's own merge message is used and a
+// fast-forward stays one. A merge that stops (conflicts, or local changes in
+// the way) is undone with `git merge --abort` at once, so the tree never
+// stays half merged; the error dialog says what git reported and that the
+// merge was cancelled. Resolving conflicts stays with the user's own tools.
+func (bv *BranchView) mergeBranch() {
+	entry, ok := bv.selectedEntry()
+	if !ok {
+		return
+	}
+	if entry.Current {
+		toast.Show(i18n.Msg("GitBranch.MergeCurrent"), 3e9)
+		return
+	}
+	confirm := vtui.ShowMessageOn(bv, i18n.Msg("GitBranch.MergeTitle"),
+		fmt.Sprintf(i18n.Msg("GitBranch.MergeConfirm"), entry.Name),
+		[]string{i18n.Msg("GitBranch.MergeButton"), i18n.Msg("vtui.Cancel")})
+	if confirm == nil {
+		return
+	}
+	confirm.OnResult = func(code int) {
+		if code != 0 {
+			return
+		}
+		bv.runMergeBranch(entry.Name)
+	}
+}
+
+// runMergeBranch is mergeBranch's confirmed action, split out like
+// runDeleteBranch so a test can drive the `git merge` path directly.
+func (bv *BranchView) runMergeBranch(name string) {
+	output, err := runGitIn(context.Background(), bv.dir, "merge", "--no-edit", name)
+	if err != nil {
+		// Leave no half merged tree behind; the abort itself may have nothing
+		// to abort (the merge refused to start), which is fine.
+		_, _ = runGitIn(context.Background(), bv.dir, "merge", "--abort")
+		vtui.ShowMessage(i18n.Msg("Error.Title"),
+			fmt.Sprintf(i18n.Msg("GitBranch.MergeFailed"), name, firstLine(string(output), err)),
+			[]string{i18n.Msg("vtui.Ok")})
+		return
+	}
+
+	if err := bv.reload(); err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.RefreshFailed"), err), 3e9)
+	}
+	if bv.status != nil {
+		if err := bv.status.reload(); err != nil {
+			toast.Show(fmt.Sprintf(i18n.Msg("GitStatus.RefreshFailed"), err), 3e9)
+		}
+	}
+	toast.Show(fmt.Sprintf(i18n.Msg("GitBranch.MergeDone"), name), 3e9)
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}
