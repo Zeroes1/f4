@@ -123,6 +123,11 @@ func (mv *markdownView) sourceLabel() string {
 	return i18n.Msg("Viewer.ModeText")
 }
 
+// MarkdownSearchTopic hands the topic the view shows (laid out for its
+// current width) to the type-to-search of the help windows
+// (dialog.HelpTopicForFrame): typing searches the formatted text.
+func (mv *markdownView) MarkdownSearchTopic() *vtui.HelpTopic { return mv.CurrentTopic() }
+
 // GetType keeps the view apart from help windows, which report TypeUser.
 func (mv *markdownView) GetType() vtui.FrameType { return vtui.TypeUser + 20 }
 
