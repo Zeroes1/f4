@@ -472,6 +472,13 @@ func Install(data []byte, archiveKind string) error {
 	if err != nil {
 		return err
 	}
+	return installOver(exePath, data, archiveKind)
+}
+
+// installOver is Install for the executable at exePath. The release check
+// (CheckReleaseArchive) runs it over a stand-in, so a release is unpacked
+// by the same code before anyone installs it.
+func installOver(exePath string, data []byte, archiveKind string) error {
 	exeDir := filepath.Dir(exePath)
 	before, err := statExecutable(exePath)
 	if err != nil {
@@ -577,13 +584,16 @@ func assetSuffixes(goos, goarch, libc string) []string {
 // A lite build updates to the lite asset only: f4-lite-linux-amd64.tar.gz
 // ends with "-linux-amd64.tar.gz" as well, and the regular asset the plain
 // suffix would also match is a different program. There is no musl lite
-// flavor, and no .7z, which a lite build cannot unpack.
+// flavor.
+//
+// Lite is a .tar.gz on Windows too (#1656). A lite .zip ends with
+// "-windows-amd64.zip", and f4 up to v0.1.3-alpha takes the first .zip by
+// name with that suffix -- f4-lite-windows-amd64.zip, before
+// f4-windows-amd64.zip -- so the regular edition updated itself into lite.
+// No regular Windows updater asks for a .tar.gz.
 func editionAssetSuffixes(lite bool, goos, goarch, libc string) []string {
 	if !lite {
 		return assetSuffixes(goos, goarch, libc)
-	}
-	if goos == "windows" {
-		return []string{fmt.Sprintf("-lite-%s-%s.zip", goos, goarch)}
 	}
 	return []string{fmt.Sprintf("-lite-%s-%s.tar.gz", goos, goarch)}
 }
@@ -611,12 +621,17 @@ const releaseAssetPrefix = "f4-"
 func pickAsset(assets []Asset, suffixes []string) (url, updatedAt, kind string) {
 	for _, suffix := range suffixes {
 		for _, a := range assets {
-			if strings.HasPrefix(a.Name, releaseAssetPrefix) && strings.HasSuffix(a.Name, suffix) && !strings.HasSuffix(a.Name, "-lite"+suffix) {
+			if takesAsset(a.Name, suffix) {
 				return a.BrowserDownloadURL, a.UpdatedAt, archiveKindForSuffix(suffix)
 			}
 		}
 	}
 	return "", "", ""
+}
+
+// takesAsset says whether pickAsset takes the asset name for suffix.
+func takesAsset(name, suffix string) bool {
+	return strings.HasPrefix(name, releaseAssetPrefix) && strings.HasSuffix(name, suffix) && !strings.HasSuffix(name, "-lite"+suffix)
 }
 
 func archiveKindForSuffix(suffix string) string {
