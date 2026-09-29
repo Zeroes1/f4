@@ -51,7 +51,7 @@ import (
 //
 // F8 rejects the edit under the cursor with a reason: it is left out like a
 // row switched off, and a line about it goes into the draft of the next
-// message to the model (vtvibe_ap_reject.go). Not here yet: Ctrl+Z.
+// message to the model (vtvibe_ap_reject.go). Ctrl+Z undoes the newest applied patch.
 
 // aiReview is the review screen's state: the dry run's rows, which of them
 // are checked and which are rejected. A rejected row is never checked.
@@ -602,19 +602,10 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 	// VTVIBE.md §7.3 -- not a modal box over the AI panel: it fills the
 	// workspace above the key bar, so the reader can leave it for the editor
 	// (Enter opens the file there) and come back to it by switching screens.
-	top := vtui.FrameManager.WorkspaceTopInset()
-	dlgW := scrW
-	// diffH is the permanent diff pane's height, under the table rather
-	// than beside it: aiReviewTable's columns need most of inner's width to
-	// stay readable (File/Locator are MinWidth 12 each, and go narrower
-	// than that fast), so splitting the dialog left/right the way
-	// docs/VTVIBE.md §7.3's mockup draws it would starve one side or the
-	// other on anything but a very wide screen. Stacked, the table keeps
-	// its usual width and the pane gets its own scrollable rows below it.
-	diffH := min(max(scrH/4, 6), 14)
-	minH := 16 + diffH
-	dlgH := max(scrH-1-top, minH)
-	inner := dlgW - 4
+	//
+	// The sizes below come from aiReviewGeometry, so that a resized terminal
+	// gets the same layout again (aiReviewScreen.ResizeConsole).
+	top, dlgW, dlgH, diffH, inner := aiReviewGeometry(scrW, scrH)
 
 	dlg := vtui.NewCenteredDialog(dlgW, dlgH, i18n.Msg("AI.ReviewTitle"))
 	dlg.ShowClose = true
@@ -804,9 +795,57 @@ func aiShowPatchReview(pf *panel.PanelsFrame, patch *vtvibe.Patch, root string, 
 		dlg.AddItem(b)
 	}
 
-	vtui.FrameManager.AddScreen(dlg)
+	// relayout builds the same screen again for a terminal of another size:
+	// the dialog takes the whole workspace, the table and the diff pane are
+	// resized and the one-line labels are cut to the new width. Nothing the
+	// reader has done (checked rows, rejections, the cursor, the pane's
+	// scroll) is touched.
+	relayout := func(w, h int) {
+		var top, dlgW, dlgH, diffH int
+		top, dlgW, dlgH, diffH, inner = aiReviewGeometry(w, h)
+		dlg.SetPosition(0, top, dlgW-1, top+dlgH-1)
+		table.SetPosition(0, 0, inner-1, dlgH-9-diffH-1)
+		diffPane.SetPosition(0, 0, inner-1, diffH-1)
+		btnRow.SetPosition(0, 0, inner-1, 0)
+		totals.SetText(aiReviewLabel(aiReviewTotals(mods), inner))
+		diffHint.SetText(aiReviewLabel(hint, inner))
+		vbox.SetPosition(dlg.X1+2, dlg.Y1+1, dlg.X1+2+inner-1, dlg.Y1+dlgH-2)
+		vbox.Apply()
+		diffPane.clampTop()
+		refresh()
+	}
+	screen := &aiReviewScreen{Window: dlg, relayout: relayout}
+	vtui.FrameManager.AddScreen(screen)
 	return dlg
 }
+
+// aiReviewGeometry is the review screen's size for a terminal of scrW x scrH:
+// the workspace's top row, the dialog's width and height, the diff pane's
+// height and the width inside the frame.
+//
+// The diff pane sits under the table rather than beside it: the table's
+// columns need most of the width to stay readable (File/Locator are MinWidth
+// 12 each, and go narrower than that fast), so splitting the dialog left/right
+// the way docs/VTVIBE.md §7.3's mockup draws it would starve one side or the
+// other on anything but a very wide screen.
+func aiReviewGeometry(scrW, scrH int) (top, dlgW, dlgH, diffH, inner int) {
+	top = vtui.FrameManager.WorkspaceTopInset()
+	dlgW = scrW
+	diffH = min(max(scrH/4, 6), 14)
+	dlgH = max(scrH-1-top, 16+diffH)
+	inner = dlgW - 4
+	return top, dlgW, dlgH, diffH, inner
+}
+
+// aiReviewScreen is the review window as the frame manager holds it: the
+// window itself plus the re-layout a resized terminal asks for (a plain
+// non-modal vtui.Window would only re-centre itself).
+type aiReviewScreen struct {
+	*vtui.Window
+	relayout func(w, h int)
+}
+
+func (s *aiReviewScreen) ResizeConsole(w, h int) { s.relayout(w, h) }
 
 // aiViewPatchLog opens the patcher's text output in the viewer.
 func aiViewPatchLog(pf *panel.PanelsFrame, output string) {

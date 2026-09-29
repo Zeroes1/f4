@@ -66,8 +66,8 @@ func TestAIShowPatchReviewListsEveryModification(t *testing.T) {
 	}
 	patch := &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}
 	dlg := aiShowPatchReview(nil, patch, root, aiReviewTestMods(), 2, "patcher output")
-	if top := vtui.FrameManager.GetTopFrame(); top != vtui.Frame(dlg) {
-		t.Fatalf("top frame = %T, want the review dialog", top)
+	if !aiReviewIsTop(dlg) {
+		t.Fatalf("top frame = %T, want the review dialog", vtui.FrameManager.GetTopFrame())
 	}
 
 	text := aiScreenText(t, scr, dlg)
@@ -227,6 +227,49 @@ func TestAIReviewSelection(t *testing.T) {
 	rev.toggle(4)
 	if !rev.canApply() {
 		t.Error("canApply false with an excluded row checked again")
+	}
+}
+
+// aiReviewIsTop reports whether dlg's review screen is the frame on top.
+func aiReviewIsTop(dlg *vtui.Window) bool {
+	s, ok := vtui.FrameManager.GetTopFrame().(*aiReviewScreen)
+	return ok && s.Window == dlg
+}
+
+// TestAIShowPatchReviewResize: a resized terminal gets the review laid out
+// again over the whole workspace, and what the reader has done stays.
+func TestAIShowPatchReviewResize(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 24)
+	vtui.FrameManager.Init(scr)
+
+	dlg := aiShowPatchReview(nil, &vtvibe.Patch{ID: "aa000001", Text: "aa000001 AP 3.2\n"}, t.TempDir(), aiReviewTestMods(), 2, "")
+	table := aiReviewTableOf(t, dlg)
+	pane := aiReviewPaneOf(t, dlg)
+	table.ProcessKey(aiKey(vtinput.VK_SPACE, ' '))
+	sel := table.SelectPos
+
+	for _, size := range [][2]int{{140, 40}, {80, 30}} {
+		w, h := size[0], size[1]
+		scr.AllocBuf(w, h)
+		vtui.FrameManager.GetTopFrame().ResizeConsole(w, h)
+		_, y1, x2, y2 := dlg.GetPosition()
+		if x2 != w-1 || y2 != h-2 || y1 < 0 {
+			t.Errorf("%dx%d: review at y %d..%d, right edge %d; want it to fill the workspace", w, h, y1, y2, x2)
+		}
+		if _, _, px2, _ := pane.GetPosition(); px2 > x2 {
+			t.Errorf("%dx%d: diff pane's right edge %d is outside the dialog (%d)", w, h, px2, x2)
+		}
+		if _, py1, _, py2 := pane.GetPosition(); py2-py1+1 != min(max(h/4, 6), 14) || py2 > y2 {
+			t.Errorf("%dx%d: diff pane rows %d..%d", w, h, py1, py2)
+		}
+		if table.SelectPos != sel {
+			t.Errorf("%dx%d: the table's cursor moved from %d to %d", w, h, sel, table.SelectPos)
+		}
+		if text := aiScreenText(t, scr, dlg); !strings.Contains(text, i18n.Msg("AI.ReviewTitle")) {
+			t.Errorf("%dx%d: title missing after the re-layout:\n%s", w, h, text)
+		}
 	}
 }
 
@@ -467,7 +510,7 @@ func TestAIShowPatchReviewDiff(t *testing.T) {
 			t.Fatalf("key %d not handled by the review table", vk)
 		}
 	}
-	if dlg.IsDone() || calls != 0 || vtui.FrameManager.GetTopFrame() != vtui.Frame(dlg) {
+	if dlg.IsDone() || calls != 0 || !aiReviewIsTop(dlg) {
 		t.Fatal("Enter or F3 closed the review, ran the patcher, or opened another screen")
 	}
 
