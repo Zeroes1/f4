@@ -427,3 +427,53 @@ func TestOverlayKeybarSlots_MatchesVtuiLayout(t *testing.T) {
 		}
 	}
 }
+
+// TestHostConsoleOverlay_RunningProgramGetsTheKeys is the regression for
+// #1674: in Host with overlay the overlay's command line took the key-downs
+// of a program that was running (pkzipc waiting for a command), and only
+// the key-ups reached it. While the program runs, typing goes to the PTY;
+// once it is done, the command line has it again.
+func TestHostConsoleOverlay_RunningProgramGetsTheKeys(t *testing.T) {
+	oldCfg := config.App
+	defer func() { config.App = oldCfg }()
+	config.App.ConsoleMode = "host"
+	config.App.ConsoleOverlayUI = true
+
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pty := pf.Pty.(*paneltest.MockPty)
+	pf.ShellMode = terminal.ShellModeHost
+	pf.ResizeConsole(80, 25)
+	pf.ShowPanels = false
+	pf.EnterHostConsole()
+	if pf.OverlayLines() == 0 {
+		t.Fatal("test setup: the overlay is off")
+	}
+
+	key := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_C, Char: 'c'}
+
+	pf.Executing = true
+	pty.Written = nil
+	pf.ProcessKey(key)
+	if !pf.CmdLine.IsEmpty() {
+		t.Error("a running program's keys went into the overlay command line")
+	}
+	if len(pty.Written) == 0 {
+		t.Error("a running program did not get the key")
+	}
+
+	pf.Executing = false
+	pty.Written = nil
+	pf.ProcessKey(key)
+	if pf.CmdLine.IsEmpty() {
+		t.Error("an idle shell's keys did not go into the overlay command line")
+	}
+	if len(pty.Written) != 0 {
+		t.Errorf("an idle shell's key also reached the PTY: %q", pty.Written)
+	}
+}

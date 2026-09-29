@@ -2916,8 +2916,11 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	// In Far-style host console with an overlay, route editing keys to CommandLine first
-	if !pf.ShowPanels && pf.ShellMode == terminal.ShellModeHost && pf.OverlayLines() > 0 {
+	// In Far-style host console with an overlay, route editing keys to CommandLine first.
+	// Only while the shell is idle: a running program (pkzipc waiting for a
+	// command, Far) owns the keyboard, and the overlay's command line must not
+	// swallow what is typed for it (#1674).
+	if !pf.ShowPanels && pf.ShellMode == terminal.ShellModeHost && pf.OverlayLines() > 0 && !pf.TerminalOwnsKeyboard() {
 		if pf.handleHostConsoleTab(e) {
 			return true
 		}
@@ -3651,7 +3654,7 @@ func (pf *PanelsFrame) hiddenConsoleCommandLineOwnsInput() bool {
 	// the edit control, otherwise Enter can execute text that was never drawn.
 	switch pf.ShellMode {
 	case terminal.ShellModeHost:
-		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.IsHostConsoleActive()
+		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.IsHostConsoleActive() && !pf.TerminalOwnsKeyboard()
 	case terminal.ShellModeSimpleInline:
 		return pf.consoleStyle() == terminal.ConsoleViewFar && pf.ConsoleViewActive()
 	default:
