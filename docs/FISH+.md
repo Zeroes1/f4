@@ -90,6 +90,10 @@ The helper answers with a terminator carrying the reserved id `0`:
 
 Everything printed before that line (motd, shell warnings, login banners) is discarded by the client. Such noise does not always end with a newline, and neither does the echo of the uploaded script on a pseudo terminal, so during the handshake — and only there — the client looks for the terminator anywhere in the line rather than at its start, while the helper prints a newline of its own before the banner. The word list after the version is the set of features the helper detected on the remote host; later steps pick their strategy from it (`stat` vs `statbsd` vs `find` vs plain `ls`, `dd` availability and so on). A failing host answers `err` with a reason instead.
 
+### f4 as the server (native bootstrap)
+
+A remote host that has f4 installed needs no shell helper: `fishplus.Server` speaks this same protocol from Go, and a client selects it with `BootstrapNative`. There is nothing to upload and no shell to get past, so the bootstrap is one line, `F4NATIVE <token>`, sent to the remote command's stdin; the server answers with the usual banner terminator (id `0`, features starting with `native`) and then serves requests exactly as `helper.sh` does. A request for a command the server does not implement is answered `err unknown command` after its path lines have been read, so the stream stays in step; one whose payload cannot be skipped (`write`, `patch`) ends the session. Served so far: `noop`, `pwd`, `ping`, `feats`, `exit`. The rest of the commands, a way to start it (`f4` as the SSH remote command) and choosing it in the connection dialog follow (unxed/f4#1680).
+
 ### Commands implemented so far
 
 *   `noop` — cheapest possible round trip.

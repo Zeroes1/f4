@@ -1,0 +1,164 @@
+package fishplus
+
+import (
+	"bufio"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
+)
+
+// Server speaks the FISH+ wire protocol (docs/FISH+.md) from Go, so that a
+// machine with f4 installed needs no shell helper: the client starts f4 as the
+// remote command, says hello with BootstrapNative and from then on talks to it
+// exactly as it talks to helper.sh. It is the first step of using f4 as the
+// remote server (unxed/f4#1680); only the session commands are served so far --
+// noop, pwd, ping, feats and exit -- and every other command of the protocol
+// answers "unknown command" after its path lines have been read, so a client
+// that has probed the banner's features never desynchronises the stream.
+type Server struct {
+	// Dir is what pwd reports; empty means the process' working directory.
+	Dir string
+	// Features are the words after the protocol version in the banner.
+	Features []string
+}
+
+// serverFeatures is what a Server announces when none is set: the native
+// marker, which tells a client that no shell tool is behind the answers.
+var serverFeatures = []string{"native"}
+
+// pathLines is how many path lines follow the request line of each command of
+// the protocol, which is what a server has to consume to stay in step with a
+// command it does not implement. Commands with a payload after the paths
+// (write, patch) are absent: their length cannot be skipped blindly.
+var pathLines = map[string]int{
+	"noop": 0, "pwd": 0, "ping": 1, "feats": 0, "exit": 0, "enum": 1, "info": 1, "linfo": 1,
+	"rdlink": 1, "read": 1, "trunc": 1, "mkdir": 1, "rm": 1, "rmdir": 1, "rmtree": 1,
+	"mv": 2, "cp": 2, "mklink": 2, "chmod": 1, "chown": 1, "utime": 1, "grep": 2, "lidx": 1,
+	"jpoll": 0, "jkill": 0, "jdrop": 0, "jlist": 0, "mode": 0, "rmode": 0, "wmode": 0,
+}
+
+// errUnrecoverable ends a session whose stream a server can no longer follow.
+var errUnrecoverable = errors.New("fishplus: request cannot be skipped")
+
+// Serve runs one session over the duplex stream until the client says exit or
+// closes it. The first line must be the client's hello (NativeHelloLine).
+func (srv *Server) Serve(r io.Reader, w io.Writer) error {
+	in := bufio.NewReader(r)
+	hello, err := readServerLine(in)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(hello, NativeHelloPrefix) || len(hello) == len(NativeHelloPrefix) {
+		return fmt.Errorf("fishplus: bad hello %q", hello)
+	}
+	token := strings.TrimSpace(hello[len(NativeHelloPrefix):])
+	feats := srv.Features
+	if len(feats) == 0 {
+		feats = serverFeatures
+	}
+	banner := fmt.Sprintf("FISHPLUS %d %s", ProtocolVersion, strings.Join(feats, " "))
+	// The newline in front is the same courtesy helper.sh pays, so the client's
+	// lenient handshake matching sees the terminator at the start of a line.
+	if _, err := fmt.Fprintf(w, "\n.%s 0 ok %s\n", token, banner); err != nil {
+		return err
+	}
+
+	for {
+		line, err := readServerLine(in)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			return fmt.Errorf("fishplus: bad request %q", line)
+		}
+		id, cmd := fields[0], fields[1]
+		if _, err := strconv.ParseUint(id, 10, 64); err != nil {
+			return fmt.Errorf("fishplus: bad request id %q", id)
+		}
+		count, known := pathLines[cmd]
+		paths := make([]string, 0, count)
+		for i := 0; i < count; i++ {
+			p, err := readServerPath(in)
+			if err != nil {
+				return err
+			}
+			paths = append(paths, p)
+		}
+		end := func(status, msg string) error {
+			if msg != "" {
+				msg = " " + msg
+			}
+			_, err := fmt.Fprintf(w, ".%s %s %s%s\n", token, id, status, msg)
+			return err
+		}
+		switch cmd {
+		case "noop":
+			err = end("ok", "")
+		case "pwd":
+			dir := srv.Dir
+			if dir == "" {
+				if dir, err = os.Getwd(); err != nil {
+					err = end("err", err.Error())
+					break
+				}
+			}
+			if _, err = fmt.Fprintf(w, "%s\n", dir); err == nil {
+				err = end("ok", "")
+			}
+		case "ping":
+			if _, err = fmt.Fprintf(w, "%s\n", paths[0]); err == nil {
+				err = end("ok", "")
+			}
+		case "feats":
+			if _, err = fmt.Fprintf(w, "%d %s\n", ProtocolVersion, strings.Join(feats, " ")); err == nil {
+				err = end("ok", "")
+			}
+		case "exit":
+			return end("ok", "")
+		default:
+			if !known {
+				// The stream cannot be followed past a command whose payload
+				// or path count is not known.
+				_ = end("err", "unknown command")
+				return errUnrecoverable
+			}
+			err = end("err", "unknown command")
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func readServerLine(in *bufio.Reader) (string, error) {
+	line, err := in.ReadString('\n')
+	if err != nil && (err != io.EOF || line == "") {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// readServerPath reads one path line and undoes the "~" base64 escape a client
+// applies to a path a line cannot carry raw (EncodePathLine).
+func readServerPath(in *bufio.Reader) (string, error) {
+	line, err := readServerLine(in)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(line, "~") {
+		raw, err := base64.StdEncoding.DecodeString(line[1:])
+		if err != nil {
+			return "", fmt.Errorf("fishplus: bad escaped path: %w", err)
+		}
+		return string(raw), nil
+	}
+	return line, nil
+}
