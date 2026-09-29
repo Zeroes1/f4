@@ -250,6 +250,7 @@ var _ vfs.PanelKeyProvider = (*statusPanel)(nil)
 // ever reaches f4 -- one more reason not to reach for it here).
 func (p *statusPanel) PanelKeys() []vfs.PanelKey {
 	return []vfs.PanelKey{
+		{VK: vtinput.VK_F1, Label: i18n.Msg("KeyBar.F1"), Run: p.showHelp},
 		{VK: vtinput.VK_F5, Label: i18n.Msg("GitStatus.KeyBar.Refresh"), Run: p.refresh},
 		{VK: vtinput.VK_RETURN, Run: p.showDiff, Enabled: p.hasSelectedEntry},
 		{VK: vtinput.VK_INSERT, Run: p.toggleStage, Enabled: p.hasSelectedEntry},

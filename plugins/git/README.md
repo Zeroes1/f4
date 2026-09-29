@@ -465,3 +465,13 @@ archive tools (f4#609) rather than linking a Go git implementation.
   passed as `git commit --author=...`, with or without `--amend`/`--signoff`.
   An invalid value is git's own error in the failure toast.
 - The dialog's switches travel as one `commitOptions` value now.
+
+## F1: the plugin's own help (`help.go`, f4#272)
+
+- **F1** on the status panel opens the plugin's help -- a Markdown text in
+  vtui's Markdown viewer, the same window the F3 view of `.md` files uses. The
+  text is the language-file string `GitStatus.Help` (title `GitStatus.HelpTitle`),
+  so it follows the interface language; it lists every key of the panel.
+- No new host API: a plugin declares F1 among its `PanelKeys`
+  (`vfs.PanelKeyProvider`), which the host already runs ahead of the global
+  Help binding and puts on the keybar, and shows its own text this way.
