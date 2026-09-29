@@ -147,6 +147,13 @@ func (p *PluginPanelInstance) ProcessKey(e *vtinput.InputEvent) bool {
 	if vfs.DispatchPanelKey(p.PanelKeys(), e) {
 		return true
 	}
+	// Ctrl+PgUp is asked before the controller: a list-like plugin panel
+	// (ProcList) reads it as "page up" and consumes it, so it never reached the
+	// close check below (f4#312). A key the controller declares still won above.
+	if e != nil && e.VirtualKeyCode == vtinput.VK_PRIOR && isPluginPanelCloseKey(e) {
+		p.Close()
+		return true
+	}
 	if p.controller.ProcessKey(e) {
 		return true
 	}
