@@ -556,13 +556,24 @@ func (pf *PanelsFrame) StartDragOut(fsp *FileSystemPanel, names []string) bool {
 // a temporary directory, which is a copy nobody asked for and needs its own
 // progress and cleanup - see DRAGDROP.md.
 func LocalDragPaths(fsp *FileSystemPanel, names []string) ([]string, bool) {
-	local, ok := fsp.Vfs.(*vfs.OSVFS)
-	if !ok {
+	var real []string
+	switch v := fsp.Vfs.(type) {
+	case *vfs.OSVFS:
+		for _, n := range names {
+			real = append(real, v.Join(v.GetPath(), n))
+		}
+	case *TempPanelVFS:
+		// A temporary panel lists references to files that live elsewhere:
+		// the drag offers those files themselves, not copies of them (#1604).
+		var ok bool
+		if real, ok = v.LocalPaths(names); !ok {
+			return nil, false
+		}
+	default:
 		return nil, false
 	}
 	paths := make([]string, 0, len(names))
-	for _, n := range names {
-		p := local.Join(local.GetPath(), n)
+	for _, p := range real {
 		if hostmode.Posix() && runtime.GOOS == "windows" {
 			// CF_HDROP carries DOS paths, so a posix path has to be
 			// translated before anything else can open it. Wine does the

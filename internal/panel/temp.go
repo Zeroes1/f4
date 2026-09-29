@@ -898,3 +898,24 @@ type FoundFile struct {
 	Path string
 	Item vfs.VFSItem
 }
+
+// LocalPaths resolves the named entries of the panel's root to the paths of
+// the files they reference, when every one of them lives on the local disk.
+// It is what dragging out of a temporary panel offers the desktop (#1604).
+func (t *TempPanelVFS) LocalPaths(names []string) ([]string, bool) {
+	if t == nil || t.store == nil || len(names) == 0 || !t.IsAtRoot() {
+		return nil, false
+	}
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		ref, realPath, isReference, ok := t.resolve(t.Join(t.root(), name))
+		if !ok || !isReference {
+			return nil, false
+		}
+		if _, local := ref.source.(*vfs.OSVFS); !local {
+			return nil, false
+		}
+		paths = append(paths, realPath)
+	}
+	return paths, true
+}
