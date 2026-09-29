@@ -2820,6 +2820,23 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.AmountInWords",
+		Area:        "Editor",
+		Label:       "Amount in words",
+		LabelKey:    "Action.Editor.AmountInWords",
+		Description: "Replace the selected number or amount of money (1234.56 rub, $12.50, 99 EUR) with it written in words",
+		DescKey:     "Action.Editor.AmountInWords.Desc",
+		MenuPath:    "Edit",
+		Handler: withEditor(func(ev *editor.EditorView) {
+			result, err := ev.AmountInWordsSelection()
+			if err != nil {
+				vtui.ShowMessage(i18n.Msg("Editor.AmountInWords.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+				return
+			}
+			toast.Show(result, 2*time.Second)
+		}),
+	})
+	registerAction(action.Action{
 		Name:                "Editor.SortLines",
 		Area:                "Editor",
 		Label:               "Sort lines",

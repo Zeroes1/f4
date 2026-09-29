@@ -47,6 +47,10 @@ var architectureLayers = map[string]int{
 	// Checked conversions, shared by seven packages. Zero imports of ours.
 	"internal/numeric": 0,
 
+	// f4#1463: numbers and amounts of money in words (Russian, English). Pure
+	// text in, text out; imports nothing of ours.
+	"internal/numwords": 0,
+
 	// The --install/--self-install CLI command. Standalone: it copies the
 	// running executable and edits a shell profile, importing nothing else
 	// of ours.

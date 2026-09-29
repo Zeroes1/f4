@@ -213,6 +213,7 @@ var actionMenuOrder = []string{
 	"Editor.Base64Encode",
 	"Editor.Base64Decode",
 	"Editor.CalculateExpression",
+	"Editor.AmountInWords",
 	"Editor.SortLines",
 	"Editor.ToggleOvertype",
 	"Editor.Search",
