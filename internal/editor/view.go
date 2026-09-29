@@ -81,8 +81,13 @@ type EditorView struct {
 	DesiredVisualCol   int // Колонка, в которую мы хотим попасть при навигации Up/Down
 
 	ShowWhitespaces bool
-	SelActive       bool
-	SelAnchorOffset int // Абсолютное смещение начала выделения
+	// ShowControlChars draws the C0 control characters and DEL as the one-cell
+	// glyphs of the Unicode Control Pictures block (U+2400..), so a NUL or ESC in
+	// a file is told apart from every other unprintable. Display only: widths,
+	// cursor columns and the file's bytes are unchanged (unxed/f4#1667).
+	ShowControlChars bool
+	SelActive        bool
+	SelAnchorOffset  int // Абсолютное смещение начала выделения
 	// extraCursors holds the secondary carets of a multi-caret edit, sorted
 	// by offset and without duplicates. The primary caret stays in
 	// CursorLine/CursorPos and is never listed here, so every existing
@@ -2956,6 +2961,11 @@ func (ev *EditorView) fillCellsWithLinks(target []vtui.CharInfo, data []byte, de
 			w = sanitizedWidth
 			if cluster.text == " " && ev.ShowWhitespaces {
 				displayText = "·"
+			}
+			if ev.ShowControlChars {
+				if picture, ok := controlPicture(cluster.text); ok {
+					displayText = picture
+				}
 			}
 		}
 		if w <= 0 {
@@ -7085,4 +7095,22 @@ func (ev *EditorView) IsSaving() bool {
 // what follows as a separate edit".
 func (ev *EditorView) Checkpoint() {
 	ev.saveUndo(opOther)
+}
+
+// controlPicture maps a lone C0 control character (tab excluded: it has its own
+// rendering) or DEL to its Unicode Control Pictures glyph, which is one cell
+// wide like the placeholder the screen buffer would otherwise show.
+func controlPicture(cluster string) (string, bool) {
+	if len(cluster) != 1 {
+		return "", false
+	}
+	switch r := rune(cluster[0]); {
+	case r == '\t' || r == '\n' || r == '\r':
+		return "", false
+	case r < 0x20:
+		return string(rune(0x2400) + r), true
+	case r == 0x7f:
+		return "\u2421", true
+	}
+	return "", false
 }

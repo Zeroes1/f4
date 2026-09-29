@@ -3094,6 +3094,17 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowWhitespaces = !ev.ShowWhitespaces }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ShowControlChars",
+		Area:        "Editor",
+		Label:       "Show Control Characters",
+		LabelKey:    "Action.Editor.ShowControlChars",
+		Description: "Toggle visible control characters",
+		DescKey:     "Action.Editor.ShowControlChars.Desc",
+		MenuPath:    "Options",
+		Checked:     editorState(func(ev *editor.EditorView) bool { return ev.ShowControlChars }),
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowControlChars = !ev.ShowControlChars }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.CodepageNext",
 		Area:        "Editor",
 		Label:       "Next Codepage",

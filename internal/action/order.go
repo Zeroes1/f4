@@ -224,6 +224,7 @@ var actionMenuOrder = []string{
 	"Editor.HexMode",
 	"Editor.DisasmMode",
 	"Editor.ShowWhitespaces",
+	"Editor.ShowControlChars",
 	"Editor.CodepageNext",
 	"Editor.CodepageMenu",
 	"Editor.ConvertCodepage",
