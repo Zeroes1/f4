@@ -297,3 +297,14 @@ func TestDragOutModifierHeld(t *testing.T) {
 		}
 	}
 }
+
+func TestDragOutStartsInsideRowsOnlyWithAModifier(t *testing.T) {
+	if panel.DragOutStartsInsideRows("") {
+		t.Error("with no modifier a drag inside the rows still belongs to the cursor")
+	}
+	for _, m := range []string{"ctrl", "alt", "shift"} {
+		if !panel.DragOutStartsInsideRows(m) {
+			t.Errorf("with %q held the drag must start on the first move", m)
+		}
+	}
+}

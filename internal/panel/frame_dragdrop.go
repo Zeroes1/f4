@@ -412,7 +412,12 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 	if !pf.DragOut.Armed || (mx == pf.DragOut.x && my == pf.DragOut.y) {
 		return false
 	}
-	if pf.DragOut.cursorOnly && pf.DragOut.Panel.pointerInsideRows(mx, my) {
+	// Without a modifier a left drag inside the rows only moves the cursor, so
+	// a drag of the current file starts once the pointer leaves them. With
+	// DragOutModifier the key already says "this is a drag": it starts, and the
+	// pointer changes, on the first move (#1604).
+	if pf.DragOut.cursorOnly && !DragOutStartsInsideRows(config.App.DragOutModifier) &&
+		pf.DragOut.Panel.pointerInsideRows(mx, my) {
 		return false
 	}
 	// The gesture stays armed while the modifier is not held, so pressing it
@@ -425,6 +430,11 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 	vtui.DebugLog("DND: drag out gesture triggered at %d,%d", mx, my)
 	return pf.StartDragOut(panel, names)
 }
+
+// DragOutStartsInsideRows reports whether a drag of the current file may start
+// while the pointer is still over the panel's rows: only when a modifier is
+// configured for drags, since without one such a move is the cursor's.
+func DragOutStartsInsideRows(modifier string) bool { return modifier != "" }
 
 // DragOutModifierHeld reports whether the key a drag out is tied to
 // (DragOutModifier: "", "ctrl", "alt" or "shift") is down in a mouse event's

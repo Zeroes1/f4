@@ -41,7 +41,7 @@ archive or a network panel says so in a toast instead.
 `DragOutModifier` in `[Panel]` (f4:config; `ctrl`, `alt` or `shift`, empty by
 default) starts a drag out only while that key is held, as Far Manager with the
 Burlak plugin does. The gesture stays armed while the key is up, so pressing it
-after the button still starts the drag (unxed/f4#1604).
+after the button still starts the drag, and with it a drag of the current file starts on the first move instead of after the pointer leaves the panel's rows, so the drag pointer appears at once (unxed/f4#1604).
 
 Under the gogpu backend a drop works as well, with two differences gogpu's
 own API imposes: it always copies, because gogpu tells us neither what the
