@@ -488,6 +488,7 @@ type F4Config struct {
 	ConsoleMode              string // "own" | "host" (default "own")
 	DragOutModifier          string // "" | "ctrl" | "alt" | "shift": a drag out of a panel starts only while this key is held (default "", f4:config)
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
+	HostConsoleDefaultColors bool   // Host modes: draw the console mirror shown beside a hidden panel in the terminal's own default colours (default false, f4:config)
 	UseWinescape             bool   // Windows only: let the file layer use libwinescape where it is available (default true)
 	AnnounceKittyTerm        bool   // introduce the built-in terminal as kitty, so that image tools use the graphics protocol
 	CommandLineAutoComplete  bool
@@ -722,6 +723,7 @@ var App = F4Config{
 	ConsoleMode:              "own",
 	ConsoleOverlayUI:         false,
 	DragOutModifier:          "",
+	HostConsoleDefaultColors: false,
 	UseWinescape:             true,
 	AnnounceKittyTerm:        true,
 	CommandLineAutoComplete:  true,
@@ -988,6 +990,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.ConsoleMode = merged.GetString("Panel", "ConsoleMode", "own")
 	cfg.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
 	cfg.DragOutModifier = NormalizeDragOutModifier(merged.GetString("Panel", "DragOutModifier", ""))
+	cfg.HostConsoleDefaultColors = merged.GetString("Panel", "HostConsoleDefaultColors", "0") == "1"
 	cfg.UseWinescape = merged.GetString("Panel", "UseWinescape", "1") != "0"
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
 	cfg.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
@@ -1326,6 +1329,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
 	fmt.Fprintf(&sb, "DragOutModifier = %s\n", NormalizeDragOutModifier(cfg.DragOutModifier))
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
+	fmt.Fprintf(&sb, "HostConsoleDefaultColors = %d\n", map[bool]int{true: 1, false: 0}[cfg.HostConsoleDefaultColors])
 	fmt.Fprintf(&sb, "UseWinescape = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseWinescape])
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
 	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])

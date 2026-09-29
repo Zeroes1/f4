@@ -2084,6 +2084,14 @@ func (pf *PanelsFrame) TerminalOwnsKeyboard() bool {
 	return pf.TermView == nil || pf.TermView.UseAltScreen || pf.IsPtyBusy()
 }
 
+// hostDefaultColors reports whether the mirror of the host console that f4
+// draws beside a hidden panel takes the host terminal's default colours
+// (HostConsoleDefaultColors, #1675). Only the host modes have such a mirror
+// of a console that is really the terminal's own.
+func (pf *PanelsFrame) hostDefaultColors() bool {
+	return config.App.HostConsoleDefaultColors && pf.ShellMode == terminal.ShellModeHost
+}
+
 func (pf *PanelsFrame) IsPtyBusy() bool {
 	active := pf.GetActivePTY()
 	if active == nil {
@@ -2368,6 +2376,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		}
 		pf.TermView.SetVisible(hasTerminalArea)
 		if hasTerminalArea {
+			pf.TermView.DefaultColors = pf.hostDefaultColors()
 			pf.TermView.Show(scr)
 		}
 		idx := pf.WidePanel
@@ -2384,6 +2393,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		// vertically (Ctrl+Up) and the terminal shows through below it.
 		if !pf.ShowLeftPanel || !pf.ShowRightPanel || pf.LeftHeightDecrement > 0 || pf.RightHeightDecrement > 0 {
 			pf.TermView.SetVisible(true)
+			pf.TermView.DefaultColors = pf.hostDefaultColors()
 			pf.TermView.Show(scr)
 		} else {
 			pf.TermView.SetVisible(false)

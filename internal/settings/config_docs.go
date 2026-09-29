@@ -81,6 +81,9 @@ var configOptionExtraDocs = map[string]string{
 		"ConsoleMode now names the style itself: own, far or mc.",
 	"Panel.DragOutModifier": "Start dragging files out of a panel into another application only while this key is held: ctrl, alt or shift. " +
 		"Empty, the default, starts a drag whenever the left button is dragged from a file, as before.",
+	"Panel.HostConsoleDefaultColors": "In the host console modes (Host with overlay, Host without overlay), draw the console that f4 shows beside a hidden panel (Ctrl+F1, Ctrl+F2) " +
+		"in the host terminal's own default colours, as the real host console looks: a translucent or themed terminal shows through instead of a black rectangle. " +
+		"0 keeps the black background. Where the terminal cannot show its default colours the effect is the same as 0.",
 	"Panel.VimHotkeys": "Kept for older f4 versions and shared settings files: 1 while NavigationMode is vim. " +
 		"f4 reads it only when NavigationMode is missing.",
 	"System.AutoSaveSettings": "The older switch for automatic saving. f4 keeps it on while any of the four automatic saving options is on, " +

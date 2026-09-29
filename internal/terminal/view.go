@@ -99,6 +99,11 @@ type TerminalView struct {
 	Muted         bool
 	lastCharWasCR bool
 
+	// DefaultColors draws the terminal's default foreground and background
+	// as the host terminal's own default colours (see hostDefaultColors),
+	// for the mirror of a host console shown beside a hidden panel (#1675).
+	DefaultColors bool
+
 	// syncScrollBudget is how many scrolls caused by a line feed on the last
 	// row are still to be kept out after an excised directory-sync echo, and
 	// syncScrollUntil is when the budget lapses whatever happens (#1673).
@@ -1039,7 +1044,11 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 		tv.kittyRecomputeSpans()
 	}
 
-	scr.FillRect(tv.X1, tv.Y1, tv.X1+tv.Width-1, tv.Y1+tv.Height-1, ' ', DefaultTermAttr)
+	fillAttr := DefaultTermAttr
+	if tv.DefaultColors {
+		fillAttr = hostDefaultColors(fillAttr)
+	}
+	scr.FillRect(tv.X1, tv.Y1, tv.X1+tv.Width-1, tv.Y1+tv.Height-1, ' ', fillAttr)
 
 	buf := tv.Lines
 	if tv.UseAltScreen {
@@ -1099,6 +1108,11 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 		// Проверка выхода за пределы экрана
 		if drawY >= tv.Y1 && drawY <= tv.Y1+tv.Height-1 {
 			drawLine := append([]vtui.CharInfo(nil), line...)
+			if tv.DefaultColors {
+				for i := range drawLine {
+					drawLine[i].Attributes = hostDefaultColors(drawLine[i].Attributes)
+				}
+			}
 			viewer.ApplyURLHoverAttr(drawLine, viewer.UrlCellRangesFromCells(line), tv.hoverURL)
 			scr.Write(tv.X1, drawY, drawLine)
 		}
