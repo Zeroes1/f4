@@ -420,7 +420,6 @@ Every file tracked in the repository. Regenerate with
     │   ├── SPREADSHEET.md
     │   ├── SYNC_DIRS.md
     │   ├── TERMINAL.md
-    │   ├── TEST_OPTIMIZATION_PLAN.md
     │   ├── TTYX.md
     │   ├── UPSTREAM.md
     │   ├── USER_MENU.md
