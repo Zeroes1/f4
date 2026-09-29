@@ -3,6 +3,8 @@ package mdmath
 import (
 	"strings"
 	"unicode"
+
+	"github.com/unxed/f4/internal/mermaid"
 )
 
 // Prepare rewrites the formulas of a Markdown document: $...$ inside a line
@@ -12,7 +14,7 @@ import (
 // inline code spans are never touched, and a lone dollar sign, as in a price,
 // stays a dollar sign.
 func Prepare(markdown string) string {
-	if !strings.Contains(markdown, "$") {
+	if !strings.Contains(markdown, "$") && !strings.Contains(strings.ToLower(markdown), "mermaid") {
 		return markdown
 	}
 	lines := strings.Split(markdown, "\n")
@@ -29,6 +31,13 @@ func Prepare(markdown string) string {
 			continue
 		}
 		if m := opensFence(trimmed); m != "" {
+			if isMermaid(trimmed, m) {
+				if block, next, ok := mermaidBlock(lines, i, m); ok {
+					out = append(out, block...)
+					i = next
+					continue
+				}
+			}
 			fence = m
 			out = append(out, line)
 			continue
@@ -43,6 +52,40 @@ func Prepare(markdown string) string {
 		out = append(out, inlineMath(line))
 	}
 	return strings.Join(out, "\n")
+}
+
+// isMermaid says whether an opening fence line names the mermaid language.
+func isMermaid(trimmed, fence string) bool {
+	info := strings.TrimSpace(strings.TrimPrefix(trimmed, fence))
+	return strings.EqualFold(strings.Fields(info + " x")[0], "mermaid")
+}
+
+// mermaidBlock converts a fenced mermaid block starting at lines[at] into a
+// plain fenced block holding the diagram as text. When the diagram is not one
+// the converter fully understands (or the block never closes) it reports
+// false and the source stays as it is.
+func mermaidBlock(lines []string, at int, fence string) (block []string, last int, ok bool) {
+	for j := at + 1; j < len(lines); j++ {
+		if !closesFence(strings.TrimSpace(lines[j]), fence) {
+			continue
+		}
+		text, converted := mermaid.Flowchart(strings.Join(lines[at+1:j], "\n"))
+		if !converted {
+			return nil, at, false
+		}
+		f := fenceFor(text)
+		return []string{f, text, f}, j, true
+	}
+	return nil, at, false
+}
+
+// fenceFor returns a code fence that text cannot close.
+func fenceFor(text string) string {
+	fence := "```"
+	for strings.Contains(text, fence) {
+		fence += "`"
+	}
+	return fence
 }
 
 func opensFence(trimmed string) string {

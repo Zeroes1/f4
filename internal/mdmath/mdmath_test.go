@@ -125,3 +125,34 @@ func TestPrepareBlocksAndFences(t *testing.T) {
 		t.Error("a converted block kept its source")
 	}
 }
+
+func TestPrepareMermaid(t *testing.T) {
+	in := strings.Join([]string{
+		"before",
+		"```mermaid",
+		"graph TD",
+		"A[Start] --> B",
+		"```",
+		"",
+		"```mermaid",
+		"sequenceDiagram",
+		"A->>B: hi",
+		"```",
+		"~~~ Mermaid",
+		"flowchart LR",
+		"X --> Y",
+		"~~~",
+		"```mermaid",
+		"graph TD",
+		"never closed --> B",
+	}, "\n")
+	got := Prepare(in)
+	for _, want := range []string{"```\n[Start] ──▶ [B]\n```", "```mermaid\nsequenceDiagram\nA->>B: hi\n```", "```\n[X] ──▶ [Y]\n```", "```mermaid\ngraph TD\nnever closed --> B"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("result lacks %q:\n%s", want, got)
+		}
+	}
+	if isMermaid("```go", "```") || !isMermaid("```mermaid", "```") || isMermaid("```", "```") {
+		t.Error("isMermaid misreads the info string")
+	}
+}
