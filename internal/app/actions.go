@@ -2162,6 +2162,23 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 	}
 }
 
+// actionCalcDirSizeAtCursor is Ctrl+Space: it sizes the folder under the
+// cursor of the active file panel and does nothing on a file.
+func actionCalcDirSizeAtCursor(pf *panel.PanelsFrame) {
+	if !pf.ShowPanels {
+		return
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return
+	}
+	idx := fsp.GetCursorIndex()
+	if idx < 0 || idx >= len(fsp.Entries) || !fsp.Entries[idx].IsDir {
+		return
+	}
+	actionCalcDirSize(pf, fsp, idx)
+}
+
 func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx int) {
 	entry := fsp.Entries[idx]
 	name := entry.Name

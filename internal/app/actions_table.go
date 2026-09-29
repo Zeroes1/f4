@@ -606,6 +606,20 @@ func init() {
 		DefaultKeys: []string{"AltF3"},
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFileHex(pf) }),
 	})
+	// Ctrl+Space: the size of the folder under the cursor, in any VFS -- an
+	// archive included, where the scan walks the archive's own listing and
+	// extracts nothing (M-Commander parity, f4#1670). F3 on a folder does the
+	// same; this is the key that does nothing else.
+	registerAction(action.Action{
+		Name:        "Panel.CalcDirSize",
+		Area:        "Shell",
+		Label:       "Calculate folder size",
+		LabelKey:    "Action.Panel.CalcDirSize",
+		Description: "Calculate the size of the folder under the cursor",
+		DescKey:     "Action.Panel.CalcDirSize.Desc",
+		DefaultKeys: []string{"CtrlSpace:NoTerminalApp"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCalcDirSizeAtCursor(pf) }),
+	})
 	registerAction(action.Action{
 		Name:        "File.Edit",
 		Area:        "Shell",
