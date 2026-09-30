@@ -1172,6 +1172,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	}
 	keymap.GlobalKeyRemap = keymap.NewKeyRemap(keymapPath)
 	macro.MacroMgr = macro.NewMacroManager(filepath.Join(configDir, "key_macros.ini"))
+	macro.MacroMgr.OnLuaLoaded = syncMacroMenuItems
 	macro.MacroMgr.LoadLuaMacros(f4MacroHost{}, filepath.Join(configDir, "Macros", "scripts"))
 	// Help is initialized after the hotkey manager: key binding topics
 	// are generated from the action registry and must reflect the

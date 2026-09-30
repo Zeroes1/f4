@@ -46,6 +46,9 @@ func (m *MacroManager) ReloadLuaMacros(host MacroHost, dir string) (int, error) 
 			}
 		}()
 	}
+	if m.OnLuaLoaded != nil {
+		m.OnLuaLoaded(m.Lua)
+	}
 	return count, loadErr
 }
 

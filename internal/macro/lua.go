@@ -228,8 +228,9 @@ func (e *LuaMacroEngine) addMenuItem(item *luaMenuItem) {
 }
 
 // MenuItems lists the MenuItem{} declarations offered in menu ("Plugins",
-// "Disks" or "Config", any case) when area is the current one; a declaration
-// that names no menu is in "Plugins", one that names no area is in every area.
+// "Disks" or "Config", any case) when area is the current one, or in any area
+// when area is empty; a declaration that names no menu is in "Plugins", one
+// that names no area is in every area.
 func (e *LuaMacroEngine) MenuItems(menu, area string) []LuaMenuItemInfo {
 	if e == nil {
 		return nil
@@ -238,7 +239,7 @@ func (e *LuaMacroEngine) MenuItems(menu, area string) []LuaMenuItemInfo {
 	defer e.mu.Unlock()
 	var out []LuaMenuItemInfo
 	for id, item := range e.items {
-		if containsFold(item.menus, menu) && (len(item.areas) == 0 || containsFold(item.areas, area) || containsFold(item.areas, "common")) {
+		if containsFold(item.menus, menu) && (area == "" || len(item.areas) == 0 || containsFold(item.areas, area) || containsFold(item.areas, "common")) {
 			out = append(out, LuaMenuItemInfo{ID: id, Description: item.macro.Description, Source: item.macro.Source})
 		}
 	}
