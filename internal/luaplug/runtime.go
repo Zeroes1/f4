@@ -90,7 +90,12 @@ type Runtime struct {
 	workerID    atomic.Int64
 	closed      atomic.Bool
 	interrupted atomic.Bool
-	once        sync.Once
+
+	// deadline is the running outermost call's clock, nil between calls. It
+	// is only set and cleared on the worker goroutine; PauseDeadline and
+	// ResumeDeadline read it there too.
+	deadline *callDeadline
+	once     sync.Once
 
 	// The fields below belong to the worker goroutine only.
 	state    *lua.LState
@@ -157,15 +162,19 @@ func (r *Runtime) run(fn func(*lua.LState) error) (err error) {
 		if timeout <= 0 {
 			timeout = DefaultCallTimeout
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		dl := newCallDeadline(timeout, cancel)
+		r.deadline = dl
+		defer func() { r.deadline = nil }()
+		defer dl.stop()
 		r.state.SetContext(ctx)
 		defer r.state.RemoveContext()
 		// Checked whatever the call returned: a plugin can catch the
 		// interruption with pcall and carry on, and the state is no better
 		// for it.
 		defer func() {
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			if dl.hit.Load() {
 				r.interrupted.Store(true)
 				if err == nil {
 					err = ErrInterrupted
@@ -180,6 +189,76 @@ func (r *Runtime) run(fn func(*lua.LState) error) (err error) {
 	defer func() { r.depth-- }()
 
 	return fn(r.state)
+}
+
+// callDeadline is the time one outermost call may take, as a clock that can
+// be stopped while the call waits for something that is not the script's
+// doing (a dialog the user has to answer).
+type callDeadline struct {
+	mu        sync.Mutex
+	cancel    context.CancelFunc
+	timer     *time.Timer
+	remaining time.Duration
+	started   time.Time
+	hit       atomic.Bool
+}
+
+func newCallDeadline(timeout time.Duration, cancel context.CancelFunc) *callDeadline {
+	d := &callDeadline{cancel: cancel, remaining: timeout}
+	d.start()
+	return d
+}
+
+// start runs the clock for what is left. Callers hold mu, or own d alone.
+func (d *callDeadline) start() {
+	d.started = time.Now()
+	d.timer = time.AfterFunc(d.remaining, func() {
+		d.hit.Store(true)
+		d.cancel()
+	})
+}
+
+func (d *callDeadline) stop() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.timer != nil {
+		d.timer.Stop()
+		d.timer = nil
+	}
+}
+
+func (d *callDeadline) pause() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.timer == nil || !d.timer.Stop() {
+		return // not running, or already expired
+	}
+	d.timer = nil
+	d.remaining = max(d.remaining-time.Since(d.started), time.Millisecond)
+}
+
+func (d *callDeadline) resume() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.timer != nil || d.hit.Load() {
+		return
+	}
+	d.start()
+}
+
+// WhileWaiting runs fn, which must be called from inside the script (a host
+// function the script called), with the call's deadline stopped: time spent
+// waiting for the user, or for anything else that is not the script running,
+// does not count against it. Outside a call it just runs fn.
+func (r *Runtime) WhileWaiting(fn func()) {
+	dl := r.deadline
+	if dl == nil {
+		fn()
+		return
+	}
+	dl.pause()
+	defer dl.resume()
+	fn()
 }
 
 // Do runs fn with exclusive access to the Lua state.

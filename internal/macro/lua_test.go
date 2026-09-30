@@ -713,15 +713,18 @@ type dialogHost struct {
 	inputOK    bool
 	menuAnswer int
 	asked      []string
+	delay      time.Duration // how long the user takes
 }
 
 func (h *dialogHost) InputBox(title, prompt, initial string) (string, bool) {
 	h.asked = append(h.asked, title+"|"+prompt+"|"+initial)
+	time.Sleep(h.delay)
 	return h.inputText, h.inputOK
 }
 
 func (h *dialogHost) Menu(title string, items []string) int {
 	h.asked = append(h.asked, title+"|"+strings.Join(items, ","))
+	time.Sleep(h.delay)
 	return h.menuAnswer
 }
 
@@ -778,5 +781,33 @@ func TestMacroFarDialogsWithoutAHostThatAsks(t *testing.T) {
 	values := macroGlobals(t, Engine, "__a", "__b", "__done")
 	if values["__a"] != lua.LNil || values["__b"] != lua.LNil || values["__done"] != lua.LTrue {
 		t.Errorf("a = %v, b = %v, done = %v", values["__a"], values["__b"], values["__done"])
+	}
+}
+
+// The time the user spends in a dialog does not count against the macro's
+// deadline; the same delay in the script itself does.
+func TestMacroDeadlineStandsStillWhileADialogWaits(t *testing.T) {
+	old := macroCallTimeout
+	macroCallTimeout = 300 * time.Millisecond
+	t.Cleanup(func() { macroCallTimeout = old })
+
+	host := &dialogHost{fakeMacroHost: newFakeMacroHost(), inputText: "ok", inputOK: true, menuAnswer: 0, delay: 800 * time.Millisecond}
+	Engine := newTestMacroEngine(t, host, `
+		Macro { area = "Shell"; key = "CtrlT"; action = function()
+			__text = far.InputBox("a", "b")
+			__item = far.Menu({}, { "x" })
+			__after = true
+		end }
+	`)
+	fireMacro(t, Engine, "CtrlT")
+	if !Engine.WaitIdle(10 * time.Second) {
+		t.Fatal("macro never finished")
+	}
+	if Engine.Interrupted() {
+		t.Fatal("the macro was interrupted for the time the user took")
+	}
+	values := macroGlobals(t, Engine, "__text", "__after")
+	if lua.LVAsString(values["__text"]) != "ok" || values["__after"] != lua.LTrue {
+		t.Fatalf("text=%v after=%v", values["__text"], values["__after"])
 	}
 }

@@ -500,7 +500,11 @@ func (e *LuaMacroEngine) luaFarInputBox(L *lua.LState) int {
 	}
 	title := strings.TrimSpace(lua.LVAsString(L.Get(1)))
 	prompt := lua.LVAsString(L.Get(2))
-	if text, ok := dialogs.InputBox(title, prompt, lua.LVAsString(L.Get(3))); ok {
+	var text string
+	var answered bool
+	// The user's time is not the script's: the macro's deadline stands still.
+	e.rt.WhileWaiting(func() { text, answered = dialogs.InputBox(title, prompt, lua.LVAsString(L.Get(3))) })
+	if answered {
 		L.Push(lua.LString(text))
 	} else {
 		L.Push(lua.LNil)
@@ -539,7 +543,8 @@ func (e *LuaMacroEngine) luaFarMenu(L *lua.LState) int {
 		L.Push(lua.LNil)
 		return 1
 	}
-	index := dialogs.Menu(title, labels)
+	var index int
+	e.rt.WhileWaiting(func() { index = dialogs.Menu(title, labels) })
 	if index < 0 || index >= len(labels) {
 		L.Push(lua.LNil)
 		return 1
