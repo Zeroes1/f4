@@ -51,10 +51,14 @@ var architectureLayers = map[string]int{
 	// text in, text out; imports nothing of ours.
 	"internal/numwords": 0,
 
-	// The --install/--self-install CLI command. Standalone: it copies the
-	// running executable and edits a shell profile, importing nothing else
-	// of ours.
-	"internal/install": 0,
+	// The application icon files, embedded so that --install can put them
+	// where the desktop looks for them (f4#1290). Generated data, no code.
+	"internal/gui/assets/icon": 0,
+
+	// The --install/--self-install CLI command. It copies the running
+	// executable, edits a shell profile and writes the desktop launcher and
+	// icons; the only package of ours it imports is the embedded icon files.
+	"internal/install": 1,
 
 	// Key naming, remapping, input translation and the X key grabs. Reads
 	// internal/config like internal/theme does, and internal/numeric for the

@@ -471,6 +471,7 @@ func Main() {
 	var updateChannelArg string
 	var installRequested bool
 	var installYes bool
+	var installDesktopRequested bool
 
 	exeName := filepath.Base(absExecPath)
 	if strings.Contains(strings.ToLower(exeName), "gui") {
@@ -506,6 +507,8 @@ func Main() {
 			}
 		case "--install", "--self-install":
 			installRequested = true
+		case "--install-desktop":
+			installDesktopRequested = true
 		case "--yes":
 			installYes = true
 		case "-gui", "--gui":
@@ -694,7 +697,12 @@ The following switches may be used in the command line:
                          (bash, zsh or fish, detected from $SHELL) after
                          confirming, or prints the exact line to add by hand
                          for another shell; --yes adds the line without
-                         asking. Unix shells only; not available on Windows
+                         asking. Unix shells only; not available on Windows.
+                         On Linux and BSD it also installs the launcher
+                         (org.unxed.f4.desktop) and icons under
+                         ~/.local/share, for the task bar icon of --gui
+ --install-desktop      Only that: install the launcher and icons for this
+                         executable under ~/.local/share (no sudo), then exit
  --log [logfile]        If =1 or =true uses profile logs/debug.log,
                          otherwise logfile
  --fish-server          Serve the FISH+ protocol on stdin/stdout (the remote
@@ -744,6 +752,9 @@ see in vtinput project: https://github.com/unxed/vtinput
 	// file manager: no panels and no session come up here either.
 	if installRequested {
 		os.Exit(install.RunCLI(absExecPath, install.Options{AutoConfirm: installYes}))
+	}
+	if installDesktopRequested {
+		os.Exit(install.RunDesktopCLI(absExecPath))
 	}
 
 	for _, arg := range os.Args {
