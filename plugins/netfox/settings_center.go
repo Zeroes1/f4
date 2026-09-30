@@ -65,6 +65,9 @@ func (p *settingsProvider) Catalog() f4settings.Catalog {
 			if _, ok := handlers["scp"]; ok {
 				specs = append(specs, "scp:SCP")
 			}
+			if _, ok := handlers["smb"]; ok {
+				specs = append(specs, "smb:SMB")
+			}
 			if _, ok := handlers["fish+"]; ok {
 				specs = append(specs, "fish:FISH")
 			}

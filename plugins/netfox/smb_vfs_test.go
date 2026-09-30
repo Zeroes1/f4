@@ -332,3 +332,31 @@ func TestBackendPath(t *testing.T) {
 		t.Errorf("backendPath = %q", got)
 	}
 }
+
+func TestSMBConnectionTypeIsListed(t *testing.T) {
+	listed := map[string]bool{}
+	for _, p := range GetProtocols() {
+		listed[p] = true
+	}
+	if !listed["smb"] {
+		t.Fatalf("protocols = %v, want smb", GetProtocols())
+	}
+	ph := &smbProtocolHandler{}
+	if ph.Prefix() != "smb" || ph.DefaultPort() != "445" {
+		t.Errorf("smb handler = %q port %q", ph.Prefix(), ph.DefaultPort())
+	}
+	if ui, cleanup := ph.BuildExtraUI(&NetFoxConfig{}, 0, 0, 10, 1); ui != nil {
+		cleanup()
+		t.Error("smb has no extra UI")
+	}
+	p := &smbProvider{}
+	if p.Name() == "" || p.Priority() != 100 {
+		t.Errorf("provider = %q/%d", p.Name(), p.Priority())
+	}
+	if p.CanOpen(context.Background(), nil, "x") {
+		t.Error("CanOpen accepted a non-NetFox parent")
+	}
+	if _, err := p.Open(context.Background(), nil, "x"); err == nil {
+		t.Error("Open with a non-NetFox parent succeeded")
+	}
+}
