@@ -369,7 +369,7 @@ func parseTables(stream, strs []byte) (*tables, error) {
 
 // Read parses the .NET metadata of a PE file. size is the length of r.
 func Read(r io.ReaderAt, size int64) (*Info, error) {
-	file, err := pe.NewFile(r)
+	file, err := openPE(r)
 	if err != nil {
 		return nil, ErrNotAssembly
 	}
@@ -701,4 +701,56 @@ func (in *Info) MethodIL(key string, index int) string {
 		return ""
 	}
 	return in.tab.disassemble(list[index].body)
+}
+
+// ReadyToRun images of the framework libraries for another operating system
+// carry their machine type XORed with a per-OS constant (Linux, macOS, FreeBSD,
+// NetBSD), which debug/pe does not know. The metadata inside is ordinary.
+var readyToRunOSKeys = []uint16{0x7B79, 0x4644, 0xADC4, 0x1993}
+
+var knownMachines = map[uint16]bool{0x14c: true, 0x8664: true, 0x1c4: true, 0xAA64: true, 0x5064: true, 0x6264: true}
+
+// openPE opens r as a PE file; when the machine type is one of those XORed
+// ReadyToRun values, the two bytes are read as the plain machine type.
+func openPE(r io.ReaderAt) (*pe.File, error) {
+	file, err := pe.NewFile(r)
+	if err == nil {
+		return file, nil
+	}
+	var head [4]byte
+	if _, e := r.ReadAt(head[:], 0x3C); e != nil {
+		return nil, err
+	}
+	machineAt := int64(binary.LittleEndian.Uint32(head[:])) + 4
+	if machineAt < 4 || machineAt > 1<<20 {
+		return nil, err
+	}
+	var raw [2]byte
+	if _, e := r.ReadAt(raw[:], machineAt); e != nil {
+		return nil, err
+	}
+	machine := binary.LittleEndian.Uint16(raw[:])
+	for _, key := range readyToRunOSKeys {
+		if plain := machine ^ key; knownMachines[plain] {
+			return pe.NewFile(&machinePatch{r: r, at: machineAt, plain: plain})
+		}
+	}
+	return nil, err
+}
+
+// machinePatch shows the machine type at offset at as plain.
+type machinePatch struct {
+	r     io.ReaderAt
+	at    int64
+	plain uint16
+}
+
+func (m *machinePatch) ReadAt(p []byte, off int64) (int, error) {
+	n, err := m.r.ReadAt(p, off)
+	for i := 0; i < 2; i++ {
+		if pos := m.at + int64(i) - off; pos >= 0 && pos < int64(n) {
+			p[pos] = byte(m.plain >> (8 * uint(i)))
+		}
+	}
+	return n, err
 }
