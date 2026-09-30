@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode/utf16"
 )
@@ -117,13 +118,16 @@ const maxInstructions = 200000
 // and code) into text. Anything it cannot decode is written as a comment and
 // ends the listing, so a hostile or broken body never fails the caller.
 func (t *tables) disassemble(body []byte) string {
-	code, maxStack, ok := splitBody(body)
+	code, maxStack, localSig, ok := splitBody(body)
 	if !ok {
 		return "// method body is not readable\n"
 	}
 	var b strings.Builder
 	if maxStack > 0 {
 		fmt.Fprintf(&b, "    .maxstack %d\n", maxStack)
+	}
+	if locals := t.localsText(localSig); locals != "" {
+		fmt.Fprintf(&b, "    .locals (%s)\n", locals)
 	}
 	pos := 0
 	for count := 0; pos < len(code) && count < maxInstructions; count++ {
@@ -160,31 +164,32 @@ func (t *tables) disassemble(body []byte) string {
 	return b.String()
 }
 
-// splitBody separates the code from the tiny or fat method header (II.25.4).
-func splitBody(body []byte) (code []byte, maxStack int, ok bool) {
+// splitBody separates the code from the tiny or fat method header (II.25.4);
+// localSig is the StandAloneSig token of the local variables (0 for none).
+func splitBody(body []byte) (code []byte, maxStack int, localSig uint32, ok bool) {
 	if len(body) == 0 {
-		return nil, 0, false
+		return nil, 0, 0, false
 	}
 	switch body[0] & 3 {
 	case 2: // tiny: the size is in the upper six bits
 		size := int(body[0] >> 2)
 		if 1+size > len(body) {
-			return nil, 0, false
+			return nil, 0, 0, false
 		}
-		return body[1 : 1+size], 8, true
+		return body[1 : 1+size], 8, 0, true
 	case 3: // fat
 		if len(body) < 12 {
-			return nil, 0, false
+			return nil, 0, 0, false
 		}
 		headerWords := int(binary.LittleEndian.Uint16(body) >> 12)
 		headerLen := headerWords * 4
 		size := int(binary.LittleEndian.Uint32(body[4:]))
 		if headerLen < 12 || headerLen > len(body) || size < 0 || size > len(body)-headerLen {
-			return nil, 0, false
+			return nil, 0, 0, false
 		}
-		return body[headerLen : headerLen+size], int(binary.LittleEndian.Uint16(body[2:])), true
+		return body[headerLen : headerLen+size], int(binary.LittleEndian.Uint16(body[2:])), binary.LittleEndian.Uint32(body[8:]), true
 	}
-	return nil, 0, false
+	return nil, 0, 0, false
 }
 
 // operandText renders the operand at the start of data; next is the offset just
@@ -294,7 +299,7 @@ func (t *tables) tokenText(kind operand, token uint32) string {
 		name := t.str(t.cell(0x0A, row, 1))
 		return t.memberParentName(parent) + "::" + name
 	case 0x2B:
-		return fmt.Sprintf("<method spec 0x%08x>", token)
+		return t.methodSpecText(row)
 	case 0x11:
 		return fmt.Sprintf("<signature 0x%08x>", token)
 	}
@@ -382,4 +387,70 @@ func quoteUserString(s string) string {
 		s = s[:200] + "..."
 	}
 	return fmt.Sprintf("%q", s)
+}
+
+// localsText renders the local variable types of a method from its
+// StandAloneSig token (II.23.2.6), e.g. "int V_0, string V_1".
+func (t *tables) localsText(token uint32) string {
+	if token>>24 != 0x11 {
+		return ""
+	}
+	row := token & 0x00FFFFFF
+	if row == 0 || row > t.rowCount[0x11] {
+		return ""
+	}
+	data := t.blobAt(t.cell(0x11, row, 0))
+	if len(data) < 2 || data[0] != 0x07 {
+		return ""
+	}
+	r := &sigReader{t: t, data: data, pos: 1}
+	count := int(r.number())
+	if count > 65535 {
+		return ""
+	}
+	locals := make([]string, 0, count)
+	for i := 0; i < count && !r.bad; i++ {
+		locals = append(locals, r.typeString()+" V_"+strconv.Itoa(i))
+	}
+	if r.bad {
+		return ""
+	}
+	return strings.Join(locals, ", ")
+}
+
+// methodSpecText renders a MethodSpec row (a generic method instantiation) as
+// "Type::Name<args>".
+func (t *tables) methodSpecText(row uint32) string {
+	if row == 0 || row > t.rowCount[0x2B] {
+		return "<method spec>"
+	}
+	coded := t.cell(0x2B, row, 0)
+	name := "<method>"
+	switch mrow := coded >> 1; coded & 1 {
+	case 0:
+		if mrow >= 1 && mrow <= t.rowCount[0x06] {
+			name = t.typeDefName(t.methodOwner(mrow)) + "::" + t.str(t.cell(0x06, mrow, 3))
+		}
+	case 1:
+		if mrow >= 1 && mrow <= t.rowCount[0x0A] {
+			name = t.memberParentName(t.cell(0x0A, mrow, 0)) + "::" + t.str(t.cell(0x0A, mrow, 1))
+		}
+	}
+	data := t.blobAt(t.cell(0x2B, row, 1))
+	if len(data) < 2 || data[0] != 0x0A {
+		return name
+	}
+	r := &sigReader{t: t, data: data, pos: 1}
+	count := int(r.number())
+	if count > 64 {
+		return name
+	}
+	args := make([]string, 0, count)
+	for i := 0; i < count && !r.bad; i++ {
+		args = append(args, r.typeString())
+	}
+	if r.bad {
+		return name
+	}
+	return name + "<" + strings.Join(args, ", ") + ">"
 }
