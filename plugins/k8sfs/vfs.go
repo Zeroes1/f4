@@ -3,6 +3,7 @@ package k8sfs
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -34,9 +35,9 @@ var (
 type unsupportedError struct{}
 
 func (unsupportedError) Error() string {
-	return k8sText("K8s.ReadOnly",
-		"The Kubernetes panel is read-only: copy files out with F5",
-		"Панель Kubernetes только для чтения: файлы можно скопировать наружу клавишей F5")
+	return k8sText("K8s.NotSupported",
+		"The Kubernetes panel cannot do this: namespaces, pods and containers are not managed here, and file attributes cannot be changed",
+		"Панель Kubernetes этого не умеет: пространствами имён, подами и контейнерами здесь не управляют, а атрибуты файлов изменить нельзя")
 }
 
 func (unsupportedError) Is(target error) bool { return target == os.ErrPermission }
@@ -412,18 +413,139 @@ func (v *k8sVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error) {
 	return &vfs.TempFileWrapper{File: file, SizeVal: size, TempPath: tempPath}, nil
 }
 
-func (v *k8sVFS) MkDir(context.Context, string) error          { return unsupportedError{} }
-func (v *k8sVFS) Remove(context.Context, string) error         { return unsupportedError{} }
-func (v *k8sVFS) Rename(context.Context, string, string) error { return unsupportedError{} }
+// Writing goes through exec too. The exec protocol available over a plain
+// WebSocket (v4.channel.k8s.io) cannot close a command's stdin, so a file is
+// not streamed in: it is sent as base64 in the arguments of a few short
+// commands, one chunk each (`sh -c 'printf %s "$1" | base64 -d >> "$2"'`), and
+// the size is capped. Folders, deletion and renaming are single commands. The
+// container needs sh, base64, mkdir, rm and mv (busybox has them all).
+
+// maxUploadSize is the largest file the panel uploads; every 12 KiB of it is
+// one exec round trip.
+const maxUploadSize = 8 << 20
+
+// uploadChunk is how much of a file one command carries (before base64).
+const uploadChunk = 12 << 10
+
+// inside resolves a path that must lie inside a container, below its root.
+func (v *k8sVFS) inside(p string) (cli *restClient, loc location, err error) {
+	abs, err := v.Abs(p)
+	if err != nil {
+		return nil, location{}, err
+	}
+	loc = parseLocation(abs)
+	if loc.depth < 3 || loc.inner == "/" {
+		return nil, location{}, unsupportedError{}
+	}
+	cli, err = v.clientFor()
+	return cli, loc, err
+}
+
+func (v *k8sVFS) MkDir(ctx context.Context, p string) error {
+	cli, loc, err := v.inside(p)
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, cli, loc, "mkdir", "--", loc.inner)
+	return err
+}
+
+func (v *k8sVFS) Remove(ctx context.Context, p string) error {
+	cli, loc, err := v.inside(p)
+	if err != nil {
+		return err
+	}
+	_, err = run(ctx, cli, loc, "rm", "-rf", "--", loc.inner)
+	return err
+}
+
+func (v *k8sVFS) Rename(ctx context.Context, oldpath, newpath string) error {
+	cli, from, err := v.inside(oldpath)
+	if err != nil {
+		return err
+	}
+	_, to, err := v.inside(newpath)
+	if err != nil {
+		return err
+	}
+	if from.ns != to.ns || from.pod != to.pod || from.container != to.container {
+		return unsupportedError{}
+	}
+	_, err = run(ctx, cli, from, "mv", "--", from.inner, to.inner)
+	return err
+}
+
 func (v *k8sVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
 	return unsupportedError{}
 }
-func (v *k8sVFS) Create(context.Context, string) (io.WriteCloser, error) {
-	return nil, unsupportedError{}
+
+// Create collects what is written in a temporary file and sends it when the
+// writer is closed.
+func (v *k8sVFS) Create(ctx context.Context, p string) (io.WriteCloser, error) {
+	cli, loc, err := v.inside(p)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.CreateTemp("", "f4-k8s-up-*")
+	if err != nil {
+		return nil, err
+	}
+	return &uploadWriter{ctx: ctx, cli: cli, loc: loc, file: file}, nil
+}
+
+type uploadWriter struct {
+	ctx    context.Context
+	cli    *restClient
+	loc    location
+	file   *os.File
+	size   int64
+	closed bool
+}
+
+func (w *uploadWriter) Write(p []byte) (int, error) {
+	if w.size+int64(len(p)) > maxUploadSize {
+		return 0, fmt.Errorf("kubernetes: %s", k8sText("K8s.UploadTooLarge",
+			"a file larger than 8 MiB cannot be uploaded through exec; copy it with kubectl cp",
+			"файл больше 8 МиБ нельзя загрузить через exec; скопируйте его командой kubectl cp"))
+	}
+	n, err := w.file.Write(p)
+	w.size += int64(n)
+	return n, err
+}
+
+func (w *uploadWriter) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+	tempPath := w.file.Name()
+	defer func() {
+		_ = w.file.Close()
+		_ = os.Remove(tempPath)
+	}()
+	if _, err := w.file.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	buf := make([]byte, uploadChunk)
+	redirect := ">" // the first chunk truncates, the rest append
+	for first := true; ; first = false {
+		n, err := io.ReadFull(w.file, buf)
+		if n > 0 || first { // an empty file still gets created
+			script := `printf %s "$1" | base64 -d ` + redirect + ` "$2"`
+			enc := base64.StdEncoding.EncodeToString(buf[:n])
+			if _, runErr := run(w.ctx, w.cli, w.loc, "sh", "-c", script, "sh", enc, w.loc.inner); runErr != nil {
+				return runErr
+			}
+			redirect = ">>"
+		}
+		if err != nil { // io.EOF or io.ErrUnexpectedEOF: that was the last chunk
+			return nil
+		}
+	}
 }
 
 func (v *k8sVFS) GetCapabilities() vfs.VFSCapabilities {
-	return vfs.VFSCapabilities{HasRandomAccess: true, HasUnixPermissions: true}
+	return vfs.VFSCapabilities{HasRandomAccess: true, HasUnixPermissions: true, HasWrite: true}
 }
 
 func (v *k8sVFS) Search(context.Context, string, string) (chan int64, error) { return nil, nil }

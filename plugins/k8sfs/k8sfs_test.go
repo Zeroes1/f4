@@ -2,6 +2,7 @@ package k8sfs
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
@@ -21,6 +23,71 @@ import (
 // and a tiny file system behind exec.
 func fakeCluster(t *testing.T) *restClient {
 	t.Helper()
+	cli, _ := fakeClusterState(t)
+	return cli
+}
+
+// clusterState records what the fake container was asked to change.
+type clusterState struct {
+	mu    sync.Mutex
+	ran   [][]string
+	files map[string]string
+	dirs  map[string]bool
+}
+
+func (s *clusterState) file(p string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c, ok := s.files[p]
+	return c, ok
+}
+
+func (s *clusterState) commands() [][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([][]string(nil), s.ran...)
+}
+
+// change carries out the writing commands the panel sends; ok is false for one
+// it does not know, or one that should fail.
+func (s *clusterState) change(cmd []string) (handled, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(cmd) == 0 {
+		return false, false
+	}
+	switch {
+	case cmd[0] == "mkdir" && len(cmd) == 3:
+		s.dirs[cmd[2]] = true
+		return true, true
+	case cmd[0] == "rm" && len(cmd) == 4:
+		if cmd[3] == "/fail" {
+			return true, false
+		}
+		delete(s.files, cmd[3])
+		return true, true
+	case cmd[0] == "mv" && len(cmd) == 4:
+		s.files[cmd[3]] = s.files[cmd[2]]
+		delete(s.files, cmd[2])
+		return true, true
+	case cmd[0] == "sh" && len(cmd) == 6 && cmd[1] == "-c":
+		data, err := base64.StdEncoding.DecodeString(cmd[4])
+		if err != nil {
+			return true, false
+		}
+		if strings.Contains(cmd[2], ">>") {
+			s.files[cmd[5]] += string(data)
+		} else {
+			s.files[cmd[5]] = string(data)
+		}
+		return true, true
+	}
+	return false, false
+}
+
+func fakeClusterState(t *testing.T) (*restClient, *clusterState) {
+	t.Helper()
+	state := &clusterState{files: map[string]string{}, dirs: map[string]bool{}}
 	const token = "s3cret"
 	mux := http.NewServeMux()
 	authed := func(h http.HandlerFunc) http.HandlerFunc {
@@ -62,7 +129,20 @@ func fakeCluster(t *testing.T) *restClient {
 		},
 		Handler: func(ws *websocket.Conn) {
 			req := ws.Request()
-			cmd := strings.Join(req.URL.Query()["command"], " ")
+			args := req.URL.Query()["command"]
+			state.mu.Lock()
+			state.ran = append(state.ran, args)
+			state.mu.Unlock()
+			if handled, fine := state.change(args); handled {
+				if fine {
+					_ = websocket.Message.Send(ws, append([]byte{3}, `{"status":"Success"}`...))
+				} else {
+					_ = websocket.Message.Send(ws, append([]byte{2}, "denied"...))
+					_ = websocket.Message.Send(ws, append([]byte{3}, `{"status":"Failure","message":"exit code 1"}`...))
+				}
+				return
+			}
+			cmd := strings.Join(args, " ")
 			out, ok := commands[cmd]
 			if !ok {
 				_ = websocket.Message.Send(ws, append([]byte{2}, "no such file"...))
@@ -78,7 +158,7 @@ func fakeCluster(t *testing.T) *restClient {
 	mux.Handle("/api/v1/namespaces/default/pods/web/exec", authed(exec.ServeHTTP))
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return newRESTClient(&apiEndpoint{server: srv.URL, token: token})
+	return newRESTClient(&apiEndpoint{server: srv.URL, token: token}), state
 }
 
 func listAll(t *testing.T, v *k8sVFS, p string) map[string]vfs.VFSItem {
@@ -384,5 +464,104 @@ func TestPluginAndHelpers(t *testing.T) {
 	}
 	if err := statusError([]byte(`not json`), []string{"ls"}, ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestK8sVFSWrites(t *testing.T) {
+	cli, state := fakeClusterState(t)
+	v := newK8sVFS(func() (*restClient, error) { return cli, nil })
+	defer func() { _ = v.Close() }()
+	ctx := context.Background()
+	base := "/default/web/app"
+
+	upload := func(name string, size int) {
+		t.Helper()
+		w, err := v.Create(ctx, base+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := strings.Repeat("0123456789abcdef", size/16)
+		for off := 0; off < len(payload); off += 5000 { // written in odd pieces
+			if _, err := io.WriteString(w, payload[off:min(off+5000, len(payload))]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("a second Close: %v", err)
+		}
+		if got, ok := state.file(name); !ok || got != payload {
+			t.Fatalf("%s: uploaded %d bytes, want %d", name, len(got), len(payload))
+		}
+	}
+	upload("/small", 16)
+	upload("/multi", 40<<10) // four chunks
+	upload("/exact", 3*uploadChunk)
+	upload("/empty", 0)
+	// The first command of an upload truncates, the later ones append.
+	var redirects []string
+	for _, c := range state.commands() {
+		if c[0] == "sh" && c[5] == "/multi" {
+			if strings.Contains(c[2], ">>") {
+				redirects = append(redirects, ">>")
+			} else {
+				redirects = append(redirects, ">")
+			}
+		}
+	}
+	if len(redirects) != 4 || redirects[0] != ">" || redirects[1] != ">>" || redirects[3] != ">>" {
+		t.Fatalf("redirects of the chunks: %v", redirects)
+	}
+
+	if err := v.MkDir(ctx, base+"/newdir"); err != nil {
+		t.Fatal(err)
+	}
+	if !state.dirs["/newdir"] {
+		t.Fatal("mkdir did not reach the container")
+	}
+	if err := v.Rename(ctx, base+"/small", base+"/renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := state.file("/small"); ok {
+		t.Fatal("the old name should be gone")
+	}
+	if _, ok := state.file("/renamed"); !ok {
+		t.Fatal("the new name should exist")
+	}
+	if err := v.Remove(ctx, base+"/renamed"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := state.file("/renamed"); ok {
+		t.Fatal("rm did not reach the container")
+	}
+	if err := v.Remove(ctx, base+"/fail"); !errors.Is(err, errExecFailed) || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("a failing rm: %v", err)
+	}
+
+	// What it does not do.
+	if err := v.Rename(ctx, base+"/multi", "/default/web/sidecar/multi"); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("a rename across containers: %v", err)
+	}
+	if _, err := v.Create(ctx, base); !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("Create on a container root: %v", err)
+	}
+	// A file over the cap is refused while it is written; closing after that
+	// with a cancelled context sends nothing and cleans up.
+	cctx, cancel := context.WithCancel(ctx)
+	w, err := v.Create(cctx, base+"/huge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(make([]byte, maxUploadSize)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("x")); err == nil || !strings.Contains(err.Error(), "8 MiB") {
+		t.Fatalf("writing past the cap: %v", err)
+	}
+	cancel()
+	if err := w.Close(); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Close with a cancelled context: %v", err)
 	}
 }

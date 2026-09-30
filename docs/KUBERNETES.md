@@ -1,8 +1,8 @@
 # Kubernetes panel (`plugins/k8sfs`)
 
-[f4#1663](https://github.com/unxed/f4/issues/1663), Kubernetes part: a cluster as a read-only drive.
+[f4#1663](https://github.com/unxed/f4/issues/1663), Kubernetes part: a cluster as a drive.
 
-Open it from the drive menu (Alt+F1) as **Kubernetes**. Namespaces are the top-level folders, then pods, then a pod's containers; inside a container is its file system. F3 and F5 work as on any panel; nothing can be changed yet.
+Open it from the drive menu (Alt+F1) as **Kubernetes**. Namespaces are the top-level folders, then pods, then a pod's containers; inside a container is its file system. F3 and F5 work as on any panel, and files inside a container can be written (see below).
 
 ## How
 
@@ -11,6 +11,14 @@ Open it from the drive menu (Alt+F1) as **Kubernetes**. Namespaces are the top-l
 * **Credentials from a kubeconfig** (`KUBECONFIG`, first file, or `~/.kube/config`): the current context's server, CA (file or inline), bearer token (or `tokenFile`), client certificate and key. Users whose credentials come from a helper program (`exec:` plugins such as `gke-gcloud-auth-plugin` or `aws eks get-token`) are supported: the helper is run once when the panel opens (with `KUBERNETES_EXEC_INFO`, no stdin), and the token or client certificate it prints is used; its own error message is shown if it fails. The removed `auth-provider` mechanism is refused with a message saying so; nothing is sent without credentials.
 * Nothing is read or connected until the panel is opened.
 
+## Writing
+
+The exec protocol available over a plain WebSocket (`v4.channel.k8s.io`) cannot close a command's stdin, so `kubectl cp`'s way (`tar xf -`) is not possible. Instead:
+
+* **Copy in** sends the file as base64 in the arguments of short commands, 12 KiB per command (`sh -c 'printf %s "$1" | base64 -d >> "$2"'`, the first one truncating). Every chunk is one exec round trip, so files are capped at 8 MiB; a larger one is refused with a hint to use `kubectl cp`.
+* **mkdir, delete, rename** are single `mkdir`, `rm -rf` and `mv` commands (within one container).
+* The container needs `sh`, `base64`, `mkdir`, `rm` and `mv`; busybox has them all. Attributes, and namespaces/pods/containers themselves, are not changed from the panel.
+
 ## Not yet
 
-Writing (copy in, mkdir, delete, rename: the exec protocol available over a plain WebSocket, v4.channel.k8s.io, cannot close a command's stdin, which uploading a file needs), refreshing an expiring exec token, in-cluster configuration, switching context from the panel, ephemeral/init containers, and the lite build (full build only, like the Docker panel).
+Files over 8 MiB (needs a stdin-capable exec, `v5.channel.k8s.io`), refreshing an expiring exec token, in-cluster configuration, switching context from the panel, ephemeral/init containers, and the lite build (full build only, like the Docker panel).

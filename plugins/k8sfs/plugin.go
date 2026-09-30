@@ -4,8 +4,8 @@
 // WebSocket, like kubectl exec). Nothing is needed beyond a kubeconfig with a
 // token or client certificate: no kubectl, no client-go, no CGO.
 //
-// The panel is read-only, and the container needs ls, stat and cat (busybox
-// has them all).
+// Reading needs ls, stat and cat in the container; writing (small files, new
+// folders, delete, rename) needs sh, base64, mkdir, rm and mv. Busybox has them all.
 package k8sfs
 
 import (
