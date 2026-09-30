@@ -7,8 +7,10 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/unxed/f4/internal/dotnet"
 	"github.com/unxed/f4/vfs"
@@ -22,6 +24,46 @@ type node struct {
 	data  []byte
 	names []string
 	kids  map[string]*node
+	// lazy, when set, builds the folder's content the first time it is looked
+	// at: a referenced assembly is read only when the user goes into it.
+	lazy func() *node
+}
+
+// resolve fills a lazy folder in. It is called with the VFS lock held.
+func (n *node) resolve() {
+	if n.lazy == nil {
+		return
+	}
+	load := n.lazy
+	n.lazy = nil
+	if built := load(); built != nil {
+		n.kids, n.names, n.data = built.kids, built.names, built.data
+	}
+	if n.kids == nil {
+		n.kids = make(map[string]*node)
+	}
+}
+
+// maxRefDepth bounds how far one can follow references from the assembly the
+// panel was opened on, and so the chain of files read.
+const maxRefDepth = 6
+
+// loadAssembly reads an assembly file; a variable so tests can serve their own.
+var loadAssembly = readAssembly
+
+// findAssembly looks for the referenced assembly next to the file that
+// references it, the way the runtime finds a private dependency.
+func findAssembly(dir, name string) string {
+	if dir == "" || name == "" || strings.ContainsAny(name, "/\\\x00") || strings.Contains(name, "..") {
+		return ""
+	}
+	for _, ext := range []string{".dll", ".exe"} {
+		p := filepath.Join(dir, name+ext)
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+			return p
+		}
+	}
+	return ""
 }
 
 func newDir() *node { return &node{dir: true, kids: make(map[string]*node)} }
@@ -48,12 +90,28 @@ func file(text string) *node { return &node{data: []byte(text)} }
 
 // buildTree lays an assembly out as folders: assembly.md (the report),
 // References, Namespaces/<namespace>/<type> and Resources.
-func buildTree(info *dotnet.Info, name string) *node {
+//
+// dir is where the assembly's file lives and chain the files already entered
+// on the way here: a reference found in dir (and not already in chain) becomes
+// a folder holding that assembly's own tree, read when it is first opened.
+func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 	root := newDir()
 	root.add("assembly.md", file(dotnet.Report(info, name)))
 	refs := newDir()
 	for _, ref := range info.References {
-		refs.add(ref.Name+" "+ref.Version.String(), file(ref.Name+", Version="+ref.Version.String()+"\n"))
+		label := ref.Name + " " + ref.Version.String()
+		if found := findAssembly(dir, ref.Name); found != "" && len(chain) < maxRefDepth && !contains(chain, found) {
+			next := append(append([]string(nil), chain...), found)
+			refs.add(label, &node{dir: true, lazy: func() *node {
+				loaded, err := loadAssembly(found)
+				if err != nil {
+					return nil
+				}
+				return buildTree(loaded, filepath.Base(found), filepath.Dir(found), next)
+			}})
+			continue
+		}
+		refs.add(label, file(ref.Name+", Version="+ref.Version.String()+"\n"))
 	}
 	root.add("References", refs)
 	spaces := newDir()
@@ -105,10 +163,26 @@ type assemblyVFS struct {
 	name   string
 	root   *node
 	path   string
+	mu     *sync.Mutex // guards lazy folders being filled in; shared by clones
 }
 
 func newAssemblyVFS(parent vfs.VFS, name string, info *dotnet.Info) *assemblyVFS {
-	return &assemblyVFS{parent: parent, name: name, root: buildTree(info, name), path: "/"}
+	return newAssemblyVFSIn(parent, name, info, "", nil)
+}
+
+// newAssemblyVFSIn is newAssemblyVFS for an assembly that lives in dir, whose
+// references are followed there.
+func newAssemblyVFSIn(parent vfs.VFS, name string, info *dotnet.Info, dir string, chain []string) *assemblyVFS {
+	return &assemblyVFS{parent: parent, name: name, root: buildTree(info, name, dir, chain), path: "/", mu: &sync.Mutex{}}
+}
+
+func contains(list []string, s string) bool {
+	for _, e := range list {
+		if e == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (v *assemblyVFS) GetTitle() string { return v.name }
@@ -144,6 +218,8 @@ func (v *assemblyVFS) Abs(p string) (string, error) { return v.abs(p), nil }
 
 // lookup finds the node at a slash-separated key ("" is the root).
 func (v *assemblyVFS) lookup(key string) *node {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	n := v.root
 	if key == "" {
 		return n
@@ -152,7 +228,11 @@ func (v *assemblyVFS) lookup(key string) *node {
 		if n == nil || !n.dir {
 			return nil
 		}
+		n.resolve()
 		n = n.kids[part]
+	}
+	if n != nil {
+		n.resolve()
 	}
 	return n
 }

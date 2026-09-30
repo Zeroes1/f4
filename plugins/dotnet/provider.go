@@ -86,5 +86,5 @@ func (p *provider) Open(ctx context.Context, parent vfs.VFS, path string) (vfs.V
 		}
 		return nil, err
 	}
-	return newAssemblyVFS(parent, filepath.Base(abs), info), nil
+	return newAssemblyVFSIn(parent, filepath.Base(abs), info, filepath.Dir(abs), []string{abs}), nil
 }

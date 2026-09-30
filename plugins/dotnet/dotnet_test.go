@@ -220,3 +220,62 @@ func TestPluginLifecycle(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestReferencesAreFollowedNextToTheFile(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"Main.dll", "Dep.dll", "Broken.exe"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := loadAssembly
+	defer func() { loadAssembly = old }()
+	loadAssembly = func(path string) (*idotnet.Info, error) {
+		switch filepath.Base(path) {
+		case "Dep.dll":
+			// Dep references Main again: a cycle, which must not be followed.
+			return &idotnet.Info{Name: "Dep", References: []idotnet.Ref{{Name: "Main"}}}, nil
+		}
+		return nil, errors.New("cannot read")
+	}
+	main := &idotnet.Info{Name: "Main", References: []idotnet.Ref{
+		{Name: "Dep", Version: idotnet.Version{Major: 1}},
+		{Name: "Missing"},
+		{Name: "../Dep"},
+		{Name: "Broken"},
+	}}
+	v := newAssemblyVFSIn(nil, "Main.dll", main, dir, []string{filepath.Join(dir, "Main.dll")})
+	refs := listing(t, v, "/References")
+	if !refs["Dep 1.0.0.0"] || !refs["Broken 0.0.0.0"] || refs["Missing 0.0.0.0"] || refs["../Dep 0.0.0.0"] || refs[".._Dep 0.0.0.0"] {
+		t.Fatalf("references = %v", refs)
+	}
+	inside := listing(t, v, "/References/Dep 1.0.0.0")
+	if isDir, ok := inside["assembly.md"]; !ok || isDir || !inside["References"] || !inside["Namespaces"] {
+		t.Fatalf("a followed reference lists %v", inside)
+	}
+	// The cycle back to Main is only a note.
+	if again := listing(t, v, "/References/Dep 1.0.0.0/References"); again["Main 0.0.0.0"] {
+		t.Errorf("a reference back to an entered assembly was followed: %v", again)
+	}
+	if got := readAll(t, v, "/References/Dep 1.0.0.0/assembly.md"); !strings.Contains(got, "Dep") {
+		t.Errorf("the followed assembly's report = %q", got)
+	}
+	// A reference that cannot be read is an empty folder, not an error.
+	if len(listing(t, v, "/References/Broken 0.0.0.0")) != 0 {
+		t.Error("an unreadable reference is not empty")
+	}
+	if err := v.SetPath("/References/Dep 1.0.0.0/Namespaces"); err != nil || v.GetPath() != "/References/Dep 1.0.0.0/Namespaces" {
+		t.Errorf("SetPath into a reference: %v", err)
+	}
+	if findAssembly("", "Dep") != "" || findAssembly(dir, "") != "" || findAssembly(dir, "a\\b") != "" {
+		t.Error("findAssembly accepted a bad name")
+	}
+	if findAssembly(dir, "Broken") == "" || findAssembly(dir, "Dep") == "" || findAssembly(dir, "Nope") != "" {
+		t.Error("findAssembly did not find the files that exist")
+	}
+	deep := []string{"1", "2", "3", "4", "5", "6"}
+	limited := buildTree(main, "Main.dll", dir, deep)
+	if isDir := limited.kids["References"].kids["Dep 1.0.0.0"].dir; isDir {
+		t.Error("references were followed past the depth limit")
+	}
+}
