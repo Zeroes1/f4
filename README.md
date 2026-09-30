@@ -197,8 +197,8 @@ them does not compile. See `internal/plughost`, `internal/gui`,
 `internal/sheet` for where each exclusion is implemented.
 
 An **extra-lite** profile (`-tags lite,extralite,vtui_noebiten,vtui_nogogpu`) goes
-further for routers: English-only embedded language files, no Lua and no WASM
-runtime, no collation tables. It is built for OpenWrt (`.ipk` packages, see the
+further for routers: only English and Russian embedded, only the built-in plugins
+that mc has an equivalent of, no Lua and no WASM runtime, no collation tables. It is built for OpenWrt (`.ipk` packages, see the
 `openwrt` workflow); the target matrix, sizes and what is left out are in
 [docs/OPENWRT.md](docs/OPENWRT.md).
 
