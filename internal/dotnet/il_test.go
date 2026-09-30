@@ -85,16 +85,17 @@ type ilFixture struct {
 func newILFixture() *ilFixture {
 	var strs heap
 	strs.add("")
-	object := strs.add("Object")
-	system := strs.add("System")
-	foo := strs.add("Foo")
-	ns := strs.add("My.Ns")
-	bar := strs.add("Bar")
-	ctor := strs.add(".ctor")
-	run := strs.add("Run")
-	count := strs.add("Count")
-	list := strs.add("List`1")
-	generic := strs.add("System.Collections.Generic")
+	sidx := func(name string) uint32 { return uint32(strs.add(name)) } //nolint:gosec // test data
+	object := sidx("Object")
+	system := sidx("System")
+	foo := sidx("Foo")
+	ns := sidx("My.Ns")
+	bar := sidx("Bar")
+	ctor := sidx(".ctor")
+	run := sidx("Run")
+	count := sidx("Count")
+	list := sidx("List`1")
+	generic := sidx("System.Collections.Generic")
 	var blob, us blobHeap
 	voidSig := blob.add([]byte{0x20, 0x00, 0x01})            // instance void ()
 	runSig := blob.add([]byte{0x20, 0x02, 0x08, 0x0e, 0x08}) // instance int (string, int)
