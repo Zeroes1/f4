@@ -66,9 +66,16 @@ GitHub ubuntu-latest runner:
 
 | | binary, bytes | listing shown | peak RSS |
 | --- | --- | --- | --- |
-| f4 lite | 47 448 329 | about 0.9 s | about 39 MB |
-| f4 extralite | 42 025 225 | (see the workflow summary) | (see the workflow summary) |
+| f4 lite | 47 534 345 | about 0.9 s | about 38 MB |
+| f4 extralite | 42 111 241 | about 0.75 s | about 39 MB |
 | mc 4.8.30 (Ubuntu package) | 1 140 880 (package 1 555 KB installed) | about 0.2 s | about 11 MB |
+
+Cross-built sizes, bytes (lite / extralite): mipsle-softfloat 45 351 105 /
+39 911 617, arm v7 40 829 090 / 35 389 602, arm64 44 499 209 / 39 125 257,
+amd64 47 534 345 / 42 111 241. All eight build; the amd64 pair passes the
+smoke check (panel listing and a typed `cd`). RSS and start-up were measured
+on a GitHub runner, not on router hardware; the extra-lite profile saves
+binary size, not memory, since the embedded translations are read lazily.
 
 The `openwrt` workflow prints these numbers for every run.
 
