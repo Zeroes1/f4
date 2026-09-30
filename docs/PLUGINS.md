@@ -55,6 +55,7 @@ Plugins can colorize files in the text editor dynamically.
 ### D. Host Callbacks (Plugin -> Host)
 Because F4-RPC is a full-duplex protocol, plugins can call back into `f4` at any time:
 *   `Host.Log` / `Host.Message` / `Host.InputBox` / `Host.Menu`: Standard UI and debugging interactions.
+    `Host.InputBox` and `Host.Menu` are refused with an error while f4's interface thread is itself waiting for the plugin (for example inside a `VFS.*` request): a dialog cannot be shown then, and waiting for it would freeze f4. Ask from a command or a hotkey handler instead.
 *   `Host.Language`: returns the language codes to try, in order (the interface language, its fallback, then `en`), for a plugin that localizes its own dialogs and messages, the way command labels are localized. The language can change at run time, so ask when building a text.
 *   `Host.RunAction`: Triggers any internal f4 semantic action (e.g., `Editor.Save`, `Panel.Swap`).
 *   `Host.RunProgressTask` / `Host.UpdateProgress`: Safely offloads long-running plugin operations to f4's background job manager, displaying a progress dialog to the user with standard Cancel functionality.

@@ -142,7 +142,8 @@ func (p *LuaPlugin) Init(api vfs.HostAPI) error {
 	// The host methods must exist before the script body runs: a plugin is
 	// free to log or ask for its version while it is still loading.
 	p.registrations = &PluginSessionRegistrations{}
-	p.host = newHostMethods(api, p, p.path, p.bridge)
+	guard := newUIGuard(p)
+	p.host = newHostMethods(api, guard, p.path, p.bridge)
 
 	if err := runtime.LoadFile(p.path); err != nil {
 		p.Close()
@@ -154,7 +155,7 @@ func (p *LuaPlugin) Init(api vfs.HostAPI) error {
 		p.Close()
 		return fmt.Errorf("Plugin.Init failed: %w", err)
 	}
-	if err := RegisterRPCPluginCommands(api, p, p.path, res.Commands, p.registrations); err != nil {
+	if err := RegisterRPCPluginCommands(api, guard, p.path, res.Commands, p.registrations); err != nil {
 		p.Close()
 		return err
 	}
@@ -162,7 +163,7 @@ func (p *LuaPlugin) Init(api vfs.HostAPI) error {
 	for _, drive := range res.Drives {
 		driveName := drive
 		api.RegisterDrive(driveName, func() vfs.VFS {
-			return NewRPCVFS(p, driveName)
+			return NewRPCVFS(guard, driveName)
 		})
 	}
 	return nil
