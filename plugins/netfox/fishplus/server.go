@@ -16,7 +16,7 @@ import (
 // remote command, says hello with BootstrapNative and from then on talks to it
 // exactly as it talks to helper.sh. It is the first step of using f4 as the
 // remote server (unxed/f4#1680); only the session commands are served so far --
-// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink, isdirs, read and the mutations (mkdir, rm, rmdir, rmtree, mv, cp, mklink, chmod, chown, utime, trunc),
+// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink, isdirs, read the mutations and writes (write, mkdir, rm, rmdir, rmtree, mv, cp, mklink, chmod, chown, utime, trunc),
 // which answer in the "find" listing format -- and every other command of the protocol
 // answers "unknown command" after its path lines have been read, so a client
 // that has probed the banner's features never desynchronises the stream.
@@ -29,7 +29,7 @@ type Server struct {
 
 // serverFeatures is what a Server announces when none is set: the native
 // marker, which tells a client that no shell tool is behind the answers.
-var serverFeatures = []string{"native", "mode:find", "read:ddbytes", "ln"}
+var serverFeatures = []string{"native", "mode:find", "read:ddbytes", "write:ddbytes", "ln", "truncate"}
 
 // pathLines is how many path lines follow the request line of each command of
 // the protocol, which is what a server has to consume to stay in step with a
@@ -83,6 +83,12 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 		id, cmd := fields[0], fields[1]
 		if _, err := strconv.ParseUint(id, 10, 64); err != nil {
 			return fmt.Errorf("fishplus: bad request id %q", id)
+		}
+		if cmd == "write" {
+			if err := srv.serveWrite(in, w, token, id, fields[2:]); err != nil {
+				return err
+			}
+			continue
 		}
 		count, known := pathLines[cmd]
 		if cmd == "isdirs" {
@@ -257,4 +263,48 @@ func mutate(cmd string, args, paths []string) error {
 		return mutTruncate(paths[0], arg(0))
 	}
 	return fmt.Errorf("unknown command")
+}
+
+// serveWrite answers write: <offset> <length> raw|b64, one path line, then the
+// payload -- exactly length raw bytes, or one base64 line. The payload is
+// always consumed, even when the write is refused, so that the stream stays at
+// a request boundary; a refusal after that carries the "D" line that tells the
+// client the stream is intact.
+func (srv *Server) serveWrite(in *bufio.Reader, w io.Writer, token, id string, args []string) error {
+	off, okOff := atoiArg(args, 0)
+	length, okLen := atoiArg(args, 1)
+	enc := ""
+	if len(args) > 2 {
+		enc = args[2]
+	}
+	if !okOff || !okLen || (enc != "raw" && enc != "b64") || length > MaxWriteLen {
+		_ = end0(w, token, id, "err", "bad write request")
+		return errUnrecoverable
+	}
+	path, err := readServerPath(in)
+	if err != nil {
+		return err
+	}
+	var data []byte
+	if enc == "raw" {
+		data = make([]byte, length)
+		if _, err := io.ReadFull(in, data); err != nil {
+			return err
+		}
+	} else {
+		line, err := readServerLine(in)
+		if err != nil {
+			return err
+		}
+		data, err = base64.StdEncoding.DecodeString(line)
+		if err != nil || len(data) != length {
+			_, _ = fmt.Fprintf(w, "D\n")
+			return end0(w, token, id, "err", "bad payload")
+		}
+	}
+	if opErr := writeAt(path, int64(off), data); opErr != nil {
+		_, _ = fmt.Fprintf(w, "D\n")
+		return end0(w, token, id, "err", errText(opErr))
+	}
+	return end0(w, token, id, "ok", "")
 }

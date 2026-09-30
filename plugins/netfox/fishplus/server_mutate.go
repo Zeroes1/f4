@@ -250,3 +250,21 @@ func mutTruncate(p, sizeArg string) error {
 	}
 	return f.Close()
 }
+
+// writeAt puts data at an offset of a file, creating it when it is not there
+// and leaving whatever follows the range alone; a gap becomes a hole.
+func writeAt(p string, off int64, data []byte) error {
+	p, err := guardPath(p)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE, 0o600) //nolint:gosec // the client's path, guarded above
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteAt(data, off); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}

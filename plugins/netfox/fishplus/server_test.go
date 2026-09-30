@@ -98,7 +98,7 @@ func TestServerRejectsABadHelloAndAnUnfollowableRequest(t *testing.T) {
 		t.Fatal("a hello without the native prefix must be refused")
 	}
 	out.Reset()
-	in := NativeHelloLine("tok") + "1 write 0 4 raw\n/x\nDATA"
+	in := NativeHelloLine("tok") + "1 patch 1 raw\n/x\n/y\nseg\n"
 	if err := (&Server{}).Serve(strings.NewReader(in), &out); err == nil {
 		t.Fatal("a command whose payload cannot be skipped must end the session")
 	}
@@ -288,5 +288,64 @@ func TestServerMutations(t *testing.T) {
 	}
 	if err := sess.Noop(ctx); err != nil {
 		t.Fatalf("the session must stay usable after refusals: %v", err)
+	}
+}
+
+func TestServerWrite(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	sess, _ := serverSession(t, &Server{Dir: root})
+	if err := sess.HandshakeWithOptions(ctx, HandshakeOptions{Bootstrap: BootstrapNative}); err != nil {
+		t.Fatal(err)
+	}
+	if sess.Features().WriteMode() != "ddbytes" {
+		t.Fatalf("write mode = %q, want ddbytes", sess.Features().WriteMode())
+	}
+	c := NewClient(sess)
+	file := filepath.Join(root, "out.bin")
+
+	if err := c.Write(ctx, file, 0, []byte("hello world")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	// A range in the middle leaves what follows it alone.
+	if err := c.Write(ctx, file, 6, []byte("WORLD")); err != nil {
+		t.Fatalf("Write at an offset: %v", err)
+	}
+	if got, _ := os.ReadFile(file); string(got) != "hello WORLD" {
+		t.Fatalf("file = %q, want %q", got, "hello WORLD")
+	}
+	// A range past the end leaves a hole of zeros.
+	if err := c.Write(ctx, file, 14, []byte("!")); err != nil {
+		t.Fatalf("Write past the end: %v", err)
+	}
+	if got, _ := os.ReadFile(file); !bytes.Equal(got, []byte("hello WORLD\x00\x00\x00!")) {
+		t.Fatalf("file = %q", got)
+	}
+	// Bytes that look like a request stay payload.
+	tricky := []byte("1 noop\n2 exit\n")
+	if err := c.Write(ctx, file, 0, tricky); err != nil {
+		t.Fatalf("Write of request-shaped bytes: %v", err)
+	}
+	if got, _ := os.ReadFile(file); !bytes.HasPrefix(got, tricky) {
+		t.Fatalf("file = %q", got)
+	}
+	if err := c.Truncate(ctx, file, 4); err != nil {
+		t.Fatalf("Truncate: %v", err)
+	}
+	if got, _ := os.ReadFile(file); string(got) != "1 no" {
+		t.Fatalf("file after Truncate = %q", got)
+	}
+
+	// A refused write still consumes its payload and says so, so the session
+	// carries on.
+	if err := c.Write(ctx, "relative.bin", 0, tricky); err == nil {
+		t.Fatal("a relative path must be refused")
+	}
+	if err := sess.Noop(ctx); err != nil {
+		t.Fatalf("the session must survive a refused write: %v", err)
+	}
+	if sess.Broken() {
+		t.Fatal("a refused write must not mark the session broken")
 	}
 }
