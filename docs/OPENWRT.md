@@ -153,6 +153,17 @@ have the Lua and wasm slices, so a rerun after they reach it will show smaller
 extralite numbers (37.2 MB raw at the time of those slices). Installing an
 `.ipk` on a real router has not been tried.
 
+## Not done: the East Asian tables still in the binary
+
+The extra-lite build leaves the East Asian code pages out of f4's own list, but
+their tables (about 0.6 MB) stay linked because `golang.org/x/text/encoding/
+htmlindex` pulls in every encoding and is imported by f4's dependency
+`github.com/unxed/localecp` (`localecp.go`, to turn a locale's charset name into
+an encoding), and, in f4 itself, by `vfs/codepages.go` and `codepages_unix.go`.
+Removing them from f4 alone changes nothing (measured: 37 286 153 bytes before
+and after). Getting them out needs a build-tag split inside `localecp`, a new
+tag of it and a `go.mod` bump in f4, for 1.6% of the size; not done.
+
 ## Not done: `net/http`
 
 Seven packages of f4 import `net/http` (`internal/app`, `netproxy`, `plughost`,
