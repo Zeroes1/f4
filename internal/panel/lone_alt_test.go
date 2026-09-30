@@ -175,3 +175,21 @@ func TestScheduleLoneAltActsOnlyIfNothingFollows(t *testing.T) {
 		t.Error("pointer motion cancelled the tap")
 	}
 }
+
+// Without a grace period the tap acts on the release itself, with no timer:
+// that is how it is everywhere but Windows, where the author of #1131 felt
+// the old quarter second as a lag.
+func TestScheduleLoneAltWithoutGraceActsAtOnce(t *testing.T) {
+	oldGrace, oldPost := loneAltGrace, loneAltPost
+	t.Cleanup(func() { loneAltGrace, loneAltPost = oldGrace, oldPost })
+	loneAltGrace = 0
+	fired := false
+	loneAltPost = func(f func()) { f() }
+	ScheduleLoneAlt(func() { fired = true })
+	if !fired {
+		t.Fatal("the tap did not act at once")
+	}
+	if defaultLoneAltGrace() > 100*time.Millisecond {
+		t.Fatalf("the default grace is %v, want a delay nobody feels", defaultLoneAltGrace())
+	}
+}

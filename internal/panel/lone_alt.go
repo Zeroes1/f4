@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -39,7 +40,20 @@ const loneAltMaxHold = 700 * time.Millisecond
 // first and looks exactly like a lone tap; the focus loss or the size change
 // that shows it was not one arrives a moment later. The tap acts only if
 // nothing of the kind arrived in this time (#1131).
-var loneAltGrace = 250 * time.Millisecond
+//
+// The delay is short on purpose: the Far Manager macro that does the same
+// job for its autofilter waits ten milliseconds for the focus event, and 250
+// milliseconds here was felt by the author of the ticket as a lag. Other
+// systems hand Alt and the window over in the right order, so nothing waits
+// there and the filter opens on the release itself.
+var loneAltGrace = defaultLoneAltGrace()
+
+func defaultLoneAltGrace() time.Duration {
+	if runtime.GOOS == "windows" {
+		return 60 * time.Millisecond
+	}
+	return 0
+}
 
 // loneAltTerminalSize reads the terminal size a tap is checked against;
 // tests replace it.
@@ -139,6 +153,10 @@ func ScheduleLoneAlt(fire func()) {
 	loneAlt.mu.Lock()
 	gen, w, h := loneAlt.gen, loneAlt.sizeW, loneAlt.sizeH
 	loneAlt.mu.Unlock()
+	if loneAltGrace <= 0 {
+		loneAltPost(fire)
+		return
+	}
 	time.AfterFunc(loneAltGrace, func() {
 		loneAlt.mu.Lock()
 		same := loneAlt.gen == gen
