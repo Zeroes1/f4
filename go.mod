@@ -6,13 +6,13 @@ require (
 	github.com/abadojack/whatlanggo v1.0.1
 	github.com/alecthomas/chroma/v2 v2.15.0
 	github.com/charlievieth/strcase v0.0.6
+	github.com/cloudsoda/go-smb2 v0.0.0-20260918041005-0c5d69b69701
 	github.com/coregx/coregex v0.12.19
 	github.com/ebitengine/oto/v3 v3.5.0-alpha.9.0.20260810052149-c311bfa6e535
 	github.com/ebitengine/purego v0.11.0-alpha.8
 	github.com/go-webgpu/goffi v0.6.3
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/hanwen/go-fuse/v2 v2.11.0
-	github.com/hirochachacha/go-smb2 v1.1.0
 	github.com/jezek/xgb v1.3.1
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/jlaffaye/ftp v0.2.0
@@ -77,12 +77,20 @@ require (
 // module imports them any more.
 
 require (
+	github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc // indirect
 	github.com/ebitengine/gomobile v0.0.0-20260211053922-3d992dae95d1 // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.13.0.20260811162617-464c2ddfc34c // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/icza/bitio v1.1.0 // indirect
+	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
+	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
+	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jfreymuth/pulse v0.1.2 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
@@ -104,7 +112,7 @@ require (
 	github.com/bodgit/windows v1.0.1 // indirect
 	github.com/coregx/ahocorasick v0.2.1 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
-	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
+	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707
 	github.com/emmansun/base64 v0.9.0 // indirect
 	github.com/fogleman/gg v1.3.0 // indirect
 	github.com/go-webgpu/webgpu v0.5.5 // indirect

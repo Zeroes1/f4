@@ -1,6 +1,6 @@
-//go:build smb && !lite
+//go:build !lite
 
-// SMB support statically links github.com/hirochachacha/go-smb2 (smb_backend.go),
+// SMB support statically links github.com/cloudsoda/go-smb2 (smb_backend.go),
 // which a lite build (f4#1178, f4#1671) exists to shed.
 
 package netfox

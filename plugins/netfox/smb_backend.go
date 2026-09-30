@@ -1,4 +1,4 @@
-//go:build smb && !lite
+//go:build !lite
 
 package netfox
 
@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hirochachacha/go-smb2"
+	"github.com/cloudsoda/go-smb2"
 )
 
 // smbClient is the smbBackend over a real SMB2/3 connection (go-smb2): one
@@ -34,7 +34,7 @@ func dialSMB(ctx context.Context, host, port, domain, user, pass string) (*smbCl
 		return nil, err
 	}
 	d := &smb2.Dialer{Initiator: &smb2.NTLMInitiator{User: user, Password: pass, Domain: domain}}
-	session, err := d.DialContext(ctx, conn)
+	session, err := d.DialConn(ctx, conn, net.JoinHostPort(host, port))
 	if err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("smb: %w", err)

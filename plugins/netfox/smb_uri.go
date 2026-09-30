@@ -1,4 +1,4 @@
-//go:build smb && !lite
+//go:build !lite
 
 package netfox
 
