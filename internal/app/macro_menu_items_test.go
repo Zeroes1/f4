@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/macro"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/vfs"
 )
@@ -30,6 +31,7 @@ func TestSyncMacroMenuItemsRegistersAndReplaces(t *testing.T) {
 		MenuItem { description = "Macro hello"; action = function() end }
 		MenuItem { description = "Macro settings"; menu = "Config"; action = function() end }
 		MenuItem { description = "Macro disk"; menu = "Disks"; action = function() end }
+		CommandLine { description = "Macro command"; prefixes = "mtest"; action = function() end }
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -43,8 +45,21 @@ func TestSyncMacroMenuItemsRegistersAndReplaces(t *testing.T) {
 		t.Fatalf("config menu = %v, want [Macro settings]", got)
 	}
 
+	panel.CommandPrefixRegistry.RLock()
+	_, prefixRegistered := panel.CommandPrefixRegistry.ByPrefix["mtest"]
+	panel.CommandPrefixRegistry.RUnlock()
+	if !prefixRegistered {
+		t.Fatal("the CommandLine{} prefix was not registered")
+	}
+
 	syncMacroMenuItems(nil)
 	if got := macroMenuLabels(vfs.PluginCommandPanel); len(got) != 0 {
 		t.Fatalf("plugin menu after the engine went = %v", got)
+	}
+	panel.CommandPrefixRegistry.RLock()
+	_, prefixRegistered = panel.CommandPrefixRegistry.ByPrefix["mtest"]
+	panel.CommandPrefixRegistry.RUnlock()
+	if prefixRegistered {
+		t.Fatal("the CommandLine{} prefix outlived the engine")
 	}
 }

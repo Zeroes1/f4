@@ -29,11 +29,12 @@ func (e *LuaMacroEngine) installAPI(L *lua.LState) {
 	L.SetGlobal("Actions", e.newActionsTable(L))
 	L.SetGlobal("Plugin", e.newPluginTable(L))
 
-	// Declarations f4 does not implement yet (MenuItem{} is below). They are accepted and ignored so
+	// Declarations f4 does not implement yet (MenuItem{} and CommandLine{} are below). They are accepted and ignored so
 	// that a script mixing them with Macro{} still contributes its macros
 	// instead of failing to load entirely.
 	L.SetGlobal("MenuItem", L.NewFunction(e.luaMenuItem))
-	for _, name := range []string{"Event", "CommandLine"} {
+	L.SetGlobal("CommandLine", L.NewFunction(e.luaCommandLine))
+	for _, name := range []string{"Event"} {
 		declaration := name
 		L.SetGlobal(name, L.NewFunction(func(L *lua.LState) int {
 			e.host.Log("MACRO: %s{} is not supported yet, ignored (%s)", declaration, L.Where(1))
@@ -271,6 +272,33 @@ func (e *LuaMacroEngine) luaMenuItem(L *lua.LState) int {
 		macro: &LuaMacro{Description: description, Source: L.Where(1), action: action},
 	})
 	return 0
+}
+
+// luaCommandLine records a CommandLine{}: command-line prefixes ("ab:cd", or
+// separated by spaces) and the action that runs for a line typed with one of
+// them. Registering the prefixes is the caller's business (CommandLinePrefixes).
+func (e *LuaMacroEngine) luaCommandLine(L *lua.LState) int {
+	spec := L.CheckTable(1)
+	action, _ := spec.RawGetString("action").(*lua.LFunction)
+	prefixes := splitCommandLinePrefixes(lua.LVAsString(spec.RawGetString("prefixes")))
+	if action == nil || len(prefixes) == 0 {
+		e.host.Log("MACRO: CommandLine{} needs an action function and prefixes, ignored (%s)", L.Where(1))
+		return 0
+	}
+	e.addCommandLine(&luaCommandLine{
+		prefixes: prefixes,
+		macro: &LuaMacro{
+			Description: strings.TrimSpace(lua.LVAsString(spec.RawGetString("description"))),
+			Source:      L.Where(1),
+			action:      action,
+		},
+	})
+	return 0
+}
+
+// splitCommandLinePrefixes splits "ab:cd ef" into ab, cd, ef, lower case.
+func splitCommandLinePrefixes(value string) []string {
+	return splitMacroList(strings.ReplaceAll(value, ":", " "))
 }
 
 // luaKeys queues keys for injection.

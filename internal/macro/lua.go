@@ -85,6 +85,21 @@ type LuaMenuItemInfo struct {
 	Source      string
 }
 
+// LuaCommandLineInfo is one command-line prefix a CommandLine{} declaration
+// claims: what the host registers and the id RunCommandLine takes.
+type LuaCommandLineInfo struct {
+	ID          int
+	Prefix      string
+	Description string
+	Source      string
+}
+
+// luaCommandLine is one CommandLine{} declaration.
+type luaCommandLine struct {
+	prefixes []string
+	macro    *LuaMacro
+}
+
 // luaMenuItem is one MenuItem{} declaration.
 type luaMenuItem struct {
 	menus []string
@@ -112,7 +127,8 @@ type LuaMacroEngine struct {
 
 	running atomic.Bool
 
-	items []*luaMenuItem
+	items    []*luaMenuItem
+	cmdLines []*luaCommandLine
 
 	// The fields below belong to the interpreter's worker goroutine while a
 	// macro is running, and are read by the caller once it has finished.
@@ -219,6 +235,57 @@ func (e *LuaMacroEngine) add(m *LuaMacro) {
 		}
 	}
 	e.all = append(e.all, m)
+}
+
+func (e *LuaMacroEngine) addCommandLine(c *luaCommandLine) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cmdLines = append(e.cmdLines, c)
+}
+
+// CommandLinePrefixes lists every prefix the CommandLine{} declarations claim,
+// one entry per prefix.
+func (e *LuaMacroEngine) CommandLinePrefixes() []LuaCommandLineInfo {
+	if e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []LuaCommandLineInfo
+	for id, c := range e.cmdLines {
+		for _, prefix := range c.prefixes {
+			out = append(out, LuaCommandLineInfo{ID: id, Prefix: prefix, Description: c.macro.Description, Source: c.macro.Source})
+		}
+	}
+	return out
+}
+
+// RunCommandLine runs a CommandLine{}'s action for a line typed as
+// "prefix:text": the action gets the prefix and the text after it, as in Far.
+// It reports whether there was an action to run (and nothing else was running).
+func (e *LuaMacroEngine) RunCommandLine(id int, prefix, text string) bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	var c *luaCommandLine
+	if id >= 0 && id < len(e.cmdLines) {
+		c = e.cmdLines[id]
+	}
+	e.mu.Unlock()
+	if c == nil {
+		return false
+	}
+	if !e.running.CompareAndSwap(false, true) {
+		return false
+	}
+	macro := *c.macro
+	macro.callArgs = []string{prefix, text}
+	go func() {
+		defer e.running.Store(false)
+		e.execute(&macro, "", nil)
+	}()
+	return true
 }
 
 func (e *LuaMacroEngine) addMenuItem(item *luaMenuItem) {

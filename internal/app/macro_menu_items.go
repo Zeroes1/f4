@@ -14,7 +14,8 @@ import (
 // those for "Config" in the plugin configuration menu. They are registered
 // as plugin commands, which can be taken back, so a reload of the macros
 // replaces them instead of adding them a second time. "Disks" has no menu in
-// f4 to show them in and is left out.
+// f4 to show them in and is left out. CommandLine{} prefixes are registered
+// the same way, as command-line prefixes, and taken back with them.
 
 var (
 	macroMenuMu   sync.Mutex
@@ -32,6 +33,14 @@ func syncMacroMenuItems(engine *macro.LuaMacroEngine) {
 	macroMenuRegs = nil
 	if engine == nil {
 		return
+	}
+	for _, line := range engine.CommandLinePrefixes() {
+		id, prefix := line.ID, line.Prefix
+		reg, err := (&coreAPI{}).RegisterCommandPrefix(fmt.Sprintf("macro.cmdline.%d.%s", id, prefix), prefix,
+			func(_ vfs.App, argument string) { engine.RunCommandLine(id, prefix, argument) })
+		if err == nil {
+			macroMenuRegs = append(macroMenuRegs, reg)
+		}
 	}
 	for _, menu := range []struct {
 		name     string

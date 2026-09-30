@@ -639,3 +639,35 @@ func TestMacroMenuItemIsListedAndRuns(t *testing.T) {
 		t.Fatal("a nil engine has menu items")
 	}
 }
+
+func TestMacroCommandLineIsListedAndRuns(t *testing.T) {
+	host := newFakeMacroHost()
+	Engine := newTestMacroEngine(t, host, `
+		CommandLine { description = "Echo"; prefixes = "Echo:say"; action = function(prefix, text)
+			__prefix, __text = prefix, text
+		end }
+		CommandLine { prefixes = "" ; action = function() end }
+		CommandLine { prefixes = "nope" }
+	`)
+
+	got := Engine.CommandLinePrefixes()
+	if len(got) != 2 || got[0].Prefix != "echo" || got[1].Prefix != "say" || got[0].Description != "Echo" {
+		t.Fatalf("prefixes = %+v, want echo and say of one declaration", got)
+	}
+	if Engine.RunCommandLine(9, "echo", "x") || Engine.RunCommandLine(-1, "echo", "x") {
+		t.Fatal("RunCommandLine accepted an id that does not exist")
+	}
+	if !Engine.RunCommandLine(got[1].ID, "say", "hello world") {
+		t.Fatal("RunCommandLine refused a listed declaration")
+	}
+	if !Engine.WaitIdle(5 * time.Second) {
+		t.Fatal("the command never finished")
+	}
+	values := macroGlobals(t, Engine, "__prefix", "__text")
+	if lua.LVAsString(values["__prefix"]) != "say" || lua.LVAsString(values["__text"]) != "hello world" {
+		t.Fatalf("action got prefix=%v text=%v", values["__prefix"], values["__text"])
+	}
+	if (*LuaMacroEngine)(nil).CommandLinePrefixes() != nil || (*LuaMacroEngine)(nil).RunCommandLine(0, "", "") {
+		t.Fatal("a nil engine has command lines")
+	}
+}
