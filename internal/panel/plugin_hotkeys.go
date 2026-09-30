@@ -18,6 +18,11 @@ import (
 	"github.com/unxed/vtui"
 )
 
+// pluginMenuBottomHint is drawn on the lower border of the F11 menu, so that the
+// hotkey assignment on F4 (and removal on Del) is not known only to those who
+// read the ticket it was asked for in.
+const pluginMenuBottomHint = " F4 "
+
 // declaredHotkeyString turns the shortcut a plugin declares for a command
 // ("Shift+F1") into the string the hotkey manager spells that key with
 // ("ShiftF1"), or "" when it does not name a key.

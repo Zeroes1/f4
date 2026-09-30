@@ -5135,8 +5135,17 @@ func (pf *PanelsFrame) menuItems(title string, items []vtui.MenuItem, onKeyDown 
 }
 
 func (pf *PanelsFrame) menuItemsWithKeyLabels(title string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), keyLabels *vtui.KeySet) {
+	pf.menuItemsWithKeyLabelsAndHint(title, "", items, onKeyDown, callback, keyLabels)
+}
+
+// menuItemsWithKeyLabelsAndHint is menuItemsWithKeyLabels with a hint drawn in
+// the middle of the menu's lower border.
+func (pf *PanelsFrame) menuItemsWithKeyLabelsAndHint(title, bottomHint string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), keyLabels *vtui.KeySet) {
 	vtui.FrameManager.PostTask(func() {
 		menu := vtui.NewVMenu(title)
+		if bottomHint != "" {
+			menu.SetBottomTitle(bottomHint)
+		}
 
 		// Calculate dynamic width based on items and title
 		maxW := runewidth.StringWidth(title) + 10
@@ -5805,7 +5814,7 @@ func (pf *PanelsFrame) ShowPluginMenu() {
 		}
 	}
 
-	pf.menuItemsWithKeyLabels(" Plugins ", menuItems, func(menu *vtui.VMenu, e *vtinput.InputEvent) bool {
+	pf.menuItemsWithKeyLabelsAndHint(" Plugins ", pluginMenuBottomHint, menuItems, func(menu *vtui.VMenu, e *vtinput.InputEvent) bool {
 		if !e.KeyDown {
 			return false
 		}
@@ -5824,6 +5833,21 @@ func (pf *PanelsFrame) ShowPluginMenu() {
 			}
 			area, key := keymap.ConfiguredHotkeyBinding(keymap.GlobalHotkeysMgr, entries[idx].ActionName)
 			if area == "" || key == "" {
+				// No assigned key: the plugin's own default, if it has one that
+				// was not removed yet, is what Del takes back.
+				def := declaredHotkeyString(entries[idx].Declared)
+				if def == "" || PluginDefaultKeyOff(def) {
+					return true
+				}
+				question := pluginHotkeyDeleteQuestion(def, entries[idx].Label)
+				buttons := []string{i18n.Msg("Plugins.HotkeyRemoveBtn"), i18n.Msg("Plugins.HotkeyKeepBtn")}
+				vtui.ShowMessageOn(menu, i18n.Msg("Plugins.HotkeyRemoveTitle"), question, buttons).OnResult = func(choice int) {
+					if choice != 0 {
+						return
+					}
+					SetPluginDefaultKeyOff(def, true)
+					refresh(menu)
+				}
 				return true
 			}
 			question := pluginHotkeyDeleteQuestion(key, entries[idx].Label)
