@@ -15,11 +15,11 @@ type blobHeap struct{ data []byte }
 func compressed(n int) []byte {
 	switch {
 	case n < 0x80:
-		return []byte{byte(n)}
+		return []byte{byte(n)} //nolint:gosec // test data
 	case n < 0x4000:
-		return []byte{byte(0x80 | n>>8), byte(n)}
+		return []byte{byte(0x80 | n>>8), byte(n)} //nolint:gosec // test data
 	}
-	return []byte{byte(0xC0 | n>>24), byte(n >> 16), byte(n >> 8), byte(n)}
+	return []byte{byte(0xC0 | n>>24), byte(n >> 16), byte(n >> 8), byte(n)} //nolint:gosec // test data
 }
 
 func (h *blobHeap) add(blob []byte) uint32 {
@@ -36,7 +36,7 @@ func (h *blobHeap) add(blob []byte) uint32 {
 func (h *blobHeap) addString(s string) uint32 {
 	var raw []byte
 	for _, u := range utf16.Encode([]rune(s)) {
-		raw = append(raw, byte(u), byte(u>>8))
+		raw = append(raw, byte(u), byte(u>>8)) //nolint:gosec // test data
 	}
 	return h.add(append(raw, 0))
 }
@@ -119,11 +119,11 @@ func newILFixture() *ilFixture {
 		// MethodDef: RVA, ImplFlags, Flags, Name, Signature, ParamList.
 		0x06: {{0, 0, 0, ctor, voidSig, 1}, {0, 0, 0, run, runSig, 1}},
 		// MemberRef: Parent (TypeRef 1), Name, Signature.
-		0x0A: {{1<<3 | 1, ctor, voidSig}, {1<<3 | 0, run, runSig}, {1<<3 | 4, run, runSig}, {1<<3 | 3, run, runSig}},
+		0x0A: {{1<<3 | 1, ctor, voidSig}, {1 << 3, run, runSig}, {1<<3 | 4, run, runSig}, {1<<3 | 3, run, runSig}},
 		0x11: {{locals}, {notLocals}, {shortLocals}},
 		0x1B: {{listTypeSpec}},
 		// MethodSpec: Method (MethodDef 2), Instantiation.
-		0x2B: {{2<<1 | 0, inst}, {1<<1 | 1, inst}, {9<<1 | 0, inst}, {2<<1 | 0, notInst}, {2<<1 | 0, shortInst}, {2<<1 | 0, hugeInst}},
+		0x2B: {{2 << 1, inst}, {1<<1 | 1, inst}, {9 << 1, inst}, {2 << 1, notInst}, {2 << 1, shortInst}, {2 << 1, hugeInst}},
 	}
 	f.t = buildTables(strs.data, blob.data, us.data, rows)
 	f.listSpec = 1
@@ -161,7 +161,7 @@ func TestBlobAt(t *testing.T) {
 	if got := f.t.blobAt(1); len(got) != 3 || got[0] != 0x20 {
 		t.Errorf("blobAt(1) = %x", got)
 	}
-	if f.t.blobAt(uint32(len(f.t.blob))) != nil || f.t.blobAt(1<<30) != nil {
+	if f.t.blobAt(uint32(len(f.t.blob))) != nil || f.t.blobAt(1<<30) != nil { //nolint:gosec // test data
 		t.Error("blobAt past the heap must be nil")
 	}
 	// A length that runs past the end of the heap.
@@ -181,7 +181,7 @@ func TestTypeNames(t *testing.T) {
 		{1 << 2, "My.Ns.Foo"},
 		{2 << 2, "Bar"},
 		{1<<2 | 1, "System.Object"},
-		{9<<2 | 0, "?"},
+		{9 << 2, "?"},
 		{9<<2 | 1, "?"},
 		{1<<2 | 2, "<type spec>"},
 		{0, "?"},
@@ -330,8 +330,9 @@ func TestTokenText(t *testing.T) {
 func TestOwners(t *testing.T) {
 	f := newILFixture()
 	tab := f.t
-	if tab.methodOwner(1) != 1 || tab.methodOwner(2) != 2 || tab.fieldOwner(1) != 1 {
-		t.Errorf("owners = %d %d %d", tab.methodOwner(1), tab.methodOwner(2), tab.fieldOwner(1))
+	// Foo lists methods 1-2 and field 1; Bar starts at method 3 and field 2.
+	if tab.methodOwner(1) != 1 || tab.methodOwner(2) != 1 || tab.methodOwner(3) != 2 || tab.fieldOwner(1) != 1 || tab.fieldOwner(2) != 2 {
+		t.Errorf("owners = %d %d %d / %d %d", tab.methodOwner(1), tab.methodOwner(2), tab.methodOwner(3), tab.fieldOwner(1), tab.fieldOwner(2))
 	}
 }
 
@@ -364,11 +365,10 @@ func fatBody(maxStack int, localSig uint32, code ...byte) []byte {
 	return append(head, code...)
 }
 
-func token(v uint32) []byte { return binary.LittleEndian.AppendUint32(nil, v) }
-
 func TestDisassemble(t *testing.T) {
 	f := newILFixture()
 	tab := f.t
+	hello := byte(f.hello) //nolint:gosec // test data
 	code := []byte{
 		0x00,       // IL_0000 nop
 		0x1f, 0xF6, // ldc.i4.s -10
@@ -376,7 +376,7 @@ func TestDisassemble(t *testing.T) {
 		0x21, 1, 0, 0, 0, 0, 0, 0, 0, // ldc.i8 1
 		0x22, 0, 0, 0x80, 0x3f, // ldc.r4 1
 		0x23, 0, 0, 0, 0, 0, 0, 0xf8, 0x3f, // ldc.r8 1.5
-		0x72, byte(f.hello), 0, 0, 0x70, // ldstr "hello"
+		0x72, hello, 0, 0, 0x70, // ldstr "hello"
 		0x28, 1, 0, 0, 0x0A, // call System.Object::.ctor
 		0x2b, 0x02, // br.s +2
 		0x2c, 0xFE, // brfalse.s -2
@@ -563,7 +563,7 @@ func TestReadyToRunImages(t *testing.T) {
 	// Broken headers: a pointer past the end, a huge pointer, too short a file.
 	for name, mutate := range map[string]func([]byte){
 		"far pointer":  func(b []byte) { binary.LittleEndian.PutUint32(b[0x3c:], 1<<28) },
-		"past the end": func(b []byte) { binary.LittleEndian.PutUint32(b[0x3c:], uint32(len(b))) },
+		"past the end": func(b []byte) { binary.LittleEndian.PutUint32(b[0x3c:], uint32(len(b))) }, //nolint:gosec // test data
 		"no pointer":   func(b []byte) { binary.LittleEndian.PutUint32(b[0x3c:], 0) },
 	} {
 		image := append([]byte(nil), plain...)
