@@ -141,6 +141,18 @@ function away, biggest first, and every step is measured by the workflow
 above. Removing whole features (Lua, wasm plugins) is left for a separate
 decision when it comes to that.
 
+## First run of the `openwrt` workflow (main, before the Lua and wasm slices)
+
+Run https://github.com/unxed/f4/actions/runs/36673427522, all eight jobs
+green. The `.ipk` files (gzip'd, what `opkg install` downloads and unpacks),
+bytes: `mipsel_24kc` 12 032 119, `arm_cortex-a7_neon-vfpv4` 12 616 492,
+`aarch64_generic` 13 060 983, `x86_64` 14 464 393. Smoke check on amd64
+(GitHub runner): lite 47 964 425 bytes, listing shown after 820 ms, peak RSS
+40 476 KB; extralite 41 062 665 bytes, 799 ms, 38 556 KB. That main did not yet
+have the Lua and wasm slices, so a rerun after they reach it will show smaller
+extralite numbers (37.2 MB raw at the time of those slices). Installing an
+`.ipk` on a real router has not been tried.
+
 ## Not done: `net/http`
 
 Seven packages of f4 import `net/http` (`internal/app`, `netproxy`, `plughost`,
