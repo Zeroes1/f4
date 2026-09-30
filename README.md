@@ -111,6 +111,10 @@ pkg install ./f4-termux-arm64.deb   # arm64
 pkg install ./f4-termux-arm.deb     # armv7
 ```
 
+A `pkg install f4` from Termux's own repository is not available yet: the
+recipe for it is `packaging/termux/build.sh`, waiting for a pull request to
+termux/termux-packages (unxed/f4#12).
+
 Alternatively, extract the `.tar.gz` archive and run `./f4`. Both artifacts
 are linked against Termux's libraries and are intended to run inside Termux;
 they are not standalone Android APKs. x86_64 (Chromebooks, emulators) is not
