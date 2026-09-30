@@ -12,7 +12,7 @@ import (
 )
 
 // smbURIProvider opens smb://[domain;]user[:password]@host[:port][/share[/path]]
-// as a read-only VFS (f4#188). Without a user the logon is anonymous.
+// as a VFS (f4#188). Without a user the logon is anonymous.
 type smbURIProvider struct{}
 
 func (p *smbURIProvider) Scheme() string { return "smb" }

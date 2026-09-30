@@ -53,6 +53,34 @@ func TestSMBLiveServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
+	// Write, rename and delete on the live share (the sandbox makes it
+	// writable for its user).
+	if err := v.MkDir(ctx, "/f4test/newdir"); err != nil {
+		t.Fatalf("MkDir: %v", err)
+	}
+	w, err := v.Create(ctx, "/f4test/newdir/w.txt")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := w.Write([]byte("written")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := v.Rename(ctx, "/f4test/newdir/w.txt", "/f4test/newdir/r.txt"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if got := names(readAll(t, v, "/f4test/newdir")); got != "r.txt" {
+		t.Errorf("newdir = %q, want r.txt", got)
+	}
+	if err := v.Remove(ctx, "/f4test/newdir"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if _, err := v.Stat(ctx, "/f4test/newdir"); err == nil {
+		t.Error("newdir still there after Remove")
+	}
+
 	buf := make([]byte, 16)
 	n, _ := f.ReadAt(ctx, buf, 1)
 	if got := string(buf[:n]); !strings.HasPrefix(got, "ello") {

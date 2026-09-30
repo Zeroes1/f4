@@ -42,6 +42,8 @@ func (f *fakeSMBFile) Size() int64  { return int64(f.Len()) }
 type fakeSMB struct {
 	closes  int
 	listErr error
+	ops     []string
+	written string
 }
 
 func (b *fakeSMB) ListShares() ([]string, error) {
@@ -78,6 +80,31 @@ func (b *fakeSMB) OpenRead(share, name string) (smbFile, error) {
 		return &fakeSMBFile{Reader: bytes.NewReader([]byte("hello"))}, nil
 	}
 	return nil, os.ErrNotExist
+}
+
+func (b *fakeSMB) MkDir(share, dir string) error {
+	b.ops = append(b.ops, "mkdir "+share+":"+dir)
+	return nil
+}
+
+func (b *fakeSMB) RemoveAll(share, name string) error {
+	b.ops = append(b.ops, "rm "+share+":"+name)
+	return nil
+}
+
+func (b *fakeSMB) Rename(share, oldName, newName string) error {
+	b.ops = append(b.ops, "mv "+share+":"+oldName+" "+newName)
+	return nil
+}
+
+type fakeWriter struct{ b *fakeSMB }
+
+func (w fakeWriter) Write(p []byte) (int, error) { w.b.written += string(p); return len(p), nil }
+func (w fakeWriter) Close() error                { w.b.ops = append(w.b.ops, "closed"); return nil }
+
+func (b *fakeSMB) Create(share, name string) (io.WriteCloser, error) {
+	b.ops = append(b.ops, "create "+share+":"+name)
+	return fakeWriter{b}, nil
 }
 
 func (b *fakeSMB) Close() error { b.closes++; return nil }
@@ -207,25 +234,51 @@ func TestSMBVFSReadsFiles(t *testing.T) {
 	}
 }
 
-func TestSMBVFSIsReadOnly(t *testing.T) {
-	v := newSMBVFS(nil, &fakeSMB{}, "srv")
+func TestSMBVFSMutations(t *testing.T) {
+	backend := &fakeSMB{}
+	v := newSMBVFS(nil, backend, "srv")
 	ctx := context.Background()
-	if v.GetCapabilities().HasWrite || !v.GetCapabilities().HasRandomAccess {
+	if !v.GetCapabilities().HasWrite || !v.GetCapabilities().HasRandomAccess {
 		t.Errorf("capabilities = %+v", v.GetCapabilities())
 	}
-	errs := []error{
-		v.MkDir(ctx, "/docs/x"), v.Remove(ctx, "/docs/a.txt"), v.Rename(ctx, "/docs/a.txt", "/docs/b"),
-		v.SetAttributes(ctx, "/docs/a.txt", vfs.VFSItem{}),
+	if err := v.MkDir(ctx, "/docs/new"); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := v.Create(ctx, "/docs/n"); err != nil {
-		errs = append(errs, err)
-	} else {
-		t.Error("Create succeeded")
+	if err := v.Remove(ctx, "/docs/sub"); err != nil {
+		t.Fatal(err)
 	}
-	for i, err := range errs {
-		if !errors.Is(err, errSMBReadOnly) {
-			t.Errorf("mutation %d error = %v, want errSMBReadOnly", i, err)
+	if err := v.Rename(ctx, "/docs/a.txt", "/DOCS/b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	w, err := v.Create(ctx, "/docs/n.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("data"))
+	_ = w.Close()
+	want := []string{"mkdir docs:new", "rm docs:sub", "mv docs:a.txt b.txt", "create docs:n.txt", "closed"}
+	if strings.Join(backend.ops, "|") != strings.Join(want, "|") || backend.written != "data" {
+		t.Errorf("backend saw %v (wrote %q), want %v", backend.ops, backend.written, want)
+	}
+
+	// The root and a share itself are not paths a mutation may touch, and a
+	// rename does not cross shares.
+	for i, err := range []error{
+		v.MkDir(ctx, "/"), v.MkDir(ctx, "/docs"), v.Remove(ctx, "/docs"), v.Rename(ctx, "/docs", "/docs/x"),
+		v.Rename(ctx, "/docs/a", "/docs"),
+	} {
+		if !errors.Is(err, errSMBNoShare) {
+			t.Errorf("share-level mutation %d error = %v, want errSMBNoShare", i, err)
 		}
+	}
+	if err := v.Rename(ctx, "/docs/a", "/other/a"); !errors.Is(err, errSMBOtherShare) {
+		t.Errorf("cross-share rename error = %v", err)
+	}
+	if _, err := v.Create(ctx, "/docs"); !errors.Is(err, errSMBNoShare) {
+		t.Errorf("Create of a share error = %v", err)
+	}
+	if err := v.SetAttributes(ctx, "/docs/a.txt", vfs.VFSItem{}); err == nil {
+		t.Error("SetAttributes succeeded")
 	}
 	if ch, err := v.Search(ctx, "/", "x"); ch != nil || err != nil {
 		t.Errorf("Search = %v, %v", ch, err)

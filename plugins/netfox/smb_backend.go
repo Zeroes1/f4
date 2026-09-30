@@ -5,6 +5,7 @@ package netfox
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"strings"
@@ -98,6 +99,38 @@ func (c *smbClient) OpenRead(share, name string) (smbFile, error) {
 		return nil, err
 	}
 	return smbRemoteFile{File: f, size: info.Size()}, nil
+}
+
+func (c *smbClient) MkDir(share, dir string) error {
+	s, err := c.share(share)
+	if err != nil {
+		return err
+	}
+	return s.Mkdir(backendPath(dir), 0o755)
+}
+
+func (c *smbClient) RemoveAll(share, name string) error {
+	s, err := c.share(share)
+	if err != nil {
+		return err
+	}
+	return s.RemoveAll(backendPath(name))
+}
+
+func (c *smbClient) Rename(share, oldName, newName string) error {
+	s, err := c.share(share)
+	if err != nil {
+		return err
+	}
+	return s.Rename(backendPath(oldName), backendPath(newName))
+}
+
+func (c *smbClient) Create(share, name string) (io.WriteCloser, error) {
+	s, err := c.share(share)
+	if err != nil {
+		return nil, err
+	}
+	return s.Create(backendPath(name))
 }
 
 func (c *smbClient) Close() error {

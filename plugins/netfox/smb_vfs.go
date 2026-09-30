@@ -19,9 +19,14 @@ import (
 	"github.com/unxed/f4/vfs"
 )
 
-// errSMBReadOnly is what every mutation reports: the first SMB slice
-// (f4#188) lists and reads only.
-var errSMBReadOnly = errors.New("SMB shares are read-only in this version")
+// errSMBNoShare is what a mutation reports when its path is the server's root
+// or a share itself: shares are made and removed on the server, not through
+// the file panel.
+var errSMBNoShare = errors.New("this operation needs a path inside a share")
+
+// errSMBOtherShare is what Rename reports between two shares: one rename is
+// one tree connect on the wire, so it cannot cross them.
+var errSMBOtherShare = errors.New("cannot rename between shares; copy and delete instead")
 
 // smbFile is an open remote file.
 type smbFile interface {
@@ -40,6 +45,12 @@ type smbBackend interface {
 	ReadDir(share, dir string) ([]fs.FileInfo, error)
 	Stat(share, name string) (fs.FileInfo, error)
 	OpenRead(share, name string) (smbFile, error)
+	MkDir(share, dir string) error
+	// RemoveAll deletes a file, or a directory with everything in it.
+	RemoveAll(share, name string) error
+	Rename(share, oldName, newName string) error
+	// Create makes (or truncates) a file and returns a writer for it.
+	Create(share, name string) (io.WriteCloser, error)
 	Close() error
 }
 
@@ -68,7 +79,7 @@ func (s *smbSession) release() error {
 	return nil
 }
 
-// smbVFS is a read-only view of an SMB server: the root lists its shares as
+// smbVFS is a view of an SMB server: the root lists its shares as
 // directories, "/share/dir/file" goes into one of them.
 type smbVFS struct {
 	mu      sync.Mutex
@@ -220,18 +231,62 @@ func (v *smbVFS) Join(e ...string) string { return path.Join(e...) }
 func (v *smbVFS) Base(p string) string    { return path.Base(p) }
 func (v *smbVFS) Dir(p string) string     { return path.Dir(p) }
 
-func (v *smbVFS) MkDir(context.Context, string) error          { return errSMBReadOnly }
-func (v *smbVFS) Remove(context.Context, string) error         { return errSMBReadOnly }
-func (v *smbVFS) Rename(context.Context, string, string) error { return errSMBReadOnly }
-func (v *smbVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
-	return errSMBReadOnly
+// inShare splits an absolute path and refuses the root and a share itself.
+func (v *smbVFS) inShare(p string) (share, rel string, err error) {
+	share, rel = splitSMBPath(v.abs(p))
+	if share == "" || rel == "" {
+		return "", "", errSMBNoShare
+	}
+	return share, rel, nil
 }
-func (v *smbVFS) Create(context.Context, string) (io.WriteCloser, error) {
-	return nil, errSMBReadOnly
+
+func (v *smbVFS) MkDir(_ context.Context, p string) error {
+	share, rel, err := v.inShare(p)
+	if err != nil {
+		return err
+	}
+	return v.backend().MkDir(share, rel)
+}
+
+func (v *smbVFS) Remove(_ context.Context, p string) error {
+	share, rel, err := v.inShare(p)
+	if err != nil {
+		return err
+	}
+	return v.backend().RemoveAll(share, rel)
+}
+
+func (v *smbVFS) Rename(_ context.Context, oldPath, newPath string) error {
+	oldShare, oldRel, err := v.inShare(oldPath)
+	if err != nil {
+		return err
+	}
+	newShare, newRel, err := v.inShare(newPath)
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(oldShare, newShare) {
+		return errSMBOtherShare
+	}
+	return v.backend().Rename(oldShare, oldRel, newRel)
+}
+
+// SetAttributes is not supported: SMB times and attributes are not mapped to
+// f4's item fields yet.
+func (v *smbVFS) SetAttributes(context.Context, string, vfs.VFSItem) error {
+	return errors.New("SetAttributes is not supported for SMB")
+}
+
+func (v *smbVFS) Create(_ context.Context, p string) (io.WriteCloser, error) {
+	share, rel, err := v.inShare(p)
+	if err != nil {
+		return nil, err
+	}
+	return v.backend().Create(share, rel)
 }
 
 func (v *smbVFS) GetCapabilities() vfs.VFSCapabilities {
-	return vfs.VFSCapabilities{HasRandomAccess: true}
+	return vfs.VFSCapabilities{HasRandomAccess: true, HasWrite: true}
 }
 
 func (v *smbVFS) Search(context.Context, string, string) (chan int64, error) { return nil, nil }
