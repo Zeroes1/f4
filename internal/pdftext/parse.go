@@ -244,7 +244,7 @@ func (ps *parser) literalString() Str {
 						v = v*8 + int(ps.b[ps.p]-'0')
 						ps.p++
 					}
-					out = append(out, byte(v))
+					out = append(out, byte(v)) //nolint:gosec // bounded by the syntax being parsed
 				} else {
 					out = append(out, e)
 				}
@@ -273,12 +273,12 @@ func (ps *parser) hexString() Str {
 		if hi < 0 {
 			hi = v
 		} else {
-			out = append(out, byte(hi<<4|v))
+			out = append(out, byte(hi<<4|v)) //nolint:gosec // bounded by the syntax being parsed
 			hi = -1
 		}
 	}
 	if hi >= 0 {
-		out = append(out, byte(hi<<4))
+		out = append(out, byte(hi<<4)) //nolint:gosec // bounded by the syntax being parsed
 	}
 	return Str(out)
 }
