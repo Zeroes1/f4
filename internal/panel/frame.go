@@ -4792,6 +4792,28 @@ func progressBlockedByModal(frames interface{ GetTopFrame() vtui.Frame }) bool {
 // behind a progress screen.
 type progressOverlayHost interface{ AllowsProgressOverlay() bool }
 
+// lazyProgressBar is a progress bar that draws nothing until shown is set.
+// ScreenObject.Show makes an object visible again on every draw, so hiding it
+// with SetVisible does not last (f4#1411, reported again on fb112e4: the bar
+// was still there under "Requesting sudo access..."); the draw calls are
+// what has to be skipped.
+type lazyProgressBar struct {
+	*vtui.ProgressBar
+	shown bool
+}
+
+func (b *lazyProgressBar) Show(scr *vtui.ScreenBuf) {
+	if b.shown {
+		b.ProgressBar.Show(scr)
+	}
+}
+
+func (b *lazyProgressBar) DisplayObject(scr *vtui.ScreenBuf) {
+	if b.shown {
+		b.ProgressBar.DisplayObject(scr)
+	}
+}
+
 func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg string, forked bool, worker func(ctx context.Context, update func(msg string, percent int)) error, onComplete func(err error)) {
 	dlg := vtui.NewCenteredDialog(50, 12, title)
 	dlg.AttentionSuppressed = true
@@ -4799,11 +4821,10 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 	lbl := vtui.NewText(0, 0, startMsg, vtui.Palette[vtui.ColDialogText])
 	dlg.AddItem(lbl)
 
-	pb := vtui.NewProgressBar(0, 0, 46)
+	pb := &lazyProgressBar{ProgressBar: vtui.NewProgressBar(0, 0, 46)}
 	// The bar stays hidden until the worker reports a real percentage: a task
 	// that only shows a status line (Opening..., Requesting sudo access...)
 	// has nothing for it to indicate, and an empty bar reads as stuck (f4#1411).
-	pb.SetVisible(false)
 	dlg.AddItem(pb)
 
 	lblHint := vtui.NewText(0, 0, i18n.Msg("Op.SwitchHint"), vtui.Palette[vtui.ColDialogText])
@@ -4900,7 +4921,7 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 					lbl.SetText(safeMsg)
 				}
 				if percent >= 0 {
-					pb.SetVisible(true)
+					pb.shown = true
 					pb.SetPercent(percent)
 					dlg.SetProgress(percent)
 				}
