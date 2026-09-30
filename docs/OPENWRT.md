@@ -57,6 +57,13 @@ Current exclusions:
 - Embedded translations other than English (`internal/i18n/langfs_extralite.go`,
   about 5.4 MB). A translation is still loaded from the language directories
   on disk, so the feature is not lost, only the copy inside the binary.
+- `golang.org/x/text/collate` (about 1.2 MB): file names are ordered by
+  `internal/panel/namecompare_extralite.go`, which follows the root collation
+  for white space, punctuation, digits and letters, but does not fold accented
+  Latin letters onto their base letters.
+- The East Asian code pages (Shift JIS, ISO-2022-JP, EUC-JP, EUC-KR, GBK,
+  HZ-GB-2312, GB18030, Big5; `vfs/codepages_nocjk.go`, about 0.6 MB). UTF-8,
+  UTF-16 and the single-byte code pages remain.
 
 ## Measurements
 
@@ -78,6 +85,28 @@ on a GitHub runner, not on router hardware; the extra-lite profile saves
 binary size, not memory, since the embedded translations are read lazily.
 
 The `openwrt` workflow prints these numbers for every run.
+
+Compressed sizes, which are what an `.ipk` or a squashfs image carries
+(bytes, `gzip -9` / `xz -9e`), lite and extralite, after the collation and
+East Asian code page slice:
+
+| target | lite gz | lite xz | extralite gz | extralite xz |
+| --- | --- | --- | --- | --- |
+| mipsle-softfloat | 14 283 600 | 8 952 380 | 11 925 423 | 7 947 420 |
+| arm v7 | 14 858 962 | 9 669 036 | 12 505 721 | 8 661 440 |
+| arm64 | 15 364 297 | 10 122 452 | 13 007 442 | 9 118 464 |
+| amd64 | 16 739 968 | 11 676 116 | 14 374 672 | 10 658 996 |
+
+(Raw extralite sizes at that point: mipsle 38 600 897, arm 34 013 346, arm64
+37 880 073, amd64 40 907 017.)
+
+What is not reachable against mc: a statically linked Go binary carries its
+own runtime, garbage collector, TLS/crypto and reflection tables, so it cannot
+come near mc's roughly 1 MB executable plus shared libraries; the floor found
+so far is about 8 MB compressed. Resident memory of a Go program is likewise
+above mc's. What extralite keeps is the function set the panels, viewer and
+editor give; what it gives up is listed under "Extra-lite profile" above and
+grows with each slice.
 
 Where the lite binary's 47 MB are: `.text` 17.4 MB, `.rodata` 13.1 MB,
 `.gopclntab` 13.6 MB. The 32 MiB `crypto/internal/fips140/drbg.memory` that
