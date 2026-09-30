@@ -17,7 +17,7 @@ Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all cont
 
 ## Connection
 
-`DOCKER_HOST` as the CLI reads it: `unix:///path/to.sock` or `tcp://host:port` (plain HTTP). Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. Not supported yet: Windows named pipes, `ssh://`, TLS. Nothing connects until the panel is opened.
+`DOCKER_HOST` as the CLI reads it: `unix:///path/to.sock` or `tcp://host:port` (plain HTTP). Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. On Windows the default is Docker Desktop's named pipe (`npipe:////./pipe/docker_engine`, also accepted in `DOCKER_HOST`); it is opened as a plain file and served by a small one-request-per-connection transport, because a synchronous pipe handle cannot read and write at once the way `net/http` does. Not supported yet: `ssh://`, TLS. Nothing connects until the panel is opened.
 
 ## Limits of this part
 

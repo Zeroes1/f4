@@ -36,12 +36,16 @@ type client struct {
 
 // clientFromEnv reads DOCKER_HOST the way the docker CLI does. Unset, it uses
 // the system socket and, failing that, the rootless one under XDG_RUNTIME_DIR.
-// Named pipes (Docker Desktop on Windows) and TLS are not supported yet; the
-// error says so instead of dialing something else.
+// On Windows the default is Docker Desktop's named pipe. TLS is not supported
+// yet; the error says so instead of dialing something else.
 func clientFromEnv() (*client, error) {
 	host := strings.TrimSpace(os.Getenv("DOCKER_HOST"))
 	if host == "" {
-		host = "unix://" + defaultSocketPath()
+		if runtime.GOOS == "windows" {
+			host = "npipe:////./pipe/docker_engine"
+		} else {
+			host = "unix://" + defaultSocketPath()
+		}
 	}
 	return newClient(host)
 }
@@ -82,13 +86,22 @@ func newClient(host string) (*client, error) {
 			IdleConnTimeout:     30 * time.Second,
 		}
 		return &client{http: &http.Client{Transport: transport}, base: "http://docker"}, nil
+	case "npipe":
+		if runtime.GOOS != "windows" {
+			return nil, fmt.Errorf("%w %q: named pipes exist only on Windows", errUnsupportedHost, host)
+		}
+		name := strings.ReplaceAll(u.Path, "/", `\`)
+		if name == "" {
+			return nil, fmt.Errorf("%w %q: no pipe name", errUnsupportedHost, host)
+		}
+		return &client{http: &http.Client{Transport: &pipeTransport{dial: openPipe(name)}}, base: "http://docker"}, nil
 	case "tcp", "http":
 		if u.Host == "" {
 			return nil, fmt.Errorf("%w %q: no address", errUnsupportedHost, host)
 		}
 		return &client{http: &http.Client{}, base: "http://" + u.Host}, nil
 	default:
-		return nil, fmt.Errorf("%w %q: only unix:// and tcp:// are supported", errUnsupportedHost, host)
+		return nil, fmt.Errorf("%w %q: only unix://, npipe:// and tcp:// are supported", errUnsupportedHost, host)
 	}
 }
 

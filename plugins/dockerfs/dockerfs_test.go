@@ -2,15 +2,18 @@ package dockerfs
 
 import (
 	"archive/tar"
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -395,14 +398,23 @@ func TestDockerVFSReportsAnUnreachableDaemon(t *testing.T) {
 }
 
 func TestNewClientHosts(t *testing.T) {
-	for _, host := range []string{"unix:///var/run/docker.sock", "tcp://127.0.0.1:2375", "http://127.0.0.1:2375"} {
+	good := []string{"tcp://127.0.0.1:2375", "http://127.0.0.1:2375"}
+	bad := []string{"ssh://user@host", "unix://", "tcp://", "://bad", "npipe://"}
+	if runtime.GOOS == "windows" {
+		good = append(good, "npipe:////./pipe/docker_engine")
+		bad = append(bad, "unix:///var/run/docker.sock")
+	} else {
+		good = append(good, "unix:///var/run/docker.sock")
+		bad = append(bad, "npipe:////./pipe/docker_engine")
+	}
+	for _, host := range good {
 		if cli, err := newClient(host); err != nil {
 			t.Errorf("newClient(%q): %v", host, err)
 		} else {
 			cli.close()
 		}
 	}
-	for _, host := range []string{"npipe:////./pipe/docker_engine", "ssh://user@host", "unix://", "tcp://", "://bad"} {
+	for _, host := range bad {
 		if _, err := newClient(host); !errors.Is(err, errUnsupportedHost) {
 			t.Errorf("newClient(%q) = %v, want errUnsupportedHost", host, err)
 		}
@@ -410,6 +422,90 @@ func TestNewClientHosts(t *testing.T) {
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
 	if _, err := clientFromEnv(); err != nil {
 		t.Fatal(err)
+	}
+	t.Setenv("DOCKER_HOST", "")
+	if _, err := clientFromEnv(); err != nil {
+		t.Fatalf("the default host: %v", err)
+	}
+}
+
+// pipeServer answers one HTTP request on c, the way the daemon does on its pipe.
+func pipeServer(c io.ReadWriteCloser, status, body string) {
+	defer func() { _ = c.Close() }()
+	if _, err := http.ReadRequest(bufio.NewReader(c)); err != nil {
+		return
+	}
+	_, _ = io.WriteString(c, "HTTP/1.1 "+status+"\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"+body)
+}
+
+func TestPipeTransport(t *testing.T) {
+	list := `[{"Id":"aaaaaaaaaaaaaaaa","Names":["/web"]}]`
+	dialer := func(status, body string) func() (io.ReadWriteCloser, error) {
+		return func() (io.ReadWriteCloser, error) {
+			c1, c2 := net.Pipe()
+			go pipeServer(c2, status, body)
+			return c1, nil
+		}
+	}
+	cli := &client{http: &http.Client{Transport: &pipeTransport{dial: dialer("200 OK", list)}}, base: "http://docker"}
+	got, err := cli.listContainers(context.Background())
+	if err != nil || len(got) != 1 || got[0].name() != "web" {
+		t.Fatalf("over a pipe: %+v, %v", got, err)
+	}
+
+	// An error status comes back as the daemon's message.
+	cli = &client{http: &http.Client{Transport: &pipeTransport{dial: dialer("404 Not Found", `{"message":"no such container"}`)}}, base: "http://docker"}
+	if _, err := cli.listContainers(context.Background()); !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "no such container") {
+		t.Fatalf("a 404 over a pipe: %v", err)
+	}
+
+	// A busy pipe is retried, any other dial error is not.
+	busy := 0
+	retrying := &pipeTransport{dial: func() (io.ReadWriteCloser, error) {
+		if busy++; busy < 3 {
+			return nil, errors.New("all pipe instances are busy")
+		}
+		return dialer("200 OK", list)()
+	}}
+	cli = &client{http: &http.Client{Transport: retrying}, base: "http://docker"}
+	if _, err := cli.listContainers(context.Background()); err != nil || busy != 3 {
+		t.Fatalf("a busy pipe: %v after %d dials", err, busy)
+	}
+	cli = &client{http: &http.Client{Transport: &pipeTransport{dial: func() (io.ReadWriteCloser, error) { return nil, errors.New("the system cannot find the file") }}}, base: "http://docker"}
+	if _, err := cli.listContainers(context.Background()); err == nil || !strings.Contains(err.Error(), "Docker") {
+		t.Fatalf("a missing pipe: %v", err)
+	}
+
+	// A daemon that hangs up without answering is an error, not a hang.
+	hangup := &pipeTransport{dial: func() (io.ReadWriteCloser, error) {
+		c1, c2 := net.Pipe()
+		go func() { _, _ = http.ReadRequest(bufio.NewReader(c2)); _ = c2.Close() }()
+		return c1, nil
+	}}
+	cli = &client{http: &http.Client{Transport: hangup}, base: "http://docker"}
+	if _, err := cli.listContainers(context.Background()); err == nil {
+		t.Fatal("a hang-up should be an error")
+	}
+
+	// A cancelled request stops waiting for a daemon that never answers.
+	silent := &pipeTransport{dial: func() (io.ReadWriteCloser, error) {
+		c1, c2 := net.Pipe()
+		go func() { _, _ = http.ReadRequest(bufio.NewReader(c2)) }()
+		return c1, nil
+	}}
+	cli = &client{http: &http.Client{Transport: silent}, base: "http://docker"}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err := cli.listContainers(ctx); err == nil {
+		t.Fatal("a silent daemon should time out")
+	}
+	// A cancelled context stops a retry loop too.
+	cctx, cancel2 := context.WithCancel(context.Background())
+	cancel2()
+	stuck := &pipeTransport{dial: func() (io.ReadWriteCloser, error) { return nil, errors.New("pipe is busy") }}
+	cli = &client{http: &http.Client{Transport: stuck}, base: "http://docker"}
+	if _, err := cli.listContainers(cctx); err == nil {
+		t.Fatal("a cancelled context should stop the retries")
 	}
 }
 
