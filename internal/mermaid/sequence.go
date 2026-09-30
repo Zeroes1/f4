@@ -102,6 +102,9 @@ func Convert(source string) (text string, ok bool) {
 		if seqHeader.MatchString(strings.TrimSuffix(line, ";")) {
 			return Sequence(source)
 		}
+		if classHeader.MatchString(strings.TrimSuffix(line, ";")) {
+			return Class(source)
+		}
 		return Flowchart(source)
 	}
 	return "", false

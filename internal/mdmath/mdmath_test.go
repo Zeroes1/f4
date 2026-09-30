@@ -135,8 +135,8 @@ func TestPrepareMermaid(t *testing.T) {
 		"```",
 		"",
 		"```mermaid",
-		"classDiagram",
-		"class A",
+		"gantt",
+		"title X",
 		"```",
 		"~~~ Mermaid",
 		"flowchart LR",
@@ -147,7 +147,7 @@ func TestPrepareMermaid(t *testing.T) {
 		"never closed --> B",
 	}, "\n")
 	got := Prepare(in)
-	for _, want := range []string{"```\n[Start] ──▶ [B]\n```", "```mermaid\nclassDiagram\nclass A\n```", "```\n[X] ──▶ [Y]\n```", "```mermaid\ngraph TD\nnever closed --> B"} {
+	for _, want := range []string{"```\n[Start] ──▶ [B]\n```", "```mermaid\ngantt\ntitle X\n```", "```\n[X] ──▶ [Y]\n```", "```mermaid\ngraph TD\nnever closed --> B"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("result lacks %q:\n%s", want, got)
 		}

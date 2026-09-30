@@ -90,7 +90,7 @@ func TestSequence(t *testing.T) {
 		"loop":     "sequenceDiagram\nloop every minute\nA->>B: ping\nend",
 		"header":   "sequenceDiagram",
 		"garbage":  "sequenceDiagram\nA ~~ B",
-		"class":    "classDiagram\nclass A",
+		"gantt":    "gantt\ntitle X",
 		"nothing":  "%% only a comment",
 		"too long": "sequenceDiagram\n" + strings.Repeat("A->>B: x\n", MaxLines),
 	} {
@@ -100,5 +100,55 @@ func TestSequence(t *testing.T) {
 	}
 	if got, ok := Convert("graph TD\nA-->B"); !ok || got != "[A] ──▶ [B]" {
 		t.Errorf("Convert must hand flowcharts to Flowchart: %q %v", got, ok)
+	}
+}
+
+func TestClass(t *testing.T) {
+	src := strings.Join([]string{
+		"classDiagram",
+		"  direction LR",
+		"  class Animal {",
+		"    <<abstract>>",
+		"    +String name",
+		"    +eat() void",
+		"  }",
+		"  class Duck",
+		"  Animal <|-- Duck",
+		"  Duck : +swim()",
+		"  Zoo \"1\" *-- \"many\" Animal : houses",
+		"  Duck ..> Pond",
+		"  Keeper --> Zoo",
+		"  Pond <.. Fish",
+		"  Fish -- Pond",
+	}, "\n")
+	got, ok := Convert(src)
+	want := strings.Join([]string{
+		"class Animal",
+		"  <<abstract>>",
+		"  +String name",
+		"  +eat() void",
+		"class Duck",
+		"  +swim()",
+		"Duck ──▷ Animal",
+		"Zoo \"1\" ◆── \"many\" Animal: houses",
+		"Duck ┄┄▶ Pond",
+		"Keeper ──▶ Zoo",
+		"Pond ◀┄┄ Fish",
+		"Fish ─── Pond",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("class:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	for name, bad := range map[string]string{
+		"generic":   "classDiagram\nclass Box~T~",
+		"note":      "classDiagram\nnote for A \"x\"",
+		"unclosed":  "classDiagram\nclass A {\n+x",
+		"namespace": "classDiagram\nnamespace N {\nclass A\n}",
+		"header":    "classDiagram",
+		"too long":  "classDiagram\n" + strings.Repeat("A --> B\n", MaxLines),
+	} {
+		if got, ok := Class(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
 	}
 }
