@@ -91,10 +91,16 @@ type TerminalView struct {
 	ClipboardWriter func(string)
 	Pty             PtyBackend
 	kitty           *KittyGraphics
-	Images          []terminalImage
-	kittyKeySeq     uint64
-	CellW           int
-	CellH           int
+	// Unicode placeholders (kitty_placeholder.go): the virtual placements a
+	// program has made, what the marks after each placeholder cell said, and
+	// the placeholder the next mark belongs to.
+	virtual     map[uint32]kittyVirtual
+	phMeta      map[*vtui.CharInfo]map[int]placeholderCell
+	phLast      placeholderRun
+	Images      []terminalImage
+	kittyKeySeq uint64
+	CellW       int
+	CellH       int
 
 	Muted         bool
 	lastCharWasCR bool
@@ -309,6 +315,7 @@ func (tv *TerminalView) ResetBuffer(w, h int) {
 	tv.AltLines = makeBuf()
 	tv.WrapFlags = make([]bool, h)
 	tv.Images = nil
+	tv.virtual, tv.phMeta, tv.phLast = nil, nil, placeholderRun{}
 
 	// Сброс параметров прокрутки и курсора
 	tv.Width, tv.Height = w, h
@@ -524,6 +531,11 @@ func (tv *TerminalView) PutChar(r rune, attr uint64) {
 	if r < 0x20 {
 		return
 	}
+	// A mark after a Unicode placeholder belongs to it and takes no cell.
+	if tv.placeholderMark(r) {
+		return
+	}
+	tv.phLast = placeholderRun{}
 
 	w := runewidth.RuneWidth(r)
 	if w <= 0 {
@@ -566,6 +578,9 @@ func (tv *TerminalView) PutChar(r rune, attr uint64) {
 		buf[tv.CursorY][tv.CursorX] = vtui.CharInfo{Char: uint64(r), Attributes: attr}
 		for i := 1; i < w; i++ {
 			buf[tv.CursorY][tv.CursorX+i] = vtui.CharInfo{Char: vtui.WideCharFiller, Attributes: attr}
+		}
+		if r == kittyPlaceholderRune {
+			tv.placeholderStarted(tv.CursorY, tv.CursorX)
 		}
 		tv.CursorX += w
 		tv.suppressEraseHistory = false
@@ -1108,6 +1123,11 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 		// Проверка выхода за пределы экрана
 		if drawY >= tv.Y1 && drawY <= tv.Y1+tv.Height-1 {
 			drawLine := append([]vtui.CharInfo(nil), line...)
+			for i := range drawLine {
+				if drawLine[i].Char == kittyPlaceholderRune {
+					drawLine[i].Char = ' ' // the picture is drawn over the cell
+				}
+			}
 			if tv.DefaultColors {
 				for i := range drawLine {
 					drawLine[i].Attributes = hostDefaultColors(drawLine[i].Attributes)
