@@ -6447,6 +6447,7 @@ func (pf *PanelsFrame) navigateToPath(fsp *FileSystemPanel, targetPath string, r
 	if targetPath == "" {
 		return false
 	}
+	targetPath = smbTargetFor(fsp.Vfs, targetPath)
 	// An explicit command/history navigation supersedes a provider mount that
 	// has not installed its child VFS yet.
 	providerOpenCanceled := fsp.ProviderOpenTask != nil
@@ -6968,4 +6969,25 @@ func expandEnvironmentVariables(s string) string {
 
 func isEnvironmentVariableChar(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// smbTargetFor turns a UNC-style name typed on a system without native UNC
+// paths (\\host\share, or //host/share on the local file system when no such
+// local path exists) into the smb:// URI the SMB provider opens (f4#1702,
+// part 3). Anything else is returned unchanged, and so is every name when no
+// SMB provider is registered (the lite build).
+func smbTargetFor(cur vfs.VFS, target string) string {
+	if runtime.GOOS == "windows" || vfs.FindURIProvider("smb://") == nil {
+		return target
+	}
+	_, local := cur.(*vfs.OSVFS)
+	allowSlashes := false
+	if local && strings.HasPrefix(target, "//") {
+		_, err := hostfs.Stat(target)
+		allowSlashes = err != nil
+	}
+	if uri, ok := vfs.UNCToSMBURI(target, allowSlashes); ok {
+		return uri
+	}
+	return target
 }
