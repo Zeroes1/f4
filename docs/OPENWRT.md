@@ -160,7 +160,7 @@ What mc offers, and what the extra-lite profile keeps for it:
 | command line, subshell, `cd` | kept | `internal/cmdline`, the built-in terminal (`internal/terminal`) |
 | archives as directories (extfs/uarc: tar, zip, 7z, rar, ...) | kept | `plugins/multiarc`, wrapping the host's `tar`, `unzip`/`zip`, `7z`, `gzip` |
 | FISH and SFTP virtual file systems | kept as FISH+ | `plugins/netfox` (FISH+ over the host's `ssh`), see [FISH+.md](FISH+.md) |
-| FTP virtual file system | not reachable | needs `jlaffaye/ftp`, left out of the lite family (about 0.1 MB); f4's full build has it |
+| FTP virtual file system | not reachable | needs `jlaffaye/ftp`, which the lite family leaves out; f4's full build has it |
 | SMB, SCP addresses | not in extra-lite | SMB is `!lite`; `scp://` is the SFTP backend, also `!lite` |
 | several languages | English and Russian | see above |
 
@@ -229,6 +229,17 @@ lite 48 115 977 bytes, listing after 964 ms, peak RSS 41 408 KB; extralite
 37 363 977 bytes (41 062 665 in the first run), 951 ms, 37 188 KB. Lua and wasm
 cost about 3.7 MB of the raw size and about 1.3 MB of an `.ipk`; memory barely
 moves.
+
+## Third run of the `openwrt` workflow (staging with the parity slices)
+
+Run https://github.com/unxed/f4/actions/runs/36706090880 on `lunobot/staging`
+(commit `1e83e66f`), all jobs green. The extralite `.ipk` files, bytes:
+`mipsel_24kc` 9 715 243, `arm_cortex-a7_neon-vfpv4` 10 135 192,
+`aarch64_generic` 10 261 900, `x86_64` 11 320 155 (11.2 to 13.1 million in the
+second run). Smoke check on amd64: extralite 32 133 385 bytes (37 363 977
+before the parity slices), 803 ms to the listing, peak RSS 35 680 KB; lite
+48 300 297 bytes, 848 ms, 38 636 KB. mc 4.8.30 on the same runner class was
+1 140 880 bytes, 190 ms, 10 928 KB.
 
 ## Not done: the East Asian tables still in the binary
 
