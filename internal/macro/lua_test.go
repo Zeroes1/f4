@@ -892,3 +892,41 @@ func (h *configHost) ConfigValue(key string) (any, bool) {
 	}
 	return nil, false
 }
+
+// Far 3's own macros open with globals like these; a file that trips over one
+// loses all its Macro{} entries.
+func TestMacroFar3LoadTimeGlobalsLetAFileLoad(t *testing.T) {
+	host := newFakeMacroHost()
+	host.panels[true] = MacroPanelInfo{Bof: true, Eof: false, SelCount: 2, Visible: true}
+	Engine := newTestMacroEngine(t, host, `
+		local F = far.Flags
+		local WIF_MODAL = far.Flags.WIF_MODAL
+		local GUID = win.Uuid(far.Guids.MakeFolderId)
+		__guid = GUID
+		__samegui = (far.Guids.MakeFolderId == far.Guids.MakeFolderId)
+		__diff = (far.Guids.A ~= far.Guids.B)
+		__flag = band(APanel.OPIFlags, far.Flags.OPIF_REALNAMES)
+		Macro { area = "Shell"; key = "CtrlT"; condition = function()
+			return not APanel.Plugin and APanel.FilePanel and Menu.Id ~= far.Guids.ScreensSwitchId and Dlg.Id == ""
+		end; action = function()
+			__bof, __eof, __sel = Object.Bof, Object.Eof, APanel.Selected
+			__state = band(Editor.State, 3) + Viewer.State + Mouse.X + Editor.Pos
+			__value = Menu.Value
+		end }
+	`)
+	if Engine.Count() != 1 {
+		t.Fatalf("Count = %d: the file did not load", Engine.Count())
+	}
+	if !fireMacro(t, Engine, "CtrlT") {
+		t.Fatal("macro not consumed")
+	}
+	Engine.WaitIdle(5 * time.Second)
+	v := macroGlobals(t, Engine, "__guid", "__samegui", "__diff", "__flag", "__bof", "__eof", "__sel", "__state", "__value")
+	if len(lua.LVAsString(v["__guid"])) != 36 || v["__samegui"] != lua.LTrue || v["__diff"] != lua.LTrue {
+		t.Errorf("guids: %v %v %v", v["__guid"], v["__samegui"], v["__diff"])
+	}
+	if lua.LVAsNumber(v["__flag"]) != 0 || v["__bof"] != lua.LTrue || v["__eof"] != lua.LFalse || v["__sel"] != lua.LTrue ||
+		lua.LVAsNumber(v["__state"]) != 0 || lua.LVAsString(v["__value"]) != "" {
+		t.Errorf("values: %v", v)
+	}
+}
