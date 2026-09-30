@@ -212,12 +212,15 @@ func openReaderBackedArchiveFS(ctx context.Context, parent vfs.VFS, archivePath,
 	lifetimeCtx, cancel := context.WithCancel(context.Background())
 	reader := &streamReaderAtSeeker{source: source, ctx: ctx}
 
-	// A gzip'd or zstd'd TAR is read through a random-access view of its decompressed
+	// A gzip'd, zstd'd or xz'd TAR is read through a random-access view of its decompressed
 	// bytes: a seek in it resumes from a checkpoint, where the generic path
 	// would decompress the member again from its beginning each time.
 	view, viewName := openGzipTarView(ctx, reader, source.Size(), displayName)
 	if view == nil {
 		view, viewName = openZstdTarView(ctx, reader, source.Size(), displayName)
+	}
+	if view == nil {
+		view, viewName = openXzTarView(ctx, reader, source.Size(), displayName)
 	}
 	if view != nil {
 		fsys, err := archives.FileSystem(lifetimeCtx, viewName, view)
