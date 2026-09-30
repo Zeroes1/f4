@@ -721,7 +721,9 @@ func (p *sftpProvider) CanOpen(ctx context.Context, parent vfs.VFS, pth string) 
 	if err := json.NewDecoder(ctxReader{f, ctx}).Decode(&cfg); err != nil {
 		return false
 	}
-	return cfg.Type == "sftp" || cfg.Type == ""
+	// "scp" is the SFTP backend under another name (f4#187): see
+	// sftpURIProvider for why.
+	return cfg.Type == "sftp" || cfg.Type == "scp" || cfg.Type == ""
 }
 func (p *sftpProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vfs.VFS, error) {
 	w := parent.(*netFoxVFSWrapper)
@@ -759,9 +761,16 @@ func (ph *sftpProtocolHandler) BuildExtraUI(cfg *NetFoxConfig, x, y, w, h int) (
 	return nil, func() {}
 }
 
+// scpProtocolHandler lists "scp" among the connection types of the NetFox
+// manager (f4#187). A saved SCP connection is opened by sftpProvider.
+type scpProtocolHandler struct{ sftpProtocolHandler }
+
+func (ph *scpProtocolHandler) Prefix() string { return "scp" }
+
 func init() {
 	vfs.RegisterProvider(&sftpProvider{})
 	RegisterProtocol(&sftpProtocolHandler{})
+	RegisterProtocol(&scpProtocolHandler{})
 }
 
 type sftpFileWrapper struct {

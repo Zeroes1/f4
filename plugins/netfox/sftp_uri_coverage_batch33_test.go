@@ -69,3 +69,23 @@ func TestSCPURIProviderIsTheSFTPBackendUnderAnotherScheme(t *testing.T) {
 		t.Errorf("malformed scp URL error = %v, want the scp: prefix", err)
 	}
 }
+
+// TestSCPConnectionTypeIsListed (f4#187): "scp" is a connection type of the
+// manager next to sftp, with the SSH port.
+func TestSCPConnectionTypeIsListed(t *testing.T) {
+	listed := map[string]bool{}
+	for _, p := range GetProtocols() {
+		listed[p] = true
+	}
+	if !listed["scp"] || !listed["sftp"] {
+		t.Fatalf("protocols = %v, want scp and sftp", GetProtocols())
+	}
+	ph := &scpProtocolHandler{}
+	if ph.Prefix() != "scp" || ph.DefaultPort() != "22" {
+		t.Errorf("scp handler = %q port %q", ph.Prefix(), ph.DefaultPort())
+	}
+	if ui, cleanup := ph.BuildExtraUI(&NetFoxConfig{}, 0, 0, 10, 1); ui != nil {
+		cleanup()
+		t.Error("scp has no extra UI")
+	}
+}
