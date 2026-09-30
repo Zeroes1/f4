@@ -13,6 +13,11 @@ func IsLuaEntrypoint(entrypoint string) bool {
 	return isBareEntrypointWithExt(entrypoint, ".lua")
 }
 
+// IsWasmEntrypoint reports whether an entrypoint is a bare WebAssembly module.
+func IsWasmEntrypoint(entrypoint string) bool {
+	return isBareEntrypointWithExt(entrypoint, ".wasm")
+}
+
 // isBareEntrypointWithExt reports whether an entrypoint is a single file with
 // the given extension. An entrypoint with arguments, such as "lua plugin.lua"
 // or ".venv/bin/python main.py", asks for a process and gets one.

@@ -14,7 +14,6 @@ import (
 	"github.com/unxed/f4/plugins/ide"
 	"github.com/unxed/f4/plugins/intchecker"
 	"github.com/unxed/f4/plugins/mediainfo"
-	observerplugin "github.com/unxed/f4/plugins/observer"
 	pdfviewplugin "github.com/unxed/f4/plugins/pdfview"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
@@ -216,7 +215,7 @@ func (pm *PluginManager) loadInternal() {
 	// wasm reactor, the same dependency transport_wazero.go already keeps in
 	// both builds for the generic wasm plugin transport, so there is no
 	// lite/full split to make here at all.
-	plugins = append(plugins, observerplugin.NewPlugin(config.GetF4ConfigDir()))
+	plugins = append(plugins, optionalObserverPlugins()...)
 
 	for _, p := range plugins {
 		if err := p.Init(pm.api); err == nil {
