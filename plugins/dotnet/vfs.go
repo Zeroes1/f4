@@ -135,9 +135,16 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 			if ns != "" {
 				key = ns + "." + t
 			}
-			body := "namespace " + ns + "\ntype " + t + "\n"
+			body := "namespace " + ns + "\n"
+			for _, a := range info.Attributes[key] {
+				body += "[" + a + "]\n"
+			}
+			body += "type " + t + "\n"
 			var il strings.Builder
 			for i, m := range info.Members[key] {
+				for _, a := range m.Attributes {
+					body += "[" + a + "]\n"
+				}
 				switch {
 				case m.Kind == "method" && m.Signature != "":
 					body += "method " + m.Signature + "\n"

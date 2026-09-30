@@ -48,6 +48,8 @@ func sampleMetadata() []byte {
 	methodCtor := h.add(".ctor")
 	methodRun := h.add("Run")
 	methodStop := h.add("Stop")
+	sysNs := h.add("System")
+	obsName := h.add("ObsoleteAttribute")
 
 	var t builder
 	// Module: Generation, Name, Mvid, EncId, EncBaseId.
@@ -56,6 +58,10 @@ func sampleMetadata() []byte {
 	t.u16(0)
 	t.u16(0)
 	t.u16(0)
+	// TypeRef x1: ResolutionScope (AssemblyRef 1), Name, Namespace.
+	t.u16(6)
+	t.u16(obsName)
+	t.u16(sysNs)
 	// TypeDef x3: Flags, Name, Namespace, Extends, FieldList, MethodList.
 	// Foo owns field 1 and methods 1-2; Nested owns field 2 and method 3.
 	for _, row := range [][4]int{{moduleType, 0, 1, 1}, {foo, ns, 1, 1}, {nested, 0, 2, 3}} {
@@ -80,6 +86,19 @@ func sampleMetadata() []byte {
 		t.u16(name)
 		t.u16(0)
 		t.u16(1)
+	}
+	// MemberRef x1: Class (TypeRef 1), Name, Signature.
+	t.u16(9)
+	t.u16(methodCtor)
+	t.u16(0)
+	// CustomAttribute x3: Parent, Type, Value. Foo carries [System.Obsolete]
+	// (through a MemberRef), its field Count carries an attribute whose
+	// constructor is Foo's own .ctor (a MethodDef), and its method Run carries
+	// [System.Obsolete] again.
+	for _, row := range [][2]int{{2<<5 | 3, 1<<3 | 3}, {1<<5 | 1, 1<<3 | 2}, {2<<5 | 0, 1<<3 | 3}} {
+		t.u16(row[0])
+		t.u16(row[1])
+		t.u16(0)
 	}
 	// Assembly: HashAlgId, version, Flags, PublicKey, Name, Culture.
 	t.u32(0x8004)
@@ -116,10 +135,10 @@ func sampleMetadata() []byte {
 	s.WriteByte(0)
 	s.WriteByte(0)
 	s.WriteByte(1)
-	valid := uint64(1<<0 | 1<<2 | 1<<4 | 1<<6 | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29)
+	valid := uint64(1<<0 | 1<<1 | 1<<2 | 1<<4 | 1<<6 | 1<<0x0A | 1<<0x0C | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29)
 	_ = binary.Write(&s, binary.LittleEndian, valid)
 	_ = binary.Write(&s, binary.LittleEndian, uint64(0))
-	for _, n := range []int{1, 3, 2, 3, 1, 1, 1, 1} {
+	for _, n := range []int{1, 1, 3, 2, 3, 1, 3, 1, 1, 1, 1} {
 		s.u32(n)
 	}
 	s.Write(t.Bytes())
@@ -226,6 +245,15 @@ func TestReadAssembly(t *testing.T) {
 	// its own members.
 	if got := info.Nested["My.Ns"]; len(got) != 1 || got[0] != "Foo+Nested" {
 		t.Errorf("Nested = %v", info.Nested)
+	}
+	// The custom attributes: on the type, on a field and on a method.
+	if got := info.Attributes["My.Ns.Foo"]; len(got) != 1 || got[0] != "System.Obsolete" {
+		t.Errorf("attributes of Foo = %v", info.Attributes)
+	}
+	foo := info.Members["My.Ns.Foo"]
+	if len(foo) < 3 || len(foo[0].Attributes) != 1 || foo[0].Attributes[0] != "My.Ns.Foo" ||
+		len(foo[2].Attributes) != 1 || foo[2].Attributes[0] != "System.Obsolete" || len(foo[1].Attributes) != 0 {
+		t.Errorf("member attributes = %+v", foo)
 	}
 	nestedMembers := info.Members["My.Ns.Foo+Nested"]
 	if len(nestedMembers) != 2 || nestedMembers[0].Name != "Hidden" || nestedMembers[1].Name != "Stop" {

@@ -67,6 +67,9 @@ type Info struct {
 	// Members maps "namespace.Type" (just "Type" in the global namespace) to
 	// the fields and methods declared by that top-level type, in file order.
 	Members map[string][]Member
+	// Attributes maps the same keys as Members to the custom attributes of the
+	// type itself.
+	Attributes map[string][]string
 	// Blobs are the bytes of the resources embedded in the file, by name; a
 	// resource kept in another file or assembly has no entry, and neither has
 	// one that is implausibly large or lies outside the resource area.
@@ -83,6 +86,9 @@ type Member struct {
 	// Signature is the C#-style signature: the type of a field, or
 	// "ret name(params)" of a method; empty when the blob cannot be read.
 	Signature string
+	// Attributes are the custom attributes applied to it, by the name of the
+	// attribute type without the "Attribute" suffix ("System.Obsolete").
+	Attributes []string
 
 	rva  uint32 // method body RVA, 0 for a field or a method with no body
 	body []byte // header and code of the method, when it could be read
@@ -243,6 +249,8 @@ type tables struct {
 	guidWide  bool
 	blobWide  bool
 	colWidths map[int][]int
+	// attrs holds the custom attributes by owner, see attrKey.
+	attrs map[uint64][]string
 }
 
 func (t *tables) codedWidth(kind codedKind) int {
@@ -529,7 +537,7 @@ func (t *tables) members(typeRow uint32, table, nameCol, listCol int, kind strin
 	}
 	var out []Member
 	for r := start; r >= 1 && r < end && len(out) < maxMembers; r++ {
-		m := Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol))}
+		m := Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol)), Attributes: t.attrs[attrKey(table, r)]}
 		if kind == "method" {
 			m.rva = t.cell(table, r, 0)
 			m.Signature = t.methodSignature(t.cell(table, r, 4), m.Name)
@@ -569,7 +577,66 @@ func (t *tables) nestedName(row uint32, enclosing map[uint32]uint32) (ns, name s
 	return t.str(t.cell(0x02, cur, 2)), strings.Join(parts, "+"), true
 }
 
+// maxAttrsPerOwner bounds the attributes kept for one type, field or method.
+const maxAttrsPerOwner = 16
+
+func attrKey(table int, row uint32) uint64 { return uint64(table)<<32 | uint64(row) }
+
+// collectAttributes reads the CustomAttribute table (II.22.10) and keeps, for
+// every type, field and method, the names of the attribute types applied to
+// it. The arguments in the value blob are not decoded.
+func (t *tables) collectAttributes() {
+	t.attrs = make(map[uint64][]string)
+	for row := uint32(1); row <= t.rowCount[0x0C]; row++ {
+		parent := t.cell(0x0C, row, 0)
+		var owner uint64
+		switch parent & 31 { // HasCustomAttribute: 5 tag bits
+		case 0:
+			owner = attrKey(0x06, parent>>5)
+		case 1:
+			owner = attrKey(0x04, parent>>5)
+		case 3:
+			owner = attrKey(0x02, parent>>5)
+		default:
+			continue
+		}
+		if len(t.attrs[owner]) >= maxAttrsPerOwner {
+			continue
+		}
+		name := t.attributeName(t.cell(0x0C, row, 1))
+		if name == "" {
+			continue
+		}
+		t.attrs[owner] = append(t.attrs[owner], name)
+	}
+}
+
+// attributeName names the attribute type a CustomAttributeType coded token
+// (II.24.2.6: MethodDef or MemberRef constructor) belongs to, without the
+// "Attribute" suffix.
+func (t *tables) attributeName(coded uint32) string {
+	row := coded >> 3
+	var typeName string
+	switch coded & 7 {
+	case 2:
+		if row == 0 || row > t.rowCount[0x06] {
+			return ""
+		}
+		typeName = t.typeDefName(t.methodOwner(row))
+	case 3:
+		if row == 0 || row > t.rowCount[0x0A] {
+			return ""
+		}
+		typeName = t.memberParentName(t.cell(0x0A, row, 0))
+	default:
+		return ""
+	}
+	return strings.TrimSuffix(typeName, "Attribute")
+}
+
 func fill(info *Info, t *tables) {
+	t.collectAttributes()
+	info.Attributes = make(map[string][]string)
 	if t.rowCount[0x20] > 0 {
 		info.Name = t.str(t.cell(0x20, 1, 7))
 		info.Version = Version{
@@ -615,6 +682,9 @@ func fill(info *Info, t *tables) {
 			}
 			info.Members[key] = append(info.Members[key], t.members(row, 0x04, 1, 4, "field")...)
 			info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
+			if a := t.attrs[attrKey(0x02, row)]; len(a) > 0 {
+				info.Attributes[key] = a
+			}
 			continue
 		}
 		name := t.str(t.cell(0x02, row, 1))
@@ -630,6 +700,9 @@ func fill(info *Info, t *tables) {
 		}
 		info.Members[key] = append(info.Members[key], t.members(row, 0x04, 1, 4, "field")...)
 		info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
+		if a := t.attrs[attrKey(0x02, row)]; len(a) > 0 {
+			info.Attributes[key] = a
+		}
 	}
 	for _, names := range info.Types {
 		sort.Strings(names)
