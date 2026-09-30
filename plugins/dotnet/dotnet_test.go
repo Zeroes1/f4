@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	idotnet "github.com/unxed/f4/internal/dotnet"
@@ -20,7 +21,8 @@ func sampleInfo() *idotnet.Info {
 		References:     []idotnet.Ref{{Name: "System.Runtime", Version: idotnet.Version{Major: 8}}},
 		Types:          map[string][]string{"My.Ns": {"Zed", "Foo", "Foo"}, "": {"Global"}},
 		TypeCount:      4,
-		Resources:      []string{"a/b.resources"},
+		Resources:      []string{"a/b.resources", "linked.bin"},
+		Blobs:          []idotnet.Blob{{Name: "a/b.resources", Data: []byte("RES")}},
 	}
 }
 
@@ -63,8 +65,14 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 		t.Errorf("references = %v", refs)
 	}
 	res := listing(t, v, "/Resources")
-	if isDir, ok := res["a_b.resources"]; !ok || isDir {
+	if isDir, ok := res["a_b.resources"]; !ok || isDir || len(res) != 2 {
 		t.Errorf("resource names are not made safe: %v", res)
+	}
+	if got := readAll(t, v, "/Resources/a_b.resources"); got != "RES" {
+		t.Errorf("resource bytes = %q", got)
+	}
+	if got := readAll(t, v, "/Resources/linked.bin"); !strings.Contains(got, "not stored") {
+		t.Errorf("a resource without bytes reads %q", got)
 	}
 	if err := v.SetPath("/Namespaces/My.Ns"); err != nil || v.IsAtRoot() || v.GetPath() != "/Namespaces/My.Ns" {
 		t.Errorf("SetPath: %v %q", err, v.GetPath())
@@ -135,6 +143,21 @@ func TestAssemblyFilesAndReadOnly(t *testing.T) {
 	if err := v.Close(); err != nil {
 		t.Error(err)
 	}
+}
+
+func readAll(t *testing.T, v vfs.VFS, p string) string {
+	t.Helper()
+	ctx := context.Background()
+	f, err := v.Open(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	all, err := io.ReadAll(readerOf{f, ctx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(all)
 }
 
 type readerOf struct {

@@ -73,8 +73,18 @@ func buildTree(info *dotnet.Info, name string) *node {
 	root.add("Namespaces", spaces)
 	if len(info.Resources) > 0 {
 		res := newDir()
+		bytesOf := make(map[string][]byte, len(info.Blobs))
+		for _, blob := range info.Blobs {
+			if _, dup := bytesOf[blob.Name]; !dup {
+				bytesOf[blob.Name] = blob.Data
+			}
+		}
 		for _, r := range info.Resources {
-			res.add(r, file("embedded resource "+r+"\n"))
+			if data, ok := bytesOf[r]; ok {
+				res.add(r, &node{data: data})
+				continue
+			}
+			res.add(r, file("resource "+r+" is not stored in this file\n"))
 		}
 		root.add("Resources", res)
 	}

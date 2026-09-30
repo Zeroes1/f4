@@ -132,7 +132,11 @@ func sampleMetadata() []byte {
 }
 
 // wrapPE puts metadata into a minimal PE32 image with a CLR header.
-func wrapPE(metadata []byte, clr bool) []byte {
+func wrapPE(metadata []byte, clr bool) []byte { return wrapPEWith(metadata, nil, clr) }
+
+// wrapPEWith also places a resource area behind the metadata and points the
+// CLR header at it.
+func wrapPEWith(metadata, resources []byte, clr bool) []byte {
 	const (
 		peOff    = 0x40
 		optOff   = peOff + 4 + 20
@@ -143,7 +147,7 @@ func wrapPE(metadata []byte, clr bool) []byte {
 		corSize  = 72
 		metaOff  = corSize
 	)
-	image := make([]byte, rawOff+corSize+len(metadata))
+	image := make([]byte, rawOff+corSize+len(metadata)+len(resources))
 	le := binary.LittleEndian
 	image[0], image[1] = 'M', 'Z'
 	le.PutUint32(image[0x3c:], peOff)
@@ -159,14 +163,19 @@ func wrapPE(metadata []byte, clr bool) []byte {
 		le.PutUint32(image[optOff+96+14*8+4:], corSize)
 	}
 	copy(image[secOff:], ".text")
-	le.PutUint32(image[secOff+8:], uint32(corSize+len(metadata))) //nolint:gosec // test data
+	le.PutUint32(image[secOff+8:], uint32(corSize+len(metadata)+len(resources))) //nolint:gosec // test data
 	le.PutUint32(image[secOff+12:], virtAddr)
-	le.PutUint32(image[secOff+16:], uint32(corSize+len(metadata))) //nolint:gosec // test data
+	le.PutUint32(image[secOff+16:], uint32(corSize+len(metadata)+len(resources))) //nolint:gosec // test data
 	le.PutUint32(image[secOff+20:], rawOff)
 	le.PutUint32(image[rawOff:], corSize)
 	le.PutUint32(image[rawOff+8:], virtAddr+metaOff)
 	le.PutUint32(image[rawOff+12:], uint32(len(metadata))) //nolint:gosec // test data
 	copy(image[rawOff+corSize:], metadata)
+	if len(resources) > 0 {
+		le.PutUint32(image[rawOff+24:], virtAddr+corSize+uint32(len(metadata))) //nolint:gosec // test data
+		le.PutUint32(image[rawOff+28:], uint32(len(resources)))                 //nolint:gosec // test data
+		copy(image[rawOff+corSize+len(metadata):], resources)
+	}
 	return image
 }
 
@@ -271,5 +280,35 @@ func TestReportCapsLongLists(t *testing.T) {
 	}
 	if n := strings.Count(text, "- `res`"); n != maxReportResources {
 		t.Errorf("resources listed = %d", n)
+	}
+}
+
+func TestReadResourceBytes(t *testing.T) {
+	// The sample's one resource sits at offset 0 of the resource area: a
+	// 4-byte length and its bytes.
+	area := []byte{5, 0, 0, 0, 'h', 'e', 'l', 'l', 'o'}
+	image := wrapPEWith(sampleMetadata(), area, true)
+	info, err := Read(bytes.NewReader(image), int64(len(image)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(info.Blobs) != 1 || info.Blobs[0].Name != "Sample.strings.resources" || string(info.Blobs[0].Data) != "hello" {
+		t.Fatalf("blobs = %+v", info.Blobs)
+	}
+	// A length that runs past the area, or an area missing altogether, leaves
+	// the rest of the result intact.
+	for name, bad := range map[string][]byte{"too long": {200, 0, 0, 0, 'x'}, "too short": {1, 2}} {
+		image := wrapPEWith(sampleMetadata(), bad, true)
+		info, err := Read(bytes.NewReader(image), int64(len(image)))
+		if err != nil || len(info.Blobs) != 0 || info.Name != "Sample" {
+			t.Errorf("%s: %+v, %v", name, info, err)
+		}
+	}
+	plain := wrapPE(sampleMetadata(), true)
+	if info, err := Read(bytes.NewReader(plain), int64(len(plain))); err != nil || len(info.Blobs) != 0 {
+		t.Errorf("no resource area: %+v, %v", info, err)
+	}
+	if got := blobsOf([]resourceRef{{name: "linked", embedded: false}, {name: "far", offset: 1 << 30, embedded: true}}, area); len(got) != 0 {
+		t.Errorf("linked or out-of-range resources yielded %+v", got)
 	}
 }

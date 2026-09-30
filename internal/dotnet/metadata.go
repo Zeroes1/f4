@@ -57,9 +57,33 @@ type Info struct {
 	Types map[string][]string
 	// TypeCount is the number of top-level types listed in Types.
 	TypeCount int
-	// Resources are the names of the embedded managed resources.
+	// Resources are the names of the managed resources.
 	Resources []string
+	// Blobs are the bytes of the resources embedded in the file, by name; a
+	// resource kept in another file or assembly has no entry, and neither has
+	// one that is implausibly large or lies outside the resource area.
+	Blobs []Blob
+
+	resRefs []resourceRef
 }
+
+// Blob is one embedded resource.
+type Blob struct {
+	Name string
+	Data []byte
+}
+
+type resourceRef struct {
+	name     string
+	offset   uint32
+	embedded bool
+}
+
+// Limits on the resource bytes taken out of one file.
+const (
+	maxBlobSize  = 64 << 20
+	maxBlobTotal = 128 << 20
+)
 
 // Namespaces returns the namespaces of Types in sorted order.
 func (in *Info) Namespaces() []string {
@@ -359,7 +383,11 @@ func Read(r io.ReaderAt, size int64) (*Info, error) {
 		return nil, errors.New("metadata is outside every section")
 	}
 
-	cor, err := rvaRead(dir.VirtualAddress, 16)
+	corLen := uint32(16)
+	if dir.Size >= 32 {
+		corLen = 32
+	}
+	cor, err := rvaRead(dir.VirtualAddress, corLen)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +400,44 @@ func Read(r io.ReaderAt, size int64) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseMetadata(root)
+	info, err := parseMetadata(root)
+	if err != nil {
+		return nil, err
+	}
+	if corLen == 32 && len(info.resRefs) > 0 {
+		resRVA := binary.LittleEndian.Uint32(cor[24:])
+		resSize := binary.LittleEndian.Uint32(cor[28:])
+		if resRVA != 0 && resSize != 0 && resSize <= maxBlobTotal {
+			// The bytes are a bonus: a file whose resource area cannot be read
+			// still yields its identity, references and types.
+			if area, err := rvaRead(resRVA, resSize); err == nil {
+				info.Blobs = blobsOf(info.resRefs, area)
+			}
+		}
+	}
+	return info, nil
+}
+
+// blobsOf cuts the embedded resources out of the resource area, where each
+// one is a 4-byte length followed by its bytes.
+func blobsOf(refs []resourceRef, area []byte) []Blob {
+	var out []Blob
+	total := 0
+	for _, ref := range refs {
+		if !ref.embedded || int64(ref.offset)+4 > int64(len(area)) {
+			continue
+		}
+		n := binary.LittleEndian.Uint32(area[ref.offset:])
+		if n > maxBlobSize || int64(ref.offset)+4+int64(n) > int64(len(area)) {
+			continue
+		}
+		total += int(n)
+		if total > maxBlobTotal {
+			break
+		}
+		out = append(out, Blob{Name: ref.name, Data: area[ref.offset+4 : ref.offset+4+n]})
+	}
+	return out
 }
 
 // parseMetadata reads a metadata root: the version string and the stream
@@ -466,6 +531,9 @@ func fill(info *Info, t *tables) {
 		sort.Strings(names)
 	}
 	for row := uint32(1); row <= t.rowCount[0x28]; row++ {
-		info.Resources = append(info.Resources, t.str(t.cell(0x28, row, 2)))
+		name := t.str(t.cell(0x28, row, 2))
+		info.Resources = append(info.Resources, name)
+		// Implementation 0 is a resource embedded in this file.
+		info.resRefs = append(info.resRefs, resourceRef{name: name, offset: t.cell(0x28, row, 0), embedded: t.cell(0x28, row, 3) == 0})
 	}
 }
