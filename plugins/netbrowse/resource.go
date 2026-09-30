@@ -52,11 +52,11 @@ func kindName(display uint32) string {
 }
 
 // errUnsupported is what the enumerator reports off Windows.
-var errUnsupported = errors.New("the network browser is only available on Windows")
+var errUnsupported = errors.New("the network browser needs Windows or a build with SMB support")
 
 // supported reports whether this OS has the WNet API; a variable so tests can
 // pretend either way.
-var supported = runtime.GOOS == "windows"
+var supported = runtime.GOOS == "windows" || smbBuilt
 
 // Supported reports whether the plugin can browse the network here.
 func Supported() bool { return supported }

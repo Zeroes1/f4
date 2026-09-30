@@ -9,6 +9,11 @@
 // (Enter) and back up (the ".." row) and lists the resources at each level.
 // Part 2 makes the same network a drive of the ordinary file panel (Alt+F1,
 // "Network", netvfs.go): a share opens as a normal directory there, read and
-// written through the file system at its UNC name. Off Windows the plugin
-// registers nothing.
+// written through the file system at its UNC name.
+//
+// Part 3 does the same off Windows over SMB (smbnet.go): the servers are the
+// ones this session has reached (or a host name typed in the Network drive), the
+// shares are what each server reports, and a share opens through the smb://
+// provider of the NetFox plugin. Without an SMB client (the lite build) the
+// plugin registers nothing off Windows.
 package netbrowse

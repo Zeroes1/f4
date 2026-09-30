@@ -27,7 +27,11 @@ type networkVFS struct {
 	mu   sync.Mutex
 	enum enumerator
 	open func(unc string) vfs.VFS // the file system at a UNC path
-	cwd  string
+	// guess names a resource the enumeration does not list but a typed path
+	// asks for (off Windows, a server the session has not met yet); nil means
+	// only listed names exist.
+	guess func(parent *resource, name string) *resource
+	cwd   string
 }
 
 // errNotInShare is what a change to the network tree itself (a provider, a
@@ -82,6 +86,9 @@ func (v *networkVFS) resolve(p string) (node, error) {
 				next = &children[j]
 				break
 			}
+		}
+		if next == nil && v.guess != nil {
+			next = v.guess(cur, part)
 		}
 		if next == nil {
 			return node{}, os.ErrNotExist
@@ -278,5 +285,5 @@ func (v *networkVFS) Close() error                                              
 func (v *networkVFS) Clone() vfs.VFS {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	return &networkVFS{enum: v.enum, open: v.open, cwd: v.cwd}
+	return &networkVFS{enum: v.enum, open: v.open, guess: v.guess, cwd: v.cwd}
 }

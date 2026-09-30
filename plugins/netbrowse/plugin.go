@@ -47,7 +47,7 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 	registration, err := host.RegisterPanelProvider(vfs.PanelProvider{
 		ID:          panelProviderID,
 		Title:       "Network",
-		Description: "The Windows network: domains, servers and their shares",
+		Description: "The network: servers and their shares (on Windows also domains and workgroups)",
 		Open: func(ctx vfs.PanelContext) (vfs.PanelController, error) {
 			return newNetPanel(ctx, enumerateNetwork)
 		},
@@ -57,7 +57,11 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 	}
 	// The same network as a drive of the ordinary file panel (Alt+F1): shares
 	// open as normal directories there.
-	api.RegisterDrive("Network", func() vfs.VFS { return newNetworkVFS(enumerateNetwork, openUNC) })
+	api.RegisterDrive("Network", func() vfs.VFS {
+		v := newNetworkVFS(enumerateNetwork, openShare)
+		v.guess = guessResource
+		return v
+	})
 
 	p.mu.Lock()
 	p.registration = registration
@@ -75,5 +79,6 @@ func (p *Plugin) Close() error {
 	if registration != nil {
 		registration.Unregister()
 	}
+	closeSMBConns()
 	return nil
 }

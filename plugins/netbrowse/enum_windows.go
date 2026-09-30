@@ -6,6 +6,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/unxed/f4/vfs"
 	"golang.org/x/sys/windows"
 )
 
@@ -98,3 +99,10 @@ func enumerateNetwork(parent *resource) ([]resource, error) {
 		}
 	}
 }
+
+// openShare is the file system at a share's UNC name: the ordinary one.
+func openShare(unc string) vfs.VFS { return openUNC(unc) }
+
+// guessResource: on Windows every server the network has is enumerated, so
+// there is nothing to guess.
+func guessResource(*resource, string) *resource { return nil }
