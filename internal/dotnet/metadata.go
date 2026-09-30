@@ -59,12 +59,21 @@ type Info struct {
 	TypeCount int
 	// Resources are the names of the managed resources.
 	Resources []string
+	// Members maps "namespace.Type" (just "Type" in the global namespace) to
+	// the fields and methods declared by that top-level type, in file order.
+	Members map[string][]Member
 	// Blobs are the bytes of the resources embedded in the file, by name; a
 	// resource kept in another file or assembly has no entry, and neither has
 	// one that is implausibly large or lies outside the resource area.
 	Blobs []Blob
 
 	resRefs []resourceRef
+}
+
+// Member is a field or a method of a type.
+type Member struct {
+	Kind string // "field" or "method"
+	Name string
 }
 
 // Blob is one embedded resource.
@@ -81,6 +90,7 @@ type resourceRef struct {
 
 // Limits on the resource bytes taken out of one file.
 const (
+	maxMembers   = 20000
 	maxBlobSize  = 64 << 20
 	maxBlobTotal = 128 << 20
 )
@@ -488,6 +498,25 @@ func parseMetadata(root []byte) (*Info, error) {
 	return info, nil
 }
 
+// members lists the rows of a member table (fields or methods) that the
+// TypeDef row owns: from its list column up to where the next TypeDef's list
+// starts, or the end of the member table for the last one.
+func (t *tables) members(typeRow uint32, table, nameCol, listCol int, kind string) []Member {
+	start := t.cell(0x02, typeRow, listCol)
+	end := t.rowCount[table] + 1
+	if typeRow < t.rowCount[0x02] {
+		end = t.cell(0x02, typeRow+1, listCol)
+	}
+	if end > t.rowCount[table]+1 {
+		end = t.rowCount[table] + 1
+	}
+	var out []Member
+	for r := start; r >= 1 && r < end && len(out) < maxMembers; r++ {
+		out = append(out, Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol))})
+	}
+	return out
+}
+
 func fill(info *Info, t *tables) {
 	if t.rowCount[0x20] > 0 {
 		info.Name = t.str(t.cell(0x20, 1, 7))
@@ -515,6 +544,7 @@ func fill(info *Info, t *tables) {
 		nested[t.cell(0x29, row, 0)] = true
 	}
 	info.Types = make(map[string][]string)
+	info.Members = make(map[string][]Member)
 	for row := uint32(1); row <= t.rowCount[0x02]; row++ {
 		if nested[row] {
 			continue
@@ -526,6 +556,12 @@ func fill(info *Info, t *tables) {
 		ns := t.str(t.cell(0x02, row, 2))
 		info.Types[ns] = append(info.Types[ns], name)
 		info.TypeCount++
+		key := name
+		if ns != "" {
+			key = ns + "." + name
+		}
+		info.Members[key] = append(info.Members[key], t.members(row, 0x04, 1, 4, "field")...)
+		info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
 	}
 	for _, names := range info.Types {
 		sort.Strings(names)

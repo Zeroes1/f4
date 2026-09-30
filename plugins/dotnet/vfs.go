@@ -66,7 +66,15 @@ func buildTree(info *dotnet.Info, name string) *node {
 		types := append([]string(nil), info.Types[ns]...)
 		sort.Strings(types)
 		for _, t := range types {
-			dir.add(t, file("namespace "+ns+"\ntype "+t+"\n"))
+			key := t
+			if ns != "" {
+				key = ns + "." + t
+			}
+			body := "namespace " + ns + "\ntype " + t + "\n"
+			for _, m := range info.Members[key] {
+				body += m.Kind + " " + m.Name + "\n"
+			}
+			dir.add(t, file(body))
 		}
 		spaces.add(label, dir)
 	}

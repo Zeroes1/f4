@@ -23,6 +23,7 @@ func sampleInfo() *idotnet.Info {
 		TypeCount:      4,
 		Resources:      []string{"a/b.resources", "linked.bin"},
 		Blobs:          []idotnet.Blob{{Name: "a/b.resources", Data: []byte("RES")}},
+		Members:        map[string][]idotnet.Member{"My.Ns.Foo": {{Kind: "field", Name: "Count"}, {Kind: "method", Name: "Run"}}},
 	}
 }
 
@@ -60,6 +61,9 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 		if isDir, ok := types[name]; !ok || isDir {
 			t.Errorf("types = %v, want file %q", types, name)
 		}
+	}
+	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "field Count\n") || !strings.Contains(got, "method Run\n") {
+		t.Errorf("a type file lists %q", got)
 	}
 	if refs := listing(t, v, "/References"); len(refs) != 1 {
 		t.Errorf("references = %v", refs)

@@ -43,6 +43,11 @@ func sampleMetadata() []byte {
 	asmName := h.add("Sample")
 	refName := h.add("System.Runtime")
 	resName := h.add("Sample.strings.resources")
+	fieldCount := h.add("Count")
+	fieldHidden := h.add("Hidden")
+	methodCtor := h.add(".ctor")
+	methodRun := h.add("Run")
+	methodStop := h.add("Stop")
 
 	var t builder
 	// Module: Generation, Name, Mvid, EncId, EncBaseId.
@@ -52,12 +57,28 @@ func sampleMetadata() []byte {
 	t.u16(0)
 	t.u16(0)
 	// TypeDef x3: Flags, Name, Namespace, Extends, FieldList, MethodList.
-	for _, row := range [][2]int{{moduleType, 0}, {foo, ns}, {nested, 0}} {
+	// Foo owns field 1 and methods 1-2; Nested owns field 2 and method 3.
+	for _, row := range [][4]int{{moduleType, 0, 1, 1}, {foo, ns, 1, 1}, {nested, 0, 2, 3}} {
 		t.u32(0)
 		t.u16(row[0])
 		t.u16(row[1])
 		t.u16(0)
-		t.u16(1)
+		t.u16(row[2])
+		t.u16(row[3])
+	}
+	// Field x2: Flags, Name, Signature.
+	for _, name := range []int{fieldCount, fieldHidden} {
+		t.u16(0)
+		t.u16(name)
+		t.u16(0)
+	}
+	// Method x3: RVA, ImplFlags, Flags, Name, Signature, ParamList.
+	for _, name := range []int{methodCtor, methodRun, methodStop} {
+		t.u32(0)
+		t.u16(0)
+		t.u16(0)
+		t.u16(name)
+		t.u16(0)
 		t.u16(1)
 	}
 	// Assembly: HashAlgId, version, Flags, PublicKey, Name, Culture.
@@ -95,10 +116,10 @@ func sampleMetadata() []byte {
 	s.WriteByte(0)
 	s.WriteByte(0)
 	s.WriteByte(1)
-	valid := uint64(1<<0 | 1<<2 | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29)
+	valid := uint64(1<<0 | 1<<2 | 1<<4 | 1<<6 | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29)
 	_ = binary.Write(&s, binary.LittleEndian, valid)
 	_ = binary.Write(&s, binary.LittleEndian, uint64(0))
-	for _, n := range []int{1, 3, 1, 1, 1, 1} {
+	for _, n := range []int{1, 3, 2, 3, 1, 1, 1, 1} {
 		s.u32(n)
 	}
 	s.Write(t.Bytes())
@@ -200,6 +221,13 @@ func TestReadAssembly(t *testing.T) {
 	}
 	if got := info.Namespaces(); len(got) != 1 || got[0] != "My.Ns" {
 		t.Errorf("Namespaces = %v", got)
+	}
+	// Foo's field and its first two methods; the nested type's own members are
+	// not attached to it.
+	wantMembers := []Member{{"field", "Count"}, {"method", ".ctor"}, {"method", "Run"}}
+	got := info.Members["My.Ns.Foo"]
+	if len(got) != len(wantMembers) || got[0] != wantMembers[0] || got[1] != wantMembers[1] || got[2] != wantMembers[2] {
+		t.Errorf("Members = %+v, want %+v", info.Members, wantMembers)
 	}
 	if len(info.Resources) != 1 || info.Resources[0] != "Sample.strings.resources" {
 		t.Errorf("Resources = %v", info.Resources)
