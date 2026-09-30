@@ -14,8 +14,9 @@ import (
 
 // Limits on what one diagram may hold.
 const (
-	MaxLines = 400
-	maxEdges = 600
+	MaxLines         = 400
+	maxEdges         = 600
+	maxSubgraphDepth = 8
 )
 
 type node struct {
@@ -37,12 +38,13 @@ var shapes = []struct{ open, close string }{
 }
 
 var (
-	header   = regexp.MustCompile(`^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?$`)
-	nodeID   = regexp.MustCompile(`^[A-Za-z0-9_]+`)
-	labelled = regexp.MustCompile(`^\s*(--|==|-\.)\s+([^-=.|<>][^|]*?)\s+(-->|---|==>|===|\.->|-\.-)`)
-	plainOp  = regexp.MustCompile(`^\s*(<-->|-{2,}>|-{3,}|={2,}>|={3,}|-\.+->|-\.+-)(?:\s*\|([^|]*)\|)?`)
-	ignored  = regexp.MustCompile(`^(?:style|classDef|class|linkStyle|click|direction)\b`)
-	brTag    = regexp.MustCompile(`(?i)<br\s*/?>`)
+	header       = regexp.MustCompile(`^(?:flowchart|graph)(?:\s+(TD|TB|BT|LR|RL))?$`)
+	nodeID       = regexp.MustCompile(`^[A-Za-z0-9_]+`)
+	labelled     = regexp.MustCompile(`^\s*(--|==|-\.)\s+([^-=.|<>][^|]*?)\s+(-->|---|==>|===|\.->|-\.-)`)
+	plainOp      = regexp.MustCompile(`^\s*(<-->|-{2,}>|-{3,}|={2,}>|={3,}|-\.+->|-\.+-)(?:\s*\|([^|]*)\|)?`)
+	subgraphLine = regexp.MustCompile(`^subgraph\s+(?:([A-Za-z0-9_]+)\s*\[(.*)\]|(.+))$`)
+	ignored      = regexp.MustCompile(`^(?:style|classDef|class|linkStyle|click|direction)\b`)
+	brTag        = regexp.MustCompile(`(?i)<br\s*/?>`)
 )
 
 // Flowchart converts the body of a ```mermaid block. ok is false when the
@@ -55,6 +57,8 @@ func Flowchart(source string) (text string, ok bool) {
 	nodes := make(map[string]*node)
 	var order []string
 	var edges []edge
+	var events []event
+	depth := 0
 	sawHeader := false
 	for _, raw := range lines {
 		line := strings.TrimSpace(raw)
@@ -72,29 +76,81 @@ func Flowchart(source string) (text string, ok bool) {
 		if ignored.MatchString(line) {
 			continue
 		}
-		if !parseStatement(line, nodes, &order, &edges) || len(edges) > maxEdges {
+		if m := subgraphLine.FindStringSubmatch(line); m != nil {
+			title := m[2]
+			if title == "" {
+				title = m[3]
+			}
+			title = strings.Trim(strings.TrimSpace(title), `"`)
+			events = append(events, event{kind: 'o', text: title, depth: depth})
+			depth++
+			if depth > maxSubgraphDepth {
+				return "", false
+			}
+			continue
+		}
+		if line == "end" {
+			if depth == 0 {
+				return "", false
+			}
+			depth--
+			events = append(events, event{kind: 'c', depth: depth})
+			continue
+		}
+		before := len(edges)
+		first, ok := parseStatement(line, nodes, &order, &edges)
+		if !ok || len(edges) > maxEdges {
 			return "", false
 		}
+		if len(edges) == before {
+			events = append(events, event{kind: 'n', id: first, depth: depth})
+		}
+		for i := before; i < len(edges); i++ {
+			events = append(events, event{kind: 'e', edge: i, depth: depth})
+		}
 	}
-	if !sawHeader || len(order) == 0 {
+	if !sawHeader || len(order) == 0 || depth != 0 {
 		return "", false
 	}
-	var b strings.Builder
 	used := make(map[string]bool)
 	for _, e := range edges {
 		used[e.from], used[e.to] = true, true
-		b.WriteString(display(nodes[e.from], e.from))
-		b.WriteString(" " + arrowText(e) + " ")
-		b.WriteString(display(nodes[e.to], e.to))
-		b.WriteByte('\n')
 	}
-	for _, id := range order {
-		if !used[id] {
-			b.WriteString(display(nodes[id], id))
-			b.WriteByte('\n')
+	var out, tail []string
+	pre := func(d int) string { return strings.Repeat("│ ", d) }
+	for _, ev := range events {
+		switch ev.kind {
+		case 'o':
+			out = append(out, pre(ev.depth)+"┌ "+ev.text)
+		case 'c':
+			out = append(out, pre(ev.depth)+"└")
+		case 'e':
+			e := edges[ev.edge]
+			out = append(out, pre(ev.depth)+display(nodes[e.from], e.from)+" "+arrowText(e)+" "+display(nodes[e.to], e.to))
+		case 'n':
+			if used[ev.id] {
+				continue
+			}
+			line := pre(ev.depth) + display(nodes[ev.id], ev.id)
+			// Loose nodes outside any group keep going last, as they always did.
+			if ev.depth == 0 {
+				tail = append(tail, line)
+			} else {
+				out = append(out, line)
+			}
 		}
 	}
-	return strings.TrimRight(b.String(), "\n"), true
+	return strings.Join(append(out, tail...), "\n"), true
+}
+
+// event is one printed thing, in source order: a subgraph opening or closing,
+// an edge, or a node that stands alone.
+type event struct {
+	kind  byte
+	text  string
+	id    string
+	edge  int
+	depth int
 }
 
 func display(n *node, id string) string {
@@ -127,27 +183,28 @@ func arrowText(e edge) string {
 }
 
 // parseStatement reads NODE (EDGE NODE)* from line.
-func parseStatement(line string, nodes map[string]*node, order *[]string, edges *[]edge) bool {
+func parseStatement(line string, nodes map[string]*node, order *[]string, edges *[]edge) (string, bool) {
 	rest := line
 	prev, rest, ok := parseNode(rest, nodes, order)
 	if !ok {
-		return false
+		return "", false
 	}
+	first := prev
 	for strings.TrimSpace(rest) != "" {
 		e, after, ok := parseEdge(rest)
 		if !ok {
-			return false
+			return "", false
 		}
 		var next string
 		next, rest, ok = parseNode(after, nodes, order)
 		if !ok {
-			return false
+			return "", false
 		}
 		e.from, e.to = prev, next
 		*edges = append(*edges, e)
 		prev = next
 	}
-	return true
+	return first, true
 }
 
 func parseNode(s string, nodes map[string]*node, order *[]string) (id, rest string, ok bool) {

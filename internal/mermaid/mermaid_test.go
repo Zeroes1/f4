@@ -39,16 +39,17 @@ func TestFlowchart(t *testing.T) {
 
 func TestFlowchartRefusals(t *testing.T) {
 	for name, src := range map[string]string{
-		"sequence":  "sequenceDiagram\nA->>B: hi",
-		"empty":     "",
-		"header":    "graph TD",
-		"subgraph":  "graph TD\nsubgraph X\nA-->B\nend",
-		"ampersand": "graph TD\nA & B --> C",
-		"class":     "graph TD\nA:::red --> B",
-		"unclosed":  "graph TD\nA[oops --> B",
-		"garbage":   "graph TD\nA --> ",
-		"nodeless":  "graph TD\n--> B",
-		"too long":  "graph TD\n" + strings.Repeat("A-->B\n", MaxLines),
+		"sequence":          "sequenceDiagram\nA->>B: hi",
+		"empty":             "",
+		"header":            "graph TD",
+		"unclosed subgraph": "graph TD\nsubgraph X\nA-->B",
+		"stray end":         "graph TD\nA-->B\nend",
+		"ampersand":         "graph TD\nA & B --> C",
+		"class":             "graph TD\nA:::red --> B",
+		"unclosed":          "graph TD\nA[oops --> B",
+		"garbage":           "graph TD\nA --> ",
+		"nodeless":          "graph TD\n--> B",
+		"too long":          "graph TD\n" + strings.Repeat("A-->B\n", MaxLines),
 	} {
 		if got, ok := Flowchart(src); ok {
 			t.Errorf("%s: converted to %q", name, got)
@@ -150,5 +151,39 @@ func TestClass(t *testing.T) {
 		if got, ok := Class(bad); ok {
 			t.Errorf("%s: converted to %q", name, got)
 		}
+	}
+}
+
+func TestFlowchartSubgraphs(t *testing.T) {
+	src := strings.Join([]string{
+		"graph TD",
+		"  A --> B",
+		"  subgraph one [First group]",
+		"    B --> C",
+		"    D",
+		"    subgraph inner",
+		"      C --> E",
+		"    end",
+		"  end",
+		"  F",
+	}, "\n")
+	got, ok := Flowchart(src)
+	want := strings.Join([]string{
+		"[A] ──▶ [B]",
+		"┌ First group",
+		"│ [B] ──▶ [C]",
+		"│ [D]",
+		"│ ┌ inner",
+		"│ │ [C] ──▶ [E]",
+		"│ └",
+		"└",
+		"[F]",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("subgraphs:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	deep := "graph TD\n" + strings.Repeat("subgraph s\n", maxSubgraphDepth+1) + "A-->B\n" + strings.Repeat("end\n", maxSubgraphDepth+1)
+	if got, ok := Flowchart(deep); ok {
+		t.Errorf("nesting past the limit converted to %q", got)
 	}
 }
