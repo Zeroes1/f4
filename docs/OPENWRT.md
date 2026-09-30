@@ -141,6 +141,16 @@ function away, biggest first, and every step is measured by the workflow
 above. Removing whole features (Lua, wasm plugins) is left for a separate
 decision when it comes to that.
 
+## Not done: `net/http`
+
+Seven packages of f4 import `net/http` (`internal/app`, `netproxy`, `plughost`,
+`settings`, `terminal`, `update`, `vtvibe`; no third-party package does), so it
+leaves the binary only if all seven consumers (the updater, the PlugRing
+catalog, the AI provider, the proxy setting and their neighbours) go. That is
+about 0.3-0.9 MB of 37 MB and it removes functions, against the owner's target
+of keeping at least mc's capabilities; it is not done. Further extralite
+slices are taken only where they cost no function.
+
 ## Packages
 
 - `.ipk`: the `openwrt` workflow wraps each extralite binary with
