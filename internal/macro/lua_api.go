@@ -298,7 +298,7 @@ func splitCommandLinePrefixes(value string) []string {
 }
 
 // luaEvent records an Event{ group, description, action}: something to run when
-// f4 raises the group. Only "ExitFAR" is raised so far; a declaration for
+// f4 raises the group. Only "ExitFAR" and "FolderChanged" are raised so far; a declaration for
 // another group is logged and left out, and the rest of the file still loads.
 func (e *LuaMacroEngine) luaEvent(L *lua.LState) int {
 	spec := L.CheckTable(1)

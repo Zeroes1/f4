@@ -49,7 +49,7 @@ type luaEvent struct {
 
 // supportedEventGroups are the Event{} groups f4 raises; a declaration for
 // another group is kept out and logged.
-var supportedEventGroups = map[string]bool{"exitfar": true}
+var supportedEventGroups = map[string]bool{"exitfar": true, "folderchanged": true}
 
 // luaCommandLine is one CommandLine{} declaration.
 type luaCommandLine struct {
@@ -221,6 +221,39 @@ func (e *LuaMacroEngine) RunEvents(group string, wait time.Duration) int {
 	case <-time.After(wait):
 		return 0
 	}
+}
+
+// RaiseEvent runs, in the background, every Event{} declared for group (any
+// case), one after the other, each with the group as its argument. It is what
+// f4 calls when something happens that macros may want to react to (a panel
+// entered another folder). It reports whether anything was started: nothing is
+// when no Event{} names the group, or a macro is already running, which also
+// keeps an event action that itself changes the folder from raising the event
+// again without end.
+func (e *LuaMacroEngine) RaiseEvent(group string) bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	var todo []*LuaMacro
+	for _, ev := range e.events {
+		if strings.EqualFold(ev.group, group) {
+			m := *ev.macro
+			m.callArgs = []string{ev.group}
+			todo = append(todo, &m)
+		}
+	}
+	e.mu.Unlock()
+	if len(todo) == 0 || !e.running.CompareAndSwap(false, true) {
+		return false
+	}
+	go func() {
+		defer e.running.Store(false)
+		for _, m := range todo {
+			e.execute(m, "", nil)
+		}
+	}()
+	return true
 }
 
 func (e *LuaMacroEngine) addCommandLine(c *luaCommandLine) {

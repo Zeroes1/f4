@@ -44,6 +44,7 @@ func (e *LuaMacroEngine) RunExact(_, _ string) bool                { return fals
 func (e *LuaMacroEngine) WaitIdle(time.Duration) bool              { return true }
 func (e *LuaMacroEngine) Interrupted() bool                        { return false }
 func (e *LuaMacroEngine) Close() error                             { return nil }
+func (e *LuaMacroEngine) RaiseEvent(string) bool                   { return false }
 func (e *LuaMacroEngine) RunEvents(_ string, _ time.Duration) int  { return 0 }
 
 func (e *LuaMacroEngine) CommandLinePrefixes() []LuaCommandLineInfo { return nil }

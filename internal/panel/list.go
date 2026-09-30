@@ -17,6 +17,7 @@ import (
 
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/internal/history"
+	"github.com/unxed/f4/internal/macro"
 	"github.com/unxed/f4/internal/sysinfo"
 
 	"github.com/unxed/f4/internal/config"
@@ -475,6 +476,9 @@ type dirCacheKey struct {
 }
 
 type FileSystemPanel struct {
+	// folderEventPath is the folder the FolderChanged macro event was last
+	// raised for, so a refresh of the same folder does not raise it again.
+	folderEventPath        string
 	GroupBy                GroupMode
 	GroupReverse           bool
 	GroupFoldersSeparately bool
@@ -2438,6 +2442,7 @@ func ShouldRecordFolderHistory(fp *FileSystemPanel, path string) bool {
 // VFS falls back to the real-path rules in ShouldRecordFolderHistory, exactly
 // as before this hook existed.
 func RecordFolderHistoryEntry(fp *FileSystemPanel, loadVFS vfs.VFS, path string) {
+	raiseFolderChanged(fp, path)
 	if provider, ok := loadVFS.(vfs.HistoryPathProvider); ok {
 		if display, ref, ok := provider.HistoryEntry(); ok {
 			history.AddPluginFolderHistory(display, fmt.Sprintf("%T", loadVFS), ref)
@@ -4613,4 +4618,15 @@ func CurrentPanelEntryPath(fsp *FileSystemPanel) string {
 		return base
 	}
 	return fsp.Vfs.Join(base, fsp.Entries[idx].Name)
+}
+
+// raiseFolderChanged raises the FolderChanged event of the Lua macros when the
+// panel has entered a folder other than the one it last reported (a refresh of
+// the same folder is not a change).
+func raiseFolderChanged(fp *FileSystemPanel, path string) {
+	if fp == nil || path == "" || fp.folderEventPath == path {
+		return
+	}
+	fp.folderEventPath = path
+	macro.MacroMgr.RaiseEvent("FolderChanged")
 }

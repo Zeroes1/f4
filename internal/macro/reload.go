@@ -82,3 +82,12 @@ func (m *MacroManager) RunExitEvents() {
 	}
 	m.Lua.RunEvents("ExitFAR", 2*time.Second)
 }
+
+// RaiseEvent raises an Event{} group of the Lua macros in the background (see
+// LuaMacroEngine.RaiseEvent); safe on a manager without Lua macros.
+func (m *MacroManager) RaiseEvent(group string) bool {
+	if m == nil || m.Lua == nil {
+		return false
+	}
+	return m.Lua.RaiseEvent(group)
+}
