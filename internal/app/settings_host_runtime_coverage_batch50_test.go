@@ -46,7 +46,7 @@ func TestSettingsHostApplyRuntimeSetsWorkspaceOverlayCoverageBatch50(t *testing.
 	fm := prepareSettingsHostRuntimeCoverageBatch50(t)
 	config.App.WorkspaceTabsOverlay = true
 	(settingsHost{}).ApplyRuntime(config.App, nil)
-	if !fm.WorkspaceTabsOverlay {
+	if !fm.WorkspaceTabOverlay {
 		t.Fatal("workspace tab overlay was not applied")
 	}
 }
