@@ -4,7 +4,8 @@ package svcmgr
 
 type platformController struct{}
 
-func (platformController) Start(string) error  { return errUnsupported }
-func (platformController) Stop(string) error   { return errUnsupported }
-func (platformController) Pause(string) error  { return errUnsupported }
-func (platformController) Resume(string) error { return errUnsupported }
+func (platformController) Start(string) error                { return errUnsupported }
+func (platformController) Stop(string) error                 { return errUnsupported }
+func (platformController) Pause(string) error                { return errUnsupported }
+func (platformController) Resume(string) error               { return errUnsupported }
+func (platformController) SetStartType(string, uint32) error { return errUnsupported }

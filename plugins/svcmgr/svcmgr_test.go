@@ -200,6 +200,10 @@ func (c *fakeController) Start(n string) error  { c.calls = append(c.calls, "sta
 func (c *fakeController) Stop(n string) error   { c.calls = append(c.calls, "stop "+n); return c.err }
 func (c *fakeController) Pause(n string) error  { c.calls = append(c.calls, "pause "+n); return c.err }
 func (c *fakeController) Resume(n string) error { c.calls = append(c.calls, "resume "+n); return c.err }
+func (c *fakeController) SetStartType(n string, t uint32) error {
+	c.calls = append(c.calls, "starttype "+n+" "+startTypeName(t, false))
+	return c.err
+}
 
 func TestPanelActionsActOnTheServiceUnderTheCursor(t *testing.T) {
 	services := []service{
@@ -252,8 +256,8 @@ func TestPanelActionsNeedAService(t *testing.T) {
 	if len(ctl.calls) != 0 || p.hasSelected() {
 		t.Errorf("an empty list ran %v", ctl.calls)
 	}
-	if got := len(p.PanelKeys()); got != 5 {
-		t.Errorf("panel keys = %d, want 5", got)
+	if got := len(p.PanelKeys()); got != 6 {
+		t.Errorf("panel keys = %d, want 6", got)
 	}
 }
 
@@ -262,7 +266,7 @@ func TestPlatformControllerOffWindows(t *testing.T) {
 		t.Skip("this OS has a service manager")
 	}
 	c := platformController{}
-	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x")} {
+	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x"), c.SetStartType("x", startManual)} {
 		if !errors.Is(err, errUnsupported) {
 			t.Errorf("action %d error = %v, want errUnsupported", i, err)
 		}
@@ -324,4 +328,20 @@ func TestPlatformDetailerOffWindows(t *testing.T) {
 	if _, err := (platformDetailer{}).Details("x"); !errors.Is(err, errUnsupported) {
 		t.Errorf("Details error = %v, want errUnsupported", err)
 	}
+}
+
+func TestSetStartTypeAppliesToTheServiceUnderTheCursor(t *testing.T) {
+	services := []service{{Name: "Svc", Display: "S", State: stateStopped}}
+	var listErr error
+	p := openFake(t, &services, &listErr)
+	ctl := &fakeController{}
+	p.ctl = ctl
+	for _, st := range startTypeChoices {
+		p.setStartType(st)
+	}
+	want := "starttype Svc Automatic|starttype Svc Manual|starttype Svc Disabled"
+	if got := strings.Join(ctl.calls, "|"); got != want {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	p.chooseStartType() // without a frame manager nothing opens
 }

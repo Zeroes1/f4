@@ -50,3 +50,12 @@ func (platformController) Pause(name string) error {
 func (platformController) Resume(name string) error {
 	return control(name, windows.SERVICE_PAUSE_CONTINUE, windows.SERVICE_CONTROL_CONTINUE)
 }
+
+// SetStartType changes only the start type: every other field of the
+// configuration is left as it is (SERVICE_NO_CHANGE, nil).
+func (platformController) SetStartType(name string, startType uint32) error {
+	return withService(name, windows.SERVICE_CHANGE_CONFIG, func(h windows.Handle) error {
+		return windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, startType, windows.SERVICE_NO_CHANGE,
+			nil, nil, nil, nil, nil, nil, nil)
+	})
+}

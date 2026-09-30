@@ -182,6 +182,7 @@ func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Start"), Run: p.start, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Stop"), Run: p.confirmStop, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
+		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.StartType"), Run: p.chooseStartType, Enabled: p.hasSelected},
 	}
 }
 
@@ -243,6 +244,38 @@ func (p *servicesPanel) showDetails() {
 		return
 	}
 	vtui.ShowMessageEx(i18n.Msg("SvcMgr.DetailsTitle"), detailsText(svc, d), []string{i18n.Msg("vtui.Ok")}, vtui.MessageInfo)
+}
+
+// startTypeChoices are the start types the panel offers, in the order of the
+// dialog's buttons. Boot and System are for drivers and are not offered.
+var startTypeChoices = []uint32{startAuto, startManual, startDisabled}
+
+// chooseStartType is Shift+F4: a dialog with one button per start type.
+func (p *servicesPanel) chooseStartType() {
+	svc, ok := p.selectedService()
+	if !ok || vtui.FrameManager == nil {
+		return
+	}
+	buttons := make([]string, 0, len(startTypeChoices)+1)
+	for _, t := range startTypeChoices {
+		buttons = append(buttons, startTypeName(t, false))
+	}
+	buttons = append(buttons, i18n.Msg("vtui.Cancel"))
+	dlg := vtui.ShowMessageEx(i18n.Msg("SvcMgr.StartTypeTitle"),
+		fmt.Sprintf(i18n.Msg("SvcMgr.StartTypePrompt"), svc.Name), buttons, vtui.MessageInfo)
+	if dlg == nil {
+		return
+	}
+	dlg.OnResult = func(code int) {
+		if code >= 0 && code < len(startTypeChoices) {
+			p.setStartType(startTypeChoices[code])
+		}
+	}
+}
+
+// setStartType applies a start type to the service under the cursor.
+func (p *servicesPanel) setStartType(startType uint32) {
+	p.run(func(name string) error { return p.ctl.SetStartType(name, startType) })
 }
 
 // run applies one action to the service under the cursor, reports a failure

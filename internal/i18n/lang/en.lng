@@ -827,6 +827,9 @@ SvcMgr.DetailState=State: %s
 SvcMgr.DetailStart=Start type: %s
 SvcMgr.DetailAccount=Runs as: %s
 SvcMgr.DetailPath=Program: %s
+SvcMgr.KeyBar.StartType=Startup
+SvcMgr.StartTypeTitle=Start type
+SvcMgr.StartTypePrompt=How should the service %s start?
 
 PanelPlugin.KeyBar.Close=Close
 

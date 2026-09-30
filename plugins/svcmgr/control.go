@@ -10,6 +10,9 @@ type controller interface {
 	Stop(name string) error
 	Pause(name string) error
 	Resume(name string) error
+	// SetStartType changes how the service starts: one of the startAuto,
+	// startManual and startDisabled values.
+	SetStartType(name string, startType uint32) error
 }
 
 // serviceController is the controller the panel uses unless a test replaces it.
