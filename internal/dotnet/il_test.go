@@ -427,9 +427,9 @@ func TestDisassembleStopsOnBrokenCode(t *testing.T) {
 		"truncated operand": {tinyBody(0x20, 1, 2), "truncated operand"},
 		"switch overrun":    {tinyBody(0x45, 0xFF, 0xFF, 0xFF, 0x7F), "truncated operand"},
 		"empty":             {nil, "not readable"},
-		"bad header":        {{0x00}, "not readable"},
-		"short tiny":        {{0x0E, 0x00}, "not readable"},
-		"short fat":         {{0x03, 0x30, 0, 0}, "not readable"},
+		"bad header":        {[]byte{0x00}, "not readable"},
+		"short tiny":        {[]byte{0x0E, 0x00}, "not readable"},
+		"short fat":         {[]byte{0x03, 0x30, 0, 0}, "not readable"},
 	} {
 		if got := tab.disassemble(tc.body); !strings.Contains(got, tc.want) {
 			t.Errorf("%s: %q lacks %q", name, got, tc.want)
