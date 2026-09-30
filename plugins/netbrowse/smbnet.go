@@ -48,6 +48,10 @@ func knownHosts() []string {
 	for _, h := range smbHosts.names {
 		out = append(out, h)
 	}
+	return sortedHosts(out)
+}
+
+func sortedHosts(out []string) []string {
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
 	return out
 }
@@ -74,6 +78,20 @@ func splitUNC(unc string) (host, rest string) {
 	unc = strings.TrimLeft(unc, `\`)
 	host, rest, _ = strings.Cut(unc, `\`)
 	return host, rest
+}
+
+// mergeHosts is the union of two host lists, without repeats that differ only
+// in case, in name order.
+func mergeHosts(a, b []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, h := range append(append([]string(nil), a...), b...) {
+		if k := strings.ToLower(h); !seen[k] {
+			seen[k] = true
+			out = append(out, h)
+		}
+	}
+	return sortedHosts(out)
 }
 
 // smbConns holds one connection per server, shared by every request for it
@@ -126,7 +144,7 @@ func closeSMBConns() {
 // shares.
 func enumerateSMB(parent *resource) ([]resource, error) {
 	if parent == nil {
-		hosts := knownHosts()
+		hosts := mergeHosts(knownHosts(), discoveredHosts())
 		out := make([]resource, 0, len(hosts))
 		for _, h := range hosts {
 			out = append(out, resource{Remote: `\\` + h, Provider: "SMB", Display: displayServer, Container: true})

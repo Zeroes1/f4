@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/vfs"
 )
@@ -69,14 +70,21 @@ func withFakeSMB(t *testing.T) *fakeSMB {
 	if err := vfs.RegisterURIProvider(p); err != nil {
 		t.Fatal(err)
 	}
+	oldDiscover := discoverHosts
+	discoverHosts = func() []string { return nil }
 	resetSMBState := func() {
 		closeSMBConns()
+		discovery.Lock()
+		discovery.at = time.Time{}
+		discovery.hosts = nil
+		discovery.Unlock()
 		smbHosts.Lock()
 		smbHosts.names = map[string]string{}
 		smbHosts.Unlock()
 	}
 	resetSMBState()
 	t.Cleanup(func() {
+		discoverHosts = oldDiscover
 		vfs.UnregisterURIProvider("smb")
 		resetSMBState()
 	})
