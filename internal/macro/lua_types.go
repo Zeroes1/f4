@@ -59,3 +59,20 @@ type LuaMacroBinding struct {
 var macroAreaAliases = map[string]string{
 	"terminal": "shell",
 }
+
+// LuaMenuItemInfo is the discoverable part of a MenuItem{} declaration: what
+// a menu shows for it and the id RunMenuItem takes.
+type LuaMenuItemInfo struct {
+	ID          int
+	Description string
+	Source      string
+}
+
+// LuaCommandLineInfo is one command-line prefix a CommandLine{} declaration
+// claims: what the host registers and the id RunCommandLine takes.
+type LuaCommandLineInfo struct {
+	ID          int
+	Prefix      string
+	Description string
+	Source      string
+}

@@ -44,3 +44,8 @@ func (e *LuaMacroEngine) RunExact(_, _ string) bool                { return fals
 func (e *LuaMacroEngine) WaitIdle(time.Duration) bool              { return true }
 func (e *LuaMacroEngine) Interrupted() bool                        { return false }
 func (e *LuaMacroEngine) Close() error                             { return nil }
+
+func (e *LuaMacroEngine) CommandLinePrefixes() []LuaCommandLineInfo { return nil }
+func (e *LuaMacroEngine) RunCommandLine(_ int, _, _ string) bool    { return false }
+func (e *LuaMacroEngine) MenuItems(_, _ string) []LuaMenuItemInfo   { return nil }
+func (e *LuaMacroEngine) RunMenuItem(_ int, _, _ string) bool       { return false }
