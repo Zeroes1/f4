@@ -853,6 +853,7 @@ jobs:
     # The go.mod files of these modules are only settled by this step, so it is
     # retried instead of the job.
     - name: go mod tidy
+      shell: bash
       run: |
         for attempt in 1 2 3 4; do
           go mod tidy && exit 0
@@ -976,6 +977,7 @@ jobs:
     # The go.mod files of these modules are only settled by this step, so it is
     # retried instead of the job.
     - name: go mod tidy
+      shell: bash
       run: |
         for attempt in 1 2 3 4; do
           go mod tidy && exit 0
@@ -1085,6 +1087,7 @@ jobs:
     # The go.mod files of these modules are only settled by this step, so it is
     # retried instead of the job.
     - name: go mod tidy
+      shell: bash
       run: |
         for attempt in 1 2 3 4; do
           go mod tidy && exit 0
