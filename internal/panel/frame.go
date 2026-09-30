@@ -6252,6 +6252,26 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
 			return true
 		}
+		// Ctrl+Up and Ctrl+Down move the link under the cursor one place up or
+		// down, and the new order is saved (#1148).
+		if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
+			e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 &&
+			e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
+			if index, ok := driveBookmarkRows[menu.SelectPos]; ok {
+				delta := 1
+				if e.VirtualKeyCode == vtinput.VK_UP {
+					delta = -1
+				}
+				pos := menu.SelectPos
+				if moved, err := moveDriveBookmarkInFile(index, delta); err != nil {
+					vtui.ShowMessageOn(menu, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
+				} else if moved {
+					menu.Close()
+					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+				}
+				return true
+			}
+		}
 		if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
 			vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			pos := menu.SelectPos

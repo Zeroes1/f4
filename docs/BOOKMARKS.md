@@ -13,4 +13,4 @@ Each row shows the slot digit and the path, and `[ID]` after it for a plugin boo
 
 ## Drive-menu links
 
-The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a path only, in the same form as above, so a link made on a Docker, Kubernetes or MongoDB panel (or an `sftp://` one) brings that panel back.
+The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a path only, in the same form as above, so a link made on a Docker, Kubernetes or MongoDB panel (or an `sftp://` one) brings that panel back. In the drive menu, Ctrl+Up and Ctrl+Down move the link under the cursor one place up or down, and the order is saved to the file.
