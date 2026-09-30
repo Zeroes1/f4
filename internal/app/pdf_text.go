@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/unxed/f4/internal/i18n"
@@ -65,4 +67,37 @@ func actionPDFText(pf *panel.PanelsFrame) {
 		vfs.ShowPanelHelp(name, text)
 		vtui.FrameManager.Redraw()
 	}
+}
+
+// isPDFFile says whether a name is one F3 opens as formatted text.
+func isPDFFile(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".pdf")
+}
+
+// tryOpenPDFViewer is F3 on a PDF (f4#1665): its text, page by page, in the
+// same formatted viewer a Markdown file gets, F4 there going to the plain
+// viewer. A file the reader cannot handle (encrypted, damaged, unreadable)
+// opens in the ordinary viewer, which has its own answers for those.
+func tryOpenPDFViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
+	if pf == nil || v == nil || !isPDFFile(path) {
+		return false
+	}
+	var report string
+	pf.RunProgressTaskAfter(openingProgressDelay, " Opening... ", "Preparing to open file...", false, func(ctx context.Context, update func(msg string, percent int)) error {
+		update("Reading the PDF...", -1)
+		var err error
+		report, err = pdfReport(ctx, v, path, v.Base(path))
+		return err
+	}, func(err error) {
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+		if err != nil {
+			vtui.DebugLog("PDF: %s opens as plain: %v", path, err)
+			openPlainViewer(pf, v, path, false)
+			return
+		}
+		showMarkdownView(pf, v, path, []byte(report))
+	})
+	return true
 }

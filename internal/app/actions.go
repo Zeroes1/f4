@@ -1665,6 +1665,9 @@ func openViewerInternalMode(pf *panel.PanelsFrame, v vfs.VFS, path string, force
 		if tryOpenMarkdownViewer(pf, v, path) {
 			return
 		}
+		if tryOpenPDFViewer(pf, v, path) {
+			return
+		}
 	}
 	openPlainViewer(pf, v, path, forceHex)
 }
