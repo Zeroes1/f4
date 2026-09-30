@@ -15,7 +15,7 @@ import (
 // rights does not get -- and the answer comes in one buffer that grows while
 // the call reports ERROR_MORE_DATA.
 func listServices(machine string) ([]service, error) {
-	manager, err := openManager(machine, windows.SC_MANAGER_ENUMERATE_SERVICE)
+	manager, err := openManager(machine, windows.SC_MANAGER_CONNECT|windows.SC_MANAGER_ENUMERATE_SERVICE)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,31 @@ func listServices(machine string) ([]service, error) {
 			Display: windows.UTF16PtrToString(e.DisplayName),
 			State:   e.ServiceStatusProcess.CurrentState,
 			PID:     e.ServiceStatusProcess.ProcessId,
+			// The list shows how each service starts, as FAR's SvcMgr does; a
+			// service that refuses the query just has none.
+			StartType: startTypeOf(manager, e.ServiceName),
 		})
 	}
 	return out, nil
+}
+
+// startTypeOf reads one service's start type with the query-configuration
+// right only, or startUnknown when the service cannot be opened or read.
+func startTypeOf(manager windows.Handle, name *uint16) uint32 {
+	h, err := windows.OpenService(manager, name, windows.SERVICE_QUERY_CONFIG)
+	if err != nil {
+		return startUnknown
+	}
+	defer func() { _ = windows.CloseServiceHandle(h) }()
+	var needed uint32
+	// The first call only reports the size the configuration needs.
+	if err := windows.QueryServiceConfig(h, nil, 0, &needed); err != windows.ERROR_INSUFFICIENT_BUFFER || needed == 0 {
+		return startUnknown
+	}
+	buf := make([]byte, needed)
+	cfg := (*windows.QUERY_SERVICE_CONFIG)(unsafe.Pointer(&buf[0]))
+	if err := windows.QueryServiceConfig(h, cfg, needed, &needed); err != nil {
+		return startUnknown
+	}
+	return cfg.StartType
 }

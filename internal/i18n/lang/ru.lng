@@ -808,6 +808,7 @@ GitStatus.DeleteUntrackedFailed=Не удалось удалить %s: %s
 SvcMgr.ColumnName=Имя
 SvcMgr.ColumnDisplay=Отображаемое имя
 SvcMgr.ColumnState=Состояние
+SvcMgr.ColumnStart=Запуск
 SvcMgr.ColumnPID=PID
 SvcMgr.PanelTitle=Службы (%d)
 SvcMgr.RefreshFailed=Не удалось прочитать список служб: %v

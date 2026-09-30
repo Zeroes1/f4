@@ -53,6 +53,9 @@ func recoveryName(a recoveryAction) string {
 	return name + " after " + strconv.FormatUint(uint64(a.DelaySec), 10) + " s"
 }
 
+// startUnknown marks a start type that could not be read.
+const startUnknown = 0xFFFFFFFF
+
 // The SERVICE_*_START values of winsvc.h.
 const (
 	startBoot     = 0
@@ -78,6 +81,8 @@ func startTypeName(t uint32, delayed bool) string {
 		return "Manual"
 	case startDisabled:
 		return "Disabled"
+	case startUnknown:
+		return ""
 	}
 	return strconv.FormatUint(uint64(t), 10)
 }

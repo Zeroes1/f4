@@ -18,6 +18,7 @@ const (
 	colName = iota
 	colDisplay
 	colState
+	colStart
 	colPID
 )
 
@@ -26,6 +27,7 @@ func serviceColumns() []vtui.TableColumn {
 		{Title: i18n.Msg("SvcMgr.ColumnName"), Width: 24},
 		{Title: i18n.Msg("SvcMgr.ColumnDisplay"), MinWidth: 16},
 		{Title: i18n.Msg("SvcMgr.ColumnState"), Width: 10},
+		{Title: i18n.Msg("SvcMgr.ColumnStart"), Width: 9},
 		{Title: i18n.Msg("SvcMgr.ColumnPID"), Width: 7},
 	}
 }
@@ -43,6 +45,8 @@ func (r serviceRow) GetCellText(col int) string {
 		return r.svc.Display
 	case colState:
 		return stateName(r.svc.State)
+	case colStart:
+		return startTypeName(r.svc.StartType, false)
 	case colPID:
 		if r.svc.PID == 0 {
 			return ""

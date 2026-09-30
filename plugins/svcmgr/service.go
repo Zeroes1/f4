@@ -12,6 +12,9 @@ type service struct {
 	Display string
 	State   uint32 // SERVICE_* current state, see stateName
 	PID     uint32 // process id while running, 0 otherwise
+	// StartType is the SERVICE_*_START value, startUnknown when it could not
+	// be read (no right to query the service).
+	StartType uint32
 }
 
 // The SERVICE_* current-state values of winsvc.h. They are plain numbers, so

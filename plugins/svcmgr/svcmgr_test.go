@@ -24,9 +24,9 @@ func TestStateName(t *testing.T) {
 }
 
 func TestServiceRowCells(t *testing.T) {
-	r := serviceRow{svc: service{Name: "Spooler", Display: "Print Spooler", State: stateRunning, PID: 1234}}
-	got := []string{r.GetCellText(colName), r.GetCellText(colDisplay), r.GetCellText(colState), r.GetCellText(colPID), r.GetCellText(99)}
-	want := []string{"Spooler", "Print Spooler", "Running", "1234", ""}
+	r := serviceRow{svc: service{Name: "Spooler", Display: "Print Spooler", State: stateRunning, PID: 1234, StartType: startAuto}}
+	got := []string{r.GetCellText(colName), r.GetCellText(colDisplay), r.GetCellText(colState), r.GetCellText(colStart), r.GetCellText(colPID), r.GetCellText(99)}
+	want := []string{"Spooler", "Print Spooler", "Running", "Automatic", "1234", ""}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("cell %d = %q, want %q", i, got[i], want[i])
@@ -281,7 +281,7 @@ func TestStartTypeName(t *testing.T) {
 	}{
 		{startBoot, false, "Boot"}, {startSystem, false, "System"}, {startAuto, false, "Automatic"},
 		{startAuto, true, "Automatic (delayed start)"}, {startManual, false, "Manual"},
-		{startDisabled, false, "Disabled"}, {9, false, "9"},
+		{startDisabled, false, "Disabled"}, {startUnknown, false, ""}, {9, false, "9"},
 	}
 	for _, c := range cases {
 		if got := startTypeName(c.t, c.delayed); got != c.want {

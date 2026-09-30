@@ -808,6 +808,7 @@ GitStatus.DeleteUntrackedFailed=Could not delete %s: %s
 SvcMgr.ColumnName=Name
 SvcMgr.ColumnDisplay=Display name
 SvcMgr.ColumnState=State
+SvcMgr.ColumnStart=Startup
 SvcMgr.ColumnPID=PID
 SvcMgr.PanelTitle=Services (%d)
 SvcMgr.RefreshFailed=Cannot read the service list: %v
