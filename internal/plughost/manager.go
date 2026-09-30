@@ -6,6 +6,7 @@ import (
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/plugins/chroma"
+	dotnetplugin "github.com/unxed/f4/plugins/dotnet"
 	"github.com/unxed/f4/plugins/dummy_internal"
 	"github.com/unxed/f4/plugins/envman"
 	gitplugin "github.com/unxed/f4/plugins/git"
@@ -175,6 +176,9 @@ func (pm *PluginManager) loadInternal() {
 		// missing from PATH" instead, the same plugin/action split
 		// plugins/sqlite's CLI backend uses.
 		gitplugin.NewPlugin(),
+		// .NET assembly browser (f4#1666): Ctrl+PgDn on a .dll/.exe with .NET
+		// metadata mounts its references, types and resources read-only.
+		dotnetplugin.NewPlugin(),
 		// IDE mode (f4#382): scaffold only for now -- registration and the
 		// three IDE.Build/Run/Test commands, no toolchain integration yet.
 		// See plugins/ide's package doc for the full plan.
