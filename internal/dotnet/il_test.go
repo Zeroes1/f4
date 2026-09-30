@@ -195,8 +195,8 @@ func TestTypeNames(t *testing.T) {
 func TestSignatures(t *testing.T) {
 	f := newILFixture()
 	tab := f.t
-	ref := func(row int) byte { return byte(row<<2 | 1) }
-	def := func(row int) byte { return byte(row << 2) }
+	ref := func(row int) byte { return byte(row<<2 | 1) } //nolint:gosec // test data
+	def := func(row int) byte { return byte(row << 2) } //nolint:gosec // test data
 	cases := []struct {
 		name string
 		sig  []byte
@@ -353,7 +353,7 @@ func TestLocalsText(t *testing.T) {
 // body helpers ----------------------------------------------------------------
 
 func tinyBody(code ...byte) []byte {
-	return append([]byte{byte(len(code)<<2 | 2)}, code...)
+	return append([]byte{byte(len(code)<<2 | 2)}, code...) //nolint:gosec // test data
 }
 
 func fatBody(maxStack int, localSig uint32, code ...byte) []byte {
