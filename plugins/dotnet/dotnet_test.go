@@ -62,7 +62,7 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 	if refs := listing(t, v, "/References"); len(refs) != 1 {
 		t.Errorf("references = %v", refs)
 	}
-	if res := listing(t, v, "/Resources"); !res["a_b.resources"] {
+	if isDir, ok := listing(t, v, "/Resources")["a_b.resources"]; !ok || isDir {
 		t.Errorf("resource names are not made safe: %v", res)
 	}
 	if err := v.SetPath("/Namespaces/My.Ns"); err != nil || v.IsAtRoot() || v.GetPath() != "/Namespaces/My.Ns" {
