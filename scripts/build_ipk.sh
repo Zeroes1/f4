@@ -10,6 +10,7 @@
 set -eu
 [ $# -eq 4 ] || { echo "usage: $0 BINARY VERSION OPKG_ARCH OUTPUT.ipk" >&2; exit 2; }
 bin=$1 version=$2 arch=$3 out=$(realpath -m "$4")
+mkdir -p "$(dirname "$out")"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
