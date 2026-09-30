@@ -24,10 +24,10 @@ jobs:
         # extralite implies lite (see docs/OPENWRT.md for what it leaves out).
         profile: [lite, extralite]
         target:
-          - {name: mipsle-softfloat, goarch: mipsle, extra: "GOMIPS=softfloat"}
-          - {name: arm-v7, goarch: arm, extra: "GOARM=7"}
-          - {name: arm64, goarch: arm64, extra: "GOARM64=v8.0"}
-          - {name: amd64, goarch: amd64, extra: "GOAMD64=v1"}
+          - {name: mipsle-softfloat, goarch: mipsle, extra: "GOMIPS=softfloat", opkg: mipsel_24kc}
+          - {name: arm-v7, goarch: arm, extra: "GOARM=7", opkg: arm_cortex-a7_neon-vfpv4}
+          - {name: arm64, goarch: arm64, extra: "GOARM64=v8.0", opkg: aarch64_generic}
+          - {name: amd64, goarch: amd64, extra: "GOAMD64=v1", opkg: x86_64}
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -60,6 +60,23 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Package (.ipk for opkg, extralite only)
+        if: matrix.profile == 'extralite'
+        env:
+          OPKG: ${{ matrix.target.opkg }}
+          NAME: ${{ matrix.profile }}-linux-${{ matrix.target.name }}
+        run: |
+          VERSION="0.0.${GITHUB_RUN_NUMBER}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then VERSION="${GITHUB_REF_NAME#v}"; fi
+          sh scripts/build_ipk.sh "dist/f4-$NAME" "$VERSION" "$OPKG" "dist/f4_${VERSION}_${OPKG}.ipk" | tee ipk.txt
+          {
+            echo "### .ipk ($OPKG)"
+            echo
+            echo '```'
+            cat ipk.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Smoke check (native build only)
         if: matrix.target.goarch == 'amd64'
         run: |
@@ -76,5 +93,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: f4-${{ matrix.profile }}-linux-${{ matrix.target.name }}
-          path: dist/f4-${{ matrix.profile }}-linux-${{ matrix.target.name }}
+          path: |
+            dist/f4-${{ matrix.profile }}-linux-${{ matrix.target.name }}
+            dist/*.ipk
           if-no-files-found: error
