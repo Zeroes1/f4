@@ -273,7 +273,7 @@ func (t *tables) tokenText(kind operand, token uint32) string {
 	case 0x01:
 		return t.typeRefName(row)
 	case 0x1B:
-		return "<type spec>"
+		return t.typeSpecName(row)
 	case 0x06:
 		if row == 0 || row > t.rowCount[0x06] {
 			return fmt.Sprintf("<bad method token 0x%08x>", token)
@@ -320,8 +320,28 @@ func (t *tables) memberParentName(coded uint32) string {
 		if row >= 1 && row <= t.rowCount[0x06] {
 			return t.typeDefName(t.methodOwner(row))
 		}
+	case 4:
+		return t.typeSpecName(row)
 	}
 	return "<parent>"
+}
+
+// typeSpecName renders the type of a TypeSpec row (a constructed type, such as
+// a generic instance or an array), or a placeholder when its blob is unreadable.
+func (t *tables) typeSpecName(row uint32) string {
+	if row == 0 || row > t.rowCount[0x1B] {
+		return "<type spec>"
+	}
+	data := t.blobAt(t.cell(0x1B, row, 0))
+	if len(data) == 0 {
+		return "<type spec>"
+	}
+	r := &sigReader{t: t, data: data}
+	out := r.typeString()
+	if r.bad {
+		return "<type spec>"
+	}
+	return out
 }
 
 // methodOwner and fieldOwner find the TypeDef row that lists a method or field
