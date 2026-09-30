@@ -51,6 +51,12 @@ type PluginCommand struct {
 	// "Shift+F4"). The plugin remains responsible for registering the hotkey.
 	Shortcut string
 	Visible  func(App) bool
+	// NotInPluginMenu keeps the command out of the F11 plugin menu: it is a
+	// basic shell command in spirit (Add to archive, Extract), with its own key
+	// and its row in the generated main menu and the command palette, and having
+	// it among the plugins made users ask how to add files to an archive
+	// (unxed/f4#918).
+	NotInPluginMenu bool
 	// Enabled, when set, decides whether the command can actually run right
 	// now, without removing it from the menu the way Visible does: a
 	// generated menu item stays on screen dimmed instead of disappearing

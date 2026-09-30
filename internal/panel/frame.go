@@ -5779,7 +5779,7 @@ func (pf *PanelsFrame) Clone() *PanelsFrame {
 
 func (pf *PanelsFrame) ShowPluginMenu() {
 	items := plughost.PluginMenuItemsSnapshot()
-	commands := plughost.PluginCommandsSnapshot(vfs.PluginCommandPanel, pf)
+	commands := commandsForPluginMenu(plughost.PluginCommandsSnapshot(vfs.PluginCommandPanel, pf))
 	if len(items) == 0 && len(commands) == 0 {
 		vtui.ShowMessage(" Plugins ", "No plugins registered for F11 menu.", []string{"&Ok"})
 		return

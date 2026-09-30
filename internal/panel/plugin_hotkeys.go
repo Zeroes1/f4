@@ -534,3 +534,15 @@ func PluginHotkeyActionsSnapshot() []action.Action {
 	}
 	return actions
 }
+
+// commandsForPluginMenu drops the commands that are not meant for the F11 menu
+// (vfs.PluginCommand.NotInPluginMenu).
+func commandsForPluginMenu(commands []vfs.PluginCommand) []vfs.PluginCommand {
+	out := make([]vfs.PluginCommand, 0, len(commands))
+	for _, c := range commands {
+		if !c.NotInPluginMenu {
+			out = append(out, c)
+		}
+	}
+	return out
+}

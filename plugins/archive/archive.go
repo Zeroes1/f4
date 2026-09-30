@@ -41,34 +41,36 @@ func (p *ArchivePlugin) Init(api vfs.HostAPI) error {
 	archiveHostAPI = api
 	if contributions, ok := api.(vfs.ContributionHost); ok {
 		addRegistration, err := contributions.RegisterPluginCommand(vfs.PluginCommand{
-			ID:             archiveAddCommandID,
-			Location:       vfs.PluginCommandPanel,
-			Label:          "Add to archive",
-			LabelKey:       "Archive.Command.Add",
-			MenuPath:       "Files",
-			Shortcut:       "Shift+F1",
-			Description:    "Create an archive from the selected files",
-			DescriptionKey: "Archive.Command.Add.Desc",
-			SearchKeys:     []string{"Attributes.Archive"},
-			Enabled:        canAddArchive,
-			Run:            actionAddArchive,
+			ID:              archiveAddCommandID,
+			Location:        vfs.PluginCommandPanel,
+			Label:           "Add to archive",
+			LabelKey:        "Archive.Command.Add",
+			MenuPath:        "Files",
+			Shortcut:        "Shift+F1",
+			NotInPluginMenu: true,
+			Description:     "Create an archive from the selected files",
+			DescriptionKey:  "Archive.Command.Add.Desc",
+			SearchKeys:      []string{"Attributes.Archive"},
+			Enabled:         canAddArchive,
+			Run:             actionAddArchive,
 		})
 		if err != nil {
 			return fmt.Errorf("archive: register add command: %w", err)
 		}
 
 		extractRegistration, err := contributions.RegisterPluginCommand(vfs.PluginCommand{
-			ID:             archiveExtractCommandID,
-			Location:       vfs.PluginCommandPanel,
-			Label:          "Extract files",
-			LabelKey:       "Archive.Command.Extract",
-			MenuPath:       "Files",
-			Shortcut:       "Shift+F2",
-			Description:    "Extract the selected archive to the passive panel",
-			DescriptionKey: "Archive.Command.Extract.Desc",
-			SearchKeys:     []string{"Attributes.Archive"},
-			Enabled:        canOperateOnArchive,
-			Run:            actionExtractArchive,
+			ID:              archiveExtractCommandID,
+			Location:        vfs.PluginCommandPanel,
+			Label:           "Extract files",
+			LabelKey:        "Archive.Command.Extract",
+			MenuPath:        "Files",
+			Shortcut:        "Shift+F2",
+			NotInPluginMenu: true,
+			Description:     "Extract the selected archive to the passive panel",
+			DescriptionKey:  "Archive.Command.Extract.Desc",
+			SearchKeys:      []string{"Attributes.Archive"},
+			Enabled:         canOperateOnArchive,
+			Run:             actionExtractArchive,
 		})
 		if err != nil {
 			addRegistration.Unregister()
