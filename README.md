@@ -196,6 +196,12 @@ them does not compile. See `internal/plughost`, `internal/gui`,
 `internal/editor`, `vfs/hostmode`, `internal/media`, `internal/fusefs` and
 `internal/sheet` for where each exclusion is implemented.
 
+An **extra-lite** profile (`-tags lite,extralite,vtui_noebiten,vtui_nogogpu`) goes
+further for routers: English-only embedded language files, no Lua and no WASM
+runtime, no collation tables. It is built for OpenWrt (`.ipk` packages, see the
+`openwrt` workflow); the target matrix, sizes and what is left out are in
+[docs/OPENWRT.md](docs/OPENWRT.md).
+
 **The Core:** Creating an experimental, cross-platform TUI (Terminal User Interface) file manager that aims to fully replicate the features, UX, data structures, and rendering logic of `far2l` and Far Manager, but implemented entirely in Go.
 
 ### 🧪 Experimental: Redox, GNU Hurd, Haiku
@@ -357,6 +363,12 @@ the same for a single run.
 7. **Custom File Highlighting:** Highly flexible file highlighting system supporting glob masks, cross-platform attributes, file sizes, absolute/relative dates, cascade blending, and visual marker glyphs. See [File Highlighting Guide](HIGHLIGHTING.md).
 8. **Declarative Localization:** Flexible i18n system for UI and Help files with a built-in "Ctrl+Alt+RightClick" Translator Tool. See [Localization Guide](I18N.md).
 9. **FUSE Mounts:** Any file system f4 can open — archives, SFTP/FTP hosts, phones — can be mounted as an ordinary directory, so that programs which know nothing about f4 can read it. See [FUSE Mounts](FUSE.md).
+10. **Windows Services:** a panel of the services of a Windows machine, with start, stop, pause, start type, details and a remote computer. See [Windows services panel](docs/SERVICES.md).
+11. **.NET Assemblies:** Ctrl+PgDn on a `.dll` or `.exe` shows the assembly as a read-only tree: references, types, signatures, IL, resources. See [.NET assemblies](docs/DOTNET.md).
+12. **PDF:** F3 shows the text of a PDF, Ctrl+PgDn opens it as a tree of pages and embedded pictures. See [PDF files](docs/PDF.md).
+13. **Formulas and Mermaid diagrams:** the Markdown views turn LaTeX formulas and Mermaid diagrams into readable text. See [Formulas and Mermaid](docs/MERMAID.md).
+14. **Remote connection types:** FTP, SFTP, SCP, SMB and FISH+ (with f4 itself as the server on the remote host). See [NetFox connection types](docs/NETFOX.md).
+15. **Docker, Kubernetes and MongoDB panels:** containers, pods and collections as drives. See [Docker](docs/DOCKER.md), [Kubernetes](docs/KUBERNETES.md), [MongoDB](docs/MONGODB.md).
 
 ---
 

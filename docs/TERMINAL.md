@@ -214,6 +214,10 @@ panel switching between two live shells: the modes of the one being left stay
 on for the one being entered. Doing that properly means keeping the modes per
 session rather than per `TerminalView`.
 
+### The shell's kitty flags are scoped to its prompt (f4#1693)
+
+For a fresh local shell f4 turns on the kitty keyboard protocol's disambiguate flag itself (`KittyEnableDisambiguateSeq`), so that Ctrl+Tab can be told from Tab at the prompt. A bare readline-based shell does not ask for it, and neither does what it runs: `cat` or `ping` are not told that keys now arrive as `CSI u`, so Ctrl+C reached them as `CSI 99;5u` and was printed instead of interrupting. With the shell's OSC 133 marks the flags are now scoped to the prompt: `OSC 133;C` (a command starts) saves the flags and clears them, `OSC 133;D` (it ended) restores the shell's own and drops whatever the command left switched on. A program that speaks the protocol (far2l) asks for it itself after it started, so it keeps working. A shell without OSC 133 marks gets no such scoping: the flag stays on for the whole session. The key code of a Ctrl+letter is the letter (`CSI 99;5u` for Ctrl+C), never the control character (`3`); Ctrl+I, Ctrl+M and Ctrl+H keep the codes of Tab, Enter and Backspace.
+
 3.  **ConPTY Isolation:** ConPTY frequently forces full screen redraws. The VTE Mirror restricts ConPTY's chaos to a fixed-size sandbox (the viewport). The permanent log is immune to cursor-jumping artifacts because lines are only saved when they are mathematically guaranteed to be finished (pushed off the top).
 3.  **Golang GC Efficiency:** Go's Garbage Collector handles large contiguous byte slices (`PieceTable` chunks) orders of magnitude better than deep hierarchies of small, pointer-heavy objects (`[]Cell` for infinite scrollback).
 
