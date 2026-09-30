@@ -178,6 +178,61 @@ jobs:
       - name: Build extralite
         run: go build -tags lite,extralite,vtui_noebiten,vtui_nogogpu -o /dev/null ./cmd/f4
 
+  # Targets that the pull-request run of build.yml does not compile: the extra
+  # Linux architectures, the BSDs, illumos and solaris are built and vetted only
+  # on pushes to main and on tags, so a break in a file they select (a
+  # syscall, a stub) used to show up as a red main, after the train had merged.
+  # Compilation only, with the tags and flags of build.yml's batched build;
+  # four runners side by side, beside check, so the critical path does not grow.
+  cross:
+    name: Cross-compile (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: "linux 32-bit", targets: "linux/386 linux/arm linux/mips linux/mipsle"}
+          - {name: "linux 64-bit", targets: "linux/mips64 linux/mips64le linux/riscv64 linux/loong64 linux/ppc64 linux/ppc64le"}
+          - {name: "freebsd, netbsd, dragonfly", targets: "freebsd/amd64 freebsd/arm64 netbsd/amd64 dragonfly/amd64"}
+          - {name: "openbsd, illumos, solaris", targets: "openbsd/amd64 openbsd/arm64 illumos/amd64 solaris/amd64"}
+    env:
+      CGO_ENABLED: 0
+      TARGETS: ${{ matrix.targets }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          for target in $TARGETS; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            flags=()
+            case "$goos" in
+              linux)
+                # arm builds without noffi; the other extra architectures have
+                # no FFI backend, so they use vtui's ANSI-only configuration.
+                if [ "$goarch" = "arm" ]; then tags="goffi_static"; else tags="noffi,goffi_static"; fi
+                flags+=(-tags "$tags")
+                ;;
+              freebsd|netbsd)
+                # fakecgo has to be built as std to export its dynamic symbols.
+                flags+=(-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std)
+                ;;
+            esac
+            echo "::group::$target"
+            GOOS="$goos" GOARCH="$goarch" go build "${flags[@]}" -o /dev/null ./cmd/f4 </dev/null
+            echo "::endgroup::"
+          done
+
   format:
     name: Format checks
     runs-on: ubuntu-latest
