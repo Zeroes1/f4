@@ -103,7 +103,9 @@ func Flowchart(source string) (text string, ok bool) {
 			return "", false
 		}
 		if len(edges) == before {
-			events = append(events, event{kind: 'n', id: first, depth: depth})
+			for _, id := range first {
+				events = append(events, event{kind: 'n', id: id, depth: depth})
+			}
 		}
 		for i := before; i < len(edges); i++ {
 			events = append(events, event{kind: 'e', edge: i, depth: depth})
@@ -183,25 +185,61 @@ func arrowText(e edge) string {
 }
 
 // parseStatement reads NODE (EDGE NODE)* from line.
-func parseStatement(line string, nodes map[string]*node, order *[]string, edges *[]edge) (string, bool) {
-	rest := line
-	prev, rest, ok := parseNode(rest, nodes, order)
+// classShorthand is the ":::name" a node may carry to pick a style class; it
+// changes only colours, so it is skipped.
+var classShorthand = regexp.MustCompile(`^:::[A-Za-z0-9_-]+`)
+
+func skipClass(s string) string { return classShorthand.ReplaceAllString(s, "") }
+
+// parseGroup reads NODE (& NODE)*.
+func parseGroup(s string, nodes map[string]*node, order *[]string) (ids []string, rest string, ok bool) {
+	id, rest, ok := parseNode(s, nodes, order)
 	if !ok {
-		return "", false
+		return nil, "", false
+	}
+	ids = []string{id}
+	for {
+		t := strings.TrimSpace(rest)
+		if !strings.HasPrefix(t, "&") {
+			return ids, rest, true
+		}
+		id, rest, ok = parseNode(t[1:], nodes, order)
+		if !ok {
+			return nil, "", false
+		}
+		ids = append(ids, id)
+	}
+}
+
+// parseStatement reads GROUP (EDGE GROUP)* from line, where a group of nodes
+// joined by & is connected to every node of the next group. It returns the
+// nodes of the first group, which stand alone when the line has no edge.
+func parseStatement(line string, nodes map[string]*node, order *[]string, edges *[]edge) ([]string, bool) {
+	prev, rest, ok := parseGroup(line, nodes, order)
+	if !ok {
+		return nil, false
 	}
 	first := prev
 	for strings.TrimSpace(rest) != "" {
 		e, after, ok := parseEdge(rest)
 		if !ok {
-			return "", false
+			return nil, false
 		}
-		var next string
-		next, rest, ok = parseNode(after, nodes, order)
+		var next []string
+		next, rest, ok = parseGroup(after, nodes, order)
 		if !ok {
-			return "", false
+			return nil, false
 		}
-		e.from, e.to = prev, next
-		*edges = append(*edges, e)
+		for _, from := range prev {
+			for _, to := range next {
+				link := e
+				link.from, link.to = from, to
+				*edges = append(*edges, link)
+			}
+		}
+		if len(*edges) > maxEdges {
+			return nil, false
+		}
 		prev = next
 	}
 	return first, true
@@ -246,13 +284,10 @@ func parseNode(s string, nodes map[string]*node, order *[]string) (id, rest stri
 		if n.open == "" || text != "" {
 			n.open, n.close, n.text = sh.open, sh.close, text
 		}
-		// A shape may be followed by a class shorthand or nothing else.
-		if strings.HasPrefix(tail, ":::") {
-			return "", "", false
-		}
-		return id, tail, true
+		return id, skipClass(tail), true
 	}
-	if strings.HasPrefix(rest, ":::") || strings.HasPrefix(rest, "@") || strings.HasPrefix(strings.TrimSpace(rest), "&") {
+	rest = skipClass(rest)
+	if strings.HasPrefix(rest, "@") {
 		return "", "", false
 	}
 	return id, rest, true

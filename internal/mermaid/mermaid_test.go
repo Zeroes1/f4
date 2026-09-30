@@ -44,8 +44,7 @@ func TestFlowchartRefusals(t *testing.T) {
 		"header":            "graph TD",
 		"unclosed subgraph": "graph TD\nsubgraph X\nA-->B",
 		"stray end":         "graph TD\nA-->B\nend",
-		"ampersand":         "graph TD\nA & B --> C",
-		"class":             "graph TD\nA:::red --> B",
+		"edge id":           "graph TD\nA@{ shape: rect } --> B",
 		"unclosed":          "graph TD\nA[oops --> B",
 		"garbage":           "graph TD\nA --> ",
 		"nodeless":          "graph TD\n--> B",
@@ -306,5 +305,30 @@ func TestER(t *testing.T) {
 		if got, ok := ER(bad); ok {
 			t.Errorf("%s: converted to %q", name, got)
 		}
+	}
+}
+
+func TestFlowchartGroupsAndClassShorthand(t *testing.T) {
+	src := strings.Join([]string{
+		"graph TD",
+		"  A:::hot --> B[Two]:::cold",
+		"  B & C --> D & E",
+		"  F & G",
+	}, "\n")
+	got, ok := Flowchart(src)
+	want := strings.Join([]string{
+		"[A] ──▶ [Two]",
+		"[Two] ──▶ [D]",
+		"[Two] ──▶ [E]",
+		"[C] ──▶ [D]",
+		"[C] ──▶ [E]",
+		"[F]",
+		"[G]",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("groups:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	if got, ok := Flowchart("graph TD\nA & --> B"); ok {
+		t.Errorf("a dangling & converted to %q", got)
 	}
 }
