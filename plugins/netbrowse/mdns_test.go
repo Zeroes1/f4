@@ -11,6 +11,7 @@ import (
 func dnsName(name string) []byte {
 	var b []byte
 	for _, l := range strings.Split(name, ".") {
+		// #nosec G115 -- test names have short labels.
 		b = append(b, byte(len(l)))
 		b = append(b, l...)
 	}
@@ -22,6 +23,7 @@ func dnsRecord(owner []byte, typ uint16, rdata []byte) []byte {
 	b = binary.BigEndian.AppendUint16(b, typ)
 	b = binary.BigEndian.AppendUint16(b, dnsClassIN)
 	b = binary.BigEndian.AppendUint32(b, 120)
+	// #nosec G115 -- test records are tiny.
 	b = binary.BigEndian.AppendUint16(b, uint16(len(rdata)))
 	return append(b, rdata...)
 }
@@ -35,6 +37,7 @@ func srvData(target []byte) []byte {
 func dnsResponse(records ...[]byte) []byte {
 	msg := make([]byte, 12)
 	msg[2] = 0x84
+	// #nosec G115 -- a handful of test records.
 	binary.BigEndian.PutUint16(msg[6:], uint16(len(records)))
 	for _, r := range records {
 		msg = append(msg, r...)
@@ -75,6 +78,7 @@ func TestSMBHostsInAnswerFollowsNameCompression(t *testing.T) {
 	ownerOff := len(msg)
 	msg = append(msg, dnsName("NAS._smb._tcp.local")...)
 	localOff := ownerOff + strings.Index(string(msg[ownerOff:]), "\x05local")
+	// #nosec G115 -- the test message is a few dozen bytes.
 	target := append([]byte{3, 'n', 'a', 's'}, 0xC0|byte(localOff>>8), byte(localOff))
 	rec := dnsRecord(nil, dnsTypeSRV, srvData(target))
 	// The owner is written once above; the record body follows it.

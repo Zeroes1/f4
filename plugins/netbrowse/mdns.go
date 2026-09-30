@@ -29,6 +29,7 @@ func buildPTRQuery(name string) []byte {
 	msg := make([]byte, 12, 64)
 	binary.BigEndian.PutUint16(msg[4:], 1) // one question
 	for _, label := range strings.Split(strings.TrimSuffix(name, "."), ".") {
+		// #nosec G115 -- the fixed service name has short labels.
 		msg = append(msg, byte(len(label)))
 		msg = append(msg, label...)
 	}
