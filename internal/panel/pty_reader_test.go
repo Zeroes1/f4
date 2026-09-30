@@ -9,8 +9,8 @@ import (
 
 func TestPumpPTYOutputKeepsOrderAndReportsTheEnd(t *testing.T) {
 	var chunks [][]byte
-	for i := 0; i < 200; i++ {
-		chunks = append(chunks, bytes.Repeat([]byte{byte(i)}, 1+i%7))
+	for i := byte(0); i < 200; i++ {
+		chunks = append(chunks, bytes.Repeat([]byte{i}, 1+int(i)%7))
 	}
 	i := 0
 	errEnd := errors.New("terminal gone")
@@ -36,7 +36,7 @@ func TestPumpPTYOutputKeepsOrderAndReportsTheEnd(t *testing.T) {
 // while the first one is still being consumed.
 func TestPumpPTYOutputReadsWhileTheParserIsBusy(t *testing.T) {
 	release := make(chan struct{})
-	readCount := 0
+	readCount := byte(0)
 	readAhead := make(chan struct{})
 	read := func(b []byte) (int, error) {
 		if readCount == 20 {
@@ -45,7 +45,7 @@ func TestPumpPTYOutputReadsWhileTheParserIsBusy(t *testing.T) {
 			return 0, errors.New("done")
 		}
 		readCount++
-		b[0] = byte(readCount)
+		b[0] = readCount
 		return 1, nil
 	}
 	consumed := 0
