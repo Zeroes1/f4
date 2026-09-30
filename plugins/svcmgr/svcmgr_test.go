@@ -256,8 +256,8 @@ func TestPanelActionsNeedAService(t *testing.T) {
 	if len(ctl.calls) != 0 || p.hasSelected() {
 		t.Errorf("an empty list ran %v", ctl.calls)
 	}
-	if got := len(p.PanelKeys()); got != 7 {
-		t.Errorf("panel keys = %d, want 7", got)
+	if got := len(p.PanelKeys()); got != 8 {
+		t.Errorf("panel keys = %d, want 8", got)
 	}
 }
 
@@ -398,5 +398,51 @@ func TestConnectSwitchesComputer(t *testing.T) {
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(60, 20)
 	p.machine = "srv"
+	p.Show(scr)
+}
+
+func TestStateFilterCycles(t *testing.T) {
+	services := []service{
+		{Name: "A", Display: "A", State: stateRunning},
+		{Name: "B", Display: "B", State: stateStopped},
+		{Name: "C", Display: "C", State: stateRunning},
+		{Name: "D", Display: "D", State: statePaused},
+	}
+	var listErr error
+	p := openFake(t, &services, &listErr)
+	if p.table.ItemCount != 4 {
+		t.Fatalf("rows unfiltered = %d, want 4", p.table.ItemCount)
+	}
+	p.selectByName("C")
+
+	p.cycleFilter() // running only
+	if p.table.ItemCount != 2 || p.GetSelectedName() != "C" {
+		t.Errorf("running filter: rows %d, cursor on %q; want 2 and C", p.table.ItemCount, p.GetSelectedName())
+	}
+	p.cycleFilter() // stopped only
+	if p.table.ItemCount != 1 {
+		t.Errorf("stopped filter rows = %d, want 1", p.table.ItemCount)
+	}
+	p.cycleFilter() // all again
+	if p.table.ItemCount != 4 {
+		t.Errorf("filter off rows = %d, want 4", p.table.ItemCount)
+	}
+
+	// The filter survives a reload and a change of computer.
+	p.cycleFilter()
+	services = append(services, service{Name: "E", Display: "E", State: stateRunning})
+	if err := p.reload(); err != nil || p.table.ItemCount != 3 {
+		t.Errorf("reload under the running filter: err %v, rows %d, want 3", err, p.table.ItemCount)
+	}
+	p.list = func(string) ([]service, error) { return []service{{Name: "R", Display: "R", State: stateStopped}}, nil }
+	p.connect("srv")
+	if p.table.ItemCount != 0 {
+		t.Errorf("running filter over a stopped-only computer: rows %d, want 0", p.table.ItemCount)
+	}
+	if got := filterAll.label(); got != "" {
+		t.Errorf("no-filter label = %q", got)
+	}
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(60, 20)
 	p.Show(scr)
 }

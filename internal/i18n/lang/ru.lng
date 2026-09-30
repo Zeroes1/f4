@@ -837,6 +837,9 @@ SvcMgr.PanelTitleRemote=Службы на %s (%d)
 SvcMgr.ComputerTitle=Компьютер
 SvcMgr.ComputerPrompt=Имя или адрес компьютера (пусто — этот):
 SvcMgr.ConnectFailed=Не удалось прочитать службы %s: %v
+SvcMgr.KeyBar.Filter=Фильтр
+SvcMgr.FilterRunning=работают
+SvcMgr.FilterStopped=остановлены
 
 PanelPlugin.KeyBar.Close=Закрыть
 

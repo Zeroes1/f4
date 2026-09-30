@@ -63,8 +63,11 @@ type servicesPanel struct {
 	list  func(machine string) ([]service, error)
 	// machine is the computer whose services are shown; empty is this one.
 	machine string
-	ctl     controller
-	det     detailer
+	// all is the last list read; the table shows the part of it the filter lets through.
+	all    []service
+	filter stateFilter
+	ctl    controller
+	det    detailer
 }
 
 func newServicesPanel(ctx vfs.PanelContext, list func(machine string) ([]service, error)) (vfs.PanelController, error) {
@@ -98,16 +101,67 @@ func (p *servicesPanel) reload() error {
 	if err != nil {
 		return err
 	}
+	p.all = services
+	p.showFiltered()
+	return nil
+}
+
+// stateFilter narrows the list by state: everything, only running services,
+// or only stopped ones.
+type stateFilter int
+
+const (
+	filterAll stateFilter = iota
+	filterRunning
+	filterStopped
+	filterCount
+)
+
+// allows reports whether a service of the given state passes the filter.
+func (f stateFilter) allows(state uint32) bool {
+	switch f {
+	case filterRunning:
+		return state == stateRunning
+	case filterStopped:
+		return state == stateStopped
+	}
+	return true
+}
+
+// showFiltered fills the table from p.all through the filter, keeping the
+// cursor on the same service when it is still shown.
+func (p *servicesPanel) showFiltered() {
 	keep, _ := p.selectedService()
-	rows := make([]vtui.TableRow, len(services))
-	for i, s := range services {
-		rows[i] = serviceRow{svc: s}
+	rows := make([]vtui.TableRow, 0, len(p.all))
+	for _, s := range p.all {
+		if p.filter.allows(s.State) {
+			rows = append(rows, serviceRow{svc: s})
+		}
 	}
 	p.table.SetRows(rows)
 	if keep.Name != "" {
 		p.selectByName(keep.Name)
 	}
-	return nil
+}
+
+// cycleFilter is Shift+F6: all, running only, stopped only, and round again.
+func (p *servicesPanel) cycleFilter() {
+	p.filter = (p.filter + 1) % filterCount
+	p.showFiltered()
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
+}
+
+// filterLabel names the filter for the panel title; empty for no filter.
+func (f stateFilter) label() string {
+	switch f {
+	case filterRunning:
+		return i18n.Msg("SvcMgr.FilterRunning")
+	case filterStopped:
+		return i18n.Msg("SvcMgr.FilterStopped")
+	}
+	return ""
 }
 
 func (p *servicesPanel) selectByName(name string) {
@@ -185,6 +239,7 @@ func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Stop"), Run: p.confirmStop, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F5, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Computer"), Run: p.askComputer},
+		{VK: vtinput.VK_F6, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Filter"), Run: p.cycleFilter},
 		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.StartType"), Run: p.chooseStartType, Enabled: p.hasSelected},
 	}
 }
@@ -286,11 +341,8 @@ func (p *servicesPanel) connect(machine string) {
 	p.machine = machine
 	p.ctl = serviceController(machine)
 	p.det = serviceDetailer(machine)
-	rows := make([]vtui.TableRow, len(services))
-	for i, s := range services {
-		rows[i] = serviceRow{svc: s}
-	}
-	p.table.SetRows(rows)
+	p.all = services
+	p.showFiltered()
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}
@@ -394,6 +446,9 @@ func (p *servicesPanel) Show(scr *vtui.ScreenBuf) {
 	title := fmt.Sprintf(i18n.Msg("SvcMgr.PanelTitle"), p.table.ItemCount)
 	if p.machine != "" {
 		title = fmt.Sprintf(i18n.Msg("SvcMgr.PanelTitleRemote"), p.machine, p.table.ItemCount)
+	}
+	if l := p.filter.label(); l != "" {
+		title += " [" + l + "]"
 	}
 	p.frame.SetTitle(title)
 	p.frame.Show(scr)

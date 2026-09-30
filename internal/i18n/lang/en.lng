@@ -837,6 +837,9 @@ SvcMgr.PanelTitleRemote=Services on %s (%d)
 SvcMgr.ComputerTitle=Computer
 SvcMgr.ComputerPrompt=Name or address of the computer (empty: this one):
 SvcMgr.ConnectFailed=Cannot read the services of %s: %v
+SvcMgr.KeyBar.Filter=Filter
+SvcMgr.FilterRunning=running
+SvcMgr.FilterStopped=stopped
 
 PanelPlugin.KeyBar.Close=Close
 
