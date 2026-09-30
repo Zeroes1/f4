@@ -150,6 +150,34 @@ jobs:
   # result moves with the vulnerability database, not with the code) and
   # icon regeneration stay in the full matrix. A separate job so it runs in
   # parallel with check and adds nothing to quick's latency.
+  # The lite and extra-lite profiles are separate build-tag sets that the
+  # regular check above never compiles, so a change to a file they exclude or
+  # replace (internal/macro/lua*.go, internal/plughost/transport_*.go,
+  # vfs/codepages*.go ...) can break them silently until the openwrt workflow
+  # runs. Compilation only, no tests, one runner, beside check so that the
+  # critical path does not grow. The tag sets are the ones openwrt.yml uses.
+  variants:
+    name: Build lite and extralite (linux/amd64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build lite
+        run: go build -tags lite,vtui_noebiten,vtui_nogogpu -o /dev/null ./cmd/f4
+
+      - name: Build extralite
+        run: go build -tags lite,extralite,vtui_noebiten,vtui_nogogpu -o /dev/null ./cmd/f4
+
   format:
     name: Format checks
     runs-on: ubuntu-latest
