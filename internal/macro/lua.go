@@ -52,7 +52,7 @@ type luaEvent struct {
 
 // supportedEventGroups are the Event{} groups f4 raises; a declaration for
 // another group is kept out and logged.
-var supportedEventGroups = map[string]bool{"exitfar": true, "folderchanged": true, "editorevent": true}
+var supportedEventGroups = map[string]bool{"exitfar": true, "folderchanged": true, "editorevent": true, "viewerevent": true}
 
 // luaCommandLine is one CommandLine{} declaration.
 type luaCommandLine struct {

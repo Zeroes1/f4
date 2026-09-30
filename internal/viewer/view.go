@@ -23,6 +23,11 @@ import (
 
 // ViewerView is a high-performance file viewer component.
 type ViewerView struct {
+	// MacroID identifies this viewer in the ViewerEvent of Lua macros;
+	// closeNotified is set once EventClose has been raised.
+	MacroID       int
+	closeNotified bool
+
 	// Syntax highlighting (see highlight.go): the colorizer, created once,
 	// and the window last handed to it.
 	highlight      WindowColorizer
@@ -201,6 +206,8 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 	vv.SetCanFocus(true)
 	vv.SetFocus(true)
 	vv.startTailWatch()
+	vv.MacroID = int(lastViewerID.Add(1))
+	vv.notify(EventRead)
 	return vv, nil
 }
 
@@ -1357,6 +1364,10 @@ func (vv *ViewerView) menuBarPinned() bool {
 }
 
 func (vv *ViewerView) Close() {
+	if !vv.closeNotified {
+		vv.closeNotified = true
+		vv.notify(EventClose)
+	}
 	if vv.highlight != nil {
 		vv.highlight.Close()
 		vv.highlight = nil

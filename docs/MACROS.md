@@ -172,12 +172,13 @@ is drawing on. Use `print()`, which goes to the debug log, and `mf.env` and
 
 Most macros need no changes. What to check:
 
-- `MenuItem{}` and `CommandLine{}` declarations work. `Event{}` works for three
+- `MenuItem{}` and `CommandLine{}` declarations work. `Event{}` works for four
   groups: `ExitFAR` (f4 is closing), `FolderChanged` (a panel entered another
-  folder; it is not raised while a macro is running) and `EditorEvent`, whose
-  action is called with the editor's id, the event and a parameter (0), where the
-  event is Far's number: 0 the file was read, 1 it was saved, 3 the editor is
-  closing. A declaration for any other group is logged and left out; the rest of
+  folder; it is not raised while a macro is running), `EditorEvent` and
+  `ViewerEvent`, whose actions are called with the editor's or viewer's id, the
+  event and a parameter (0). The editor events are Far's numbers: 0 the file was
+  read, 1 it was saved, 3 the editor is closing; the viewer's: 0 the file was
+  opened, 1 the viewer is closing. A declaration for any other group is logged and left out; the rest of
   the file still loads.
 - The `Editor`, `Viewer`, `Dlg`, `Menu`, `Object` and `Plugin` objects are not
   implemented yet.

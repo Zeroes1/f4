@@ -100,3 +100,12 @@ func (m *MacroManager) RaiseEditorEvent(id, event int) bool {
 	}
 	return m.Lua.RaiseEventNumbers("EditorEvent", id, event, 0)
 }
+
+// RaiseViewerEvent raises the ViewerEvent of the Lua macros for the viewer with
+// the given id: event is one of Far's VE_* numbers (read 0, close 1).
+func (m *MacroManager) RaiseViewerEvent(id, event int) bool {
+	if m == nil || m.Lua == nil {
+		return false
+	}
+	return m.Lua.RaiseEventNumbers("ViewerEvent", id, event, 0)
+}

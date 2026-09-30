@@ -77,3 +77,23 @@ func TestMacroRaiseEventNumbersPassesThem(t *testing.T) {
 		t.Error("an event was raised without an engine")
 	}
 }
+
+func TestMacroRaiseViewerEvent(t *testing.T) {
+	Engine := newTestMacroEngine(t, newFakeMacroHost(), `
+		Event { group = "ViewerEvent"; action = function(id, event) __vid, __vevent = id, event end }
+	`)
+	manager := &MacroManager{Lua: Engine}
+	if !manager.RaiseViewerEvent(4, 1) {
+		t.Fatal("the manager did not raise the viewer event")
+	}
+	if !Engine.WaitIdle(5 * time.Second) {
+		t.Fatal("the event action never finished")
+	}
+	values := macroGlobals(t, Engine, "__vid", "__vevent")
+	if lua.LVAsNumber(values["__vid"]) != 4 || lua.LVAsNumber(values["__vevent"]) != 1 {
+		t.Fatalf("action got %v %v, want 4 1", values["__vid"], values["__vevent"])
+	}
+	if (*MacroManager)(nil).RaiseViewerEvent(1, 0) || (&MacroManager{}).RaiseViewerEvent(1, 0) {
+		t.Error("a viewer event was raised without an engine")
+	}
+}
