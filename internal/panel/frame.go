@@ -2544,6 +2544,11 @@ func (pf *PanelsFrame) InterceptPluginKey(e *vtinput.InputEvent) bool {
 			hkShift := (hk.Mods & vtinput.ShiftPressed) != 0
 
 			if e.VirtualKeyCode == hk.VK && ctrl == hkCtrl && alt == hkAlt && shift == hkShift {
+				// A default the user removed from the plugin menu (F4, Del)
+				// no longer runs its command.
+				if PluginDefaultKeyOff(keymap.EventToHotkeyString(e)) {
+					continue
+				}
 				hk.Handler(pf)
 				return true
 			}

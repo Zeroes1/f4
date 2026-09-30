@@ -50,6 +50,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.ConsoleMode = "host"
 	App.ConsoleOverlayUI = true
 	App.DragOutModifier = "ctrl"
+	App.PluginDefaultHotkeysOff = "ShiftF1;ShiftF2"
 	App.HostConsoleDefaultColors = true
 	App.WorkspaceTabMode = int(vtui.WorkspaceTabsNever)
 	App.WorkspaceTabsOverlay = false
@@ -191,6 +192,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if !App.ConsoleOverlayUI {
 		t.Error("LoadConfig failed to restore ConsoleOverlayUI")
+	}
+	if App.PluginDefaultHotkeysOff != "ShiftF1;ShiftF2" {
+		t.Errorf("LoadConfig failed to restore PluginDefaultHotkeysOff: got %q", App.PluginDefaultHotkeysOff)
 	}
 	if App.DragOutModifier != "ctrl" {
 		t.Errorf("LoadConfig failed to restore DragOutModifier: got %q", App.DragOutModifier)

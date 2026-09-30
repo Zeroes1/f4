@@ -79,6 +79,8 @@ var configOptionExtraDocs = map[string]string{
 	"Panel.DriveMenuOptions": "The drive menu options as a bit mask, one bit per option of Settings Center, Drive chooser. Bits:",
 	"Panel.ConsoleOverlayUI": "The older form of the console style, read only while ConsoleMode is \"host\": 1 is the host console with f4's overlay, 0 without it. " +
 		"ConsoleMode now names the style itself: own, far or mc.",
+	"Panel.PluginDefaultHotkeysOff": "Hotkeys a plugin brings with it (Shift+F1 for Add to archive, say) that were removed with F4 and Del in the plugin menu, as a semicolon-separated list such as ShiftF1;ShiftF2. " +
+		"A key on the list no longer runs the plugin's command; delete it from the list to bring the default back.",
 	"Panel.DragOutModifier": "Start dragging files out of a panel into another application only while this key is held: ctrl, alt or shift. " +
 		"Empty, the default, starts a drag whenever the left button is dragged from a file, as before.",
 	"Panel.HostConsoleDefaultColors": "In the host console modes (Host with overlay, Host without overlay), draw the console that f4 shows beside a hidden panel (Ctrl+F1, Ctrl+F2) " +

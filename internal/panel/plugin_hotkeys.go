@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/internal/action"
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
@@ -16,6 +17,54 @@ import (
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
+
+// declaredHotkeyString turns the shortcut a plugin declares for a command
+// ("Shift+F1") into the string the hotkey manager spells that key with
+// ("ShiftF1"), or "" when it does not name a key.
+func declaredHotkeyString(declared string) string {
+	declared = strings.ReplaceAll(strings.TrimSpace(declared), "+", "")
+	if declared == "" {
+		return ""
+	}
+	e := keymap.ParseFarKey(declared)
+	if e == nil || e.VirtualKeyCode == 0 && e.Char == 0 {
+		return ""
+	}
+	return keymap.EventToHotkeyString(e)
+}
+
+// PluginDefaultKeyOff reports whether the user removed the default hotkey a
+// plugin brings with it (config PluginDefaultHotkeysOff).
+func PluginDefaultKeyOff(key string) bool {
+	if key == "" {
+		return false
+	}
+	for _, off := range strings.Split(config.App.PluginDefaultHotkeysOff, ";") {
+		if strings.EqualFold(strings.TrimSpace(off), key) {
+			return true
+		}
+	}
+	return false
+}
+
+// SetPluginDefaultKeyOff removes a plugin's default hotkey from use, or gives
+// it back, and saves the setting.
+func SetPluginDefaultKeyOff(key string, off bool) {
+	if key == "" || PluginDefaultKeyOff(key) == off {
+		return
+	}
+	var kept []string
+	for _, k := range strings.Split(config.App.PluginDefaultHotkeysOff, ";") {
+		if k = strings.TrimSpace(k); k != "" && !strings.EqualFold(k, key) {
+			kept = append(kept, k)
+		}
+	}
+	if off {
+		kept = append(kept, key)
+	}
+	config.App.PluginDefaultHotkeysOff = strings.Join(kept, ";")
+	config.SaveConfig()
+}
 
 func PluginActionForName(name string) (action.Action, bool) {
 	rawName := strings.TrimSpace(name)
@@ -151,6 +200,9 @@ func (e *PluginMenuEntry) applyBinding() {
 		return
 	}
 	declared := strings.TrimSpace(e.Declared)
+	if PluginDefaultKeyOff(declaredHotkeyString(declared)) {
+		return // the user removed the plugin's own default
+	}
 	if r := pluginMenuHotkeyRune(declared); r != 0 {
 		e.Hotkey = string(r)
 		return
@@ -345,6 +397,10 @@ type PluginHotkeyAssignFrame struct {
 	hm         *keymap.HotkeyManager
 	actionName string
 	onComplete func()
+	// declaredKey is the hotkey the plugin brings with it, in the hotkey
+	// manager's spelling, when nothing is configured and the user has not
+	// removed it: it is what the plugin menu shows and what Del removes.
+	declaredKey string
 }
 
 func NewPluginHotkeyAssignFrame(hm *keymap.HotkeyManager, actionName, label string, onComplete func()) *PluginHotkeyAssignFrame {
@@ -360,6 +416,9 @@ func NewPluginHotkeyAssignFrame(hm *keymap.HotkeyManager, actionName, label stri
 	current := i18n.Msg("Plugins.HotkeyNone")
 	if _, key := keymap.ConfiguredHotkeyBinding(hm, actionName); key != "" {
 		current = keymap.FormatKeyForUI(key)
+	} else if def := declaredHotkeyString(PluginActionDefaultShortcut(actionName)); def != "" && !PluginDefaultKeyOff(def) {
+		f.declaredKey = def
+		current = keymap.FormatKeyForUI(def)
 	}
 	lines := []string{
 		cleanLabel,
@@ -398,6 +457,11 @@ func (f *PluginHotkeyAssignFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		changed := false
 		if area, key := keymap.ConfiguredHotkeyBinding(f.hm, f.actionName); key != "" {
 			changed = keymap.DeletePluginHotkey(f.hm, area, key)
+		} else if f.declaredKey != "" {
+			// The plugin's own default: it cannot be unbound in the hotkey
+			// manager (it is not there), so it is switched off.
+			SetPluginDefaultKeyOff(f.declaredKey, true)
+			changed = true
 		}
 		f.finish(changed)
 		return true
