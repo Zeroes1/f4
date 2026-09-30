@@ -80,10 +80,10 @@ func parseURI(raw string) (connConfig, error) {
 	if err != nil || u.Host == "" {
 		return connConfig{}, fmt.Errorf("%w: use mongodb://host[:port]", errURI)
 	}
-	if _, _, err := net.SplitHostPort(u.Host); err != nil {
+	if _, _, err := net.SplitHostPort(u.Host); err != nil && !srv {
 		host = net.JoinHostPort(strings.Trim(u.Host, "[]"), defaultPort)
 	} else {
-		host = u.Host
+		host = u.Host // an SRV name has no port: the record supplies it
 	}
 	cfg := connConfig{addr: host, authSource: "admin", srv: srv, useTLS: srv}
 	if u.User != nil {
