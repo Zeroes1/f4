@@ -114,7 +114,7 @@ func TestServerFileSystemCommands(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "a file.txt"), []byte("hello"), 0o640); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "a file.txt"), []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, ".hidden"), nil, 0o600); err != nil {
@@ -139,7 +139,7 @@ func TestServerFileSystemCommands(t *testing.T) {
 	for _, e := range entries {
 		byName[e.Name] = e
 	}
-	if f, ok := byName["a file.txt"]; !ok || !f.IsRegular() || f.Size != 5 || (runtime.GOOS != "windows" && f.Perm() != 0o640) {
+	if f, ok := byName["a file.txt"]; !ok || !f.IsRegular() || f.Size != 5 || (runtime.GOOS != "windows" && f.Perm() != 0o600) {
 		t.Errorf("a file.txt = %#v", f)
 	}
 	if d, ok := byName["sub"]; !ok || !d.IsDir() {
