@@ -26,6 +26,7 @@ func (settingsHost) ApplyRuntime(before config.F4Config, changed []string) {
 	config.ApplyMenuSettings()
 	panel.ApplyPathHintSettings()
 	config.ApplyCursorSettings()
+	ApplyGlyphStyle()
 	for _, id := range changed {
 		if id == "ColorStyle" || id == "EnforceColorCorrection" {
 			_ = theme.ApplyColorStyle(config.App.ColorStyle)
@@ -131,4 +132,14 @@ func (settingsHost) PluginPackage(install bool, pf *panel.PanelsFrame, item plug
 	} else {
 		actionRemovePlugRingItem(pf, nil, item, refresh)
 	}
+}
+
+// ApplyGlyphStyle gives the graphical backends the frame and control glyph set
+// the GlyphStyle setting names (f4#285); text terminals ignore it.
+func ApplyGlyphStyle() {
+	style := vtui.GlyphStyleClassic
+	if config.NormalizeGlyphStyle(config.App.GlyphStyle) == config.GlyphStyleRounded {
+		style = vtui.GlyphStyleRounded
+	}
+	vtui.SetGlyphStyle(style)
 }
