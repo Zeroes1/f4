@@ -1539,18 +1539,13 @@ func (pf *PanelsFrame) InitPTY() {
 		}
 
 		// Local terminal.PTY has its own dedicated read loop.
-		buf := make([]byte, 32768)
-		for {
-			n, err := p.Read(buf)
-			if err != nil {
-				vtui.DebugLog("PTY: Local read loop exited: %v", err)
-				// A shell that is gone cannot print the prompt that would
-				// end the command, and cannot take another one either.
-				uiFrames.PostTask(func() { pf.localShellGone(p) })
-				return
-			}
-			pf.consumeLocalOutput(p, buf[:n])
-		}
+		// The read and the parsing run on separate goroutines (pumpPTYOutput),
+		// so the parser's time is not time the terminal's pipe goes unread.
+		err := pumpPTYOutput(p.Read, func(chunk []byte) { pf.consumeLocalOutput(p, chunk) })
+		vtui.DebugLog("PTY: Local read loop exited: %v", err)
+		// A shell that is gone cannot print the prompt that would
+		// end the command, and cannot take another one either.
+		uiFrames.PostTask(func() { pf.localShellGone(p) })
 	}()
 }
 
