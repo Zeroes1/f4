@@ -16,7 +16,7 @@ import (
 // remote command, says hello with BootstrapNative and from then on talks to it
 // exactly as it talks to helper.sh. It is the first step of using f4 as the
 // remote server (unxed/f4#1680); only the session commands are served so far --
-// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink, isdirs and read,
+// noop, pwd, ping, feats and exit, plus info, linfo, enum, rdlink, isdirs, read and the mutations (mkdir, rm, rmdir, rmtree, mv, cp, mklink, chmod, chown, utime, trunc),
 // which answer in the "find" listing format -- and every other command of the protocol
 // answers "unknown command" after its path lines have been read, so a client
 // that has probed the banner's features never desynchronises the stream.
@@ -29,7 +29,7 @@ type Server struct {
 
 // serverFeatures is what a Server announces when none is set: the native
 // marker, which tells a client that no shell tool is behind the answers.
-var serverFeatures = []string{"native", "mode:find", "read:ddbytes"}
+var serverFeatures = []string{"native", "mode:find", "read:ddbytes", "ln"}
 
 // pathLines is how many path lines follow the request line of each command of
 // the protocol, which is what a server has to consume to stay in step with a
@@ -172,6 +172,8 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 				}
 			}
 			err = end("ok", "")
+		case "mkdir", "rm", "rmdir", "rmtree", "mv", "cp", "mklink", "chmod", "chown", "utime", "trunc":
+			err = reply(nil, mutate(cmd, fields[2:], paths))
 		case "exit":
 			return end("ok", "")
 		default:
@@ -220,4 +222,39 @@ func readServerPath(in *bufio.Reader) (string, error) {
 		return string(raw), nil
 	}
 	return line, nil
+}
+
+// mutate runs one of the mutating commands.
+func mutate(cmd string, args, paths []string) error {
+	arg := func(i int) string {
+		if i < len(args) {
+			return args[i]
+		}
+		return ""
+	}
+	switch cmd {
+	case "mkdir":
+		return mutMkdir(paths[0])
+	case "rm":
+		return mutRemove(paths[0], false)
+	case "rmdir":
+		return mutRemove(paths[0], true)
+	case "rmtree":
+		return mutRemoveAll(paths[0])
+	case "mv":
+		return mutRename(paths[0], paths[1])
+	case "cp":
+		return mutCopy(paths[0], paths[1])
+	case "mklink":
+		return mutSymlink(paths[0], paths[1])
+	case "chmod":
+		return mutChmod(paths[0], arg(0))
+	case "chown":
+		return mutChown(paths[0], arg(0), arg(1))
+	case "utime":
+		return mutUtime(paths[0], arg(0), arg(1))
+	case "trunc":
+		return mutTruncate(paths[0], arg(0))
+	}
+	return fmt.Errorf("unknown command")
 }

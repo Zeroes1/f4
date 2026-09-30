@@ -62,9 +62,9 @@ func TestServerNativeSession(t *testing.T) {
 	}
 	// A command the server does not implement is refused after its path lines
 	// were read, and the session stays usable.
-	resp, err = sess.ExecPath(ctx, "mkdir", "/nowhere")
+	resp, err = sess.ExecPaths(ctx, "grep", []string{"pattern", "/nowhere"}, "f", "10")
 	if err != nil || resp.OK() || !strings.Contains(resp.Msg, "unknown command") {
-		t.Fatalf("mkdir = %#v, %v, want an unknown command error", resp, err)
+		t.Fatalf("grep = %#v, %v, want an unknown command error", resp, err)
 	}
 	if err := sess.Noop(ctx); err != nil {
 		t.Fatalf("noop after a refused command: %v", err)
@@ -194,5 +194,99 @@ func TestServerFileSystemCommands(t *testing.T) {
 	dirs, err := c.TargetDirs(ctx, []string{root, filepath.Join(root, "a file.txt"), filepath.Join(root, "missing")})
 	if err != nil || len(dirs) != 3 || !dirs[0] || dirs[1] || dirs[2] {
 		t.Errorf("TargetDirs = %v, %v, want [true false false]", dirs, err)
+	}
+}
+
+func TestServerMutations(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	sess, _ := serverSession(t, &Server{Dir: root})
+	if err := sess.HandshakeWithOptions(ctx, HandshakeOptions{Bootstrap: BootstrapNative}); err != nil {
+		t.Fatal(err)
+	}
+	c := NewClient(sess)
+	at := func(parts ...string) string { return filepath.Join(append([]string{root}, parts...)...) }
+
+	if err := c.MkDir(ctx, at("a", "b")); err != nil {
+		t.Fatalf("MkDir: %v", err)
+	}
+	if fi, err := os.Stat(at("a", "b")); err != nil || !fi.IsDir() {
+		t.Fatalf("MkDir did not create the directory: %v", err)
+	}
+	if err := os.WriteFile(at("a", "f.txt"), []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := c.Copy(ctx, at("a"), at("copy")); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+	if got, err := os.ReadFile(at("copy", "f.txt")); err != nil || string(got) != "data" {
+		t.Fatalf("copied file = %q, %v", got, err)
+	}
+	if err := c.Rename(ctx, at("copy"), at("moved")); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if _, err := os.Stat(at("copy")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("Rename left the source behind")
+	}
+
+	if err := c.Remove(ctx, at("moved")); err == nil {
+		t.Error("rm of a directory must fail")
+	}
+	if err := c.RemoveDir(ctx, at("moved")); err == nil {
+		t.Error("rmdir of a non-empty directory must fail")
+	}
+	if err := c.Remove(ctx, at("moved", "f.txt")); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := c.RemoveAll(ctx, at("moved")); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	if _, err := os.Stat(at("moved")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("RemoveAll left the tree behind")
+	}
+
+	if runtime.GOOS != "windows" {
+		if err := c.Chmod(ctx, at("a", "f.txt"), 0o640); err != nil {
+			t.Fatalf("Chmod: %v", err)
+		}
+		if fi, _ := os.Stat(at("a", "f.txt")); fi.Mode().Perm() != 0o640 {
+			t.Errorf("mode after Chmod = %v", fi.Mode().Perm())
+		}
+		if err := c.Symlink(ctx, at("a", "lnk"), "f.txt"); err != nil {
+			t.Fatalf("Symlink: %v", err)
+		}
+		if target, _ := os.Readlink(at("a", "lnk")); target != "f.txt" {
+			t.Errorf("link target = %q", target)
+		}
+		if err := c.Symlink(ctx, at("a", "lnk"), "other"); err == nil {
+			t.Error("an existing link path must be refused")
+		}
+	}
+	when := time.Unix(1_700_000_000, 0)
+	if err := c.Chtimes(ctx, at("a", "f.txt"), when, when); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	if fi, _ := os.Stat(at("a", "f.txt")); !fi.ModTime().Equal(when) {
+		t.Errorf("mtime after Chtimes = %v", fi.ModTime())
+	}
+
+	// The guard: relative paths, .. components and the root are refused, and
+	// nothing outside the tree is touched.
+	if err := c.RemoveAll(ctx, root+string(filepath.Separator)+"a"+string(filepath.Separator)+".."+string(filepath.Separator)+"a"); err == nil {
+		t.Error("a .. component must be refused")
+	}
+	if err := c.RemoveAll(ctx, string(filepath.Separator)); err == nil {
+		t.Error("the root directory must be refused")
+	}
+	if err := c.MkDir(ctx, "relative/dir"); err == nil {
+		t.Error("a relative path must be refused")
+	}
+	if _, err := os.Stat(at("a", "f.txt")); err != nil {
+		t.Fatalf("a refused request damaged the tree: %v", err)
+	}
+	if err := sess.Noop(ctx); err != nil {
+		t.Fatalf("the session must stay usable after refusals: %v", err)
 	}
 }
