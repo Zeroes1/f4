@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"context"
+	"image/png"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -122,5 +123,63 @@ func TestVideoFrameSourceReportsAFailingFFmpegAndCloses(t *testing.T) {
 
 	if _, err := startVideoFrames(context.Background(), filepath.Join(t.TempDir(), "nothing"), "a", s); err == nil {
 		t.Error("a missing ffmpeg started")
+	}
+}
+
+// useFakeFFmpeg makes the frame source find the stand-in instead of the real
+// ffmpeg for the rest of the test.
+func useFakeFFmpeg(t *testing.T, body string) {
+	t.Helper()
+	bin := fakeFFmpeg(t, body)
+	key := strings.Join(ToolFFmpeg.Names, ",")
+	toolPathMu.Lock()
+	old, had := toolPaths[key]
+	toolPaths[key] = bin
+	toolPathMu.Unlock()
+	t.Cleanup(func() {
+		toolPathMu.Lock()
+		defer toolPathMu.Unlock()
+		if had {
+			toolPaths[key] = old
+		} else {
+			delete(toolPaths, key)
+		}
+	})
+}
+
+func TestSaveVideoPosterWritesAPNGAndRetriesFromTheStart(t *testing.T) {
+	video := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(video, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A video shorter than a second: ffmpeg has nothing after -ss 1.
+	useFakeFFmpeg(t, `case "$*" in *-ss*) exit 0;; esac
+head -c 921600 /dev/zero`)
+	dest := filepath.Join(t.TempDir(), "poster.png")
+	if err := SaveVideoPoster(context.Background(), video, dest); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	img, err := png.Decode(f)
+	if err != nil || img.Bounds().Dx() != posterWidth || img.Bounds().Dy() != posterHeight {
+		t.Fatalf("poster: %v, %v", img, err)
+	}
+}
+
+func TestSaveVideoPosterReportsAVideoWithNoPicture(t *testing.T) {
+	video := filepath.Join(t.TempDir(), "clip.mp4")
+	if err := os.WriteFile(video, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	useFakeFFmpeg(t, "exit 0")
+	if err := SaveVideoPoster(context.Background(), video, filepath.Join(t.TempDir(), "p.png")); err == nil {
+		t.Fatal("a video with no frames gave a poster")
+	}
+	if err := SaveVideoPoster(context.Background(), filepath.Join(t.TempDir(), "missing.mp4"), "x.png"); err == nil {
+		t.Fatal("a missing video gave a poster")
 	}
 }

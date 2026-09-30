@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"os/exec"
@@ -184,4 +186,55 @@ func (v *VideoFrameSource) Close() {
 	for range v.Frames {
 	}
 	<-v.done
+}
+
+// posterSize is the frame a poster is decoded at: big enough to look at, small
+// enough to come back at once. The frame is padded to it with black.
+const (
+	posterWidth  = 640
+	posterHeight = 360
+)
+
+// SaveVideoPoster writes a still picture of the video to dest as a PNG: the
+// frame a second in (the first frame of a short one), from the frame source.
+// It is the last rung of the ladder, for a screen that cannot play the video
+// but can show a picture (VIDEO.md V4). ErrNeedFFmpeg says there is no ffmpeg.
+func SaveVideoPoster(ctx context.Context, Path, dest string) error {
+	frame, err := firstVideoFrame(ctx, Path, time.Second)
+	if err != nil {
+		return err
+	}
+	if frame == nil { // shorter than a second
+		if frame, err = firstVideoFrame(ctx, Path, 0); err != nil {
+			return err
+		}
+	}
+	if frame == nil {
+		return fmt.Errorf("no picture could be read from %s", filepath.Base(Path))
+	}
+	img := &image.RGBA{Pix: frame.Pix, Stride: frame.Width * 4, Rect: image.Rect(0, 0, frame.Width, frame.Height)}
+	out, err := os.Create(dest) //nolint:gosec // dest is a temporary file the caller chose
+	if err != nil {
+		return err
+	}
+	if err := png.Encode(out, img); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
+// firstVideoFrame is the first frame at or after start, or nil when there is
+// none (start is past the end).
+func firstVideoFrame(ctx context.Context, Path string, start time.Duration) (*VideoFrame, error) {
+	src, err := OpenVideoFrames(ctx, Path, VideoFrameSpec{Width: posterWidth, Height: posterHeight, FPS: 1, Start: start})
+	if err != nil {
+		return nil, err
+	}
+	defer src.Close()
+	frame, ok := <-src.Frames
+	if !ok {
+		return nil, src.Err()
+	}
+	return &frame, nil
 }
