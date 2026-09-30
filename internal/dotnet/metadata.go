@@ -747,9 +747,11 @@ type machinePatch struct {
 
 func (m *machinePatch) ReadAt(p []byte, off int64) (int, error) {
 	n, err := m.r.ReadAt(p, off)
-	for i := 0; i < 2; i++ {
+	var plain [2]byte
+	binary.LittleEndian.PutUint16(plain[:], m.plain)
+	for i, b := range plain {
 		if pos := m.at + int64(i) - off; pos >= 0 && pos < int64(n) {
-			p[pos] = byte(m.plain >> (8 * uint(i)))
+			p[pos] = b
 		}
 	}
 	return n, err
