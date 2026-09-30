@@ -187,7 +187,7 @@ func (tv *TerminalView) drawPlaceholders(scr *vtui.ScreenBuf, offset int) {
 			}
 			prev, prevKey, prevRGB, havePrv = cur, key, rgb, true
 
-			id := key | uint32(cur.msb)<<24
+			id := key | uint32(cur.msb&0xFF)<<24 // #nosec G115 -- masked to one byte, the top byte of the id
 			if run != nil && run.id == id && run.vrow == cur.row && run.col0+run.n == cur.col && run.x0+run.n == x {
 				run.n++
 				continue
