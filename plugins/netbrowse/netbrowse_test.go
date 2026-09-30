@@ -199,8 +199,14 @@ func (r *fakeRegistration) Unregister() { r.unregistered = true }
 
 type fakePanelHost struct {
 	vfs.HostAPI
-	provider vfs.PanelProvider
-	reg      *fakeRegistration
+	provider  vfs.PanelProvider
+	reg       *fakeRegistration
+	driveName string
+	drive     func() vfs.VFS
+}
+
+func (h *fakePanelHost) RegisterDrive(name string, factory func() vfs.VFS) {
+	h.driveName, h.drive = name, factory
 }
 
 func (h *fakePanelHost) RegisterPanelProvider(p vfs.PanelProvider) (vfs.Registration, error) {
@@ -238,6 +244,11 @@ func TestPluginRegistersOnlyWhereSupported(t *testing.T) {
 	}
 	if host.provider.ID != panelProviderID || host.provider.Open == nil {
 		t.Errorf("provider = %+v", host.provider)
+	}
+	if host.driveName != "Network" || host.drive == nil {
+		t.Errorf("drive = %q, factory %v", host.driveName, host.drive != nil)
+	} else if _, ok := host.drive().(*networkVFS); !ok {
+		t.Error("the Network drive is not a networkVFS")
 	}
 	if err := p.Init(host); err == nil {
 		t.Error("second Init accepted")

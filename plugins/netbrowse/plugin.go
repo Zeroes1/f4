@@ -55,6 +55,10 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 	if err != nil {
 		return fmt.Errorf("NetBrowse: register panel provider: %w", err)
 	}
+	// The same network as a drive of the ordinary file panel (Alt+F1): shares
+	// open as normal directories there.
+	api.RegisterDrive("Network", func() vfs.VFS { return newNetworkVFS(enumerateNetwork, openUNC) })
+
 	p.mu.Lock()
 	p.registration = registration
 	p.initialized = true

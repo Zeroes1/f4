@@ -7,6 +7,8 @@
 //
 // Part 1 is the read-only browser: a panel that descends into every container
 // (Enter) and back up (the ".." row) and lists the resources at each level.
-// Opening a share as an ordinary directory, and a network:// or \\host entry,
-// are the next parts. Off Windows the plugin registers nothing.
+// Part 2 makes the same network a drive of the ordinary file panel (Alt+F1,
+// "Network", netvfs.go): a share opens as a normal directory there, read and
+// written through the file system at its UNC name. Off Windows the plugin
+// registers nothing.
 package netbrowse
