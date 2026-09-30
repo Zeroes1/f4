@@ -162,7 +162,7 @@ func TestServerFileSystemCommands(t *testing.T) {
 			t.Errorf("Lstat of a link = %#v, %v, want the link", e, err)
 		}
 	}
-	if e, err := c.Stat(ctx, filepath.Join(root, "a file.txt")); err != nil || e.Size != 5 || e.Name != "a file.txt" {
+	if e, err := c.Stat(ctx, filepath.ToSlash(filepath.Join(root, "a file.txt"))); err != nil || e.Size != 5 || e.Name != "a file.txt" {
 		t.Errorf("Stat = %#v, %v", e, err)
 	}
 	if _, err := c.Stat(ctx, filepath.Join(root, "missing")); !errors.Is(err, os.ErrNotExist) {

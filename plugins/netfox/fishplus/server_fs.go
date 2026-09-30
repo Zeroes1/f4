@@ -1,6 +1,7 @@
 package fishplus
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -132,9 +133,15 @@ func isdirsLines(paths []string) []string {
 	return out
 }
 
-// errText renders an error on one line, in the operating system's own words:
-// the client recognises a missing path by "no such file or directory".
+// errText renders an error on one line. A missing path is always reported in
+// the words the client's not-found detection reads, "no such file or
+// directory", whatever the operating system calls it (Windows says "The system
+// cannot find the file specified").
 func errText(err error) string {
+	var pe *fs.PathError
+	if errors.Is(err, fs.ErrNotExist) && errors.As(err, &pe) {
+		return fmt.Sprintf("%s %s: no such file or directory", pe.Op, pe.Path)
+	}
 	return strings.ReplaceAll(err.Error(), "\n", " ")
 }
 
