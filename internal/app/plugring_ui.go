@@ -415,12 +415,35 @@ func actionInstallPlugRingItem(pf *panel.PanelsFrame, parent *vtui.Window, item 
 				vtui.ShowMessageOn(parent, " Error ", fmt.Sprintf("Installation failed:\n%v", err), []string{"&Ok"})
 			}
 		} else {
-			if plughost.GlobalPluginManager != nil {
-				plughost.GlobalPluginManager.LoadSinglePlugRingItem(item)
-			}
+			finishPlugRingInstall(parent, item, refresh)
+		}
+	})
+}
+
+// loadPlugRingItem starts a just-installed plugin. It is a variable so a test
+// can stand in for a plugin that takes its time.
+var loadPlugRingItem = func(item plughost.PlugRingItem) {
+	if plughost.GlobalPluginManager != nil {
+		plughost.GlobalPluginManager.LoadSinglePlugRingItem(item)
+	}
+}
+
+// finishPlugRingInstall loads the installed plugin and reports the result.
+//
+// It is called on the UI goroutine, and loading must not run there (f4#1710):
+// it starts the plugin process and asks the user's permission to run it, and
+// that prompt is a dialog which only the UI goroutine can show. Loading on it
+// meant waiting for an answer that the waiting itself kept from being asked,
+// so the window froze for the whole two-minute prompt timeout and could not
+// even be closed. The load runs in the background and the message comes back
+// to the UI goroutine afterwards.
+func finishPlugRingInstall(parent *vtui.Window, item plughost.PlugRingItem, refresh func()) {
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		loadPlugRingItem(item)
+		ctx.RunOnUI(func() {
 			vtui.ShowMessageOn(parent, " Success ", "Plugin installed and loaded successfully!", []string{"&Ok"})
 			refresh()
-		}
+		})
 	})
 }
 
