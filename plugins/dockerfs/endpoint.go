@@ -129,8 +129,7 @@ func contextEndpoint(cfgDir, name string) (endpoint, error) {
 	if cfgDir == "" {
 		return endpoint{}, fmt.Errorf("docker context %q: no docker configuration directory", name)
 	}
-	sum := sha256.Sum256([]byte(name))
-	id := hex.EncodeToString(sum[:])
+	id := contextID(name)
 	data, err := readSmall(filepath.Join(cfgDir, "contexts", "meta", id, "meta.json"))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -196,4 +195,11 @@ func loadTLS(dir string, skipVerify bool) (cfg *tls.Config, found bool, err erro
 		found = true
 	}
 	return cfg, found, nil
+}
+
+// contextID is the name of a context's directories in the store: the SHA-256 of
+// its name in hex.
+func contextID(name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return hex.EncodeToString(sum[:])
 }
