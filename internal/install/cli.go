@@ -87,6 +87,7 @@ func RunCLI(exePath string, opts Options) int {
 		return 1
 	}
 	fmt.Printf("Installed %s\n", dst)
+	installDesktopStep(home, dst)
 
 	if HasDirOnPath(Getenv("PATH"), dir) {
 		fmt.Println("That directory is already on PATH; nothing else to do.")
@@ -129,4 +130,19 @@ func RunCLI(exePath string, opts Options) int {
 	}
 	fmt.Printf("Added to %s. Restart your shell (or run `source %s`) to use it.\n", profile.Path, profile.Path)
 	return 0
+}
+
+// installDesktopStep adds the launcher and icons (desktop.go) next to a fresh
+// install. A failure here is reported but does not fail the install: the
+// binary is where it should be, and `f4 --install-desktop` can be run again.
+func installDesktopStep(home, exePath string) {
+	if !SupportsDesktop() {
+		return
+	}
+	dataHome := DataHome(home, Getenv)
+	if _, err := InstallDesktop(dataHome, exePath); err != nil {
+		fmt.Printf("f4: could not install the launcher and icons under %s: %v\n", dataHome, err)
+		return
+	}
+	fmt.Printf("Installed the launcher %s and the application icons.\n", filepath.Join(dataHome, "applications", DesktopFileName))
 }

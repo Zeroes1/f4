@@ -35,6 +35,13 @@ f4 --update           # whichever channel is configured (Options > Auto update)
 
 A named channel also becomes the one f4 checks automatically from then on.
 
+On a Linux or BSD desktop, a single downloaded binary has no launcher and no icon, so the task bar of `f4 --gui` shows the window manager's default icon. One command fixes that, without sudo:
+
+```sh
+f4 --install-desktop   # launcher + icons into ~/.local/share (no copying of the binary)
+f4 --install           # also copies f4 into ~/.local/bin, and does the same
+```
+
 ### 🍺 Install on macOS via Homebrew
 
 Tagged releases (`vX.Y.Z`) are published to a Homebrew tap, so you can install with one command:
