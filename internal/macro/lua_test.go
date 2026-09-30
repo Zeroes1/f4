@@ -678,7 +678,7 @@ func TestMacroEventExitFARRuns(t *testing.T) {
 		__n = 0
 		Event { group = "ExitFAR"; description = "first"; action = function(group) __n = __n + 1; __group = group end }
 		Event { group = "exitfar"; action = function() __n = __n + 10 end }
-		Event { group = "EditorEvent"; action = function() __n = __n + 100 end }
+		Event { group = "ViewerEvent"; action = function() __n = __n + 100 end }
 		Event { group = "ExitFAR" }
 		Event { action = function() end }
 	`)
