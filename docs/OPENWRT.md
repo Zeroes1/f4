@@ -153,6 +153,17 @@ have the Lua and wasm slices, so a rerun after they reach it will show smaller
 extralite numbers (37.2 MB raw at the time of those slices). Installing an
 `.ipk` on a real router has not been tried.
 
+## Second run of the `openwrt` workflow (main with the Lua and wasm slices)
+
+Run https://github.com/unxed/f4/actions/runs/36675798812, all jobs green. The
+extralite `.ipk` files, bytes: `mipsel_24kc` 11 237 261,
+`arm_cortex-a7_neon-vfpv4` 11 743 488, `aarch64_generic` 11 873 448, `x86_64`
+13 131 493 (12 032 119 to 14 464 393 in the first run). Smoke check on amd64:
+lite 48 115 977 bytes, listing after 964 ms, peak RSS 41 408 KB; extralite
+37 363 977 bytes (41 062 665 in the first run), 951 ms, 37 188 KB. Lua and wasm
+cost about 3.7 MB of the raw size and about 1.3 MB of an `.ipk`; memory barely
+moves.
+
 ## Not done: the East Asian tables still in the binary
 
 The extra-lite build leaves the East Asian code pages out of f4's own list, but
