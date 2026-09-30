@@ -81,6 +81,16 @@ func sshFishDialerPwsh(host, port, user, pass, keyPath string, timeout int, px n
 	})
 }
 
+// sshFishDialerNative runs f4 itself as the server (nativeRemoteCommand): no
+// helper is uploaded and no shell is in the way, the stream is the protocol. A
+// peer without f4 answers "command not found" and closes, which the caller's
+// handshake sees as a failure and falls back from.
+func sshFishDialerNative(host, port, user, pass, keyPath string, timeout int, px netproxy.Settings) FishDialer {
+	return sshFishDialerWith(host, port, user, pass, keyPath, timeout, px, func(s *ssh.Session) error {
+		return s.Start(nativeRemoteCommand)
+	})
+}
+
 // sshFishDialerWith is what both flavors share. The only thing they
 // disagree about is how they ask sshd to give them the shell: exec+cmd
 // on POSIX (which bypasses an exotic login shell), plain shell on

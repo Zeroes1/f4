@@ -181,6 +181,14 @@ func sshFishDialer(host, port, user, pass, keyPath string, timeout int, px netpr
 	}
 }
 
+// sshFishDialerNative runs f4 itself as the server on the peer
+// (nativeRemoteCommand), as the full build's dialer of the same name does.
+func sshFishDialerNative(host, port, user, pass, keyPath string, timeout int, px netproxy.Settings) FishDialer {
+	return func(ctx context.Context) (io.Writer, io.Reader, io.Closer, error) {
+		return dialSSHSubprocess(ctx, host, port, user, pass, keyPath, timeout, px, nativeRemoteCommand)
+	}
+}
+
 // sshFishDialerPwsh is the full build's Windows fallback, reached the same
 // way: sshd resolves a plain command through the peer's DefaultShell, which
 // is how a stock OpenSSH-Server-Windows install ends up running PowerShell

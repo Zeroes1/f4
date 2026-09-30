@@ -296,7 +296,7 @@ func newFishVFSFromSession(parent vfs.VFS, sess *fishplus.Session, closer io.Clo
 func establishSession(ctx context.Context, dial FishDialer, opts fishplus.HandshakeOptions) (*fishplus.Session, io.Closer, error) {
 	stdin, stdout, closer, err := dial(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, &dialError{err}
 	}
 	sess := fishplus.NewSession(stdin, stdout, closer)
 	if err := sess.HandshakeWithOptions(ctx, opts); err != nil {
@@ -305,6 +305,12 @@ func establishSession(ctx context.Context, dial FishDialer, opts fishplus.Handsh
 	}
 	return sess, closer, nil
 }
+
+// dialError marks a failure to reach the peer at all, as opposed to a peer that
+// answered and did not speak the protocol.
+type dialError struct{ error }
+
+func (e *dialError) Unwrap() error { return e.error }
 
 // establishWithFallback tries the primary (dial, opts) pair first and
 // falls back to (dialAlt, optsAlt) only when the primary handshake fails
@@ -323,8 +329,17 @@ func establishWithFallback(ctx context.Context, dial FishDialer, opts fishplus.H
 	// try. Only a handshake failure means the transport is fine but the
 	// far side did not recognize the bootstrap; only then is the fallback
 	// worth trying.
-	if _, isRemoteErr := err.(*fishplus.RemoteError); !isRemoteErr && !isHandshakeFailure(err) {
-		return nil, false, nil, err
+	var dialErr *dialError
+	if errors.As(err, &dialErr) {
+		return nil, false, nil, dialErr.error
+	}
+	// A native primary (f4 --fish-server on the peer) fails in whatever way a
+	// peer without f4 fails -- "command not found" and the end of the stream --
+	// so there any handshake error is worth the shell fallback.
+	if opts.Bootstrap != fishplus.BootstrapNative {
+		if _, isRemoteErr := err.(*fishplus.RemoteError); !isRemoteErr && !isHandshakeFailure(err) {
+			return nil, false, nil, err
+		}
 	}
 	if dialAlt == nil {
 		return nil, false, nil, err
@@ -392,10 +407,23 @@ func NewFishVFS(parent vfs.VFS, host, port, user, pass, keyPath string, timeout 
 	// bootstrap with a parse error; the fallback dialer catches that,
 	// asks sshd for a plain shell (which resolves to PowerShell on
 	// Windows), and delivers the base64-encoded helper.ps1 through it.
-	v, err := NewFishVFSOnDialers(ctx, parent,
-		sshFishDialer(host, port, user, pass, keyPath, timeout, px), fishplus.HandshakeOptions{},
-		sshFishDialerPwsh(host, port, user, pass, keyPath, timeout, px), fishplus.HandshakeOptions{Bootstrap: fishplus.BootstrapBase64LinePwsh},
-		title)
+	shell := sshFishDialer(host, port, user, pass, keyPath, timeout, px)
+	pwsh := sshFishDialerPwsh(host, port, user, pass, keyPath, timeout, px)
+	var v *FishVFS
+	var err error
+	if FishPreferRemoteF4.Load() {
+		// Opt-in: try f4 itself as the server first (no helper to upload, and
+		// none of the shell's limits), and fall back to the POSIX shell helper
+		// on a host that does not have it.
+		v, err = NewFishVFSOnDialers(ctx, parent,
+			sshFishDialerNative(host, port, user, pass, keyPath, timeout, px), fishplus.HandshakeOptions{Bootstrap: fishplus.BootstrapNative},
+			shell, fishplus.HandshakeOptions{},
+			title)
+	} else {
+		v, err = NewFishVFSOnDialers(ctx, parent, shell, fishplus.HandshakeOptions{},
+			pwsh, fishplus.HandshakeOptions{Bootstrap: fishplus.BootstrapBase64LinePwsh},
+			title)
+	}
 	if err != nil {
 		return nil, err
 	}
