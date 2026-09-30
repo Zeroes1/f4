@@ -130,6 +130,17 @@ function away, biggest first, and every step is measured by the workflow
 above. Removing whole features (Lua, wasm plugins) is left for a separate
 decision when it comes to that.
 
+## Packages
+
+- `.ipk`: the `openwrt` workflow wraps each extralite binary with
+  `scripts/build_ipk.sh` for `mipsel_24kc`, `arm_cortex-a7_neon-vfpv4`,
+  `aarch64_generic` and `x86_64`. A device installs only the one that matches
+  `opkg print-architecture`; run the script with another architecture name for
+  other families.
+- Feed recipe: `packaging/openwrt/f4/Makefile` builds the same profile inside
+  the OpenWrt build system (`golang-package.mk`). It has not been built there
+  yet.
+
 ## Open points
 
 - The mc baseline was measured on the amd64 runner only; a comparison on the
