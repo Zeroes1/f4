@@ -26,6 +26,13 @@ func (platformDetailer) Details(name string) (serviceDetails, error) {
 			Description: cfg.Description,
 			DependsOn:   cfg.Dependencies,
 		}
+		// Recovery actions are optional: a service with none configured (or a
+		// refused query) simply shows no recovery line.
+		if actions, err := (&mgr.Service{Name: name, Handle: h}).RecoveryActions(); err == nil {
+			for _, a := range actions {
+				out.Recovery = append(out.Recovery, recoveryAction{Type: uint32(a.Type), DelaySec: uint32(a.Delay.Seconds())})
+			}
+		}
 		return nil
 	})
 	return out, err

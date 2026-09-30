@@ -13,6 +13,44 @@ type serviceDetails struct {
 	// DependsOn names the services and service groups this one needs
 	// running first.
 	DependsOn []string
+	// Recovery is what the manager does after the first, second and later
+	// failures of the service; empty when none is configured.
+	Recovery []recoveryAction
+}
+
+// recoveryAction is one step of a service's failure recovery.
+type recoveryAction struct {
+	Type     uint32 // SC_ACTION_*, see recoveryName
+	DelaySec uint32
+}
+
+// The SC_ACTION_* values of winsvc.h.
+const (
+	recoverNone    = 0
+	recoverRestart = 1
+	recoverReboot  = 2
+	recoverCommand = 3
+)
+
+// recoveryName is one recovery step as text, with its delay when it has one.
+func recoveryName(a recoveryAction) string {
+	var name string
+	switch a.Type {
+	case recoverNone:
+		return "Do nothing"
+	case recoverRestart:
+		name = "Restart the service"
+	case recoverReboot:
+		name = "Restart the computer"
+	case recoverCommand:
+		name = "Run a program"
+	default:
+		name = strconv.FormatUint(uint64(a.Type), 10)
+	}
+	if a.DelaySec == 0 {
+		return name
+	}
+	return name + " after " + strconv.FormatUint(uint64(a.DelaySec), 10) + " s"
 }
 
 // The SERVICE_*_START values of winsvc.h.

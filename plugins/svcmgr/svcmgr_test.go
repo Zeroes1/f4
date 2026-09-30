@@ -299,8 +299,9 @@ func (f fakeDetailer) Details(string) (serviceDetails, error) { return f.d, f.er
 
 func TestDetailsTextAndEnter(t *testing.T) {
 	text := detailsText(service{Name: "Spooler", Display: "Print Spooler", State: stateRunning},
-		serviceDetails{StartType: startAuto, Delayed: true, Account: "LocalSystem", BinaryPath: `C:\x\spool.exe`, Description: "Prints.", DependsOn: []string{"RPCSS", "http"}})
-	for _, want := range []string{"Spooler", "Print Spooler", "Running", "Automatic (delayed start)", "LocalSystem", `C:\x\spool.exe`, "Prints.", "RPCSS, http"} {
+		serviceDetails{StartType: startAuto, Delayed: true, Account: "LocalSystem", BinaryPath: `C:\x\spool.exe`, Description: "Prints.", DependsOn: []string{"RPCSS", "http"},
+			Recovery: []recoveryAction{{recoverRestart, 60}, {recoverNone, 0}}})
+	for _, want := range []string{"Spooler", "Print Spooler", "Running", "Automatic (delayed start)", "LocalSystem", `C:\x\spool.exe`, "Prints.", "RPCSS, http", "1. Restart the service after 60 s; 2. Do nothing"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("details text lacks %q:\n%s", want, text)
 		}
@@ -344,4 +345,17 @@ func TestSetStartTypeAppliesToTheServiceUnderTheCursor(t *testing.T) {
 		t.Errorf("calls = %q, want %q", got, want)
 	}
 	p.chooseStartType() // without a frame manager nothing opens
+}
+
+func TestRecoveryName(t *testing.T) {
+	cases := map[recoveryAction]string{
+		{recoverNone, 0}: "Do nothing", {recoverRestart, 0}: "Restart the service",
+		{recoverReboot, 30}: "Restart the computer after 30 s", {recoverCommand, 5}: "Run a program after 5 s",
+		{9, 0}: "9",
+	}
+	for a, want := range cases {
+		if got := recoveryName(a); got != want {
+			t.Errorf("recoveryName(%+v) = %q, want %q", a, got, want)
+		}
+	}
 }

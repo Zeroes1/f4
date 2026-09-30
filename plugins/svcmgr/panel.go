@@ -225,6 +225,13 @@ func detailsText(svc service, d serviceDetails) string {
 	if len(d.DependsOn) > 0 {
 		lines = append(lines, fmt.Sprintf(i18n.Msg("SvcMgr.DetailDepends"), strings.Join(d.DependsOn, ", ")))
 	}
+	if len(d.Recovery) > 0 {
+		steps := make([]string, len(d.Recovery))
+		for i, a := range d.Recovery {
+			steps[i] = fmt.Sprintf("%d. %s", i+1, recoveryName(a))
+		}
+		lines = append(lines, fmt.Sprintf(i18n.Msg("SvcMgr.DetailRecovery"), strings.Join(steps, "; ")))
+	}
 	if d.Description != "" {
 		lines = append(lines, "", d.Description)
 	}
