@@ -95,7 +95,7 @@ func sampleMetadata() []byte {
 	// (through a MemberRef), its field Count carries an attribute whose
 	// constructor is Foo's own .ctor (a MethodDef), and its method Run carries
 	// [System.Obsolete] again.
-	for _, row := range [][2]int{{2<<5 | 3, 1<<3 | 3}, {1<<5 | 1, 1<<3 | 2}, {2<<5 | 0, 1<<3 | 3}} {
+	for _, row := range [][2]int{{2<<5 | 3, 1<<3 | 3}, {1<<5 | 1, 1<<3 | 2}, {2 << 5, 1<<3 | 3}} {
 		t.u16(row[0])
 		t.u16(row[1])
 		t.u16(0)

@@ -580,7 +580,9 @@ func (t *tables) nestedName(row uint32, enclosing map[uint32]uint32) (ns, name s
 // maxAttrsPerOwner bounds the attributes kept for one type, field or method.
 const maxAttrsPerOwner = 16
 
-func attrKey(table int, row uint32) uint64 { return uint64(table)<<32 | uint64(row) }
+func attrKey(table int, row uint32) uint64 {
+	return uint64(uint32(table))<<32 | uint64(row) // #nosec G115 -- table is one of a few small table numbers
+}
 
 // collectAttributes reads the CustomAttribute table (II.22.10) and keeps, for
 // every type, field and method, the names of the attribute types applied to
