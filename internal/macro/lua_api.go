@@ -646,10 +646,11 @@ func (e *LuaMacroEngine) newMFTable(L *lua.LState) *lua.LTable {
 			L.Push(lua.LString(strings.ToUpper(L.CheckString(1))))
 			return 1
 		},
-		"trim": func(L *lua.LState) int {
-			L.Push(lua.LString(strings.TrimSpace(L.CheckString(1))))
-			return 1
-		},
+		"trim":    macroTrim,
+		"itoa":    macroItoa,
+		"atoi":    macroAtoi,
+		"mod":     macroMod,
+		"date":    macroDate,
 		"substr":  macroSubstr,
 		"index":   macroIndex,
 		"rindex":  macroRIndex,

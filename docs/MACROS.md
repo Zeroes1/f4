@@ -150,7 +150,16 @@ string library:
 
 `iif`, `abs`, `max`, `min`, `int`, `float`, `string`, `len`, `lcase`, `ucase`,
 `trim`, `substr`, `index`, `rindex`, `replace`, `asc`, `chr`, `env`, `fexist`,
-`fattr`, `sleep`, `beep`, `print`, `exit`, `msgbox`, `Keys`, `akey`.
+`fattr`, `sleep`, `beep`, `print`, `exit`, `msgbox`, `Keys`, `akey`, `itoa`,
+`atoi`, `mod`, `date`.
+
+`mf.trim(s[, mode])` strips both ends (mode 0, the default), the left (1) or the
+right (2). `mf.itoa(n[, radix])` and `mf.atoi(s[, radix])` convert between
+integers and text in the radix (10 for `itoa` by default; `atoi` reads the
+integer at the start of the text, and a radix of 0 or none picks the base from a
+`0x` or `0` prefix). `mf.mod(a, b)` is the integer remainder (0 for a zero
+divisor). `mf.date([format])` is the current local time in a C `strftime`
+format, English names; with no format it is `%a %b %d %H:%M:%S %Y`.
 
 `bit` and `bit64` carry `band`, `bor`, `bxor`, `bnot`, `lshift`, `rshift`.
 
