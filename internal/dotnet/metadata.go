@@ -625,6 +625,9 @@ func (t *tables) collectAttributes() {
 		if name == "" {
 			continue
 		}
+		if args := t.attributeArgs(t.cell(0x0C, row, 1), t.cell(0x0C, row, 2)); args != "" {
+			name += "(" + args + ")"
+		}
 		t.attrs[owner] = append(t.attrs[owner], name)
 	}
 }
