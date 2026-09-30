@@ -153,6 +153,47 @@ func (f4MacroHost) Message(title, text string) {
 	})
 }
 
+// InputBox and Menu are macro.MacroDialogHost: they wait for the answer, with no
+// deadline but the user's, because the macro is the one waiting.
+func (f4MacroHost) InputBox(title, prompt, initial string) (string, bool) {
+	if vtui.FrameManager == nil {
+		return "", false
+	}
+	type answer struct {
+		text string
+		ok   bool
+	}
+	result := make(chan answer, 1)
+	send := func(a answer) {
+		select {
+		case result <- a:
+		default:
+		}
+	}
+	vtui.FrameManager.PostTask(func() {
+		dlg := vtui.InputBox(title, prompt, initial, func(text string) { send(answer{text, true}) })
+		dlg.OnResult = func(int) { send(answer{}) } // after OK the answer is already sent
+	})
+	a := <-result
+	return a.text, a.ok
+}
+
+func (f4MacroHost) Menu(title string, items []string) int {
+	if vtui.FrameManager == nil {
+		return -1
+	}
+	result := make(chan int, 1)
+	vtui.FrameManager.PostTask(func() {
+		pf := panel.FindPanelsFrameAnyScreen()
+		if pf == nil {
+			result <- -1
+			return
+		}
+		pf.MenuCancelable(title, items, func(index int) { result <- index }, func() { result <- -1 })
+	})
+	return <-result
+}
+
 func (f4MacroHost) InjectKeys(keys []*vtinput.InputEvent) {
 	if vtui.FrameManager == nil || len(keys) == 0 {
 		return

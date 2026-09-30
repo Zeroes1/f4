@@ -5136,6 +5136,21 @@ func (pf *PanelsFrame) menuItemsWithKeyLabels(title string, items []vtui.MenuIte
 // menuItemsWithKeyLabelsAndHint is menuItemsWithKeyLabels with a hint drawn in
 // the middle of the menu's lower border.
 func (pf *PanelsFrame) menuItemsWithKeyLabelsAndHint(title, bottomHint string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), keyLabels *vtui.KeySet) {
+	pf.menuCore(title, bottomHint, items, onKeyDown, callback, nil, keyLabels)
+}
+
+// MenuCancelable is Menu that also says when the menu was closed without a
+// choice: onCancel is called then (and only then), so a caller that waits for
+// the answer is not left waiting for a callback that never comes.
+func (pf *PanelsFrame) MenuCancelable(title string, items []string, callback func(int), onCancel func()) {
+	menuItems := make([]vtui.MenuItem, 0, len(items))
+	for _, item := range items {
+		menuItems = append(menuItems, vtui.MenuItem{Text: item})
+	}
+	pf.menuCore(title, "", menuItems, nil, callback, onCancel, nil)
+}
+
+func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), onCancel func(), keyLabels *vtui.KeySet) {
 	vtui.FrameManager.PostTask(func() {
 		menu := vtui.NewVMenu(title)
 		if bottomHint != "" {
@@ -5182,11 +5197,30 @@ func (pf *PanelsFrame) menuItemsWithKeyLabelsAndHint(title, bottomHint string, i
 			}
 		}
 
+		chosen := false
 		menu.OnAction = func(idx int) {
+			chosen = true
 			menu.Close()
 			if callback != nil {
 				callback(idx)
 			}
+		}
+		if onCancel != nil {
+			// A VMenu says nothing when it is closed without a choice (Esc, a
+			// click outside), so look at it from the UI thread until it is.
+			// Read here, on the UI thread: the timer runs elsewhere.
+			frames := vtui.FrameManager
+			var watch func()
+			watch = func() {
+				switch {
+				case chosen:
+				case menu.IsDone():
+					onCancel()
+				default:
+					time.AfterFunc(100*time.Millisecond, func() { frames.PostTask(watch) })
+				}
+			}
+			defer watch()
 		}
 		if keyLabels != nil {
 			vtui.FrameManager.PushToFrameScreen(pf, &menuKeyLabelsFrame{VMenu: menu, keyLabels: keyLabels})

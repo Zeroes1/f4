@@ -705,3 +705,78 @@ func TestMacroManagerRunExitEventsIsSafe(t *testing.T) {
 	(*MacroManager)(nil).RunExitEvents()
 	(&MacroManager{}).RunExitEvents()
 }
+
+// dialogHost is a fake host that can also ask the user something.
+type dialogHost struct {
+	*fakeMacroHost
+	inputText  string
+	inputOK    bool
+	menuAnswer int
+	asked      []string
+}
+
+func (h *dialogHost) InputBox(title, prompt, initial string) (string, bool) {
+	h.asked = append(h.asked, title+"|"+prompt+"|"+initial)
+	return h.inputText, h.inputOK
+}
+
+func (h *dialogHost) Menu(title string, items []string) int {
+	h.asked = append(h.asked, title+"|"+strings.Join(items, ","))
+	return h.menuAnswer
+}
+
+func TestMacroFarInputBoxAndMenu(t *testing.T) {
+	host := &dialogHost{fakeMacroHost: newFakeMacroHost(), inputText: "typed", inputOK: true, menuAnswer: 1}
+	Engine := newTestMacroEngine(t, host, `
+		Macro { area = "Shell"; key = "CtrlT"; action = function()
+			__text = far.InputBox("Title", "Prompt:", "start")
+			__item, __pos = far.Menu({ Title = "Pick" }, { "one", { text = "two" }, "three" })
+			__empty = far.Menu({ Title = "None" }, {})
+		end }
+	`)
+	if !fireMacro(t, Engine, "CtrlT") {
+		t.Fatal("macro not consumed")
+	}
+	if !Engine.WaitIdle(5 * time.Second) {
+		t.Fatal("macro never finished")
+	}
+	values := macroGlobals(t, Engine, "__text", "__item", "__pos", "__empty")
+	if lua.LVAsString(values["__text"]) != "typed" {
+		t.Errorf("InputBox = %v", values["__text"])
+	}
+	if item, ok := values["__item"].(*lua.LTable); !ok || lua.LVAsString(item.RawGetString("text")) != "two" || lua.LVAsNumber(values["__pos"]) != 2 {
+		t.Errorf("Menu = %v at %v, want the second item at 2", values["__item"], values["__pos"])
+	}
+	if values["__empty"] != lua.LNil {
+		t.Errorf("a menu with no items answered %v", values["__empty"])
+	}
+	if len(host.asked) != 2 || host.asked[0] != "Title|Prompt:|start" || host.asked[1] != "Pick|one,two,three" {
+		t.Errorf("asked %v", host.asked)
+	}
+
+	// Cancelled.
+	host.inputOK, host.menuAnswer = false, -1
+	fireMacro(t, Engine, "CtrlT")
+	Engine.WaitIdle(5 * time.Second)
+	values = macroGlobals(t, Engine, "__text", "__item")
+	if values["__text"] != lua.LNil || values["__item"] != lua.LNil {
+		t.Errorf("cancelled dialogs answered %v and %v", values["__text"], values["__item"])
+	}
+}
+
+// A host that cannot ask gets nils, not a failing macro.
+func TestMacroFarDialogsWithoutAHostThatAsks(t *testing.T) {
+	Engine := newTestMacroEngine(t, newFakeMacroHost(), `
+		Macro { area = "Shell"; key = "CtrlT"; action = function()
+			__a = far.InputBox("t", "p")
+			__b = far.Menu({}, { "x" })
+			__done = true
+		end }
+	`)
+	fireMacro(t, Engine, "CtrlT")
+	Engine.WaitIdle(5 * time.Second)
+	values := macroGlobals(t, Engine, "__a", "__b", "__done")
+	if values["__a"] != lua.LNil || values["__b"] != lua.LNil || values["__done"] != lua.LTrue {
+		t.Errorf("a = %v, b = %v, done = %v", values["__a"], values["__b"], values["__done"])
+	}
+}

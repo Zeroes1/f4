@@ -44,6 +44,16 @@ type MacroHost interface {
 	CallPlugin(context.Context, string, []any) ([]any, error)
 }
 
+// MacroDialogHost is what a host adds to MacroHost to let macros ask the user
+// something: far.InputBox and far.Menu use it, and are nil-returning no-ops on
+// a host without it. Both block the macro until the answer.
+type MacroDialogHost interface {
+	// InputBox shows a one-line input; ok is false when it was cancelled.
+	InputBox(title, prompt, initial string) (text string, ok bool)
+	// Menu shows the items; the answer is the chosen position, or -1.
+	Menu(title string, items []string) int
+}
+
 // LuaMacroBinding is the discoverable, immutable part of a Lua macro. It is
 // used by command surfaces without exposing interpreter-owned functions.
 type LuaMacroBinding struct {

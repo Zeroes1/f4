@@ -483,8 +483,70 @@ func (e *LuaMacroEngine) newFarNamespace(L *lua.LState) *lua.LTable {
 			L.Push(lua.LString(""))
 			return 1
 		},
+		"InputBox": e.luaFarInputBox,
+		"Menu":     e.luaFarMenu,
 	})
 	return namespace
+}
+
+// far.InputBox(title, prompt [, default]) shows a one-line input and returns
+// the text, or nil when the dialog was cancelled. (Far's fuller argument list -
+// history, flags - is not read; the three that matter are.)
+func (e *LuaMacroEngine) luaFarInputBox(L *lua.LState) int {
+	dialogs, ok := e.host.(MacroDialogHost)
+	if !ok {
+		L.Push(lua.LNil)
+		return 1
+	}
+	title := strings.TrimSpace(lua.LVAsString(L.Get(1)))
+	prompt := lua.LVAsString(L.Get(2))
+	if text, ok := dialogs.InputBox(title, prompt, lua.LVAsString(L.Get(3))); ok {
+		L.Push(lua.LString(text))
+	} else {
+		L.Push(lua.LNil)
+	}
+	return 1
+}
+
+// far.Menu(properties, items) shows a menu of the items - strings, or tables
+// with a Text field - and returns the chosen item and its 1-based position, or
+// nil when the menu was cancelled. properties.Title is the menu's title.
+func (e *LuaMacroEngine) luaFarMenu(L *lua.LState) int {
+	dialogs, ok := e.host.(MacroDialogHost)
+	if !ok {
+		L.Push(lua.LNil)
+		return 1
+	}
+	title := ""
+	if props, ok := L.Get(1).(*lua.LTable); ok {
+		title = strings.TrimSpace(lua.LVAsString(props.RawGetString("Title")))
+	}
+	list := L.CheckTable(2)
+	var labels []string
+	var chosen []lua.LValue
+	list.ForEach(func(_, item lua.LValue) {
+		label := lua.LVAsString(item)
+		if t, ok := item.(*lua.LTable); ok {
+			label = lua.LVAsString(t.RawGetString("text"))
+			if label == "" {
+				label = lua.LVAsString(t.RawGetString("Text"))
+			}
+		}
+		labels = append(labels, label)
+		chosen = append(chosen, item)
+	})
+	if len(labels) == 0 {
+		L.Push(lua.LNil)
+		return 1
+	}
+	index := dialogs.Menu(title, labels)
+	if index < 0 || index >= len(labels) {
+		L.Push(lua.LNil)
+		return 1
+	}
+	L.Push(chosen[index])
+	L.Push(lua.LNumber(index + 1))
+	return 2
 }
 
 func newBitTable(L *lua.LState) *lua.LTable {
