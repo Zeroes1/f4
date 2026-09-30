@@ -562,6 +562,11 @@ func Main() {
 				os.Exit(2)
 			}
 			i += consumed
+		case "--fish-server":
+			// The remote end of a FISH+ session (docs/FISH+.md, "f4 as the
+			// server"): stdin and stdout are the protocol, so nothing else may
+			// be written to stdout, and nothing above has been.
+			os.Exit(runFishServer(os.Stdin, os.Stdout, os.Stderr))
 		case "--new-plugin":
 			pluginName := flagVal
 			if pluginName == "" && i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
@@ -691,6 +696,8 @@ The following switches may be used in the command line:
                          asking. Unix shells only; not available on Windows
  --log [logfile]        If =1 or =true uses profile logs/debug.log,
                          otherwise logfile
+ --fish-server          Serve the FISH+ protocol on stdin/stdout (the remote
+                         command of a FISH+ connection to a host with f4)
  --new-plugin [pluginName]
  --server [serverPath]
  -test-plugins          Plugin test mode
