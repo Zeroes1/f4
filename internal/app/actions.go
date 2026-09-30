@@ -1549,10 +1549,10 @@ func tryOpenVideoPlayer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 	// terminal, and the player draws into a window of f4's own on the
 	// screen the terminal is on.
 	if terminal.SharedTTYXSession() == nil {
-		// No window to play in (ssh, Wayland, a tty): the answer to F3 on a
-		// video is a still picture from it, and the text viewer only when
-		// there is no ffmpeg to take one (VIDEO.md V4).
-		return tryOpenVideoPoster(pf, v, path)
+		// No window to play in (ssh, Wayland, a tty): play by drawing frames,
+		// and fall through to the text viewer only when there is no ffmpeg
+		// to decode them (VIDEO.md V3).
+		return tryOpenVideoFrames(pf, v, path)
 	}
 	if !media.ToolMPV.Available() {
 		vtui.ShowMessage(" Video ", media.ToolMPV.MissingMessage(), []string{"&Ok"})
@@ -1569,35 +1569,20 @@ func tryOpenVideoPlayer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 	return true
 }
 
-// tryOpenVideoPoster shows a picture taken from the video in the image
-// viewer, which draws it in pixels where the screen can and in half blocks
-// where it cannot. The video has to be a local file: ffmpeg reads it by path.
-func tryOpenVideoPoster(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
+// tryOpenVideoFrames plays a video by drawing its frames (VIDEO.md V3), for a
+// screen with no window of f4's own to play in: through the terminal's
+// graphics where it has any, in half blocks where it has not. It is silent.
+// The video has to be a local file, because ffmpeg reads it by path.
+func tryOpenVideoFrames(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 	if !media.ToolFFmpeg.Available() || vtui.FrameManager.Screen() == nil {
 		return false
 	}
 	if _, ok := v.(*vfs.OSVFS); !ok {
 		return false
 	}
-	vtui.RunAsync(func(ctx *vtui.TaskContext) {
-		dir, err := os.MkdirTemp("", "f4-poster-")
-		var iv *media.ImageView
-		if err == nil {
-			name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)) + ".png"
-			if err = media.SaveVideoPoster(ctx.Context, path, filepath.Join(dir, name)); err == nil {
-				iv, err = media.NewImageView(ctx.Context, vfs.NewOSVFS(dir), filepath.Join(dir, name))
-			}
-		}
-		ctx.RunOnUI(func() {
-			if err != nil {
-				vtui.DebugLog("VIDEO: poster of %s: %v", path, err)
-				vtui.ShowMessage(" Video ", fmt.Sprintf("No picture could be taken from the video:\n%v", err), []string{"&Ok"})
-				return
-			}
-			iv.ResizeConsole(pf.LastW, pf.LastH)
-			vtui.FrameManager.AddScreen(iv)
-		})
-	})
+	fv := media.NewFrameVideoView(v, path)
+	fv.ResizeConsole(pf.LastW, pf.LastH)
+	vtui.FrameManager.AddScreen(fv)
 	return true
 }
 
