@@ -70,6 +70,9 @@ type Info struct {
 	// Attributes maps the same keys as Members to the custom attributes of the
 	// type itself.
 	Attributes map[string][]string
+	// Generics maps the same keys to the generic parameters of the type, in
+	// declaration order, with their constraints.
+	Generics map[string][]GenericParam
 	// Blobs are the bytes of the resources embedded in the file, by name; a
 	// resource kept in another file or assembly has no entry, and neither has
 	// one that is implausibly large or lies outside the resource area.
@@ -92,6 +95,17 @@ type Member struct {
 
 	rva  uint32 // method body RVA, 0 for a field or a method with no body
 	body []byte // header and code of the method, when it could be read
+}
+
+// GenericParam is a generic parameter of a type: "out T : class, IFoo, new()".
+type GenericParam struct {
+	Name string
+	// Variance is "in", "out" or "".
+	Variance string
+	// Class, Struct and New are the special constraints (class, struct, new()).
+	Class, Struct, New bool
+	// Constraints are the types the parameter must derive from or implement.
+	Constraints []string
 }
 
 // Blob is one embedded resource.
@@ -251,6 +265,8 @@ type tables struct {
 	colWidths map[int][]int
 	// attrs holds the custom attributes by owner, see attrKey.
 	attrs map[uint64][]string
+	// generics holds the generic parameters of each TypeDef row.
+	generics map[uint32][]GenericParam
 }
 
 func (t *tables) codedWidth(kind codedKind) int {
@@ -636,9 +652,63 @@ func (t *tables) attributeName(coded uint32) string {
 	return strings.TrimSuffix(typeName, "Attribute")
 }
 
+// maxGenericParams bounds the parameters and the constraints kept per type.
+const maxGenericParams = 64
+
+// collectGenerics reads the GenericParam (II.22.20) and GenericParamConstraint
+// (II.22.21) tables for the generic parameters of types; those of methods are
+// not listed.
+func (t *tables) collectGenerics() {
+	t.generics = make(map[uint32][]GenericParam)
+	type slot struct {
+		typeRow uint32
+		idx     int
+	}
+	owners := make(map[uint32]slot) // GenericParam row -> where it was stored
+	for row := uint32(1); row <= t.rowCount[0x2A]; row++ {
+		owner := t.cell(0x2A, row, 2) // TypeOrMethodDef: 1 tag bit, 0 is a TypeDef
+		if owner&1 != 0 || len(t.generics[owner>>1]) >= maxGenericParams {
+			continue
+		}
+		flags := t.cell(0x2A, row, 1)
+		p := GenericParam{
+			Name:   t.str(t.cell(0x2A, row, 3)),
+			Class:  flags&0x04 != 0,
+			Struct: flags&0x08 != 0,
+			New:    flags&0x10 != 0,
+		}
+		switch flags & 0x03 {
+		case 1:
+			p.Variance = "out"
+		case 2:
+			p.Variance = "in"
+		}
+		owners[row] = slot{typeRow: owner >> 1, idx: len(t.generics[owner>>1])}
+		t.generics[owner>>1] = append(t.generics[owner>>1], p)
+	}
+	for row := uint32(1); row <= t.rowCount[0x2C]; row++ {
+		where, ok := owners[t.cell(0x2C, row, 0)]
+		if !ok {
+			continue
+		}
+		list := t.generics[where.typeRow]
+		if len(list[where.idx].Constraints) >= maxGenericParams {
+			continue
+		}
+		coded := t.cell(0x2C, row, 1)
+		name := t.typeName(coded)
+		if coded&3 == 2 {
+			name = t.typeSpecName(coded >> 2)
+		}
+		list[where.idx].Constraints = append(list[where.idx].Constraints, name)
+	}
+}
+
 func fill(info *Info, t *tables) {
 	t.collectAttributes()
+	t.collectGenerics()
 	info.Attributes = make(map[string][]string)
+	info.Generics = make(map[string][]GenericParam)
 	if t.rowCount[0x20] > 0 {
 		info.Name = t.str(t.cell(0x20, 1, 7))
 		info.Version = Version{
@@ -687,6 +757,9 @@ func fill(info *Info, t *tables) {
 			if a := t.attrs[attrKey(0x02, row)]; len(a) > 0 {
 				info.Attributes[key] = a
 			}
+			if g := t.generics[row]; len(g) > 0 {
+				info.Generics[key] = g
+			}
 			continue
 		}
 		name := t.str(t.cell(0x02, row, 1))
@@ -704,6 +777,9 @@ func fill(info *Info, t *tables) {
 		info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
 		if a := t.attrs[attrKey(0x02, row)]; len(a) > 0 {
 			info.Attributes[key] = a
+		}
+		if g := t.generics[row]; len(g) > 0 {
+			info.Generics[key] = g
 		}
 	}
 	for _, names := range info.Types {

@@ -25,6 +25,12 @@ func sampleInfo() *idotnet.Info {
 		Blobs:          []idotnet.Blob{{Name: "a/b.resources", Data: []byte("RES")}},
 		Nested:         map[string][]string{"My.Ns": {"Foo+Inner"}},
 		Attributes:     map[string][]string{"My.Ns.Foo": {"System.Serializable"}},
+		Generics: map[string][]idotnet.GenericParam{"My.Ns.Foo": {
+			{Name: "T", Variance: "out", Class: true, Constraints: []string{"System.IDisposable"}},
+			{Name: "K", Struct: true, New: true},
+			{Name: "V", New: true},
+			{Name: "X"},
+		}},
 		Members: map[string][]idotnet.Member{
 			"My.Ns.Foo":       {{Kind: "field", Name: "Count", Attributes: []string{"System.NonSerialized"}}, {Kind: "method", Name: "Run"}},
 			"My.Ns.Foo+Inner": {{Kind: "field", Name: "Depth"}},
@@ -72,6 +78,10 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 	}
 	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "[System.Serializable]\ntype Foo\n") || !strings.Contains(got, "[System.NonSerialized]\nfield Count\n") {
 		t.Errorf("attributes are not in the type file: %q", got)
+	}
+	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "generic out T : class, System.IDisposable\n") ||
+		!strings.Contains(got, "generic K : struct\n") || !strings.Contains(got, "generic V : new()\n") || !strings.Contains(got, "generic X\n") {
+		t.Errorf("generic parameters are not in the type file: %q", got)
 	}
 	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "field Count\n") || !strings.Contains(got, "method Run\n") {
 		t.Errorf("a type file lists %q", got)

@@ -50,6 +50,8 @@ func sampleMetadata() []byte {
 	methodStop := h.add("Stop")
 	sysNs := h.add("System")
 	obsName := h.add("ObsoleteAttribute")
+	paramT := h.add("T")
+	paramU := h.add("U")
 
 	var t builder
 	// Module: Generation, Name, Mvid, EncId, EncBaseId.
@@ -129,16 +131,28 @@ func sampleMetadata() []byte {
 	t.u16(3)
 	t.u16(2)
 
+	// GenericParam x2: Number, Flags, Owner (TypeOrMethodDef: TypeDef Foo),
+	// Name. T is covariant with class; U has new().
+	for _, row := range [][3]int{{0, 0x01 | 0x04, paramT}, {1, 0x10, paramU}} {
+		t.u16(row[0])
+		t.u16(row[1])
+		t.u16(2 << 1)
+		t.u16(row[2])
+	}
+	// GenericParamConstraint x1: Owner (GenericParam 1), Constraint (TypeRef 1).
+	t.u16(1)
+	t.u16(1<<2 | 1)
+
 	var s builder
 	s.u32(0)
 	s.WriteByte(2)
 	s.WriteByte(0)
 	s.WriteByte(0)
 	s.WriteByte(1)
-	valid := uint64(1<<0 | 1<<1 | 1<<2 | 1<<4 | 1<<6 | 1<<0x0A | 1<<0x0C | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29)
+	valid := uint64(1<<0 | 1<<1 | 1<<2 | 1<<4 | 1<<6 | 1<<0x0A | 1<<0x0C | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29 | 1<<0x2A | 1<<0x2C)
 	_ = binary.Write(&s, binary.LittleEndian, valid)
 	_ = binary.Write(&s, binary.LittleEndian, uint64(0))
-	for _, n := range []int{1, 1, 3, 2, 3, 1, 3, 1, 1, 1, 1} {
+	for _, n := range []int{1, 1, 3, 2, 3, 1, 3, 1, 1, 1, 1, 2, 1} {
 		s.u32(n)
 	}
 	s.Write(t.Bytes())
@@ -254,6 +268,13 @@ func TestReadAssembly(t *testing.T) {
 	if len(foo) < 3 || len(foo[0].Attributes) != 1 || foo[0].Attributes[0] != "My.Ns.Foo" ||
 		len(foo[2].Attributes) != 1 || foo[2].Attributes[0] != "System.Obsolete" || len(foo[1].Attributes) != 0 {
 		t.Errorf("member attributes = %+v", foo)
+	}
+	// Foo<T, U>: T is covariant with a class constraint and one type
+	// constraint, U has new().
+	gen := info.Generics["My.Ns.Foo"]
+	if len(gen) != 2 || gen[0].Name != "T" || gen[0].Variance != "out" || !gen[0].Class || len(gen[0].Constraints) != 1 ||
+		gen[0].Constraints[0] != "System.ObsoleteAttribute" || gen[1].Name != "U" || !gen[1].New || gen[1].Class || len(gen[1].Constraints) != 0 {
+		t.Errorf("generics of Foo = %+v", info.Generics)
 	}
 	nestedMembers := info.Members["My.Ns.Foo+Nested"]
 	if len(nestedMembers) != 2 || nestedMembers[0].Name != "Hidden" || nestedMembers[1].Name != "Stop" {
@@ -400,5 +421,18 @@ func TestNestedNameFollowsAndBoundsTheChain(t *testing.T) {
 	// So is one that points outside the TypeDef table.
 	if _, _, ok := tab.nestedName(3, map[uint32]uint32{3: 999}); ok {
 		t.Error("an enclosing row outside the table was accepted")
+	}
+}
+
+func TestAttributeNameRefusesBadTokens(t *testing.T) {
+	image := wrapPE(sampleMetadata(), true)
+	info, err := Read(bytes.NewReader(image), int64(len(image)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, coded := range []uint32{0<<3 | 2, 999<<3 | 2, 0<<3 | 3, 999<<3 | 3, 1<<3 | 5} {
+		if got := info.tab.attributeName(coded); got != "" {
+			t.Errorf("attributeName(%#x) = %q, want none", coded, got)
+		}
 	}
 }

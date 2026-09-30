@@ -86,6 +86,29 @@ func (n *node) add(name string, child *node) {
 	n.names = append(n.names, unique)
 }
 
+// genericText writes a generic parameter as C# does: "out T : class, IFoo, new()".
+func genericText(g dotnet.GenericParam) string {
+	text := g.Name
+	if g.Variance != "" {
+		text = g.Variance + " " + text
+	}
+	var bounds []string
+	if g.Class {
+		bounds = append(bounds, "class")
+	}
+	if g.Struct {
+		bounds = append(bounds, "struct")
+	}
+	bounds = append(bounds, g.Constraints...)
+	if g.New && !g.Struct {
+		bounds = append(bounds, "new()")
+	}
+	if len(bounds) > 0 {
+		text += " : " + strings.Join(bounds, ", ")
+	}
+	return text
+}
+
 func file(text string) *node { return &node{data: []byte(text)} }
 
 // maxILText bounds the IL text generated for one assembly; the listings of the
@@ -140,6 +163,9 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 				body += "[" + a + "]\n"
 			}
 			body += "type " + t + "\n"
+			for _, g := range info.Generics[key] {
+				body += "generic " + genericText(g) + "\n"
+			}
 			var il strings.Builder
 			for i, m := range info.Members[key] {
 				for _, a := range m.Attributes {
