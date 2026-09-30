@@ -353,3 +353,55 @@ func TestShareLinkEnabled(t *testing.T) {
 		t.Error("a VFS without ShareLinkProvider support must disable Share")
 	}
 }
+
+// TestCursorEntryAndOneRegularFileEnabled covers the predicates behind F3, F4,
+// Create Link, Rename and the Base64 commands (f4#1356, viklequick's list):
+// the cursor on ".." dims them; a folder keeps F3/F4 (size, attributes) but
+// not the Base64 commands, which want exactly one regular file.
+func TestCursorEntryAndOneRegularFileEnabled(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	if cursorEntryEnabled() || oneRegularFileEnabled() {
+		t.Error("with no panels frame at all, nothing is enabled")
+	}
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.GetActivePanel()
+	fsp.Vfs = vfs.NewOSVFS(t.TempDir())
+	fsp.Entries = []*panel.FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "dir", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "a.txt"}},
+		{VFSItem: vfs.VFSItem{Name: "b.txt"}},
+	}
+
+	fsp.SetCursorIndex(0)
+	if cursorEntryEnabled() || oneRegularFileEnabled() {
+		t.Error("the cursor on \"..\" should dim F3/F4 and the Base64 commands")
+	}
+	fsp.SetCursorIndex(1)
+	if !cursorEntryEnabled() {
+		t.Error("F3/F4 on a folder are size and attributes, so they stay enabled")
+	}
+	if oneRegularFileEnabled() {
+		t.Error("a folder is not a regular file for the Base64 commands")
+	}
+	fsp.SetCursorIndex(2)
+	if !cursorEntryEnabled() || !oneRegularFileEnabled() {
+		t.Error("a regular file enables all of them")
+	}
+	fsp.Entries[2].Selected = true
+	fsp.Entries[3].Selected = true
+	if oneRegularFileEnabled() {
+		t.Error("two marked files are not \"exactly one file\"")
+	}
+	fsp.SetCursorIndex(99)
+	if cursorEntryEnabled() {
+		t.Error("a cursor outside the list is not an entry")
+	}
+}

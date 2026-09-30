@@ -200,3 +200,21 @@ func TestMenuOffersGenerateAndValidate(t *testing.T) {
 		t.Fatalf("menu = %q", app.menu)
 	}
 }
+
+// Calculate and Verify checksum are dimmed with nothing but ".." to work on
+// (f4#1356); the plugin's own menu entry only needs a panel.
+func TestCanWorkOnSelection(t *testing.T) {
+	fs := vfs.NewOSVFS(t.TempDir())
+	if canWorkOnSelection(&appMock{}) {
+		t.Fatal("enabled without a panel filesystem")
+	}
+	if canWorkOnSelection(&appMock{fs: fs, selected: nil}) {
+		t.Fatal("enabled with nothing under the cursor")
+	}
+	if canWorkOnSelection(&appMock{fs: fs, selected: []string{".."}}) {
+		t.Fatal("enabled with only \"..\" selected")
+	}
+	if !canWorkOnSelection(&appMock{fs: fs, selected: []string{"a.txt"}}) {
+		t.Fatal("disabled on a real file")
+	}
+}

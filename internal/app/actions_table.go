@@ -153,6 +153,49 @@ func fileDeleteEnabled() bool {
 	return activePanelHasSelectionTarget()
 }
 
+// cursorEntryEnabled is the Enabled predicate for F3 and F4 (and View in Hex):
+// the cursor of the active panel is on an entry, and not on "..". A folder
+// stays allowed on purpose: F3 on a folder is its size and F4 on one its
+// attributes, as in Far; ".." is the one row those keys have nothing to work
+// on (f4#1356).
+func cursorEntryEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return false
+	}
+	idx := fsp.GetCursorIndex()
+	return idx >= 0 && idx < len(fsp.Entries) && fsp.Entries[idx].Name != ".."
+}
+
+// oneRegularFileEnabled is the Enabled predicate for the commands that make a
+// copy of exactly one regular file (Encode/Decode as Base64): one entry
+// selected, and it is not a folder or "..". FileSystemPanel.GetSelectedNames
+// already leaves ".." out (f4#1356).
+func oneRegularFileEnabled() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return false
+	}
+	names := fsp.GetSelectedNames()
+	if len(names) != 1 {
+		return false
+	}
+	for _, e := range fsp.Entries {
+		if e.Name == names[0] {
+			return !e.IsDir
+		}
+	}
+	return false
+}
+
 // symlinkEditEnabled is the Enabled predicate for File.EditSymlink. It
 // mirrors actionEditSymlink's own three refusal branches -- exactly one
 // target selected (SymlinkEdit.OneFile), that target actually is a symlink
@@ -594,6 +637,7 @@ func init() {
 		DescKey:     "Action.File.View.Desc",
 		DefaultKeys: []string{"F3", "Num5"},
 		MenuPath:    "Files",
+		Enabled:     cursorEntryEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFile(pf) }),
 	})
 	registerAction(action.Action{
@@ -604,6 +648,7 @@ func init() {
 		Description: "Open the selected file in the hex viewer",
 		DescKey:     "Action.File.ViewHex.Desc",
 		DefaultKeys: []string{"AltF3"},
+		Enabled:     cursorEntryEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFileHex(pf) }),
 	})
 	// Ctrl+Space: the size of the folder under the cursor, in any VFS -- an
@@ -647,6 +692,7 @@ func init() {
 		DescKey:     "Action.File.Edit.Desc",
 		DefaultKeys: []string{"F4"},
 		MenuPath:    "Files",
+		Enabled:     cursorEntryEnabled,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditFile(pf) }),
 	})
 	registerAction(action.Action{
@@ -725,6 +771,7 @@ func init() {
 		DescKey:     "Action.File.CreateLink.Desc",
 		DefaultKeys: []string{"AltF6"},
 		MenuPath:    "Files",
+		Enabled:     activePanelHasSelectionTarget,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCreateLink(pf) }),
 	})
 	registerAction(action.Action{
@@ -747,6 +794,7 @@ func init() {
 		DescKey:     "Action.File.Rename.Desc",
 		DefaultKeys: []string{"ShiftF6"},
 		MenuPath:    "Files",
+		Enabled:     activePanelHasSelectionTarget,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionRename(pf) }),
 	})
 	registerAction(action.Action{
@@ -1035,6 +1083,7 @@ func init() {
 		Description: "Create a Base64 copy of the selected file",
 		DescKey:     "Action.Panel.Base64EncodeFile.Desc",
 		MenuPath:    "Commands",
+		Enabled:     oneRegularFileEnabled,
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if path, err := panel.TransformSelectedFileBase64(pf, true); err != nil {
 				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
@@ -1051,6 +1100,7 @@ func init() {
 		Description: "Create a decoded copy of the selected Base64 file",
 		DescKey:     "Action.Panel.Base64DecodeFile.Desc",
 		MenuPath:    "Commands",
+		Enabled:     oneRegularFileEnabled,
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if path, err := panel.TransformSelectedFileBase64(pf, false); err != nil {
 				vtui.ShowMessage(i18n.Msg("Panel.Base64.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})

@@ -80,7 +80,7 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			DescriptionKey: "IntChecker.Command.Generate.Desc",
 			SearchKeys:     []string{"IntChecker.Generate"},
 			SearchTerms:    []string{"checksum", "hash", "crc32", "md5", "sha1", "sha256", "sfv"},
-			Enabled:        canRun,
+			Enabled:        canWorkOnSelection,
 			Run:            p.showGenerateDialog,
 		},
 		{
@@ -93,7 +93,7 @@ func (p *Plugin) Init(api vfs.HostAPI) error {
 			DescriptionKey: "IntChecker.Command.Validate.Desc",
 			SearchKeys:     []string{"IntChecker.Validate"},
 			SearchTerms:    []string{"checksum", "hash", "verify", "check", "sfv"},
-			Enabled:        canRun,
+			Enabled:        canWorkOnSelection,
 			Run:            p.showValidate,
 		},
 	}
@@ -139,6 +139,12 @@ func (p *Plugin) settingsDirectory() string {
 // canRun dims the command when there is no panel filesystem to work on.
 func canRun(app vfs.App) bool {
 	return app.GetActivePanelVFS() != nil
+}
+
+// canWorkOnSelection dims the Files-menu commands when nothing but ".." is
+// under the cursor and nothing is marked (f4#1356).
+func canWorkOnSelection(app vfs.App) bool {
+	return canRun(app) && len(selectedFileNames(app)) > 0
 }
 
 // Menu items, in the order showMenu lists them.
