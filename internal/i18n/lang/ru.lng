@@ -827,6 +827,7 @@ SvcMgr.DetailState=Состояние: %s
 SvcMgr.DetailStart=Тип запуска: %s
 SvcMgr.DetailAccount=Учётная запись: %s
 SvcMgr.DetailPath=Программа: %s
+SvcMgr.DetailDepends=Зависит от: %s
 SvcMgr.KeyBar.StartType=Тип
 SvcMgr.StartTypeTitle=Тип запуска
 SvcMgr.StartTypePrompt=Как запускать службу %s?

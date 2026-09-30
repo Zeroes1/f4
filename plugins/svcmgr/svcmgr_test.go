@@ -299,8 +299,8 @@ func (f fakeDetailer) Details(string) (serviceDetails, error) { return f.d, f.er
 
 func TestDetailsTextAndEnter(t *testing.T) {
 	text := detailsText(service{Name: "Spooler", Display: "Print Spooler", State: stateRunning},
-		serviceDetails{StartType: startAuto, Delayed: true, Account: "LocalSystem", BinaryPath: `C:\x\spool.exe`, Description: "Prints."})
-	for _, want := range []string{"Spooler", "Print Spooler", "Running", "Automatic (delayed start)", "LocalSystem", `C:\x\spool.exe`, "Prints."} {
+		serviceDetails{StartType: startAuto, Delayed: true, Account: "LocalSystem", BinaryPath: `C:\x\spool.exe`, Description: "Prints.", DependsOn: []string{"RPCSS", "http"}})
+	for _, want := range []string{"Spooler", "Print Spooler", "Running", "Automatic (delayed start)", "LocalSystem", `C:\x\spool.exe`, "Prints.", "RPCSS, http"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("details text lacks %q:\n%s", want, text)
 		}

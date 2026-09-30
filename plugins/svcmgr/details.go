@@ -10,6 +10,9 @@ type serviceDetails struct {
 	BinaryPath  string
 	Account     string
 	Description string
+	// DependsOn names the services and service groups this one needs
+	// running first.
+	DependsOn []string
 }
 
 // The SERVICE_*_START values of winsvc.h.

@@ -24,6 +24,7 @@ func (platformDetailer) Details(name string) (serviceDetails, error) {
 			BinaryPath:  cfg.BinaryPathName,
 			Account:     cfg.ServiceStartName,
 			Description: cfg.Description,
+			DependsOn:   cfg.Dependencies,
 		}
 		return nil
 	})

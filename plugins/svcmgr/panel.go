@@ -222,6 +222,9 @@ func detailsText(svc service, d serviceDetails) string {
 		fmt.Sprintf(i18n.Msg("SvcMgr.DetailAccount"), d.Account),
 		fmt.Sprintf(i18n.Msg("SvcMgr.DetailPath"), d.BinaryPath),
 	}
+	if len(d.DependsOn) > 0 {
+		lines = append(lines, fmt.Sprintf(i18n.Msg("SvcMgr.DetailDepends"), strings.Join(d.DependsOn, ", ")))
+	}
 	if d.Description != "" {
 		lines = append(lines, "", d.Description)
 	}
