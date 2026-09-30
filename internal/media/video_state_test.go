@@ -79,7 +79,7 @@ func fakeMPV(t *testing.T, sock string) (lines chan string, serve func(func(net.
 					return
 				}
 				go func() {
-					defer conn.Close()
+					defer func() { _ = conn.Close() }()
 					if handle != nil {
 						handle(conn)
 					}

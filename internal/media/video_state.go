@@ -85,7 +85,7 @@ func mpvSeconds(raw json.RawMessage) time.Duration {
 // observe reads mpv's answers off conn until it closes: it asks for the
 // properties, then feeds every line to the tracker.
 func (t *playbackTracker) observe(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	for i, name := range observedProperties {
 		payload, err := json.Marshal(map[string]any{"command": []any{"observe_property", i + 1, name}})
 		if err != nil {

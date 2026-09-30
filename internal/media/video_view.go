@@ -196,7 +196,7 @@ func (vv *VideoView) ProcessKey(e *vtinput.InputEvent) bool {
 		}
 		return true
 	case vtinput.VK_A:
-		vv.player.CycleAudio(!(ctrl && shift))
+		vv.player.CycleAudio(!ctrl || !shift)
 		return true
 	}
 	return false
