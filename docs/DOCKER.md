@@ -17,7 +17,12 @@ Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all cont
 
 ## Connection
 
-`DOCKER_HOST` as the CLI reads it: `unix:///path/to.sock` or `tcp://host:port` (plain HTTP). Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. On Windows the default is Docker Desktop's named pipe (`npipe:////./pipe/docker_engine`, also accepted in `DOCKER_HOST`); it is opened as a plain file and served by a small one-request-per-connection transport, because a synchronous pipe handle cannot read and write at once the way `net/http` does. Not supported yet: `ssh://`, TLS. Nothing connects until the panel is opened.
+The plugin keeps no credentials of its own: it reads the places the `docker` CLI reads, so a TLS key stays in files the user already protects and nothing secret is typed into f4 or written to its settings. Order, as in the CLI: `DOCKER_CONTEXT`, then `DOCKER_HOST`, then the current context of `~/.docker/config.json` (`docker context use`; the directory is `DOCKER_CONFIG` if set), then the local daemon.
+
+* `DOCKER_HOST`: `unix:///path/to.sock`, `tcp://host:port` or `https://host:port`. Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. On Windows the default is Docker Desktop's named pipe (`npipe:////./pipe/docker_engine`, also accepted in `DOCKER_HOST`); it is opened as a plain file and served by a small one-request-per-connection transport, because a synchronous pipe handle cannot read and write at once the way `net/http` does.
+* **TLS.** `DOCKER_TLS_VERIFY` (any value) or an `https://` address turns it on; `ca.pem` (trusted CA; the system roots without it), `cert.pem` and `key.pem` (client certificate) are read from `DOCKER_CERT_PATH` or the configuration directory. A certificate file that does not parse is an error, never silently skipped. TLS 1.2 or newer.
+* **Contexts.** A context created by `docker context create` is read from the CLI's store (`contexts/meta/<sha256 of the name>/meta.json`, TLS files in `contexts/tls/<same>/docker/`): its host, its `ca.pem`/`cert.pem`/`key.pem`, and `SkipTLSVerify`. Like the CLI, a context uses TLS when it has TLS files or skips verification, and is used as written otherwise. A context that does not exist, or has no docker endpoint, is reported by name.
+* Not supported yet: `ssh://` (also in a context), and choosing a context from the panel. Nothing connects until the panel is opened.
 
 * **Addresses.** The panel path is `docker:///<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `docker://` URI provider; the server is the one the drive menu entry uses (`DOCKER_HOST`).
 

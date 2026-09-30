@@ -424,6 +424,8 @@ func TestNewClientHosts(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("DOCKER_HOST", "")
+	t.Setenv("DOCKER_CONFIG", t.TempDir())
+	t.Setenv("DOCKER_CONTEXT", "")
 	if _, err := clientFromEnv(); err != nil {
 		t.Fatalf("the default host: %v", err)
 	}

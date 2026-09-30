@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -36,18 +37,15 @@ type client struct {
 
 // clientFromEnv reads DOCKER_HOST the way the docker CLI does. Unset, it uses
 // the system socket and, failing that, the rootless one under XDG_RUNTIME_DIR.
-// On Windows the default is Docker Desktop's named pipe. TLS is not supported
-// yet; the error says so instead of dialing something else.
+// On Windows the default is Docker Desktop's named pipe. DOCKER_CONTEXT, DOCKER_TLS_VERIFY/DOCKER_CERT_PATH and the CLI's current
+// context are honoured too (see endpoint.go); ssh:// is not supported and the
+// error says so instead of dialing something else.
 func clientFromEnv() (*client, error) {
-	host := strings.TrimSpace(os.Getenv("DOCKER_HOST"))
-	if host == "" {
-		if runtime.GOOS == "windows" {
-			host = "npipe:////./pipe/docker_engine"
-		} else {
-			host = "unix://" + defaultSocketPath()
-		}
+	ep, err := resolveEndpoint(os.Getenv)
+	if err != nil {
+		return nil, err
 	}
-	return newClient(host)
+	return newClientTLS(ep.host, ep.tls)
 }
 
 func defaultSocketPath() string {
@@ -63,7 +61,12 @@ func defaultSocketPath() string {
 	return defaultSocket
 }
 
-func newClient(host string) (*client, error) {
+func newClient(host string) (*client, error) { return newClientTLS(host, nil) }
+
+// newClientTLS is newClient with the TLS settings for tcp://, http:// and
+// https:// addresses (nil: plain HTTP, except https://, which uses the
+// system roots).
+func newClientTLS(host string, tlsCfg *tls.Config) (*client, error) {
 	u, err := url.Parse(host)
 	if err != nil {
 		return nil, fmt.Errorf("%w %q: %v", errUnsupportedHost, host, err)
@@ -95,13 +98,24 @@ func newClient(host string) (*client, error) {
 			return nil, fmt.Errorf("%w %q: no pipe name", errUnsupportedHost, host)
 		}
 		return &client{http: &http.Client{Transport: &pipeTransport{dial: openPipe(name)}}, base: "http://docker"}, nil
-	case "tcp", "http":
+	case "tcp", "http", "https":
 		if u.Host == "" {
 			return nil, fmt.Errorf("%w %q: no address", errUnsupportedHost, host)
 		}
-		return &client{http: &http.Client{}, base: "http://" + u.Host}, nil
+		if tlsCfg == nil && u.Scheme != "https" {
+			return &client{http: &http.Client{}, base: "http://" + u.Host}, nil
+		}
+		if tlsCfg == nil {
+			tlsCfg = &tls.Config{MinVersion: tls.VersionTLS12}
+		}
+		transport := &http.Transport{
+			TLSClientConfig:     tlsCfg,
+			MaxIdleConnsPerHost: 4,
+			IdleConnTimeout:     30 * time.Second,
+		}
+		return &client{http: &http.Client{Transport: transport}, base: "https://" + u.Host}, nil
 	default:
-		return nil, fmt.Errorf("%w %q: only unix://, npipe:// and tcp:// are supported", errUnsupportedHost, host)
+		return nil, fmt.Errorf("%w %q: only unix://, npipe://, tcp:// and https:// are supported (ssh:// is not)", errUnsupportedHost, host)
 	}
 }
 
