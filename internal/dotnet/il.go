@@ -199,7 +199,7 @@ func (t *tables) operandText(kind operand, data []byte, at int) (text string, us
 		if !need(1) {
 			return "", 0, false
 		}
-		return fmt.Sprint(int8(data[0])), 1, true
+		return fmt.Sprint(int8(data[0])), 1, true //nolint:gosec // the operand is the same bits read as signed
 	case opUint8, opVar8:
 		if !need(1) {
 			return "", 0, false
@@ -214,12 +214,12 @@ func (t *tables) operandText(kind operand, data []byte, at int) (text string, us
 		if !need(4) {
 			return "", 0, false
 		}
-		return fmt.Sprint(int32(u32())), 4, true
+		return fmt.Sprint(int32(u32())), 4, true //nolint:gosec // the operand is the same bits read as signed
 	case opInt64:
 		if !need(8) {
 			return "", 0, false
 		}
-		return fmt.Sprint(int64(binary.LittleEndian.Uint64(data))), 8, true
+		return fmt.Sprint(int64(binary.LittleEndian.Uint64(data))), 8, true //nolint:gosec // the operand is the same bits read as signed
 	case opFloat32:
 		if !need(4) {
 			return "", 0, false
@@ -234,12 +234,12 @@ func (t *tables) operandText(kind operand, data []byte, at int) (text string, us
 		if !need(1) {
 			return "", 0, false
 		}
-		return fmt.Sprintf("IL_%04x", at+1+int(int8(data[0]))), 1, true
+		return fmt.Sprintf("IL_%04x", at+1+int(int8(data[0]))), 1, true //nolint:gosec // the operand is the same bits read as signed
 	case opTarget32:
 		if !need(4) {
 			return "", 0, false
 		}
-		return fmt.Sprintf("IL_%04x", at+4+int(int32(u32()))), 4, true
+		return fmt.Sprintf("IL_%04x", at+4+int(int32(u32()))), 4, true //nolint:gosec // the operand is the same bits read as signed
 	case opSwitch:
 		if !need(4) {
 			return "", 0, false
@@ -251,7 +251,7 @@ func (t *tables) operandText(kind operand, data []byte, at int) (text string, us
 		base := at + 4 + 4*n
 		targets := make([]string, n)
 		for i := range targets {
-			targets[i] = fmt.Sprintf("IL_%04x", base+int(int32(binary.LittleEndian.Uint32(data[4+4*i:]))))
+			targets[i] = fmt.Sprintf("IL_%04x", base+int(int32(binary.LittleEndian.Uint32(data[4+4*i:])))) //nolint:gosec // the operand is the same bits read as signed
 		}
 		return "(" + strings.Join(targets, ", ") + ")", 4 + 4*n, true
 	default: // a metadata token
@@ -333,9 +333,9 @@ func (t *tables) owner(row uint32, listCol int) uint32 {
 	// The list columns never decrease down the TypeDef table, so the owner is
 	// the last type whose list starts at or before row.
 	i := sort.Search(int(t.rowCount[0x02]), func(i int) bool {
-		return t.cell(0x02, uint32(i)+1, listCol) > row
+		return t.cell(0x02, uint32(i)+1, listCol) > row //nolint:gosec // bounded by the row count of the TypeDef table
 	})
-	return uint32(i)
+	return uint32(i) //nolint:gosec // bounded by the row count of the TypeDef table
 }
 
 // userString reads the #US entry at index: a compressed byte length, the
