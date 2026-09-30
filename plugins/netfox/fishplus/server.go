@@ -29,7 +29,7 @@ type Server struct {
 
 // serverFeatures is what a Server announces when none is set: the native
 // marker, which tells a client that no shell tool is behind the answers.
-var serverFeatures = []string{"native", "mode:find", "read:ddbytes", "write:ddbytes", "ln", "truncate"}
+var serverFeatures = []string{"native", "mode:find", "read:ddbytes", "write:ddbytes", "ln", "truncate", "dd"}
 
 // pathLines is how many path lines follow the request line of each command of
 // the protocol, which is what a server has to consume to stay in step with a
@@ -86,6 +86,12 @@ func (srv *Server) Serve(r io.Reader, w io.Writer) error {
 		}
 		if cmd == "write" {
 			if err := srv.serveWrite(in, w, token, id, fields[2:]); err != nil {
+				return err
+			}
+			continue
+		}
+		if cmd == "patch" {
+			if err := srv.servePatch(in, w, token, id, fields[2:]); err != nil {
 				return err
 			}
 			continue

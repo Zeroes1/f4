@@ -100,9 +100,9 @@ func TestServerRejectsABadHelloAndAnUnfollowableRequest(t *testing.T) {
 	out.Reset()
 	in := NativeHelloLine("tok") + "1 patch 1 raw\n/x\n/y\nseg\n"
 	if err := (&Server{}).Serve(strings.NewReader(in), &out); err == nil {
-		t.Fatal("a command whose payload cannot be skipped must end the session")
+		t.Fatal("a patch segment that cannot be followed must end the session")
 	}
-	if !strings.Contains(out.String(), ".tok 1 err unknown command") {
+	if !strings.Contains(out.String(), ".tok 1 err bad patch segment") {
 		t.Fatalf("the refusal was not sent: %q", out.String())
 	}
 }
@@ -347,5 +347,51 @@ func TestServerWrite(t *testing.T) {
 	}
 	if sess.Broken() {
 		t.Fatal("a refused write must not mark the session broken")
+	}
+}
+
+func TestServerPatch(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	root := t.TempDir()
+	sess, _ := serverSession(t, &Server{Dir: root})
+	if err := sess.HandshakeWithOptions(ctx, HandshakeOptions{Bootstrap: BootstrapNative}); err != nil {
+		t.Fatal(err)
+	}
+	c := NewClient(sess)
+	if !c.CanPatch() {
+		t.Fatal("the server must announce what patch needs")
+	}
+	src := filepath.Join(root, "src.txt")
+	dst := filepath.Join(root, "dst.txt")
+	if err := os.WriteFile(src, []byte("hello world"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Two copies around a literal: one changed byte range crosses the wire, the
+	// rest is copied where the file is.
+	segs := []PatchSegment{Copy(0, 6), Literal([]byte("F4\n1 exit\n")), Copy(8, 3)}
+	if err := c.Patch(ctx, src, dst, segs); err != nil {
+		t.Fatalf("Patch: %v", err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != "hello F4\n1 exit\nrld" {
+		t.Fatalf("patched file = %q", got)
+	}
+	if err := c.Patch(ctx, src, dst, []PatchSegment{Copy(0, 5)}); err != nil {
+		t.Fatalf("second Patch: %v", err)
+	}
+	if got, _ := os.ReadFile(dst); string(got) != "hello" {
+		t.Fatalf("second patched file = %q, want the destination rebuilt from nothing", got)
+	}
+
+	// A refusal still leaves the stream where the next request expects it.
+	if err := c.Patch(ctx, "relative", dst, segs); err == nil {
+		t.Fatal("a relative source must be refused")
+	}
+	if err := c.Patch(ctx, src, src, segs); err == nil {
+		t.Fatal("source and destination must differ")
+	}
+	if err := sess.Noop(ctx); err != nil || sess.Broken() {
+		t.Fatalf("the session must survive a refused patch: %v, broken=%v", err, sess.Broken())
 	}
 }
