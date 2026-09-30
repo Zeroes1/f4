@@ -112,3 +112,9 @@ missing one means.
   the common senders is still unconfirmed, which is why move is not offered
   outwards. Under gogpu the question does not arise: only copy is ever
   announced, in both directions.
+
+## Terminal drag and drop
+
+The far2l-extension protocol that lets a terminal hand dropped files to the
+program inside it (and f4 receive them from the terminal it runs in) is
+specified in [FAR2L_DND.md](FAR2L_DND.md), written to be submitted to far2l.
