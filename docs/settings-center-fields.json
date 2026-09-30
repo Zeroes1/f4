@@ -1040,6 +1040,16 @@
     "unavailable": ""
   },
   {
+    "category": "terminal",
+    "description": "In the host console modes, draw the console f4 shows beside a hidden panel (Ctrl+F1, Ctrl+F2) in the host terminal's own default colours, so a translucent or themed terminal shows through instead of a black rectangle. Off keeps the black background. No effect in the embedded terminal.",
+    "group": "Presentation",
+    "id": "HostConsoleDefaultColors",
+    "kind": "boolean",
+    "label": "Keep host console default colors",
+    "timing": "live",
+    "unavailable": ""
+  },
+  {
     "category": "history",
     "description": "Width of the command-history directory prefix while date-and-time display is active. Minimum four characters.",
     "group": "Presentation",
