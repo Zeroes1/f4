@@ -224,9 +224,13 @@ func TestReadAssembly(t *testing.T) {
 	}
 	// Foo's field and its first two methods; the nested type's own members are
 	// not attached to it.
-	wantMembers := []Member{{"field", "Count"}, {"method", ".ctor"}, {"method", "Run"}}
+	wantMembers := []Member{{Kind: "field", Name: "Count"}, {Kind: "method", Name: ".ctor"}, {Kind: "method", Name: "Run"}}
 	got := info.Members["My.Ns.Foo"]
-	if len(got) != len(wantMembers) || got[0] != wantMembers[0] || got[1] != wantMembers[1] || got[2] != wantMembers[2] {
+	sameMembers := len(got) == len(wantMembers)
+	for i := 0; sameMembers && i < len(got); i++ {
+		sameMembers = got[i].Kind == wantMembers[i].Kind && got[i].Name == wantMembers[i].Name
+	}
+	if !sameMembers {
 		t.Errorf("Members = %+v, want %+v", info.Members, wantMembers)
 	}
 	if len(info.Resources) != 1 || info.Resources[0] != "Sample.strings.resources" {

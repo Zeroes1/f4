@@ -68,12 +68,19 @@ type Info struct {
 	Blobs []Blob
 
 	resRefs []resourceRef
+	tab     *tables
 }
 
 // Member is a field or a method of a type.
 type Member struct {
 	Kind string // "field" or "method"
 	Name string
+	// Signature is the C#-style signature: the type of a field, or
+	// "ret name(params)" of a method; empty when the blob cannot be read.
+	Signature string
+
+	rva  uint32 // method body RVA, 0 for a field or a method with no body
+	body []byte // header and code of the method, when it could be read
 }
 
 // Blob is one embedded resource.
@@ -221,6 +228,8 @@ var tableSchema = map[int][]column{
 // tables holds the located rows of one metadata image.
 type tables struct {
 	strs      []byte
+	blob      []byte // the #Blob heap
+	us        []byte // the #US heap
 	data      []byte // the whole #~ stream
 	rowCount  [64]uint32
 	offset    [64]int // start of each table's rows inside data
@@ -414,6 +423,7 @@ func Read(r io.ReaderAt, size int64) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
+	info.readBodies(rvaRead)
 	if corLen == 32 && len(info.resRefs) > 0 {
 		resRVA := binary.LittleEndian.Uint32(cor[24:])
 		resSize := binary.LittleEndian.Uint32(cor[28:])
@@ -494,6 +504,8 @@ func parseMetadata(root []byte) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
+	t.blob, t.us = streams["#Blob"], streams["#US"]
+	info.tab = t
 	fill(info, t)
 	return info, nil
 }
@@ -512,7 +524,14 @@ func (t *tables) members(typeRow uint32, table, nameCol, listCol int, kind strin
 	}
 	var out []Member
 	for r := start; r >= 1 && r < end && len(out) < maxMembers; r++ {
-		out = append(out, Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol))})
+		m := Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol))}
+		if kind == "method" {
+			m.rva = t.cell(table, r, 0)
+			m.Signature = t.methodSignature(t.cell(table, r, 4), m.Name)
+		} else {
+			m.Signature = t.fieldSignature(t.cell(table, r, 2))
+		}
+		out = append(out, m)
 	}
 	return out
 }
@@ -572,4 +591,62 @@ func fill(info *Info, t *tables) {
 		// Implementation 0 is a resource embedded in this file.
 		info.resRefs = append(info.resRefs, resourceRef{name: name, offset: t.cell(0x28, row, 0), embedded: t.cell(0x28, row, 3) == 0})
 	}
+}
+
+// Limits on the method bodies kept from one file.
+const (
+	maxBodySize  = 1 << 20
+	maxBodyTotal = 64 << 20
+)
+
+// readBodies keeps the code of every method that has a body, within the
+// limits above. A body that cannot be read is skipped: the method is still
+// listed, only its IL is missing.
+func (in *Info) readBodies(rvaRead func(rva, n uint32) ([]byte, error)) {
+	total := 0
+	for _, list := range in.Members {
+		for i := range list {
+			m := &list[i]
+			if m.Kind != "method" || m.rva == 0 || total >= maxBodyTotal {
+				continue
+			}
+			head, err := rvaRead(m.rva, 12)
+			if err != nil {
+				// A tiny header is one byte, so a body at the end of a section
+				// can be shorter than a fat header.
+				if head, err = rvaRead(m.rva, 1); err != nil {
+					continue
+				}
+			}
+			n := uint32(0)
+			switch head[0] & 3 {
+			case 2:
+				n = 1 + uint32(head[0]>>2)
+			case 3:
+				if len(head) < 12 {
+					continue
+				}
+				n = uint32(binary.LittleEndian.Uint16(head)>>12)*4 + binary.LittleEndian.Uint32(head[4:])
+			default:
+				continue
+			}
+			if n == 0 || n > maxBodySize {
+				continue
+			}
+			if body, err := rvaRead(m.rva, n); err == nil {
+				m.body = body
+				total += len(body)
+			}
+		}
+	}
+}
+
+// MethodIL returns the IL listing of the index-th member of the type key, or ""
+// when that member is not a method or has no readable body.
+func (in *Info) MethodIL(key string, index int) string {
+	list := in.Members[key]
+	if in.tab == nil || index < 0 || index >= len(list) || list[index].body == nil {
+		return ""
+	}
+	return in.tab.disassemble(list[index].body)
 }

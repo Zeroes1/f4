@@ -88,6 +88,10 @@ func (n *node) add(name string, child *node) {
 
 func file(text string) *node { return &node{data: []byte(text)} }
 
+// maxILText bounds the IL text generated for one assembly; the listings of the
+// remaining types are left out once it is spent.
+const maxILText = 8 << 20
+
 // buildTree lays an assembly out as folders: assembly.md (the report),
 // References, Namespaces/<namespace>/<type> and Resources.
 //
@@ -115,6 +119,7 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 	}
 	root.add("References", refs)
 	spaces := newDir()
+	ilBudget := maxILText
 	for _, ns := range info.Namespaces() {
 		dir := newDir()
 		label := ns
@@ -129,10 +134,38 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 				key = ns + "." + t
 			}
 			body := "namespace " + ns + "\ntype " + t + "\n"
-			for _, m := range info.Members[key] {
-				body += m.Kind + " " + m.Name + "\n"
+			var il strings.Builder
+			for i, m := range info.Members[key] {
+				switch {
+				case m.Kind == "method" && m.Signature != "":
+					body += "method " + m.Signature + "\n"
+				case m.Kind == "field" && m.Signature != "":
+					body += "field " + m.Signature + " " + m.Name + "\n"
+				default:
+					body += m.Kind + " " + m.Name + "\n"
+				}
+				if m.Kind != "method" {
+					continue
+				}
+				code := info.MethodIL(key, i)
+				if code == "" {
+					continue
+				}
+				if ilBudget <= 0 {
+					il.WriteString("// IL of the remaining methods is left out: this assembly's listing is too large\n")
+					break
+				}
+				head := m.Signature
+				if head == "" {
+					head = m.Name
+				}
+				il.WriteString(".method " + head + "\n" + code + "\n")
+				ilBudget -= len(code)
 			}
 			dir.add(t, file(body))
+			if il.Len() > 0 {
+				dir.add(t+".il", file(il.String()))
+			}
 		}
 		spaces.add(label, dir)
 	}
