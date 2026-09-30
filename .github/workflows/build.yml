@@ -846,8 +846,20 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: plugins/cloudfox/go.sum
 
+    # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
+    # plugin, and a transient answer from either ("stream error ... INTERNAL_ERROR
+    # ... reading https://sum.golang.org/tile/...") turned a whole job red on
+    # main and on trains (30-09-2026, main eb17c3a0a and train unxed/f4#1707).
+    # The go.mod files of these modules are only settled by this step, so it is
+    # retried instead of the job.
     - name: go mod tidy
-      run: go mod tidy
+      run: |
+        for attempt in 1 2 3 4; do
+          go mod tidy && exit 0
+          echo "go mod tidy failed (attempt $attempt of 4); retrying"
+          sleep $((attempt * 20))
+        done
+        exit 1
 
     - name: Build cloudfox-plugin
       run: go build -trimpath -o cloudfox-plugin ./cmd/cloudfox-plugin
@@ -957,8 +969,20 @@ jobs:
     # here is fine even though it resolves plugins/netfox's full (non-lite)
     # file set too; `go mod tidy` has no `-tags` flag to scope that (it
     # fails outright: "flag provided but not defined: -tags").
+    # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
+    # plugin, and a transient answer from either ("stream error ... INTERNAL_ERROR
+    # ... reading https://sum.golang.org/tile/...") turned a whole job red on
+    # main and on trains (30-09-2026, main eb17c3a0a and train unxed/f4#1707).
+    # The go.mod files of these modules are only settled by this step, so it is
+    # retried instead of the job.
     - name: go mod tidy
-      run: go mod tidy
+      run: |
+        for attempt in 1 2 3 4; do
+          go mod tidy && exit 0
+          echo "go mod tidy failed (attempt $attempt of 4); retrying"
+          sleep $((attempt * 20))
+        done
+        exit 1
 
     - name: Build android-plugin
       run: go build -trimpath -tags lite -o android-plugin ./cmd/android-plugin
@@ -1054,8 +1078,20 @@ jobs:
         go-version: '1.26.6'
         cache-dependency-path: plugins/ios/go.sum
 
+    # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
+    # plugin, and a transient answer from either ("stream error ... INTERNAL_ERROR
+    # ... reading https://sum.golang.org/tile/...") turned a whole job red on
+    # main and on trains (30-09-2026, main eb17c3a0a and train unxed/f4#1707).
+    # The go.mod files of these modules are only settled by this step, so it is
+    # retried instead of the job.
     - name: go mod tidy
-      run: go mod tidy
+      run: |
+        for attempt in 1 2 3 4; do
+          go mod tidy && exit 0
+          echo "go mod tidy failed (attempt $attempt of 4); retrying"
+          sleep $((attempt * 20))
+        done
+        exit 1
 
     - name: Build ios-plugin
       run: go build -trimpath -o ios-plugin ./cmd/ios-plugin
