@@ -945,6 +945,13 @@ func (p *AnsiParser) handleOSC() {
 		}
 		return
 	}
+	if cmd == 1337 {
+		// iTerm2 proprietary sequences; only the inline picture is taken.
+		if arg, ok := strings.CutPrefix(parts[1], "File="); ok {
+			p.term.HandleITerm2File(arg)
+		}
+		return
+	}
 	if cmd == 133 {
 		// В последовательности OSC 133;C BEL, cmd это 133, а аргумент 'C' находится в parts[1]
 		if len(parts) > 1 {
