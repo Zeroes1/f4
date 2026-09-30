@@ -3895,6 +3895,9 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Let f4 use a saved connection's password to authenticate the second hop of a server-to-server copy or move, instead of requiring SSH keys or agent access. Off by default: this exposes that password to the other server.
 SettingsCenter.TreeRootWholeVolume.Label=Root the tree panel at the whole volume
 SettingsCenter.TreeRootWholeVolume.Description=Root the Ctrl+T tree panel at the source panel's whole current volume, as far2l does. Off roots it at the source panel's current directory instead.
+SettingsCenter.GlyphStyle.Label=Frame and control glyphs
+SettingsCenter.GlyphStyle.Description=How graphical windows draw frames, checkboxes and radio buttons: Classic keeps square corners and [x] boxes, Rounded draws rounded corners and round buttons. Text terminals are not affected.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Rounded
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Directory tree
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=next tree open
 
