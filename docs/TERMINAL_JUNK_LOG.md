@@ -145,6 +145,9 @@ cannot change the behaviour the owner wants kept.
 | --- | --- | --- |
 | unxed/f4#49 | closed | Windows: artifacts in the embedded terminal's log, panels not coming back after commands |
 | unxed/f4#165 | closed | Changing the directory scrolled the output up (the hidden `cd /d ... & rem f4_sync`); on long paths the command became visible |
+| unxed/f4#55 | closed | Windows: `cd %Temp%` typed by the user was appended to the sync line (`cd /d "C:\1" & cd %Temp%`) and visible in the console: the user's command and f4's own line met in one typed line |
+| unxed/f4#158 | closed | POSIX: the bash history filled with f4's own lines (`set +H; cd '...' && { printf "\033]133;C\007"; ... }`) after running commands from f4; the typed line must stay out of the history (leading space, `HISTCONTROL=ignorespace`) |
+| unxed/f4#424 | closed | Several workspaces (Ctrl-N): the sync line and its echo showed up in the terminal of another workspace and a directory change in one workspace changed another; the sync belongs to the workspace's own PTY |
 | unxed/f4#425 | closed | Umbrella: the embedded terminal on Windows, the ConPTY observation log (docs/TERMINAL.md Appendix A) |
 | unxed/f4#507 | closed | macOS: `cd '/tmp' # f4_sync` gave "cd: too many arguments" (zsh: interactive comments off), `~` did not work. Marker became `&& true f4_sync` |
 | unxed/f4#1376 | open | Far Manager run from f4: excision cut `cd /d "` out of the middle of repainted rows of FAR's panels; now only an announced echo is cut |
