@@ -400,8 +400,8 @@ func TestCursorEntryAndOneRegularFileEnabled(t *testing.T) {
 	if oneRegularFileEnabled() {
 		t.Error("two marked files are not \"exactly one file\"")
 	}
-	fsp.SetCursorIndex(99)
+	fsp.Entries = nil
 	if cursorEntryEnabled() {
-		t.Error("a cursor outside the list is not an entry")
+		t.Error("an empty list has no entry under the cursor")
 	}
 }
