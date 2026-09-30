@@ -300,7 +300,7 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	"panel.showMountList#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered mount-list action opens the current mount inventory",
 	},
-	"panel.(*PanelsFrame).menuItemsWithKeyLabels#1": {
+	"panel.(*PanelsFrame).menuItemsWithKeyLabelsAndHint#1": {
 		class: paletteAuditPluginDialogBridge, rationale: "the generic callback-based plugin menu bridge adds runtime plugin rows and optional key labels that are not globally enumerable commands",
 	},
 	"panel.(*PanelsFrame).showDriveMenuAt#1": {
