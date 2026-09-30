@@ -841,6 +841,13 @@ SvcMgr.ConnectFailed=Не удалось прочитать службы %s: %v
 SvcMgr.KeyBar.Filter=Фильтр
 SvcMgr.FilterRunning=работают
 SvcMgr.FilterStopped=остановлены
+SvcMgr.KeyBar.Props=Свойст
+SvcMgr.PropsTitle=Свойства службы
+SvcMgr.PropsName=Имя:
+SvcMgr.PropsDisplay=Экранное имя:
+SvcMgr.PropsPath=Программа:
+SvcMgr.PropsStart=Тип запуска:
+SvcMgr.PropsError=Контроль ошибок:
 
 PanelPlugin.KeyBar.Close=Закрыть
 

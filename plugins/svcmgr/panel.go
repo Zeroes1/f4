@@ -244,6 +244,7 @@ func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F5, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Computer"), Run: p.askComputer},
 		{VK: vtinput.VK_F6, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Filter"), Run: p.cycleFilter},
+		{VK: vtinput.VK_F7, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Props"), Run: p.showProperties, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.StartType"), Run: p.chooseStartType, Enabled: p.hasSelected},
 	}
 }
@@ -388,6 +389,27 @@ func (p *servicesPanel) chooseStartType() {
 // setStartType applies a start type to the service under the cursor.
 func (p *servicesPanel) setStartType(c startChoice) {
 	p.run(func(name string) error { return p.ctl.SetStartType(name, c.Type, c.Delayed) })
+}
+
+// showProperties is Shift+F7: FAR's service properties window over the service
+// under the cursor; Ok writes the changed fields.
+func (p *servicesPanel) showProperties() {
+	svc, ok := p.selectedService()
+	if !ok {
+		return
+	}
+	d, err := p.det.Details(svc.Name)
+	if err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("SvcMgr.ActionFailed"), svc.Name, err), 3e9)
+		return
+	}
+	showPropertiesDialog(svc, d, p.setConfig)
+}
+
+// setConfig applies the properties dialog's values to the service under the
+// cursor.
+func (p *servicesPanel) setConfig(c serviceConfig) {
+	p.run(func(name string) error { return p.ctl.SetConfig(name, c) })
 }
 
 // run applies one action to the service under the cursor, reports a failure

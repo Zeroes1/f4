@@ -70,21 +70,43 @@ func (c platformController) Resume(name string) error {
 	return c.control(name, windows.SERVICE_PAUSE_CONTINUE, windows.SERVICE_CONTROL_CONTINUE)
 }
 
+// applyConfig writes the start type, the optional strings and the error
+// control (SERVICE_NO_CHANGE and nil leave a field as it is) and then the
+// delayed-start flag, a separate setting of the manager
+// (SERVICE_CONFIG_DELAYED_AUTO_START_INFO), which is cleared for every type but
+// a delayed automatic one.
+func applyConfig(h windows.Handle, startType, errorControl uint32, binaryPath, displayName *uint16, delayed bool) error {
+	if err := windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, startType, errorControl,
+		binaryPath, nil, nil, nil, nil, nil, displayName); err != nil {
+		return err
+	}
+	info := windows.SERVICE_DELAYED_AUTO_START_INFO{}
+	if delayed && startType == startAuto {
+		info.IsDelayedAutoStartUp = 1
+	}
+	return windows.ChangeServiceConfig2(h, windows.SERVICE_CONFIG_DELAYED_AUTO_START_INFO, (*byte)(unsafe.Pointer(&info)))
+}
+
 // SetStartType changes only the start type: every other field of the
-// configuration is left as it is (SERVICE_NO_CHANGE, nil). The delayed flag is
-// a separate setting of the manager (SERVICE_CONFIG_DELAYED_AUTO_START_INFO),
-// written after the start type; it is cleared for every type but a delayed
-// automatic one.
+// configuration is left as it is.
 func (c platformController) SetStartType(name string, startType uint32, delayed bool) error {
 	return withService(c.machine, name, windows.SERVICE_CHANGE_CONFIG, func(h windows.Handle) error {
-		if err := windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, startType, windows.SERVICE_NO_CHANGE,
-			nil, nil, nil, nil, nil, nil, nil); err != nil {
-			return err
-		}
-		info := windows.SERVICE_DELAYED_AUTO_START_INFO{}
-		if delayed && startType == startAuto {
-			info.IsDelayedAutoStartUp = 1
-		}
-		return windows.ChangeServiceConfig2(h, windows.SERVICE_CONFIG_DELAYED_AUTO_START_INFO, (*byte)(unsafe.Pointer(&info)))
+		return applyConfig(h, startType, windows.SERVICE_NO_CHANGE, nil, nil, delayed)
+	})
+}
+
+// SetConfig changes the display name, the program, the start type and the
+// error control.
+func (c platformController) SetConfig(name string, cfg serviceConfig) error {
+	binary, err := windows.UTF16PtrFromString(cfg.BinaryPath)
+	if err != nil {
+		return err
+	}
+	display, err := windows.UTF16PtrFromString(cfg.DisplayName)
+	if err != nil {
+		return err
+	}
+	return withService(c.machine, name, windows.SERVICE_CHANGE_CONFIG, func(h windows.Handle) error {
+		return applyConfig(h, cfg.StartType, cfg.ErrorControl, binary, display, cfg.Delayed)
 	})
 }

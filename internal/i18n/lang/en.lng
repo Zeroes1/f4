@@ -841,6 +841,13 @@ SvcMgr.ConnectFailed=Cannot read the services of %s: %v
 SvcMgr.KeyBar.Filter=Filter
 SvcMgr.FilterRunning=running
 SvcMgr.FilterStopped=stopped
+SvcMgr.KeyBar.Props=Props
+SvcMgr.PropsTitle=Service properties
+SvcMgr.PropsName=Name:
+SvcMgr.PropsDisplay=Display name:
+SvcMgr.PropsPath=Program:
+SvcMgr.PropsStart=Start type:
+SvcMgr.PropsError=Error control:
 
 PanelPlugin.KeyBar.Close=Close
 

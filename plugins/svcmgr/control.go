@@ -14,6 +14,17 @@ type controller interface {
 	// startManual and startDisabled values; delayed asks for a delayed
 	// automatic start and only means something with startAuto.
 	SetStartType(name string, startType uint32, delayed bool) error
+	// SetConfig changes the fields of the service properties dialog at once.
+	SetConfig(name string, c serviceConfig) error
+}
+
+// serviceConfig is what the service properties dialog edits.
+type serviceConfig struct {
+	DisplayName  string
+	BinaryPath   string
+	StartType    uint32
+	Delayed      bool
+	ErrorControl uint32
 }
 
 // serviceController makes the controller for a computer (empty: this one); a

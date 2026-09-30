@@ -200,6 +200,10 @@ func (c *fakeController) Start(n string) error  { c.calls = append(c.calls, "sta
 func (c *fakeController) Stop(n string) error   { c.calls = append(c.calls, "stop "+n); return c.err }
 func (c *fakeController) Pause(n string) error  { c.calls = append(c.calls, "pause "+n); return c.err }
 func (c *fakeController) Resume(n string) error { c.calls = append(c.calls, "resume "+n); return c.err }
+func (c *fakeController) SetConfig(n string, cfg serviceConfig) error {
+	c.calls = append(c.calls, "config "+n+" "+cfg.DisplayName+"|"+cfg.BinaryPath+"|"+startTypeName(cfg.StartType, cfg.Delayed)+"|"+errorControlName(cfg.ErrorControl))
+	return c.err
+}
 func (c *fakeController) SetStartType(n string, t uint32, delayed bool) error {
 	c.calls = append(c.calls, "starttype "+n+" "+startTypeName(t, delayed))
 	return c.err
@@ -256,8 +260,8 @@ func TestPanelActionsNeedAService(t *testing.T) {
 	if len(ctl.calls) != 0 || p.hasSelected() {
 		t.Errorf("an empty list ran %v", ctl.calls)
 	}
-	if got := len(p.PanelKeys()); got != 8 {
-		t.Errorf("panel keys = %d, want 8", got)
+	if got := len(p.PanelKeys()); got != 9 {
+		t.Errorf("panel keys = %d, want 9", got)
 	}
 }
 
@@ -266,7 +270,7 @@ func TestPlatformControllerOffWindows(t *testing.T) {
 		t.Skip("this OS has a service manager")
 	}
 	c := platformController{}
-	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x"), c.SetStartType("x", startManual, false)} {
+	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x"), c.SetStartType("x", startManual, false), c.SetConfig("x", serviceConfig{})} {
 		if !errors.Is(err, errUnsupported) {
 			t.Errorf("action %d error = %v, want errUnsupported", i, err)
 		}
@@ -445,4 +449,45 @@ func TestStateFilterCycles(t *testing.T) {
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(60, 20)
 	p.Show(scr)
+}
+
+func TestPropertiesFieldsRoundTrip(t *testing.T) {
+	cfg := configFromFields("  Disp ", ` C:\x.exe `, "Automatic (delayed start)", "Severe")
+	want := serviceConfig{DisplayName: "Disp", BinaryPath: `C:\x.exe`, StartType: startAuto, Delayed: true, ErrorControl: errorSevere}
+	if cfg != want {
+		t.Errorf("configFromFields = %+v, want %+v", cfg, want)
+	}
+	if got := startChoiceIndex(startAuto, true); propStartChoices[got].Type != startAuto || !propStartChoices[got].Delayed {
+		t.Errorf("startChoiceIndex(auto, delayed) = %d", got)
+	}
+	if got := startChoiceIndex(startManual, true); propStartChoices[got].Type != startManual || propStartChoices[got].Delayed {
+		t.Errorf("startChoiceIndex(manual, delayed flag) = %d: the flag means nothing off automatic", got)
+	}
+	if startChoiceIndex(startBoot, false) != 0 || errorChoiceIndex(99) != 0 {
+		t.Error("unknown types fall back to the first entry")
+	}
+	for e, name := range map[uint32]string{errorIgnore: "Ignore", errorNormal: "Normal", errorSevere: "Severe", errorCritical: "Critical", 7: "7"} {
+		if got := errorControlName(e); got != name {
+			t.Errorf("errorControlName(%d) = %q, want %q", e, got, name)
+		}
+	}
+}
+
+func TestSetConfigAppliesToTheServiceUnderTheCursor(t *testing.T) {
+	services := []service{{Name: "Svc", Display: "S", State: stateStopped}}
+	var listErr error
+	p := openFake(t, &services, &listErr)
+	ctl := &fakeController{}
+	p.ctl = ctl
+	p.det = fakeDetailer{d: serviceDetails{BinaryPath: `C:\a.exe`, StartType: startManual}}
+	p.setConfig(serviceConfig{DisplayName: "New", BinaryPath: `C:\b.exe`, StartType: startDisabled, ErrorControl: errorNormal})
+	if got, want := strings.Join(ctl.calls, "|"), `config Svc New|C:\b.exe|Disabled|Normal`; got != want {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	p.showProperties() // without a frame manager the dialog is not shown
+	p.det = fakeDetailer{err: errors.New("denied")}
+	p.showProperties() // a failed read is a toast
+	var none []service
+	empty := openFake(t, &none, &listErr)
+	empty.showProperties()
 }

@@ -13,6 +13,9 @@ type serviceDetails struct {
 	// DependsOn names the services and service groups this one needs
 	// running first.
 	DependsOn []string
+	// ErrorControl is what the manager does when the service fails to start at
+	// boot, one of the errorIgnore.. errorCritical values.
+	ErrorControl uint32
 	// Recovery is what the manager does after the first, second and later
 	// failures of the service; empty when none is configured.
 	Recovery []recoveryAction
@@ -51,6 +54,29 @@ func recoveryName(a recoveryAction) string {
 		return name
 	}
 	return name + " after " + strconv.FormatUint(uint64(a.DelaySec), 10) + " s"
+}
+
+// The SERVICE_ERROR_* values of winsvc.h.
+const (
+	errorIgnore   = 0
+	errorNormal   = 1
+	errorSevere   = 2
+	errorCritical = 3
+)
+
+// errorControlName is the error control as text.
+func errorControlName(e uint32) string {
+	switch e {
+	case errorIgnore:
+		return "Ignore"
+	case errorNormal:
+		return "Normal"
+	case errorSevere:
+		return "Severe"
+	case errorCritical:
+		return "Critical"
+	}
+	return strconv.FormatUint(uint64(e), 10)
 }
 
 // startUnknown marks a start type that could not be read.

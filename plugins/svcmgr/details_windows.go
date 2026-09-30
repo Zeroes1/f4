@@ -19,12 +19,13 @@ func (d platformDetailer) Details(name string) (serviceDetails, error) {
 			return err
 		}
 		out = serviceDetails{
-			StartType:   cfg.StartType,
-			Delayed:     cfg.DelayedAutoStart,
-			BinaryPath:  cfg.BinaryPathName,
-			Account:     cfg.ServiceStartName,
-			Description: cfg.Description,
-			DependsOn:   cfg.Dependencies,
+			StartType:    cfg.StartType,
+			Delayed:      cfg.DelayedAutoStart,
+			BinaryPath:   cfg.BinaryPathName,
+			Account:      cfg.ServiceStartName,
+			Description:  cfg.Description,
+			DependsOn:    cfg.Dependencies,
+			ErrorControl: cfg.ErrorControl,
 		}
 		// Recovery actions are optional: a service with none configured (or a
 		// refused query) simply shows no recovery line.
