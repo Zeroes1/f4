@@ -36,13 +36,7 @@ func (e *LuaMacroEngine) installAPI(L *lua.LState) {
 	// instead of failing to load entirely.
 	L.SetGlobal("MenuItem", L.NewFunction(e.luaMenuItem))
 	L.SetGlobal("CommandLine", L.NewFunction(e.luaCommandLine))
-	for _, name := range []string{"Event"} {
-		declaration := name
-		L.SetGlobal(name, L.NewFunction(func(L *lua.LState) int {
-			e.host.Log("MACRO: %s{} is not supported yet, ignored (%s)", declaration, L.Where(1))
-			return 0
-		}))
-	}
+	L.SetGlobal("Event", L.NewFunction(e.luaEvent))
 
 	L.SetGlobal("Area", e.newAreaTable(L))
 	L.SetGlobal("APanel", e.newPanelTable(L, true))
@@ -301,6 +295,29 @@ func (e *LuaMacroEngine) luaCommandLine(L *lua.LState) int {
 // splitCommandLinePrefixes splits "ab:cd ef" into ab, cd, ef, lower case.
 func splitCommandLinePrefixes(value string) []string {
 	return splitMacroList(strings.ReplaceAll(value, ":", " "))
+}
+
+// luaEvent records an Event{ group, description, action}: something to run when
+// f4 raises the group. Only "ExitFAR" is raised so far; a declaration for
+// another group is logged and left out, and the rest of the file still loads.
+func (e *LuaMacroEngine) luaEvent(L *lua.LState) int {
+	spec := L.CheckTable(1)
+	action, _ := spec.RawGetString("action").(*lua.LFunction)
+	group := strings.TrimSpace(lua.LVAsString(spec.RawGetString("group")))
+	if action == nil || group == "" {
+		e.host.Log("MACRO: Event{} needs a group and an action function, ignored (%s)", L.Where(1))
+		return 0
+	}
+	if !supportedEventGroups[strings.ToLower(group)] {
+		e.host.Log("MACRO: Event{} group %q is not supported yet, ignored (%s)", group, L.Where(1))
+		return 0
+	}
+	e.addEvent(&luaEvent{group: group, macro: &LuaMacro{
+		Description: strings.TrimSpace(lua.LVAsString(spec.RawGetString("description"))),
+		Source:      L.Where(1),
+		action:      action,
+	}})
+	return 0
 }
 
 // luaKeys queues keys for injection.

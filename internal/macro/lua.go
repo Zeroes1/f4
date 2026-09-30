@@ -40,6 +40,17 @@ type LuaMacro struct {
 	callArgs []string
 }
 
+// luaEvent is one Event{} declaration: the group it listens to ("ExitFAR"...)
+// and what to run.
+type luaEvent struct {
+	group string
+	macro *LuaMacro
+}
+
+// supportedEventGroups are the Event{} groups f4 raises; a declaration for
+// another group is kept out and logged.
+var supportedEventGroups = map[string]bool{"exitfar": true}
+
 // luaCommandLine is one CommandLine{} declaration.
 type luaCommandLine struct {
 	prefixes []string
@@ -65,6 +76,7 @@ type LuaMacroEngine struct {
 	running atomic.Bool
 
 	items    []*luaMenuItem
+	events   []*luaEvent
 	cmdLines []*luaCommandLine
 
 	// The fields below belong to the interpreter's worker goroutine while a
@@ -165,6 +177,50 @@ func (e *LuaMacroEngine) add(m *LuaMacro) {
 		}
 	}
 	e.all = append(e.all, m)
+}
+
+func (e *LuaMacroEngine) addEvent(ev *luaEvent) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.events = append(e.events, ev)
+}
+
+// RunEvents runs every Event{} declared for group (any case), one after the
+// other, each with the group as its argument, and waits up to wait for all of
+// them: it is what f4 calls as it exits, when nobody can be waited on for long.
+// It reports how many actions ran to the end in time.
+func (e *LuaMacroEngine) RunEvents(group string, wait time.Duration) int {
+	if e == nil {
+		return 0
+	}
+	e.mu.Lock()
+	var todo []*LuaMacro
+	for _, ev := range e.events {
+		if strings.EqualFold(ev.group, group) {
+			m := *ev.macro
+			m.callArgs = []string{ev.group}
+			todo = append(todo, &m)
+		}
+	}
+	e.mu.Unlock()
+	if len(todo) == 0 {
+		return 0
+	}
+	done := make(chan int, 1)
+	go func() {
+		n := 0
+		for _, m := range todo {
+			e.execute(m, "", nil)
+			n++
+		}
+		done <- n
+	}()
+	select {
+	case n := <-done:
+		return n
+	case <-time.After(wait):
+		return 0
+	}
 }
 
 func (e *LuaMacroEngine) addCommandLine(c *luaCommandLine) {

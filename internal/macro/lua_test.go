@@ -671,3 +671,37 @@ func TestMacroCommandLineIsListedAndRuns(t *testing.T) {
 		t.Fatal("a nil engine has command lines")
 	}
 }
+
+func TestMacroEventExitFARRuns(t *testing.T) {
+	host := newFakeMacroHost()
+	Engine := newTestMacroEngine(t, host, `
+		__n = 0
+		Event { group = "ExitFAR"; description = "first"; action = function(group) __n = __n + 1; __group = group end }
+		Event { group = "exitfar"; action = function() __n = __n + 10 end }
+		Event { group = "EditorEvent"; action = function() __n = __n + 100 end }
+		Event { group = "ExitFAR" }
+		Event { action = function() end }
+	`)
+
+	if got := Engine.RunEvents("ExitFAR", 5*time.Second); got != 2 {
+		t.Fatalf("RunEvents ran %d actions, want the 2 declared for ExitFAR", got)
+	}
+	values := macroGlobals(t, Engine, "__n", "__group")
+	if lua.LVAsNumber(values["__n"]) != 11 || lua.LVAsString(values["__group"]) != "ExitFAR" {
+		t.Fatalf("n=%v group=%v, want 11 and ExitFAR", values["__n"], values["__group"])
+	}
+	if Engine.RunEvents("Nothing", time.Second) != 0 || (*LuaMacroEngine)(nil).RunEvents("ExitFAR", time.Second) != 0 {
+		t.Fatal("events ran for a group nobody declared, or on a nil engine")
+	}
+	host.mu.Lock()
+	logged := len(host.logs)
+	host.mu.Unlock()
+	if logged < 3 {
+		t.Errorf("the unsupported group and the two malformed declarations were not logged (%d entries)", logged)
+	}
+}
+
+func TestMacroManagerRunExitEventsIsSafe(t *testing.T) {
+	(*MacroManager)(nil).RunExitEvents()
+	(&MacroManager{}).RunExitEvents()
+}

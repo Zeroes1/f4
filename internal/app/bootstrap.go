@@ -421,6 +421,7 @@ func Main() {
 
 	defer func() {
 		terminalDNDStop()
+		macro.MacroMgr.RunExitEvents()
 		SaveSession() // Гарантирует сохранение размеров и путей при любом выходе
 		if plughost.GlobalPluginManager != nil {
 			plughost.GlobalPluginManager.CloseAll()

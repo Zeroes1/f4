@@ -2,6 +2,7 @@ package macro
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/unxed/vtui"
 )
@@ -70,4 +71,14 @@ func (m *MacroManager) RefreshInterruptedLua() bool {
 	}
 	vtui.DebugLog("MACRO: %d Lua macro(s) loaded after the rebuild", count)
 	return true
+}
+
+// RunExitEvents raises the ExitFAR group of the Lua macros, giving them a couple
+// of seconds in all: f4 is on its way out and a script that does not finish
+// does not hold it up.
+func (m *MacroManager) RunExitEvents() {
+	if m == nil || m.Lua == nil {
+		return
+	}
+	m.Lua.RunEvents("ExitFAR", 2*time.Second)
 }
