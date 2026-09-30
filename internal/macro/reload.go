@@ -91,3 +91,12 @@ func (m *MacroManager) RaiseEvent(group string) bool {
 	}
 	return m.Lua.RaiseEvent(group)
 }
+
+// RaiseEditorEvent raises the EditorEvent of the Lua macros for the editor with
+// the given id: event is one of Far's EE_* numbers (read 0, save 1, close 3).
+func (m *MacroManager) RaiseEditorEvent(id, event int) bool {
+	if m == nil || m.Lua == nil {
+		return false
+	}
+	return m.Lua.RaiseEventNumbers("EditorEvent", id, event, 0)
+}
