@@ -3928,3 +3928,18 @@ PDF.Page=Page %d
 PDF.NoText=No text on this page (it may be a picture).
 PDF.Lost=%d characters could not be decoded and are shown as U+FFFD.
 PDF.Truncated=The document is long; only the first part is shown.
+
+Docker.LanguageCode=en
+Docker.Unreachable=Cannot reach the Docker daemon (is it running, and is DOCKER_HOST right?)
+Docker.NotSupported=The Docker panel cannot do this: containers themselves are not managed here, and file attributes cannot be changed
+Docker.ListingTruncated=The folder is too large to list completely through the Docker API; the list is partial
+
+K8s.LanguageCode=en
+K8s.Unreachable=Cannot reach the Kubernetes API server (check the kubeconfig and the network)
+K8s.NotSupported=The Kubernetes panel cannot do this: namespaces, pods and containers are not managed here, and file attributes cannot be changed
+K8s.UploadTooLarge=a file larger than 8 MiB cannot be uploaded through exec; copy it with kubectl cp
+
+Mongo.LanguageCode=en
+Mongo.Unreachable=Cannot reach the MongoDB server (check MONGODB_URI and that it is running)
+Mongo.NotSupported=The MongoDB panel cannot do this: documents can be edited, created and deleted and collections created, nothing else
+Mongo.ListingTruncated=The collection has more documents than the panel lists; only the first ones are shown

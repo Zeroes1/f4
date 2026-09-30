@@ -3928,3 +3928,18 @@ PDF.Page=Страница %d
 PDF.NoText=На странице нет текста (возможно, это картинка).
 PDF.Lost=Символов, которые не удалось расшифровать: %d (показаны как U+FFFD).
 PDF.Truncated=Документ длинный, показана только его первая часть.
+
+Docker.LanguageCode=ru
+Docker.Unreachable=Нет связи с демоном Docker (запущен ли он, верна ли переменная DOCKER_HOST?)
+Docker.NotSupported=Панель Docker этого не умеет: самими контейнерами здесь не управляют, а атрибуты файлов изменить нельзя
+Docker.ListingTruncated=Папка слишком велика, чтобы получить её список целиком через API Docker; список неполный
+
+K8s.LanguageCode=ru
+K8s.Unreachable=Нет связи с API-сервером Kubernetes (проверьте kubeconfig и сеть)
+K8s.NotSupported=Панель Kubernetes этого не умеет: пространствами имён, подами и контейнерами здесь не управляют, а атрибуты файлов изменить нельзя
+K8s.UploadTooLarge=файл больше 8 МиБ нельзя загрузить через exec; скопируйте его командой kubectl cp
+
+Mongo.LanguageCode=ru
+Mongo.Unreachable=Нет связи с сервером MongoDB (проверьте MONGODB_URI и что сервер запущен)
+Mongo.NotSupported=Панель MongoDB этого не умеет: документы можно править, создавать и удалять, коллекции создавать, остального нельзя
+Mongo.ListingTruncated=В коллекции больше документов, чем показывает панель; показаны только первые
