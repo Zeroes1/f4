@@ -28,6 +28,7 @@ func main() {
 		linkProbe            = flag.Bool("link-probe", false, "verify OSC 8 rendering in isolation")
 		progressProbe        = flag.Bool("progress-probe", false, "verify in-place progress rendering")
 		unicodeProbe         = flag.Bool("unicode-probe", false, "verify Unicode and ZWJ round-trip")
+		passthroughProbe     = flag.Bool("passthrough-probe", false, "measure which sixel, kitty, iTerm2 and OSC sequences reach the consumer through the pinned host")
 		clearProbe           = flag.Bool("clear-probe", false, "verify Clear-Host emits and applies ESC[3J")
 		scrollProbe          = flag.Bool("scroll-probe", false, "verify consumer scrollback and piece-table eviction")
 		emptyProbe           = flag.Bool("empty-probe", false, "verify an empty child emits no empty frame")
@@ -188,6 +189,12 @@ func main() {
 			kind = "unicode"
 		}
 		if err := runNativeSemanticProbe(*probeHost, *reportPath, kind); err != nil {
+			fail(err)
+		}
+		return
+	}
+	if *passthroughProbe {
+		if err := runNativePassthroughProbe(*probeHost, *reportPath); err != nil {
 			fail(err)
 		}
 		return

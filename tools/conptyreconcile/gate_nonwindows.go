@@ -104,3 +104,9 @@ func runNativeCommandTiming(hostPath, reportPath string, width int, heights []in
 	_ = heights
 	return fmt.Errorf("native command timing requires Windows")
 }
+
+func runNativePassthroughProbe(hostPath, reportPath string) error {
+	_ = hostPath
+	_ = reportPath
+	return fmt.Errorf("native passthrough probe requires Windows")
+}
