@@ -90,6 +90,6 @@ func (b *pipeBody) Close() error {
 // openPipe opens a named pipe by its path.
 func openPipe(path string) func() (io.ReadWriteCloser, error) {
 	return func() (io.ReadWriteCloser, error) {
-		return os.OpenFile(path, os.O_RDWR, 0) // #nosec G304 -- the pipe DOCKER_HOST names
+		return os.OpenFile(path, os.O_RDWR, 0) // #nosec G304 G703 -- the pipe DOCKER_HOST names
 	}
 }
