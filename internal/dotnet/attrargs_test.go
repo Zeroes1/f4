@@ -6,7 +6,7 @@ import (
 )
 
 func TestAttributeTextDecodesArguments(t *testing.T) {
-	str := func(s string) []byte { return append([]byte{byte(len(s))}, s...) }
+	str := func(s string) []byte { return append([]byte{byte(len(s) & 0x7F)}, s...) } // #nosec G115 -- short test strings
 	cat := func(parts ...[]byte) []byte {
 		out := []byte{0x01, 0x00}
 		for _, p := range parts {
