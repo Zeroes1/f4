@@ -211,3 +211,28 @@ func TestNetworkVFSChangesOnlyInsideShares(t *testing.T) {
 		t.Error("openUNC returned nil")
 	}
 }
+
+func TestNetworkURIOpensTheNetworkAtAnAddress(t *testing.T) {
+	var ops []string
+	p := &uriProvider{enum: fakeNetwork, open: func(string) vfs.VFS { return fakeShareFS{ops: &ops} }}
+	if p.Scheme() != "network" {
+		t.Fatalf("scheme = %q", p.Scheme())
+	}
+	ctx := context.Background()
+	for raw, want := range map[string]string{
+		"network://": "/", "network:": "/",
+		"network://Microsoft%20Windows%20Network/WORKGROUP/alpha": "/Microsoft Windows Network/WORKGROUP/alpha",
+		"network:///Microsoft Windows Network":                    "/Microsoft Windows Network",
+	} {
+		v, err := p.OpenURI(ctx, nil, raw)
+		if err != nil {
+			t.Fatalf("OpenURI(%q): %v", raw, err)
+		}
+		if v.GetPath() != want {
+			t.Errorf("OpenURI(%q) opens at %q, want %q", raw, v.GetPath(), want)
+		}
+	}
+	if _, err := p.OpenURI(ctx, nil, "network://nowhere"); err == nil {
+		t.Error("an address that is not in the network opened")
+	}
+}

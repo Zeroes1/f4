@@ -203,6 +203,13 @@ type fakePanelHost struct {
 	reg       *fakeRegistration
 	driveName string
 	drive     func() vfs.VFS
+	uri       vfs.URIProvider
+	uriErr    error
+}
+
+func (h *fakePanelHost) RegisterURIProvider(p vfs.URIProvider) error {
+	h.uri = p
+	return h.uriErr
 }
 
 func (h *fakePanelHost) RegisterDrive(name string, factory func() vfs.VFS) {
@@ -250,6 +257,9 @@ func TestPluginRegistersOnlyWhereSupported(t *testing.T) {
 	} else if _, ok := host.drive().(*networkVFS); !ok {
 		t.Error("the Network drive is not a networkVFS")
 	}
+	if host.uri == nil || host.uri.Scheme() != "network" {
+		t.Errorf("URI provider = %v", host.uri)
+	}
 	if err := p.Init(host); err == nil {
 		t.Error("second Init accepted")
 	}
@@ -264,5 +274,16 @@ func TestEnumerateNetworkOffWindows(t *testing.T) {
 	}
 	if _, err := enumerateNetwork(nil); !errors.Is(err, errUnsupported) {
 		t.Errorf("enumerateNetwork error = %v, want errUnsupported", err)
+	}
+}
+
+func TestPluginUnregistersWhenTheURIProviderFails(t *testing.T) {
+	withSupported(t, true)
+	host := &fakePanelHost{uriErr: errors.New("taken")}
+	if err := NewPlugin().Init(host); err == nil {
+		t.Fatal("Init succeeded although the URI provider could not be registered")
+	}
+	if host.reg == nil || !host.reg.unregistered {
+		t.Error("the panel provider was left registered")
 	}
 }
