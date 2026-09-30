@@ -811,3 +811,84 @@ func TestMacroDeadlineStandsStillWhileADialogWaits(t *testing.T) {
 		t.Fatalf("text=%v after=%v", values["__text"], values["__after"])
 	}
 }
+
+func waitForGlobal(t *testing.T, Engine *LuaMacroEngine, name string, ok func(lua.LValue) bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if ok(macroGlobals(t, Engine, name)[name]) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("global %s never got the expected value", name)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestMacroFarTimerTicksAndStops(t *testing.T) {
+	host := newFakeMacroHost()
+	Engine := newTestMacroEngine(t, host, `
+		__n = 0
+		__timer = far.Timer(20, function(t)
+			__n = __n + 1
+			__self = (t == __timer)
+			if __n == 3 then t.Enabled = false end
+		end)
+		__interval = __timer.Interval
+		__bad = far.Timer(10, function() error("boom") end)
+	`)
+	waitForGlobal(t, Engine, "__n", func(v lua.LValue) bool { return lua.LVAsNumber(v) >= 3 })
+	time.Sleep(150 * time.Millisecond)
+	values := macroGlobals(t, Engine, "__n", "__self", "__interval")
+	if n := lua.LVAsNumber(values["__n"]); n != 3 {
+		t.Errorf("the timer ran %v times, want exactly 3 (it disabled itself)", n)
+	}
+	if values["__self"] != lua.LTrue || lua.LVAsNumber(values["__interval"]) != 20 {
+		t.Errorf("callback argument / interval: %v %v", values["__self"], values["__interval"])
+	}
+	host.mu.Lock()
+	logged := len(host.logs)
+	host.mu.Unlock()
+	if logged == 0 {
+		t.Error("a failing timer callback was not logged")
+	}
+
+	// Enabled again, then closed for good.
+	if err := Engine.LoadString("more.lua", `__timer.Enabled = true; __n = 0; __timer.Interval = 1; __timer:Close()`); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(150 * time.Millisecond)
+	if n := lua.LVAsNumber(macroGlobals(t, Engine, "__n")["__n"]); n != 0 {
+		t.Errorf("a closed timer ticked %v times", n)
+	}
+}
+
+func TestMacroFarGetConfig(t *testing.T) {
+	host := &configHost{fakeMacroHost: newFakeMacroHost()}
+	Engine := newTestMacroEngine(t, host, `
+		__tab = far.GetConfig("Editor.TabSize")
+		__flag = far.GetConfig("Editor.AutoIndent")
+		__unknown = far.GetConfig("No.Such")
+	`)
+	values := macroGlobals(t, Engine, "__tab", "__flag", "__unknown")
+	if lua.LVAsNumber(values["__tab"]) != 8 || values["__flag"] != lua.LTrue || values["__unknown"] != lua.LNil {
+		t.Errorf("GetConfig: %v %v %v", values["__tab"], values["__flag"], values["__unknown"])
+	}
+	plain := newTestMacroEngine(t, newFakeMacroHost(), `__x = far.GetConfig("Editor.TabSize")`)
+	if macroGlobals(t, plain, "__x")["__x"] != lua.LNil {
+		t.Error("a host without settings answered")
+	}
+}
+
+type configHost struct{ *fakeMacroHost }
+
+func (h *configHost) ConfigValue(key string) (any, bool) {
+	switch key {
+	case "Editor.TabSize":
+		return int64(8), true
+	case "Editor.AutoIndent":
+		return true, true
+	}
+	return nil, false
+}

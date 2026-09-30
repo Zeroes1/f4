@@ -77,6 +77,7 @@ type LuaMacroEngine struct {
 
 	items    []*luaMenuItem
 	events   []*luaEvent
+	timers   []*luaTimer
 	cmdLines []*luaCommandLine
 
 	// The fields below belong to the interpreter's worker goroutine while a
@@ -630,6 +631,7 @@ func (e *LuaMacroEngine) Close() error {
 	if e == nil || e.rt == nil {
 		return nil
 	}
+	e.stopTimers()
 	return e.rt.Close()
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/unxed/f4/internal/panel"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/unxed/f4/internal/config"
@@ -151,6 +152,19 @@ func (f4MacroHost) Message(title, text string) {
 	vtui.FrameManager.PostTask(func() {
 		vtui.ShowMessage(title, text, []string{"&Ok"})
 	})
+}
+
+// ConfigValue is macro.MacroConfigHost: the few settings far.GetConfig reads.
+func (f4MacroHost) ConfigValue(key string) (any, bool) {
+	switch strings.ToLower(key) {
+	case "editor.tabsize":
+		return int64(config.App.EditorTabSize), true
+	case "editor.expandtabs":
+		return int64(config.App.EditorExpandTabs), true
+	case "editor.autoindent":
+		return config.App.EditorAutoIndent, true
+	}
+	return nil, false
 }
 
 // InputBox and Menu are macro.MacroDialogHost: they wait for the answer, with no

@@ -54,6 +54,12 @@ type MacroDialogHost interface {
 	Menu(title string, items []string) int
 }
 
+// MacroConfigHost is what a host adds to let far.GetConfig read its settings.
+type MacroConfigHost interface {
+	// ConfigValue answers a setting by name: a number, a bool or a string.
+	ConfigValue(key string) (value any, known bool)
+}
+
 // LuaMacroBinding is the discoverable, immutable part of a Lua macro. It is
 // used by command surfaces without exposing interpreter-owned functions.
 type LuaMacroBinding struct {

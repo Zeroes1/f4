@@ -483,8 +483,10 @@ func (e *LuaMacroEngine) newFarNamespace(L *lua.LState) *lua.LTable {
 			L.Push(lua.LString(""))
 			return 1
 		},
-		"InputBox": e.luaFarInputBox,
-		"Menu":     e.luaFarMenu,
+		"InputBox":  e.luaFarInputBox,
+		"Menu":      e.luaFarMenu,
+		"Timer":     e.luaFarTimer,
+		"GetConfig": e.luaFarGetConfig,
 	})
 	return namespace
 }
@@ -552,6 +554,22 @@ func (e *LuaMacroEngine) luaFarMenu(L *lua.LState) int {
 	L.Push(chosen[index])
 	L.Push(lua.LNumber(index + 1))
 	return 2
+}
+
+// far.GetConfig(key) reads one of f4's settings by name ("Editor.TabSize",
+// "Editor.ExpandTabs", "Editor.AutoIndent"); nil for a name it does not know.
+func (e *LuaMacroEngine) luaFarGetConfig(L *lua.LState) int {
+	key := L.CheckString(1)
+	if host, ok := e.host.(MacroConfigHost); ok {
+		if value, known := host.ConfigValue(key); known {
+			if lv, err := macroValueToLua(L, value, 0); err == nil {
+				L.Push(lv)
+				return 1
+			}
+		}
+	}
+	L.Push(lua.LNil)
+	return 1
 }
 
 func newBitTable(L *lua.LState) *lua.LTable {
