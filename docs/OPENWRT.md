@@ -64,6 +64,17 @@ Current exclusions:
 - The East Asian code pages (Shift JIS, ISO-2022-JP, EUC-JP, EUC-KR, GBK,
   HZ-GB-2312, GB18030, Big5; `vfs/codepages_nocjk.go`, about 0.6 MB). UTF-8,
   UTF-16 and the single-byte code pages remain.
+- The Lua interpreter (`gopher-lua`): Lua macros (`internal/macro`) and Lua
+  plugins (`internal/plughost`) report themselves as unavailable
+  (`lua_extralite.go`, `transport_lua_extralite.go`). Recorded keyboard macros
+  and out-of-process plugins work.
+- The WebAssembly runtime (`wazero`): WASM plugins and Observer modules report
+  themselves as unavailable (`transport_wazero_extralite.go`,
+  `plugins_observer_extralite.go`).
+
+Extralite amd64 after these two slices: 37 224 713 bytes raw (40 907 017 before
+them), with neither `gopher-lua` nor `wazero` in `go list -deps`. The sizes
+tables above are from before them and are lower bounds of the gain.
 
 ## Measurements
 
