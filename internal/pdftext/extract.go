@@ -18,8 +18,8 @@ type Result struct {
 	Truncated bool
 }
 
-// Extract reads the file of the given size and returns its text.
-func Extract(r io.ReaderAt, size int64) (*Result, error) {
+// load reads the whole file into memory and finds its objects.
+func load(r io.ReaderAt, size int64) (*doc, error) {
 	if size < 0 || size > MaxFileSize {
 		return nil, fmt.Errorf("the PDF is larger than %d MiB", MaxFileSize>>20)
 	}
@@ -27,7 +27,12 @@ func Extract(r io.ReaderAt, size int64) (*Result, error) {
 	if _, err := r.ReadAt(data, 0); err != nil && err != io.EOF {
 		return nil, err
 	}
-	d, err := loadDoc(data)
+	return loadDoc(data)
+}
+
+// Extract reads the file of the given size and returns its text.
+func Extract(r io.ReaderAt, size int64) (*Result, error) {
+	d, err := load(r, size)
 	if err != nil {
 		return nil, err
 	}

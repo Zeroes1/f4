@@ -15,6 +15,7 @@ import (
 	"github.com/unxed/f4/plugins/intchecker"
 	"github.com/unxed/f4/plugins/mediainfo"
 	observerplugin "github.com/unxed/f4/plugins/observer"
+	pdfviewplugin "github.com/unxed/f4/plugins/pdfview"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
 	"github.com/unxed/f4/plugins/svcmgr"
@@ -179,6 +180,9 @@ func (pm *PluginManager) loadInternal() {
 		// .NET assembly browser (f4#1666): Ctrl+PgDn on a .dll/.exe with .NET
 		// metadata mounts its references, types and resources read-only.
 		dotnetplugin.NewPlugin(),
+		// PDF browser (f4#1665): Ctrl+PgDn on a .pdf mounts its text and pictures
+		// read-only; F3 on a picture opens f4's image viewer.
+		pdfviewplugin.NewPlugin(),
 		// IDE mode (f4#382): scaffold only for now -- registration and the
 		// three IDE.Build/Run/Test commands, no toolchain integration yet.
 		// See plugins/ide's package doc for the full plan.

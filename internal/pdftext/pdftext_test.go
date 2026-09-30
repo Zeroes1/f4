@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"errors"
 	"fmt"
+	"image/png"
 	"strings"
 	"testing"
 )
@@ -222,5 +223,82 @@ func TestReport(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("report lacks %q:\n%s", want, text)
 		}
+	}
+}
+
+func TestExtractImages(t *testing.T) {
+	// A 2x2 RGB picture, Flate-compressed with PNG "Up" prediction: the first
+	// row is stored plain, the second as the difference from the first.
+	row1 := []byte{10, 20, 30, 40, 50, 60}
+	row2 := []byte{15, 25, 35, 45, 55, 65}
+	predicted := append([]byte{0}, row1...)
+	predicted = append(predicted, 2)
+	for i := range row2 {
+		predicted = append(predicted, row2[i]-row1[i])
+	}
+	gray := flate(t, string([]byte{1, 2, 3, 4}))
+	data := build(map[int]string{
+		1: "<< /Type /Catalog /Pages 2 0 R >>",
+		2: "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+		3: "<< /Type /Page /Parent 2 0 R /Resources << /XObject << /Im0 4 0 R /Im1 5 0 R /Im2 6 0 R /Fm 7 0 R /Skip 9 0 R >> >> >>",
+		4: stream("/Type /XObject /Subtype /Image /Width 8 /Height 8 /Filter /DCTDecode", "JPEGDATA"),
+		5: stream("/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /DecodeParms << /Predictor 15 /Columns 2 >>", flate(t, string(predicted))),
+		6: stream("/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode", gray),
+		7: stream("/Type /XObject /Subtype /Form /Resources << /XObject << /Inner 8 0 R >> >>", "q Q"),
+		8: stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /Filter /JPXDecode", "JP2"),
+		9: stream("/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceCMYK /BitsPerComponent 8", "12345678123456781234567812345678"),
+	}, "<< /Root 1 0 R >>")
+	images, err := ExtractImages(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]Image{}
+	for _, img := range images {
+		byName[img.Name] = img
+	}
+	if len(images) != 4 || byName["Im0"].Ext != "jpg" || string(byName["Im0"].Data) != "JPEGDATA" || byName["Inner"].Ext != "jp2" {
+		t.Fatalf("images = %+v", images)
+	}
+	if byName["Im1"].Page != 1 || byName["Im1"].Ext != "png" {
+		t.Fatalf("rgb picture = %+v", byName["Im1"])
+	}
+	decoded, err := png.Decode(bytes.NewReader(byName["Im1"].Data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, g, b, _ := decoded.At(1, 1).RGBA(); r>>8 != 45 || g>>8 != 55 || b>>8 != 65 {
+		t.Errorf("pixel (1,1) = %d %d %d, want 45 55 65", r>>8, g>>8, b>>8)
+	}
+	grayImg, err := png.Decode(bytes.NewReader(byName["Im2"].Data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _, _, _ := grayImg.At(1, 0).RGBA(); r>>8 != 2 {
+		t.Errorf("gray pixel = %d", r>>8)
+	}
+	if _, err := ExtractImages(bytes.NewReader([]byte("nope")), 4); !errors.Is(err, ErrNotPDF) {
+		t.Errorf("not a PDF: %v", err)
+	}
+}
+
+func TestUnpredictPNGFilters(t *testing.T) {
+	// Sub, Average and Paeth on a two-row, one-byte-per-pixel picture.
+	rows := []byte{
+		1, 5, 1, 1, // Sub: 5, 6, 7
+		3, 1, 1, 1, // Average: 1+(0+5)/2=3, 1+(3+6)/2=5, 1+(5+7)/2=7
+		4, 1, 1, 1, // Paeth
+	}
+	got, err := unpredictPNG(rows, 3, 1)
+	if err != nil || len(got) != 9 || got[0] != 5 || got[1] != 6 || got[2] != 7 || got[3] != 3 || got[4] != 5 || got[5] != 7 {
+		t.Fatalf("unpredict = %v, %v", got, err)
+	}
+	if _, err := unpredictPNG([]byte{9, 1}, 1, 1); err == nil {
+		t.Error("an unknown row filter was accepted")
+	}
+	if _, err := unpredictPNG(nil, 0, 1); err == nil {
+		t.Error("bad parameters were accepted")
+	}
+	if paeth(3, 5, 3) != 5 || paeth(1, 1, 5) != 1 || abs(-4) != 4 {
+		t.Error("paeth or abs wrong")
 	}
 }
