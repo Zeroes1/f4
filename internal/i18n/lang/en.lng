@@ -2292,6 +2292,7 @@ NetFox.Command.EditConnection.Desc=Edit the selected NetFox connection
 NetFox.Command.AddConnection=Add connection
 NetFox.Command.AddConnection.Desc=Create a new NetFox connection
 NetFox.PassiveMode=Passive mode
+NetFox.FishRemoteF4=Use f4 on the remote host if installed
 NetFox.LabelName=&Name:
 NetFox.LabelProtocol=P&rotocol:
 NetFox.LabelHost=&Host:

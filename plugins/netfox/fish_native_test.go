@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/unxed/f4/plugins/netfox/fishplus"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtui"
 )
 
 // nativeServerDialer connects a FishVFS to an in-process fishplus.Server the
@@ -32,6 +34,9 @@ type nativeTestCloser func() error
 func (f nativeTestCloser) Close() error { return f() }
 
 func TestFishVFSOverTheNativeServer(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("FishVFS keeps remote paths in slash form with a leading /, which a Windows server does not take as absolute")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	dir := t.TempDir()
@@ -89,5 +94,35 @@ func TestNativeAttemptFallsBackOnAPeerWithoutF4(t *testing.T) {
 	dialFails := func(ctx context.Context) (io.Writer, io.Reader, io.Closer, error) { return nil, nil, nil, unreachable }
 	if _, err := NewFishVFSOnDialers(ctx, nil, dialFails, native, nativeServerDialer(dir), native, "test"); !errors.Is(err, unreachable) {
 		t.Fatalf("a dial failure = %v, want it returned as it is", err)
+	}
+}
+
+func TestFishConnectionDialogCheckboxSavesTheRemoteF4Choice(t *testing.T) {
+	if err := loadHostStrings(); err != nil {
+		t.Skipf("host strings unavailable: %v", err)
+	}
+	ph := &fishProtocolHandler{}
+
+	cfg := &NetFoxConfig{}
+	ui, save := ph.BuildExtraUI(cfg, 0, 0, 56, 1)
+	chk, ok := ui.(*vtui.Checkbox)
+	if !ok || chk.State != 0 {
+		t.Fatalf("a site without the option must show an unchecked box, got %#v", ui)
+	}
+	chk.State = 1
+	save()
+	if cfg.Options[fishRemoteF4Option] != "true" {
+		t.Fatalf("Options = %v, want RemoteF4=true", cfg.Options)
+	}
+
+	ui, save = ph.BuildExtraUI(cfg, 0, 0, 56, 1)
+	chk = ui.(*vtui.Checkbox)
+	if chk.State != 1 {
+		t.Fatal("a saved choice must show a checked box")
+	}
+	chk.State = 0
+	save()
+	if _, still := cfg.Options[fishRemoteF4Option]; still {
+		t.Fatalf("Options = %v, want the option removed when unchecked", cfg.Options)
 	}
 }

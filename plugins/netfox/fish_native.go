@@ -10,3 +10,8 @@ var FishPreferRemoteF4 atomic.Bool
 
 // nativeRemoteCommand is what the client runs on the peer in place of a shell.
 const nativeRemoteCommand = "f4 --fish-server"
+
+// fishRemoteF4Option is the key of the per-site setting in NetFoxConfig.Options
+// ("true" when the site prefers f4 on the peer), set by the checkbox of the
+// fish+ connection dialog.
+const fishRemoteF4Option = "RemoteF4"

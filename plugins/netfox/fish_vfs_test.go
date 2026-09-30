@@ -637,8 +637,8 @@ func TestFishProtocolIsRegistered(t *testing.T) {
 		t.Errorf("DefaultPort = %q, want 22", ph.DefaultPort())
 	}
 	ui, apply := ph.BuildExtraUI(&NetFoxConfig{}, 0, 0, 10, 10)
-	if ui != nil {
-		t.Error("the fish+ handler needs no extra UI yet")
+	if ui == nil {
+		t.Error("the fish+ handler carries the use-f4-on-the-host checkbox")
 	}
 	apply()
 }

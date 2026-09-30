@@ -388,6 +388,13 @@ func isHandshakeFailure(err error) bool {
 // rebuilt after the connection drops; a site opened any other way would have
 // to be reopened by hand.
 func NewFishVFS(parent vfs.VFS, host, port, user, pass, keyPath string, timeout int, px netproxy.Settings) (*FishVFS, error) {
+	return NewFishVFSWithOptions(parent, host, port, user, pass, keyPath, timeout, px, FishPreferRemoteF4.Load())
+}
+
+// NewFishVFSWithOptions is NewFishVFS with the choice of server made by the
+// caller: with remoteF4 set the peer's f4 (--fish-server) is tried before the
+// shell helper (see FishPreferRemoteF4).
+func NewFishVFSWithOptions(parent vfs.VFS, host, port, user, pass, keyPath string, timeout int, px netproxy.Settings, remoteF4 bool) (*FishVFS, error) {
 	key := fishPoolKey{host: host, port: port, user: user, proxy: px}
 	if conn := globalFishPool.take(key); conn != nil {
 		return newFishVFSFromPooledConn(parent, conn, host, port, user), nil
@@ -411,7 +418,7 @@ func NewFishVFS(parent vfs.VFS, host, port, user, pass, keyPath string, timeout 
 	pwsh := sshFishDialerPwsh(host, port, user, pass, keyPath, timeout, px)
 	var v *FishVFS
 	var err error
-	if FishPreferRemoteF4.Load() {
+	if remoteF4 {
 		// Opt-in: try f4 itself as the server first (no helper to upload, and
 		// none of the shell's limits), and fall back to the POSIX shell helper
 		// on a host that does not have it.
@@ -1327,7 +1334,8 @@ func (p *fishProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vf
 			timeout = t
 		}
 	}
-	res, err := NewFishVFS(parent, cfg.Host, port, cfg.User, cfg.Pass, cfg.KeyPath, timeout, cfg.Proxy())
+	res, err := NewFishVFSWithOptions(parent, cfg.Host, port, cfg.User, cfg.Pass, cfg.KeyPath, timeout, cfg.Proxy(),
+		FishPreferRemoteF4.Load() || cfg.Options[fishRemoteF4Option] == "true")
 	if err != nil {
 		return nil, err
 	}
@@ -1339,7 +1347,21 @@ type fishProtocolHandler struct{}
 func (ph *fishProtocolHandler) Prefix() string      { return "fish+" }
 func (ph *fishProtocolHandler) DefaultPort() string { return "22" }
 func (ph *fishProtocolHandler) BuildExtraUI(cfg *NetFoxConfig, x, y, w, h int) (vtui.UIElement, func()) {
-	return nil, func() {}
+	chk := vtui.NewCheckbox(x, y, vtui.Msg("NetFox.FishRemoteF4"), false)
+	if cfg.Options[fishRemoteF4Option] == "true" {
+		chk.State = 1
+	}
+	save := func() {
+		if chk.State == 1 {
+			if cfg.Options == nil {
+				cfg.Options = make(map[string]string)
+			}
+			cfg.Options[fishRemoteF4Option] = "true"
+		} else {
+			delete(cfg.Options, fishRemoteF4Option)
+		}
+	}
+	return chk, save
 }
 
 func init() {

@@ -2292,6 +2292,7 @@ NetFox.Command.EditConnection.Desc=Изменить выбранное подк�
 NetFox.Command.AddConnection=Добавить подключение
 NetFox.Command.AddConnection.Desc=Создать новое подключение NetFox
 NetFox.PassiveMode=Пассивный режим
+NetFox.FishRemoteF4=Использовать f4 на хосте, если он там есть
 NetFox.LabelName=&Имя:
 NetFox.LabelProtocol=П&ротокол:
 NetFox.LabelHost=&Хост:
