@@ -92,6 +92,8 @@ type Member struct {
 	// Attributes are the custom attributes applied to it, by the name of the
 	// attribute type without the "Attribute" suffix ("System.Obsolete").
 	Attributes []string
+	// Generics are the generic parameters of a method, with their constraints.
+	Generics []GenericParam
 
 	rva  uint32 // method body RVA, 0 for a field or a method with no body
 	body []byte // header and code of the method, when it could be read
@@ -265,8 +267,10 @@ type tables struct {
 	colWidths map[int][]int
 	// attrs holds the custom attributes by owner, see attrKey.
 	attrs map[uint64][]string
-	// generics holds the generic parameters of each TypeDef row.
-	generics map[uint32][]GenericParam
+	// generics holds the generic parameters of each TypeDef row, and
+	// methodGenerics those of each MethodDef row.
+	generics       map[uint32][]GenericParam
+	methodGenerics map[uint32][]GenericParam
 }
 
 func (t *tables) codedWidth(kind codedKind) int {
@@ -555,6 +559,9 @@ func (t *tables) members(typeRow uint32, table, nameCol, listCol int, kind strin
 	for r := start; r >= 1 && r < end && len(out) < maxMembers; r++ {
 		m := Member{Kind: kind, Name: t.str(t.cell(table, r, nameCol)), Attributes: t.attrs[attrKey(table, r)]}
 		if kind == "method" {
+			m.Generics = t.methodGenerics[r]
+		}
+		if kind == "method" {
 			m.rva = t.cell(table, r, 0)
 			m.Signature = t.methodSignature(t.cell(table, r, 4), m.Name)
 		} else {
@@ -655,22 +662,28 @@ func (t *tables) attributeName(coded uint32) string {
 	return strings.TrimSuffix(typeName, "Attribute")
 }
 
-// maxGenericParams bounds the parameters and the constraints kept per type.
+// maxGenericParams bounds the parameters and the constraints kept per type
+// or method.
 const maxGenericParams = 64
 
 // collectGenerics reads the GenericParam (II.22.20) and GenericParamConstraint
-// (II.22.21) tables for the generic parameters of types; those of methods are
-// not listed.
+// (II.22.21) tables for the generic parameters of types and methods.
 func (t *tables) collectGenerics() {
 	t.generics = make(map[uint32][]GenericParam)
+	t.methodGenerics = make(map[uint32][]GenericParam)
 	type slot struct {
-		typeRow uint32
-		idx     int
+		lists map[uint32][]GenericParam // where the parameter was stored
+		row   uint32
+		idx   int
 	}
 	owners := make(map[uint32]slot) // GenericParam row -> where it was stored
 	for row := uint32(1); row <= t.rowCount[0x2A]; row++ {
-		owner := t.cell(0x2A, row, 2) // TypeOrMethodDef: 1 tag bit, 0 is a TypeDef
-		if owner&1 != 0 || len(t.generics[owner>>1]) >= maxGenericParams {
+		owner := t.cell(0x2A, row, 2) // TypeOrMethodDef: 1 tag bit, 0 TypeDef, 1 MethodDef
+		lists := t.generics
+		if owner&1 != 0 {
+			lists = t.methodGenerics
+		}
+		if len(lists[owner>>1]) >= maxGenericParams {
 			continue
 		}
 		flags := t.cell(0x2A, row, 1)
@@ -686,15 +699,15 @@ func (t *tables) collectGenerics() {
 		case 2:
 			p.Variance = "in"
 		}
-		owners[row] = slot{typeRow: owner >> 1, idx: len(t.generics[owner>>1])}
-		t.generics[owner>>1] = append(t.generics[owner>>1], p)
+		owners[row] = slot{lists: lists, row: owner >> 1, idx: len(lists[owner>>1])}
+		lists[owner>>1] = append(lists[owner>>1], p)
 	}
 	for row := uint32(1); row <= t.rowCount[0x2C]; row++ {
 		where, ok := owners[t.cell(0x2C, row, 0)]
 		if !ok {
 			continue
 		}
-		list := t.generics[where.typeRow]
+		list := where.lists[where.row]
 		if len(list[where.idx].Constraints) >= maxGenericParams {
 			continue
 		}

@@ -179,6 +179,9 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 				default:
 					body += m.Kind + " " + m.Name + "\n"
 				}
+				for _, g := range m.Generics {
+					body += "  generic " + genericText(g) + "\n"
+				}
 				if m.Kind != "method" {
 					continue
 				}

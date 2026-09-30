@@ -32,7 +32,7 @@ func sampleInfo() *idotnet.Info {
 			{Name: "X"},
 		}},
 		Members: map[string][]idotnet.Member{
-			"My.Ns.Foo":       {{Kind: "field", Name: "Count", Attributes: []string{"System.NonSerialized"}}, {Kind: "method", Name: "Run"}},
+			"My.Ns.Foo":       {{Kind: "field", Name: "Count", Attributes: []string{"System.NonSerialized"}}, {Kind: "method", Name: "Run", Generics: []idotnet.GenericParam{{Name: "M", Class: true}}}},
 			"My.Ns.Foo+Inner": {{Kind: "field", Name: "Depth"}},
 		},
 	}
@@ -82,6 +82,9 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "generic out T : class, System.IDisposable\n") ||
 		!strings.Contains(got, "generic K : struct\n") || !strings.Contains(got, "generic V : new()\n") || !strings.Contains(got, "generic X\n") {
 		t.Errorf("generic parameters are not in the type file: %q", got)
+	}
+	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "method Run\n  generic M : class\n") {
+		t.Errorf("a method's generic parameters are not in the type file: %q", got)
 	}
 	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "field Count\n") || !strings.Contains(got, "method Run\n") {
 		t.Errorf("a type file lists %q", got)

@@ -131,17 +131,20 @@ func sampleMetadata() []byte {
 	t.u16(3)
 	t.u16(2)
 
-	// GenericParam x2: Number, Flags, Owner (TypeOrMethodDef: TypeDef Foo),
-	// Name. T is covariant with class; U has new().
-	for _, row := range [][3]int{{0, 0x01 | 0x04, paramT}, {1, 0x10, paramU}} {
+	// GenericParam x3: Number, Flags, Owner (TypeOrMethodDef), Name. On Foo,
+	// T is covariant with class and U has new(); on the method Run (MethodDef
+	// 2), T is a struct.
+	for _, row := range [][4]int{{0, 0x01 | 0x04, 2 << 1, paramT}, {1, 0x10, 2 << 1, paramU}, {0, 0x08, 2<<1 | 1, paramT}} {
 		t.u16(row[0])
 		t.u16(row[1])
-		t.u16(2 << 1)
 		t.u16(row[2])
+		t.u16(row[3])
 	}
-	// GenericParamConstraint x1: Owner (GenericParam 1), Constraint (TypeRef 1).
-	t.u16(1)
-	t.u16(1<<2 | 1)
+	// GenericParamConstraint x2: Owner (GenericParam), Constraint (TypeRef 1).
+	for _, owner := range []int{1, 3} {
+		t.u16(owner)
+		t.u16(1<<2 | 1)
+	}
 
 	var s builder
 	s.u32(0)
@@ -152,7 +155,7 @@ func sampleMetadata() []byte {
 	valid := uint64(1<<0 | 1<<1 | 1<<2 | 1<<4 | 1<<6 | 1<<0x0A | 1<<0x0C | 1<<0x20 | 1<<0x23 | 1<<0x28 | 1<<0x29 | 1<<0x2A | 1<<0x2C)
 	_ = binary.Write(&s, binary.LittleEndian, valid)
 	_ = binary.Write(&s, binary.LittleEndian, uint64(0))
-	for _, n := range []int{1, 1, 3, 2, 3, 1, 3, 1, 1, 1, 1, 2, 1} {
+	for _, n := range []int{1, 1, 3, 2, 3, 1, 3, 1, 1, 1, 1, 3, 2} {
 		s.u32(n)
 	}
 	s.Write(t.Bytes())
@@ -275,6 +278,12 @@ func TestReadAssembly(t *testing.T) {
 	if len(gen) != 2 || gen[0].Name != "T" || gen[0].Variance != "out" || !gen[0].Class || len(gen[0].Constraints) != 1 ||
 		gen[0].Constraints[0] != "System.ObsoleteAttribute" || gen[1].Name != "U" || !gen[1].New || gen[1].Class || len(gen[1].Constraints) != 0 {
 		t.Errorf("generics of Foo = %+v", info.Generics)
+	}
+	// The method Run has its own <T> where T : struct, ObsoleteAttribute.
+	run := info.Members["My.Ns.Foo"][2]
+	if len(run.Generics) != 1 || run.Generics[0].Name != "T" || !run.Generics[0].Struct || len(run.Generics[0].Constraints) != 1 ||
+		len(info.Members["My.Ns.Foo"][0].Generics) != 0 {
+		t.Errorf("generics of Run = %+v", run.Generics)
 	}
 	nestedMembers := info.Members["My.Ns.Foo+Nested"]
 	if len(nestedMembers) != 2 || nestedMembers[0].Name != "Hidden" || nestedMembers[1].Name != "Stop" {
