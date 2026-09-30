@@ -111,6 +111,7 @@ artifacts/       # build artifacts
 | Archive libraries | `docs/ARCHIVE_DEPENDENCIES.md` | The chain of archive libraries (zipper, zip, tar, xz, sevenzip, archives, rardecode) and the rules for updating them |
 | Issue reviews | `docs/ISSUES/` | Per-issue solution reviews |
 | Spreadsheet | `docs/SPREADSHEET.md` | Spreadsheet mode specification |
+| Terminal junk log | `docs/TERMINAL_JUNK_LOG.md` | Stray paths, stray line feeds and the `f4_sync` directory sync in the embedded terminal. Read it whole before touching that area; never delete or prune it, add to it |
 
 ## AI Context Files
 
