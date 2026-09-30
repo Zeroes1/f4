@@ -818,6 +818,13 @@ SvcMgr.CannotPause=%s is %s: only a running service can be paused and only a pau
 SvcMgr.StopTitle=Stop service
 SvcMgr.StopConfirm=Stop the service %s? Services that depend on it stop too.
 SvcMgr.StopButton=&Stop
+SvcMgr.DetailsTitle=Service
+SvcMgr.DetailName=Name: %s
+SvcMgr.DetailDisplay=Display name: %s
+SvcMgr.DetailState=State: %s
+SvcMgr.DetailStart=Start type: %s
+SvcMgr.DetailAccount=Runs as: %s
+SvcMgr.DetailPath=Program: %s
 
 PanelPlugin.KeyBar.Close=Close
 

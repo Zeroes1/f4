@@ -818,6 +818,13 @@ SvcMgr.CannotPause=%s: состояние «%s»; приостановить м�
 SvcMgr.StopTitle=Остановка службы
 SvcMgr.StopConfirm=Остановить службу %s? Зависящие от неё службы тоже остановятся.
 SvcMgr.StopButton=&Остановить
+SvcMgr.DetailsTitle=Служба
+SvcMgr.DetailName=Имя: %s
+SvcMgr.DetailDisplay=Отображаемое имя: %s
+SvcMgr.DetailState=Состояние: %s
+SvcMgr.DetailStart=Тип запуска: %s
+SvcMgr.DetailAccount=Учётная запись: %s
+SvcMgr.DetailPath=Программа: %s
 
 PanelPlugin.KeyBar.Close=Закрыть
 

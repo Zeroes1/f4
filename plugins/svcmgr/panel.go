@@ -62,6 +62,7 @@ type servicesPanel struct {
 	table *vtui.Table
 	list  func() ([]service, error)
 	ctl   controller
+	det   detailer
 }
 
 func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs.PanelController, error) {
@@ -79,7 +80,7 @@ func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs
 	table.ColorItemSelectTextIdx = theme.ColPanelSelectedText
 	table.SetSort(colDisplay, true)
 
-	p := &servicesPanel{frame: frame, table: table, list: list, ctl: serviceController}
+	p := &servicesPanel{frame: frame, table: table, list: list, ctl: serviceController, det: serviceDetailer}
 	p.SetFocus(false)
 	p.SetPosition(ctx.Bounds[0], ctx.Bounds[1], ctx.Bounds[2], ctx.Bounds[3])
 	if err := p.reload(); err != nil {
@@ -169,7 +170,7 @@ func (p *servicesPanel) IsFocused() bool { return p.table.IsFocused() }
 
 var _ vfs.PanelKeyProvider = (*servicesPanel)(nil)
 
-// PanelKeys declares F5 (reload) and, on the Shift row, Start (Shift+F1), Stop
+// PanelKeys declares F5 (reload), Enter (the service's details) and, on the Shift row, Start (Shift+F1), Stop
 // (Shift+F2, after a confirmation) and Pause/Resume (Shift+F3, whichever the
 // service's state calls for). They are F-keys rather than letters because
 // QuickSearch claims printable characters while the table has the focus, and
@@ -177,6 +178,7 @@ var _ vfs.PanelKeyProvider = (*servicesPanel)(nil)
 func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 	return []vfs.PanelKey{
 		{VK: vtinput.VK_F5, Label: i18n.Msg("SvcMgr.KeyBar.Refresh"), Run: p.refresh},
+		{VK: vtinput.VK_RETURN, Run: p.showDetails, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Start"), Run: p.start, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Stop"), Run: p.confirmStop, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
@@ -206,6 +208,41 @@ func (p *servicesPanel) refresh() {
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}
+}
+
+// detailsText renders a service and its configuration as the lines the
+// details window shows.
+func detailsText(svc service, d serviceDetails) string {
+	lines := []string{
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailName"), svc.Name),
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailDisplay"), svc.Display),
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailState"), stateName(svc.State)),
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailStart"), startTypeName(d.StartType, d.Delayed)),
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailAccount"), d.Account),
+		fmt.Sprintf(i18n.Msg("SvcMgr.DetailPath"), d.BinaryPath),
+	}
+	if d.Description != "" {
+		lines = append(lines, "", d.Description)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// showDetails is Enter: how the service starts, what it runs and as whom,
+// and its description, read on demand for the service under the cursor.
+func (p *servicesPanel) showDetails() {
+	svc, ok := p.selectedService()
+	if !ok {
+		return
+	}
+	d, err := p.det.Details(svc.Name)
+	if err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("SvcMgr.ActionFailed"), svc.Name, err), 3e9)
+		return
+	}
+	if vtui.FrameManager == nil {
+		return
+	}
+	vtui.ShowMessageEx(i18n.Msg("SvcMgr.DetailsTitle"), detailsText(svc, d), []string{i18n.Msg("vtui.Ok")}, vtui.MessageInfo)
 }
 
 // run applies one action to the service under the cursor, reports a failure

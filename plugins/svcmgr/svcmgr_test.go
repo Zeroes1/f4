@@ -2,6 +2,7 @@ package svcmgr
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/vfs"
@@ -251,8 +252,8 @@ func TestPanelActionsNeedAService(t *testing.T) {
 	if len(ctl.calls) != 0 || p.hasSelected() {
 		t.Errorf("an empty list ran %v", ctl.calls)
 	}
-	if got := len(p.PanelKeys()); got != 4 {
-		t.Errorf("panel keys = %d, want 4", got)
+	if got := len(p.PanelKeys()); got != 5 {
+		t.Errorf("panel keys = %d, want 5", got)
 	}
 }
 
@@ -265,5 +266,62 @@ func TestPlatformControllerOffWindows(t *testing.T) {
 		if !errors.Is(err, errUnsupported) {
 			t.Errorf("action %d error = %v, want errUnsupported", i, err)
 		}
+	}
+}
+
+func TestStartTypeName(t *testing.T) {
+	cases := []struct {
+		t       uint32
+		delayed bool
+		want    string
+	}{
+		{startBoot, false, "Boot"}, {startSystem, false, "System"}, {startAuto, false, "Automatic"},
+		{startAuto, true, "Automatic (delayed start)"}, {startManual, false, "Manual"},
+		{startDisabled, false, "Disabled"}, {9, false, "9"},
+	}
+	for _, c := range cases {
+		if got := startTypeName(c.t, c.delayed); got != c.want {
+			t.Errorf("startTypeName(%d, %v) = %q, want %q", c.t, c.delayed, got, c.want)
+		}
+	}
+}
+
+type fakeDetailer struct {
+	d   serviceDetails
+	err error
+}
+
+func (f fakeDetailer) Details(string) (serviceDetails, error) { return f.d, f.err }
+
+func TestDetailsTextAndEnter(t *testing.T) {
+	text := detailsText(service{Name: "Spooler", Display: "Print Spooler", State: stateRunning},
+		serviceDetails{StartType: startAuto, Delayed: true, Account: "LocalSystem", BinaryPath: `C:\x\spool.exe`, Description: "Prints."})
+	for _, want := range []string{"Spooler", "Print Spooler", "Running", "Automatic (delayed start)", "LocalSystem", `C:\x\spool.exe`, "Prints."} {
+		if !strings.Contains(text, want) {
+			t.Errorf("details text lacks %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(detailsText(service{Name: "a"}, serviceDetails{}), "\n\n") {
+		t.Error("an empty description left a blank paragraph")
+	}
+
+	services := []service{{Name: "A", Display: "A", State: stateStopped}}
+	var listErr error
+	p := openFake(t, &services, &listErr)
+	p.det = fakeDetailer{err: errors.New("denied")}
+	p.showDetails() // a failure is a toast, not a crash
+	p.det = fakeDetailer{d: serviceDetails{StartType: startManual}}
+	p.showDetails()
+	var none []service
+	empty := openFake(t, &none, &listErr)
+	empty.showDetails()
+}
+
+func TestPlatformDetailerOffWindows(t *testing.T) {
+	if Supported() {
+		t.Skip("this OS has a service manager")
+	}
+	if _, err := (platformDetailer{}).Details("x"); !errors.Is(err, errUnsupported) {
+		t.Errorf("Details error = %v, want errUnsupported", err)
 	}
 }
