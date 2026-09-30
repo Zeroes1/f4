@@ -126,7 +126,9 @@ func buildTree(info *dotnet.Info, name, dir string, chain []string) *node {
 		if label == "" {
 			label = "(global)"
 		}
-		types := append([]string(nil), info.Types[ns]...)
+		// Nested types sit beside their outer type as "Outer+Inner", with the
+		// members and the IL of their own.
+		types := append(append([]string(nil), info.Types[ns]...), info.Nested[ns]...)
 		sort.Strings(types)
 		for _, t := range types {
 			key := t

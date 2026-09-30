@@ -23,7 +23,11 @@ func sampleInfo() *idotnet.Info {
 		TypeCount:      4,
 		Resources:      []string{"a/b.resources", "linked.bin"},
 		Blobs:          []idotnet.Blob{{Name: "a/b.resources", Data: []byte("RES")}},
-		Members:        map[string][]idotnet.Member{"My.Ns.Foo": {{Kind: "field", Name: "Count"}, {Kind: "method", Name: "Run"}}},
+		Nested:         map[string][]string{"My.Ns": {"Foo+Inner"}},
+		Members: map[string][]idotnet.Member{
+			"My.Ns.Foo":       {{Kind: "field", Name: "Count"}, {Kind: "method", Name: "Run"}},
+			"My.Ns.Foo+Inner": {{Kind: "field", Name: "Depth"}},
+		},
 	}
 }
 
@@ -61,6 +65,9 @@ func TestAssemblyTreeBrowsing(t *testing.T) {
 		if isDir, ok := types[name]; !ok || isDir {
 			t.Errorf("types = %v, want file %q", types, name)
 		}
+	}
+	if got := readAll(t, v, "/Namespaces/My.Ns/Foo+Inner"); !strings.Contains(got, "type Foo+Inner\n") || !strings.Contains(got, "field Depth\n") {
+		t.Errorf("the nested type's file reads %q", got)
 	}
 	if got := readAll(t, v, "/Namespaces/My.Ns/Foo"); !strings.Contains(got, "field Count\n") || !strings.Contains(got, "method Run\n") {
 		t.Errorf("a type file lists %q", got)

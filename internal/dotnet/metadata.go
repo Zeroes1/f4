@@ -55,6 +55,11 @@ type Info struct {
 	// its top-level types; nested types and the <Module> pseudo-type are left
 	// out.
 	Types map[string][]string
+	// Nested maps a namespace to the sorted names of the nested types of the
+	// types in it, written as the runtime writes them: "Outer+Inner" (and
+	// "Outer+Inner+Innermost"). A nested type is in the namespace of the
+	// outermost type. Their members are in Members under "namespace.Outer+Inner".
+	Nested map[string][]string
 	// TypeCount is the number of top-level types listed in Types.
 	TypeCount int
 	// Resources are the names of the managed resources.
@@ -536,6 +541,34 @@ func (t *tables) members(typeRow uint32, table, nameCol, listCol int, kind strin
 	return out
 }
 
+// maxNesting bounds the chain of enclosing types followed for one nested type,
+// so that a file whose NestedClass rows loop cannot make the walk endless.
+const maxNesting = 16
+
+// nestedName gives the namespace and the "Outer+Inner" name of a nested
+// TypeDef row, following the NestedClass rows out to the outermost type. It
+// reports false for a row that has no name, whose chain loops or is too deep,
+// or that points outside the TypeDef table.
+func (t *tables) nestedName(row uint32, enclosing map[uint32]uint32) (ns, name string, ok bool) {
+	parts := []string{t.str(t.cell(0x02, row, 1))}
+	if parts[0] == "" {
+		return "", "", false
+	}
+	cur := row
+	for depth := 0; ; depth++ {
+		outer := enclosing[cur]
+		if outer == 0 {
+			break // cur is the outermost type
+		}
+		if depth >= maxNesting || outer > t.rowCount[0x02] {
+			return "", "", false
+		}
+		parts = append([]string{t.str(t.cell(0x02, outer, 1))}, parts...)
+		cur = outer
+	}
+	return t.str(t.cell(0x02, cur, 2)), strings.Join(parts, "+"), true
+}
+
 func fill(info *Info, t *tables) {
 	if t.rowCount[0x20] > 0 {
 		info.Name = t.str(t.cell(0x20, 1, 7))
@@ -559,13 +592,29 @@ func fill(info *Info, t *tables) {
 		})
 	}
 	nested := make(map[uint32]bool, t.rowCount[0x29])
+	enclosing := make(map[uint32]uint32, t.rowCount[0x29])
 	for row := uint32(1); row <= t.rowCount[0x29]; row++ {
 		nested[t.cell(0x29, row, 0)] = true
+		if _, dup := enclosing[t.cell(0x29, row, 0)]; !dup {
+			enclosing[t.cell(0x29, row, 0)] = t.cell(0x29, row, 1)
+		}
 	}
 	info.Types = make(map[string][]string)
+	info.Nested = make(map[string][]string)
 	info.Members = make(map[string][]Member)
 	for row := uint32(1); row <= t.rowCount[0x02]; row++ {
 		if nested[row] {
+			ns, name, ok := t.nestedName(row, enclosing)
+			if !ok {
+				continue
+			}
+			info.Nested[ns] = append(info.Nested[ns], name)
+			key := name
+			if ns != "" {
+				key = ns + "." + name
+			}
+			info.Members[key] = append(info.Members[key], t.members(row, 0x04, 1, 4, "field")...)
+			info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
 			continue
 		}
 		name := t.str(t.cell(0x02, row, 1))
@@ -583,6 +632,9 @@ func fill(info *Info, t *tables) {
 		info.Members[key] = append(info.Members[key], t.members(row, 0x06, 3, 5, "method")...)
 	}
 	for _, names := range info.Types {
+		sort.Strings(names)
+	}
+	for _, names := range info.Nested {
 		sort.Strings(names)
 	}
 	for row := uint32(1); row <= t.rowCount[0x28]; row++ {

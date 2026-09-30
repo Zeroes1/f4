@@ -222,6 +222,15 @@ func TestReadAssembly(t *testing.T) {
 	if got := info.Namespaces(); len(got) != 1 || got[0] != "My.Ns" {
 		t.Errorf("Namespaces = %v", got)
 	}
+	// The nested type is listed apart, as Foo+Nested in Foo's namespace, with
+	// its own members.
+	if got := info.Nested["My.Ns"]; len(got) != 1 || got[0] != "Foo+Nested" {
+		t.Errorf("Nested = %v", info.Nested)
+	}
+	nestedMembers := info.Members["My.Ns.Foo+Nested"]
+	if len(nestedMembers) != 2 || nestedMembers[0].Name != "Hidden" || nestedMembers[1].Name != "Stop" {
+		t.Errorf("members of the nested type = %+v", nestedMembers)
+	}
 	// Foo's field and its first two methods; the nested type's own members are
 	// not attached to it.
 	wantMembers := []Member{{Kind: "field", Name: "Count"}, {Kind: "method", Name: ".ctor"}, {Kind: "method", Name: "Run"}}
@@ -342,5 +351,26 @@ func TestReadResourceBytes(t *testing.T) {
 	}
 	if got := blobsOf([]resourceRef{{name: "linked", embedded: false}, {name: "far", offset: 1 << 30, embedded: true}}, area); len(got) != 0 {
 		t.Errorf("linked or out-of-range resources yielded %+v", got)
+	}
+}
+
+func TestNestedNameFollowsAndBoundsTheChain(t *testing.T) {
+	image := wrapPE(sampleMetadata(), true)
+	info, err := Read(bytes.NewReader(image), int64(len(image)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab := info.tab
+	// Row 3 is nested in row 2 (Foo, My.Ns).
+	if ns, name, ok := tab.nestedName(3, map[uint32]uint32{3: 2}); !ok || ns != "My.Ns" || name != "Foo+Nested" {
+		t.Fatalf("nestedName = %q %q %v", ns, name, ok)
+	}
+	// A chain that loops back on itself is refused instead of followed for ever.
+	if _, _, ok := tab.nestedName(3, map[uint32]uint32{3: 2, 2: 3}); ok {
+		t.Error("a looping NestedClass chain was accepted")
+	}
+	// So is one that points outside the TypeDef table.
+	if _, _, ok := tab.nestedName(3, map[uint32]uint32{3: 999}); ok {
+		t.Error("an enclosing row outside the table was accepted")
 	}
 }
