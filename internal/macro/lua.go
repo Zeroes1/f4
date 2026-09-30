@@ -71,6 +71,25 @@ type LuaMacro struct {
 
 	action    *lua.LFunction
 	condition *lua.LFunction
+
+	// callArgs are passed to action: a MenuItem{}'s action is called with the
+	// menu and the area it was chosen from, as in Far.
+	callArgs []string
+}
+
+// LuaMenuItemInfo is the discoverable part of a MenuItem{} declaration: what
+// a menu shows for it and the id RunMenuItem takes.
+type LuaMenuItemInfo struct {
+	ID          int
+	Description string
+	Source      string
+}
+
+// luaMenuItem is one MenuItem{} declaration.
+type luaMenuItem struct {
+	menus []string
+	areas []string
+	macro *LuaMacro
 }
 
 // LuaMacroBinding is the discoverable, immutable part of a Lua macro. It is
@@ -92,6 +111,8 @@ type LuaMacroEngine struct {
 	all    []*LuaMacro
 
 	running atomic.Bool
+
+	items []*luaMenuItem
 
 	// The fields below belong to the interpreter's worker goroutine while a
 	// macro is running, and are read by the caller once it has finished.
@@ -198,6 +219,67 @@ func (e *LuaMacroEngine) add(m *LuaMacro) {
 		}
 	}
 	e.all = append(e.all, m)
+}
+
+func (e *LuaMacroEngine) addMenuItem(item *luaMenuItem) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.items = append(e.items, item)
+}
+
+// MenuItems lists the MenuItem{} declarations offered in menu ("Plugins",
+// "Disks" or "Config", any case) when area is the current one; a declaration
+// that names no menu is in "Plugins", one that names no area is in every area.
+func (e *LuaMacroEngine) MenuItems(menu, area string) []LuaMenuItemInfo {
+	if e == nil {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []LuaMenuItemInfo
+	for id, item := range e.items {
+		if containsFold(item.menus, menu) && (len(item.areas) == 0 || containsFold(item.areas, area) || containsFold(item.areas, "common")) {
+			out = append(out, LuaMenuItemInfo{ID: id, Description: item.macro.Description, Source: item.macro.Source})
+		}
+	}
+	return out
+}
+
+func containsFold(list []string, s string) bool {
+	for _, x := range list {
+		if strings.EqualFold(x, s) {
+			return true
+		}
+	}
+	return false
+}
+
+// RunMenuItem runs a MenuItem{}'s action, chosen from menu while area was
+// current, and reports whether there was one to run (and nothing else was
+// running).
+func (e *LuaMacroEngine) RunMenuItem(id int, menu, area string) bool {
+	if e == nil {
+		return false
+	}
+	e.mu.Lock()
+	var item *luaMenuItem
+	if id >= 0 && id < len(e.items) {
+		item = e.items[id]
+	}
+	e.mu.Unlock()
+	if item == nil {
+		return false
+	}
+	if !e.running.CompareAndSwap(false, true) {
+		return false
+	}
+	macro := *item.macro
+	macro.callArgs = []string{menu, area}
+	go func() {
+		defer e.running.Store(false)
+		e.execute(&macro, "", nil)
+	}()
+	return true
 }
 
 // Find returns the macro bound to a key in an area, falling back to common.
@@ -405,7 +487,10 @@ func (e *LuaMacroEngine) execute(macro *LuaMacro, key string, original *vtinput.
 		}
 
 		L.Push(macro.action)
-		if err := L.PCall(0, 0, nil); err != nil {
+		for _, a := range macro.callArgs {
+			L.Push(lua.LString(a))
+		}
+		if err := L.PCall(len(macro.callArgs), 0, nil); err != nil {
 			if strings.Contains(err.Error(), macroExitSentinel) {
 				return nil
 			}

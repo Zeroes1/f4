@@ -600,3 +600,42 @@ func TestMacroExplicitRunReportsBusy(t *testing.T) {
 		t.Fatal("RunExact reported success while the macro engine was busy")
 	}
 }
+
+func TestMacroMenuItemIsListedAndRuns(t *testing.T) {
+	host := newFakeMacroHost()
+	Engine := newTestMacroEngine(t, host, `
+		MenuItem { description = "Say hello"; action = function(menu, area)
+			__menu, __area = menu, area
+		end }
+		MenuItem { description = "Disks only"; menu = "Disks"; area = "Shell"; action = function() end }
+		MenuItem { description = "No action" }
+		MenuItem { action = function() end }
+	`)
+
+	items := Engine.MenuItems("Plugins", "Shell")
+	if len(items) != 1 || items[0].Description != "Say hello" {
+		t.Fatalf("Plugins menu items = %+v, want only \"Say hello\"", items)
+	}
+	if got := Engine.MenuItems("disks", "shell"); len(got) != 1 || got[0].Description != "Disks only" {
+		t.Fatalf("Disks menu items = %+v", got)
+	}
+	if got := Engine.MenuItems("Disks", "Editor"); len(got) != 0 {
+		t.Fatalf("an item bound to Shell is offered in the Editor: %+v", got)
+	}
+	if Engine.RunMenuItem(99, "Plugins", "Shell") || Engine.RunMenuItem(-1, "Plugins", "Shell") {
+		t.Fatal("RunMenuItem accepted an id that does not exist")
+	}
+	if !Engine.RunMenuItem(items[0].ID, "Plugins", "Shell") {
+		t.Fatal("RunMenuItem refused a listed item")
+	}
+	if !Engine.WaitIdle(5 * time.Second) {
+		t.Fatal("the menu item never finished")
+	}
+	got := macroGlobals(t, Engine, "__menu", "__area")
+	if lua.LVAsString(got["__menu"]) != "Plugins" || lua.LVAsString(got["__area"]) != "Shell" {
+		t.Fatalf("action got menu=%v area=%v", got["__menu"], got["__area"])
+	}
+	if (*LuaMacroEngine)(nil).MenuItems("Plugins", "Shell") != nil || (*LuaMacroEngine)(nil).RunMenuItem(0, "", "") {
+		t.Fatal("a nil engine has menu items")
+	}
+}

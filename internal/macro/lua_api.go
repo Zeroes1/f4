@@ -29,10 +29,11 @@ func (e *LuaMacroEngine) installAPI(L *lua.LState) {
 	L.SetGlobal("Actions", e.newActionsTable(L))
 	L.SetGlobal("Plugin", e.newPluginTable(L))
 
-	// Declarations f4 does not implement yet. They are accepted and ignored so
+	// Declarations f4 does not implement yet (MenuItem{} is below). They are accepted and ignored so
 	// that a script mixing them with Macro{} still contributes its macros
 	// instead of failing to load entirely.
-	for _, name := range []string{"Event", "MenuItem", "CommandLine"} {
+	L.SetGlobal("MenuItem", L.NewFunction(e.luaMenuItem))
+	for _, name := range []string{"Event", "CommandLine"} {
 		declaration := name
 		L.SetGlobal(name, L.NewFunction(func(L *lua.LState) int {
 			e.host.Log("MACRO: %s{} is not supported yet, ignored (%s)", declaration, L.Where(1))
@@ -241,6 +242,33 @@ func (e *LuaMacroEngine) luaMacro(L *lua.LState) int {
 		Source:      L.Where(1),
 		action:      action,
 		condition:   condition,
+	})
+	return 0
+}
+
+// luaMenuItem records a MenuItem{}: an entry for one of the plugin menus, with
+// the action that runs when it is chosen. Where it shows up is the caller's
+// business (MenuItems); here it is only kept.
+func (e *LuaMacroEngine) luaMenuItem(L *lua.LState) int {
+	spec := L.CheckTable(1)
+	action, _ := spec.RawGetString("action").(*lua.LFunction)
+	if action == nil {
+		e.host.Log("MACRO: MenuItem{} without an action function ignored (%s)", L.Where(1))
+		return 0
+	}
+	description := strings.TrimSpace(lua.LVAsString(spec.RawGetString("description")))
+	if description == "" {
+		e.host.Log("MACRO: MenuItem{} without a description ignored (%s)", L.Where(1))
+		return 0
+	}
+	menu := lua.LVAsString(spec.RawGetString("menu"))
+	if strings.TrimSpace(menu) == "" {
+		menu = "Plugins"
+	}
+	e.addMenuItem(&luaMenuItem{
+		menus: splitMacroList(menu),
+		areas: splitMacroList(lua.LVAsString(spec.RawGetString("area"))),
+		macro: &LuaMacro{Description: description, Source: L.Where(1), action: action},
 	})
 	return 0
 }
