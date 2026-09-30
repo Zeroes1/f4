@@ -105,6 +105,17 @@ func Convert(source string) (text string, ok bool) {
 		if classHeader.MatchString(strings.TrimSuffix(line, ";")) {
 			return Class(source)
 		}
+		head := strings.TrimSuffix(line, ";")
+		switch {
+		case pieHeader.MatchString(head):
+			return Pie(source)
+		case ganttHead.MatchString(head):
+			return Gantt(source)
+		case stateHead.MatchString(head):
+			return State(source)
+		case erHead.MatchString(head):
+			return ER(source)
+		}
 		return Flowchart(source)
 	}
 	return "", false

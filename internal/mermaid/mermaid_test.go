@@ -187,3 +187,124 @@ func TestFlowchartSubgraphs(t *testing.T) {
 		t.Errorf("nesting past the limit converted to %q", got)
 	}
 }
+
+func TestPie(t *testing.T) {
+	got, ok := Convert("pie showData title Pets\n  \"Dogs\" : 60\n  \"Cats\" : 30\n  \"Fish\" : 10\n")
+	row := func(label string, blocks int, pct, raw string) string {
+		return label + "  " + strings.Repeat("█", blocks) + strings.Repeat(" ", pieBar-blocks) + "  " + pct + "%  (" + raw + ")"
+	}
+	want := strings.Join([]string{"Pets", row("Dogs", 12, "60.0", "60"), row("Cats", 6, "30.0", "30"), row("Fish", 2, "10.0", "10")}, "\n")
+	if !ok || got != want {
+		t.Errorf("pie:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	if got, ok := Pie("pie\ntitle Later\n\"A\" : 1.5"); !ok || !strings.HasPrefix(got, "Later\n") {
+		t.Errorf("a title line: %q %v", got, ok)
+	}
+	for name, bad := range map[string]string{
+		"empty":    "pie",
+		"zero":     "pie\n\"A\" : 0",
+		"garbage":  "pie\nA = 1",
+		"negative": "pie\n\"A\" : -1",
+		"header":   "piechart\n\"A\" : 1",
+		"too long": "pie\n" + strings.Repeat("\"A\" : 1\n", MaxLines),
+	} {
+		if got, ok := Pie(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
+	}
+}
+
+func TestGantt(t *testing.T) {
+	src := strings.Join([]string{
+		"gantt",
+		"  title Plan",
+		"  dateFormat YYYY-MM-DD",
+		"  section Build",
+		"  Design :done, d1, 2024-01-01, 10d",
+		"  Code :active, after d1, 20d",
+		"  section Ship",
+		"  Release :milestone, 2024-03-01, 0d",
+	}, "\n")
+	got, ok := Convert(src)
+	want := strings.Join([]string{
+		"Plan",
+		"▸ Build",
+		"  Design — done, d1, 2024-01-01, 10d",
+		"  Code — active, after d1, 20d",
+		"▸ Ship",
+		"  Release — milestone, 2024-03-01, 0d",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("gantt:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	for name, bad := range map[string]string{"no tasks": "gantt\ntitle x", "header": "gantt chart", "garbage": "gantt\nnot a task"} {
+		if got, ok := Gantt(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
+	}
+}
+
+func TestState(t *testing.T) {
+	src := strings.Join([]string{
+		"stateDiagram-v2",
+		"  direction LR",
+		"  state \"Waiting for input\" as Wait",
+		"  [*] --> Wait",
+		"  Wait --> Run : go",
+		"  Run --> [*]",
+		"  Run : does the work",
+	}, "\n")
+	got, ok := Convert(src)
+	want := strings.Join([]string{
+		"(●) ──▶ (Waiting for input)",
+		"(Waiting for input) ──▶ (Run): go",
+		"(Run) ──▶ (◎)",
+		"Run: does the work",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("state:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	for name, bad := range map[string]string{
+		"composite": "stateDiagram\nstate Big {\nA --> B\n}",
+		"note":      "stateDiagram\nnote right of A : x",
+		"header":    "stateDiagram\n",
+		"too long":  "stateDiagram\n" + strings.Repeat("A --> B\n", MaxLines),
+	} {
+		if got, ok := State(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
+	}
+}
+
+func TestER(t *testing.T) {
+	src := strings.Join([]string{
+		"erDiagram",
+		"  CUSTOMER ||--o{ ORDER : places",
+		"  ORDER |o..|{ LINE-ITEM : \"contains items\"",
+		"  CUSTOMER {",
+		"    string name",
+		"    int id PK",
+		"  }",
+	}, "\n")
+	got, ok := Convert(src)
+	want := strings.Join([]string{
+		"entity CUSTOMER",
+		"  string name",
+		"  int id PK",
+		"CUSTOMER 1 ─── 0..* ORDER: places",
+		"ORDER 0..1 ┄┄┄ 1..* LINE-ITEM: contains items",
+	}, "\n")
+	if !ok || got != want {
+		t.Errorf("er:\n%s\nwant:\n%s (ok=%v)", got, want, ok)
+	}
+	for name, bad := range map[string]string{
+		"unclosed": "erDiagram\nA {\nint x",
+		"garbage":  "erDiagram\nA -- B",
+		"header":   "erDiagram",
+		"too long": "erDiagram\n" + strings.Repeat("A ||--|| B : x\n", MaxLines),
+	} {
+		if got, ok := ER(bad); ok {
+			t.Errorf("%s: converted to %q", name, got)
+		}
+	}
+}
