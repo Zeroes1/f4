@@ -268,6 +268,7 @@ var actionMenuOrder = []string{
 	"App.ProcList",
 	"App.GitStatus",
 	"App.Services",
+	"App.Network",
 	"Panel.Left.ViewBrief",
 	"Panel.Left.ViewMedium",
 	"Panel.Left.ViewDetailed",
