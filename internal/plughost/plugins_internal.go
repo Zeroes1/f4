@@ -13,6 +13,7 @@ import (
 	"github.com/unxed/f4/plugins/ide"
 	"github.com/unxed/f4/plugins/intchecker"
 	"github.com/unxed/f4/plugins/mediainfo"
+	"github.com/unxed/f4/plugins/netbrowse"
 	pdfviewplugin "github.com/unxed/f4/plugins/pdfview"
 	"github.com/unxed/f4/plugins/proclist"
 	sqliteplugin "github.com/unxed/f4/plugins/sqlite"
@@ -40,6 +41,8 @@ func internalPlugins() []Plugin {
 		proclist.NewPlugin(config.GetF4ConfigDir()),
 		// Windows service list (f4#311 part 1): registers nothing off Windows.
 		svcmgr.NewPlugin(),
+		// Windows network browser (f4#1702 part 1): registers nothing off Windows.
+		netbrowse.NewPlugin(),
 		// Git status view (f4#659 part 1 of N): wraps the host's own `git`
 		// binary, no platform gate at this layer -- gitplugin.Available()
 		// (internal/app/git_actions.go's Visible check) covers "git is

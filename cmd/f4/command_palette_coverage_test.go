@@ -237,6 +237,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	"proclist.(*procListPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
 	},
+	"netbrowse.(*netPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the Windows network browser forwards raw input to its own vtui.Table; Enter goes into a container or up on the .. row and F5 reloads, and quick-search and cursor movement are local table primitives; the panel is reached through the plugin-owned PluginPanelInstance surface (f4#1702 part 1)",
+	},
 	"svcmgr.(*servicesPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the Windows services panel forwards raw input to its own vtui.Table; F5 reloads the list, and sorting, quick-search and cursor movement are local table primitives; the panel is reached through the plugin-owned PluginPanelInstance surface (f4#311 part 1)",
 	},

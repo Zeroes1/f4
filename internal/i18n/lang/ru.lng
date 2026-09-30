@@ -849,6 +849,16 @@ SvcMgr.PropsPath=Программа:
 SvcMgr.PropsStart=Тип запуска:
 SvcMgr.PropsError=Контроль ошибок:
 
+NetBrowse.ColumnName=Имя
+NetBrowse.ColumnKind=Тип
+NetBrowse.ColumnComment=Комментарий
+NetBrowse.PanelTitle=Сеть
+NetBrowse.PanelTitleAt=Сеть: %s
+NetBrowse.KeyBar.Refresh=Обновить
+NetBrowse.ShareName=Общий ресурс %s
+NetBrowse.EnterFailed=Не удалось открыть %s: %v
+NetBrowse.RefreshFailed=Не удалось прочитать сеть: %v
+
 PanelPlugin.KeyBar.Close=Закрыть
 
 GitDiff.ReadFailed=Не удалось прочитать %s: %v
