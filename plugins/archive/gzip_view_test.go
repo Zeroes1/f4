@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/dsnet/compress/bzip2"
 	"github.com/klauspost/compress/zstd"
 	"github.com/unxed/xz"
 )
@@ -70,6 +71,7 @@ func TestTarNameOf(t *testing.T) {
 	for in, want := range map[string]string{
 		"a.tar.gz": "a.tar", "A.TAR.GZ": "A.TAR", "a.tgz": "a.tar", "a.gz": "a.tar", "a.bin": "a.bin.tar",
 		"a.tar.zst": "a.tar", "a.tzst": "a.tar", "a.zst": "a.tar",
+		"a.tar.bz2": "a.tar", "a.tbz2": "a.tar", "a.tbz": "a.tar", "a.bz2": "a.tar",
 		"a.tar.xz": "a.tar", "a.txz": "a.tar", "a.xz": "a.tar",
 	} {
 		if got := tarNameOf(in); got != want {
@@ -197,6 +199,58 @@ func TestArchiveVFSNestedTarXzMembersOutOfOrder(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = big.Close() })
 	requireReaderBacked(t, big, "big.tar.xz")
+	for _, i := range []int{members - 1, 2, 9, 0, members - 3} {
+		member := big.Join(bigPath, fmt.Sprintf("d/f%02d.txt", i))
+		if got := readArchiveMember(t, big, member); !bytes.Equal(got, contents[i]) {
+			t.Fatalf("member %d differs (%d bytes, want %d)", i, len(got), len(contents[i]))
+		}
+	}
+}
+
+// The same view serves a bzip2'd TAR of many blocks.
+func TestArchiveVFSNestedTarBzipMembersOutOfOrder(t *testing.T) {
+	ctx := context.Background()
+	rng := rand.New(rand.NewSource(17)) // #nosec G404 -- a fixed seed makes the test data reproducible; no security decision uses it.
+	const members = 14
+	contents := make([][]byte, members)
+	var raw bytes.Buffer
+	tw := tar.NewWriter(&raw)
+	for i := range contents {
+		b := make([]byte, 150<<10+rng.Intn(300<<10))
+		for j := range b {
+			b[j] = "abcdefgh\n"[rng.Intn(9)]
+		}
+		contents[i] = b
+		if err := tw.WriteHeader(&tar.Header{Name: fmt.Sprintf("d/f%02d.txt", i), Mode: 0o600, Size: int64(len(b))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var packed bytes.Buffer
+	bw, err := bzip2.NewWriter(&packed, &bzip2.WriterConfig{Level: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bw.Write(raw.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	if err := bw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	outer, outerPath := openOuterArchive(t, map[string][]byte{"big.tar.bz2": packed.Bytes()})
+	bigPath := outer.Join(outerPath, "big.tar.bz2")
+	big, err := NewArchiveVFSContext(ctx, outer, bigPath)
+	if err != nil {
+		t.Fatalf("open tar.bz2 inside zip: %v", err)
+	}
+	t.Cleanup(func() { _ = big.Close() })
+	requireReaderBacked(t, big, "big.tar.bz2")
 	for _, i := range []int{members - 1, 2, 9, 0, members - 3} {
 		member := big.Join(bigPath, fmt.Sprintf("d/f%02d.txt", i))
 		if got := readArchiveMember(t, big, member); !bytes.Equal(got, contents[i]) {

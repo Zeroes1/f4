@@ -91,6 +91,23 @@ func openGzipTarView(ctx context.Context, source io.ReaderAt, size int64, displa
 	return finishTarView(ctx, g, displayName)
 }
 
+// openBzipTarView is openGzipTarView for a bzip2'd TAR. The blocks are found by
+// scanning the stream once, and each is decoded on its own.
+func openBzipTarView(ctx context.Context, source io.ReaderAt, size int64, displayName string) (*gzipTarView, string) {
+	if size < 14 {
+		return nil, ""
+	}
+	var magic [3]byte
+	if _, err := source.ReadAt(magic[:], 0); err != nil || magic != [3]byte{'B', 'Z', 'h'} {
+		return nil, ""
+	}
+	z, err := tar.NewBzipReaderAt(source, size)
+	if err != nil {
+		return nil, ""
+	}
+	return finishTarView(ctx, z, displayName)
+}
+
 // openXzTarView is openGzipTarView for an xz'd TAR. The size is known from the
 // file's index, so a file of several blocks is entered at the block a read
 // falls in.
@@ -165,6 +182,12 @@ func tarNameOf(name string) string {
 		return name[:len(name)-4] + ".tar"
 	case strings.HasSuffix(lower, ".xz"):
 		return name[:len(name)-3] + ".tar"
+	case strings.HasSuffix(lower, ".tar.bz2"):
+		return name[:len(name)-4]
+	case strings.HasSuffix(lower, ".tbz2"), strings.HasSuffix(lower, ".tbz"):
+		return name[:strings.LastIndex(name, ".")] + ".tar"
+	case strings.HasSuffix(lower, ".bz2"):
+		return name[:len(name)-4] + ".tar"
 	case strings.HasSuffix(lower, ".gz"):
 		return name[:len(name)-3] + ".tar"
 	case strings.HasSuffix(lower, ".zst"):

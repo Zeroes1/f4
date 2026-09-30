@@ -16,16 +16,16 @@ The first implementation is deliberately a vertical slice:
 - ordinary top-level archives, remote-file materialization, disk extraction,
   and the existing password-specific archive path remain in place.
 
-A compressed TAR (`.tar.gz`, `.tar.zst`, `.tar.xz`) is read through a random
+A compressed TAR (`.tar.gz`, `.tar.zst`, `.tar.xz`, `.tar.bz2`) is read through a random
 access view of its decompressed bytes (`plugins/archive/gzip_view.go`, built on
-`tar.GzipReaderAt`, `tar.ZstdReaderAt` and `tar.XzReaderAt` from `unxed/tar`).
+`tar.GzipReaderAt`, `tar.ZstdReaderAt`, `tar.XzReaderAt` and `tar.BzipReaderAt` from `unxed/tar`).
 Opening the archive reads the stream once, which teaches the reader its exact
 size and, for gzip, lays down checkpoints (a position in the deflate stream and
 its 32 KiB window every 2 MiB); after that a seek costs at most one checkpoint
-interval, one zstd frame or one xz block, and the tar reader skips over file
+interval, one zstd frame, one xz block or one bzip2 block, and the tar reader skips over file
 data by seeking. A stream that is a single zstd frame or a single xz block
 cannot be entered in the middle, so there a forward read continues the decoder
-and only a read going back starts again. bzip2 still takes the generic path.
+and only a read going back starts again.
 
 The reader-backed path does not create an archive-sized temporary file for
 each intermediary. It requires a known source size. The generic archive
