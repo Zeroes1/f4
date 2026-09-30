@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"testing"
 
@@ -255,6 +256,36 @@ func TestArchiveVFSNestedTarBzipMembersOutOfOrder(t *testing.T) {
 		member := big.Join(bigPath, fmt.Sprintf("d/f%02d.txt", i))
 		if got := readArchiveMember(t, big, member); !bytes.Equal(got, contents[i]) {
 			t.Fatalf("member %d differs (%d bytes, want %d)", i, len(got), len(contents[i]))
+		}
+	}
+}
+
+// Data that is not the format a view is for is declined, whichever view is
+// asked, so the caller falls back to the generic path.
+func TestCompressedTarViewsDeclineOtherData(t *testing.T) {
+	ctx := context.Background()
+	text := bytes.Repeat([]byte("plain text, not any archive at all "), 20)
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_, _ = zw.Write(bytes.Repeat([]byte("just text, no tar header here "), 40))
+	_ = zw.Close()
+
+	opens := map[string]func(context.Context, io.ReaderAt, int64, string) (*gzipTarView, string){
+		"gzip": openGzipTarView, "zstd": openZstdTarView, "xz": openXzTarView, "bzip2": openBzipTarView,
+	}
+	inputs := map[string][]byte{
+		"tiny":             []byte("x"),
+		"plain text":       text,
+		"gzip of text":     gz.Bytes(),
+		"zstd magic only":  append([]byte{0x28, 0xb5, 0x2f, 0xfd}, text...),
+		"xz magic only":    append([]byte{0xfd, '7', 'z', 'X', 'Z', 0}, text...),
+		"bzip2 magic only": append([]byte("BZh9"), text...),
+	}
+	for viewName, open := range opens {
+		for inName, data := range inputs {
+			if view, _ := open(ctx, bytes.NewReader(data), int64(len(data)), "x.bin"); view != nil {
+				t.Errorf("%s view opened %s", viewName, inName)
+			}
 		}
 	}
 }
