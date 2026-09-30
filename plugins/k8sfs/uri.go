@@ -3,6 +3,7 @@ package k8sfs
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 // one the drive menu entry uses.
 type uriProvider struct {
 	open func() (*restClient, error)
+	// openContext connects to a named kubeconfig context (nil: none).
+	openContext func(name string) func() (*restClient, error)
 }
 
 func (uriProvider) Scheme() string { return "k8s" }
@@ -23,8 +26,20 @@ func (p uriProvider) OpenURI(ctx context.Context, _ vfs.VFS, raw string) (vfs.VF
 	if len(raw) < len(uriPrefix) || !strings.EqualFold(raw[:len(uriPrefix)], uriPrefix) {
 		return nil, fmt.Errorf("Kubernetes: not a k8s:// address: %s", raw)
 	}
-	plain := path.Clean("/" + strings.TrimPrefix(raw[len(uriPrefix):], "/"))
-	v := newK8sVFS(p.open)
+	rest := raw[len(uriPrefix):]
+	open, prefix := p.open, uriPrefix
+	if rest != "" && rest[0] != '/' {
+		// k8s://<context>/<path>
+		name, tail, _ := strings.Cut(rest, "/")
+		ctx, err := url.PathUnescape(name)
+		if err != nil || ctx == "" || p.openContext == nil {
+			return nil, fmt.Errorf("Kubernetes: bad kubeconfig context in %s", raw)
+		}
+		open, prefix, rest = p.openContext(ctx), contextPrefix(ctx), "/"+tail
+	}
+	plain := path.Clean("/" + strings.TrimPrefix(rest, "/"))
+	v := newK8sVFS(open)
+	v.prefix = prefix
 	item, err := v.Stat(ctx, plain)
 	if err != nil {
 		_ = v.Close()

@@ -101,6 +101,11 @@ func kubeconfigPath() (string, error) {
 // are refused with a message that names the reason rather than sent without
 // credentials.
 func loadEndpoint(configPath string) (*apiEndpoint, error) {
+	return loadEndpointFor(configPath, "")
+}
+
+// loadEndpointFor is loadEndpoint for a named context ("" is the current one).
+func loadEndpointFor(configPath, contextName string) (*apiEndpoint, error) {
 	raw, err := os.ReadFile(configPath) // #nosec G304 -- the user's own kubeconfig
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -108,7 +113,7 @@ func loadEndpoint(configPath string) (*apiEndpoint, error) {
 		}
 		return nil, err
 	}
-	ep, err := parseEndpoint(raw, filepath.Dir(configPath))
+	ep, err := parseEndpointFor(raw, filepath.Dir(configPath), contextName)
 	if err != nil {
 		return nil, err
 	}
@@ -121,11 +126,20 @@ func loadEndpoint(configPath string) (*apiEndpoint, error) {
 }
 
 func parseEndpoint(raw []byte, baseDir string) (*apiEndpoint, error) {
+	return parseEndpointFor(raw, baseDir, "")
+}
+
+// parseEndpointFor resolves the named context of a kubeconfig; an empty name is
+// the current context (or the only one).
+func parseEndpointFor(raw []byte, baseDir, ctxName string) (*apiEndpoint, error) {
 	var cfg kubeconfig
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("%w: %v", errUnsupported, err)
 	}
-	ctxName := cfg.CurrentContext
+	named := ctxName != ""
+	if ctxName == "" {
+		ctxName = cfg.CurrentContext
+	}
 	if ctxName == "" && len(cfg.Contexts) == 1 {
 		ctxName = cfg.Contexts[0].Name
 	}
@@ -136,6 +150,9 @@ func parseEndpoint(raw []byte, baseDir string) (*apiEndpoint, error) {
 		}
 	}
 	if clusterName == "" {
+		if named {
+			return nil, fmt.Errorf("%w: context %q is not defined", errUnsupported, ctxName)
+		}
 		return nil, fmt.Errorf("%w: no current context", errUnsupported)
 	}
 	ep := &apiEndpoint{}

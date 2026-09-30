@@ -19,8 +19,10 @@ The exec protocol available over a plain WebSocket (`v4.channel.k8s.io`) cannot 
 * **mkdir, delete, rename** are single `mkdir`, `rm -rf` and `mv` commands (within one container).
 * The container needs `sh`, `base64`, `mkdir`, `rm` and `mv`; busybox has them all. Attributes, and namespaces/pods/containers themselves, are not changed from the panel.
 
-* **Addresses.** The panel path is `k8s:///<namespace>/<pod>/<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `k8s://` URI provider; the cluster is the one of the current kubeconfig.
+* **One drive per context.** The plain **Kubernetes** entry uses the current context. Every context of the kubeconfig also gets its own entry in the drive menu, `Kubernetes (name)`, read when f4 starts (a context added while f4 runs shows up after a restart); it connects to that context's cluster with that context's credentials, including exec helpers.
+* **In a pod.** With no kubeconfig at all, inside a pod (`KUBERNETES_SERVICE_HOST` set), the pod's service account is used: its token and CA from `/var/run/secrets/kubernetes.io/serviceaccount`.
+* **Addresses.** The panel path is `k8s:///<namespace>/<pod>/<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `k8s://` URI provider; the cluster is the one of the current kubeconfig. A context's panel is `k8s://<context>/<namespace>/<pod>/<container>/<path>`, the context name escaped as in a URL.
 
 ## Not yet
 
-Files over 8 MiB (needs a stdin-capable exec, `v5.channel.k8s.io`), refreshing an expiring exec token, in-cluster configuration, switching context from the panel, ephemeral/init containers, and the lite build (full build only, like the Docker panel).
+Files over 8 MiB (needs a stdin-capable exec, `v5.channel.k8s.io`), refreshing an expiring exec token, merging several KUBECONFIG files, ephemeral/init containers, and the lite build (full build only, like the Docker panel).

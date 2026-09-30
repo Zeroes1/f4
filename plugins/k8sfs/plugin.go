@@ -33,7 +33,13 @@ func (*Plugin) Init(api vfs.HostAPI) error {
 	}
 	api.RegisterDrive(driveName, func() vfs.VFS { return newK8sVFS(openFromKubeconfig) })
 	// k8s:///<path> reopens the panel from a bookmark, history or a saved session.
-	return api.RegisterURIProvider(uriProvider{open: openFromKubeconfig})
+	// One more drive per context of the kubeconfig.
+	if cfgPath, err := kubeconfigPath(); err == nil {
+		for _, name := range listContexts(cfgPath) {
+			api.RegisterDrive(contextDriveName(name), func() vfs.VFS { return newContextVFS(name) })
+		}
+	}
+	return api.RegisterURIProvider(uriProvider{open: openFromKubeconfig, openContext: contextOpener})
 }
 
 func (*Plugin) Close() error {
@@ -41,13 +47,19 @@ func (*Plugin) Close() error {
 	return nil
 }
 
-// openFromKubeconfig connects with the user's kubeconfig.
+// openFromKubeconfig connects with the user's kubeconfig; without one, inside
+// a pod, with the pod's service account.
 func openFromKubeconfig() (*restClient, error) {
 	p, err := kubeconfigPath()
 	if err != nil {
 		return nil, err
 	}
 	ep, err := loadEndpoint(p)
+	if errors.Is(err, errNoKubeconfig) {
+		if ic, icErr := inClusterEndpoint(inClusterDir); icErr == nil {
+			return newRESTClient(ic), nil
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
