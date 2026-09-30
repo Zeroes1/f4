@@ -74,7 +74,7 @@ func parseURI(raw string) (connConfig, error) {
 	}
 	host, _, _ := strings.Cut(hosts, ",")
 	u, err := url.Parse("mongodb://" + userinfo + host + tail)
-	if err == nil && srv && (strings.Contains(u.Host, ",") || strings.Contains(u.Host, ":")) {
+	if err == nil && srv && (strings.Contains(hosts, ",") || strings.Contains(u.Host, ":")) {
 		return connConfig{}, fmt.Errorf("%w: a mongodb+srv:// name takes no port or host list", errURI)
 	}
 	if err != nil || u.Host == "" {
