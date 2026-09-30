@@ -324,8 +324,16 @@ func (p *AnsiParser) exciseWindowsSync(data []byte) []byte {
 }
 
 func (p *AnsiParser) Process(data []byte) {
+	p.ProcessFiltered(data)
+}
+
+// ProcessFiltered is Process that also returns what is left of data once the
+// directory-sync echoes f4 typed into the shell are cut out of it: the bytes a
+// terminal that shows the shell's own output (the host console) may show, where
+// Process alone only keeps them off f4's own grid (#1673).
+func (p *AnsiParser) ProcessFiltered(data []byte) []byte {
 	if p == nil || len(data) == 0 {
-		return
+		return nil
 	}
 
 	// Heuristics: Hide background sync commands.
@@ -380,7 +388,7 @@ func (p *AnsiParser) Process(data []byte) {
 	data = p.exciseWindowsSync(data)
 
 	if len(data) == 0 {
-		return
+		return nil
 	}
 
 	for _, b := range data {
@@ -526,6 +534,7 @@ func (p *AnsiParser) Process(data []byte) {
 		}
 	}
 	p.term.FlushLog()
+	return data
 }
 
 // maxDCSBody caps the device control string we are willing to buffer. A sixel

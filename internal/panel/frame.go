@@ -1580,8 +1580,15 @@ func (pf *PanelsFrame) displayLocalOutput(shouldProcess bool, data []byte) {
 		return
 	}
 	if pf.ShellMode == terminal.ShellModeHost && pf.IsHostConsoleActive() {
-		vtui.WritePassthrough(data)
-		pf.Parser.Process(data)
+		if terminal.WindowsShellSyntax() {
+			// The host console shows the shell's own output, echo of the
+			// directory-sync lines f4 types included; cut those out as the
+			// mirror does (#1673).
+			vtui.WritePassthrough(pf.Parser.ProcessFiltered(data))
+		} else {
+			vtui.WritePassthrough(data)
+			pf.Parser.Process(data)
+		}
 		if pf.OverlayLines() > 0 && time.Since(pf.lastOverlayDraw) > 30*time.Millisecond {
 			pf.drawHostConsoleOverlay()
 			pf.lastOverlayDraw = time.Now()

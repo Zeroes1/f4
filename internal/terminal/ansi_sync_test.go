@@ -192,3 +192,45 @@ func TestKittyFlagsAreScopedToThePrompt(t *testing.T) {
 		t.Fatalf("flags after the command = %d, want the shell's 1", got)
 	}
 }
+
+// #1673: a terminal that shows the shell's own output (the host console) must
+// not get the directory-sync echo either; ProcessFiltered hands back what is
+// left of the chunk, the same bytes the grid was fed.
+func TestProcessFilteredCutsTheSyncEchoForTheHostConsole(t *testing.T) {
+	tv, p, _ := syncEnv(t)
+	p.TrackWindowsSyncEcho()
+
+	// The shape ConPTY 1.25 sends: the echo positioned on the prompt row.
+	p.ExpectWindowsSyncEcho()
+	out := p.ProcessFiltered([]byte("\x1b[41;30Hcd /d \"C:\\FAR\" & rem f4_sync\x1b[41;81H"))
+	if strings.Contains(string(out), "f4_sync") || strings.Contains(string(out), "cd /d") {
+		t.Errorf("the sync echo reached the host console: %q", out)
+	}
+	if !strings.Contains(string(out), "\r\x1b[2K") {
+		t.Errorf("the row the echo began on was not erased: %q", out)
+	}
+
+	// Output that is not an announced echo goes through untouched.
+	plain := []byte("\x1b[1;1Hhello\r\nworld")
+	if got := p.ProcessFiltered(plain); string(got) != string(plain) {
+		t.Errorf("ordinary output changed: %q", got)
+	}
+	if got := syncRow(tv, 0); !strings.Contains(got, "hello") {
+		t.Errorf("the grid did not get the ordinary output: %q", got)
+	}
+
+	// An echo split across two chunks is held back and cut whole.
+	p.ExpectWindowsSyncEcho()
+	first := p.ProcessFiltered([]byte("cd /d \"C:\\FAR\" & rem f4"))
+	second := p.ProcessFiltered([]byte("_sync\r\nrest"))
+	if joined := string(first) + string(second); strings.Contains(joined, "f4_sync") || !strings.Contains(joined, "rest") {
+		t.Errorf("a split echo was not cut whole and its neighbours kept: %q + %q", first, second)
+	}
+
+	if got := (*AnsiParser)(nil).ProcessFiltered([]byte("x")); got != nil {
+		t.Errorf("a nil parser returned %q", got)
+	}
+	if got := p.ProcessFiltered(nil); got != nil {
+		t.Errorf("empty input returned %q", got)
+	}
+}
