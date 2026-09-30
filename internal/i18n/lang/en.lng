@@ -693,6 +693,8 @@ Action.App.ProcList.Desc=Open a live list of running processes in the active pan
 ; --- Git ---
 Action.App.GitStatus=Gi&t status
 Action.App.GitStatus.Desc=Open the working tree status of the active panel's git repository
+Action.App.Services=Ser&vices
+Action.App.Services.Desc=Open the list of Windows services in the active panel slot
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Calendar.Desc=Open the built-in calendar
