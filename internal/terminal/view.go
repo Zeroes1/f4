@@ -79,12 +79,18 @@ type TerminalView struct {
 	// state it needs its own cross-goroutine synchronization rather than
 	// tv.mu: an atomic.Int32, mirroring how AnsiParser guards its own
 	// cross-goroutine flags (syncEchoTracked/syncEchoArms in ansi.go).
-	KittyFlags        atomic.Int32
-	KittyFlagsStack   []int
-	AutoWrap          bool
-	SixelDisplayMode  bool
-	MouseTrackingMode int
-	MouseSGRMode      bool
+	KittyFlags      atomic.Int32
+	KittyFlagsStack []int
+	// kittyBeforeCommand and kittyCommandRunning scope the shell's own kitty
+	// flags to its prompt: they hold the flags in force when a command started
+	// (OSC 133;C) so that the command runs with none and the shell gets them
+	// back when it ends (OSC 133;D). See HandleOSC133.
+	kittyBeforeCommand  atomic.Int32
+	kittyCommandRunning atomic.Bool
+	AutoWrap            bool
+	SixelDisplayMode    bool
+	MouseTrackingMode   int
+	MouseSGRMode        bool
 
 	clipboardChunks []byte
 	ClipboardReader func() string
@@ -1827,6 +1833,7 @@ func (tv *TerminalView) ResetKeyboardProtocols() {
 	defer tv.mu.Unlock()
 	tv.Win32InputMode = false
 	tv.KittyFlags.Store(0)
+	tv.kittyCommandRunning.Store(false)
 	tv.ApplicationCursorKeys = false
 }
 
@@ -2039,11 +2046,24 @@ func (tv *TerminalView) HandleOSC133(payload string) {
 		tv.OnShellMark(mark, tv.PromptSnapshot())
 	}
 	if payload == "C" {
+		// The flags now in force are the shell's own (f4 seeds them for a fresh
+		// local shell, KittyEnableDisambiguateSeq). A command the shell starts
+		// does not speak the protocol, so Ctrl+C must reach it as 0x03, not as
+		// CSI 99;5u (f4#1693); a program that wants the protocol asks for it
+		// itself after this point.
+		if !tv.kittyCommandRunning.Swap(true) {
+			tv.kittyBeforeCommand.Store(tv.KittyFlags.Swap(0))
+		}
 		tv.SetMuted(false)
 		if tv.OnBusyChange != nil {
 			tv.OnBusyChange(true)
 		}
 	} else if payload == "D" || strings.HasPrefix(payload, "D;") {
+		// Whatever the command left switched on is dropped, and the shell's
+		// own flags come back for its prompt.
+		if tv.kittyCommandRunning.Swap(false) {
+			tv.KittyFlags.Store(tv.kittyBeforeCommand.Load())
+		}
 		tv.EnsureFreshPromptLine()
 		if tv.OnBusyChange != nil {
 			tv.OnBusyChange(false)

@@ -172,3 +172,23 @@ func TestWindowsSyncEchoDoesNotScrollTheBottomRow(t *testing.T) {
 		t.Errorf("row 0 after Enter = %q, want it scrolled off", got)
 	}
 }
+
+// A command the shell starts runs with the kitty flags off and the shell gets
+// its own back when the command ends (f4#1693): otherwise Ctrl+C reaches a
+// plain program as CSI 99;5u.
+func TestKittyFlagsAreScopedToThePrompt(t *testing.T) {
+	tv, p, _ := syncEnv(t)
+	p.Process([]byte(KittyEnableDisambiguateSeq))
+	if got := tv.KittyFlags.Load(); got != 1 {
+		t.Fatalf("flags at the prompt = %d, want 1", got)
+	}
+	p.Process([]byte("\x1b]133;C\x1b\\"))
+	if got := tv.KittyFlags.Load(); got != 0 {
+		t.Fatalf("flags while a command runs = %d, want 0", got)
+	}
+	p.Process([]byte("\x1b[=1;1u")) // a program of its own asks for the protocol
+	p.Process([]byte("\x1b]133;D;0\x1b\\"))
+	if got := tv.KittyFlags.Load(); got != 1 {
+		t.Fatalf("flags after the command = %d, want the shell's 1", got)
+	}
+}
