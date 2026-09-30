@@ -196,7 +196,7 @@ func TestSignatures(t *testing.T) {
 	f := newILFixture()
 	tab := f.t
 	ref := func(row int) byte { return byte(row<<2 | 1) } //nolint:gosec // test data
-	def := func(row int) byte { return byte(row << 2) } //nolint:gosec // test data
+	def := func(row int) byte { return byte(row << 2) }   //nolint:gosec // test data
 	cases := []struct {
 		name string
 		sig  []byte
