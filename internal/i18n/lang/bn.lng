@@ -2188,5 +2188,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=SSH কী বা এজেন্ট অ্যাক্সেসের পরিবর্তে, সংরক্ষিত সংযোগের পাসওয়ার্ড ব্যবহার করে সার্ভার-থেকে-সার্ভার কপি বা মুভের দ্বিতীয় হপ প্রমাণ করতে f4-কে অনুমতি দেয়. ডিফল্টরূপে বন্ধ: এটি সেই পাসওয়ার্ড অন্য সার্ভারের কাছে প্রকাশ করে.
 SettingsCenter.TreeRootWholeVolume.Label=ট্রি প্যানেলকে সম্পূর্ণ ভলিউমের মূলে রাখুন
 SettingsCenter.TreeRootWholeVolume.Description=উৎস প্যানেলের সম্পূর্ণ বর্তমান ভলিউমের মূল থেকে ডিরেক্টরি ট্রি (Ctrl+T) খোলে, far2l-এর মতো। বন্ধ থাকলে পরিবর্তে উৎস প্যানেলের বর্তমান ডিরেক্টরির মূল থেকে খোলে।
+SettingsCenter.GlyphStyle.Label=ফ্রেম ও নিয়ন্ত্রণের প্রতীক
+SettingsCenter.GlyphStyle.Description=গ্রাফিক্যাল উইন্ডো কীভাবে ফ্রেম, চেকবক্স ও রেডিও বোতাম আঁকে: «ক্লাসিক» চৌকো কোণ ও [x] বাক্স রাখে, «গোলাকার» গোলাকার কোণ ও গোল বোতাম আঁকে। টেক্সট টার্মিনালে কোনো পরিবর্তন হয় না।
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=গোলাকার
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=ডিরেক্টরি ট্রি
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=পরবর্তী ট্রি খোলা

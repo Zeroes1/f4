@@ -2191,5 +2191,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Pozwala f4 użyć hasła zapisanego połączenia do uwierzytelnienia drugiego etapu kopiowania lub przenoszenia między serwerami, zamiast wymagać kluczy SSH lub dostępu do agenta. Domyślnie wyłączone: to ujawnia to hasło drugiemu serwerowi.
 SettingsCenter.TreeRootWholeVolume.Label=Zakorzeń drzewo w całym woluminie
 SettingsCenter.TreeRootWholeVolume.Description=Otwiera drzewo katalogów (Ctrl+T) od korzenia całego bieżącego woluminu panelu źródłowego, tak jak far2l. Wyłączone otwiera je od bieżącego katalogu panelu źródłowego.
+SettingsCenter.GlyphStyle.Label=Glify ramek i kontrolek
+SettingsCenter.GlyphStyle.Description=Jak okna graficzne rysują ramki, pola wyboru i przyciski opcji: Klasyczny zachowuje kanciaste rogi i pola [x], Zaokrąglony rysuje zaokrąglone rogi i okrągłe przyciski. Terminale tekstowe nie są objęte.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Zaokrąglony
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Drzewo katalogów
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=następne otwarcie drzewa

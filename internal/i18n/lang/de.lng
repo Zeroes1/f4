@@ -2191,5 +2191,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Lässt f4 das Passwort einer gespeicherten Verbindung verwenden, um den zweiten Sprung einer Server-zu-Server-Kopie oder -Verschiebung zu authentifizieren, statt SSH-Schlüssel oder Agentenzugriff zu verlangen. Standardmäßig deaktiviert: Dies gibt dieses Passwort an den anderen Server weiter.
 SettingsCenter.TreeRootWholeVolume.Label=Verzeichnisbaum ab dem ganzen Datenträger verwurzeln
 SettingsCenter.TreeRootWholeVolume.Description=Verwurzelt den Verzeichnisbaum (Ctrl+T) am ganzen aktuellen Datenträger des Quellpanels, wie es far2l tut. Ausgeschaltet verwurzelt ihn stattdessen am aktuellen Verzeichnis des Quellpanels.
+SettingsCenter.GlyphStyle.Label=Rahmen- und Bedienelement-Glyphen
+SettingsCenter.GlyphStyle.Description=Wie grafische Fenster Rahmen, Kontrollkästchen und Optionsfelder zeichnen: Klassisch behält eckige Ecken und [x]-Kästchen, Abgerundet zeichnet abgerundete Ecken und runde Schaltflächen. Textterminals sind nicht betroffen.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Abgerundet
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Verzeichnisbaum
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=beim nächsten Öffnen des Baums

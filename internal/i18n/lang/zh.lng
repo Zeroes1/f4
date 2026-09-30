@@ -2109,5 +2109,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=允许 f4 使用已保存连接的密码来验证服务器间复制或移动的第二跳, 而不必依赖 SSH 密钥或代理访问. 默认关闭: 这会将该密码暴露给另一台服务器.
 SettingsCenter.TreeRootWholeVolume.Label=将树面板的根设为整个卷
 SettingsCenter.TreeRootWholeVolume.Description=像 far2l 一样，从源面板整个当前卷的根打开目录树 (Ctrl+T)。关闭时改为从源面板当前目录的根打开。
+SettingsCenter.GlyphStyle.Label=边框与控件符号
+SettingsCenter.GlyphStyle.Description=图形窗口如何绘制边框、复选框和单选按钮：“经典”保留直角和 [x] 方框，“圆角”绘制圆角边框和圆形按钮。文本终端不受影响。
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=圆角
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=目录树
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=下一次打开树时

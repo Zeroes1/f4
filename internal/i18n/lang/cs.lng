@@ -2191,5 +2191,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Umožňuje f4 použít heslo uložené v připojení k ověření druhého skoku při kopírování nebo přesunu mezi servery, místo vyžadování klíčů SSH nebo přístupu agenta. Výchozí stav je vypnuto: tím se toto heslo odhalí druhému serveru.
 SettingsCenter.TreeRootWholeVolume.Label=Zakořenit strom v celém svazku
 SettingsCenter.TreeRootWholeVolume.Description=Otevře strom adresářů (Ctrl+T) od kořene celého aktuálního svazku zdrojového panelu, stejně jako far2l. Vypnuto jej místo toho otevře od aktuálního adresáře zdrojového panelu.
+SettingsCenter.GlyphStyle.Label=Rámečky a ovládací prvky
+SettingsCenter.GlyphStyle.Description=Jak grafická okna kreslí rámečky, zaškrtávací políčka a přepínače: Classic ponechá hranaté rohy a políčka [x], Zaoblené kreslí zaoblené rohy a kulatá tlačítka. Textové terminály se nemění.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Zaoblené
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Strom adresářů
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=další otevření stromu

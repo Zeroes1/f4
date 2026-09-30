@@ -2183,5 +2183,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=SSH 키나 에이전트 접근을 요구하는 대신, 저장된 연결의 비밀번호를 사용해 서버 간 복사 또는 이동의 두 번째 홉을 인증하도록 f4에 허용합니다. 기본값은 꺼짐이며, 이 경우 해당 비밀번호가 다른 서버에 노출됩니다.
 SettingsCenter.TreeRootWholeVolume.Label=트리 패널의 루트를 전체 볼륨으로 설정
 SettingsCenter.TreeRootWholeVolume.Description=far2l처럼 원본 패널의 전체 현재 볼륨을 루트로 디렉터리 트리(Ctrl+T)를 엽니다. 끄면 대신 원본 패널의 현재 디렉터리를 루트로 엽니다.
+SettingsCenter.GlyphStyle.Label=프레임 및 컨트롤 글리프
+SettingsCenter.GlyphStyle.Description=그래픽 창이 프레임, 체크박스, 라디오 버튼을 그리는 방식입니다. 「클래식」은 각진 모서리와 [x] 상자를 유지하고, 「둥근 모서리」는 둥근 모서리와 둥근 버튼을 그립니다. 텍스트 터미널에는 영향을 주지 않습니다.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=둥근 모서리
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=디렉터리 트리
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=다음 트리 열기
