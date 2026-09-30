@@ -2,7 +2,11 @@
 
 package svcmgr
 
-import "golang.org/x/sys/windows"
+import (
+	"unsafe"
+
+	"golang.org/x/sys/windows"
+)
 
 type platformController struct{}
 
@@ -52,10 +56,20 @@ func (platformController) Resume(name string) error {
 }
 
 // SetStartType changes only the start type: every other field of the
-// configuration is left as it is (SERVICE_NO_CHANGE, nil).
-func (platformController) SetStartType(name string, startType uint32) error {
+// configuration is left as it is (SERVICE_NO_CHANGE, nil). The delayed flag is
+// a separate setting of the manager (SERVICE_CONFIG_DELAYED_AUTO_START_INFO),
+// written after the start type; it is cleared for every type but a delayed
+// automatic one.
+func (platformController) SetStartType(name string, startType uint32, delayed bool) error {
 	return withService(name, windows.SERVICE_CHANGE_CONFIG, func(h windows.Handle) error {
-		return windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, startType, windows.SERVICE_NO_CHANGE,
-			nil, nil, nil, nil, nil, nil, nil)
+		if err := windows.ChangeServiceConfig(h, windows.SERVICE_NO_CHANGE, startType, windows.SERVICE_NO_CHANGE,
+			nil, nil, nil, nil, nil, nil, nil); err != nil {
+			return err
+		}
+		info := windows.SERVICE_DELAYED_AUTO_START_INFO{}
+		if delayed && startType == startAuto {
+			info.IsDelayedAutoStartUp = 1
+		}
+		return windows.ChangeServiceConfig2(h, windows.SERVICE_CONFIG_DELAYED_AUTO_START_INFO, (*byte)(unsafe.Pointer(&info)))
 	})
 }

@@ -11,8 +11,9 @@ type controller interface {
 	Pause(name string) error
 	Resume(name string) error
 	// SetStartType changes how the service starts: one of the startAuto,
-	// startManual and startDisabled values.
-	SetStartType(name string, startType uint32) error
+	// startManual and startDisabled values; delayed asks for a delayed
+	// automatic start and only means something with startAuto.
+	SetStartType(name string, startType uint32, delayed bool) error
 }
 
 // serviceController is the controller the panel uses unless a test replaces it.

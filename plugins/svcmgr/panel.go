@@ -256,9 +256,15 @@ func (p *servicesPanel) showDetails() {
 	vtui.ShowMessageEx(i18n.Msg("SvcMgr.DetailsTitle"), detailsText(svc, d), []string{i18n.Msg("vtui.Ok")}, vtui.MessageInfo)
 }
 
+// startChoice is one entry of the start type dialog.
+type startChoice struct {
+	Type    uint32
+	Delayed bool
+}
+
 // startTypeChoices are the start types the panel offers, in the order of the
 // dialog's buttons. Boot and System are for drivers and are not offered.
-var startTypeChoices = []uint32{startAuto, startManual, startDisabled}
+var startTypeChoices = []startChoice{{startAuto, false}, {startAuto, true}, {startManual, false}, {startDisabled, false}}
 
 // chooseStartType is Shift+F4: a dialog with one button per start type.
 func (p *servicesPanel) chooseStartType() {
@@ -267,8 +273,8 @@ func (p *servicesPanel) chooseStartType() {
 		return
 	}
 	buttons := make([]string, 0, len(startTypeChoices)+1)
-	for _, t := range startTypeChoices {
-		buttons = append(buttons, startTypeName(t, false))
+	for _, c := range startTypeChoices {
+		buttons = append(buttons, startTypeName(c.Type, c.Delayed))
 	}
 	buttons = append(buttons, i18n.Msg("vtui.Cancel"))
 	dlg := vtui.ShowMessageEx(i18n.Msg("SvcMgr.StartTypeTitle"),
@@ -284,8 +290,8 @@ func (p *servicesPanel) chooseStartType() {
 }
 
 // setStartType applies a start type to the service under the cursor.
-func (p *servicesPanel) setStartType(startType uint32) {
-	p.run(func(name string) error { return p.ctl.SetStartType(name, startType) })
+func (p *servicesPanel) setStartType(c startChoice) {
+	p.run(func(name string) error { return p.ctl.SetStartType(name, c.Type, c.Delayed) })
 }
 
 // run applies one action to the service under the cursor, reports a failure

@@ -200,8 +200,8 @@ func (c *fakeController) Start(n string) error  { c.calls = append(c.calls, "sta
 func (c *fakeController) Stop(n string) error   { c.calls = append(c.calls, "stop "+n); return c.err }
 func (c *fakeController) Pause(n string) error  { c.calls = append(c.calls, "pause "+n); return c.err }
 func (c *fakeController) Resume(n string) error { c.calls = append(c.calls, "resume "+n); return c.err }
-func (c *fakeController) SetStartType(n string, t uint32) error {
-	c.calls = append(c.calls, "starttype "+n+" "+startTypeName(t, false))
+func (c *fakeController) SetStartType(n string, t uint32, delayed bool) error {
+	c.calls = append(c.calls, "starttype "+n+" "+startTypeName(t, delayed))
 	return c.err
 }
 
@@ -266,7 +266,7 @@ func TestPlatformControllerOffWindows(t *testing.T) {
 		t.Skip("this OS has a service manager")
 	}
 	c := platformController{}
-	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x"), c.SetStartType("x", startManual)} {
+	for i, err := range []error{c.Start("x"), c.Stop("x"), c.Pause("x"), c.Resume("x"), c.SetStartType("x", startManual, false)} {
 		if !errors.Is(err, errUnsupported) {
 			t.Errorf("action %d error = %v, want errUnsupported", i, err)
 		}
@@ -340,7 +340,7 @@ func TestSetStartTypeAppliesToTheServiceUnderTheCursor(t *testing.T) {
 	for _, st := range startTypeChoices {
 		p.setStartType(st)
 	}
-	want := "starttype Svc Automatic|starttype Svc Manual|starttype Svc Disabled"
+	want := "starttype Svc Automatic|starttype Svc Automatic (delayed start)|starttype Svc Manual|starttype Svc Disabled"
 	if got := strings.Join(ctl.calls, "|"); got != want {
 		t.Errorf("calls = %q, want %q", got, want)
 	}
