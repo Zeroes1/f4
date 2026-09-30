@@ -167,7 +167,9 @@ func TranslateKeyToKitty(e *vtinput.InputEvent, flags int, appCursorKeys bool) s
 		base = '.'
 	}
 
-	if base != 0 && keycode == 0 {
+	// A control character in Char (Ctrl+C arrives as 0x03) is not the key: the
+	// protocol names the key that was pressed, 'c' (99), never ETX (3).
+	if base != 0 && (keycode == 0 || (isSpecial && keycode < 32)) {
 		keycode = base
 	}
 
