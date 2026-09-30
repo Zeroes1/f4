@@ -18,8 +18,6 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/internal/history"
 	"github.com/unxed/f4/internal/sysinfo"
-	"golang.org/x/text/collate"
-	"golang.org/x/text/language"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/fileops"
@@ -956,14 +954,14 @@ func (fp *FileSystemPanel) sortEntriesAt(now time.Time) {
 
 	// far2l uses a string collation order for panel names: punctuation such as
 	// '_' sorts before digits and letters, unlike Go's byte/code-point order.
-	// Keep the collator local because collate.Collator reuses iterator state and
+	// Keep the comparator local because the collator reuses iterator state and
 	// is not safe for concurrent use.
-	nameCollator := collate.New(language.Und, collate.IgnoreCase, collate.Force)
+	nameCompare := newNameComparer()
 	compareName := func(left, right string) int {
 		if fp.SortNumeric {
-			return naturalCompare(left, right, nameCollator.CompareString)
+			return naturalCompare(left, right, nameCompare)
 		}
-		return nameCollator.CompareString(left, right)
+		return nameCompare(left, right)
 	}
 
 	// Group numbers are resolved once per entry: doing it inside the comparator
