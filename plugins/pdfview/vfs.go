@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"sort"
 	"strings"
 
 	"github.com/unxed/f4/internal/pdftext"

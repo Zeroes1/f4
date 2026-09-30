@@ -102,7 +102,11 @@ func TestProviderMountsAPDF(t *testing.T) {
 	if got := readAll(t, v, "/Images/p001-Im0.jpg"); got != "JPEGBYTES" {
 		t.Errorf("picture = %q", got)
 	}
-	if v.PanelTitle("/Pages") != "PDF:doc.pdf/Pages" || v.PanelTitle("/") != "PDF:doc.pdf" || v.GetTitle() != "doc.pdf" {
+	titled, ok := v.(interface {
+		PanelTitle(string) string
+		GetTitle() string
+	})
+	if !ok || titled.PanelTitle("/Pages") != "PDF:doc.pdf/Pages" || titled.PanelTitle("/") != "PDF:doc.pdf" || titled.GetTitle() != "doc.pdf" {
 		t.Error("titles wrong")
 	}
 }
