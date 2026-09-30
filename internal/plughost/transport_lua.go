@@ -4,6 +4,7 @@ package plughost
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/ffibridge"
 	"github.com/unxed/vtui"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 // LuaPlugin runs a Lua plugin inside the f4 process.
