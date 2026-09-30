@@ -19,6 +19,8 @@ Open it from the drive menu (Alt+F1) as **Docker**. The top level lists all cont
 
 `DOCKER_HOST` as the CLI reads it: `unix:///path/to.sock` or `tcp://host:port` (plain HTTP). Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. On Windows the default is Docker Desktop's named pipe (`npipe:////./pipe/docker_engine`, also accepted in `DOCKER_HOST`); it is opened as a plain file and served by a small one-request-per-connection transport, because a synchronous pipe handle cannot read and write at once the way `net/http` does. Not supported yet: `ssh://`, TLS. Nothing connects until the panel is opened.
 
+* **Addresses.** The panel path is `docker:///<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `docker://` URI provider; the server is the one the drive menu entry uses (`DOCKER_HOST`).
+
 ## Limits of this part
 
 * Delete/rename need a running container with `rm`/`mv`; the reason of a failure is only the exit status.

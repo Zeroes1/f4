@@ -144,27 +144,70 @@ func (v *mongoVFS) cursor(ctx context.Context, db string, cmd bsonD, coll string
 	}
 }
 
-func (v *mongoVFS) IsAtRoot() bool      { return v.GetPath() == "/" }
-func (v *mongoVFS) IsAbs(p string) bool { return strings.HasPrefix(p, "/") }
+// Panel paths are written as mongo:///<path> (uriPrefix and the POSIX path),
+// so that a bookmark, a folder history entry or a restored session can open the
+// panel again through the URI provider (f4#1669); the methods accept both that
+// form and the plain path, and keep the form they were given.
+const uriPrefix = "mongo://"
 
-func (v *mongoVFS) GetPath() string {
+func stripURI(p string) (plain string, wasURI bool) {
+	if rest, ok := strings.CutPrefix(p, uriPrefix); ok {
+		return rest, true
+	}
+	return p, false
+}
+
+func withURI(p string, uri bool) string {
+	if uri {
+		return uriPrefix + p
+	}
+	return p
+}
+
+func (v *mongoVFS) IsAtRoot() bool { return v.plainPath() == "/" }
+
+func (v *mongoVFS) IsAbs(p string) bool {
+	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, uriPrefix)
+}
+
+// plainPath is the current folder as a POSIX path.
+func (v *mongoVFS) plainPath() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.cwd
 }
 
-func (v *mongoVFS) Join(elem ...string) string { return path.Join(elem...) }
-func (v *mongoVFS) Base(p string) string       { return path.Base(path.Clean(p)) }
-func (v *mongoVFS) Dir(p string) string        { return path.Dir(path.Clean(p)) }
+// GetPath is the current folder as a URI.
+func (v *mongoVFS) GetPath() string { return uriPrefix + v.plainPath() }
 
+func (v *mongoVFS) Join(elem ...string) string {
+	if len(elem) == 0 {
+		return ""
+	}
+	first, uri := stripURI(elem[0])
+	return withURI(path.Join(append([]string{first}, elem[1:]...)...), uri)
+}
+
+func (v *mongoVFS) Base(p string) string {
+	plain, _ := stripURI(p)
+	return path.Base(path.Clean(plain))
+}
+
+func (v *mongoVFS) Dir(p string) string {
+	plain, uri := stripURI(p)
+	return withURI(path.Dir(path.Clean(plain)), uri)
+}
+
+// Abs is always the plain POSIX path: it is what the rest of the panel works with.
 func (v *mongoVFS) Abs(p string) (string, error) {
 	if p == "" {
-		return v.GetPath(), nil
+		return v.plainPath(), nil
 	}
-	if v.IsAbs(p) {
-		return path.Clean(p), nil
+	plain, _ := stripURI(p)
+	if strings.HasPrefix(plain, "/") {
+		return path.Clean(plain), nil
 	}
-	return path.Join(v.GetPath(), p), nil
+	return path.Join(v.plainPath(), plain), nil
 }
 
 // location is a panel path taken apart; depth counts how many of database,
@@ -680,7 +723,7 @@ func (v *mongoVFS) PanelTitle(p string) string {
 // Clone opens its own connection when first used.
 func (v *mongoVFS) Clone() vfs.VFS {
 	clone := newMongoVFS(v.open)
-	clone.cwd = v.GetPath()
+	clone.cwd = v.plainPath()
 	return clone
 }
 

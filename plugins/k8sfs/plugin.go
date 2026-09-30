@@ -32,10 +32,14 @@ func (*Plugin) Init(api vfs.HostAPI) error {
 		return errors.New("Kubernetes: nil host API")
 	}
 	api.RegisterDrive(driveName, func() vfs.VFS { return newK8sVFS(openFromKubeconfig) })
-	return nil
+	// k8s:///<path> reopens the panel from a bookmark, history or a saved session.
+	return api.RegisterURIProvider(uriProvider{open: openFromKubeconfig})
 }
 
-func (*Plugin) Close() error { return nil }
+func (*Plugin) Close() error {
+	vfs.UnregisterURIProvider("k8s")
+	return nil
+}
 
 // openFromKubeconfig connects with the user's kubeconfig.
 func openFromKubeconfig() (*restClient, error) {

@@ -96,27 +96,70 @@ func (v *dockerVFS) clientFor() (*client, error) {
 	return cli, nil
 }
 
-func (v *dockerVFS) IsAtRoot() bool      { return v.GetPath() == "/" }
-func (v *dockerVFS) IsAbs(p string) bool { return strings.HasPrefix(p, "/") }
+// Panel paths are written as docker:///<path> (uriPrefix and the POSIX path),
+// so that a bookmark, a folder history entry or a restored session can open the
+// panel again through the URI provider (f4#1669); the methods accept both that
+// form and the plain path, and keep the form they were given.
+const uriPrefix = "docker://"
 
-func (v *dockerVFS) GetPath() string {
+func stripURI(p string) (plain string, wasURI bool) {
+	if rest, ok := strings.CutPrefix(p, uriPrefix); ok {
+		return rest, true
+	}
+	return p, false
+}
+
+func withURI(p string, uri bool) string {
+	if uri {
+		return uriPrefix + p
+	}
+	return p
+}
+
+func (v *dockerVFS) IsAtRoot() bool { return v.plainPath() == "/" }
+
+func (v *dockerVFS) IsAbs(p string) bool {
+	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, uriPrefix)
+}
+
+// plainPath is the current folder as a POSIX path.
+func (v *dockerVFS) plainPath() string {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.cwd
 }
 
-func (v *dockerVFS) Join(elem ...string) string { return path.Join(elem...) }
-func (v *dockerVFS) Base(p string) string       { return path.Base(path.Clean(p)) }
-func (v *dockerVFS) Dir(p string) string        { return path.Dir(path.Clean(p)) }
+// GetPath is the current folder as a URI.
+func (v *dockerVFS) GetPath() string { return uriPrefix + v.plainPath() }
 
+func (v *dockerVFS) Join(elem ...string) string {
+	if len(elem) == 0 {
+		return ""
+	}
+	first, uri := stripURI(elem[0])
+	return withURI(path.Join(append([]string{first}, elem[1:]...)...), uri)
+}
+
+func (v *dockerVFS) Base(p string) string {
+	plain, _ := stripURI(p)
+	return path.Base(path.Clean(plain))
+}
+
+func (v *dockerVFS) Dir(p string) string {
+	plain, uri := stripURI(p)
+	return withURI(path.Dir(path.Clean(plain)), uri)
+}
+
+// Abs is always the plain POSIX path: it is what the rest of the panel works with.
 func (v *dockerVFS) Abs(p string) (string, error) {
 	if p == "" {
-		return v.GetPath(), nil
+		return v.plainPath(), nil
 	}
-	if v.IsAbs(p) {
-		return path.Clean(p), nil
+	plain, _ := stripURI(p)
+	if strings.HasPrefix(plain, "/") {
+		return path.Clean(plain), nil
 	}
-	return path.Join(v.GetPath(), p), nil
+	return path.Join(v.plainPath(), plain), nil
 }
 
 // split cuts an absolute path into the container name and the path inside it
@@ -659,7 +702,7 @@ func (v *dockerVFS) PanelTitle(p string) string {
 // not cut the other's.
 func (v *dockerVFS) Clone() vfs.VFS {
 	clone := newDockerVFS(v.open)
-	clone.cwd = v.GetPath()
+	clone.cwd = v.plainPath()
 	return clone
 }
 

@@ -421,7 +421,7 @@ func TestMongoVFSStatSetPathAndReadOnly(t *testing.T) {
 	if err := v.SetPath("/shop/orders"); err != nil {
 		t.Fatal(err)
 	}
-	if v.GetPath() != "/shop/orders" || v.IsAtRoot() || v.PanelTitle(v.GetPath()) != "MongoDB:shop/orders" || v.PanelTitle("/") != "MongoDB" {
+	if v.GetPath() != "mongo:///shop/orders" || v.IsAtRoot() || v.PanelTitle(v.GetPath()) != "MongoDB:shop/orders" || v.PanelTitle("/") != "MongoDB" {
 		t.Fatalf("path %q", v.GetPath())
 	}
 	for _, p := range []string{"/", "/shop", "/shop/orders"} {
@@ -437,7 +437,7 @@ func TestMongoVFSStatSetPathAndReadOnly(t *testing.T) {
 	if err := v.SetPath("/shop/orders/i_42.json"); !errors.Is(err, errNotADirectory) {
 		t.Fatalf("SetPath on a document: %v", err)
 	}
-	if v.Clone().(*mongoVFS).GetPath() != "/shop/orders" {
+	if v.Clone().(*mongoVFS).GetPath() != "mongo:///shop/orders" {
 		t.Fatal("clone lost the path")
 	}
 	_, createErr := v.Create(ctx, "/x")
@@ -834,3 +834,55 @@ func TestParseEJSON(t *testing.T) {
 }
 
 func oidA0() objectID { return objectID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12} }
+
+func TestURIProviderAndURIPaths(t *testing.T) {
+	f := startFake(t, "", "")
+	p := uriProvider{open: connectTo(f, "", "")}
+	ctx := context.Background()
+	if p.Scheme() != "mongo" {
+		t.Fatal(p.Scheme())
+	}
+	got, err := p.OpenURI(ctx, nil, "mongo:///shop/orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := got.(*mongoVFS)
+	defer func() { _ = v.Close() }()
+	if v.GetPath() != "mongo:///shop/orders" || v.plainPath() != "/shop/orders" {
+		t.Fatalf("path %q / %q", v.GetPath(), v.plainPath())
+	}
+	file := v.Join(v.GetPath(), "i_42.json")
+	if file != "mongo:///shop/orders/i_42.json" || v.Base(file) != "i_42.json" || v.Dir(file) != "mongo:///shop/orders" {
+		t.Fatalf("Join/Base/Dir: %q %q %q", file, v.Base(file), v.Dir(file))
+	}
+	if v.Join("/a", "b") != "/a/b" || v.Dir("/a/b") != "/a" || v.Join() != "" {
+		t.Fatal("plain paths keep their form")
+	}
+	if !v.IsAbs("mongo:///x") || !v.IsAbs("/x") || v.IsAbs("x") {
+		t.Fatal("IsAbs")
+	}
+	if abs, _ := v.Abs(file); abs != "/shop/orders/i_42.json" {
+		t.Fatalf("Abs(uri) = %q", abs)
+	}
+	if abs, _ := v.Abs("i_42.json"); abs != "/shop/orders/i_42.json" {
+		t.Fatalf("Abs(relative) = %q", abs)
+	}
+	if _, err := v.Stat(ctx, file); err != nil {
+		t.Fatalf("Stat(uri): %v", err)
+	}
+	if names, err := names(t, v, v.GetPath()); err != nil || len(names) != 4 {
+		t.Fatalf("ReadDir(uri): %v, %v", names, err)
+	}
+	if root, err := p.OpenURI(ctx, nil, "MONGO://"); err != nil || root.GetPath() != "mongo:///" {
+		t.Fatalf("the root: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "mongo:///nodb"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a missing database: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "mongo:///shop/orders/i_42.json"); !errors.Is(err, errNotADirectory) {
+		t.Fatalf("a document: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "ftp://x"); err == nil {
+		t.Fatal("a foreign scheme should be refused")
+	}
+}

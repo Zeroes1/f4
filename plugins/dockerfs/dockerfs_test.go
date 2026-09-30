@@ -240,7 +240,7 @@ func TestDockerVFSStatSetPathAndOpen(t *testing.T) {
 	if err := v.SetPath("/web/etc"); err != nil {
 		t.Fatal(err)
 	}
-	if v.GetPath() != "/web/etc" || v.IsAtRoot() {
+	if v.GetPath() != "docker:///web/etc" || v.IsAtRoot() {
 		t.Fatalf("path is %q", v.GetPath())
 	}
 	if it, err := v.Stat(ctx, "hostname"); err != nil || it.IsDir || it.Size != 4 {
@@ -283,7 +283,7 @@ func TestDockerVFSStatSetPathAndOpen(t *testing.T) {
 	if got := v.PanelTitle("/"); got != "Docker" {
 		t.Fatalf("PanelTitle(/) = %q", got)
 	}
-	if clone := v.Clone().(*dockerVFS); clone.GetPath() != "/web/etc" {
+	if clone := v.Clone().(*dockerVFS); clone.GetPath() != "docker:///web/etc" {
 		t.Fatalf("clone path %q", clone.GetPath())
 	}
 }
@@ -542,5 +542,62 @@ func TestPathHelpers(t *testing.T) {
 	}
 	if _, err := parsePathStat(base64.StdEncoding.EncodeToString([]byte("nope"))); err == nil {
 		t.Error("a non-JSON stat header should be an error")
+	}
+}
+
+func TestURIProviderAndURIPaths(t *testing.T) {
+	cli, _ := fakeDaemon(t, testFS())
+	p := uriProvider{open: func() (*client, error) { return cli, nil }}
+	ctx := context.Background()
+	if p.Scheme() != "docker" {
+		t.Fatal(p.Scheme())
+	}
+	got, err := p.OpenURI(ctx, nil, "docker:///web/etc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := got.(*dockerVFS)
+	defer func() { _ = v.Close() }()
+	if v.GetPath() != "docker:///web/etc" || v.plainPath() != "/web/etc" {
+		t.Fatalf("path %q / %q", v.GetPath(), v.plainPath())
+	}
+	// The URI form goes in and comes out of every path method.
+	file := v.Join(v.GetPath(), "hostname")
+	if file != "docker:///web/etc/hostname" || v.Base(file) != "hostname" || v.Dir(file) != "docker:///web/etc" {
+		t.Fatalf("Join/Base/Dir: %q %q %q", file, v.Base(file), v.Dir(file))
+	}
+	if plain := v.Join("/web", "etc"); plain != "/web/etc" || v.Dir("/web/etc") != "/web" || v.Join() != "" {
+		t.Fatalf("plain paths keep their form: %q %q", plain, v.Dir("/web/etc"))
+	}
+	if !v.IsAbs("docker:///x") || !v.IsAbs("/x") || v.IsAbs("x") {
+		t.Fatal("IsAbs")
+	}
+	if abs, _ := v.Abs(file); abs != "/web/etc/hostname" {
+		t.Fatalf("Abs(uri) = %q", abs)
+	}
+	if abs, _ := v.Abs("hostname"); abs != "/web/etc/hostname" {
+		t.Fatalf("Abs(relative) = %q", abs)
+	}
+	if it, err := v.Stat(ctx, file); err != nil || it.Size != 4 {
+		t.Fatalf("Stat(uri) = %+v, %v", it, err)
+	}
+	if names := listNames(t, v, v.GetPath()); len(names) != 1 {
+		t.Fatalf("ReadDir(uri): %v", names)
+	}
+	if err := v.SetPath("docker:///web"); err != nil || v.GetPath() != "docker:///web" {
+		t.Fatalf("SetPath(uri): %v, %q", err, v.GetPath())
+	}
+
+	if root, err := p.OpenURI(ctx, nil, "DOCKER://"); err != nil || root.GetPath() != "docker:///" || !root.IsAtRoot() {
+		t.Fatalf("the root: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "docker:///nope"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a missing container: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "docker:///web/etc/hostname"); !errors.Is(err, errNotADirectory) {
+		t.Fatalf("a file: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "ftp://x"); err == nil {
+		t.Fatal("a foreign scheme should be refused")
 	}
 }

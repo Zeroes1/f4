@@ -117,6 +117,7 @@ func fakeClusterState(t *testing.T) (*restClient, *clusterState) {
 		"cat -- /hello.txt": "hello\n",
 		"stat -c %F|%s|%Y|%a|%n -- /bin /etc /hello.txt /lnk": "directory|4096|1700000000|755|/bin\n" +
 			"directory|4096|1700000000|755|/etc\nregular file|6|1700000000|644|/hello.txt\nsymbolic link|3|1700000000|777|/lnk\n",
+		"stat -c %F|%s|%Y|%a|%n -- /etc":          "directory|4096|1700000000|755|/etc\n",
 		"stat -c %F|%s|%Y|%a|%n -- /etc/hostname": "regular file|4|1700000001|600|/etc/hostname\n",
 		"stat -c %F|%s|%Y|%a|%n -- /hello.txt":    "regular file|6|1700000000|644|/hello.txt\n",
 		"stat -c %F|%s|%Y|%a|%n -- /lnk":          "symbolic link|3|1700000000|777|/lnk\n",
@@ -215,7 +216,7 @@ func TestK8sVFSStatOpenAndPaths(t *testing.T) {
 	if err := v.SetPath("/default/web/app"); err != nil {
 		t.Fatal(err)
 	}
-	if v.GetPath() != "/default/web/app" || v.IsAtRoot() {
+	if v.GetPath() != "k8s:///default/web/app" || v.IsAtRoot() {
 		t.Fatalf("path %q", v.GetPath())
 	}
 	if it, err := v.Stat(ctx, "hello.txt"); err != nil || it.IsDir || it.Size != 6 {
@@ -262,7 +263,7 @@ func TestK8sVFSStatOpenAndPaths(t *testing.T) {
 	if got := v.PanelTitle("/default/web/app/etc"); got != "Kubernetes:default/web/app/etc" || v.PanelTitle("/") != "Kubernetes" {
 		t.Fatalf("PanelTitle = %q", got)
 	}
-	if v.Clone().(*k8sVFS).GetPath() != "/default/web/app" {
+	if v.Clone().(*k8sVFS).GetPath() != "k8s:///default/web/app" {
 		t.Fatal("clone lost the path")
 	}
 }
@@ -563,5 +564,54 @@ func TestK8sVFSWrites(t *testing.T) {
 	cancel()
 	if err := w.Close(); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Close with a cancelled context: %v", err)
+	}
+}
+
+func TestURIProviderAndURIPaths(t *testing.T) {
+	cli := fakeCluster(t)
+	p := uriProvider{open: func() (*restClient, error) { return cli, nil }}
+	ctx := context.Background()
+	if p.Scheme() != "k8s" {
+		t.Fatal(p.Scheme())
+	}
+	got, err := p.OpenURI(ctx, nil, "k8s:///default/web/app/etc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := got.(*k8sVFS)
+	defer func() { _ = v.Close() }()
+	if v.GetPath() != "k8s:///default/web/app/etc" || v.plainPath() != "/default/web/app/etc" {
+		t.Fatalf("path %q / %q", v.GetPath(), v.plainPath())
+	}
+	file := v.Join(v.GetPath(), "hostname")
+	if file != "k8s:///default/web/app/etc/hostname" || v.Base(file) != "hostname" || v.Dir(file) != "k8s:///default/web/app/etc" {
+		t.Fatalf("Join/Base/Dir: %q %q %q", file, v.Base(file), v.Dir(file))
+	}
+	if v.Join("/a", "b") != "/a/b" || v.Dir("/a/b") != "/a" || v.Join() != "" {
+		t.Fatal("plain paths keep their form")
+	}
+	if !v.IsAbs("k8s:///x") || !v.IsAbs("/x") || v.IsAbs("x") {
+		t.Fatal("IsAbs")
+	}
+	if abs, _ := v.Abs(file); abs != "/default/web/app/etc/hostname" {
+		t.Fatalf("Abs(uri) = %q", abs)
+	}
+	if abs, _ := v.Abs("hostname"); abs != "/default/web/app/etc/hostname" {
+		t.Fatalf("Abs(relative) = %q", abs)
+	}
+	if names := listAll(t, v, v.GetPath()); len(names) != 1 {
+		t.Fatalf("ReadDir(uri): %v", names)
+	}
+	if root, err := p.OpenURI(ctx, nil, "K8S://"); err != nil || root.GetPath() != "k8s:///" {
+		t.Fatalf("the root: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "k8s:///nowhere"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a missing namespace: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "k8s:///default/web/app/hello.txt"); !errors.Is(err, errNotADirectory) {
+		t.Fatalf("a file: %v", err)
+	}
+	if _, err := p.OpenURI(ctx, nil, "ftp://x"); err == nil {
+		t.Fatal("a foreign scheme should be refused")
 	}
 }

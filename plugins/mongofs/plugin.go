@@ -35,10 +35,14 @@ func (*Plugin) Init(api vfs.HostAPI) error {
 		return errors.New("MongoDB: nil host API")
 	}
 	api.RegisterDrive(driveName, func() vfs.VFS { return newMongoVFS(connectFromEnv) })
-	return nil
+	// mongo:///<path> reopens the panel from a bookmark, history or a saved session.
+	return api.RegisterURIProvider(uriProvider{open: connectFromEnv})
 }
 
-func (*Plugin) Close() error { return nil }
+func (*Plugin) Close() error {
+	vfs.UnregisterURIProvider("mongo")
+	return nil
+}
 
 // connectFromEnv opens the connection MONGODB_URI names.
 func connectFromEnv(ctx context.Context) (*conn, error) {

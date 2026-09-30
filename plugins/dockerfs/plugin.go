@@ -30,7 +30,11 @@ func (*Plugin) Init(api vfs.HostAPI) error {
 		return errors.New("Docker: nil host API")
 	}
 	api.RegisterDrive(driveName, func() vfs.VFS { return newDockerVFS(clientFromEnv) })
-	return nil
+	// docker:///<path> reopens the panel from a bookmark, history or a saved session.
+	return api.RegisterURIProvider(uriProvider{open: clientFromEnv})
 }
 
-func (*Plugin) Close() error { return nil }
+func (*Plugin) Close() error {
+	vfs.UnregisterURIProvider("docker")
+	return nil
+}
