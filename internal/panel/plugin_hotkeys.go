@@ -342,7 +342,7 @@ func assignPluginHotkey(actionName, label string, onComplete func()) {
 	if hm == nil || vtui.FrameManager == nil || !keymap.IsPluginActionName(actionName) {
 		return
 	}
-	vtui.FrameManager.Push(NewPluginHotkeyAssignFrame(hm, actionName, label, onComplete))
+	showPluginHotkeyDialog(hm, actionName, label, onComplete)
 }
 
 // bindPluginMenuHotkey stores a letter for the entry. A letter identifies
