@@ -288,6 +288,17 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 		}
 	}
 
+	// A held Ctrl+W auto-repeats while the exit confirmation dialog is up and
+	// the repeats pile up in the event channel. They must die here: the
+	// close-active-screen fallback below this filter would re-emit CmQuit and
+	// stack another copy of the dialog (one Cancel per queued repeat), and
+	// with several workspaces it would close one behind the modal dialog.
+	if e.VirtualKeyCode == vtinput.VK_W &&
+		(e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed)) != 0 &&
+		panel.QuitConfirmationOpen() {
+		return true
+	}
+
 	return false
 }
 
