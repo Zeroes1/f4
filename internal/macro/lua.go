@@ -1,7 +1,8 @@
+//go:build !extralite
+
 package macro
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,44 +24,6 @@ const macroExitSentinel = "f4macro:exit"
 // macroCallTimeout bounds one macro. A macro is user code triggered by a key
 // press, so it gets far less rope than a plugin.
 var macroCallTimeout = 10 * time.Second
-
-// MacroPanelInfo is the panel state a macro can see, gathered in one shot.
-// Reading it costs a round trip to the UI goroutine, so it is fetched whole
-// rather than field by field.
-type MacroPanelInfo struct {
-	Path      string
-	Current   string
-	ItemCount int
-	SelCount  int
-	CurPos    int
-	TopPos    int
-	IsFolder  bool
-	Empty     bool
-	Left      bool
-	Visible   bool
-	Root      bool
-	Bof       bool
-	Eof       bool
-	Type      int
-}
-
-// MacroHost is everything the macro engine needs from f4. Keeping it an
-// interface is what makes the engine testable without a terminal, and it is
-// also the seam where the "must run on the UI goroutine" rule is enforced
-// exactly once instead of in every API function.
-type MacroHost interface {
-	CurrentArea() string
-	Panel(active bool) MacroPanelInfo
-	CommandLine() string
-	ScreenSize() (width, height int)
-	Version() string
-	WindowTitle() string
-	Message(title, text string)
-	InjectKeys(keys []*vtinput.InputEvent)
-	Log(format string, args ...any)
-	RunAction(name string) bool
-	CallPlugin(context.Context, string, []any) ([]any, error)
-}
 
 // LuaMacro is one Macro{} declaration.
 type LuaMacro struct {
@@ -107,15 +70,6 @@ type luaMenuItem struct {
 	macro *LuaMacro
 }
 
-// LuaMacroBinding is the discoverable, immutable part of a Lua macro. It is
-// used by command surfaces without exposing interpreter-owned functions.
-type LuaMacroBinding struct {
-	Area        string
-	Key         string
-	Description string
-	Source      string
-}
-
 // LuaMacroEngine runs Far-compatible macros written in Lua.
 type LuaMacroEngine struct {
 	rt   *luaplug.Runtime
@@ -134,13 +88,6 @@ type LuaMacroEngine struct {
 	// macro is running, and are read by the caller once it has finished.
 	pendingKeys []*vtinput.InputEvent
 	invokedKey  string
-}
-
-// macroAreaAliases maps f4's own area names onto Far's. f4 reports Terminal
-// when the panels are hidden; Far has no such area, and its Shell macros are
-// what a user expects to fire there.
-var macroAreaAliases = map[string]string{
-	"terminal": "shell",
 }
 
 // NewLuaMacroEngine starts an engine with no macros loaded.
