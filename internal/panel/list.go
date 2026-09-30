@@ -4219,11 +4219,24 @@ func (fp *FileSystemPanel) ClearSelectionIfUnchanged(token PanelSelectionToken) 
 // together with the position of the one under the cursor, or minus one when
 // the cursor is not on a picture.
 func (fp *FileSystemPanel) ImageSiblings() ([]string, int) {
+	return fp.siblingsWhere(media.IsImageFile)
+}
+
+// VideoSiblings is ImageSiblings for films: the video files of this panel in
+// the order it shows them, and the position of the one under the cursor, or
+// minus one when the cursor is not on one.
+func (fp *FileSystemPanel) VideoSiblings() ([]string, int) {
+	return fp.siblingsWhere(media.IsVideoFile)
+}
+
+// siblingsWhere lists the files of the panel that keep(name) accepts, in the
+// order the panel shows them, and the position of the one under the cursor.
+func (fp *FileSystemPanel) siblingsWhere(keep func(name string) bool) ([]string, int) {
 	current := fp.GetRawSelectedName()
 	names := make([]string, 0, len(fp.Entries))
 	index := -1
 	for _, e := range fp.Entries {
-		if e.IsDir || e.Name == ".." || !media.IsImageFile(e.Name) {
+		if e.IsDir || e.Name == ".." || !keep(e.Name) {
 			continue
 		}
 		if e.Name == current {

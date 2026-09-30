@@ -35,6 +35,10 @@ type VideoView struct {
 	paused bool
 
 	OnClose func()
+
+	// Siblings, when set, lets PgUp/PgDn/Home/End walk through the films of
+	// the panel.
+	Siblings *VideoSiblings
 }
 
 // NewVideoView starts the player and hands back the frame it lives in.
@@ -158,6 +162,9 @@ func (vv *VideoView) ProcessKey(e *vtinput.InputEvent) bool {
 	seekBy, volumeBy := 10, 10
 	if shift {
 		seekBy, volumeBy = 1, 2
+	}
+	if vv.Siblings.step(e.VirtualKeyCode) {
+		return true
 	}
 	switch e.VirtualKeyCode {
 	case vtinput.VK_ESCAPE, vtinput.VK_F10, vtinput.VK_F3:

@@ -50,6 +50,10 @@ type FrameVideoView struct {
 
 	gfxKey  string
 	OnClose func()
+
+	// Siblings, when set, lets PgUp/PgDn/Home/End walk through the films of
+	// the panel.
+	Siblings *VideoSiblings
 }
 
 // NewFrameVideoView makes the frame; playback starts when it is first drawn,
@@ -281,6 +285,9 @@ func (fv *FrameVideoView) ProcessKey(e *vtinput.InputEvent) bool {
 	step := 10 * time.Second
 	if e.ControlKeyState&vtinput.ShiftPressed != 0 {
 		step = time.Second
+	}
+	if fv.Siblings.step(e.VirtualKeyCode) {
+		return true
 	}
 	switch e.VirtualKeyCode {
 	case vtinput.VK_ESCAPE, vtinput.VK_F10, vtinput.VK_F3:

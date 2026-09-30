@@ -1564,6 +1564,7 @@ func tryOpenVideoPlayer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 		vtui.DebugLog("VIDEO: %v", err)
 		return false
 	}
+	vv.Siblings = videoSiblings(pf, v, path, vv.Close)
 	vv.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.AddScreen(vv)
 	return true
@@ -1581,9 +1582,40 @@ func tryOpenVideoFrames(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 		return false
 	}
 	fv := media.NewFrameVideoView(v, path)
+	fv.Siblings = videoSiblings(pf, v, path, fv.Close)
 	fv.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.AddScreen(fv)
 	return true
+}
+
+// videoSiblings lets PgUp/PgDn/Home/End of a video frame walk through the
+// films of the panel the video was opened from (VIDEO.md V6): the frame is
+// closed and the film chosen opens the way F3 would open it. A panel looking
+// somewhere else has nothing to say about this file, and then there is nobody
+// to walk to.
+func videoSiblings(pf *panel.PanelsFrame, v vfs.VFS, path string, closeView func()) *media.VideoSiblings {
+	if pf == nil || v == nil {
+		return nil
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil || fsp.Vfs.GetPath() != v.Dir(path) {
+		return nil
+	}
+	names, index := fsp.VideoSiblings()
+	dir := v.Dir(path)
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		paths = append(paths, v.Join(dir, name))
+	}
+	return &media.VideoSiblings{
+		Paths: paths,
+		Index: index,
+		OnStep: func(next string) {
+			closeView()
+			fsp.SelectName(v.Base(next))
+			openViewerInternal(pf, v, next)
+		},
+	}
 }
 
 func tryOpenImageViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {

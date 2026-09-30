@@ -124,3 +124,41 @@ func videoFileForTest(t *testing.T) string {
 	}
 	return path
 }
+
+func TestVideoSiblingsWalkThroughTheFilms(t *testing.T) {
+	var got []string
+	s := &VideoSiblings{Paths: []string{"a.mp4", "b.mp4", "c.mp4"}, Index: 1, OnStep: func(p string) { got = append(got, p) }}
+	for _, vk := range []uint16{vtinput.VK_NEXT, vtinput.VK_PRIOR, vtinput.VK_HOME, vtinput.VK_END} {
+		if !s.step(vk) {
+			t.Fatalf("key %d not handled", vk)
+		}
+	}
+	if want := []string{"c.mp4", "a.mp4", "a.mp4", "c.mp4"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("stepped to %v, want %v", got, want)
+	}
+	// Wrapping, and standing still on the film already shown.
+	got = nil
+	s.Index = 2
+	s.step(vtinput.VK_NEXT)
+	s.Index = 0
+	s.step(vtinput.VK_PRIOR)
+	s.step(vtinput.VK_HOME) // already the first: handled, nowhere to go
+	if strings.Join(got, ",") != "a.mp4,c.mp4" {
+		t.Fatalf("wrapping steps = %v", got)
+	}
+	if s.step(vtinput.VK_A) {
+		t.Error("an unrelated key stepped")
+	}
+	for _, alone := range []*VideoSiblings{nil, {Paths: []string{"a"}, Index: 0, OnStep: func(string) {}}, {Paths: []string{"a", "b"}, Index: -1, OnStep: func(string) {}}, {Paths: []string{"a", "b"}, Index: 0}} {
+		if alone.step(vtinput.VK_NEXT) {
+			t.Errorf("%+v stepped with nowhere to go", alone)
+		}
+	}
+
+	// And through the frame's own key handling.
+	fv := NewFrameVideoView(nil, "a.mp4")
+	fv.Siblings = &VideoSiblings{Paths: []string{"a.mp4", "b.mp4"}, Index: 0, OnStep: func(p string) { got = append(got[:0], p) }}
+	if !fv.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_NEXT}) || len(got) != 1 || got[0] != "b.mp4" {
+		t.Fatalf("PgDn on the frame: %v", got)
+	}
+}

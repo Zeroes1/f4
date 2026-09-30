@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/unxed/vtinput"
 )
 
 // PlaybackState is a copy of what mpv last said. A zero Duration means the
@@ -170,4 +172,40 @@ func (s PlaybackState) statusText() string {
 	}
 	parts = append(parts, fmt.Sprintf("vol %d", s.Volume))
 	return " " + strings.Join(parts, " │ ") + " "
+}
+
+// VideoSiblings is the other films next to the one playing, for the keys that
+// walk through them (docs/VIDEO.md V6); the same on both video frames.
+type VideoSiblings struct {
+	Paths []string
+	Index int
+	// OnStep is called with the film to switch to; the host closes the frame
+	// and opens that one.
+	OnStep func(path string)
+}
+
+// step handles PgDn/PgUp/End/Home: the next, previous, last and first film. It
+// reports whether the key was one of these and there was somewhere to go.
+func (s *VideoSiblings) step(vk uint16) bool {
+	if s == nil || s.OnStep == nil || len(s.Paths) < 2 || s.Index < 0 || s.Index >= len(s.Paths) {
+		return false
+	}
+	var target int
+	switch vk {
+	case vtinput.VK_NEXT:
+		target = (s.Index + 1) % len(s.Paths)
+	case vtinput.VK_PRIOR:
+		target = (s.Index - 1 + len(s.Paths)) % len(s.Paths)
+	case vtinput.VK_HOME:
+		target = 0
+	case vtinput.VK_END:
+		target = len(s.Paths) - 1
+	default:
+		return false
+	}
+	if target == s.Index {
+		return true
+	}
+	s.OnStep(s.Paths[target])
+	return true
 }
