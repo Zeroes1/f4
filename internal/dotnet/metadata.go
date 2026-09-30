@@ -806,7 +806,11 @@ const (
 // limits above. A body that cannot be read is skipped: the method is still
 // listed, only its IL is missing.
 func (in *Info) readBodies(rvaRead func(rva, n uint32) ([]byte, error)) {
-	total := 0
+	in.readBodiesFrom(rvaRead, 0)
+}
+
+// readBodiesFrom is readBodies with bytes already spent against the total limit.
+func (in *Info) readBodiesFrom(rvaRead func(rva, n uint32) ([]byte, error), total int) {
 	for _, list := range in.Members {
 		for i := range list {
 			m := &list[i]
