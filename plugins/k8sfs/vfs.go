@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -47,6 +48,9 @@ func (unsupportedError) Is(target error) bool { return target == os.ErrPermissio
 // "/<ns>/<pod>/<container>/..." the container's file system.
 type k8sVFS struct {
 	open func() (*restClient, error)
+	// prefix is the URI head of this panel's paths: uriPrefix, or uriPrefix
+	// plus the escaped name of a kubeconfig context.
+	prefix string
 
 	mu     sync.Mutex
 	cli    *restClient
@@ -55,7 +59,7 @@ type k8sVFS struct {
 }
 
 func newK8sVFS(open func() (*restClient, error)) *k8sVFS {
-	return &k8sVFS{open: open, cwd: "/"}
+	return &k8sVFS{open: open, prefix: uriPrefix, cwd: "/"}
 }
 
 func (v *k8sVFS) clientFor() (*restClient, error) {
@@ -81,16 +85,28 @@ func (v *k8sVFS) clientFor() (*restClient, error) {
 // form and the plain path, and keep the form they were given.
 const uriPrefix = "k8s://"
 
-func stripURI(p string) (plain string, wasURI bool) {
-	if rest, ok := strings.CutPrefix(p, uriPrefix); ok {
+// A panel opened for one kubeconfig context (see contexts.go) writes
+// k8s://<context>/<path> instead, the context name escaped as a URL path
+// segment; its prefix is what the methods below strip and put back.
+func (v *k8sVFS) stripURI(p string) (plain string, wasURI bool) {
+	if v.prefix == uriPrefix {
+		if rest, ok := strings.CutPrefix(p, uriPrefix); ok {
+			return rest, true
+		}
+		return p, false
+	}
+	if rest, ok := strings.CutPrefix(p, v.prefix); ok && (rest == "" || rest[0] == '/') {
+		if rest == "" {
+			rest = "/"
+		}
 		return rest, true
 	}
 	return p, false
 }
 
-func withURI(p string, uri bool) string {
+func (v *k8sVFS) withURI(p string, uri bool) string {
 	if uri {
-		return uriPrefix + p
+		return v.prefix + p
 	}
 	return p
 }
@@ -98,7 +114,7 @@ func withURI(p string, uri bool) string {
 func (v *k8sVFS) IsAtRoot() bool { return v.plainPath() == "/" }
 
 func (v *k8sVFS) IsAbs(p string) bool {
-	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, uriPrefix)
+	return strings.HasPrefix(p, "/") || strings.HasPrefix(p, v.prefix)
 }
 
 // plainPath is the current folder as a POSIX path.
@@ -109,24 +125,24 @@ func (v *k8sVFS) plainPath() string {
 }
 
 // GetPath is the current folder as a URI.
-func (v *k8sVFS) GetPath() string { return uriPrefix + v.plainPath() }
+func (v *k8sVFS) GetPath() string { return v.prefix + v.plainPath() }
 
 func (v *k8sVFS) Join(elem ...string) string {
 	if len(elem) == 0 {
 		return ""
 	}
-	first, uri := stripURI(elem[0])
-	return withURI(path.Join(append([]string{first}, elem[1:]...)...), uri)
+	first, uri := v.stripURI(elem[0])
+	return v.withURI(path.Join(append([]string{first}, elem[1:]...)...), uri)
 }
 
 func (v *k8sVFS) Base(p string) string {
-	plain, _ := stripURI(p)
+	plain, _ := v.stripURI(p)
 	return path.Base(path.Clean(plain))
 }
 
 func (v *k8sVFS) Dir(p string) string {
-	plain, uri := stripURI(p)
-	return withURI(path.Dir(path.Clean(plain)), uri)
+	plain, uri := v.stripURI(p)
+	return v.withURI(path.Dir(path.Clean(plain)), uri)
 }
 
 // Abs is always the plain POSIX path: it is what the rest of the panel works with.
@@ -134,7 +150,7 @@ func (v *k8sVFS) Abs(p string) (string, error) {
 	if p == "" {
 		return v.plainPath(), nil
 	}
-	plain, _ := stripURI(p)
+	plain, _ := v.stripURI(p)
 	if strings.HasPrefix(plain, "/") {
 		return path.Clean(plain), nil
 	}
@@ -595,18 +611,25 @@ func (v *k8sVFS) Search(context.Context, string, string) (chan int64, error) { r
 
 func (v *k8sVFS) ParentVFS() vfs.VFS { return nil }
 
-// PanelTitle names the panel by where it is, "Kubernetes:default/web/app/etc".
+// PanelTitle names the panel by where it is, "Kubernetes:default/web/app/etc"
+// (for a kubeconfig context, "Kubernetes(name):default/...").
 func (v *k8sVFS) PanelTitle(p string) string {
+	head := "Kubernetes"
+	if v.prefix != uriPrefix {
+		name, _ := url.PathUnescape(strings.TrimPrefix(v.prefix, uriPrefix))
+		head += "(" + name + ")"
+	}
 	abs, err := v.Abs(p)
 	if err != nil || abs == "/" {
-		return "Kubernetes"
+		return head
 	}
-	return "Kubernetes:" + strings.TrimPrefix(abs, "/")
+	return head + ":" + strings.TrimPrefix(abs, "/")
 }
 
 // Clone opens its own connection when first used.
 func (v *k8sVFS) Clone() vfs.VFS {
 	clone := newK8sVFS(v.open)
+	clone.prefix = v.prefix
 	clone.cwd = v.plainPath()
 	return clone
 }
