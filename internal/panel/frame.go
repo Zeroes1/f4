@@ -5178,6 +5178,23 @@ func (pf *PanelsFrame) MenuCancelable(title string, items []string, callback fun
 	pf.menuCore(title, "", menuItems, nil, callback, onCancel, nil)
 }
 
+// menuHeightLimit is the tallest a menu of the panels frame may be: generic
+// menus stay compact on normal screens, while the plugin menu, whose rows only
+// grow in number, may take the whole height of the program window (#918).
+func menuHeightLimit(bottomHint string, screenH int) int {
+	maxH := 15
+	if bottomHint == pluginMenuBottomHint && screenH > 0 {
+		maxH = screenH
+	}
+	if screenH > 0 && maxH > screenH {
+		maxH = screenH
+	}
+	if maxH < 3 {
+		maxH = 3
+	}
+	return maxH
+}
+
 func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), onCancel func(), keyLabels *vtui.KeySet) {
 	vtui.FrameManager.PostTask(func() {
 		menu := vtui.NewVMenu(title)
@@ -5197,13 +5214,7 @@ func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem,
 		}
 
 		h := len(items) + 2
-		maxH := 15 // Keep generic plugin menus compact on normal screens.
-		if screenH := vtui.FrameManager.GetScreenHeight(); screenH > 0 && maxH > screenH {
-			maxH = screenH
-		}
-		if maxH < 3 {
-			maxH = 3
-		}
+		maxH := menuHeightLimit(bottomHint, vtui.FrameManager.GetScreenHeight())
 		if h > maxH {
 			h = maxH
 		}
@@ -5891,18 +5902,24 @@ func (pf *PanelsFrame) ShowPluginMenu() {
 			area, key := keymap.ConfiguredHotkeyBinding(keymap.GlobalHotkeysMgr, entries[idx].ActionName)
 			if area == "" || key == "" {
 				// No assigned key: the plugin's own default, if it has one that
-				// was not removed yet, is what Del takes back.
-				def := declaredHotkeyString(entries[idx].Declared)
-				if def == "" || PluginDefaultKeyOff(def) {
+				// was not removed yet, is what Del takes back: its declared
+				// shortcut, else the letter its label marks with an ampersand.
+				offKey, shown := declaredHotkeyString(entries[idx].Declared), ""
+				if offKey != "" && !PluginDefaultKeyOff(offKey) {
+					shown = offKey
+				} else if r := pluginLabelHotkey(entries[idx].ActionName, entries[idx].Label); r != 0 {
+					offKey, shown = pluginLabelHotkeyOffKey(entries[idx].ActionName), string(r)
+				}
+				if shown == "" {
 					return true
 				}
-				question := pluginHotkeyDeleteQuestion(def, entries[idx].Label)
+				question := pluginHotkeyDeleteQuestion(shown, entries[idx].Label)
 				buttons := []string{i18n.Msg("Plugins.HotkeyRemoveBtn"), i18n.Msg("Plugins.HotkeyKeepBtn")}
 				vtui.ShowMessageOn(menu, i18n.Msg("Plugins.HotkeyRemoveTitle"), question, buttons).OnResult = func(choice int) {
 					if choice != 0 {
 						return
 					}
-					SetPluginDefaultKeyOff(def, true)
+					SetPluginDefaultKeyOff(offKey, true)
 					refresh(menu)
 				}
 				return true
