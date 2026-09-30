@@ -60,12 +60,14 @@ func (r serviceRow) GetCellText(col int) string {
 type servicesPanel struct {
 	frame *vtui.BorderedFrame
 	table *vtui.Table
-	list  func() ([]service, error)
-	ctl   controller
-	det   detailer
+	list  func(machine string) ([]service, error)
+	// machine is the computer whose services are shown; empty is this one.
+	machine string
+	ctl     controller
+	det     detailer
 }
 
-func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs.PanelController, error) {
+func newServicesPanel(ctx vfs.PanelContext, list func(machine string) ([]service, error)) (vfs.PanelController, error) {
 	frame := vtui.NewBorderedFrame(0, 0, 1, 1, vtui.SingleBox, "")
 	frame.ColorBoxIdx = theme.ColPanelBox
 	frame.ColorTitleIdx = theme.ColPanelTitle
@@ -80,7 +82,7 @@ func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs
 	table.ColorItemSelectTextIdx = theme.ColPanelSelectedText
 	table.SetSort(colDisplay, true)
 
-	p := &servicesPanel{frame: frame, table: table, list: list, ctl: serviceController, det: serviceDetailer}
+	p := &servicesPanel{frame: frame, table: table, list: list, ctl: serviceController(""), det: serviceDetailer("")}
 	p.SetFocus(false)
 	p.SetPosition(ctx.Bounds[0], ctx.Bounds[1], ctx.Bounds[2], ctx.Bounds[3])
 	if err := p.reload(); err != nil {
@@ -92,7 +94,7 @@ func newServicesPanel(ctx vfs.PanelContext, list func() ([]service, error)) (vfs
 // reload replaces the rows with a fresh list, keeping the cursor on the same
 // service when it is still there.
 func (p *servicesPanel) reload() error {
-	services, err := p.list()
+	services, err := p.list(p.machine)
 	if err != nil {
 		return err
 	}
@@ -182,6 +184,7 @@ func (p *servicesPanel) PanelKeys() []vfs.PanelKey {
 		{VK: vtinput.VK_F1, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Start"), Run: p.start, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F2, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Stop"), Run: p.confirmStop, Enabled: p.hasSelected},
 		{VK: vtinput.VK_F3, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Pause"), Run: p.pauseOrResume, Enabled: p.hasSelected},
+		{VK: vtinput.VK_F5, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.Computer"), Run: p.askComputer},
 		{VK: vtinput.VK_F4, Mods: vtinput.ShiftPressed, Label: i18n.Msg("SvcMgr.KeyBar.StartType"), Run: p.chooseStartType, Enabled: p.hasSelected},
 	}
 }
@@ -254,6 +257,43 @@ func (p *servicesPanel) showDetails() {
 		return
 	}
 	vtui.ShowMessageEx(i18n.Msg("SvcMgr.DetailsTitle"), detailsText(svc, d), []string{i18n.Msg("vtui.Ok")}, vtui.MessageInfo)
+}
+
+// askComputer is Shift+F5: it asks for the name or address of a computer whose
+// services to manage; empty goes back to this one.
+func (p *servicesPanel) askComputer() {
+	if vtui.FrameManager == nil {
+		return
+	}
+	vtui.InputBox(i18n.Msg("SvcMgr.ComputerTitle"), i18n.Msg("SvcMgr.ComputerPrompt"), p.machine,
+		func(value string) { p.connect(strings.TrimSpace(value)) })
+}
+
+// connect switches the panel to another computer (empty: this one). When its
+// service list cannot be read the panel stays on the computer it was on and
+// the reason is shown.
+func (p *servicesPanel) connect(machine string) {
+	machine = strings.TrimLeft(machine, `\`)
+	if machine == p.machine {
+		p.refresh()
+		return
+	}
+	services, err := p.list(machine)
+	if err != nil {
+		toast.Show(fmt.Sprintf(i18n.Msg("SvcMgr.ConnectFailed"), machine, err), 3e9)
+		return
+	}
+	p.machine = machine
+	p.ctl = serviceController(machine)
+	p.det = serviceDetailer(machine)
+	rows := make([]vtui.TableRow, len(services))
+	for i, s := range services {
+		rows[i] = serviceRow{svc: s}
+	}
+	p.table.SetRows(rows)
+	if vtui.FrameManager != nil {
+		vtui.FrameManager.Redraw()
+	}
 }
 
 // startChoice is one entry of the start type dialog.
@@ -351,7 +391,11 @@ func (p *servicesPanel) pauseOrResume() {
 func (p *servicesPanel) SetContext(vfs.PanelContext) {}
 
 func (p *servicesPanel) Show(scr *vtui.ScreenBuf) {
-	p.frame.SetTitle(fmt.Sprintf(i18n.Msg("SvcMgr.PanelTitle"), p.table.ItemCount))
+	title := fmt.Sprintf(i18n.Msg("SvcMgr.PanelTitle"), p.table.ItemCount)
+	if p.machine != "" {
+		title = fmt.Sprintf(i18n.Msg("SvcMgr.PanelTitleRemote"), p.machine, p.table.ItemCount)
+	}
+	p.frame.SetTitle(title)
 	p.frame.Show(scr)
 	p.table.Show(scr)
 }

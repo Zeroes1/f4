@@ -2,7 +2,7 @@
 
 package svcmgr
 
-type platformDetailer struct{}
+type platformDetailer struct{ machine string }
 
 func (platformDetailer) Details(string) (serviceDetails, error) {
 	return serviceDetails{}, errUnsupported

@@ -37,8 +37,8 @@ func TestServiceRowCells(t *testing.T) {
 	}
 }
 
-func fakeList(services *[]service, err *error) func() ([]service, error) {
-	return func() ([]service, error) { return *services, *err }
+func fakeList(services *[]service, err *error) func(string) ([]service, error) {
+	return func(string) ([]service, error) { return *services, *err }
 }
 
 func openFake(t *testing.T, services *[]service, err *error) *servicesPanel {
@@ -186,7 +186,7 @@ func TestListServicesOffWindows(t *testing.T) {
 	if Supported() {
 		t.Skip("this OS has a service manager")
 	}
-	if _, err := listServices(); !errors.Is(err, errUnsupported) {
+	if _, err := listServices(""); !errors.Is(err, errUnsupported) {
 		t.Errorf("listServices error = %v, want errUnsupported", err)
 	}
 }
@@ -256,8 +256,8 @@ func TestPanelActionsNeedAService(t *testing.T) {
 	if len(ctl.calls) != 0 || p.hasSelected() {
 		t.Errorf("an empty list ran %v", ctl.calls)
 	}
-	if got := len(p.PanelKeys()); got != 6 {
-		t.Errorf("panel keys = %d, want 6", got)
+	if got := len(p.PanelKeys()); got != 7 {
+		t.Errorf("panel keys = %d, want 7", got)
 	}
 }
 
@@ -358,4 +358,45 @@ func TestRecoveryName(t *testing.T) {
 			t.Errorf("recoveryName(%+v) = %q, want %q", a, got, want)
 		}
 	}
+}
+
+func TestConnectSwitchesComputer(t *testing.T) {
+	services := []service{{Name: "Local", Display: "L", State: stateRunning}}
+	var listErr error
+	var asked []string
+	p := openFake(t, &services, &listErr)
+	p.list = func(machine string) ([]service, error) {
+		asked = append(asked, machine)
+		if machine == "bad" {
+			return nil, errors.New("rpc unavailable")
+		}
+		return []service{{Name: "Remote1", Display: "R1"}, {Name: "Remote2", Display: "R2"}}, nil
+	}
+	oldCtl, oldDet := serviceController, serviceDetailer
+	var ctlFor, detFor []string
+	serviceController = func(m string) controller { ctlFor = append(ctlFor, m); return &fakeController{} }
+	serviceDetailer = func(m string) detailer { detFor = append(detFor, m); return fakeDetailer{} }
+	defer func() { serviceController, serviceDetailer = oldCtl, oldDet }()
+
+	p.connect(`\\srv`) // the leading backslashes are dropped
+	if p.machine != "srv" || p.table.ItemCount != 2 {
+		t.Fatalf("after connect: machine %q, rows %d", p.machine, p.table.ItemCount)
+	}
+	if len(ctlFor) != 1 || ctlFor[0] != "srv" || len(detFor) != 1 || detFor[0] != "srv" {
+		t.Errorf("controller/detailer made for %v / %v, want srv", ctlFor, detFor)
+	}
+	p.connect("bad") // an unreachable computer leaves the panel where it was
+	if p.machine != "srv" || p.table.ItemCount != 2 {
+		t.Errorf("after a failed connect: machine %q, rows %d", p.machine, p.table.ItemCount)
+	}
+	p.connect("srv") // the same computer just reloads
+	p.connect("")    // back to this one
+	if p.machine != "" || asked[len(asked)-1] != "" {
+		t.Errorf("machine %q, last asked %q", p.machine, asked[len(asked)-1])
+	}
+	p.askComputer() // without a frame manager nothing opens
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(60, 20)
+	p.machine = "srv"
+	p.Show(scr)
 }

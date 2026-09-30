@@ -8,7 +8,7 @@ import "testing"
 // Manager: every Windows machine has services, and the RPC service (RpcSs)
 // is always running.
 func TestListServicesFromTheServiceManager(t *testing.T) {
-	services, err := listServices()
+	services, err := listServices("")
 	if err != nil {
 		t.Fatal(err)
 	}

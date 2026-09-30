@@ -832,6 +832,11 @@ SvcMgr.DetailRecovery=On failure: %s
 SvcMgr.KeyBar.StartType=Startup
 SvcMgr.StartTypeTitle=Start type
 SvcMgr.StartTypePrompt=How should the service %s start?
+SvcMgr.KeyBar.Computer=Computer
+SvcMgr.PanelTitleRemote=Services on %s (%d)
+SvcMgr.ComputerTitle=Computer
+SvcMgr.ComputerPrompt=Name or address of the computer (empty: this one):
+SvcMgr.ConnectFailed=Cannot read the services of %s: %v
 
 PanelPlugin.KeyBar.Close=Close
 

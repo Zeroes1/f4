@@ -7,13 +7,13 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-type platformDetailer struct{}
+type platformDetailer struct{ machine string }
 
 // Details reads the configuration through mgr.Service.Config, which needs only
 // the query-configuration right on the handle it is given.
-func (platformDetailer) Details(name string) (serviceDetails, error) {
+func (d platformDetailer) Details(name string) (serviceDetails, error) {
 	var out serviceDetails
-	err := withService(name, windows.SERVICE_QUERY_CONFIG, func(h windows.Handle) error {
+	err := withService(d.machine, name, windows.SERVICE_QUERY_CONFIG, func(h windows.Handle) error {
 		cfg, err := (&mgr.Service{Name: name, Handle: h}).Config()
 		if err != nil {
 			return err

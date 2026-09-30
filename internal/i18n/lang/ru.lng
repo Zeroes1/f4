@@ -832,6 +832,11 @@ SvcMgr.DetailRecovery=При сбое: %s
 SvcMgr.KeyBar.StartType=Тип
 SvcMgr.StartTypeTitle=Тип запуска
 SvcMgr.StartTypePrompt=Как запускать службу %s?
+SvcMgr.KeyBar.Computer=Компьют
+SvcMgr.PanelTitleRemote=Службы на %s (%d)
+SvcMgr.ComputerTitle=Компьютер
+SvcMgr.ComputerPrompt=Имя или адрес компьютера (пусто — этот):
+SvcMgr.ConnectFailed=Не удалось прочитать службы %s: %v
 
 PanelPlugin.KeyBar.Close=Закрыть
 

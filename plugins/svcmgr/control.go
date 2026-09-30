@@ -16,5 +16,6 @@ type controller interface {
 	SetStartType(name string, startType uint32, delayed bool) error
 }
 
-// serviceController is the controller the panel uses unless a test replaces it.
-var serviceController controller = platformController{}
+// serviceController makes the controller for a computer (empty: this one); a
+// test replaces it.
+var serviceController = func(machine string) controller { return platformController{machine: machine} }

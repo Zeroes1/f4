@@ -88,5 +88,6 @@ type detailer interface {
 	Details(name string) (serviceDetails, error)
 }
 
-// serviceDetailer is the detailer the panel uses unless a test replaces it.
-var serviceDetailer detailer = platformDetailer{}
+// serviceDetailer makes the detailer for a computer (empty: this one); a test
+// replaces it.
+var serviceDetailer = func(machine string) detailer { return platformDetailer{machine: machine} }

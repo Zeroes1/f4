@@ -3,4 +3,4 @@
 package svcmgr
 
 // listServices has nothing to ask off Windows.
-func listServices() ([]service, error) { return nil, errUnsupported }
+func listServices(string) ([]service, error) { return nil, errUnsupported }

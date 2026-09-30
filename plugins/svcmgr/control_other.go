@@ -2,7 +2,7 @@
 
 package svcmgr
 
-type platformController struct{}
+type platformController struct{ machine string }
 
 func (platformController) Start(string) error                      { return errUnsupported }
 func (platformController) Stop(string) error                       { return errUnsupported }

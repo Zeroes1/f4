@@ -8,13 +8,14 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// listServices asks the Service Control Manager for every Win32 service in any
+// listServices asks the Service Control Manager of the given computer (empty:
+// this one) for every Win32 service in any
 // state. The manager is opened with the enumerate right only -- the mgr
 // package's Connect asks for all access, which a user without administrator
 // rights does not get -- and the answer comes in one buffer that grows while
 // the call reports ERROR_MORE_DATA.
-func listServices() ([]service, error) {
-	manager, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_ENUMERATE_SERVICE)
+func listServices(machine string) ([]service, error) {
+	manager, err := openManager(machine, windows.SC_MANAGER_ENUMERATE_SERVICE)
 	if err != nil {
 		return nil, err
 	}
