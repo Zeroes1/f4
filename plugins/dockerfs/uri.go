@@ -3,6 +3,7 @@ package dockerfs
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path"
 	"strings"
 
@@ -15,6 +16,8 @@ import (
 // one the drive menu entry uses.
 type uriProvider struct {
 	open func() (*client, error)
+	// openContext connects to the daemon of a named docker context (nil: none).
+	openContext func(name string) func() (*client, error)
 }
 
 func (uriProvider) Scheme() string { return "docker" }
@@ -23,8 +26,20 @@ func (p uriProvider) OpenURI(ctx context.Context, _ vfs.VFS, raw string) (vfs.VF
 	if len(raw) < len(uriPrefix) || !strings.EqualFold(raw[:len(uriPrefix)], uriPrefix) {
 		return nil, fmt.Errorf("Docker: not a docker:// address: %s", raw)
 	}
-	plain := path.Clean("/" + strings.TrimPrefix(raw[len(uriPrefix):], "/"))
-	v := newDockerVFS(p.open)
+	rest := raw[len(uriPrefix):]
+	open, prefix := p.open, uriPrefix
+	if rest != "" && rest[0] != '/' {
+		// docker://<context>/<path>
+		name, tail, _ := strings.Cut(rest, "/")
+		ctx, err := url.PathUnescape(name)
+		if err != nil || ctx == "" || p.openContext == nil {
+			return nil, fmt.Errorf("Docker: bad docker context in %s", raw)
+		}
+		open, prefix, rest = p.openContext(ctx), contextPrefix(ctx), "/"+tail
+	}
+	plain := path.Clean("/" + strings.TrimPrefix(rest, "/"))
+	v := newDockerVFS(open)
+	v.prefix = prefix
 	item, err := v.Stat(ctx, plain)
 	if err != nil {
 		_ = v.Close()

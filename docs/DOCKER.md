@@ -22,9 +22,10 @@ The plugin keeps no credentials of its own: it reads the places the `docker` CLI
 * `DOCKER_HOST`: `unix:///path/to.sock`, `tcp://host:port` or `https://host:port`. Unset: `/var/run/docker.sock`, then the rootless `$XDG_RUNTIME_DIR/docker.sock`. On Windows the default is Docker Desktop's named pipe (`npipe:////./pipe/docker_engine`, also accepted in `DOCKER_HOST`); it is opened as a plain file and served by a small one-request-per-connection transport, because a synchronous pipe handle cannot read and write at once the way `net/http` does.
 * **TLS.** `DOCKER_TLS_VERIFY` (any value) or an `https://` address turns it on; `ca.pem` (trusted CA; the system roots without it), `cert.pem` and `key.pem` (client certificate) are read from `DOCKER_CERT_PATH` or the configuration directory. A certificate file that does not parse is an error, never silently skipped. TLS 1.2 or newer.
 * **Contexts.** A context created by `docker context create` is read from the CLI's store (`contexts/meta/<sha256 of the name>/meta.json`, TLS files in `contexts/tls/<same>/docker/`): its host, its `ca.pem`/`cert.pem`/`key.pem`, and `SkipTLSVerify`. Like the CLI, a context uses TLS when it has TLS files or skips verification, and is used as written otherwise. A context that does not exist, or has no docker endpoint, is reported by name.
-* Not supported yet: `ssh://` (also in a context), and choosing a context from the panel. Nothing connects until the panel is opened.
+* **One drive per context.** Every context of the store that has a docker endpoint also gets its own entry in the drive menu, `Docker (name)`, read when f4 starts; it talks to that context's daemon whatever `DOCKER_HOST` says. The plain **Docker** entry follows the order above. (A context created while f4 runs shows up after a restart.)
+* Not supported yet: `ssh://` (also in a context). Nothing connects until a panel is opened.
 
-* **Addresses.** The panel path is `docker:///<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `docker://` URI provider; the server is the one the drive menu entry uses (`DOCKER_HOST`).
+* **Addresses.** The panel path is `docker:///<container>/<path>`, so bookmarks, folder history and saved sessions (f4#1669) bring the panel back through the `docker://` URI provider; the server is the one the drive menu entry uses (see above). A context's panel is `docker://<context>/<container>/<path>`, the context name escaped as in a URL.
 
 ## Limits of this part
 

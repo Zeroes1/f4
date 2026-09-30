@@ -5,11 +5,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/hex"
 	"encoding/pem"
 	"math/big"
 	"net"
@@ -154,11 +152,6 @@ func dial(t *testing.T, env map[string]string) error {
 	}
 	defer c.close()
 	return ping()(c)
-}
-
-func contextID(name string) string {
-	sum := sha256.Sum256([]byte(name))
-	return hex.EncodeToString(sum[:])
 }
 
 // writeContext stores a docker context the way the CLI does.

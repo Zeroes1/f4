@@ -8,6 +8,7 @@ package dockerfs
 
 import (
 	"errors"
+	"os"
 
 	"github.com/unxed/f4/vfs"
 )
@@ -31,7 +32,11 @@ func (*Plugin) Init(api vfs.HostAPI) error {
 	}
 	api.RegisterDrive(driveName, func() vfs.VFS { return newDockerVFS(clientFromEnv) })
 	// docker:///<path> reopens the panel from a bookmark, history or a saved session.
-	return api.RegisterURIProvider(uriProvider{open: clientFromEnv})
+	// One more drive per docker context of the CLI's store (docker context create).
+	for _, name := range listContexts(dockerConfigDir(os.Getenv)) {
+		api.RegisterDrive(contextDriveName(name), func() vfs.VFS { return newContextVFS(name) })
+	}
+	return api.RegisterURIProvider(uriProvider{open: clientFromEnv, openContext: contextOpener})
 }
 
 func (*Plugin) Close() error {
