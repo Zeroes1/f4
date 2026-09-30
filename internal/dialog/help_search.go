@@ -538,7 +538,7 @@ func drawHelpWindowControls(scr *vtui.ScreenBuf, frame vtui.Frame) {
 	}
 	attr := scr.GetCell(x2, y1).Attributes
 	zoom := string(vtui.UIStrings.CloseBrackets[0]) + string(vtui.UIStrings.ZoomSymbol) + string(vtui.UIStrings.CloseBrackets[1])
-	closeButton := string(vtui.UIStrings.CloseBrackets[0]) + string(vtui.UIStrings.CloseSymbol) + string(vtui.UIStrings.CloseBrackets[1])
+	closeButton := string(vtui.UIStrings.CloseBrackets[0]) + string(vtui.EffectiveCloseSymbol()) + string(vtui.UIStrings.CloseBrackets[1])
 	offset := helpControlOffset(frame)
 	// These are the standard BaseWindow control offsets when both buttons are
 	// visible. Drawing them here makes the zoom button visible on the first
