@@ -37,6 +37,7 @@ func TestApplyColorIni_MissingSlotInheritsParentBackground(t *testing.T) {
 	vtui.Palette[ColViewerScrollbar] = vtui.SetRGBBoth(0, 0xFFFF00, 0x0000A0)
 	vtui.Palette[ColViewerArrows] = vtui.SetRGBBoth(0, 0xFFFF00, 0x0000A0)
 	vtui.Palette[ColEditorScrollbar] = vtui.SetRGBBoth(0, 0x808080, 0x0000A0)
+	vtui.Palette[ColEditorWrapMark] = vtui.SetRGBBoth(0, 0xFFFF00, 0x0000A0)
 
 	InitColors(ini.Load(iniPath))
 
@@ -53,6 +54,12 @@ func TestApplyColorIni_MissingSlotInheritsParentBackground(t *testing.T) {
 	}
 	if _, bg := GetColorRGBBoth(vtui.Palette[ColEditorScrollbar]); bg != editorBg {
 		t.Errorf("Editor.Scrollbar = #%06x, want the editor text background #%06x", bg, editorBg)
+	}
+	// The "»" that ends a wrapped row is drawn on the editor's text, so it
+	// must not show the default's blue box either (f4#1232, reported again on
+	// 1c2e8c8).
+	if _, bg := GetColorRGBBoth(vtui.Palette[ColEditorWrapMark]); bg != editorBg {
+		t.Errorf("Editor.WrapMark = #%06x, want the editor text background #%06x", bg, editorBg)
 	}
 }
 
