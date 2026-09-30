@@ -21,6 +21,7 @@ Unlike classic terminal file managers, the `f4` plugin API is strictly **Data-Ce
 `f4` supports two distinct ways of mounting virtual file systems:
 1.  **Drives (External & Internal):** Standalone file systems mounted under a specific label. They are registered during `Plugin.Init` (e.g., returning `{ Drives = { "My Lua Drive" } }`) and appear in the `Alt+F1/F2` drive selection menus.
 2.  **VFS Providers (Internal):** High-priority hooks that can intercept path navigation. For example, when you press `Enter` on a `.zip` or `.tar.gz` file, the **Archive Plugin** (an internal Go provider) intercepts the open request and transparently mounts a virtual file system *over* the archive. Similarly, the **NetFox (Network) Plugin** intercepts connection files in `net://` and mounts FTP/SFTP sessions.
+    SMB (`smb://`, the "SMB" connection type) is temporarily switched off: it builds only with `-tags smb`, and no release or CI build sets that tag, because of GO-2026-5051 (out-of-bounds read and panic in `go-smb2`'s `ReadDir` on a hostile server's listing, no fix in that module). It comes back with a fixed `go-smb2` (f4#188).
 
 To expose a VFS, an external plugin registers handlers for these requests:
 *   `VFS.ReadDir`: Returns a list of `VFSItem` objects (Name, Size, IsDir, MTime).
