@@ -14,7 +14,7 @@ import (
 // instead of uploading the shell helper (unxed/f4#1680).
 func runFishServer(in io.Reader, out, errOut io.Writer) int {
 	if err := (&fishplus.Server{}).Serve(in, out); err != nil {
-		fmt.Fprintf(errOut, "f4 --fish-server: %v\n", err)
+		_, _ = fmt.Fprintf(errOut, "f4 --fish-server: %v\n", err)
 		return 1
 	}
 	return 0

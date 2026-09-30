@@ -28,7 +28,7 @@ func applyPluginHotkeyChoice(hm *keymap.HotkeyManager, actionName, declaredKey, 
 		return false, true
 	}
 	runes := []rune(text)
-	if len(runes) != 1 || !(unicode.IsLetter(runes[0]) || unicode.IsDigit(runes[0])) {
+	if len(runes) != 1 || (!unicode.IsLetter(runes[0]) && !unicode.IsDigit(runes[0])) {
 		return false, false
 	}
 	// Choosing the letter the entry already has is not a change.
