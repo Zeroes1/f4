@@ -14,11 +14,30 @@ import (
 // inline code spans are never touched, and a lone dollar sign, as in a price,
 // stays a dollar sign.
 func Prepare(markdown string) string {
-	if !strings.Contains(markdown, "$") && !strings.Contains(strings.ToLower(markdown), "mermaid") {
-		return markdown
-	}
+	out, _ := PrepareMapped(markdown)
+	return out
+}
+
+// PrepareMapped is Prepare that also says where each line of the result came
+// from: origin[i] is the 0-based line of markdown that line i of the result
+// was made from (the first one, for a block that was rewritten as a whole).
+// A host that shows the result beside the original uses it to map places.
+func PrepareMapped(markdown string) (prepared string, origin []int) {
 	lines := strings.Split(markdown, "\n")
+	if !strings.Contains(markdown, "$") && !strings.Contains(strings.ToLower(markdown), "mermaid") {
+		origin = make([]int, len(lines))
+		for i := range origin {
+			origin[i] = i
+		}
+		return markdown, origin
+	}
 	out := make([]string, 0, len(lines))
+	add := func(at int, l ...string) {
+		out = append(out, l...)
+		for range l {
+			origin = append(origin, at)
+		}
+	}
 	var fence string // the opening fence marker while inside fenced code
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -27,31 +46,31 @@ func Prepare(markdown string) string {
 			if closesFence(trimmed, fence) {
 				fence = ""
 			}
-			out = append(out, line)
+			add(i, line)
 			continue
 		}
 		if m := opensFence(trimmed); m != "" {
 			if isMermaid(trimmed, m) {
 				if block, next, ok := mermaidBlock(lines, i, m); ok {
-					out = append(out, block...)
+					add(i, block...)
 					i = next
 					continue
 				}
 			}
 			fence = m
-			out = append(out, line)
+			add(i, line)
 			continue
 		}
 		if strings.HasPrefix(trimmed, "$$") {
 			if block, next, ok := displayBlock(lines, i); ok {
-				out = append(out, block...)
+				add(i, block...)
 				i = next
 				continue
 			}
 		}
-		out = append(out, inlineMath(line))
+		add(i, inlineMath(line))
 	}
-	return strings.Join(out, "\n")
+	return strings.Join(out, "\n"), origin
 }
 
 // isMermaid says whether an opening fence line names the mermaid language.

@@ -27,6 +27,11 @@ const mdSplitMaxSize = 4 << 20
 type mdSplitState struct {
 	view  *vtui.HelpView
 	timer *time.Timer
+	// prepLine[i] is the line of the editor's text that line i of the text
+	// the preview was parsed from (formulas rewritten) came from; topicLine[i]
+	// is the line of that text that row i of the parsed topic came from.
+	prepLine  []int
+	topicLine []int
 }
 
 // MarkdownSplitActive reports whether the split preview is on.
@@ -78,7 +83,11 @@ func (ev *EditorView) refreshMarkdownSplit() {
 		return
 	}
 	name := filepath.Base(ev.FilePath)
-	view := vtui.NewMarkdownView(name, mdmath.Prepare(strings.ReplaceAll(text, "\r\n", "\n")))
+	prepared, prepLine := mdmath.PrepareMapped(strings.ReplaceAll(text, "\r\n", "\n"))
+	topic, topicLine := vtui.ParseMarkdownTopicMap(name, prepared)
+	engine := vtui.NewHelpEngine(nil)
+	engine.AddTopic(topic)
+	view := vtui.NewHelpView(engine, name)
 	view.Modal = false
 	view.ShowClose = false
 	view.SetTitle(" " + name + " ")
@@ -86,24 +95,64 @@ func (ev *EditorView) refreshMarkdownSplit() {
 		_, y1, _, y2 := ev.GetPosition()
 		view.SetPosition(ev.lastW/2, y1, ev.lastW-1, y2)
 	}
-	st.view = view
+	st.view, st.prepLine, st.topicLine = view, prepLine, topicLine
 	ev.syncMarkdownSplitScroll()
 }
 
-// syncMarkdownSplitScroll scrolls the preview to the same relative place as
-// the cursor. The preview keeps no map from its rows to source lines, so the
-// place is a proportion: line N of L is row N*R/L of R.
+// previewRowOfLine is the row of the preview (as it reads in the window,
+// long lines broken) that shows editor line: the first row made from the
+// text at or after that line.
+func (st *mdSplitState) previewRowOfLine(line int) int {
+	prep := 0
+	for i, orig := range st.prepLine {
+		if orig > line {
+			break
+		}
+		prep = i
+	}
+	topicRow := len(st.topicLine) - 1
+	for i, src := range st.topicLine {
+		if src >= prep {
+			topicRow = i
+			break
+		}
+	}
+	lines := st.view.CurrentTopic().Lines
+	for row := range lines {
+		if src, ok := st.view.SourceRow(row); ok && src >= topicRow {
+			// The blank line that separates a block from the one before it
+			// belongs to the block; the text is on the line after it.
+			for row+1 < len(lines) && lines[row] == "" {
+				row++
+			}
+			return row
+		}
+	}
+	return max(len(lines)-1, 0)
+}
+
+// lineOfPreviewRow is the editor line the preview row was made from.
+func (st *mdSplitState) lineOfPreviewRow(row int) int {
+	topicRow, ok := st.view.SourceRow(row)
+	if !ok || topicRow >= len(st.topicLine) {
+		return 0
+	}
+	prep := st.topicLine[topicRow]
+	if prep >= len(st.prepLine) {
+		return st.prepLine[len(st.prepLine)-1]
+	}
+	return st.prepLine[prep]
+}
+
+// syncMarkdownSplitScroll scrolls the preview to the rows made from the
+// cursor's line, using the map the Markdown parser keeps from rows back to
+// the text.
 func (ev *EditorView) syncMarkdownSplitScroll() {
 	st := ev.mdSplit
-	if st == nil || st.view == nil || st.view.CurrentTopic() == nil || ev.Li == nil {
+	if st == nil || st.view == nil || st.view.CurrentTopic() == nil || len(st.prepLine) == 0 {
 		return
 	}
-	total := ev.Li.LineCount()
-	rows := len(st.view.CurrentTopic().Lines)
-	if total <= 0 || rows <= 0 {
-		return
-	}
-	st.view.SetScrollTop(ev.CursorLine * rows / total)
+	st.view.SetScrollTop(st.previewRowOfLine(ev.CursorLine))
 }
 
 // scheduleMarkdownSplit restarts the pause timer after a key, so the preview
@@ -156,10 +205,8 @@ func (ev *EditorView) markdownSplitMouse(e *vtinput.InputEvent) bool {
 }
 
 // markdownSplitClick puts the cursor where the clicked preview row sits in the
-// text. The preview keeps no map from its rows back to source lines, so the
-// place is the same proportion syncMarkdownSplitScroll goes by the other way:
-// row N of R is line N*L/R of L. The preview itself stays where it is, so the
-// text does not move under the pointer.
+// text, by the map from the preview's rows back to its lines. The preview
+// itself stays where it is, so the text does not move under the pointer.
 func (ev *EditorView) markdownSplitClick(e *vtinput.InputEvent) bool {
 	st := ev.mdSplit
 	if st == nil || st.view == nil || ev.Li == nil || !vtui.IsMousePress(e) ||
@@ -186,10 +233,9 @@ func (ev *EditorView) markdownSplitClick(e *vtinput.InputEvent) bool {
 			return false // a row with a link: the preview follows or selects it
 		}
 	}
-	total := ev.Li.LineCount()
-	if total <= 0 {
+	if len(st.prepLine) == 0 {
 		return false
 	}
-	ev.gotoLinePosition(row*total/len(topic.Lines)+1, 1)
+	ev.gotoLinePosition(st.lineOfPreviewRow(row)+1, 1)
 	return true
 }

@@ -156,3 +156,26 @@ func TestPrepareMermaid(t *testing.T) {
 		t.Error("isMermaid misreads the info string")
 	}
 }
+
+func TestPrepareMappedOrigins(t *testing.T) {
+	md := "intro\n\n$$\nx^2\n$$\n\nlast $a$ line"
+	out, origin := PrepareMapped(md)
+	if strings.Count(out, "\n")+1 != len(origin) {
+		t.Fatalf("%d lines but %d origins", strings.Count(out, "\n")+1, len(origin))
+	}
+	for i := 1; i < len(origin); i++ {
+		if origin[i] < origin[i-1] {
+			t.Fatalf("origins go back: %v", origin)
+		}
+	}
+	if origin[0] != 0 || origin[len(origin)-1] != 6 {
+		t.Errorf("origins = %v, want them to run from line 0 to line 6", origin)
+	}
+	plain, po := PrepareMapped("a\nb")
+	if plain != "a\nb" || len(po) != 2 || po[1] != 1 {
+		t.Errorf("no formulas: %q %v", plain, po)
+	}
+	if got := Prepare(md); got != out {
+		t.Errorf("Prepare and PrepareMapped disagree: %q vs %q", got, out)
+	}
+}
