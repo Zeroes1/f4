@@ -1571,12 +1571,12 @@ func tryOpenImageViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 		return false
 	}
 	scr := vtui.FrameManager.Screen()
-	// One question, and the X overlay is inside the answer: it is installed
-	// as the screen's graphics renderer at startup, so a terminal with no
-	// image protocol of its own still supports graphics when there is a
-	// local X session behind it. Asking anything else here is how F3 on a
-	// PNG in gnome-terminal used to open the hex viewer.
-	if scr == nil || !scr.SupportsGraphics() {
+	// A screen with a graphics protocol - or with the X overlay, which is
+	// installed as the graphics renderer at startup - shows the picture in
+	// pixels. One with none still shows it, in coloured half blocks (VIDEO.md
+	// V2): F3 on a PNG over ssh in a plain xterm, or in a terminal whose image
+	// protocol was not detected, is a picture and not a hex dump.
+	if scr == nil {
 		return false
 	}
 
