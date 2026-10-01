@@ -1,11 +1,15 @@
 package panel
 
 import (
+	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/testutil"
+	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -142,5 +146,64 @@ func TestMenuHeightLimit(t *testing.T) {
 	}
 	if got := menuHeightLimit("", 0); got != 15 {
 		t.Errorf("unknown screen: %d", got)
+	}
+}
+
+// The hot key window follows the example in the ticket (f4#918): the prompt,
+// the one-cell field with the name of the entry beside it, the hint, a rule
+// and the buttons as the last row inside the frame, with no blank row.
+//
+// Screen Dump (80x25, the whole window):
+//
+//	╔══════════ Assign plugin hot key ═══════════[×]╗
+//	║ Enter hot key (letter or digit)               ║
+//	║ V  Visual File Renamer                        ║
+//	║ Type a character, or Del to clear             ║
+//	║───────────────────────────────────────────────║
+//	║             [ Ok ]  [ Cancel ]                ║
+//	╚═══════════════════════════════════════════════╝
+func TestPluginHotkeyDialogLayout(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(80, 25)
+	vtui.FrameManager.Init(screen)
+	theme.SetDefaultF4Palette()
+	old := config.App.PluginDefaultHotkeysOff
+	t.Cleanup(func() { config.App.PluginDefaultHotkeysOff = old })
+	config.App.PluginDefaultHotkeysOff = ""
+
+	showPluginHotkeyDialog(newDialogTestManager(t), "Plugin.Legacy.0", "&Visual File Renamer", nil)
+	dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok {
+		t.Fatal("the hot key window is not on top")
+	}
+	t.Cleanup(func() { vtui.FrameManager.Pop() })
+	rules := vtui.DefaultLayoutRules
+	rules.FrameClearanceY = 0
+	vtui.AssertLayoutWithRules(t, dlg, rules)
+
+	dlg.Show(screen)
+	var buf bytes.Buffer
+	screen.Dump(&buf)
+	lines := strings.Split(buf.String(), "\n")
+	var rows []string
+	for y := dlg.Y1; y <= dlg.Y2; y++ {
+		cells := []rune(lines[2+y])
+		rows = append(rows, string(cells[dlg.X1:dlg.X2+1]))
+	}
+	dump := strings.Join(rows, "\n")
+	if len(rows) != 7 {
+		t.Fatalf("the window has %d rows, want 7:\n%s", len(rows), dump)
+	}
+	for i, want := range map[int]string{1: "Enter hot key (letter or digit)", 2: "V  Visual File Renamer", 3: "Type a character, or Del to clear", 5: "Ok"} {
+		if !strings.Contains(rows[i], want) {
+			t.Errorf("row %d should hold %q:\n%s", i, want, dump)
+		}
+	}
+	for _, c := range []rune(rows[4])[1 : len([]rune(rows[4]))-1] {
+		if c == ' ' {
+			t.Errorf("row 4 is not a rule:\n%s", dump)
+			break
+		}
 	}
 }
