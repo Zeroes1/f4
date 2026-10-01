@@ -57,7 +57,7 @@ func TestDesktopEntryMatchesThePackagedOne(t *testing.T) {
 	strip := func(text string) string {
 		var keep []string
 		for _, line := range strings.Split(text, "\n") {
-			if strings.HasPrefix(line, "Exec=") || strings.HasPrefix(line, "TryExec=") {
+			if strings.HasPrefix(line, "Exec=") || strings.HasPrefix(line, "TryExec=") || strings.HasPrefix(line, ManagedKey+"=") {
 				continue
 			}
 			keep = append(keep, line)
@@ -143,3 +143,153 @@ func TestRunDesktopCLIInstallsIntoTheUsersDataDirectory(t *testing.T) {
 }
 
 func pngSizesForTest() []int { return icon.PNGSizes }
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path) // #nosec G304 -- a path inside the test's own temp dir.
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestEnsureDesktopFromScratchAndWhenNothingChanged(t *testing.T) {
+	data := t.TempDir()
+	written, err := EnsureDesktop(data, "/opt/f4/f4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(written) != 1+1+len(icon.PNGSizes) {
+		t.Errorf("first run wrote %d files: %v", len(written), written)
+	}
+	if !strings.Contains(readFile(t, launcherPath(data)), ManagedKey+"=true\n") {
+		t.Error("the launcher is not marked as managed")
+	}
+	written, err = EnsureDesktop(data, "/opt/f4/f4")
+	if err != nil || len(written) != 0 {
+		t.Errorf("second run: %v, %v", written, err)
+	}
+}
+
+func TestEnsureDesktopLeavesTheUsersOwnLauncherButFixesIcons(t *testing.T) {
+	data := t.TempDir()
+	own := "[Desktop Entry]\nType=Application\nName=f4\nExec=/my/f4 --gui=x11\nIcon=io.github.unxed.f4\n"
+	if err := os.MkdirAll(filepath.Join(data, "applications"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(launcherPath(data), []byte(own), 0o644); err != nil { // #nosec G306 -- test file.
+		t.Fatal(err)
+	}
+	written, err := EnsureDesktop(data, "/opt/f4/f4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, launcherPath(data)); got != own {
+		t.Errorf("the user's launcher was changed:\n%s", got)
+	}
+	if len(written) != 1+len(icon.PNGSizes) {
+		t.Errorf("wrote %d files, want the icons only: %v", len(written), written)
+	}
+}
+
+func TestEnsureDesktopRefreshesAStaleIconAndKeepsALiveExecutable(t *testing.T) {
+	data := t.TempDir()
+	live := filepath.Join(t.TempDir(), "f4")
+	if err := os.WriteFile(live, []byte("x"), 0o755); err != nil { // #nosec G306 -- test file.
+		t.Fatal(err)
+	}
+	if _, err := InstallDesktop(data, live); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(data, "icons", "hicolor", "48x48", "apps", IconName+".png")
+	if err := os.WriteFile(stale, []byte("old"), 0o644); err != nil { // #nosec G306 -- test file.
+		t.Fatal(err)
+	}
+	// An older text of the launcher, still pointing at the live executable.
+	old := strings.Replace(DesktopEntry(live), "Comment=Far Manager / far2l-style file manager", "Comment=old", 1)
+	if err := os.WriteFile(launcherPath(data), []byte(old), 0o644); err != nil { // #nosec G306 -- test file.
+		t.Fatal(err)
+	}
+	written, err := EnsureDesktop(data, "/another/copy/f4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(written) != 2 {
+		t.Errorf("wrote %v, want the launcher and one icon", written)
+	}
+	if got := readFile(t, launcherPath(data)); got != DesktopEntry(live) {
+		t.Errorf("the launcher must keep pointing at the existing executable:\n%s", got)
+	}
+	if readFile(t, stale) == "old" {
+		t.Error("the stale icon was not replaced")
+	}
+}
+
+func TestEnsureDesktopRepointsAManagedLauncherWhoseExecutableIsGone(t *testing.T) {
+	data := t.TempDir()
+	if _, err := InstallDesktop(data, "/gone/f4"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := EnsureDesktop(data, "/new/place/f4"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, launcherPath(data)); got != DesktopEntry("/new/place/f4") {
+		t.Errorf("launcher:\n%s", got)
+	}
+}
+
+func TestEnsureDesktopAtStartRespectsOptOutSystemLauncherAndTempDir(t *testing.T) {
+	if !SupportsDesktop() {
+		t.Skip("no freedesktop launchers on this OS")
+	}
+	home := t.TempDir()
+	system := t.TempDir()
+	env := map[string]string{}
+	oldHome, oldGetenv := UserHomeDir, Getenv
+	UserHomeDir = func() (string, error) { return home, nil }
+	Getenv = func(k string) string { return env[k] }
+	t.Cleanup(func() { UserHomeDir, Getenv = oldHome, oldGetenv })
+	// t.TempDir lives under the temporary directory, which the function must
+	// refuse; point the temporary directory elsewhere for this test.
+	scratch := filepath.Join(home, "scratch")
+	if err := os.MkdirAll(scratch, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", scratch)
+	t.Setenv("TMP", scratch)
+	t.Setenv("TEMP", scratch)
+	exe := filepath.Join(home, "bin", "f4")
+	launcher := filepath.Join(home, ".local", "share", "applications", DesktopFileName)
+
+	env[OptOutEnv] = "1"
+	if w, err := EnsureDesktopAtStart(exe); err != nil || len(w) != 0 {
+		t.Errorf("opt-out: %v, %v", w, err)
+	}
+	delete(env, OptOutEnv)
+
+	env["XDG_DATA_DIRS"] = system
+	if err := os.MkdirAll(filepath.Join(system, "applications"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(system, "applications", DesktopFileName), []byte("x"), 0o644); err != nil { // #nosec G306 -- test file.
+		t.Fatal(err)
+	}
+	if w, err := EnsureDesktopAtStart(exe); err != nil || len(w) != 0 {
+		t.Errorf("system launcher: %v, %v", w, err)
+	}
+	env["XDG_DATA_DIRS"] = ""
+
+	if w, err := EnsureDesktopAtStart(filepath.Join(os.TempDir(), "f4-build", "f4")); err != nil || len(w) != 0 {
+		t.Errorf("temp dir: %v, %v", w, err)
+	}
+	if _, err := os.Stat(launcher); err == nil {
+		t.Fatal("something was written although every guard said no")
+	}
+
+	if w, err := EnsureDesktopAtStart(exe); err != nil || len(w) == 0 {
+		t.Fatalf("normal start: %v, %v", w, err)
+	}
+	if got := readFile(t, launcher); !strings.Contains(got, "TryExec="+exe+"\n") {
+		t.Errorf("launcher:\n%s", got)
+	}
+}

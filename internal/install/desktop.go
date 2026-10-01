@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,10 @@ const (
 	DesktopFileName = "org.unxed.f4.desktop"
 	// IconName is the Icon= value and the base name of every icon file.
 	IconName = "io.github.unxed.f4"
+	// ManagedKey marks a launcher that f4 wrote itself. EnsureDesktop keeps
+	// such a file up to date, and never touches a launcher without it: that one
+	// is the user's own (a different Exec=, a different backend) and stays.
+	ManagedKey = "X-F4-Managed"
 )
 
 // SupportsDesktop reports whether this system uses freedesktop .desktop files.
@@ -82,6 +87,7 @@ func DesktopEntry(exePath string) string {
 		"TryExec=" + exePath + "\n" +
 		"Icon=" + IconName + "\n" +
 		"StartupWMClass=org.unxed.f4\n" +
+		ManagedKey + "=true\n" +
 		"Terminal=false\n" +
 		"Categories=System;FileManager;\n"
 }
@@ -117,40 +123,155 @@ func writeFileAtomic(path string, data []byte) error {
 	return nil
 }
 
+// iconFile is one icon to put under the user's data directory.
+type iconFile struct {
+	path string
+	data []byte
+}
+
+// iconFiles lists every icon file under dataHome, with its content.
+func iconFiles(dataHome string) ([]iconFile, error) {
+	svg, err := icon.Files.ReadFile("f4.svg")
+	if err != nil {
+		return nil, err
+	}
+	files := []iconFile{{filepath.Join(dataHome, "icons", "hicolor", "scalable", "apps", IconName+".svg"), svg}}
+	for _, size := range icon.PNGSizes {
+		png, err := icon.Files.ReadFile(fmt.Sprintf("generated/f4-%d.png", size))
+		if err != nil {
+			return nil, err
+		}
+		dir := fmt.Sprintf("%dx%d", size, size)
+		files = append(files, iconFile{filepath.Join(dataHome, "icons", "hicolor", dir, "apps", IconName+".png"), png})
+	}
+	return files, nil
+}
+
+func launcherPath(dataHome string) string {
+	return filepath.Join(dataHome, "applications", DesktopFileName)
+}
+
 // InstallDesktop writes the launcher for the executable at exePath and the
 // application icons under dataHome, and returns the files written. Running it
 // again rewrites the same files.
 func InstallDesktop(dataHome, exePath string) ([]string, error) {
-	var written []string
-	put := func(path string, data []byte) error {
-		if err := writeFileAtomic(path, data); err != nil {
-			return err
-		}
-		written = append(written, path)
-		return nil
-	}
-
-	if err := put(filepath.Join(dataHome, "applications", DesktopFileName), []byte(DesktopEntry(exePath))); err != nil {
-		return written, err
-	}
-	svg, err := icon.Files.ReadFile("f4.svg")
+	icons, err := iconFiles(dataHome)
 	if err != nil {
-		return written, err
+		return nil, err
 	}
-	if err := put(filepath.Join(dataHome, "icons", "hicolor", "scalable", "apps", IconName+".svg"), svg); err != nil {
-		return written, err
-	}
-	for _, size := range icon.PNGSizes {
-		png, err := icon.Files.ReadFile(fmt.Sprintf("generated/f4-%d.png", size))
-		if err != nil {
+	files := append([]iconFile{{launcherPath(dataHome), []byte(DesktopEntry(exePath))}}, icons...)
+	var written []string
+	for _, f := range files {
+		if err := writeFileAtomic(f.path, f.data); err != nil {
 			return written, err
 		}
-		dir := fmt.Sprintf("%dx%d", size, size)
-		if err := put(filepath.Join(dataHome, "icons", "hicolor", dir, "apps", IconName+".png"), png); err != nil {
-			return written, err
-		}
+		written = append(written, f.path)
 	}
 	return written, nil
+}
+
+// execOfEntry is the TryExec= path of a launcher text, or "".
+func execOfEntry(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if v, ok := strings.CutPrefix(line, "TryExec="); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// EnsureDesktop makes sure the launcher and icons are in place under
+// dataHome, writing only what is missing or out of date, and returns the files
+// it wrote. It is what a GUI start runs, so that an f4 that was installed by
+// hand and updates itself gets its task bar icon without the user doing
+// anything (f4#1290):
+//
+//   - a missing launcher is written for exePath;
+//   - a launcher that f4 wrote earlier (ManagedKey) is rewritten when the
+//     program's text moved on, keeping the executable it already points at
+//     while that still exists, so two copies of f4 do not fight over it;
+//   - a launcher without ManagedKey is the user's and is left alone;
+//   - an icon file that differs from the embedded one is replaced.
+func EnsureDesktop(dataHome, exePath string) ([]string, error) {
+	var files []iconFile
+	current, err := os.ReadFile(launcherPath(dataHome)) // #nosec G304 -- the user's own data directory.
+	switch {
+	case err != nil && !os.IsNotExist(err):
+		return nil, err
+	case err != nil:
+		files = append(files, iconFile{launcherPath(dataHome), []byte(DesktopEntry(exePath))})
+	case strings.Contains(string(current), "\n"+ManagedKey+"="):
+		target := execOfEntry(string(current))
+		// target comes from the user's own launcher and is only stat'ed.
+		if info, statErr := os.Stat(target); target == "" || statErr != nil || info.IsDir() { // #nosec G703 -- existence check only.
+			target = exePath
+		}
+		if want := DesktopEntry(target); string(current) != want {
+			files = append(files, iconFile{launcherPath(dataHome), []byte(want)})
+		}
+	}
+	icons, err := iconFiles(dataHome)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range icons {
+		if have, err := os.ReadFile(f.path); err != nil || !bytes.Equal(have, f.data) { // #nosec G304 -- the user's own data directory.
+			files = append(files, f)
+		}
+	}
+	var written []string
+	for _, f := range files {
+		if err := writeFileAtomic(f.path, f.data); err != nil {
+			return written, err
+		}
+		written = append(written, f.path)
+	}
+	return written, nil
+}
+
+// OptOutEnv is the environment variable that switches EnsureDesktopAtStart off.
+const OptOutEnv = "F4_NO_DESKTOP_INSTALL"
+
+// systemLauncherExists reports whether a package already put the launcher
+// into one of the system data directories ($XDG_DATA_DIRS).
+func systemLauncherExists(getenv func(string) string) bool {
+	dirs := getenv("XDG_DATA_DIRS")
+	if dirs == "" {
+		dirs = "/usr/local/share:/usr/share"
+	}
+	for _, dir := range filepath.SplitList(dirs) {
+		if filepath.IsAbs(dir) {
+			if _, err := os.Stat(launcherPath(dir)); err == nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// EnsureDesktopAtStart is called before a GUI window opens. It does nothing
+// on systems without .desktop files, when OptOutEnv is set, when a package
+// provides the launcher system-wide, or when f4 runs from the temporary
+// directory (a throwaway build must not become the launcher). Any failure is
+// returned for the debug log; it never stops f4 from starting.
+func EnsureDesktopAtStart(exePath string) ([]string, error) {
+	if !SupportsDesktop() || Getenv(OptOutEnv) != "" || systemLauncherExists(Getenv) {
+		return nil, nil
+	}
+	home, err := UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
+		exePath = resolved
+	}
+	if abs, err := filepath.Abs(exePath); err == nil {
+		exePath = abs
+	}
+	if tmp, err := filepath.EvalSymlinks(os.TempDir()); err == nil && strings.HasPrefix(exePath, tmp+string(filepath.Separator)) {
+		return nil, nil
+	}
+	return EnsureDesktop(DataHome(home, Getenv), exePath)
 }
 
 // RunDesktopCLI serves `f4 --install-desktop`, and the desktop step of

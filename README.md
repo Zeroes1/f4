@@ -35,7 +35,7 @@ f4 --update           # whichever channel is configured (Options > Auto update)
 
 A named channel also becomes the one f4 checks automatically from then on.
 
-On a Linux or BSD desktop, a single downloaded binary has no launcher and no icon, so the task bar of `f4 --gui` shows the window manager's default icon. One command fixes that, without sudo:
+On a Linux or BSD desktop, a single downloaded binary has no launcher and no icon, so the task bar of a GUI window would show the window manager's default icon. f4 therefore puts its launcher (`org.unxed.f4.desktop`) and icons under `~/.local/share` by itself the first time a GUI window opens, and refreshes them after an update; no sudo, no questions. A launcher you wrote yourself under that name is never changed, a launcher installed by a package is respected, and `F4_NO_DESKTOP_INSTALL=1` switches this off. The same can be done by hand, without sudo:
 
 ```sh
 f4 --install-desktop   # launcher + icons into ~/.local/share (no copying of the binary)

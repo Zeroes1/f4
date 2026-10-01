@@ -861,6 +861,27 @@ see in vtinput project: https://github.com/unxed/vtinput
 	terminal.ManageSessions()
 }
 
+// ensureDesktopIntegration puts the launcher and icons under ~/.local/share
+// before a GUI window opens, when they are missing or out of date, so that an
+// f4 installed by hand (and updating itself) shows its own icon in the task
+// bar without the user running anything (f4#1290). It needs no sudo, asks
+// nothing and never stops f4 from starting; F4_NO_DESKTOP_INSTALL=1 switches
+// it off.
+func ensureDesktopIntegration() {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	written, err := install.EnsureDesktopAtStart(exe)
+	if err != nil {
+		vtui.DebugLog("MAIN: desktop launcher/icons not installed: %v", err)
+		return
+	}
+	if len(written) > 0 {
+		vtui.DebugLog("MAIN: installed or refreshed %d launcher/icon files under ~/.local/share", len(written))
+	}
+}
+
 // runGuiBackend starts the GUI on a named backend, or on the best available
 // one when the name is empty.
 //
@@ -871,6 +892,7 @@ see in vtinput project: https://github.com/unxed/vtinput
 // saved on a different machine. A backend named on the command line keeps the
 // strict behavior, because there the user asked for that one and is watching.
 func runGuiBackend(backend string, fromConfig bool) error {
+	ensureDesktopIntegration()
 	if backend == "" {
 		return tryRunDefaultGui()
 	}
