@@ -3376,10 +3376,13 @@ func (fp *FileSystemPanel) fastFindMatch(name string) (startRunes, matchedRunes 
 		fp.fastFindMatcherKey = queryText
 		fp.fastFindMatcherStrict = strict
 		fp.fastFindMatchers = fp.fastFindMatchers[:0]
-		for _, query := range []string{
-			queryText,
-			vtui.GlobalXlator.TranscodeString(queryText),
-		} {
+		// The layout-transcoded variant ("сфы" -> "cas") is a tolerance too:
+		// strict mode searches exactly what was typed (f4 #1709).
+		queries := []string{queryText}
+		if !strict {
+			queries = append(queries, vtui.GlobalXlator.TranscodeString(queryText))
+		}
+		for _, query := range queries {
 			if m := vtui.NewFuzzyMatcher(query, false); m != nil {
 				if strict {
 					m.Strict()
