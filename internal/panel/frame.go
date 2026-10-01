@@ -381,8 +381,13 @@ type PanelsFrame struct {
 	CommandLineFocused bool
 
 	LastPtyPath string
-	LastPtyVFS  vfs.VFS
-	Closed      bool
+	// localShellStartDir is the directory the local shell was started in (f4's
+	// own working directory, which the shell inherits); guarded by PtyMutex.
+	// The first directory sync is skipped when the panel is already there
+	// (docs/TERMINAL_JUNK_LOG.md, section 4).
+	localShellStartDir string
+	LastPtyVFS         vfs.VFS
+	Closed             bool
 
 	ShellMode             terminal.ShellMode
 	HostConsoleActive     bool
@@ -1496,6 +1501,7 @@ func (pf *PanelsFrame) InitPTY() {
 				return
 			}
 			pf.Pty = p
+			pf.localShellStartDir, _ = os.Getwd()
 			pf.localReflow = pf.ShellMode == terminal.ShellModeOwn && terminal.PreservesLogicalLines(p)
 			vtui.DebugLog("PTY: local shell started; reflow %v", pf.localReflow)
 			serializedPTY := &processEnvironmentSerializedPTY{owner: pf, Backend: p}
@@ -4792,6 +4798,28 @@ func progressBlockedByModal(frames interface{ GetTopFrame() vtui.Frame }) bool {
 // behind a progress screen.
 type progressOverlayHost interface{ AllowsProgressOverlay() bool }
 
+// lazyProgressBar is a progress bar that draws nothing until shown is set.
+// ScreenObject.Show makes an object visible again on every draw, so hiding it
+// with SetVisible does not last (f4#1411, reported again on fb112e4: the bar
+// was still there under "Requesting sudo access..."); the draw calls are
+// what has to be skipped.
+type lazyProgressBar struct {
+	*vtui.ProgressBar
+	shown bool
+}
+
+func (b *lazyProgressBar) Show(scr *vtui.ScreenBuf) {
+	if b.shown {
+		b.ProgressBar.Show(scr)
+	}
+}
+
+func (b *lazyProgressBar) DisplayObject(scr *vtui.ScreenBuf) {
+	if b.shown {
+		b.ProgressBar.DisplayObject(scr)
+	}
+}
+
 func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg string, forked bool, worker func(ctx context.Context, update func(msg string, percent int)) error, onComplete func(err error)) {
 	dlg := vtui.NewCenteredDialog(50, 12, title)
 	dlg.AttentionSuppressed = true
@@ -4799,11 +4827,10 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 	lbl := vtui.NewText(0, 0, startMsg, vtui.Palette[vtui.ColDialogText])
 	dlg.AddItem(lbl)
 
-	pb := vtui.NewProgressBar(0, 0, 46)
+	pb := &lazyProgressBar{ProgressBar: vtui.NewProgressBar(0, 0, 46)}
 	// The bar stays hidden until the worker reports a real percentage: a task
 	// that only shows a status line (Opening..., Requesting sudo access...)
 	// has nothing for it to indicate, and an empty bar reads as stuck (f4#1411).
-	pb.SetVisible(false)
 	dlg.AddItem(pb)
 
 	lblHint := vtui.NewText(0, 0, i18n.Msg("Op.SwitchHint"), vtui.Palette[vtui.ColDialogText])
@@ -4900,7 +4927,7 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 					lbl.SetText(safeMsg)
 				}
 				if percent >= 0 {
-					pb.SetVisible(true)
+					pb.shown = true
 					pb.SetPercent(percent)
 					dlg.SetProgress(percent)
 				}
@@ -5157,6 +5184,23 @@ func (pf *PanelsFrame) MenuCancelable(title string, items []string, callback fun
 	pf.menuCore(title, "", menuItems, nil, callback, onCancel, nil)
 }
 
+// menuHeightLimit is the tallest a menu of the panels frame may be: generic
+// menus stay compact on normal screens, while the plugin menu, whose rows only
+// grow in number, may take the whole height of the program window (#918).
+func menuHeightLimit(bottomHint string, screenH int) int {
+	maxH := 15
+	if bottomHint == pluginMenuBottomHint && screenH > 0 {
+		maxH = screenH
+	}
+	if screenH > 0 && maxH > screenH {
+		maxH = screenH
+	}
+	if maxH < 3 {
+		maxH = 3
+	}
+	return maxH
+}
+
 func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem, onKeyDown func(*vtui.VMenu, *vtinput.InputEvent) bool, callback func(int), onCancel func(), keyLabels *vtui.KeySet) {
 	vtui.FrameManager.PostTask(func() {
 		menu := vtui.NewVMenu(title)
@@ -5176,13 +5220,7 @@ func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem,
 		}
 
 		h := len(items) + 2
-		maxH := 15 // Keep generic plugin menus compact on normal screens.
-		if screenH := vtui.FrameManager.GetScreenHeight(); screenH > 0 && maxH > screenH {
-			maxH = screenH
-		}
-		if maxH < 3 {
-			maxH = 3
-		}
+		maxH := menuHeightLimit(bottomHint, vtui.FrameManager.GetScreenHeight())
 		if h > maxH {
 			h = maxH
 		}
@@ -5283,6 +5321,10 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
 		return true
 	}
 
+	if isWindowsShell && !uncertain && pf.localShellAlreadyIn(path, v, activePty) {
+		return true
+	}
+
 	if isWindowsShell {
 		_, _ = pf.WritePTY(activePty, []byte(fmt.Sprintf("cd /d \"%s\" & rem f4_sync\r", path)))
 		pf.NoteLocalShellLineSent(activePty)
@@ -5295,6 +5337,40 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
 		_, _ = pf.WritePTY(activePty, []byte(fmt.Sprintf(" cd '%s' && true f4_sync\r", sqPath)))
 	}
 	return !uncertain
+}
+
+// localShellAlreadyIn reports that the very first directory sync of a local
+// shell has nothing to do: the shell starts in f4's working directory, and when
+// the active panel shows that same local directory, typing "cd" only puts an
+// echo, a blank line and a second prompt into a console that is still at its
+// startup size, where they are the stray path at the top of the console
+// (unxed/f4#1673, docs/TERMINAL_JUNK_LOG.md section 4). Later syncs are never
+// skipped. Only for cmd.exe, where the stray path was seen; a POSIX shell's
+// startup files may move it elsewhere, so it is always told.
+func (pf *PanelsFrame) localShellAlreadyIn(path string, v vfs.VFS, pty terminal.PtyBackend) bool {
+	if pf.LastPtyPath != "" || pf.LastPtyVFS != nil {
+		return false
+	}
+	if _, local := v.(*vfs.OSVFS); !local || !pf.isLocalPTY(pty) {
+		return false
+	}
+	pf.PtyMutex.Lock()
+	start := pf.localShellStartDir
+	pf.PtyMutex.Unlock()
+	return samePanelDir(start, path)
+}
+
+// samePanelDir compares two local directory paths the way the host file
+// system does: case-insensitively on Windows.
+func samePanelDir(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 func vfsHasRemotePTY(v vfs.VFS) bool {
@@ -5870,18 +5946,24 @@ func (pf *PanelsFrame) ShowPluginMenu() {
 			area, key := keymap.ConfiguredHotkeyBinding(keymap.GlobalHotkeysMgr, entries[idx].ActionName)
 			if area == "" || key == "" {
 				// No assigned key: the plugin's own default, if it has one that
-				// was not removed yet, is what Del takes back.
-				def := declaredHotkeyString(entries[idx].Declared)
-				if def == "" || PluginDefaultKeyOff(def) {
+				// was not removed yet, is what Del takes back: its declared
+				// shortcut, else the letter its label marks with an ampersand.
+				offKey, shown := declaredHotkeyString(entries[idx].Declared), ""
+				if offKey != "" && !PluginDefaultKeyOff(offKey) {
+					shown = offKey
+				} else if r := pluginLabelHotkey(entries[idx].ActionName, entries[idx].Label); r != 0 {
+					offKey, shown = pluginLabelHotkeyOffKey(entries[idx].ActionName), string(r)
+				}
+				if shown == "" {
 					return true
 				}
-				question := pluginHotkeyDeleteQuestion(def, entries[idx].Label)
+				question := pluginHotkeyDeleteQuestion(shown, entries[idx].Label)
 				buttons := []string{i18n.Msg("Plugins.HotkeyRemoveBtn"), i18n.Msg("Plugins.HotkeyKeepBtn")}
 				vtui.ShowMessageOn(menu, i18n.Msg("Plugins.HotkeyRemoveTitle"), question, buttons).OnResult = func(choice int) {
 					if choice != 0 {
 						return
 					}
-					SetPluginDefaultKeyOff(def, true)
+					SetPluginDefaultKeyOff(offKey, true)
 					refresh(menu)
 				}
 				return true
@@ -6170,6 +6252,26 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
 			return true
 		}
+		// Ctrl+Up and Ctrl+Down move the link under the cursor one place up or
+		// down, and the new order is saved (#1148).
+		if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
+			e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 &&
+			e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
+			if index, ok := driveBookmarkRows[menu.SelectPos]; ok {
+				delta := 1
+				if e.VirtualKeyCode == vtinput.VK_UP {
+					delta = -1
+				}
+				pos := menu.SelectPos
+				if moved, err := moveDriveBookmarkInFile(index, delta); err != nil {
+					vtui.ShowMessageOn(menu, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
+				} else if moved {
+					menu.Close()
+					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+				}
+				return true
+			}
+		}
 		if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
 			vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			pos := menu.SelectPos
@@ -6447,6 +6549,7 @@ func (pf *PanelsFrame) navigateToPath(fsp *FileSystemPanel, targetPath string, r
 	if targetPath == "" {
 		return false
 	}
+	targetPath = smbTargetFor(fsp.Vfs, targetPath)
 	// An explicit command/history navigation supersedes a provider mount that
 	// has not installed its child VFS yet.
 	providerOpenCanceled := fsp.ProviderOpenTask != nil
@@ -6968,4 +7071,25 @@ func expandEnvironmentVariables(s string) string {
 
 func isEnvironmentVariableChar(c byte) bool {
 	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+
+// smbTargetFor turns a UNC-style name typed on a system without native UNC
+// paths (\\host\share, or //host/share on the local file system when no such
+// local path exists) into the smb:// URI the SMB provider opens (f4#1702,
+// part 3). Anything else is returned unchanged, and so is every name when no
+// SMB provider is registered (the lite build).
+func smbTargetFor(cur vfs.VFS, target string) string {
+	if runtime.GOOS == "windows" || vfs.FindURIProvider("smb://") == nil {
+		return target
+	}
+	_, local := cur.(*vfs.OSVFS)
+	allowSlashes := false
+	if local && strings.HasPrefix(target, "//") {
+		_, err := hostfs.Stat(target)
+		allowSlashes = err != nil
+	}
+	if uri, ok := vfs.UNCToSMBURI(target, allowSlashes); ok {
+		return uri
+	}
+	return target
 }

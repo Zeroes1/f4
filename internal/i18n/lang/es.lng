@@ -2191,5 +2191,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Permite que f4 use la contraseña de una conexión guardada para autenticar el segundo salto de una copia o movimiento de servidor a servidor, en lugar de requerir claves SSH o acceso al agente. Desactivado de forma predeterminada: esto expone esa contraseña al otro servidor.
 SettingsCenter.TreeRootWholeVolume.Label=Anclar el árbol al volumen completo
 SettingsCenter.TreeRootWholeVolume.Description=Ancla el árbol de directorios (Ctrl+T) a todo el volumen actual del panel de origen, como hace far2l. Desactivado lo ancla al directorio actual del panel de origen.
+SettingsCenter.GlyphStyle.Label=Glifos de marcos y controles
+SettingsCenter.GlyphStyle.Description=Cómo dibujan las ventanas gráficas los marcos, las casillas y los botones de opción: Clásico mantiene las esquinas cuadradas y las casillas [x], Redondeado dibuja esquinas redondeadas y botones redondos. Los terminales de texto no se ven afectados.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Redondeado
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Árbol de directorios
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=siguiente apertura del árbol

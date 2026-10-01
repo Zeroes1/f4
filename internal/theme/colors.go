@@ -331,7 +331,7 @@ var ColorSlots = []ColorSlot{
 	{Canonical: "Editor.Occurrence", Index: ColEditorOccurrence, Group: "Editor", ConstantName: "ColEditorOccurrence", Aliases: []string{"Editor.Text.Occurrence"}},
 	{Canonical: "Editor.Scrollbar", Index: ColEditorScrollbar, Group: "Editor", ConstantName: "ColEditorScrollbar", InheritsBackgroundFrom: "Editor.Text"},
 	{Canonical: "Editor.Status", Index: ColEditorStatus, Group: "Editor", ConstantName: "ColEditorStatus"},
-	{Canonical: "Editor.WrapMark", Index: ColEditorWrapMark, Group: "Editor", ConstantName: "ColEditorWrapMark"},
+	{Canonical: "Editor.WrapMark", Index: ColEditorWrapMark, Group: "Editor", ConstantName: "ColEditorWrapMark", InheritsBackgroundFrom: "Editor.Text"},
 
 	// Editor.Syntax.* feed plugins/chroma's syntax highlighter (f4#1470),
 	// one slot per Chroma token category it distinguishes.

@@ -2188,5 +2188,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Lubab f4-l kasutada salvestatud ühenduse parooli serverist serverisse kopeerimise või teisaldamise teise hüppe autentimiseks, selle asemel et nõuda SSH-võtmeid või agendi juurdepääsu. Vaikimisi väljas: see paljastab parooli teisele serverile.
 SettingsCenter.TreeRootWholeVolume.Label=Ava puu kogu köite juurest
 SettingsCenter.TreeRootWholeVolume.Description=Avab kataloogipuu (Ctrl+T) lähtepaneeli kogu praeguse köite juurest, nii nagu far2l. Väljalülitatuna avab selle lähtepaneeli praeguse kataloogi juurest.
+SettingsCenter.GlyphStyle.Label=Raamide ja juhtelementide sümbolid
+SettingsCenter.GlyphStyle.Description=Kuidas graafilised aknad joonistavad raame, märkeruute ja raadionuppe: Classic jätab ruudukujulised nurgad ja [x]-ruudud, Ümardatud joonistab ümarad nurgad ja ümmargused nupud. Tekstiterminale see ei mõjuta.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Ümardatud
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Kataloogipuu
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=järgmine puu avamine

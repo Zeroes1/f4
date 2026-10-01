@@ -2,6 +2,8 @@
 
 The built-in terminal in `f4` is one of its most complex components. This document serves as a comprehensive guide for human developers and AI assistants. It explains the fundamental challenges of cross-platform terminal emulation (specifically Windows ConPTY), analyzes how industry-leading terminal emulators solve them, and justifies the final architectural design chosen for `f4`.
 
+> Stray text, stray paths or stray line feeds in the terminal, and the shell's directory following the panel: read `docs/TERMINAL_JUNK_LOG.md` in full first.
+
 ## 0. Philosophy: why this component exists at all
 
 far2l proved, by existing, several hypotheses nobody had even ventured before

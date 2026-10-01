@@ -2188,5 +2188,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Ļauj f4 izmantot saglabāta savienojuma paroli, lai autentificētu otro posmu serveris-serverim kopēšanā vai pārvietošanā, nevis pieprasīt SSH atslēgas vai aģenta piekļuvi. Pēc noklusējuma izslēgts: tas atklāj šo paroli otram serverim.
 SettingsCenter.TreeRootWholeVolume.Label=Koka saknei izmantot visu sējumu
 SettingsCenter.TreeRootWholeVolume.Description=Atver direktoriju koku (Ctrl+T) no avota paneļa visa pašreizējā sējuma saknes, tāpat kā far2l. Izslēgts atver no avota paneļa pašreizējā direktorija saknes.
+SettingsCenter.GlyphStyle.Label=Rāmju un vadīklu simboli
+SettingsCenter.GlyphStyle.Description=Kā grafiskie logi zīmē rāmjus, izvēles rūtiņas un radiopogas: „Klasisks“ saglabā stūrainus stūrus un [x] rūtiņas, „Noapaļots“ zīmē noapaļotus stūrus un apaļas pogas. Teksta termināļus tas neietekmē.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Noapaļots
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Direktoriju koks
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=nākamā koka atvēršana

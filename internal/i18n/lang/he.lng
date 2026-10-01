@@ -2188,5 +2188,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=מאפשר ל-f4 להשתמש בססמה של חיבור שמור כדי לאמת את הקפיצה השנייה בהעתקה או העברה בין שני שרתים, במקום לדרוש מפתחות SSH או גישה לסוכן. כבוי כברירת מחדל: הדבר חושף את הססמה הזו לשרת האחר.
 SettingsCenter.TreeRootWholeVolume.Label=להציב את שורש העץ בכרך כולו
 SettingsCenter.TreeRootWholeVolume.Description=מציב את עץ התיקיות (Ctrl+T) בשורש הכרך הנוכחי כולו של החלונית המקור, כמו ב-far2l. כשההגדרה כבויה, השורש הוא התיקייה הנוכחית של החלונית המקור.
+SettingsCenter.GlyphStyle.Label=סמלי מסגרות ופקדים
+SettingsCenter.GlyphStyle.Description=כיצד חלונות גרפיים מציירים מסגרות, תיבות סימון וכפתורי רדיו: «קלאסי» משאיר פינות ישרות ותיבות [x], «מעוגל» מצייר פינות מעוגלות וכפתורים עגולים. מסופי טקסט אינם מושפעים.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=מעוגל
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=עץ תיקיות
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=הפתיחה הבאה של העץ

@@ -287,3 +287,30 @@ func (pf *PanelsFrame) deleteDriveBookmark(menu *vtui.VMenu, bookmarks []DriveBo
 		vtui.FrameManager.PostTask(reopen)
 	}
 }
+
+// moveDriveBookmark returns the list with the link at index moved by delta
+// places (-1 up, 1 down), and whether anything moved: the first link cannot go
+// up nor the last one down. The list itself is left as it was.
+func moveDriveBookmark(bookmarks []DriveBookmark, index, delta int) ([]DriveBookmark, bool) {
+	target := index + delta
+	if index < 0 || index >= len(bookmarks) || target < 0 || target >= len(bookmarks) || delta == 0 {
+		return bookmarks, false
+	}
+	moved := append([]DriveBookmark(nil), bookmarks...)
+	moved[index], moved[target] = moved[target], moved[index]
+	return moved, true
+}
+
+// moveDriveBookmarkInFile moves one link of the saved list by delta places
+// and saves the new order, so that it is remembered.
+func moveDriveBookmarkInFile(index, delta int) (bool, error) {
+	current, err := LoadDriveBookmarks(DriveBookmarksFilePath())
+	if err != nil {
+		return false, err
+	}
+	moved, ok := moveDriveBookmark(current, index, delta)
+	if !ok {
+		return false, nil
+	}
+	return true, SaveDriveBookmarks(DriveBookmarksFilePath(), moved)
+}

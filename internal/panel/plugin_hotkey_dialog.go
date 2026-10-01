@@ -7,25 +7,32 @@ import (
 
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
 // applyPluginHotkeyChoice is what OK does in the plugin hotkey dialog: text is
-// what the one-character field holds. Empty takes the hotkey back (an assigned
-// one, or the plugin's own default), a letter or digit becomes the menu hotkey
+// what the one-character field holds. Empty takes the hotkey away: the assigned
+// one and every default the plugin brings with it (its declared shortcut, the
+// letter its label marks with an ampersand), so that nothing is left, as
+// clearing the hot key of a link in the drive menu leaves nothing. A letter or digit becomes the menu hotkey
 // of the entry, anything else is refused with ok false so that the dialog stays
 // open. changed reports whether the bindings moved.
-func applyPluginHotkeyChoice(hm *keymap.HotkeyManager, actionName, declaredKey, text string) (changed, ok bool) {
+func applyPluginHotkeyChoice(hm *keymap.HotkeyManager, actionName, label, declaredKey, text string) (changed, ok bool) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		if area, key := keymap.ConfiguredHotkeyBinding(hm, actionName); key != "" {
-			return keymap.DeletePluginHotkey(hm, area, key), true
+			changed = keymap.DeletePluginHotkey(hm, area, key)
 		}
 		if declaredKey != "" && !PluginDefaultKeyOff(declaredKey) {
 			SetPluginDefaultKeyOff(declaredKey, true)
-			return true, true
+			changed = true
 		}
-		return false, true
+		if pluginLabelHotkey(actionName, label) != 0 {
+			SetPluginDefaultKeyOff(pluginLabelHotkeyOffKey(actionName), true)
+			changed = true
+		}
+		return changed, true
 	}
 	runes := []rune(text)
 	if len(runes) != 1 || (!unicode.IsLetter(runes[0]) && !unicode.IsDigit(runes[0])) {
@@ -39,9 +46,10 @@ func applyPluginHotkeyChoice(hm *keymap.HotkeyManager, actionName, declaredKey, 
 }
 
 // currentPluginHotkeyText is what the one-character field starts with: the
-// assigned letter, else the plugin's own default when it is a single character,
-// else nothing.
-func currentPluginHotkeyText(hm *keymap.HotkeyManager, actionName, declaredKey string) string {
+// assigned letter, else the plugin's own default when it is a single character
+// (declared, or marked with an ampersand in the label, as the row "V Visual
+// File Renamer" is), else nothing.
+func currentPluginHotkeyText(hm *keymap.HotkeyManager, actionName, label, declaredKey string) string {
 	if _, key := keymap.ConfiguredHotkeyBinding(hm, actionName); key != "" {
 		if r := pluginMenuHotkeyRune(key); r != 0 {
 			return string(r)
@@ -53,7 +61,44 @@ func currentPluginHotkeyText(hm *keymap.HotkeyManager, actionName, declaredKey s
 			return string(r)
 		}
 	}
+	if r := pluginLabelHotkey(actionName, label); r != 0 {
+		return string(r)
+	}
 	return ""
+}
+
+// pluginHotkeyEdit is the one-cell field of the hot key: a letter or a digit
+// replaces what it holds (never a second character next to it), Delete and
+// Backspace empty it, any other printable character is ignored. Whatever is
+// typed, one character is all it can hold, as the field of the link editor in
+// the drive menu.
+type pluginHotkeyEdit struct{ *vtui.Edit }
+
+func (e *pluginHotkeyEdit) ProcessKey(ev *vtinput.InputEvent) bool {
+	if ev == nil || !ev.KeyDown {
+		return e.Edit.ProcessKey(ev)
+	}
+	switch ev.VirtualKeyCode {
+	case vtinput.VK_DELETE, vtinput.VK_BACK:
+		e.SetText("")
+		return true
+	}
+	if r := pluginHotkeyEventRune(ev); r != 0 {
+		e.SetText(string(r))
+		return true
+	}
+	if mods := keymap.NormalizeMods(ev.ControlKeyState); unicode.IsPrint(ev.Char) &&
+		!mods.Contains(vtinput.LeftCtrlPressed) && !mods.Contains(vtinput.LeftAltPressed) {
+		return true // some other printable character: not a hot key, not typed
+	}
+	return e.Edit.ProcessKey(ev)
+}
+
+// Show keeps the caret on the character rather than scrolling it out of the
+// one-cell field to make room for the insertion point behind it.
+func (e *pluginHotkeyEdit) Show(scr *vtui.ScreenBuf) {
+	e.Edit.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_HOME})
+	e.Edit.Show(scr)
 }
 
 // showPluginHotkeyDialog asks for the menu hotkey of a plugin entry in a
@@ -70,10 +115,10 @@ func showPluginHotkeyDialog(hm *keymap.HotkeyManager, actionName, label string, 
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("Plugins.HotkeyTitle"))
 	dlg.ShowClose = true
 
-	edit := vtui.NewEdit(0, 0, 3, currentPluginHotkeyText(hm, actionName, declaredKey))
+	edit := &pluginHotkeyEdit{vtui.NewEdit(0, 0, 1, currentPluginHotkeyText(hm, actionName, label, declaredKey))}
 	title := vtui.NewText(0, 0, cleanLabel, vtui.Palette[vtui.ColDialogText])
-	prompt := vtui.NewLabel(0, 0, "&"+i18n.Msg("Plugins.HotkeyFieldLabel")+":", edit)
-	note := vtui.NewText(0, 0, i18n.Msg("Plugins.HotkeyFieldNote"), vtui.Palette[vtui.ColDialogText])
+	prompt := vtui.NewLabel(0, 0, i18n.Msg("DriveLink.Hotkey"), edit)
+	note := vtui.NewText(0, 0, i18n.Msg("DriveLink.HotkeyHint"), vtui.Palette[vtui.ColDialogText])
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	btnOk.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
@@ -97,7 +142,7 @@ func showPluginHotkeyDialog(hm *keymap.HotkeyManager, actionName, label string, 
 
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnOk.OnClick = func() {
-		changed, ok := applyPluginHotkeyChoice(hm, actionName, declaredKey, edit.GetText())
+		changed, ok := applyPluginHotkeyChoice(hm, actionName, label, declaredKey, edit.GetText())
 		if !ok {
 			vtui.ShowMessageOn(dlg, i18n.Msg("Plugins.HotkeyTitle"), fmt.Sprint(i18n.Msg("Plugins.HotkeyFieldInvalid")), []string{i18n.Msg("vtui.Ok")})
 			return

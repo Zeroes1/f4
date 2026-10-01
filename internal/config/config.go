@@ -459,7 +459,8 @@ type F4Config struct {
 	HelpLanguage             string
 	UseLocalLanguageFiles    bool
 	AlwaysShowMenuBar        bool
-	DialogOuterBorder        bool // draw an extra frame one cell outside dialog/UserMenu borders, far2l/Far3 style (default off)
+	DialogOuterBorder        bool   // draw an extra frame one cell outside dialog/UserMenu borders, far2l/Far3 style (default off)
+	GlyphStyle               string // box, checkbox and radio glyphs of graphical windows: "classic" or "rounded" (f4#285)
 	WorkspaceTabMode         int
 	WorkspaceTabsOverlay     bool
 	CtrlTabShowsMenu         bool
@@ -697,6 +698,7 @@ var App = F4Config{
 	UseLocalLanguageFiles:    false,
 	AlwaysShowMenuBar:        false,
 	DialogOuterBorder:        false,
+	GlyphStyle:               GlyphStyleClassic,
 	WorkspaceTabMode:         int(vtui.WorkspaceTabsAlways),
 	WorkspaceTabsOverlay:     true,
 	CtrlTabShowsMenu:         false,
@@ -942,6 +944,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.DisplayFullPathInTitle = merged.GetString("Interface", "DisplayFullPathInTitle", "0") == "1"
 	cfg.AlwaysShowMenuBar = merged.GetString("Interface", "AlwaysShowMenuBar", "0") == "1"
 	cfg.DialogOuterBorder = merged.GetString("Interface", "DialogOuterBorder", "0") == "1"
+	cfg.GlyphStyle = NormalizeGlyphStyle(merged.GetString("Interface", "GlyphStyle", GlyphStyleClassic))
 	switch strings.ToLower(merged.GetString("Interface", "WorkspaceTabMode", "always")) {
 	case "always":
 		cfg.WorkspaceTabMode = int(vtui.WorkspaceTabsAlways)
@@ -1289,6 +1292,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "DisplayFullPathInTitle = %d\n", map[bool]int{true: 1, false: 0}[cfg.DisplayFullPathInTitle])
 	fmt.Fprintf(&sb, "AlwaysShowMenuBar = %d\n", map[bool]int{true: 1, false: 0}[cfg.AlwaysShowMenuBar])
 	fmt.Fprintf(&sb, "DialogOuterBorder = %d\n", map[bool]int{true: 1, false: 0}[cfg.DialogOuterBorder])
+	fmt.Fprintf(&sb, "GlyphStyle = %s\n", NormalizeGlyphStyle(cfg.GlyphStyle))
 	workspaceTabMode := "multiple"
 	if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsAlways) {
 		workspaceTabMode = "always"
@@ -1904,4 +1908,19 @@ func NormalizeDragOutModifier(v string) string {
 		return v
 	}
 	return ""
+}
+
+// The values of F4Config.GlyphStyle.
+const (
+	GlyphStyleClassic = "classic"
+	GlyphStyleRounded = "rounded"
+)
+
+// NormalizeGlyphStyle maps whatever the ini file holds to a known style; an
+// unknown or empty value is the classic one.
+func NormalizeGlyphStyle(v string) string {
+	if strings.EqualFold(strings.TrimSpace(v), GlyphStyleRounded) {
+		return GlyphStyleRounded
+	}
+	return GlyphStyleClassic
 }

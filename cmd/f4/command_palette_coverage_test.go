@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 63
+const commandPaletteF4Surfaces = 64
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -136,6 +136,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"panel.(*PluginHotkeyAssignFrame).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the plugin hotkey assignment dialog captures its next key locally and is not a global command surface",
+	},
+	"panel.(*pluginHotkeyEdit).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the one-character field of the plugin hotkey dialog takes a letter, a digit or Delete locally and is not a global command surface",
 	},
 	"media.(*ImageView).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "image-viewer commands are supplied by commandPaletteImageEntries",
@@ -236,6 +239,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"proclist.(*procListPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "ProcList forwards raw input to its own vtui.Table; sorting, quick-search and cursor movement are local table primitives, and the panel itself is reached through the plugin-owned PluginPanelInstance surface (f4#312 part 1 of 4)",
+	},
+	"netbrowse.(*netPanel).ProcessKey": {
+		class: paletteAuditPanelProvider, rationale: "the Windows network browser forwards raw input to its own vtui.Table; Enter goes into a container or up on the .. row and F5 reloads, and quick-search and cursor movement are local table primitives; the panel is reached through the plugin-owned PluginPanelInstance surface (f4#1702 part 1)",
 	},
 	"svcmgr.(*servicesPanel).ProcessKey": {
 		class: paletteAuditPanelProvider, rationale: "the Windows services panel forwards raw input to its own vtui.Table; F5 reloads the list, and sorting, quick-search and cursor movement are local table primitives; the panel is reached through the plugin-owned PluginPanelInstance surface (f4#311 part 1)",

@@ -42,7 +42,8 @@ type FrameVideoView struct {
 	ended   bool
 	failure error
 	cancel  context.CancelFunc
-	gen     int // which run the frame belongs to; a restart bumps it
+	gen     int            // which run the frame belongs to; a restart bumps it
+	runs    sync.WaitGroup // the run goroutines, for tests to wait out
 
 	// What the current run was started for, to notice a resized screen.
 	runCols, runRows int
@@ -130,7 +131,11 @@ func (fv *FrameVideoView) begin(scr *vtui.ScreenBuf, cols, rows int, start time.
 	fv.runCols, fv.runRows, fv.runGraphics = cols, rows, graphics
 	fv.mu.Unlock()
 
-	go fv.run(ctx, gen, spec)
+	fv.runs.Add(1)
+	go func() {
+		defer fv.runs.Done()
+		fv.run(ctx, gen, spec)
+	}()
 }
 
 // run reads the frames of one start and shows each at its time.

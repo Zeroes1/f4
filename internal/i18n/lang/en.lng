@@ -465,6 +465,8 @@ Action.Viewer.MarkdownFormatted=&Markdown
 Action.Viewer.MarkdownFormatted.Desc=Switch a Markdown file from the text/hex viewer back to the formatted view
 Action.Viewer.DisasmMode=&Disassembler mode (16/32/64)
 Action.Viewer.DisasmMode.Desc=Cycle the decode view between 64-, 32- and 16-bit x86 code
+Action.Viewer.AnsiMode=&Terminal colors
+Action.Viewer.AnsiMode.Desc=Draw the colour escape sequences of terminal output (logs, build output) as colours
 Action.Viewer.Search=&Find
 Action.Viewer.Search.Desc=Find text
 Action.Viewer.SearchNext=Find &next
@@ -695,6 +697,8 @@ Action.App.GitStatus=Gi&t status
 Action.App.GitStatus.Desc=Open the working tree status of the active panel's git repository
 Action.App.Services=Ser&vices
 Action.App.Services.Desc=Open the list of Windows services in the active panel slot
+Action.App.Network=&Network
+Action.App.Network.Desc=Open the network (servers and their shares) in the active panel slot
 Action.Panel.TempPanel.Desc=Open the temporary panel or switch its saved list
 Action.Panel.Calculator.Desc=Open the built-in calculator
 Action.Panel.Calendar.Desc=Open the built-in calendar
@@ -848,6 +852,16 @@ SvcMgr.PropsDisplay=Display name:
 SvcMgr.PropsPath=Program:
 SvcMgr.PropsStart=Start type:
 SvcMgr.PropsError=Error control:
+
+NetBrowse.ColumnName=Name
+NetBrowse.ColumnKind=Kind
+NetBrowse.ColumnComment=Comment
+NetBrowse.PanelTitle=Network
+NetBrowse.PanelTitleAt=Network: %s
+NetBrowse.KeyBar.Refresh=Refresh
+NetBrowse.ShareName=Share %s
+NetBrowse.EnterFailed=Cannot open %s: %v
+NetBrowse.RefreshFailed=Cannot read the network: %v
 
 PanelPlugin.KeyBar.Close=Close
 
@@ -1579,8 +1593,6 @@ Plugins.ConfigEmpty=No configurable plugins are registered.
 Plugins.AddTitle= Add Plugin
 Plugins.SelectFilePrompt=Select plugin file:
 Plugins.HotkeyTitle= Assign plugin hot key
-Plugins.HotkeyFieldLabel=Hotkey
-Plugins.HotkeyFieldNote=Letter or digit; leave empty to remove the hotkey
 Plugins.HotkeyFieldInvalid=Only a letter or a digit can be a plugin menu hotkey
 Plugins.HotkeyPrompt=Enter hot key (letter or digit)
 Plugins.HotkeyCurrent=Current: %s
@@ -3885,6 +3897,9 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Let f4 use a saved connection's password to authenticate the second hop of a server-to-server copy or move, instead of requiring SSH keys or agent access. Off by default: this exposes that password to the other server.
 SettingsCenter.TreeRootWholeVolume.Label=Root the tree panel at the whole volume
 SettingsCenter.TreeRootWholeVolume.Description=Root the Ctrl+T tree panel at the source panel's whole current volume, as far2l does. Off roots it at the source panel's current directory instead.
+SettingsCenter.GlyphStyle.Label=Frame and control glyphs
+SettingsCenter.GlyphStyle.Description=How graphical windows draw frames, checkboxes and radio buttons: Classic keeps square corners and [x] boxes, Rounded draws rounded corners and round buttons. Text terminals are not affected.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Rounded
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Directory tree
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=next tree open
 

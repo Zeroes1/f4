@@ -172,9 +172,14 @@ is drawing on. Use `print()`, which goes to the debug log, and `mf.env` and
 
 Most macros need no changes. What to check:
 
-- `Event{}`, `MenuItem{}` and `CommandLine{}` declarations are accepted and
-  ignored, so a file mixing them with `Macro{}` still contributes its macros,
-  but those declarations do nothing.
+- `MenuItem{}` and `CommandLine{}` declarations work. `Event{}` works for four
+  groups: `ExitFAR` (f4 is closing), `FolderChanged` (a panel entered another
+  folder; it is not raised while a macro is running), `EditorEvent` and
+  `ViewerEvent`, whose actions are called with the editor's or viewer's id, the
+  event and a parameter (0). The editor events are Far's numbers: 0 the file was
+  read, 1 it was saved, 3 the editor is closing; the viewer's: 0 the file was
+  opened, 1 the viewer is closing. A declaration for any other group is logged and left out; the rest of
+  the file still loads.
 - The `Editor`, `Viewer`, `Dlg`, `Menu`, `Object` and `Plugin` objects are not
   implemented yet.
 - There is no `ffi` and no `cdef`. f4 has its own FFI for plugins, described

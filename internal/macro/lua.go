@@ -38,6 +38,9 @@ type LuaMacro struct {
 	// callArgs are passed to action: a MenuItem{}'s action is called with the
 	// menu and the area it was chosen from, as in Far.
 	callArgs []string
+	// callValues, when set, are passed to action instead of callArgs (an event
+	// that carries numbers, such as EditorEvent).
+	callValues []lua.LValue
 }
 
 // luaEvent is one Event{} declaration: the group it listens to ("ExitFAR"...)
@@ -49,7 +52,7 @@ type luaEvent struct {
 
 // supportedEventGroups are the Event{} groups f4 raises; a declaration for
 // another group is kept out and logged.
-var supportedEventGroups = map[string]bool{"exitfar": true, "folderchanged": true}
+var supportedEventGroups = map[string]bool{"exitfar": true, "folderchanged": true, "editorevent": true, "viewerevent": true}
 
 // luaCommandLine is one CommandLine{} declaration.
 type luaCommandLine struct {
@@ -232,6 +235,21 @@ func (e *LuaMacroEngine) RunEvents(group string, wait time.Duration) int {
 // keeps an event action that itself changes the folder from raising the event
 // again without end.
 func (e *LuaMacroEngine) RaiseEvent(group string) bool {
+	return e.raise(group, nil)
+}
+
+// RaiseEventNumbers is RaiseEvent for an event whose action is called with
+// numbers instead of the group name (Far's EditorEvent gets the editor id, the
+// event and a parameter).
+func (e *LuaMacroEngine) RaiseEventNumbers(group string, numbers ...int) bool {
+	values := make([]lua.LValue, len(numbers))
+	for i, n := range numbers {
+		values[i] = lua.LNumber(n)
+	}
+	return e.raise(group, values)
+}
+
+func (e *LuaMacroEngine) raise(group string, values []lua.LValue) bool {
 	if e == nil {
 		return false
 	}
@@ -241,6 +259,7 @@ func (e *LuaMacroEngine) RaiseEvent(group string) bool {
 		if strings.EqualFold(ev.group, group) {
 			m := *ev.macro
 			m.callArgs = []string{ev.group}
+			m.callValues = values
 			todo = append(todo, &m)
 		}
 	}
@@ -575,10 +594,18 @@ func (e *LuaMacroEngine) execute(macro *LuaMacro, key string, original *vtinput.
 		}
 
 		L.Push(macro.action)
-		for _, a := range macro.callArgs {
-			L.Push(lua.LString(a))
+		argc := len(macro.callArgs)
+		if macro.callValues != nil {
+			for _, v := range macro.callValues {
+				L.Push(v)
+			}
+			argc = len(macro.callValues)
+		} else {
+			for _, a := range macro.callArgs {
+				L.Push(lua.LString(a))
+			}
 		}
-		if err := L.PCall(len(macro.callArgs), 0, nil); err != nil {
+		if err := L.PCall(argc, 0, nil); err != nil {
 			if strings.Contains(err.Error(), macroExitSentinel) {
 				return nil
 			}

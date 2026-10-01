@@ -465,6 +465,8 @@ Action.Viewer.MarkdownFormatted=&Markdown
 Action.Viewer.MarkdownFormatted.Desc=Вернуть файл Markdown из текстового/hex-просмотра в форматированный вид
 Action.Viewer.DisasmMode=Разрядность &дизассемблера (16/32/64)
 Action.Viewer.DisasmMode.Desc=Переключить дизассемблер между 64-, 32- и 16-битным кодом x86
+Action.Viewer.AnsiMode=&Цвета терминала
+Action.Viewer.AnsiMode.Desc=Показывать цветовые управляющие последовательности терминала (в логах, выводе сборки) цветом, а не текстом
 Action.Viewer.Search=&Поиск
 Action.Viewer.Search.Desc=Найти текст
 Action.Viewer.SearchNext=Искать &дальше
@@ -695,6 +697,8 @@ Action.App.GitStatus=&Статус git
 Action.App.GitStatus.Desc=Открыть статус рабочего каталога git-репозитория активной панели
 Action.App.Services=Сл&ужбы
 Action.App.Services.Desc=Открыть список служб Windows в активной панели
+Action.App.Network=&Сеть
+Action.App.Network.Desc=Открыть сеть (серверы и их общие ресурсы) в активной панели
 Action.Panel.TempPanel.Desc=Открыть временную панель или выбрать сохранённый список
 Action.Panel.Calculator.Desc=Открыть встроенный калькулятор
 Action.Panel.Calendar.Desc=Открыть встроенный календарь
@@ -848,6 +852,16 @@ SvcMgr.PropsDisplay=Экранное имя:
 SvcMgr.PropsPath=Программа:
 SvcMgr.PropsStart=Тип запуска:
 SvcMgr.PropsError=Контроль ошибок:
+
+NetBrowse.ColumnName=Имя
+NetBrowse.ColumnKind=Тип
+NetBrowse.ColumnComment=Комментарий
+NetBrowse.PanelTitle=Сеть
+NetBrowse.PanelTitleAt=Сеть: %s
+NetBrowse.KeyBar.Refresh=Обновить
+NetBrowse.ShareName=Общий ресурс %s
+NetBrowse.EnterFailed=Не удалось открыть %s: %v
+NetBrowse.RefreshFailed=Не удалось прочитать сеть: %v
 
 PanelPlugin.KeyBar.Close=Закрыть
 
@@ -1579,8 +1593,6 @@ Plugins.ConfigEmpty=Нет плагинов с доступными настро
 Plugins.AddTitle= Добавить плагин
 Plugins.SelectFilePrompt=Выберите файл плагина:
 Plugins.HotkeyTitle= Назначить горячую клавишу плагина
-Plugins.HotkeyFieldLabel=Хоткей
-Plugins.HotkeyFieldNote=Буква или цифра; пусто — убрать хоткей
 Plugins.HotkeyFieldInvalid=Хоткеем меню плагинов может быть только буква или цифра
 Plugins.HotkeyPrompt=Введите горячую клавишу (буква или цифра)
 Plugins.HotkeyCurrent=Текущая: %s
@@ -3885,6 +3897,9 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Разрешить f4 использовать пароль из сохранённого соединения для авторизации второго прыжка при копировании или перемещении с сервера на сервер вместо SSH-ключей или агента. По умолчанию отключено: это раскрывает пароль другому серверу.
 SettingsCenter.TreeRootWholeVolume.Label=Открывать дерево каталогов от корня тома
 SettingsCenter.TreeRootWholeVolume.Description=Открывает дерево каталогов (Ctrl+T) от корня всего текущего тома исходной панели, как в far2l. Выключено — открывает от текущего каталога исходной панели.
+SettingsCenter.GlyphStyle.Label=Рамки и элементы управления
+SettingsCenter.GlyphStyle.Description=Как графические окна рисуют рамки, флажки и переключатели: Классические — прямые углы и «[x]», Скруглённые — закруглённые углы и круглые кнопки. Текстовые терминалы не затрагиваются.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Скруглённые
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Дерево каталогов
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=при следующем открытии дерева
 

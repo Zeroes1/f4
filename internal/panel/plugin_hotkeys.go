@@ -52,6 +52,23 @@ func PluginDefaultKeyOff(key string) bool {
 	return false
 }
 
+// pluginLabelHotkeyOffKey is the PluginDefaultHotkeysOff entry that switches off
+// the letter a plugin marks with an ampersand in the label of the entry named
+// actionName. It cannot clash with a key spelling: those never hold a colon.
+func pluginLabelHotkeyOffKey(actionName string) string {
+	return "amp:" + actionName
+}
+
+// pluginLabelHotkey is the letter a plugin label marks with an ampersand, or
+// zero when it marks none or the user switched it off.
+func pluginLabelHotkey(actionName, label string) rune {
+	if PluginDefaultKeyOff(pluginLabelHotkeyOffKey(actionName)) {
+		return 0
+	}
+	_, hotkey, _ := vtui.ParseAmpersandString(label)
+	return pluginMenuHotkeyRune(string(hotkey))
+}
+
 // SetPluginDefaultKeyOff removes a plugin's default hotkey from use, or gives
 // it back, and saves the setting.
 func SetPluginDefaultKeyOff(key string, off bool) {
@@ -247,7 +264,7 @@ func resolvePluginMenuHotkeys(entries []PluginMenuEntry) {
 		if entries[i].Hotkey != "" || entries[i].Chord != "" {
 			continue
 		}
-		if _, hotkey, _ := vtui.ParseAmpersandString(entries[i].Label); hotkey != 0 {
+		if hotkey := pluginLabelHotkey(entries[i].ActionName, entries[i].Label); hotkey != 0 {
 			entries[i].Hotkey = claim(string(hotkey))
 		}
 	}

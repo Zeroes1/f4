@@ -2188,5 +2188,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Leidžia f4 naudoti išsaugoto ryšio slaptažodį antrojo šuolio autentifikavimui kopijuojant ar perkeliant failus tarp serverių, vietoj SSH raktų ar agento prieigos. Pagal numatytuosius nustatymus išjungta: tai atskleidžia šį slaptažodį kitam serveriui.
 SettingsCenter.TreeRootWholeVolume.Label=Medžio šaknimi laikyti visą tomą
 SettingsCenter.TreeRootWholeVolume.Description=Atveria katalogų medį (Ctrl+T) nuo šaltinio skydelio viso dabartinio tomo šaknies, kaip far2l. Išjungus atveria nuo šaltinio skydelio dabartinio katalogo šaknies.
+SettingsCenter.GlyphStyle.Label=Rėmelių ir valdiklių simboliai
+SettingsCenter.GlyphStyle.Description=Kaip grafiniai langai piešia rėmelius, žymimuosius langelius ir pasirinkimo mygtukus: „Klasikinis“ palieka kampuotus kampus ir [x] langelius, „Suapvalintas“ piešia suapvalintus kampus ir apvalius mygtukus. Teksto terminalams tai įtakos neturi.
+SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Suapvalintas
 SettingsCenter.Text.aeda2930caf9e007f9a430bd511051114f326386896b234d067aa929e7e171d7=Katalogų medis
 SettingsCenter.Text.3e73ee978e0a6681b6433c439a127fa7c460bd8013e93402758eaebd9d309540=kitas medžio atvėrimas

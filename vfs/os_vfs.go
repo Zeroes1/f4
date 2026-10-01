@@ -673,7 +673,7 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 			if update, ok := ctx.Value(ProgressKey).(ProgressCallback); ok && update != nil {
 				update("Requesting sudo access...", -1)
 			}
-			sudoF, sudoErr := globalSudoClient.Open(prepareOSPath(path), os.O_RDONLY, 0)
+			sudoF, sudoErr := sudoOpenCancellable(ctx, prepareOSPath(path))
 			if sudoErr == nil {
 				info, _ := sudoF.Stat()
 				size := info.Size()
@@ -708,6 +708,34 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 		}
 	}
 	return &osFileWrapper{File: f, size: size}, nil
+}
+
+// sudoOpenCancellable is globalSudoClient.Open that gives up when ctx is
+// cancelled. The elevated open can wait a long time on a PAM prompt or the
+// password dialog and takes no context, so the Cancel button of the progress
+// window did nothing (f4#1411); now the caller is released at once and the
+// open that is still going on is closed when it ends.
+func sudoOpenCancellable(ctx context.Context, path string) (*os.File, error) {
+	type result struct {
+		f   *os.File
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		f, err := globalSudoClient.Open(path, os.O_RDONLY, 0)
+		done <- result{f, err}
+	}()
+	select {
+	case r := <-done:
+		return r.f, r.err
+	case <-ctx.Done():
+		go func() {
+			if r := <-done; r.err == nil && r.f != nil {
+				_ = r.f.Close()
+			}
+		}()
+		return nil, ctx.Err()
+	}
 }
 
 func (v *OSVFS) Create(ctx context.Context, path string) (io.WriteCloser, error) {

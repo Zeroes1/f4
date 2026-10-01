@@ -54,9 +54,15 @@ Built with `-tags lite,extralite,vtui_noebiten,vtui_nogogpu`. `extralite`
 implies everything the lite profile leaves out and adds its own exclusions.
 Current exclusions:
 
-- Embedded translations other than English (`internal/i18n/langfs_extralite.go`,
-  about 5.4 MB). A translation is still loaded from the language directories
-  on disk, so the feature is not lost, only the copy inside the binary.
+- Embedded translations other than English and Russian
+  (`internal/i18n/langfs_extralite.go`, about 5 MB). A translation is still
+  loaded from the language directories on disk, so the feature is not lost,
+  only the copy inside the binary. (The F1 help is embedded in English in every
+  build; other help languages are read from disk.)
+- Every built-in plugin without an equivalent in mc (list under "Midnight
+  Commander parity"); `plugins_internal_extralite.go` registers syntax
+  highlighting only, and the action files that referenced the process, service
+  and git plugins and the visual renamer bridge are built with `!extralite`.
 - `golang.org/x/text/collate` (about 1.2 MB): file names are ordered by
   `internal/panel/namecompare_extralite.go`, which follows the root collation
   for white space, punctuation, digits and letters, but does not fold accented
@@ -132,14 +138,74 @@ plugins), `github.com/yuin/gopher-lua` 0.29 MB (Lua plugins), `net/http` and
 `golang.org/x/text/encoding` CJK tables about 0.6 MB, `ebitengine/purego`
 0.9 MB.
 
-## Decision
+## Target and decision
 
-Decided independently, without asking the owner: the extra-lite profile does
-not try to match mc's size, which a Go binary with an editor, a viewer,
-plugins and 25 languages cannot reach; it removes what can go without taking a
-function away, biggest first, and every step is measured by the workflow
-above. Removing whole features (Lua, wasm plugins) is left for a separate
-decision when it comes to that.
+The owner's target for this profile is to reach mc's size or go below it while
+giving the same or more capabilities and, where that cannot be done, to fix mc's
+features that are not reachable and shrink as far as possible. The measured
+floor for a static Go binary is far above mc's roughly 1 MB (see "What takes
+the space"), so the profile keeps the *capabilities* of mc and drops what mc
+does not have, biggest first: all languages but English and Russian, every
+built-in plugin without an mc equivalent, the Lua and WebAssembly runtimes, the
+collation tables. Each step is measured by the `openwrt` workflow.
+
+## Midnight Commander parity
+
+What mc offers, and what the extra-lite profile keeps for it:
+
+| mc capability | extra-lite | how |
+| --- | --- | --- |
+| two panels, copy, move, delete, mkdir, mark, sort, filters, quick search, tree, find files, panelize, directory hotlist, user menu, background jobs | kept | f4 core (`internal/app`, `panel`, `fileops`, `vfs`) |
+| internal viewer with hex mode, internal editor (mcedit), syntax highlighting | kept | `internal/viewer`, `internal/editor`, `plugins/chroma` (plus the viewer's disassembly mode, which mc lacks) |
+| command line, subshell, `cd` | kept | `internal/cmdline`, the built-in terminal (`internal/terminal`) |
+| archives as directories (extfs/uarc: tar, zip, 7z, rar, ...) | kept | `plugins/multiarc`, wrapping the host's `tar`, `unzip`/`zip`, `7z`, `gzip` |
+| FISH and SFTP virtual file systems | kept as FISH+ | `plugins/netfox` (FISH+ over the host's `ssh`), see [FISH+.md](FISH+.md) |
+| FTP virtual file system | not reachable | needs `jlaffaye/ftp`, which the lite family leaves out; f4's full build has it |
+| SMB, SCP addresses | not in extra-lite | SMB is `!lite`; `scp://` is the SFTP backend, also `!lite` |
+| several languages | English and Russian | see above |
+
+Built-in plugins removed from extra-lite because mc has nothing like them:
+visual renamer (`visren`), audio tag editor (`id3editor`), checksum tool
+(`intchecker`), environment manager (`envman`), media information
+(`mediainfo`), SQLite client (`sqlite`), process list (`proclist`), Windows
+services (`svcmgr`), git status (`git`), .NET assemblies (`dotnet`), PDF
+(`pdfview`), IDE mode (`ide`), the test dummy, Observer modules, Lua and WASM
+plugins. The Docker, Kubernetes and MongoDB panels, cloud storage, Android and
+iPhone drives were already outside the lite family.
+
+## What takes the space
+
+The extra-lite amd64 binary after the parity slices is 32 129 289 bytes
+(stripped; run https://github.com/unxed/f4/actions/runs/36705091886 and
+https://github.com/unxed/f4/actions/runs/36705536367). By section: `.text`
+13.2 MB, `.rodata` 7.1 MB, `.gopclntab` 9.8 MB (the function tables, growing
+with the code), `.noptrdata`/`.data` 2.0 MB. The table lists the largest
+consumers of code and data (`go tool nm -size`, in MB; each one also drags its
+share of the function tables along) and says what was decided.
+
+| consumer | MB | kept / removed | why |
+| --- | --- | --- | --- |
+| function tables (`.gopclntab`) | 9.8 | kept | the price of the Go runtime for all the code below |
+| `go:func` metadata | 1.6 | kept | same |
+| core UI and file operations (`internal/app`, `panel`, `dialog`, `settings`, `config`, `cmdline`, `fileops`, `vfs`, `plughost`, `keymap`) | 3.2 | kept | this is the file manager |
+| terminal UI and GUI loader (`vtui`, `purego`, `goffi`, `xgb`, `xkb-go`, wayland, freetype, `x/image`) | 2.3 | kept | the X11/Wayland window of the lite family; mc has no window, so this is the first candidate if the profile is split into a console-only one |
+| runtime, `reflect`, generic instantiations | 1.1 | kept | Go itself |
+| `net/http`, `crypto/tls`, `crypto/x509`, `net` | 0.75 | kept | updater, PlugRing catalog, AI provider, proxy setting import them: seven packages, removing them takes those features away |
+| editor, viewer, disassembler, Markdown (`editor`, `viewer`, `x/arch/x86asm`, `goldmark`) | 0.6 | kept | mc's editor and viewer; disassembly and Markdown are f4's own |
+| Chroma lexers and regexp engines (`chroma`, `regexp2`, `coregex`) | 0.7 | kept | syntax highlighting, which mc has |
+| East Asian encoding tables (`x/text/encoding/{japanese,korean,simplifiedchinese,traditionalchinese}`) | 0.56 | kept, for now | linked through `unxed/localecp` (see "Not done: the East Asian tables"); a patch is ready |
+| crypto internals (`nistec`, `edwards25519`, `chacha20poly1305`) | 0.31 | kept | TLS and SSH host keys |
+| terminal emulator (`internal/terminal`, `keytrans`) | 0.3 | kept | mc's subshell counterpart |
+| NetFox FISH+ and multiarc | 0.3 | kept | mc's FISH/SFTP and archive file systems |
+| AI chat (`vtvibe`) | 0.2 | kept | f4's own feature, not a plugin; a candidate if the owner wants only mc's features |
+| images and spreadsheet (`internal/media`, `internal/sheet`) | 0.2 | kept | f4's own features, not plugins; candidates like the AI chat |
+| YAML, MessagePack, `strcase` tables | 0.36 | kept | settings and the plugin protocol |
+| `.NET` info action (`internal/dotnet`, 0.06) | 0.06 | kept | referenced by an action registered for every build; the panel plugin itself is gone |
+| built-in plugins without an mc equivalent (about 12 packages) | about 5 | **removed** | see "Midnight Commander parity"; the binary went from 37.4 to 32.1 MB with the languages included |
+| translations other than English and Russian | about 5 | **removed** | still read from disk |
+| Lua interpreter | about 1 | **removed** | no mc equivalent |
+| WebAssembly runtime | about 2.7 | **removed** | no mc equivalent |
+| collation tables (`x/text/collate`) | 1.25 | **removed** | own name comparison |
 
 ## First run of the `openwrt` workflow (main, before the Lua and wasm slices)
 
@@ -163,6 +229,17 @@ lite 48 115 977 bytes, listing after 964 ms, peak RSS 41 408 KB; extralite
 37 363 977 bytes (41 062 665 in the first run), 951 ms, 37 188 KB. Lua and wasm
 cost about 3.7 MB of the raw size and about 1.3 MB of an `.ipk`; memory barely
 moves.
+
+## Third run of the `openwrt` workflow (staging with the parity slices)
+
+Run https://github.com/unxed/f4/actions/runs/36706090880 on `lunobot/staging`
+(commit `1e83e66f`), all jobs green. The extralite `.ipk` files, bytes:
+`mipsel_24kc` 9 715 243, `arm_cortex-a7_neon-vfpv4` 10 135 192,
+`aarch64_generic` 10 261 900, `x86_64` 11 320 155 (11.2 to 13.1 million in the
+second run). Smoke check on amd64: extralite 32 133 385 bytes (37 363 977
+before the parity slices), 803 ms to the listing, peak RSS 35 680 KB; lite
+48 300 297 bytes, 848 ms, 38 636 KB. mc 4.8.30 on the same runner class was
+1 140 880 bytes, 190 ms, 10 928 KB.
 
 ## Not done: the East Asian tables still in the binary
 

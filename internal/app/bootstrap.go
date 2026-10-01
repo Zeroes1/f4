@@ -1064,6 +1064,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	config.LoadConfig()
 	config.ApplyWheelSettings()
 	config.ApplyMenuSettings()
+	ApplyGlyphStyle()
 	vtui.PathHintProvider = panel.PathHintProvider
 	panel.ApplyPathHintSettings()
 	ctrlTabMode := vtui.WorkspaceCtrlTabDirect

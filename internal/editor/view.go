@@ -81,6 +81,11 @@ type EditorView struct {
 	DesiredVisualCol   int // Колонка, в которую мы хотим попасть при навигации Up/Down
 
 	ShowWhitespaces bool
+	// MacroID identifies this editor in the EditorEvent of Lua macros.
+	MacroID int
+	// closeNotified is set once EventClose has been raised, so a second Close
+	// does not raise it again.
+	closeNotified bool
 	// ShowControlChars draws the C0 control characters and DEL as the one-cell
 	// glyphs of the Unicode Control Pictures block (U+2400..), so a NUL or ESC in
 	// a file is told apart from every other unprintable. Display only: widths,
@@ -377,6 +382,10 @@ func (ev *EditorView) ConfirmClose() bool {
 }
 
 func (ev *EditorView) Close() {
+	if !ev.closeNotified {
+		ev.closeNotified = true
+		ev.notify(EventClose)
+	}
 	if fileops.GlobalFileState != nil && ev.FilePath != "" {
 		fileops.GlobalFileState.SaveEditorStateAsync(fileops.FileStateKey(ev.Vfs, ev.FilePath), ev.CursorLine, ev.CursorPos, ev.ScrollTopRow, ev.ScrollLeft, ev.wordWrapWanted)
 	}
@@ -592,6 +601,8 @@ func NewEditorViewWith(Pt *piecetable.PieceTable, v vfs.VFS, path string, useEdi
 	ev.topBar.SetVisible(true)
 	ev.SetCanFocus(true)
 	ev.SetFocus(true)
+	ev.MacroID = int(lastEditorID.Add(1))
+	ev.notify(EventRead)
 	return ev
 }
 
@@ -5736,6 +5747,7 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				ev.Modified = false
 				ev.UnsavedBaseline = false
 				ev.CreateNewTarget = false
+				ev.notify(EventSave)
 				if afterSave != nil {
 					afterSave()
 				}

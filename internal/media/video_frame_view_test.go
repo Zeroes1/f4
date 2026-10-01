@@ -89,6 +89,9 @@ func TestFrameVideoViewPlaysFramesAsHalfBlocks(t *testing.T) {
 	if !fv.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE}) || !fv.IsDone() || closed != 1 {
 		t.Errorf("escape did not close the view (done=%v, callbacks=%d)", fv.IsDone(), closed)
 	}
+	// The stand-in for ffmpeg is put back when the test ends; no run may still
+	// be looking for it then.
+	fv.runs.Wait()
 }
 
 func TestFrameVideoViewReportsAFailedStartAndIgnoresOtherKeys(t *testing.T) {
@@ -112,6 +115,7 @@ func TestFrameVideoViewReportsAFailedStartAndIgnoresOtherKeys(t *testing.T) {
 		t.Error("an unrelated key was handled")
 	}
 	fv.Close()
+	fv.runs.Wait()
 }
 
 // videoFileForTest is a file that exists, which is all the frame source asks of

@@ -49,6 +49,7 @@ func (e *LuaMacroEngine) installAPI(L *lua.LState) {
 	bits := newBitTable(L)
 	L.SetGlobal("bit", bits)
 	L.SetGlobal("bit64", bits)
+	e.installCompat(L)
 }
 
 func (e *LuaMacroEngine) newPluginTable(L *lua.LState) *lua.LTable {
@@ -407,6 +408,16 @@ func (e *LuaMacroEngine) newPanelTable(L *lua.LState, active bool) *lua.LTable {
 			return lua.LBool(info.Bof)
 		case "eof":
 			return lua.LBool(info.Eof)
+		// Far 3's plugin-panel words: f4's panels of a macro's view are file
+		// panels of the host, with no plugin panel to report.
+		case "plugin":
+			return lua.LFalse
+		case "opiflags":
+			return lua.LNumber(0)
+		case "filepanel":
+			return lua.LTrue
+		case "selected":
+			return lua.LBool(info.SelCount > 0)
 		}
 		return lua.LNil
 	})
@@ -488,6 +499,7 @@ func (e *LuaMacroEngine) newFarNamespace(L *lua.LState) *lua.LTable {
 		"Timer":     e.luaFarTimer,
 		"GetConfig": e.luaFarGetConfig,
 	})
+	farConstants(L, namespace)
 	return namespace
 }
 
