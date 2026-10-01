@@ -14,6 +14,8 @@ The NetFox plugin (the connection manager, and the `sftp://`, `scp://` and `smb:
 
 `scp://` and the connection type **SCP** are the SFTP backend under the name people expect from `scp`: an SSH server that speaks SCP today also speaks SFTP, and SFTP gives real file listing, random access and rename, which the SCP protocol has no wire format for. A host with only the old SCP subsystem and no SFTP is not supported.
 
+Saving an edited file renames a staged temp file onto the original, so SFTP replaces an existing target when the caller asks for overwrite: atomically through `posix-rename@openssh.com` where the server offers it, otherwise by parking the old file under a backup name for the moment of the swap. A plain rename with no overwrite decision still refuses an existing target (f4#1716, `docs/ISSUES/ISSUE_1716_SFTP_SAVE_OVERWRITE.md`).
+
 ## SMB (f4#188)
 
 `smb://[domain;]user[:password]@host[:port]/share/path`: the port is 445 unless given, the `DOMAIN;user` form of `smbclient` is understood, and without a user the logon is anonymous. Without a share (`smb://host/`) the panel lists the shares of the server. On systems other than Windows the UNC forms `\\host`, `\\host\share\dir` (and `//host/share` when there is no such local path) typed on the command line or in the path box open the same way. The panel reads, writes, creates folders, renames and deletes, and copies to and from it use the ordinary file operations. Shares themselves are made and removed on the server, not from the panel, and one rename cannot cross two shares (copy and delete instead). It is a pure Go client (`github.com/cloudsoda/go-smb2`), so no `mount` and no external tool is involved. The SMB type is in the full build only; the lite build leaves it out.
