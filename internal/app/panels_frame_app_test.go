@@ -372,7 +372,7 @@ func TestLayout_F4ActionDialogs_Validity(t *testing.T) {
 		setupPanel()
 		actionCopyMove(pf, false)
 		dlg := fm.GetTopFrame().(vtui.Container)
-		vtui.AssertLayout(t, dlg)
+		assertFileDialogLayout(t, dlg)
 		focusDlg, ok := fm.GetTopFrame().(dialogFocusContainer)
 		if !ok {
 			t.Fatal("copy dialog does not expose focus traversal")
@@ -385,7 +385,7 @@ func TestLayout_F4ActionDialogs_Validity(t *testing.T) {
 		setupPanel()
 		actionCopyMove(pf, true)
 		dlg := fm.GetTopFrame().(vtui.Container)
-		vtui.AssertLayout(t, dlg)
+		assertFileDialogLayout(t, dlg)
 		focusDlg, ok := fm.GetTopFrame().(dialogFocusContainer)
 		if !ok {
 			t.Fatal("move dialog does not expose focus traversal")
