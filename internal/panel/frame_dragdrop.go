@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/fileops"
@@ -33,6 +34,7 @@ type dragOutState struct {
 	x, y       int
 	Armed      bool
 	cursorOnly bool
+	armedAt    time.Time
 }
 
 // readOnlyVFS is implemented by a file system that already knows it cannot
@@ -400,7 +402,7 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 		if !ok {
 			return false
 		}
-		pf.DragOut = dragOutState{Panel: info.Panel, Names: names, x: mx, y: my, Armed: true, cursorOnly: cursorOnly}
+		pf.DragOut = dragOutState{Panel: info.Panel, Names: names, x: mx, y: my, Armed: true, cursorOnly: cursorOnly, armedAt: time.Now()}
 		if cursorOnly {
 			vtui.DebugLog("DND: drag out armed on the current file at %d,%d", mx, my)
 		} else {
@@ -412,11 +414,13 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 	if !pf.DragOut.Armed || (mx == pf.DragOut.x && my == pf.DragOut.y) {
 		return false
 	}
-	// Without a modifier a left drag inside the rows only moves the cursor, so
-	// a drag of the current file starts once the pointer leaves them. With
-	// DragOutModifier the key already says "this is a drag": it starts, and the
-	// pointer changes, on the first move (#1604).
-	if pf.DragOut.cursorOnly && !DragOutStartsInsideRows(config.App.DragOutModifier) &&
+	// A quick left drag inside the rows only moves the cursor, so a drag of
+	// the current file starts once the pointer leaves them. With
+	// DragOutModifier the key already says "this is a drag", and so does a
+	// button held still for DragOutHoldMs: it starts, and the pointer changes,
+	// on the first move (#1604).
+	if pf.DragOut.cursorOnly &&
+		!DragOutStartsInsideRows(config.App.DragOutModifier, config.App.DragOutHoldMs, time.Since(pf.DragOut.armedAt)) &&
 		pf.DragOut.Panel.pointerInsideRows(mx, my) {
 		return false
 	}
@@ -432,9 +436,17 @@ func (pf *PanelsFrame) ProcessDragOutGesture(e *vtinput.InputEvent, mx, my int) 
 }
 
 // DragOutStartsInsideRows reports whether a drag of the current file may start
-// while the pointer is still over the panel's rows: only when a modifier is
-// configured for drags, since without one such a move is the cursor's.
-func DragOutStartsInsideRows(modifier string) bool { return modifier != "" }
+// while the pointer is still over the panel's rows. A quick move there is the
+// cursor's (it is how the mouse has always moved it), so the drag needs a
+// sign of intent: a configured modifier, or the button held down for holdMs
+// before the move (holdMs 0: no wait at all, negative: never inside the rows).
+// held is how long the button has been down on the file.
+func DragOutStartsInsideRows(modifier string, holdMs int, held time.Duration) bool {
+	if modifier != "" {
+		return true
+	}
+	return holdMs >= 0 && held >= time.Duration(holdMs)*time.Millisecond
+}
 
 // DragOutModifierHeld reports whether the key a drag out is tied to
 // (DragOutModifier: "", "ctrl", "alt" or "shift") is down in a mouse event's

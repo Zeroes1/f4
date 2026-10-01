@@ -489,6 +489,7 @@ type F4Config struct {
 	ConsoleMode              string // "own" | "host" (default "own")
 	PluginDefaultHotkeysOff  string // semicolon-separated hotkeys (e.g. "ShiftF1;ShiftF2") whose plugin defaults the user removed with F4/Del in the plugin menu (f4:config)
 	DragOutModifier          string // "" | "ctrl" | "alt" | "shift": a drag out of a panel starts only while this key is held (default "", f4:config)
+	DragOutHoldMs            int    // without DragOutModifier: how long (ms) a left button is held on a file before a move starts a drag out instead of moving the cursor; 0 starts at once, -1 only outside the rows (default 250, f4:config)
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
 	HostConsoleDefaultColors bool   // Host modes: draw the console mirror shown beside a hidden panel in the terminal's own default colours (default false, f4:config)
 	UseWinescape             bool   // Windows only: let the file layer use libwinescape where it is available (default true)
@@ -728,6 +729,7 @@ var App = F4Config{
 	ConsoleOverlayUI:         false,
 	PluginDefaultHotkeysOff:  "",
 	DragOutModifier:          "",
+	DragOutHoldMs:            DefaultDragOutHoldMs,
 	HostConsoleDefaultColors: false,
 	UseWinescape:             true,
 	AnnounceKittyTerm:        true,
@@ -998,6 +1000,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.ConsoleOverlayUI = merged.GetString("Panel", "ConsoleOverlayUI", "0") == "1"
 	cfg.PluginDefaultHotkeysOff = strings.TrimSpace(merged.GetString("Panel", "PluginDefaultHotkeysOff", ""))
 	cfg.DragOutModifier = NormalizeDragOutModifier(merged.GetString("Panel", "DragOutModifier", ""))
+	cfg.DragOutHoldMs = NormalizeDragOutHoldMs(merged.GetString("Panel", "DragOutHoldMs", ""))
 	cfg.HostConsoleDefaultColors = merged.GetString("Panel", "HostConsoleDefaultColors", "0") == "1"
 	cfg.UseWinescape = merged.GetString("Panel", "UseWinescape", "1") != "0"
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
@@ -1339,6 +1342,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ConsoleMode = %s\n", cfg.ConsoleMode)
 	fmt.Fprintf(&sb, "PluginDefaultHotkeysOff = %s\n", strings.TrimSpace(cfg.PluginDefaultHotkeysOff))
 	fmt.Fprintf(&sb, "DragOutModifier = %s\n", NormalizeDragOutModifier(cfg.DragOutModifier))
+	fmt.Fprintf(&sb, "DragOutHoldMs = %d\n", clampDragOutHoldMs(cfg.DragOutHoldMs))
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
 	fmt.Fprintf(&sb, "HostConsoleDefaultColors = %d\n", map[bool]int{true: 1, false: 0}[cfg.HostConsoleDefaultColors])
 	fmt.Fprintf(&sb, "UseWinescape = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseWinescape])
@@ -1908,6 +1912,34 @@ func NormalizeDragOutModifier(v string) string {
 		return v
 	}
 	return ""
+}
+
+// DefaultDragOutHoldMs is how long the left button must stay down on a file
+// before a move starts dragging it out of the panel (unxed/f4#1604).
+const DefaultDragOutHoldMs = 250
+
+// MaxDragOutHoldMs bounds DragOutHoldMs; a longer hold is no longer a hold.
+const MaxDragOutHoldMs = 5000
+
+// NormalizeDragOutHoldMs reads a DragOutHoldMs settings value: a number of
+// milliseconds, 0 for "start on the first move", a negative number for "only
+// once the pointer leaves the rows"; empty or unreadable means the default.
+func NormalizeDragOutHoldMs(v string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil {
+		return DefaultDragOutHoldMs
+	}
+	return clampDragOutHoldMs(n)
+}
+
+func clampDragOutHoldMs(n int) int {
+	switch {
+	case n < 0:
+		return -1
+	case n > MaxDragOutHoldMs:
+		return MaxDragOutHoldMs
+	}
+	return n
 }
 
 // The values of F4Config.GlyphStyle.

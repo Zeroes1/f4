@@ -83,6 +83,8 @@ var configOptionExtraDocs = map[string]string{
 		"A key on the list no longer runs the plugin's command; delete it from the list to bring the default back.",
 	"Panel.DragOutModifier": "Start dragging files out of a panel into another application only while this key is held: ctrl, alt or shift. " +
 		"Empty, the default, starts a drag whenever the left button is dragged from a file, as before.",
+	"Panel.DragOutHoldMs": "Without DragOutModifier: how many milliseconds the left button must stay down on a file before moving the mouse starts dragging it out of the panel (the pointer changes at once). " +
+		"A quick drag keeps moving the cursor, as before, and still starts a drag once it leaves the panel's rows. 0 starts a drag on the first move; -1 only after leaving the rows. The default is 250.",
 	"Panel.VimHotkeys": "Kept for older f4 versions and shared settings files: 1 while NavigationMode is vim. " +
 		"f4 reads it only when NavigationMode is missing.",
 	"System.AutoSaveSettings": "The older switch for automatic saving. f4 keeps it on while any of the four automatic saving options is on, " +
