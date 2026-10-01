@@ -50,6 +50,7 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	App.ConsoleMode = "host"
 	App.ConsoleOverlayUI = true
 	App.DragOutModifier = "ctrl"
+	App.DragOutHoldMs = 0
 	App.PluginDefaultHotkeysOff = "ShiftF1;ShiftF2"
 	App.HostConsoleDefaultColors = true
 	App.WorkspaceTabMode = int(vtui.WorkspaceTabsNever)
@@ -195,6 +196,9 @@ func TestConfig_SaveAndLoad(t *testing.T) {
 	}
 	if App.PluginDefaultHotkeysOff != "ShiftF1;ShiftF2" {
 		t.Errorf("LoadConfig failed to restore PluginDefaultHotkeysOff: got %q", App.PluginDefaultHotkeysOff)
+	}
+	if App.DragOutHoldMs != 0 {
+		t.Errorf("LoadConfig failed to restore DragOutHoldMs: got %d", App.DragOutHoldMs)
 	}
 	if App.DragOutModifier != "ctrl" {
 		t.Errorf("LoadConfig failed to restore DragOutModifier: got %q", App.DragOutModifier)
@@ -897,6 +901,14 @@ func TestConfig_MouseWheelRoundTrip(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Errorf("wheel config field %d: expected %d, got %d", i, want[i], got[i])
+		}
+	}
+}
+
+func TestNormalizeDragOutHoldMs(t *testing.T) {
+	for in, want := range map[string]int{"": DefaultDragOutHoldMs, "abc": DefaultDragOutHoldMs, "0": 0, " 400 ": 400, "-1": -1, "-50": -1, "99999": MaxDragOutHoldMs} {
+		if got := NormalizeDragOutHoldMs(in); got != want {
+			t.Errorf("NormalizeDragOutHoldMs(%q) = %d, want %d", in, got, want)
 		}
 	}
 }

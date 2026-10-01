@@ -298,13 +298,26 @@ func TestDragOutModifierHeld(t *testing.T) {
 	}
 }
 
-func TestDragOutStartsInsideRowsOnlyWithAModifier(t *testing.T) {
-	if panel.DragOutStartsInsideRows("") {
-		t.Error("with no modifier a drag inside the rows still belongs to the cursor")
+func TestDragOutStartsInsideRows(t *testing.T) {
+	ms := time.Millisecond
+	cases := []struct {
+		name     string
+		modifier string
+		holdMs   int
+		held     time.Duration
+		want     bool
+	}{
+		{"quick drag is the cursor's", "", 250, 40 * ms, false},
+		{"held long enough starts the drag", "", 250, 250 * ms, true},
+		{"held much longer", "", 250, 3000 * ms, true},
+		{"zero starts on the first move", "", 0, 0, true},
+		{"negative never starts inside the rows", "", -1, time.Hour, false},
+		{"a modifier needs no hold", "ctrl", 250, 0, true},
+		{"a modifier beats a negative hold", "alt", -1, 0, true},
 	}
-	for _, m := range []string{"ctrl", "alt", "shift"} {
-		if !panel.DragOutStartsInsideRows(m) {
-			t.Errorf("with %q held the drag must start on the first move", m)
+	for _, c := range cases {
+		if got := panel.DragOutStartsInsideRows(c.modifier, c.holdMs, c.held); got != c.want {
+			t.Errorf("%s: DragOutStartsInsideRows(%q, %d, %v) = %v, want %v", c.name, c.modifier, c.holdMs, c.held, got, c.want)
 		}
 	}
 }

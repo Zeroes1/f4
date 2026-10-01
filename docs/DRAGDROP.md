@@ -33,7 +33,12 @@ The other direction works too. Press the left button on a marked file and
 move: the marked files are offered to the desktop as a file list. When
 nothing is marked, a press on a file and a drag out of the panel's rows
 offers that one file - the current file, as every other command understands
-it. Inside the rows a left drag still only moves the cursor, and with marks
+it. Inside the rows a quick left drag still only moves the cursor, because that
+is how the mouse moves it, but a button held down on the file for
+`DragOutHoldMs` (`[Panel]`, f4:config, 250 by default) starts the drag on the
+next move, and the drag pointer appears at once, so a file can be dragged onto
+a window that overlaps the panel (unxed/f4#1604). `0` starts a drag on the
+first move, `-1` keeps the old rule that only leaving the rows starts it. With marks
 present a press on an unmarked file still only moves the cursor, so the old
 mouse behaviour is kept. Only copy is offered, and only from a local panel - an
 archive or a network panel says so in a toast instead.
