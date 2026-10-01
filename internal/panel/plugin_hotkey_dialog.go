@@ -104,6 +104,8 @@ func (e *pluginHotkeyEdit) Show(scr *vtui.ScreenBuf) {
 // showPluginHotkeyDialog asks for the menu hotkey of a plugin entry in a
 // one-character field with OK and Cancel: the letter is shown, edited and
 // deleted (empty field) like any other field, as the ticket asked (#918).
+// The window is laid out as in the ticket's example: the field stands left
+// of the entry's name.
 func showPluginHotkeyDialog(hm *keymap.HotkeyManager, actionName, label string, onComplete func()) {
 	if hm == nil || vtui.FrameManager == nil {
 		return
@@ -111,33 +113,39 @@ func showPluginHotkeyDialog(hm *keymap.HotkeyManager, actionName, label string, 
 	cleanLabel, _, _ := vtui.ParseAmpersandString(label)
 	declaredKey := declaredHotkeyString(PluginActionDefaultShortcut(actionName))
 
-	const width, height = 56, 10
+	// The rows follow the example in the ticket (#918): the prompt, the
+	// one-cell field with the name of the entry beside it, the hint, a rule
+	// and the buttons as the last row inside the frame, no blank rows.
+	const width, height = 50, 7
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("Plugins.HotkeyTitle"))
 	dlg.ShowClose = true
 
 	edit := &pluginHotkeyEdit{vtui.NewEdit(0, 0, 1, currentPluginHotkeyText(hm, actionName, label, declaredKey))}
+	prompt := vtui.NewText(0, 0, i18n.Msg("Plugins.HotkeyPrompt"), vtui.Palette[vtui.ColDialogText])
 	title := vtui.NewText(0, 0, cleanLabel, vtui.Palette[vtui.ColDialogText])
-	prompt := vtui.NewLabel(0, 0, i18n.Msg("DriveLink.Hotkey"), edit)
 	note := vtui.NewText(0, 0, i18n.Msg("DriveLink.HotkeyHint"), vtui.Palette[vtui.ColDialogText])
+	sep := vtui.NewSeparator(0, 0, width, true, true)
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	btnOk.IsDefault = true
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
-	for _, it := range []vtui.UIElement{title, prompt, edit, note, btnOk, btnCancel} {
+	for _, it := range []vtui.UIElement{prompt, edit, title, note, sep, btnOk, btnCancel} {
 		dlg.AddItem(it)
 	}
 
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-4, height-4)
-	vbox.Add(title, vtui.Margins{}, vtui.AlignCenter)
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, width-4, height-2)
+	vbox.Add(prompt, vtui.Margins{}, vtui.AlignLeft)
 	row := vtui.NewHBoxLayout(0, 0, width-4, 1)
-	row.Add(prompt, vtui.Margins{Right: 1}, vtui.AlignLeft)
-	row.Add(edit, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(row, vtui.Margins{Top: 1}, vtui.AlignFill)
-	vbox.Add(note, vtui.Margins{Top: 1}, vtui.AlignCenter)
+	row.Add(edit, vtui.Margins{Right: 1}, vtui.AlignLeft)
+	row.Add(title, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(row, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(note, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(sep, vtui.Margins{Left: -2, Right: -2}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
-	buttons.Add(btnOk, vtui.Margins{Right: 2}, vtui.AlignTop)
+	buttons.Spacing = 2
+	buttons.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
 	buttons.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
-	vbox.Add(buttons, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(buttons, vtui.Margins{}, vtui.AlignFill)
 	vbox.Apply()
 
 	btnCancel.OnClick = func() { dlg.Close() }
