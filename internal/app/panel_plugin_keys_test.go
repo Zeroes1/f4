@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"github.com/unxed/f4/internal/appcmd"
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
@@ -222,6 +223,53 @@ func TestIsFilePanelScopedAction(t *testing.T) {
 	} {
 		if got := panel.IsFilePanelScopedAction(name); got != want {
 			t.Errorf("IsFilePanelScopedAction(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// A panel plugin carried to the other side by Ctrl+U has to close from there
+// by every close key: its close hook used to look at the side it was opened
+// on, so ProcList, Services, Network and Git status stayed (f4#1715).
+func TestPluginPanelClosesAfterCtrlUSwap(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ResizeConsole(80, 25)
+	defer pf.Close()
+
+	closeKeys := map[string]*vtinput.InputEvent{
+		"Esc":       {Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_ESCAPE},
+		"F10":       {Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F10},
+		"Ctrl+PgUp": {Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_PRIOR, ControlKeyState: vtinput.LeftCtrlPressed},
+	}
+	for name, key := range closeKeys {
+		for swaps := 1; swaps <= 2; swaps++ {
+			controller := &panelKeysTestController{}
+			id := "test.panel.swapclose"
+			registration, err := (&coreAPI{}).RegisterPanelProvider(vfs.PanelProvider{
+				ID:    id,
+				Title: "Swap close panel",
+				Open:  func(vfs.PanelContext) (vfs.PanelController, error) { return controller, nil },
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			pf.ActiveIdx = 1
+			panel.OpenRegisteredPanelProvider(pf, id)
+			instance, ok := pf.AltPanels[1].(*panel.PluginPanelInstance)
+			if !ok {
+				registration.Unregister()
+				t.Fatalf("%s: panel plugin did not open on the right", name)
+			}
+			for i := 0; i < swaps; i++ {
+				pf.HandleCommand(appcmd.CmSwapPanels, nil)
+			}
+			if !instance.ProcessKey(key) {
+				t.Errorf("%s after %d swap(s): key not handled", name, swaps)
+			}
+			if pf.AltPanels[0] != nil || pf.AltPanels[1] != nil {
+				t.Errorf("%s after %d swap(s): the panel plugin is still open (left=%v right=%v)", name, swaps, pf.AltPanels[0], pf.AltPanels[1])
+			}
+			registration.Unregister()
 		}
 	}
 }
