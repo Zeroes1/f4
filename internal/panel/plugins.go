@@ -51,9 +51,12 @@ func OpenRegisteredPanelProvider(app vfs.App, providerID string) {
 		slot:       slot,
 		controller: controller,
 	}
+	// The side the panel is on right now is instance.slot, not the side it was
+	// opened on: Ctrl+U moves it (swapPluginPanels), and closing through the
+	// stale opening side left the panel open and unclosable (f4#1715).
 	instance.closeFn = func() {
-		if pf.AltPanels[slot] == instance {
-			pf.AltPanels[slot] = nil
+		if cur := instance.slot; cur >= 0 && cur < len(pf.AltPanels) && pf.AltPanels[cur] == instance {
+			pf.AltPanels[cur] = nil
 			// PanelsFrame.Close holds ptyMutex while closing overlays. Do not
 			// re-enter ResizeConsole from that path.
 			if !pf.Closed {
