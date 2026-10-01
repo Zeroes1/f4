@@ -38,7 +38,7 @@ func TestFileInputBoxFollowsWindowResize(t *testing.T) {
 	if _, height := dlg.Size(); height != fileInputBoxHeight {
 		t.Errorf("dialog height %d after resizing, want it fixed at %d", height, fileInputBoxHeight)
 	}
-	vtui.AssertLayout(t, dlg)
+	assertDialogLayout(t, dlg)
 }
 
 // The F5/F6 dialog has its own layout, so it gets its own resize check.

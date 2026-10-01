@@ -2652,11 +2652,12 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 			go fileops.ExecuteFileOpAtWithOptions(srcVfs, dstVfs, srcBasePath, names, dest, isMove, mode, opts, onCompleteWithClear)
 		}
 	}
-	dlg.AddItem(btnOk)
 
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
 	btnCancel.OnClick = func() { dlg.Close() }
-	dlg.AddItem(btnCancel)
+
+	// Tab walks the controls in the order they are added, which is the order
+	// they stand in the dialog, top to bottom, the buttons last.
 	dlg.AddItem(lblRights)
 	dlg.AddItem(comboRights)
 	dlg.AddItem(lblExisting)
@@ -2664,13 +2665,26 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	if chkSymlinks != nil {
 		dlg.AddItem(chkSymlinks)
 	}
-	dlg.AddItem(btnAdvanced)
 	dlg.AddItem(comboMode)
+	dlg.AddItem(btnAdvanced)
+	dlg.AddItem(btnOk)
+	dlg.AddItem(btnCancel)
 
-	// Layout Engine
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-4, height-4)
+	// Two rules split the dialog the way far2l's do: the destination above,
+	// the options below, and the buttons under their own line (#891). They
+	// reach the frame on both sides, so the layout takes the two columns
+	// back that the content margin of the VBox leaves.
+	sepOptions := vtui.NewSeparator(0, 0, width, true, true)
+	sepButtons := vtui.NewSeparator(0, 0, width, true, true)
+	dlg.AddItem(sepOptions)
+	dlg.AddItem(sepButtons)
+
+	// Layout Engine. The rows follow each other without blank lines, from the
+	// first row inside the frame to the last one.
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, width-4, height-2)
 	vbox.Add(promptLbl, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(editDest, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(editDest, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(sepOptions, vtui.Margins{Left: -2, Right: -2}, vtui.AlignFill)
 
 	hbox := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	hbox.HorizontalAlign = vtui.AlignCenter
@@ -2684,16 +2698,24 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	rowRights := optionRow(width-4, lblRights, comboRights, rightsCaption, captionWidth)
 	rowExisting := optionRow(width-4, lblExisting, comboExisting, existingCaption, captionWidth)
 
-	// Keep the action row above the selectors. ComboBox.Open() places its
-	// popup below the field, so no popup can cover these buttons.
-	vbox.Add(hbox, vtui.Margins{Top: 1}, vtui.AlignFill)
-	vbox.Add(rowRights, vtui.Margins{Top: 1}, vtui.AlignFill)
+	// The buttons close the dialog, under the last rule. The popup of a
+	// selector opens downwards, over the rows below its field, so while the
+	// list of the mode selector is open it is drawn on top of the buttons,
+	// which is what a popup does in far2l too.
+	//
+	// The advanced options button is the one place that keeps a blank row:
+	// vtui wants a lone button to have air from the controls above and below
+	// it, except from a rule, so the blank row goes over the button and the
+	// rule closes the options right under it.
+	vbox.Add(rowRights, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(rowExisting, vtui.Margins{}, vtui.AlignFill)
 	if chkSymlinks != nil {
 		vbox.Add(chkSymlinks, vtui.Margins{}, vtui.AlignLeft)
 	}
+	vbox.Add(comboMode, vtui.Margins{}, vtui.AlignCenter)
 	vbox.Add(btnAdvanced, vtui.Margins{Top: 1}, vtui.AlignLeft)
-	vbox.Add(comboMode, vtui.Margins{Top: 1}, vtui.AlignCenter)
+	vbox.Add(sepButtons, vtui.Margins{Left: -2, Right: -2}, vtui.AlignFill)
+	vbox.Add(hbox, vtui.Margins{}, vtui.AlignFill)
 
 	// The same VBox re-applied to the new dialog rectangle is what stretches
 	// the destination field when the f4 window is resized; the button row
@@ -2709,7 +2731,7 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 			field.SetPosition(x1, y1, x1+rightsComboWidth-1, y2)
 		}
 
-		vbox.SetPosition(dlg.X1+2, dlg.Y1+2, dlg.X2-2, dlg.Y2-2)
+		vbox.SetPosition(dlg.X1+2, dlg.Y1+1, dlg.X2-2, dlg.Y2-1)
 		vbox.Apply()
 
 		// Laying out a row is what says where its field starts, so the width

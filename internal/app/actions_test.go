@@ -1313,7 +1313,11 @@ func TestActionDelete_TreeRootRefused(t *testing.T) {
 	}
 }
 
-func TestActionCopyMove_ModeMenuDoesNotCoverButtons(t *testing.T) {
+// The buttons of the Copy dialog stand under the last rule of the dialog, as
+// in far2l (#891), so the list of the mode selector, which opens downwards,
+// is drawn over them while it is open. What still holds is that it opens
+// right under its field, whole and on the screen.
+func TestActionCopyMove_ModeMenuOpensUnderItsField(t *testing.T) {
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
 	vtui.FrameManager.Init(scr)
@@ -1336,7 +1340,26 @@ func TestActionCopyMove_ModeMenuDoesNotCoverButtons(t *testing.T) {
 		t.Fatal("copy dialog not found on top")
 	}
 
-	assertComboMenuDoesNotCoverButtons(t, dlg, "copy")
+	var mode *vtui.ComboBox
+	for _, item := range dlg.GetChildren() {
+		if combo, ok := item.(*vtui.ComboBox); ok {
+			mode = combo // the last selector of the dialog is the mode
+		}
+	}
+	if mode == nil {
+		t.Fatal("copy dialog has no mode selector")
+	}
+	mode.Open()
+	menu, ok := vtui.FrameManager.GetTopFrame().(*vtui.VMenu)
+	if !ok {
+		t.Fatal("mode menu was not opened")
+	}
+	mx1, my1, mx2, my2 := menu.GetPosition()
+	_, _, _, fy2 := mode.GetPosition()
+	if my1 != fy2+1 || my2 >= 25 || mx1 < 0 || mx2 >= 80 {
+		t.Errorf("mode menu (%d,%d)-(%d,%d) is not whole right under its field ending at row %d", mx1, my1, mx2, my2, fy2)
+	}
+	vtui.FrameManager.Pop()
 	focusDlg, ok := vtui.FrameManager.GetTopFrame().(dialogFocusContainer)
 	if !ok {
 		t.Fatal("copy dialog does not expose focus traversal")
