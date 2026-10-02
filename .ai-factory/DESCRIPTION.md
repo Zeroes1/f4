@@ -40,6 +40,7 @@ Two project conventions drive everything else:
   `--tty=ansi|win32`
 - **Database:** none for the application itself; `plugins/sqlite` reads user SQLite
   files as a VFS
+- **Clipboard:** goclip; tagged Zoinen/goclip fork supplies image-reading APIs for panel paste.
 - **Notable dependencies:** `wazero` (WASM), `hanwen/go-fuse` (FUSE),
   `aws-sdk-go-v2` (S3), `pkg/sftp`, `jlaffaye/ftp`, `mholt/archives`,
   `alecthomas/chroma`, `ebitengine/purego`, `danielpaulus/go-ios`

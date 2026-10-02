@@ -449,6 +449,10 @@ func showApplyCommandDialog(session *ApplyCommandSession) {
 }
 
 func ShowApplyCommandPrompts(anchor vtui.Frame, prompts []cmdline.ApplyCommandResolvedPrompt, accepted func(cmdline.ApplyCommandPromptValues)) {
+	showApplyCommandPrompts(anchor, prompts, accepted, nil)
+}
+
+func showApplyCommandPrompts(anchor vtui.Frame, prompts []cmdline.ApplyCommandResolvedPrompt, accepted func(cmdline.ApplyCommandPromptValues), canceled func()) {
 	const pageSize = 10
 
 	width := 70
@@ -459,6 +463,12 @@ func ShowApplyCommandPrompts(anchor vtui.Frame, prompts []cmdline.ApplyCommandRe
 	height := 7 + visibleRows
 	dlg := vtui.NewCenteredDialog(width, height, i18n.Msg("ApplyCommand.PromptTitle"))
 	dlg.ShowClose = true
+	completed := false
+	dlg.OnResult = func(int) {
+		if !completed && canceled != nil {
+			canceled()
+		}
+	}
 	dlg.SetHelp("ApplyCmd")
 	contentX := dlg.X1 + 2
 	contentRight := dlg.X2 - 2
@@ -574,6 +584,7 @@ func ShowApplyCommandPrompts(anchor vtui.Frame, prompts []cmdline.ApplyCommandRe
 				edits[i].AddHistory(value)
 			}
 		}
+		completed = true
 		dlg.Close()
 		accepted(values)
 	}

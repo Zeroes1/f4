@@ -946,3 +946,23 @@ $ #Group by#
  Folders separately keeps a first Folders group. Turn it off to include folders
  in ordinary groups, before files. Reverse group order affects ordinary groups
  only: the parent row, separate folders and No data keep their positions.
+
+@ClipboardImages
+$Clipboard images
+  In panels, Ctrl+V and Shift+Insert save an image from the clipboard into
+  the active folder. With both text and an image, choose Save image, Paste
+  text, or Cancel. The dialog shows a scrollable text preview.
+
+  File operations / Clipboard images in Settings controls PNG/JPEG output,
+  lossless PNG compression, JPEG quality, filename prefix, stem template,
+  and minimum digit width. Defaults produce screenshot001.png.
+
+  The stem template accepts Ctrl+G scalar substitutions and input prompts.
+  !{prefix}! inserts the literal prefix, and exactly one !{seq}! inserts the
+  number. Digit format 000 pads to three digits. The image extension is
+  appended automatically. Lists and paths are not permitted.
+
+  The next number is the greatest matching number in the complete folder
+  plus one. Existing files are never overwritten. The new image receives
+  focus; existing marked files remain marked. Unsupported destinations
+  show an explanation.

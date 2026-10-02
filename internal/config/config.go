@@ -601,41 +601,47 @@ type F4Config struct {
 	DialogAutoComplete  bool // drop-down while typing in fields that have history
 	// HistoryShowTimes controls the timestamp presentation in command, folder,
 	// and viewer/editor history dialogs: date+time, date, or hidden.
-	HistoryShowTimes       [HistoryTypeCount]int
-	HistoryDirsPrefixLen   int // command-history directory prefix width
-	SlideShowDelay         int
-	ImageOverlay           bool
-	VideoPauseOnFocusLoss  bool
-	ImageX11OffsetX        int
-	ImageX11OffsetY        int
-	TTYXKeys               bool
-	TTYXKeyList            string
-	ImageExternalTimeout   int
-	ImageDecoderPriority   string
-	RegisteredPlugins      []string
-	ConfirmCopy            bool
-	ConfirmMove            bool
-	ConfirmDelete          bool
-	UseTrash               bool
-	ConfirmExit            bool
-	DeleteCancelFocused    bool
-	AutoSaveSettings       bool
-	AutoSaveDialogSettings bool
-	AutoSavePanelSettings  bool
-	AutoSaveCurrentPanel   bool
-	AutoSaveGUIWindow      bool
-	DefaultFileOpMode      int
-	FileOpPathDisplay      int
-	CopyAccessRights       int
-	MacroRecordFormat      int
-	GuiFont                string
-	GuiUseSystemMonospace  bool
-	GuiFontSize            int
-	GuiCols                int
-	GuiRows                int
-	GuiPosX                int
-	GuiPosY                int
-	GuiPositionSaved       bool
+	HistoryShowTimes             [HistoryTypeCount]int
+	HistoryDirsPrefixLen         int // command-history directory prefix width
+	SlideShowDelay               int
+	ImageOverlay                 bool
+	VideoPauseOnFocusLoss        bool
+	ImageX11OffsetX              int
+	ImageX11OffsetY              int
+	TTYXKeys                     bool
+	TTYXKeyList                  string
+	ImageExternalTimeout         int
+	ImageDecoderPriority         string
+	RegisteredPlugins            []string
+	ConfirmCopy                  bool
+	ConfirmMove                  bool
+	ConfirmDelete                bool
+	UseTrash                     bool
+	ConfirmExit                  bool
+	DeleteCancelFocused          bool
+	AutoSaveSettings             bool
+	AutoSaveDialogSettings       bool
+	AutoSavePanelSettings        bool
+	AutoSaveCurrentPanel         bool
+	AutoSaveGUIWindow            bool
+	DefaultFileOpMode            int
+	FileOpPathDisplay            int
+	ClipboardImageFormat         string
+	ClipboardImagePNGCompression string
+	ClipboardImageJPEGQuality    int
+	ClipboardImagePrefix         string
+	ClipboardImageTemplate       string
+	ClipboardImageDigitFormat    string
+	CopyAccessRights             int
+	MacroRecordFormat            int
+	GuiFont                      string
+	GuiUseSystemMonospace        bool
+	GuiFontSize                  int
+	GuiCols                      int
+	GuiRows                      int
+	GuiPosX                      int
+	GuiPosY                      int
+	GuiPositionSaved             bool
 	// StartupMode, GuiBackend and TTYBackend answer "what should plain `f4`
 	// do?". They are only defaults: --gui/--tty still win on any single run.
 	// An empty backend means automatic selection.
@@ -823,6 +829,12 @@ var App = F4Config{
 	AutoSaveGUIWindow:               true,
 	DefaultFileOpMode:               0,
 	FileOpPathDisplay:               0,
+	ClipboardImageFormat:            "png",
+	ClipboardImagePNGCompression:    "default",
+	ClipboardImageJPEGQuality:       90,
+	ClipboardImagePrefix:            "screenshot",
+	ClipboardImageTemplate:          "!{prefix}!!{seq}!",
+	ClipboardImageDigitFormat:       "000",
 	CopyAccessRights:                0,
 	GuiFont:                         "",
 	GuiUseSystemMonospace:           true,
@@ -1052,6 +1064,13 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.SystemANSICodePage = parseForcedCodePage(merged.GetString("System", "ANSICodePage", ""))
 	cfg.SystemOEMCodePage = parseForcedCodePage(merged.GetString("System", "OEMCodePage", ""))
 	_, _ = fmt.Sscanf(merged.GetString("Panel", "FileOpPathDisplay", "0"), "%d", &cfg.FileOpPathDisplay)
+	cfg.ClipboardImageFormat = merged.GetString("ClipboardImages", "Format", "png")
+	cfg.ClipboardImagePNGCompression = merged.GetString("ClipboardImages", "PNGCompression", "default")
+	cfg.ClipboardImageJPEGQuality = 90
+	_, _ = fmt.Sscanf(merged.GetString("ClipboardImages", "JPEGQuality", "90"), "%d", &cfg.ClipboardImageJPEGQuality)
+	cfg.ClipboardImagePrefix = merged.GetString("ClipboardImages", "Prefix", "screenshot")
+	cfg.ClipboardImageTemplate = merged.GetString("ClipboardImages", "Template", "!{prefix}!!{seq}!")
+	cfg.ClipboardImageDigitFormat = merged.GetString("ClipboardImages", "DigitFormat", "000")
 	_, _ = fmt.Sscanf(merged.GetString("Panel", "CopyAccessRights", "0"), "%d", &cfg.CopyAccessRights)
 	if cfg.CopyAccessRights < 0 || cfg.CopyAccessRights > 2 {
 		cfg.CopyAccessRights = 0
@@ -1363,6 +1382,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "FileOpPathDisplay = %d\n", cfg.FileOpPathDisplay)
 	fmt.Fprintf(&sb, "CopyAccessRights = %d\n", cfg.CopyAccessRights)
 
+	sb.WriteString("\n[ClipboardImages]\n")
+	fmt.Fprintf(&sb, "Format = %s\nPNGCompression = %s\nJPEGQuality = %d\nPrefix = %s\nTemplate = %s\nDigitFormat = %s\n", cfg.ClipboardImageFormat, cfg.ClipboardImagePNGCompression, cfg.ClipboardImageJPEGQuality, cfg.ClipboardImagePrefix, cfg.ClipboardImageTemplate, cfg.ClipboardImageDigitFormat)
 	sb.WriteString("\n[System]\n")
 	fmt.Fprintf(&sb, "ConfirmCopy = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmCopy])
 	fmt.Fprintf(&sb, "ConfirmMove = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConfirmMove])
