@@ -330,48 +330,55 @@ func (v *SFTPVFS) Remove(ctx context.Context, p string) error {
 	return nil
 }
 
-// sftpPosixRenameExt is the OpenSSH extension that renames over an existing
-// target atomically (SFTP v3's plain RENAME must fail in that case).
-const sftpPosixRenameExt = "posix-rename@openssh.com"
-
 func (v *SFTPVFS) Rename(ctx context.Context, o, n string) error {
-	from, to := v.encodePath(o), v.encodePath(n)
-	// Replacement only when the caller explicitly resolved the conflict as
-	// "overwrite" (the editor does so on every save of an existing file,
-	// f4#1716). Otherwise keep the plain RENAME: it refuses an existing target.
-	if overwrite, known := vfs.DestinationOverwrite(ctx); known && overwrite {
-		return v.renameOverwrite(from, to)
-	}
-	return v.client.Rename(from, to)
+	overwrite, known := vfs.DestinationOverwrite(ctx)
+	return sftpRename(v.client, v.encodePath(o), v.encodePath(n), known && overwrite)
 }
 
-func (v *SFTPVFS) renameOverwrite(from, to string) error {
-	if _, ok := v.client.HasExtension(sftpPosixRenameExt); ok {
-		return v.client.PosixRename(from, to)
-	}
-	return v.renameSwap(from, to)
+// sftpRenameClient is the part of *sftp.Client that sftpRename uses, so that a
+// server without the replacing rename can be faked in tests.
+type sftpRenameClient interface {
+	Rename(oldname, newname string) error
+	PosixRename(oldname, newname string) error
+	HasExtension(name string) (string, bool)
+	Lstat(p string) (os.FileInfo, error)
+	Remove(path string) error
 }
 
-// renameSwap replaces an existing target on servers without posix-rename
-// (not atomic, but the old target is parked under a backup name first and put
-// back if the move fails, so a failure never leaves the target missing).
-func (v *SFTPVFS) renameSwap(from, to string) error {
-	err := v.client.Rename(from, to)
+// sftpPosixRenameExtension is the OpenSSH extension that renames over an
+// existing file, as rename(2) does.
+const sftpPosixRenameExtension = "posix-rename@openssh.com"
+
+// sftpRename renames from to to. The plain SFTP rename (protocol version 3)
+// fails with SSH_FX_FAILURE when the destination exists, which broke saving an
+// edited file over SFTP: the editor stages the new content beside the file and
+// renames it over the original (f4#1716). When the caller allows replacing the
+// destination, use the posix-rename extension; a server without it gets the
+// original moved aside first and put back if the replacement fails.
+func sftpRename(c sftpRenameClient, from, to string, overwrite bool) error {
+	if !overwrite {
+		return c.Rename(from, to)
+	}
+	if _, ok := c.HasExtension(sftpPosixRenameExtension); ok {
+		return c.PosixRename(from, to)
+	}
+	err := c.Rename(from, to)
 	if err == nil {
 		return nil
 	}
-	if _, statErr := v.client.Lstat(to); statErr != nil {
-		return err // the target is not there: a genuine rename failure
-	}
-	backup := fmt.Sprintf("%s.f4bak%x", to, time.Now().UnixNano())
-	if err := v.client.Rename(to, backup); err != nil {
+	st, serr := c.Lstat(to)
+	if serr != nil || st.IsDir() {
 		return err
 	}
-	if err := v.client.Rename(from, to); err != nil {
-		_ = v.client.Rename(backup, to)
+	backup := fmt.Sprintf("%s.f4-replaced-%d", to, time.Now().UnixNano())
+	if berr := c.Rename(to, backup); berr != nil {
 		return err
 	}
-	_ = v.client.Remove(backup)
+	if rerr := c.Rename(from, to); rerr != nil {
+		_ = c.Rename(backup, to)
+		return rerr
+	}
+	_ = c.Remove(backup)
 	return nil
 }
 
