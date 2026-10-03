@@ -98,6 +98,12 @@ var architectureLayers = map[string]int{
 	// Menu hotkeys made distinct once a menu is built. A leaf over vtui only.
 	"internal/menuhotkeys": 0,
 
+	// Reading a frame's own border colour back off the screen buffer, for a
+	// view that paints a decoration onto a frame it does not own. A leaf over
+	// vtui only, so a view does not grow a private copy of a probe whose
+	// whole point is to survive a frame dragged off the screen edge.
+	"internal/frameborder": 0,
+
 	// LaTeX formulas of a Markdown document to Unicode text: a leaf over the
 	// standard library, run before the text reaches the Markdown viewer.
 	"internal/mdmath": 0,

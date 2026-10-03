@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/mattn/go-runewidth"
+	"github.com/unxed/f4/internal/frameborder"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -536,7 +537,16 @@ func drawHelpWindowControls(scr *vtui.ScreenBuf, frame vtui.Frame) {
 	if x2-x1 < 10 {
 		return
 	}
-	attr := scr.GetCell(x2, y1).Attributes
+	// The controls live on the top border, so take the colour from that
+	// border and not from whatever sits behind the frame: a window dragged
+	// past the top edge has no top row to sample, and GetCell answers an
+	// off-screen coordinate with a zero cell. When the top border is off
+	// the screen the controls would be drawn into cells nobody can see
+	// anyway.
+	attr, ok := frameborder.Attr(scr, x1, y1, x2, y1)
+	if !ok {
+		return
+	}
 	zoom := string(vtui.UIStrings.CloseBrackets[0]) + string(vtui.UIStrings.ZoomSymbol) + string(vtui.UIStrings.CloseBrackets[1])
 	closeButton := string(vtui.UIStrings.CloseBrackets[0]) + string(vtui.EffectiveCloseSymbol()) + string(vtui.UIStrings.CloseBrackets[1])
 	offset := helpControlOffset(frame)
@@ -592,7 +602,16 @@ func RenderHelpFrame(scr *vtui.ScreenBuf, frame vtui.Frame) {
 	}
 
 	x1, y1, x2, y2 := frame.GetPosition()
-	titleAttr := scr.GetCell((x1+x2)/2, y1).Attributes
+	// The hint is painted on the bottom border, but its colour comes from the
+	// frame's border wherever that border is still on screen: a Help window
+	// dragged past the top edge has no title row left to sample, and GetCell
+	// answers an off-screen coordinate with a zero cell, which used to draw
+	// the hint in black. With no border cell visible at all there is no
+	// frame on screen to decorate.
+	titleAttr, ok := frameborder.Attr(scr, x1, y1, x2, y2)
+	if !ok {
+		return
+	}
 	vtui.NewPainter(scr).DrawTitle(x1, y2, x2, helpHint(frame, searching), titleAttr)
 	if !searching {
 		return
@@ -701,10 +720,17 @@ func FinishHelpRender() {
 }
 
 func drawHelpSearchTitle(scr *vtui.ScreenBuf, frame vtui.Frame, TopicName, Query string) {
-	x1, y1, x2, _ := frame.GetPosition()
+	x1, y1, x2, y2 := frame.GetPosition()
 	// Sample the title drawn by HelpView so both foreground and background stay
-	// exactly as they were before search became active.
-	baseAttr := scr.GetCell((x1+x2)/2, y1).Attributes
+	// exactly as they were before search became active -- and sample it where
+	// the title row can still be read: a window dragged past the top edge has
+	// no row y1 on the screen, and GetCell answers a coordinate outside the
+	// buffer with a zero cell. Without a border cell there is no title row
+	// on screen to draw over either.
+	baseAttr, ok := frameborder.Attr(scr, x1, y1, x2, y2)
+	if !ok {
+		return
+	}
 	highlightAttr := vtui.SetRGBFore(baseAttr, vtui.GetRGBFore(vtui.Palette[vtui.ColHelpLink]))
 	title := " Help: " + TopicName + " ["
 	if isMarkdownSearchFrame(frame) {

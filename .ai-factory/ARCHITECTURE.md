@@ -296,9 +296,9 @@ silence; this prose can, and the check for that is at the end of this section.
 
 **Layer 0 — leaves, importing no package of ours but `internal/ini`:**
 `vfs`, `sdk`, `internal/action`, `internal/appcmd`, `internal/colorer`,
-`internal/config`, `internal/history`, `internal/i18n`, `internal/ini`,
-`internal/keymap`, `internal/luaplug`, `internal/netproxy`, `internal/numeric`,
-`internal/piecetable`, `internal/semantic`, `internal/sheet`,
+`internal/config`, `internal/frameborder`, `internal/history`, `internal/i18n`,
+`internal/ini`, `internal/keymap`, `internal/luaplug`, `internal/netproxy`,
+`internal/numeric`, `internal/piecetable`, `internal/semantic`, `internal/sheet`,
 `internal/sysinfo`, `internal/testutil`, `internal/textdiff`,
 `internal/textsearch`, `internal/theme`, `internal/toast`, `internal/ttyx`,
 `internal/unpack`, `internal/vtvibe/ap`, `internal/wincon`.
