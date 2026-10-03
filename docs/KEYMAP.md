@@ -212,3 +212,11 @@ rather than to a command.
 
 And reach for neither when you only need the command once: `Ctrl+Shift+P`
 runs it by name.
+
+### Panel clipboard paste
+
+`Panel.Paste` defaults to Ctrl+V and Shift+Insert and can be remapped through the
+normal action hotkey settings. In panels it saves clipboard images or offers an
+image/text choice; text-only clipboard data goes to the command line. See
+[Clipboard images](SETTINGS_CENTER.md#clipboard-images) for encoding and naming
+preferences. Editor and dialog clipboard shortcuts keep their existing actions.

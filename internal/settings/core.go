@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"github.com/unxed/f4/internal/cmdline"
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/editor"
@@ -281,6 +282,26 @@ func (p coreSettingsProvider) Begin(context.Context) (*f4settings.Draft, error) 
 				}
 				if f.ID == "Compare.MaxDepth" && n > 99 {
 					errors[f.ID] = settingsError("maximum depth is 99")
+				}
+			}
+
+			switch f.ID {
+			case "ClipboardImageJPEGQuality":
+				n, err := strconv.Atoi(value)
+				if err != nil || n < 1 || n > 100 {
+					errors[f.ID] = settingsError("JPEG quality must be between 1 and 100")
+				}
+			case "ClipboardImageTemplate":
+				if _, err := cmdline.CompileFilenameTemplate(value); err != nil {
+					errors[f.ID] = err
+				}
+			case "ClipboardImageDigitFormat":
+				if len(value) < 1 || len(value) > 20 || strings.Trim(value, "0") != "" {
+					errors[f.ID] = settingsError("digit format must contain between 1 and 20 zeros")
+				}
+			case "ClipboardImagePrefix":
+				if err := panel.ValidateClipboardImageName(value + "1.png"); err != nil {
+					errors[f.ID] = err
 				}
 			}
 			if current := coreSettingValue(config.App, f.ID); current != d.Baseline[f.ID] && current != value {

@@ -707,6 +707,17 @@ func init() {
 		MenuPath:     "Files",
 		Handler:      withPF(func(pf *panel.PanelsFrame) { actionNewFile(pf) }),
 	})
+
+	registerAction(action.Action{
+		Name:        "Panel.Paste",
+		Area:        "Shell",
+		Label:       "Paste from clipboard",
+		LabelKey:    "Action.Panel.Paste",
+		Description: "Paste clipboard text or save a clipboard image into the active panel",
+		DescKey:     "Action.Panel.Paste.Desc",
+		DefaultKeys: []string{"CtrlV", "ShiftIns"},
+		Handler:     func() bool { return panel.ActionPasteClipboard(panel.FindPanelsFrame()) },
+	})
 	registerAction(action.Action{
 		Name:        "File.ApplyCommand",
 		Area:        "Shell",

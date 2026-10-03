@@ -487,3 +487,46 @@ then month/year newest first. Groups are refreshed on the first panel timer tick
 after midnight. Unknown metadata stays last; the parent row stays first outside
 groups. Reverse leaves both anchors and the separate Folders group in place.
 Folder sizes join size buckets only after explicit size calculation.
+
+## Clipboard images
+
+File operations → Clipboard images configures panel paste (`Panel.Paste`, Ctrl+V
+and Shift+Insert). Defaults are PNG, default lossless PNG compression, JPEG quality
+90, prefix `screenshot`, stem template `!{prefix}!!{seq}!`, and digit format `000`.
+Settings persist in `[ClipboardImages]` using Format, PNGCompression, JPEGQuality,
+Prefix, Template and DigitFormat. Changes use the normal draft/Apply/Cancel flow
+and take effect on the next paste.
+
+An image-only clipboard saves immediately. If both image and text are offered,
+f4 shows a read-only, scrollable text preview and Save image / Paste text / Cancel
+buttons. Text-only paste continues inserting into the command line. Editor,
+dialog and hidden-panel terminal paste retain their existing behavior.
+
+The filename compiler reuses Ctrl+G scalar substitutions and input prompts.
+`!{prefix}!` inserts literal prefix text; exactly one `!{seq}!` supplies the
+sequence. Lists, list files, paths and invalid filename characters are rejected.
+Prompt values are collected once and never reinterpreted as template syntax.
+The selected image format supplies `.png` or `.jpg` automatically. DigitFormat
+is 1–20 zeros specifying minimum decimal width, with no numeric upper bound.
+For the expanded naming pattern and selected extension, all destination entries
+(including directories, hidden and panel-filtered files) contribute to the maximum
+sequence. The next file uses maximum + 1, beginning at 1 in an empty sequence.
+Directory case semantics are checked through an alternate spelling when available.
+
+The destination VFS and panel context are captured before clipboard reading.
+A private VFS clone keeps navigation from redirecting writes. Safe destinations
+must advertise HasWrite and HasAtomicNoReplaceRename; the workflow stages a
+random temporary file and publishes it with DestinationOverwrite=false. It
+retries sequence collisions and removes temporary files after failures or
+cancellation. Completion focuses the new file only if its original panel still
+shows the destination; marked files are preserved. Paste completion closes the
+transient panel search/filter and reveals the saved entry even when hidden-file
+display is disabled, without changing the global hidden-file preference.
+
+Clipboard images are read by goclip. f4 pins the tagged
+[Zoinen/goclip image-support fork](https://github.com/Zoinen/goclip/releases/tag/v0.1.3-clipboard.1)
+until the API is available upstream. Windows supports PNG and uncompressed DIB,
+macOS reads PNG/TIFF through AppKit using the system JXA bridge, X11 negotiates
+native image targets, and Wayland requires wl-paste from wl-clipboard. Unsupported
+clipboard transports retain text paste; no terminal image-transfer protocol is
+introduced. PNG preserves transparency; JPEG composites it onto white.

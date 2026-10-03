@@ -26,6 +26,7 @@ require (
 	github.com/unxed/colorer4go v0.1.24
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
+	github.com/unxed/goclip v0.1.2
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.7
@@ -98,7 +99,6 @@ require (
 	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
-	github.com/unxed/goclip v0.1.2 // indirect
 	github.com/unxed/kiwi-go v0.1.0 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
@@ -167,3 +167,5 @@ replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 replace github.com/neurlang/wayland => github.com/unxed/wayland v0.4.5-0.20260929195943-eab109b70429
 
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
+
+replace github.com/unxed/goclip => github.com/Zoinen/goclip v0.1.3-clipboard.1
