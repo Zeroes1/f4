@@ -459,7 +459,7 @@ type F4Config struct {
 	HelpLanguage             string
 	UseLocalLanguageFiles    bool
 	AlwaysShowMenuBar        bool
-	DialogOuterBorder        bool   // draw an extra frame one cell outside dialog/UserMenu borders, far2l/Far3 style (default off)
+	DialogOuterBorder        bool   // leave an empty border outside dialog/UserMenu borders instead of a second frame (three cells on the sides, one above and below), far2l/Far3 style (default off)
 	GlyphStyle               string // box, checkbox and radio glyphs of graphical windows: "classic" or "rounded" (f4#285)
 	WorkspaceTabMode         int
 	WorkspaceTabsOverlay     bool

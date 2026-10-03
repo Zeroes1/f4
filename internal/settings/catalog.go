@@ -43,7 +43,7 @@ GuiFont|appearance|Font|Graphical font|Choose a font for supported graphical fro
 GuiFontSize|appearance|Font|Font size|Set graphical font size. This does not change the font of an external terminal emulator.||restart
 GlyphStyle|appearance|Font|Frame and control glyphs|How graphical windows draw frames, checkboxes and radio buttons: Classic keeps square corners and [x] boxes, Rounded draws rounded corners and round buttons. Text terminals are not affected.|classic:Classic;rounded:Rounded|live
 AlwaysShowMenuBar|appearance|Titles and menus|Always show menu bar|Keep the main menu bar visible instead of showing it only when activated.||live
-DialogOuterBorder|appearance|Dialogs|Extra outer border for dialogs|Draw an additional frame one cell outside the border of dialogs and the user menu, far2l/Far3 style.||live
+DialogOuterBorder|appearance|Dialogs|Extra outer border for dialogs|Reserve an empty border around dialogs and the user menu instead of drawing a second frame, far2l/Far3 style.||live
 ConsoleTitleTemplate|appearance|Titles and menus|Window title template|Format the host title with %State, %Ver, %Platform, %Backend, %Host, %User and %Admin.||live
 DisplayFullPathInTitle|appearance|Titles and menus|Full file paths in titles|Show the complete file identity in editor and viewer title bars instead of only the basename.||live
 StartupMode|startup|Launch defaults|Startup mode|Choose how plain f4 launches. Explicit --gui or --tty arguments override this default for that launch.|auto:Automatic;tty:Terminal;gui:Graphical|restart

@@ -457,3 +457,42 @@ func TestHelpSearchFollowsTheLaidOutTopicWhenTheWindowChangesWidth(t *testing.T)
 		t.Fatalf("after widening, matches = %#v, want one on line 1: the line is a single row again", CurrentHelpSearch.Matches)
 	}
 }
+
+// helpHintAttr is the colour of the key hint RenderHelpFrame paints on the
+// bottom border of a frame.
+func helpHintAttr(scr *vtui.ScreenBuf, frame vtui.Frame) uint64 {
+	x1, _, x2, y2 := frame.GetPosition()
+	return scr.GetCell((x1+x2)/2, y2).Attributes
+}
+
+// A Help window dragged past the top edge keeps the position MoveRelative gave
+// it -- nothing clamps it -- so its title row is off the screen while GetCell
+// answers that coordinate with a zero cell, and the hint on the bottom border
+// used to be painted in that zero colour. The same case in a dialog's outer
+// ring is f4#1399.
+func TestHelpDecorationsKeepTheirColourWhenDraggedOffScreen(t *testing.T) {
+	view, scr := newSearchableHelpForTest(t, []string{"before needle after"})
+	for _, r := range "needle" {
+		if !HandleHelpSearchHotkey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: r}) {
+			t.Fatalf("character %q was not consumed", r)
+		}
+	}
+	view.Show(scr)
+	RenderHelpFrame(scr, view)
+	before := helpHintAttr(scr, view)
+	if before == 0 {
+		t.Fatalf("the hint drawn in place has no colour: %#x", before)
+	}
+
+	view.MoveRelative(0, -8)
+	view.Show(scr)
+	RenderHelpFrame(scr, view)
+
+	if _, y1, _, _ := view.GetPosition(); y1 >= 0 {
+		t.Fatalf("the window did not leave the screen: y1 = %d", y1)
+	}
+	if after := helpHintAttr(scr, view); after != before {
+		t.Fatalf("hint colour after the drag = %#x, want %#x, the colour the window's border is drawn in",
+			after, before)
+	}
+}
