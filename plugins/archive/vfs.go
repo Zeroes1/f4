@@ -479,7 +479,7 @@ func archiveExtractionTarget(dstVfs vfs.VFS, dstDir, name, innerPath string) (st
 		return "", err
 	}
 
-	target := dstVfs.Join(dstDir, filepath.FromSlash(relative))
+	target := dstVfs.Join(dstDir, relative)
 	baseAbs, err := dstVfs.Abs(dstDir)
 	if err != nil {
 		return "", fmt.Errorf("resolve archive extraction destination: %w", err)
