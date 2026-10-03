@@ -831,6 +831,14 @@ see in vtinput project: https://github.com/unxed/vtinput
 		})
 	}
 
+	// A bare binary on macOS gets its Finder and Dock icon stamped onto the
+	// file here, before the mode is chosen: a console start (a Finder
+	// double-click on the binary opens Terminal and lands here) is the only
+	// start many installs ever see, and it never reaches RunGui. The
+	// --server/--client daemons and the update helpers returned above and
+	// do not stamp.
+	gui.EnsureDarwinIcon()
+
 	if ttyMode {
 		redirectConsoleWineStderr()
 		terminal.ManageSessions()

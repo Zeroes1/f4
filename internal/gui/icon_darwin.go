@@ -50,7 +50,30 @@ func applyDarwinDockIcon(backend string) {
 		// x11/wayland windows (XQuartz) are not Cocoa apps; leave AppKit alone.
 		return
 	}
+	EnsureDarwinIcon()
+}
+
+// EnsureDarwinIcon stamps the icon onto a bare f4 binary whatever mode this
+// start ends up in. The stamp is a property of the file, not of the window:
+// a console start from Terminal (which is what a Finder double-click on the
+// binary becomes) never reaches RunGui, and Finder kept showing the generic
+// "exec" icon for a binary that had only ever been started that way. A
+// self-update writes a fresh file with no extended attributes; the restarted
+// process comes through here and stamps it again.
+//
+// Every check that can say "no" runs before AppKit is loaded, so a start that
+// will not stamp costs a getenv, a getxattr and an access(2) at most: the file
+// already carries kHasCustomIcon, it lives inside an app bundle, it cannot be
+// written (a Nix store path, a 0555 Homebrew Cellar binary, a root-owned
+// /usr/local/bin install -- the stamp would never stick there and every start
+// would pay for AppKit again), or this is an SSH session, which has no
+// WindowServer to talk to and where AppKit's complaints would land on the
+// console f4 is drawing.
+func EnsureDarwinIcon() {
 	if len(darwinIconICNS) == 0 {
+		return
+	}
+	if inSSHSession() {
 		return
 	}
 	exe, err := os.Executable()
@@ -68,6 +91,10 @@ func applyDarwinDockIcon(backend string) {
 	if hasCustomIconFlag(exe) {
 		// Already stamped by an earlier run; rewriting the resource fork on
 		// every start would be pure disk churn.
+		return
+	}
+	if unix.Access(exe, unix.W_OK) != nil {
+		// The stamp is two xattrs on the file and needs write access to it.
 		return
 	}
 
@@ -120,4 +147,11 @@ func hasCustomIconFlag(path string) bool {
 		return false
 	}
 	return info[8]&0x04 != 0
+}
+
+// inSSHSession reports whether f4 was started over SSH. sshd sets both
+// variables for the login it creates, and they are inherited by everything
+// started from that shell.
+func inSSHSession() bool {
+	return os.Getenv("SSH_CONNECTION") != "" || os.Getenv("SSH_TTY") != ""
 }
