@@ -555,6 +555,9 @@ type FileSystemPanel struct {
 	ProviderOpenSourceSelect   string
 	providerOpenResult         func(bool) bool
 	PendingSelection           string
+	clipboardImageRevealName   string
+	clipboardImageRevealPath   string
+	clipboardImageRevealVFS    vfs.VFS
 	ProviderEntryName          string // name of entry used to enter a provider VFS (e.g. NetFox connection name)
 	suppressFolderHistoryPath  string // one-shot: history/menu navigation must not reorder MRU
 	suppressFolderHistoryToken uint64 // binds suppression to one specific asynchronous directory load
@@ -2497,6 +2500,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 	fp.startLoadingAnimation()
 
 	loadVFS := fp.Vfs
+	loadRevealName := fp.clipboardImageRevealFor(loadVFS, loadVFS.GetPath())
 	path := loadVFS.GetPath()
 	suppressionToken, hasFolderHistorySuppression := fp.FolderHistorySuppression(path)
 	cacheKey := DirectoryCacheKey(loadVFS, path)
@@ -2558,7 +2562,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 			}
 
 			for _, item := range cached.Items {
-				if !config.App.ShowHiddenFiles && item.Name != ".." && item.IsHidden {
+				if !config.App.ShowHiddenFiles && item.Name != ".." && item.Name != loadRevealName && item.IsHidden {
 					continue
 				}
 				entry := &FileEntry{VFSItem: item, IsCached: true}
@@ -2637,7 +2641,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 			newEntries := make([]*FileEntry, 0, len(chunk))
 			for _, item := range chunk {
 				// Hide hidden files if configured, but never hide '..'
-				if !loadShowHidden && item.Name != ".." && item.IsHidden {
+				if !loadShowHidden && item.Name != ".." && item.Name != loadRevealName && item.IsHidden {
 					continue
 				}
 				entry := &FileEntry{VFSItem: item}
@@ -2794,7 +2798,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				}
 
 				for _, item := range accumulated {
-					if !loadShowHidden && item.Name != ".." && item.IsHidden {
+					if !loadShowHidden && item.Name != ".." && item.Name != loadRevealName && item.IsHidden {
 						continue
 					}
 					entry := &FileEntry{VFSItem: item}
@@ -2852,7 +2856,7 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 				}
 
 				for _, item := range accumulated {
-					if !loadShowHidden && item.Name != ".." && item.IsHidden {
+					if !loadShowHidden && item.Name != ".." && item.Name != loadRevealName && item.IsHidden {
 						continue
 					}
 					entry := &FileEntry{VFSItem: item}

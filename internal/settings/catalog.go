@@ -94,6 +94,12 @@ PathHintPerCategory|terminal|Path suggestions|Separate suggestion limits|Apply t
 UseWinescape|operations|Compatibility|Use libwinescape under Wine|Windows builds under Wine only: file operations use POSIX system calls through libwinescape instead of Win32. Off keeps the Win32 path everywhere.||restart
 UseTrash|operations|Deletion|Use trash or recycle bin|Send ordinary Delete operations to trash where supported. Explicit permanent-delete commands still delete permanently.||new operations
 DefaultFileOpMode|operations|Execution|Default operation mode|Start operations in Queue, Background or Foreground mode. Individual operation dialogs can override it.|0:Queue;1:Background;2:Foreground|new operations
+ClipboardImageFormat|operations|Clipboard images|Image format|Format used when saving a clipboard image.|png:PNG;jpeg:JPEG|new operations
+ClipboardImagePNGCompression|operations|Clipboard images|PNG compression|Lossless PNG compression trades encoding time for file size.|none:None;speed:Best speed;default:Default;best:Best compression|new operations
+ClipboardImageJPEGQuality|operations|Clipboard images|JPEG quality|JPEG quality from 1 to 100. Transparent pixels are composited onto white.||new operations
+ClipboardImagePrefix|operations|Clipboard images|Filename prefix|Literal filename prefix inserted by !{prefix}!.||new operations
+ClipboardImageTemplate|operations|Clipboard images|Filename stem template|Ctrl+G scalar substitutions and prompts, with exactly one !{seq}! token. !{prefix}! inserts the prefix. The image extension is appended automatically.||new operations
+ClipboardImageDigitFormat|operations|Clipboard images|Digit format|A run of zeros gives the minimum number of sequence digits, for example 000 produces 001.||new operations
 FileOpPathDisplay|operations|Execution|Progress path display|Show the current name, full path, or source and destination paths in operation progress.|0:Name;1:Full path;2:Source and destination|live
 CopyAccessRights|operations|Execution|Access rights of copies|Permissions a copied file or folder receives. The copy dialog starts from this value and stores the choice made there.|0:Default;1:Copy from source;2:Inherit from destination|new operations
 ApplyCommandParallelism|operations|Execution|Concurrent Apply commands|Maximum concurrent commands in Apply command. Zero means unlimited. The initial default is the logical CPU count.||new operations
