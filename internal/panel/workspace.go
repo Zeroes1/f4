@@ -18,6 +18,7 @@ type PanelSessionState struct {
 	SortReverse            bool
 	UseSortGroups          bool
 	SortNumeric            bool
+	SortSelectedFirst      bool
 	GroupBy                GroupMode
 	GroupReverse           bool
 	GroupFoldersSeparately bool
@@ -42,13 +43,15 @@ func LegacyWorkspaceSession() WorkspaceSessionState {
 			Path: LastLeftPath, Cursor: LastLeftCursor, ViewMode: LastLeftViewMode,
 			SortMode: LastLeftSortMode, SortReverse: LastLeftSortRev,
 			UseSortGroups: LastLeftSortGroups, SortNumeric: LastLeftSortNumeric,
-			GroupBy: LastLeftGroupBy, GroupReverse: LastLeftGroupReverse, GroupFoldersSeparately: LastLeftGroupFoldersSeparately,
+			SortSelectedFirst: LastLeftSortSelectedFirst,
+			GroupBy:           LastLeftGroupBy, GroupReverse: LastLeftGroupReverse, GroupFoldersSeparately: LastLeftGroupFoldersSeparately,
 		},
 		Right: PanelSessionState{
 			Path: LastRightPath, Cursor: LastRightCursor, ViewMode: LastRightViewMode,
 			SortMode: LastRightSortMode, SortReverse: LastRightSortRev,
 			UseSortGroups: LastRightSortGroups, SortNumeric: LastRightSortNumeric,
-			GroupBy: LastRightGroupBy, GroupReverse: LastRightGroupReverse, GroupFoldersSeparately: LastRightGroupFoldersSeparately,
+			SortSelectedFirst: LastRightSortSelectedFirst,
+			GroupBy:           LastRightGroupBy, GroupReverse: LastRightGroupReverse, GroupFoldersSeparately: LastRightGroupFoldersSeparately,
 		},
 		ActivePanel: LastActivePanel,
 		WidePanel:   LastWidePanel,
@@ -68,6 +71,7 @@ func SetLegacyWorkspaceSession(state WorkspaceSessionState) {
 	LastLeftSortRev, LastRightSortRev = state.Left.SortReverse, state.Right.SortReverse
 	LastLeftSortGroups, LastRightSortGroups = state.Left.UseSortGroups, state.Right.UseSortGroups
 	LastLeftSortNumeric, LastRightSortNumeric = state.Left.SortNumeric, state.Right.SortNumeric
+	LastLeftSortSelectedFirst, LastRightSortSelectedFirst = state.Left.SortSelectedFirst, state.Right.SortSelectedFirst
 	LastActivePanel, LastWidePanel = state.ActivePanel, state.WidePanel
 	LastShowPanels, LastShowLeft, LastShowRight = state.ShowPanels, state.ShowLeft, state.ShowRight
 }
@@ -119,7 +123,8 @@ func CaptureWorkspaceSession(pf *PanelsFrame) WorkspaceSessionState {
 			Path: path, Cursor: cursor, ViewMode: int(left.ViewMode),
 			SortMode: int(left.SortMode), SortReverse: left.SortReverse,
 			UseSortGroups: left.UseSortGroups, SortNumeric: left.SortNumeric,
-			GroupBy: left.GroupBy, GroupReverse: left.GroupReverse, GroupFoldersSeparately: left.GroupFoldersSeparately,
+			SortSelectedFirst: left.SortSelectedFirst,
+			GroupBy:           left.GroupBy, GroupReverse: left.GroupReverse, GroupFoldersSeparately: left.GroupFoldersSeparately,
 		}
 	}
 	if right, ok := pf.Panels[1].(*FileSystemPanel); ok {
@@ -136,7 +141,8 @@ func CaptureWorkspaceSession(pf *PanelsFrame) WorkspaceSessionState {
 			Path: path, Cursor: cursor, ViewMode: int(right.ViewMode),
 			SortMode: int(right.SortMode), SortReverse: right.SortReverse,
 			UseSortGroups: right.UseSortGroups, SortNumeric: right.SortNumeric,
-			GroupBy: right.GroupBy, GroupReverse: right.GroupReverse, GroupFoldersSeparately: right.GroupFoldersSeparately,
+			SortSelectedFirst: right.SortSelectedFirst,
+			GroupBy:           right.GroupBy, GroupReverse: right.GroupReverse, GroupFoldersSeparately: right.GroupFoldersSeparately,
 		}
 	}
 	return state
@@ -209,6 +215,7 @@ func LoadWorkspaceSessions(ini *ini.File) ([]WorkspaceSessionState, int) {
 				SortReverse:            ini.GetString(leftSection, "SortReverse", "0") == "1",
 				UseSortGroups:          ini.GetString(leftSection, "UseSortGroups", "1") == "1",
 				SortNumeric:            ini.GetString(leftSection, "SortNumeric", "0") == "1",
+				SortSelectedFirst:      ini.GetString(leftSection, "SortSelectedFirst", "0") == "1",
 				GroupBy:                ValidGroupMode(GroupMode(parseSessionInt(ini, leftSection, "GroupBy", 0))),
 				GroupReverse:           ini.GetString(leftSection, "GroupReverse", "0") == "1",
 				GroupFoldersSeparately: ini.GetString(leftSection, "GroupFoldersSeparately", "1") == "1",
@@ -220,6 +227,7 @@ func LoadWorkspaceSessions(ini *ini.File) ([]WorkspaceSessionState, int) {
 				SortReverse:            ini.GetString(rightSection, "SortReverse", "0") == "1",
 				UseSortGroups:          ini.GetString(rightSection, "UseSortGroups", "1") == "1",
 				SortNumeric:            ini.GetString(rightSection, "SortNumeric", "0") == "1",
+				SortSelectedFirst:      ini.GetString(rightSection, "SortSelectedFirst", "0") == "1",
 				GroupBy:                ValidGroupMode(GroupMode(parseSessionInt(ini, rightSection, "GroupBy", 0))),
 				GroupReverse:           ini.GetString(rightSection, "GroupReverse", "0") == "1",
 				GroupFoldersSeparately: ini.GetString(rightSection, "GroupFoldersSeparately", "1") == "1",
@@ -278,6 +286,7 @@ func writePanelSession(sb *strings.Builder, section string, state PanelSessionSt
 	fmt.Fprintf(sb, "SortReverse = %d\n", map[bool]int{true: 1}[state.SortReverse])
 	fmt.Fprintf(sb, "UseSortGroups = %d\n", map[bool]int{true: 1}[state.UseSortGroups])
 	fmt.Fprintf(sb, "SortNumeric = %d\n", map[bool]int{true: 1}[state.SortNumeric])
+	fmt.Fprintf(sb, "SortSelectedFirst = %d\n", map[bool]int{true: 1}[state.SortSelectedFirst])
 	fmt.Fprintf(sb, "GroupBy = %d\nGroupReverse = %d\nGroupFoldersSeparately = %d\n", ValidGroupMode(state.GroupBy), map[bool]int{true: 1}[state.GroupReverse], map[bool]int{true: 1}[state.GroupFoldersSeparately])
 }
 
@@ -390,6 +399,7 @@ func ApplyWorkspaceSession(pf *PanelsFrame, state WorkspaceSessionState, width, 
 	left.SortReverse, right.SortReverse = state.Left.SortReverse, state.Right.SortReverse
 	left.UseSortGroups, right.UseSortGroups = state.Left.UseSortGroups, state.Right.UseSortGroups
 	left.SortNumeric, right.SortNumeric = state.Left.SortNumeric, state.Right.SortNumeric
+	left.SortSelectedFirst, right.SortSelectedFirst = state.Left.SortSelectedFirst, state.Right.SortSelectedFirst
 
 	left.SetGrouping(state.Left.GroupBy, state.Left.GroupReverse, state.Left.GroupFoldersSeparately)
 

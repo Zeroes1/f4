@@ -596,6 +596,13 @@ type FileSystemPanel struct {
 	// UseSortGroups modifies clustering regardless of SortMode.
 	SortNumeric bool
 
+	// SortSelectedFirst makes selected entries sort ahead of unselected ones
+	// regardless of the sort mode (far's Shift+F12 "show selected first").
+	// It is a key between the directories rule and the sort groups, the
+	// same place far puts it, and like every other sort modifier it takes
+	// effect through a re-sort that keeps the cursor on its file.
+	SortSelectedFirst bool
+
 	lastDirMTime time.Time
 	DirCache     map[dirCacheKey]DirCacheEntry
 
@@ -933,6 +940,44 @@ func (fp *FileSystemPanel) ToggleSortNumeric() {
 	fp.SetSortNumeric(!fp.SortNumeric)
 }
 
+// SetSortSelectedFirst switches whether marked rows sort ahead of unmarked
+// ones (far's Shift+F12). Like the other sort modifiers it goes through a
+// re-sort, so the cursor stays on its file while the rows move under it.
+func (fp *FileSystemPanel) SetSortSelectedFirst(on bool) {
+	if fp == nil || fp.SortSelectedFirst == on {
+		return
+	}
+	fp.SortSelectedFirst = on
+	if fp.GroupBy != GroupNone {
+		fp.SetGrouping(fp.GroupBy, fp.GroupReverse, fp.GroupFoldersSeparately)
+		return
+	}
+	fp.ReadDirectory()
+}
+
+func (fp *FileSystemPanel) ToggleSortSelectedFirst() {
+	if fp == nil {
+		return
+	}
+	fp.SetSortSelectedFirst(!fp.SortSelectedFirst)
+}
+
+// resortSelectedFirst re-sorts the rows after a selection change while the
+// "selected first" mode is on, keeping the cursor on the entry it stood on
+// (far's SortFileList(TRUE) after every selection mutation). It is a no-op
+// when the mode is off, so plain selection stays as cheap as it was.
+func (fp *FileSystemPanel) resortSelectedFirst() {
+	if fp == nil || !fp.SortSelectedFirst {
+		return
+	}
+	focused := fp.GetRawSelectedName()
+	offset := fp.displayOfEntry(fp.GetCursorIndex()) - fp.Table.TopPos
+	fp.sortEntriesAt(time.Now())
+	fp.focusEntryByName(focused)
+	fp.Table.TopPos = max(0, fp.displayOfEntry(fp.GetCursorIndex())-offset)
+	fp.SetCursorIndex(fp.GetCursorIndex())
+}
+
 // sortGroupsActive reports whether this panel's entries have to be clustered:
 // the panel asked for it and there is at least one configured group.
 func (fp *FileSystemPanel) sortGroupsActive() bool {
@@ -954,7 +999,9 @@ func (fp *FileSystemPanel) sortEntriesAt(now time.Time) {
 	}
 	fp.prepareGrouping(entries, now)
 	grouped := fp.sortGroupsActive()
-	if (fp.SortMode == SortUnsorted && !grouped && fp.GroupBy == GroupNone) || len(entries) <= 1 {
+	// An unsorted panel normally keeps its arrival order untouched, but with
+	// "selected first" on there is something to reorder: the marked rows.
+	if (fp.SortMode == SortUnsorted && !grouped && fp.GroupBy == GroupNone && !fp.SortSelectedFirst) || len(entries) <= 1 {
 		fp.refilterEntries()
 		return
 	}
@@ -1003,6 +1050,15 @@ func (fp *FileSystemPanel) sortEntriesAt(now time.Time) {
 		}
 		if (fp.SortMode != SortUnsorted || fp.GroupBy != GroupNone) && ei.IsDir != ej.IsDir {
 			return ei.IsDir
+		}
+
+		// Marked rows outrank unmarked ones once the directories rule has
+		// had its say (far's "show selected first", Shift+F12): far ranks
+		// DirectoriesFirst above SelectedFirst, so a marked file never
+		// jumps above an unmarked folder, and the sort groups and the sort
+		// key still order the rows inside each half.
+		if fp.SortSelectedFirst && ei.Selected != ej.Selected {
+			return ei.Selected
 		}
 
 		if grouped {
@@ -3564,9 +3620,14 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 
 	// Close the shift-selection session on anything other than a
 	// Shift+nav key so the next Shift+nav re-decides its mode
-	// from the row under the cursor.
+	// from the row under the cursor. The closing key is also far's
+	// moment to re-sort: a session's rows only jump up once Shift is
+	// let go, so the sweep itself stays visually stable.
 	if !shift || !isShiftSelectNavKey(e.VirtualKeyCode) {
-		fp.shiftSessionActive = false
+		if fp.shiftSessionActive {
+			fp.shiftSessionActive = false
+			fp.resortSelectedFirst()
+		}
 	}
 
 	if fp.FastFindMode {
@@ -3676,6 +3737,9 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 		idx := fp.GetCursorIndex()
 		fp.ToggleSelection(idx)
 		fp.SetCursorIndex(idx + 1)
+		// Far re-sorts after Ins while "selected first" is on, keeping the
+		// cursor on the row it just moved to.
+		fp.resortSelectedFirst()
 		return true
 
 	case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_PRIOR, vtinput.VK_NEXT, vtinput.VK_HOME, vtinput.VK_END:
@@ -4446,6 +4510,7 @@ func (fp *FileSystemPanel) RestoreSelection() {
 	} else {
 		fp.previousSelectionPath = ""
 	}
+	fp.resortSelectedFirst()
 	vtui.FrameManager.Redraw()
 }
 
@@ -4456,6 +4521,7 @@ func (fp *FileSystemPanel) InvertSelection() {
 			fp.SetItemSelected(i, !e.Selected)
 		}
 	}
+	fp.resortSelectedFirst()
 	vtui.FrameManager.Redraw()
 }
 
@@ -4487,6 +4553,7 @@ func (fp *FileSystemPanel) ApplyMaskSelection(mask string, state bool) {
 			fp.SetItemSelected(i, state)
 		}
 	}
+	fp.resortSelectedFirst()
 	vtui.FrameManager.Redraw()
 }
 

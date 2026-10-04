@@ -727,6 +727,7 @@ func (pf *PanelsFrame) leftMenu() vtui.MenuBarItem {
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortUnsorted")), Command: appcmd.CmLeftSortUnsorted},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortUseGroups")), Command: appcmd.CmLeftSortGroups},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortNumeric")), Command: appcmd.CmLeftSortNumeric},
+		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortSelectedFirst")), Command: appcmd.CmLeftSortSelectedFirst},
 		{Text: sideMenuText("Group.Menu"), Command: appcmd.CmLeftGroupMenu},
 		{Separator: true},
 		{Text: sideMenuText("Menu.Left.DriveMenu"), Command: appcmd.CmLeftDriveMenu, Shortcut: "Alt+F1"},
@@ -768,6 +769,7 @@ func (pf *PanelsFrame) rightMenu() vtui.MenuBarItem {
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortUnsorted")), Command: appcmd.CmRightSortUnsorted},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortUseGroups")), Command: appcmd.CmRightSortGroups},
 		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortNumeric")), Command: appcmd.CmRightSortNumeric},
+		{Text: menuhotkeys.Auto(i18n.Msg("Menu.SortSelectedFirst")), Command: appcmd.CmRightSortSelectedFirst},
 		{Text: sideMenuText("Group.Menu"), Command: appcmd.CmRightGroupMenu},
 		{Separator: true},
 		{Text: sideMenuText("Menu.Right.DriveMenu"), Command: appcmd.CmRightDriveMenu, Shortcut: "Alt+F2"},
@@ -951,73 +953,75 @@ func getToggleMenuText(on bool, label string) string {
 }
 
 var CommandToActionName = map[int]string{
-	appcmd.CmLeftBrief:             "Panel.Left.ViewBrief",
-	appcmd.CmLeftMedium:            "Panel.Left.ViewMedium",
-	appcmd.CmLeftDetailed:          "Panel.Left.ViewDetailed",
-	appcmd.CmLeftWide:              "Panel.Left.ViewWide",
-	appcmd.CmRightBrief:            "Panel.Right.ViewBrief",
-	appcmd.CmRightMedium:           "Panel.Right.ViewMedium",
-	appcmd.CmRightDetailed:         "Panel.Right.ViewDetailed",
-	appcmd.CmRightWide:             "Panel.Right.ViewWide",
-	appcmd.CmLeftViewMode5:         "Panel.Left.ViewMode5",
-	appcmd.CmLeftViewMode6:         "Panel.Left.ViewMode6",
-	appcmd.CmLeftViewMode7:         "Panel.Left.ViewMode7",
-	appcmd.CmLeftViewMode8:         "Panel.Left.ViewMode8",
-	appcmd.CmLeftViewMode9:         "Panel.Left.ViewMode9",
-	appcmd.CmLeftViewMode0:         "Panel.Left.ViewMode0",
-	appcmd.CmRightViewMode5:        "Panel.Right.ViewMode5",
-	appcmd.CmRightViewMode6:        "Panel.Right.ViewMode6",
-	appcmd.CmRightViewMode7:        "Panel.Right.ViewMode7",
-	appcmd.CmRightViewMode8:        "Panel.Right.ViewMode8",
-	appcmd.CmRightViewMode9:        "Panel.Right.ViewMode9",
-	appcmd.CmRightViewMode0:        "Panel.Right.ViewMode0",
-	appcmd.CmLeftSortName:          "Panel.Left.SortByName",
-	appcmd.CmLeftSortExt:           "Panel.Left.SortByExt",
-	appcmd.CmLeftSortTime:          "Panel.Left.SortByTime",
-	appcmd.CmLeftSortSize:          "Panel.Left.SortBySize",
-	appcmd.CmLeftSortUnsorted:      "Panel.Left.SortUnsorted",
-	appcmd.CmLeftSortGroups:        "Panel.Left.SortUseGroups",
-	appcmd.CmLeftSortNumeric:       "Panel.Left.SortNumeric",
-	appcmd.CmLeftGroupMenu:         "Panel.Left.GroupMenu",
-	appcmd.CmRightSortName:         "Panel.Right.SortByName",
-	appcmd.CmRightSortExt:          "Panel.Right.SortByExt",
-	appcmd.CmRightSortTime:         "Panel.Right.SortByTime",
-	appcmd.CmRightSortSize:         "Panel.Right.SortBySize",
-	appcmd.CmRightSortUnsorted:     "Panel.Right.SortUnsorted",
-	appcmd.CmRightSortGroups:       "Panel.Right.SortUseGroups",
-	appcmd.CmRightSortNumeric:      "Panel.Right.SortNumeric",
-	appcmd.CmRightGroupMenu:        "Panel.Right.GroupMenu",
-	appcmd.CmLeftAIContext:         "AI.Left.ViewContext",
-	appcmd.CmLeftAIChat:            "AI.Left.ViewChat",
-	appcmd.CmLeftAIOut:             "AI.Left.ViewOut",
-	appcmd.CmLeftAIMem:             "AI.Left.ViewMem",
-	appcmd.CmRightAIContext:        "AI.Right.ViewContext",
-	appcmd.CmRightAIChat:           "AI.Right.ViewChat",
-	appcmd.CmRightAIOut:            "AI.Right.ViewOut",
-	appcmd.CmRightAIMem:            "AI.Right.ViewMem",
-	appcmd.CmBackground:            "App.Background",
-	appcmd.CmWorkspaceNew:          "Workspace.New",
-	appcmd.CmWorkspaceNewTerminal:  "Workspace.NewTerminal",
-	appcmd.CmWorkspaceClose:        "Workspace.Close",
-	appcmd.CmLeftDriveMenu:         "Panel.LeftDriveMenu",
-	appcmd.CmRightDriveMenu:        "Panel.RightDriveMenu",
-	vtui.CmQuit:                    "App.Quit",
-	appcmd.CmView:                  "File.View",
-	appcmd.CmEdit:                  "File.Edit",
-	appcmd.CmCopy:                  "File.Copy",
-	appcmd.CmMove:                  "File.Move",
-	appcmd.CmMkDir:                 "File.MakeDir",
-	appcmd.CmDelete:                "File.Delete",
-	appcmd.CmFindFile:              "File.Find",
-	appcmd.CmBookmarks:             "Panel.Bookmarks",
-	appcmd.CmPanelSettings:         "Settings.Panel",
-	appcmd.CmEditorSettings:        "Settings.Editor",
-	appcmd.CmColorerSettings:       "Settings.Colorer",
-	appcmd.CmAppearanceSettings:    "Settings.Appearance",
-	appcmd.CmConfirmationsSettings: "Settings.Confirmations",
-	appcmd.CmLanguage:              "Settings.Language",
-	appcmd.CmHelpLanguage:          "Settings.HelpLanguage",
-	appcmd.CmPlugins:               "Settings.Plugins",
+	appcmd.CmLeftBrief:              "Panel.Left.ViewBrief",
+	appcmd.CmLeftMedium:             "Panel.Left.ViewMedium",
+	appcmd.CmLeftDetailed:           "Panel.Left.ViewDetailed",
+	appcmd.CmLeftWide:               "Panel.Left.ViewWide",
+	appcmd.CmRightBrief:             "Panel.Right.ViewBrief",
+	appcmd.CmRightMedium:            "Panel.Right.ViewMedium",
+	appcmd.CmRightDetailed:          "Panel.Right.ViewDetailed",
+	appcmd.CmRightWide:              "Panel.Right.ViewWide",
+	appcmd.CmLeftViewMode5:          "Panel.Left.ViewMode5",
+	appcmd.CmLeftViewMode6:          "Panel.Left.ViewMode6",
+	appcmd.CmLeftViewMode7:          "Panel.Left.ViewMode7",
+	appcmd.CmLeftViewMode8:          "Panel.Left.ViewMode8",
+	appcmd.CmLeftViewMode9:          "Panel.Left.ViewMode9",
+	appcmd.CmLeftViewMode0:          "Panel.Left.ViewMode0",
+	appcmd.CmRightViewMode5:         "Panel.Right.ViewMode5",
+	appcmd.CmRightViewMode6:         "Panel.Right.ViewMode6",
+	appcmd.CmRightViewMode7:         "Panel.Right.ViewMode7",
+	appcmd.CmRightViewMode8:         "Panel.Right.ViewMode8",
+	appcmd.CmRightViewMode9:         "Panel.Right.ViewMode9",
+	appcmd.CmRightViewMode0:         "Panel.Right.ViewMode0",
+	appcmd.CmLeftSortName:           "Panel.Left.SortByName",
+	appcmd.CmLeftSortExt:            "Panel.Left.SortByExt",
+	appcmd.CmLeftSortTime:           "Panel.Left.SortByTime",
+	appcmd.CmLeftSortSize:           "Panel.Left.SortBySize",
+	appcmd.CmLeftSortUnsorted:       "Panel.Left.SortUnsorted",
+	appcmd.CmLeftSortGroups:         "Panel.Left.SortUseGroups",
+	appcmd.CmLeftSortNumeric:        "Panel.Left.SortNumeric",
+	appcmd.CmLeftSortSelectedFirst:  "Panel.Left.SortSelectedFirst",
+	appcmd.CmLeftGroupMenu:          "Panel.Left.GroupMenu",
+	appcmd.CmRightSortName:          "Panel.Right.SortByName",
+	appcmd.CmRightSortExt:           "Panel.Right.SortByExt",
+	appcmd.CmRightSortTime:          "Panel.Right.SortByTime",
+	appcmd.CmRightSortSize:          "Panel.Right.SortBySize",
+	appcmd.CmRightSortUnsorted:      "Panel.Right.SortUnsorted",
+	appcmd.CmRightSortGroups:        "Panel.Right.SortUseGroups",
+	appcmd.CmRightSortNumeric:       "Panel.Right.SortNumeric",
+	appcmd.CmRightSortSelectedFirst: "Panel.Right.SortSelectedFirst",
+	appcmd.CmRightGroupMenu:         "Panel.Right.GroupMenu",
+	appcmd.CmLeftAIContext:          "AI.Left.ViewContext",
+	appcmd.CmLeftAIChat:             "AI.Left.ViewChat",
+	appcmd.CmLeftAIOut:              "AI.Left.ViewOut",
+	appcmd.CmLeftAIMem:              "AI.Left.ViewMem",
+	appcmd.CmRightAIContext:         "AI.Right.ViewContext",
+	appcmd.CmRightAIChat:            "AI.Right.ViewChat",
+	appcmd.CmRightAIOut:             "AI.Right.ViewOut",
+	appcmd.CmRightAIMem:             "AI.Right.ViewMem",
+	appcmd.CmBackground:             "App.Background",
+	appcmd.CmWorkspaceNew:           "Workspace.New",
+	appcmd.CmWorkspaceNewTerminal:   "Workspace.NewTerminal",
+	appcmd.CmWorkspaceClose:         "Workspace.Close",
+	appcmd.CmLeftDriveMenu:          "Panel.LeftDriveMenu",
+	appcmd.CmRightDriveMenu:         "Panel.RightDriveMenu",
+	vtui.CmQuit:                     "App.Quit",
+	appcmd.CmView:                   "File.View",
+	appcmd.CmEdit:                   "File.Edit",
+	appcmd.CmCopy:                   "File.Copy",
+	appcmd.CmMove:                   "File.Move",
+	appcmd.CmMkDir:                  "File.MakeDir",
+	appcmd.CmDelete:                 "File.Delete",
+	appcmd.CmFindFile:               "File.Find",
+	appcmd.CmBookmarks:              "Panel.Bookmarks",
+	appcmd.CmPanelSettings:          "Settings.Panel",
+	appcmd.CmEditorSettings:         "Settings.Editor",
+	appcmd.CmColorerSettings:        "Settings.Colorer",
+	appcmd.CmAppearanceSettings:     "Settings.Appearance",
+	appcmd.CmConfirmationsSettings:  "Settings.Confirmations",
+	appcmd.CmLanguage:               "Settings.Language",
+	appcmd.CmHelpLanguage:           "Settings.HelpLanguage",
+	appcmd.CmPlugins:                "Settings.Plugins",
 }
 
 // Fixed-side menu commands intentionally have exact action IDs above so every
@@ -1025,42 +1029,44 @@ var CommandToActionName = map[int]string{
 // however, keeps showing the active-panel bindings used by Ctrl+1..4 and
 // Ctrl+F3..F7; the fixed-side actions themselves do not claim extra keys.
 var commandShortcutActionName = map[int]string{
-	appcmd.CmLeftBrief:         "Panel.ViewBrief",
-	appcmd.CmLeftMedium:        "Panel.ViewMedium",
-	appcmd.CmLeftDetailed:      "Panel.ViewDetailed",
-	appcmd.CmLeftWide:          "Panel.ViewWide",
-	appcmd.CmRightBrief:        "Panel.ViewBrief",
-	appcmd.CmRightMedium:       "Panel.ViewMedium",
-	appcmd.CmRightDetailed:     "Panel.ViewDetailed",
-	appcmd.CmRightWide:         "Panel.ViewWide",
-	appcmd.CmLeftViewMode5:     "Panel.ViewMode5",
-	appcmd.CmLeftViewMode6:     "Panel.ViewMode6",
-	appcmd.CmLeftViewMode7:     "Panel.ViewMode7",
-	appcmd.CmLeftViewMode8:     "Panel.ViewMode8",
-	appcmd.CmLeftViewMode9:     "Panel.ViewMode9",
-	appcmd.CmLeftViewMode0:     "Panel.ViewMode0",
-	appcmd.CmRightViewMode5:    "Panel.ViewMode5",
-	appcmd.CmRightViewMode6:    "Panel.ViewMode6",
-	appcmd.CmRightViewMode7:    "Panel.ViewMode7",
-	appcmd.CmRightViewMode8:    "Panel.ViewMode8",
-	appcmd.CmRightViewMode9:    "Panel.ViewMode9",
-	appcmd.CmRightViewMode0:    "Panel.ViewMode0",
-	appcmd.CmLeftSortName:      "Panel.SortByName",
-	appcmd.CmLeftSortExt:       "Panel.SortByExt",
-	appcmd.CmLeftSortTime:      "Panel.SortByTime",
-	appcmd.CmLeftSortSize:      "Panel.SortBySize",
-	appcmd.CmLeftSortUnsorted:  "Panel.SortUnsorted",
-	appcmd.CmLeftSortGroups:    "Panel.SortUseGroups",
-	appcmd.CmLeftSortNumeric:   "Panel.SortNumeric",
-	appcmd.CmLeftGroupMenu:     "Panel.GroupMenu",
-	appcmd.CmRightSortName:     "Panel.SortByName",
-	appcmd.CmRightSortExt:      "Panel.SortByExt",
-	appcmd.CmRightSortTime:     "Panel.SortByTime",
-	appcmd.CmRightSortSize:     "Panel.SortBySize",
-	appcmd.CmRightSortUnsorted: "Panel.SortUnsorted",
-	appcmd.CmRightSortGroups:   "Panel.SortUseGroups",
-	appcmd.CmRightSortNumeric:  "Panel.SortNumeric",
-	appcmd.CmRightGroupMenu:    "Panel.GroupMenu",
+	appcmd.CmLeftBrief:              "Panel.ViewBrief",
+	appcmd.CmLeftMedium:             "Panel.ViewMedium",
+	appcmd.CmLeftDetailed:           "Panel.ViewDetailed",
+	appcmd.CmLeftWide:               "Panel.ViewWide",
+	appcmd.CmRightBrief:             "Panel.ViewBrief",
+	appcmd.CmRightMedium:            "Panel.ViewMedium",
+	appcmd.CmRightDetailed:          "Panel.ViewDetailed",
+	appcmd.CmRightWide:              "Panel.ViewWide",
+	appcmd.CmLeftViewMode5:          "Panel.ViewMode5",
+	appcmd.CmLeftViewMode6:          "Panel.ViewMode6",
+	appcmd.CmLeftViewMode7:          "Panel.ViewMode7",
+	appcmd.CmLeftViewMode8:          "Panel.ViewMode8",
+	appcmd.CmLeftViewMode9:          "Panel.ViewMode9",
+	appcmd.CmLeftViewMode0:          "Panel.ViewMode0",
+	appcmd.CmRightViewMode5:         "Panel.ViewMode5",
+	appcmd.CmRightViewMode6:         "Panel.ViewMode6",
+	appcmd.CmRightViewMode7:         "Panel.ViewMode7",
+	appcmd.CmRightViewMode8:         "Panel.ViewMode8",
+	appcmd.CmRightViewMode9:         "Panel.ViewMode9",
+	appcmd.CmRightViewMode0:         "Panel.ViewMode0",
+	appcmd.CmLeftSortName:           "Panel.SortByName",
+	appcmd.CmLeftSortExt:            "Panel.SortByExt",
+	appcmd.CmLeftSortTime:           "Panel.SortByTime",
+	appcmd.CmLeftSortSize:           "Panel.SortBySize",
+	appcmd.CmLeftSortUnsorted:       "Panel.SortUnsorted",
+	appcmd.CmLeftSortGroups:         "Panel.SortUseGroups",
+	appcmd.CmLeftSortNumeric:        "Panel.SortNumeric",
+	appcmd.CmLeftSortSelectedFirst:  "Panel.SortSelectedFirst",
+	appcmd.CmLeftGroupMenu:          "Panel.GroupMenu",
+	appcmd.CmRightSortName:          "Panel.SortByName",
+	appcmd.CmRightSortExt:           "Panel.SortByExt",
+	appcmd.CmRightSortTime:          "Panel.SortByTime",
+	appcmd.CmRightSortSize:          "Panel.SortBySize",
+	appcmd.CmRightSortUnsorted:      "Panel.SortUnsorted",
+	appcmd.CmRightSortGroups:        "Panel.SortUseGroups",
+	appcmd.CmRightSortNumeric:       "Panel.SortNumeric",
+	appcmd.CmRightSortSelectedFirst: "Panel.SortSelectedFirst",
+	appcmd.CmRightGroupMenu:         "Panel.GroupMenu",
 }
 
 func (pf *PanelsFrame) UpdateMenuCheckmarks() {
@@ -1075,17 +1081,20 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 	lSort, rSort := SortName, SortName
 	lGroups, rGroups := false, false
 	lNumeric, rNumeric := false, false
+	lSelectedFirst, rSelectedFirst := false, false
 	if fsp, ok := pf.Panels[0].(*FileSystemPanel); ok {
 		lMode = fsp.ViewMode
 		lSort = fsp.SortMode
 		lGroups = fsp.UseSortGroups
 		lNumeric = fsp.SortNumeric
+		lSelectedFirst = fsp.SortSelectedFirst
 	}
 	if fsp, ok := pf.Panels[1].(*FileSystemPanel); ok {
 		rMode = fsp.ViewMode
 		rSort = fsp.SortMode
 		rGroups = fsp.UseSortGroups
 		rNumeric = fsp.SortNumeric
+		rSelectedFirst = fsp.SortSelectedFirst
 	}
 
 	if pf.Wide && pf.WidePanel == 0 {
@@ -1147,6 +1156,14 @@ func (pf *PanelsFrame) UpdateMenuCheckmarks() {
 		numericLabel := menuhotkeys.Auto(i18n.Msg("Menu.SortNumeric"))
 		pf.MenuBar.Items[0].SubItems[lGroupRow+1].Text = getToggleMenuText(lNumeric, numericLabel)
 		pf.MenuBar.Items[4].SubItems[rGroupRow+1].Text = getToggleMenuText(rNumeric, numericLabel)
+	}
+
+	// The "selected first" toggle sits right after the numeric one, for the
+	// same reason and with the same test-friendly guard.
+	if len(pf.MenuBar.Items[0].SubItems) > lGroupRow+2 && len(pf.MenuBar.Items[4].SubItems) > rGroupRow+2 {
+		selectedLabel := menuhotkeys.Auto(i18n.Msg("Menu.SortSelectedFirst"))
+		pf.MenuBar.Items[0].SubItems[lGroupRow+2].Text = getToggleMenuText(lSelectedFirst, selectedLabel)
+		pf.MenuBar.Items[4].SubItems[rGroupRow+2].Text = getToggleMenuText(rSelectedFirst, selectedLabel)
 	}
 
 	// Update shortcuts dynamically from the action registry. Framework-owned
@@ -4579,6 +4596,18 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		}
 		pf.UpdateMenuCheckmarks()
 		return true
+	case appcmd.CmLeftSortSelectedFirst:
+		if fsp, ok := pf.Panels[0].(*FileSystemPanel); ok {
+			fsp.ToggleSortSelectedFirst()
+		}
+		pf.UpdateMenuCheckmarks()
+		return true
+	case appcmd.CmRightSortSelectedFirst:
+		if fsp, ok := pf.Panels[1].(*FileSystemPanel); ok {
+			fsp.ToggleSortSelectedFirst()
+		}
+		pf.UpdateMenuCheckmarks()
+		return true
 	case appcmd.CmSwapPanels:
 		pf.Panels[0], pf.Panels[1] = pf.Panels[1], pf.Panels[0]
 		pf.swapPluginPanels()
@@ -4627,6 +4656,12 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 	case appcmd.CmSortNumeric:
 		if fsp := pf.GetActivePanel(); fsp != nil {
 			fsp.ToggleSortNumeric()
+		}
+		pf.UpdateMenuCheckmarks()
+		return true
+	case appcmd.CmSortSelectedFirst:
+		if fsp := pf.GetActivePanel(); fsp != nil {
+			fsp.ToggleSortSelectedFirst()
 		}
 		pf.UpdateMenuCheckmarks()
 		return true
@@ -5813,6 +5848,7 @@ func (pf *PanelsFrame) Clone() *PanelsFrame {
 			cloneFsp.SortReverse = fsp.SortReverse
 			cloneFsp.UseSortGroups = fsp.UseSortGroups
 			cloneFsp.SortNumeric = fsp.SortNumeric
+			cloneFsp.SortSelectedFirst = fsp.SortSelectedFirst
 			cloneFsp.GroupBy, cloneFsp.GroupReverse, cloneFsp.GroupFoldersSeparately = fsp.GroupBy, fsp.GroupReverse, fsp.GroupFoldersSeparately
 			cloneFsp.nextSourceOrder = fsp.nextSourceOrder
 

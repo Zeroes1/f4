@@ -662,14 +662,27 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		Shortcut: keymap.MenuShortcutsForAction("Shell", "Panel.SortNumeric"),
 	})
 
+	// "Show selected first" (far's Shift+F12): the same toggle-row style,
+	// third of the boolean modifiers between the sort modes and the group menu.
+	selectedPrefix := "  "
+	if fsp.SortSelectedFirst {
+		selectedPrefix = "✓ "
+	}
+	menu.AddItem(vtui.MenuItem{
+		Text:     selectedPrefix + i18n.Msg("Menu.SortSelectedFirst"),
+		Shortcut: keymap.MenuShortcutsForAction("Shell", "Panel.SortSelectedFirst"),
+	})
+
 	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Group.Menu")})
 	menu.SetSelectPos(selected)
 	menu.OnAction = func(idx int) {
 		switch {
 		case idx >= 0 && idx < len(entries):
 			fsp.SetSortMode(entries[idx].mode)
-		case idx == len(entries)+2:
+		case idx == len(entries)+3:
 			fsp.ShowGroupMenu()
+		case idx == len(entries)+2:
+			fsp.ToggleSortSelectedFirst()
 		case idx == len(entries)+1:
 			fsp.ToggleSortNumeric()
 		case idx == len(entries):
@@ -681,7 +694,7 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		vtui.FrameManager.Redraw()
 	}
 
-	w, h := 36, len(entries)+5
+	w, h := 36, len(entries)+6
 	panelX1, panelY1, panelX2, panelY2 := fsp.GetPosition()
 	panelW := panelX2 - panelX1 + 1
 	panelH := panelY2 - panelY1 + 1

@@ -3460,6 +3460,54 @@ func TestFileSystemPanel_SortNumeric(t *testing.T) {
 	}
 }
 
+// Shift+F12 (f4 selected-first): marked entries sort ahead of unmarked ones,
+// but ".." keeps its leading position the way it does under every other sort.
+func TestFileSystemPanel_SortSelectedFirst(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	v := vfs.NewOSVFS(t.TempDir())
+	fp := NewFileSystemPanel(0, 0, 80, 24, v)
+	waitForLoad(t, fp)
+
+	fp.Entries = []*FileEntry{
+		{VFSItem: vfs.VFSItem{Name: ".."}},
+		{VFSItem: vfs.VFSItem{Name: "a.txt"}, Selected: true},
+		{VFSItem: vfs.VFSItem{Name: "b.txt"}, Selected: false},
+		{VFSItem: vfs.VFSItem{Name: "c.txt"}, Selected: true},
+	}
+
+	fp.SortMode = SortName
+	fp.SortReverse = false
+	fp.SortSelectedFirst = false
+	fp.SortEntries()
+	gotPlain := []string{fp.Entries[1].Name, fp.Entries[2].Name, fp.Entries[3].Name}
+	if want := []string{"a.txt", "b.txt", "c.txt"}; !reflect.DeepEqual(gotPlain, want) {
+		t.Fatalf("plain name sort = %v, want %v", gotPlain, want)
+	}
+
+	fp.SortSelectedFirst = true
+	fp.SortEntries()
+	gotSelectedFirst := []string{fp.Entries[0].Name, fp.Entries[1].Name, fp.Entries[2].Name, fp.Entries[3].Name}
+	wantSelectedFirst := []string{"..", "a.txt", "c.txt", "b.txt"}
+	if !reflect.DeepEqual(gotSelectedFirst, wantSelectedFirst) {
+		t.Fatalf("selected-first sort = %v, want %v", gotSelectedFirst, wantSelectedFirst)
+	}
+
+	// SetSortSelectedFirst/ToggleSortSelectedFirst flip the flag the same way
+	// the SortNumeric setters do, and are a no-op on a nil panel.
+	var nilPanel *FileSystemPanel
+	nilPanel.SetSortSelectedFirst(true)
+	nilPanel.ToggleSortSelectedFirst()
+
+	fp.SetSortSelectedFirst(false)
+	if fp.SortSelectedFirst {
+		t.Error("SetSortSelectedFirst(false) left SortSelectedFirst set")
+	}
+	fp.ToggleSortSelectedFirst()
+	if !fp.SortSelectedFirst {
+		t.Error("ToggleSortSelectedFirst did not turn selected-first on")
+	}
+}
+
 func TestFileSystemPanel_SetSortModeUsesModeDefaultDirection(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	fp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewNullVFS(0))
