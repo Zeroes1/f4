@@ -1701,6 +1701,7 @@ func (pf *PanelsFrame) Close() {
 				fsp.CancelLoad()
 			}
 			fsp.StopLoadingAnimation()
+			fsp.wheel.Stop()
 		}
 	}
 	for i, alt := range pf.AltPanels {

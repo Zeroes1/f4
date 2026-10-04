@@ -592,6 +592,11 @@ type F4Config struct {
 	WheelMenuDown   int
 	WheelTableUp    int
 	WheelTableDown  int
+	// Wheel acceleration: how many lines the very fastest notch queues on
+	// top of the rows it scrolls at once, WheelAccelerationMin (the ramp
+	// never queues) to WheelAccelerationMax. The spin window, the coast
+	// step and its delay are tuned in code, see internal/wheel.
+	WheelAcceleration int
 	// Path hints (autocomplete in path inputs and the command line).
 	PathHintTimeout     int  // seconds for a VFS ReadDir behind a hint
 	PathHintFullPath    bool // show full paths in the hint, false = final element only
@@ -802,6 +807,7 @@ var App = F4Config{
 	WheelMenuDown:                   0,
 	WheelTableUp:                    0,
 	WheelTableDown:                  0,
+	WheelAcceleration:               WheelAccelerationDefault,
 	PathHintTimeout:                 2,
 	PathHintFullPath:                false,
 	PathHintSource:                  2,
@@ -1175,6 +1181,9 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.WheelMenuDown = LoadWheelLines(merged, "MenuDown")
 	cfg.WheelTableUp = LoadWheelLines(merged, "TableUp")
 	cfg.WheelTableDown = LoadWheelLines(merged, "TableDown")
+	// [Mouse] — the strength of the fast-spin ramp; its shape is tuned in
+	// code (see internal/wheel), and the value is clamped into its range.
+	cfg.WheelAcceleration = loadWheelInt(merged, "Acceleration", WheelAccelerationDefault, WheelAccelerationMin, WheelAccelerationMax)
 
 	// [PathHints]
 	cfg.PathHintTimeout = 2
@@ -1489,6 +1498,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "MenuDown = %d\n", cfg.WheelMenuDown)
 	fmt.Fprintf(&sb, "TableUp = %d\n", cfg.WheelTableUp)
 	fmt.Fprintf(&sb, "TableDown = %d\n", cfg.WheelTableDown)
+	fmt.Fprintf(&sb, "Acceleration = %d\n", cfg.WheelAcceleration)
 	sb.WriteString("\n[PathHints]\n")
 	fmt.Fprintf(&sb, "Timeout = %d\n", cfg.PathHintTimeout)
 	fmt.Fprintf(&sb, "FullPath = %d\n", map[bool]int{true: 1, false: 0}[cfg.PathHintFullPath])
@@ -1748,6 +1758,32 @@ func LoadWheelLines(ini *ini.File, key string) int {
 	_, _ = fmt.Sscanf(ini.GetString("Mouse", key, "0"), "%d", &n)
 	if n < 0 {
 		n = 0
+	}
+	return n
+}
+
+// Bounds and default of the [Mouse] Acceleration key: a settings file that
+// does not mention it ends up with the default, and so does a compiled-in
+// App before any file was read. The weakest value never queues anything, so
+// it is the ramp switched off; see internal/wheel for the ramp itself.
+const (
+	WheelAccelerationMin     = 1
+	WheelAccelerationMax     = 10
+	WheelAccelerationDefault = 5
+)
+
+// loadWheelInt reads an integer [Mouse] key: def when the key is missing or
+// unparsable, then clamped into [min, max]. settings.ini is user text, and
+// no value in it may be able to stop the panel from scrolling or make it
+// scroll at nonsense speed.
+func loadWheelInt(ini *ini.File, key string, def, min, max int) int {
+	n := def
+	_, _ = fmt.Sscanf(ini.GetString("Mouse", key, strconv.Itoa(def)), "%d", &n)
+	if n < min {
+		n = min
+	}
+	if n > max {
+		n = max
 	}
 	return n
 }

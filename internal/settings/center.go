@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/sdk/f4settings"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -61,6 +62,13 @@ type settingsViewport struct {
 	onFocus       func(*settingsRow)
 	boxes         []settingsGroupBox
 	groupLabel    func(string) string
+
+	// wheelCoast is what a fast wheel spin leaves behind: rows the list
+	// still owes the scroll position (see internal/wheel). lastMouseY is
+	// the pointer row of the last mouse event, so the coast can explain
+	// whatever it scrolls under a pointer that did not move (#1273).
+	wheelCoast wheel.Coast
+	lastMouseY int
 }
 
 type settingsGroupBox struct {
@@ -329,16 +337,15 @@ func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
 		return false
 	}
 	if e.WheelDirection != 0 {
-		delta := e.WheelDirection
-		step := 3
-		if delta > 0 {
-			step = -step
+		v.lastMouseY = int(e.MouseY)
+		direction := 1
+		if e.WheelDirection > 0 {
+			direction = -1
 		}
-		v.scroll = max(0, min(v.bar.Max, v.scroll+step))
-		v.positionRows()
-		// The rows moved under a pointer that did not: the setting it is over
-		// now is the one to explain (#1273).
-		v.describeRowAt(int(e.MouseY))
+		// A spin faster than one notch per spin window queues extra rows
+		// the list keeps scrolling on its own (see internal/wheel).
+		v.wheelCoast.Notch(direction, v.scrollWheelBy)
+		v.scrollWheelBy(direction * 3)
 		return true
 	}
 	if int(e.MouseX) == v.X2 && v.bar.ProcessMouse(e) {
@@ -347,6 +354,21 @@ func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
 	handled := v.Group.ProcessMouse(e)
 	v.describeRowAt(int(e.MouseY))
 	return handled
+}
+
+// scrollWheelBy moves the list by step rows, positive down, and reports
+// whether anything moved so a coast stops at an end of the settings instead
+// of spinning in place. The rows move under a pointer that did not: the
+// setting it is over now is the one to explain (#1273).
+func (v *settingsViewport) scrollWheelBy(step int) bool {
+	before := v.scroll
+	v.scroll = max(0, min(v.bar.Max, v.scroll+step))
+	if v.scroll == before {
+		return false
+	}
+	v.positionRows()
+	v.describeRowAt(v.lastMouseY)
+	return true
 }
 
 // describeRowAt hands the setting drawn on screen row y to onFocus, which
@@ -368,6 +390,10 @@ type settingsHelp struct {
 	text string
 	top  int
 	bar  *vtui.ScrollBar
+
+	// wheelCoast is what a fast wheel spin leaves behind: lines the help
+	// still owes the scroll position (see internal/wheel).
+	wheelCoast wheel.Coast
 }
 
 func newSettingsHelp() *settingsHelp {
@@ -431,14 +457,26 @@ func (h *settingsHelp) ProcessMouse(e *vtinput.InputEvent) bool {
 		return false
 	}
 	if e.WheelDirection != 0 {
+		direction := 1
 		if e.WheelDirection > 0 {
-			h.top = max(0, h.top-3)
-		} else {
-			h.top += 3
+			direction = -1
 		}
+		// A spin faster than one notch per spin window queues extra lines
+		// the help keeps scrolling on its own (see internal/wheel).
+		h.wheelCoast.Notch(direction, h.scrollWheelBy)
+		h.scrollWheelBy(direction * 3)
 		return true
 	}
 	return h.bar.ProcessMouse(e)
+}
+
+// scrollWheelBy moves the help by step lines, positive down, and reports
+// whether anything moved so a coast stops at an end of the text instead of
+// spinning in place.
+func (h *settingsHelp) scrollWheelBy(step int) bool {
+	before := h.top
+	h.top = max(0, h.top+step)
+	return h.top != before
 }
 
 func settingsWrap(text string, width int) []string {

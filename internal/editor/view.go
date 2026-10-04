@@ -36,6 +36,7 @@ import (
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/internal/viewer"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -106,6 +107,10 @@ type EditorView struct {
 	hoverURL           string
 	hoverURLStart      int
 	editSession        int // Unique ID to fence background tasks
+
+	// wheelCoast is what a fast wheel spin leaves behind: lines the editor
+	// still owes the cursor (see internal/wheel).
+	wheelCoast wheel.Coast
 
 	pasting     bool
 	Saving      bool
@@ -382,6 +387,8 @@ func (ev *EditorView) ConfirmClose() bool {
 }
 
 func (ev *EditorView) Close() {
+	// A coast already posted to the UI loop has no view left to scroll.
+	ev.wheelCoast.Stop()
 	if !ev.closeNotified {
 		ev.closeNotified = true
 		ev.notify(EventClose)
@@ -3318,6 +3325,26 @@ func (ev *EditorView) EnsureCursorVisible() {
 	}
 }
 
+// scrollWheelLines moves the cursor and the view by step lines, positive
+// down the text, the way one wheel notch does, and reports whether anything
+// moved so a coast stops at an end of the file instead of spinning in place.
+func (ev *EditorView) scrollWheelLines(step int) bool {
+	if step == 0 {
+		return false
+	}
+	beforeLine := ev.CursorLine
+	beforeTop := ev.ScrollTopRow
+	vk := uint16(vtinput.VK_DOWN)
+	if step < 0 {
+		vk = vtinput.VK_UP
+		step = -step
+	}
+	for i := 0; i < step; i++ {
+		ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk})
+	}
+	return ev.CursorLine != beforeLine || ev.ScrollTopRow != beforeTop
+}
+
 func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.MouseEventType {
 		return false
@@ -3374,15 +3401,16 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 	}
 
 	if e.WheelDirection != 0 {
+		direction := 1
 		speed := config.App.WheelEditorDown
-		vk := uint16(vtinput.VK_DOWN)
 		if e.WheelDirection > 0 {
+			direction = -1
 			speed = config.App.WheelEditorUp
-			vk = vtinput.VK_UP
 		}
-		for i := 0; i < config.WheelScrollLines(speed); i++ {
-			ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk})
-		}
+		// A spin faster than one notch per spin window queues extra lines
+		// the editor keeps scrolling on its own (see internal/wheel).
+		ev.wheelCoast.Notch(direction, ev.scrollWheelLines)
+		ev.scrollWheelLines(direction * config.WheelScrollLines(speed))
 		return true
 	}
 
