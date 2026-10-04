@@ -106,6 +106,16 @@ func coreSettingsStaticFields() []f4settings.Field {
 			fields = append(fields, f4settings.Field{ID: id, Category: "keyboard", Group: "Mouse wheel", Label: f4settings.Text{English: area + " wheel " + strings.ToLower(direction)}, Description: f4settings.Text{English: "Number of " + strings.ToLower(area) + " rows per " + strings.ToLower(direction) + "ward wheel notch. Zero follows the system setting."}, Kind: f4settings.Integer, Timing: "live"})
 		}
 	}
+	// The fast-spin ramp behind Mouse wheel: a spin queues lines the view
+	// then scrolls on its own, faster than the wheel itself reports them.
+	// The ramp shape itself is tuned in code (see internal/wheel), so this
+	// is the only knob it has.
+	fields = append(fields, f4settings.Field{
+		ID: "WheelAcceleration", Category: "keyboard", Group: "Mouse wheel",
+		Label:       f4settings.Text{English: "Wheel acceleration"},
+		Description: f4settings.Text{English: "How many lines the very fastest wheel notch queues on top of the rows it scrolls at once, from 1 (the ramp never queues anything) to 10."},
+		Kind:        f4settings.Integer, Timing: "live",
+	})
 	for i, label := range []string{"Command history timestamps", "Folder history timestamps", "Viewer/editor history timestamps"} {
 		fields = append(fields, f4settings.Field{ID: fmt.Sprintf("HistoryShowTimes.%d", i), Category: "history", Group: "Presentation", Label: f4settings.Text{English: label}, Description: f4settings.Text{English: "Choose the timestamp presentation independently for this history."}, Kind: f4settings.ChoiceKind, Choices: settingsChoices("0:Date and time;1:Date;2:None"), Timing: "new history dialogs"})
 	}

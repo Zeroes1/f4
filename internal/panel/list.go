@@ -25,6 +25,7 @@ import (
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/media"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -525,6 +526,7 @@ type FileSystemPanel struct {
 	dragScrollDirection  int
 	dragScrollTimer      *time.Timer
 	dragScrollGeneration uint64
+	wheel                wheel.Coast
 
 	loadCtx        context.Context
 	CancelLoad     context.CancelFunc
@@ -2155,6 +2157,8 @@ func (fp *FileSystemPanel) pathTitleHitTest(x, y int) bool {
 }
 
 func (fp *FileSystemPanel) ReadDirectory() {
+	// A fresh listing must not inherit the coast of the previous one.
+	fp.wheel.Stop()
 	fp.readDirectoryEx(false)
 }
 
@@ -3992,6 +3996,11 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.MouseEventType {
 		return false
 	}
+	if e.WheelDirection == 0 {
+		// Any other pointer gesture ends the coast: the cursor has to stay
+		// where the user last saw it when they click (see internal/wheel).
+		fp.wheel.Stop()
+	}
 	if fp.ProviderOpenTask != nil {
 		// The visible rows belong to the destination cache while fp.vfs still
 		// points at the source. Consume panel mouse input until the switch so a
@@ -4063,76 +4072,11 @@ func (fp *FileSystemPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 			speed = config.App.WheelPanelUp
 		}
 		step := direction * config.WheelScrollLines(speed)
-		if fp.GroupBy != GroupNone {
-			target := fp.nearestDisplayEntry(fp.displayOfEntry(fp.GetCursorIndex())+step, direction)
-			fp.setPanelScrollTop(fp.Table.TopPos + step)
-			fp.SetCursorIndex(target)
-			fp.Refresh()
-			return true
-		}
-
-		H := fp.Table.ViewHeight
-		if H <= 0 {
-			H = 1
-		}
-
-		if fp.gridColumnCount() == 1 {
-			// Detailed view (1-column)
-			idx := fp.GetCursorIndex()
-			newIdx := idx + step
-			if newIdx < 0 {
-				newIdx = 0
-			}
-			if newIdx >= len(fp.Entries) {
-				newIdx = len(fp.Entries) - 1
-			}
-
-			// Scroll the list if possible, keeping the cursor visually stable
-			newTop := fp.Table.TopPos + step
-			maxTop := len(fp.Entries) - H
-			if maxTop < 0 {
-				maxTop = 0
-			}
-			if newTop < 0 {
-				newTop = 0
-			}
-			if newTop > maxTop {
-				newTop = maxTop
-			}
-
-			fp.Table.TopPos = newTop
-			fp.SetCursorIndex(newIdx)
-			fp.Refresh()
-			return true
-		} else {
-			// Medium/Brief grid view.
-			idx := fp.GetCursorIndex()
-			newIdx := idx + step
-			if newIdx < 0 {
-				newIdx = 0
-			}
-			if newIdx >= len(fp.Entries) {
-				newIdx = len(fp.Entries) - 1
-			}
-
-			// Scroll the list if possible, keeping the cursor visually stable
-			newTop := fp.Table.TopPos + step
-			maxTop := len(fp.Entries) - fp.gridColumnCount()*H
-			if maxTop < 0 {
-				maxTop = 0
-			}
-			if newTop < 0 {
-				newTop = 0
-			}
-			if newTop > maxTop {
-				newTop = maxTop
-			}
-
-			fp.Table.TopPos = newTop
-			fp.SetCursorIndex(newIdx)
-			fp.Refresh()
-			return true
-		}
+		// A spin faster than one notch per spin window queues extra
+		// lines the panel keeps scrolling on its own (see internal/wheel).
+		fp.wheel.Notch(direction, fp.wheelScrollBy)
+		fp.wheelScrollBy(step)
+		return true
 	}
 
 	isRightDragMove := isMove && fp.rightDragActive &&

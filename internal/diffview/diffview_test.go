@@ -439,8 +439,8 @@ func TestDiffViewShowScrollBranches(t *testing.T) {
 	}
 }
 
-// wheel sends a synthetic mouse-wheel event through ProcessMouse.
-func wheel(dv *DiffView, dir int) bool {
+// wheelEvent sends a synthetic mouse-wheel event through ProcessMouse.
+func wheelEvent(dv *DiffView, dir int) bool {
 	return dv.ProcessMouse(&vtinput.InputEvent{
 		Type:           vtinput.MouseEventType,
 		WheelDirection: dir,
@@ -457,7 +457,7 @@ func TestDiffViewProcessMouseWheel(t *testing.T) {
 	dv.SetPosition(0, 0, 20, 6) // 5 content rows tall
 	maxTop := len(dv.rows) - dv.viewHeight()
 
-	if wheel(dv, 0) {
+	if wheelEvent(dv, 0) {
 		t.Fatal("expected a zero WheelDirection to be reported as unhandled")
 	}
 	if dv.topPos != 0 {
@@ -465,7 +465,7 @@ func TestDiffViewProcessMouseWheel(t *testing.T) {
 	}
 
 	dv.topPos = 10
-	if !wheel(dv, -1) { // wheel down
+	if !wheelEvent(dv, -1) { // wheel down
 		t.Fatal("expected wheel-down to be handled")
 	}
 	if want := 13; dv.topPos != want {
@@ -473,7 +473,7 @@ func TestDiffViewProcessMouseWheel(t *testing.T) {
 	}
 
 	dv.topPos = maxTop - 1
-	if !wheel(dv, -1) { // wheel down past the bottom clamps
+	if !wheelEvent(dv, -1) { // wheel down past the bottom clamps
 		t.Fatal("expected wheel-down to be handled")
 	}
 	if dv.topPos != maxTop {
@@ -481,7 +481,7 @@ func TestDiffViewProcessMouseWheel(t *testing.T) {
 	}
 
 	dv.topPos = 2
-	if !wheel(dv, 1) { // wheel up past the top clamps
+	if !wheelEvent(dv, 1) { // wheel up past the top clamps
 		t.Fatal("expected wheel-up to be handled")
 	}
 	if dv.topPos != 0 {

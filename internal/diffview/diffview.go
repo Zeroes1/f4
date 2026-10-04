@@ -10,6 +10,7 @@ import (
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/textdiff"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -32,6 +33,10 @@ type DiffView struct {
 	// pick from. Keeping it lets repeated jumps move on from where the user
 	// last landed instead of restarting from the top every time.
 	cursor int
+
+	// wheelCoast is what a fast wheel spin leaves behind: rows the diff
+	// still owes the scroll position (see internal/wheel).
+	wheelCoast wheel.Coast
 }
 
 // NewDiffView builds a view from the two files' content, already split into
@@ -281,12 +286,23 @@ func (dv *DiffView) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.WheelDirection == 0 {
 		return false
 	}
-	const wheelLines = 3
+	direction := 1
 	if e.WheelDirection > 0 {
-		dv.topPos -= wheelLines
-	} else {
-		dv.topPos += wheelLines
+		direction = -1
 	}
+	// A spin faster than one notch per spin window queues extra lines the
+	// diff keeps scrolling on its own (see internal/wheel).
+	dv.wheelCoast.Notch(direction, dv.scrollBy)
+	dv.scrollBy(direction * 3)
+	return true
+}
+
+// scrollBy moves the first shown row by step rows, positive down the diff,
+// and reports whether anything moved so a coast stops at an end of the
+// comparison instead of spinning in place.
+func (dv *DiffView) scrollBy(step int) bool {
+	before := dv.topPos
+	dv.topPos += step
 	h := dv.viewHeight()
 	maxTop := len(dv.rows) - h
 	if maxTop < 0 {
@@ -298,5 +314,5 @@ func (dv *DiffView) ProcessMouse(e *vtinput.InputEvent) bool {
 	if dv.topPos < 0 {
 		dv.topPos = 0
 	}
-	return true
+	return dv.topPos != before
 }
