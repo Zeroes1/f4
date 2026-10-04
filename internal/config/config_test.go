@@ -960,7 +960,7 @@ func TestConfig_MouseAccelerationClampsNonsense(t *testing.T) {
 		{999, WheelAccelerationMax},
 	} {
 		iniText := fmt.Sprintf("[Mouse]\nAcceleration = %d\n", tc.ini)
-		if err := os.WriteFile(userIniPath, []byte(iniText), 0o644); err != nil {
+		if err := os.WriteFile(userIniPath, []byte(iniText), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		LoadConfig()
@@ -969,7 +969,7 @@ func TestConfig_MouseAccelerationClampsNonsense(t *testing.T) {
 		}
 	}
 
-	if err := os.WriteFile(userIniPath, []byte("[Mouse]\nAcceleration = soon\n"), 0o644); err != nil {
+	if err := os.WriteFile(userIniPath, []byte("[Mouse]\nAcceleration = soon\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	LoadConfig()
