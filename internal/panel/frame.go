@@ -2609,6 +2609,26 @@ func (pf *PanelsFrame) escClearsCommandLine() bool {
 	return pf.CmdLine != nil && !pf.CmdLine.IsEmpty() && (!pf.SearchFirstMode() || pf.CommandLineFocused)
 }
 
+// commandLineOwnsDeletion reports whether plain Backspace/Delete must edit
+// the command line before a configurable hotkey or the active panel sees the
+// event. An empty line deliberately does not claim the key: that is the point
+// at which a user-assigned Del action (including the built-in EscToggle) may
+// run.
+func (pf *PanelsFrame) commandLineOwnsDeletion(e *vtinput.InputEvent) bool {
+	if e.Type != vtinput.KeyEventType || !e.KeyDown || pf.CmdLine == nil || pf.CmdLine.IsEmpty() {
+		return false
+	}
+	if pf.SearchFirstMode() && pf.ShowPanels && !pf.CommandLineFocused {
+		return false
+	}
+	if e.VirtualKeyCode != vtinput.VK_BACK && e.VirtualKeyCode != vtinput.VK_DELETE {
+		return false
+	}
+	mods := e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed |
+		vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed)
+	return mods == 0
+}
+
 // VetoActionKey reports modal input states in which the panels must see
 // the key before the global hotkey dispatcher. During fast find,
 // printable characters and the gray selection keys belong to the
@@ -2655,6 +2675,12 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 	// its selection keys in terminal mode too, where the drive menus are
 	// bound in the Terminal area.
 	if pf.commandLineOwnsSelection(e) {
+		return true
+	}
+	// Plain deletion is another command-line edit primitive. Keep it ahead of
+	// user hotkeys while there is text to delete; with an empty line the normal
+	// hotkey path remains available.
+	if pf.commandLineOwnsDeletion(e) {
 		return true
 	}
 	if !pf.ShowPanels {
@@ -2878,6 +2904,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 				return fsp.ProcessKey(e)
 			}
 		}
+	}
+	// A non-empty command line gets first refusal for plain deletion. This is
+	// intentionally after Fast Find, whose own query has a higher-priority
+	// panel-local meaning, and before the active file panel and its actions.
+	if pf.commandLineOwnsDeletion(e) {
+		return pf.CmdLine.ProcessKey(e)
 	}
 	// Crash test hotkey: Ctrl+Alt+C. Not while a program owns the terminal:
 	// the raw forwarding below hands the key to it, and a chord that belongs

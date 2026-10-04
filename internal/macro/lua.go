@@ -27,10 +27,14 @@ var macroCallTimeout = 10 * time.Second
 
 // LuaMacro is one Macro{} declaration.
 type LuaMacro struct {
-	Areas       []string
-	Keys        []string
-	Description string
-	Source      string
+	Areas []string
+	Keys  []string
+	// EmptyCommandLine is Far's EmptyCommandLine macro flag. Such a macro
+	// claims its key only while the host command line is empty; otherwise the
+	// original key continues through the ordinary input route.
+	EmptyCommandLine bool
+	Description      string
+	Source           string
 
 	action    *lua.LFunction
 	condition *lua.LFunction
@@ -509,12 +513,25 @@ func (e *LuaMacroEngine) Remove(area, key string) bool {
 // the input loop running on the UI goroutine, and a macro that asks for panel
 // state or shows a message needs that goroutine to be free to answer.
 func (e *LuaMacroEngine) Trigger(area string, event *vtinput.InputEvent) bool {
+	return e.TriggerWithCommandLine(area, event, "")
+}
+
+// TriggerWithCommandLine is Trigger with the command-line snapshot already
+// collected by the UI event filter. The real f4 host cannot be queried from
+// that goroutine: its MacroHost deliberately posts reads back to the UI
+// goroutine, while Lua actions run on a worker. Keeping the snapshot at this
+// boundary lets EmptyCommandLine decide before the key is consumed without a
+// UI deadlock.
+func (e *LuaMacroEngine) TriggerWithCommandLine(area string, event *vtinput.InputEvent, commandLine string) bool {
 	if e == nil || event == nil {
 		return false
 	}
 	key := keymap.EventToFarString(event)
 	macro := e.Find(area, key)
 	if macro == nil {
+		return false
+	}
+	if macro.EmptyCommandLine && commandLine != "" {
 		return false
 	}
 	if !e.running.CompareAndSwap(false, true) {

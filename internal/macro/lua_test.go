@@ -280,6 +280,35 @@ func TestMacroConditionAccepts(t *testing.T) {
 	}
 }
 
+func TestMacroEmptyCommandLineFlag(t *testing.T) {
+	host := newFakeMacroHost()
+	host.cmdLine = "typed command"
+	Engine := newTestMacroEngine(t, host, `
+		ran = false
+		Macro { area = "Shell"; key = "Del";
+			flags = "EmptyCommandLine EnableOutput";
+			action = function() ran = true end }
+	`)
+
+	if Engine.TriggerWithCommandLine("Shell", keymap.ParseFarKey("Del"), host.cmdLine) {
+		t.Fatal("EmptyCommandLine macro consumed Del with non-empty command line")
+	}
+	if got := macroGlobals(t, Engine, "ran")["ran"]; got == lua.LTrue {
+		t.Fatal("EmptyCommandLine macro ran with non-empty command line")
+	}
+
+	host.cmdLine = ""
+	if !Engine.TriggerWithCommandLine("Shell", keymap.ParseFarKey("Del"), host.cmdLine) {
+		t.Fatal("EmptyCommandLine macro did not consume Del on an empty command line")
+	}
+	if !Engine.WaitIdle(5 * time.Second) {
+		t.Fatal("EmptyCommandLine macro did not finish in time")
+	}
+	if got := macroGlobals(t, Engine, "ran")["ran"]; got != lua.LTrue {
+		t.Fatal("EmptyCommandLine macro did not run on an empty command line")
+	}
+}
+
 func TestMacroAKeyAndExit(t *testing.T) {
 	host := newFakeMacroHost()
 	Engine := newTestMacroEngine(t, host, `

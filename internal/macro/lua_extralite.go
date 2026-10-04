@@ -18,10 +18,11 @@ var ErrLuaMacrosUnavailable = errors.New("Lua macros are not available in the ex
 
 // LuaMacro is one macro declaration; there are none in this build.
 type LuaMacro struct {
-	Areas       []string
-	Keys        []string
-	Description string
-	Source      string
+	Areas            []string
+	Keys             []string
+	EmptyCommandLine bool
+	Description      string
+	Source           string
 }
 
 // LuaMacroEngine is the placeholder of the Lua macro engine.
@@ -39,14 +40,17 @@ func (e *LuaMacroEngine) Find(_, _ string) *LuaMacro               { return nil 
 func (e *LuaMacroEngine) Bindings(string) []LuaMacroBinding        { return nil }
 func (e *LuaMacroEngine) Remove(_, _ string) bool                  { return false }
 func (e *LuaMacroEngine) Trigger(string, *vtinput.InputEvent) bool { return false }
-func (e *LuaMacroEngine) Run(_, _ string) bool                     { return false }
-func (e *LuaMacroEngine) RunExact(_, _ string) bool                { return false }
-func (e *LuaMacroEngine) WaitIdle(time.Duration) bool              { return true }
-func (e *LuaMacroEngine) Interrupted() bool                        { return false }
-func (e *LuaMacroEngine) Close() error                             { return nil }
-func (e *LuaMacroEngine) RaiseEvent(string) bool                   { return false }
-func (e *LuaMacroEngine) RaiseEventNumbers(string, ...int) bool    { return false }
-func (e *LuaMacroEngine) RunEvents(_ string, _ time.Duration) int  { return 0 }
+func (e *LuaMacroEngine) TriggerWithCommandLine(string, *vtinput.InputEvent, string) bool {
+	return false
+}
+func (e *LuaMacroEngine) Run(_, _ string) bool                    { return false }
+func (e *LuaMacroEngine) RunExact(_, _ string) bool               { return false }
+func (e *LuaMacroEngine) WaitIdle(time.Duration) bool             { return true }
+func (e *LuaMacroEngine) Interrupted() bool                       { return false }
+func (e *LuaMacroEngine) Close() error                            { return nil }
+func (e *LuaMacroEngine) RaiseEvent(string) bool                  { return false }
+func (e *LuaMacroEngine) RaiseEventNumbers(string, ...int) bool   { return false }
+func (e *LuaMacroEngine) RunEvents(_ string, _ time.Duration) int { return 0 }
 
 func (e *LuaMacroEngine) CommandLinePrefixes() []LuaCommandLineInfo { return nil }
 func (e *LuaMacroEngine) RunCommandLine(_ int, _, _ string) bool    { return false }

@@ -12,6 +12,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -208,6 +209,54 @@ func TestMacroRecordingAndPlayback(t *testing.T) {
 	mgr2 := macro.NewMacroManager(tmpFile)
 	if _, ok := mgr2.Macros["Common"][f1Key]; !ok {
 		t.Fatal("Macro was not correctly loaded from INI file")
+	}
+}
+
+func TestMacroFilterLetsCommandLineDeleteBeforeRemappedHotkey(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	oldConfig := config.App
+	oldHotkeys, oldMacros, oldRemap := keymap.GlobalHotkeysMgr, macro.MacroMgr, keymap.GlobalKeyRemap
+	t.Cleanup(func() {
+		config.App = oldConfig
+		keymap.GlobalHotkeysMgr, macro.MacroMgr, keymap.GlobalKeyRemap = oldHotkeys, oldMacros, oldRemap
+	})
+	config.App.NavigationMode = config.NavigationClassic
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	keymap.GlobalHotkeysMgr.Bind("Shell", "Del", "Panel.Toggle")
+	keymap.GlobalHotkeysMgr.Bind("Shell", "BS", "Panel.Toggle")
+	keymap.GlobalKeyRemap = nil
+	mgr := macro.NewMacroManager("")
+
+	pf := panel.NewPanelsFrame()
+	t.Cleanup(pf.Close)
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	for _, tc := range []struct {
+		name string
+		key  uint16
+		pos  uint16
+		want string
+	}{
+		{name: "Del", key: vtinput.VK_DELETE, pos: vtinput.VK_HOME, want: "bc"},
+		{name: "Backspace", key: vtinput.VK_BACK, pos: vtinput.VK_END, want: "ab"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pf.CmdLine.Edit.SetText("abc")
+			pf.CmdLine.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: tc.pos})
+			e := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: tc.key}
+			if macroFilter(mgr, e) {
+				t.Fatalf("macro filter consumed %s before command-line editing", tc.name)
+			}
+			if !pf.ProcessKey(e) {
+				t.Fatalf("PanelsFrame did not consume %s", tc.name)
+			}
+			if got := pf.CmdLine.Edit.GetText(); got != tc.want {
+				t.Fatalf("command line after %s = %q, want %q", tc.name, got, tc.want)
+			}
+		})
 	}
 }
 

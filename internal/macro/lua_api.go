@@ -232,16 +232,27 @@ func (e *LuaMacroEngine) luaMacro(L *lua.LState) int {
 	}
 
 	condition, _ := spec.RawGetString("condition").(*lua.LFunction)
+	flags := lua.LVAsString(spec.RawGetString("flags"))
 
 	e.add(&LuaMacro{
-		Areas:       splitMacroList(area),
-		Keys:        splitMacroList(key),
-		Description: lua.LVAsString(spec.RawGetString("description")),
-		Source:      L.Where(1),
-		action:      action,
-		condition:   condition,
+		Areas:            splitMacroList(area),
+		Keys:             splitMacroList(key),
+		EmptyCommandLine: hasMacroFlag(flags, "EmptyCommandLine"),
+		Description:      lua.LVAsString(spec.RawGetString("description")),
+		Source:           L.Where(1),
+		action:           action,
+		condition:        condition,
 	})
 	return 0
+}
+
+func hasMacroFlag(flags, wanted string) bool {
+	for _, flag := range strings.Fields(flags) {
+		if strings.EqualFold(flag, wanted) {
+			return true
+		}
+	}
+	return false
 }
 
 // luaMenuItem records a MenuItem{}: an entry for one of the plugin menus, with

@@ -115,6 +115,18 @@ func isPanelFastFindActive() bool {
 	return fsp != nil && fsp.FastFindMode
 }
 
+func macroCommandLine() string {
+	area := macroCurrentArea()
+	if area != "Shell" && area != "Terminal" {
+		return ""
+	}
+	pf := panel.FindPanelsFrameAnyScreen()
+	if pf == nil || pf.CmdLine == nil {
+		return ""
+	}
+	return pf.CmdLine.Edit.GetText()
+}
+
 func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.KeyEventType {
 		return false
@@ -225,7 +237,7 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	m.RefreshInterruptedLua()
 
 	// Recorded macros win over scripted ones, as they do in Far.
-	if m.Lua != nil && m.Lua.Trigger(currentArea, e) {
+	if m.Lua != nil && m.Lua.TriggerWithCommandLine(currentArea, e, macroCommandLine()) {
 		vtui.DebugLog("MACRO: Running Lua macro for %s in area %s", keyStr, currentArea)
 		return true
 	}
