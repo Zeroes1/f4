@@ -531,15 +531,9 @@ func checkReplaced(path string, before os.FileInfo) error {
 }
 
 func extract(data []byte, archiveKind, destDir string) error {
-	switch archiveKind {
-	case "7z":
-		return unpack.SevenZip(data, destDir)
-	case "targz":
-		return unpack.TarGz(data, destDir)
-	default:
-		// 4 workers: benchmark-optimal.
-		return unpack.ZipParallel(data, destDir, min(runtime.GOMAXPROCS(0), 4))
-	}
+	// 4 workers: benchmark-optimal. Extract also strips the f4/ wrapper used
+	// by new release archives while retaining support for the old flat layout.
+	return unpack.Extract(data, archiveKind, destDir, min(runtime.GOMAXPROCS(0), 4))
 }
 
 // assetSuffixes returns the release asset suffixes to look for, most

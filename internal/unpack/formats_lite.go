@@ -44,3 +44,11 @@ func zipEntries(data []byte) ([]archiveEntry, error) {
 func SevenZip(data []byte, destDir string) error {
 	return ErrSevenZipUnsupported
 }
+
+func sevenZipEntries(data []byte) ([]archiveEntry, error) {
+	return nil, ErrSevenZipUnsupported
+}
+
+func sevenZip(data []byte, destDir, prefix string) error {
+	return ErrSevenZipUnsupported
+}

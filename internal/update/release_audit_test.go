@@ -141,10 +141,13 @@ func TestPublishedFlavor(t *testing.T) {
 }
 
 // The release check unpacks what the updaters would install with the
-// updater's own code, so an archive that does not hold the executable at its
-// root is refused before it is published.
+// updater's own code. New archives carry the files below f4/, while old flat
+// archives remain accepted for updates from releases that used that layout.
 func TestCheckReleaseArchive(t *testing.T) {
 	linux := ReleaseArchive{Name: "f4-linux-amd64.tar.gz", Kind: "targz", Executable: "f4"}
+	if err := CheckReleaseArchive(targz(t, map[string]string{"f4/f4": "f4", "f4/lang/en.lng": "x"}), linux); err != nil {
+		t.Errorf("a wrapped archive was refused: %v", err)
+	}
 	if err := CheckReleaseArchive(targz(t, map[string]string{"f4": "f4", "lang/en.lng": "x"}), linux); err != nil {
 		t.Errorf("a good archive was refused: %v", err)
 	}

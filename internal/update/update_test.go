@@ -145,7 +145,7 @@ func TestInstallFailsWhenTheArchiveLeavesTheBinary(t *testing.T) {
 func TestInstallReplacesTheBinary(t *testing.T) {
 	exe := installFixture(t)
 
-	if err := Install(targz(t, map[string]string{"f4": "new f4", "lang/ru.lng": "x"}), "targz"); err != nil {
+	if err := Install(targz(t, map[string]string{"f4/f4": "new f4", "f4/lang/ru.lng": "x"}), "targz"); err != nil {
 		t.Fatalf("Install() = %v", err)
 	}
 	if got, _ := os.ReadFile(exe); string(got) != "new f4" {

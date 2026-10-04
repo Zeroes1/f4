@@ -262,6 +262,14 @@ jobs:
         cd plugins/dummy_internal
         go build "${BUILD_TAG_ARGS[@]}" -trimpath $GCFLAGS -ldflags="$LDFLAGS" -o ../../build/plugins/dummy_internal/f4-internal-dummy-plugin$EXT .
 
+        # Keep every downloadable f4 file under one directory when unpacked
+        # by hand. The updater strips this wrapper and still accepts the old
+        # flat archives for in-place updates.
+        cd ../..
+        rm -rf package
+        mkdir -p package/f4
+        cp -a build/. package/f4/
+
     # The universal contract, asserted rather than assumed: no PT_INTERP and
     # no DT_NEEDED. Both halves matter and neither is visible later -- a
     # binary that kept its interpreter starts fine on this runner and fails
@@ -363,17 +371,16 @@ jobs:
       if: steps.affected.outputs.build == 'yes'
       run: |
         if [ "${{ matrix.goos }}" = "windows" ]; then
-          (cd build && zip -r "../$ASSET.zip" .)
+          (cd package && zip -r "../$ASSET.zip" f4)
           SEVENZIP=$(command -v 7z || command -v 7zz || command -v 7za || true)
           if [ -z "$SEVENZIP" ]; then
             sudo apt-get update -qq </dev/null
             sudo apt-get install -y -qq 7zip </dev/null
             SEVENZIP=$(command -v 7zz || command -v 7z)
           fi
-          (cd build && "$SEVENZIP" a -t7z -mx=9 -mf=off -bd "../$ASSET.7z" . </dev/null)
+          (cd package && "$SEVENZIP" a -t7z -mx=9 -mf=off -bd "../$ASSET.7z" f4 </dev/null)
         else
-          # Создаем архив в корне, упаковывая содержимое build (без самой папки build)
-          tar -czvf "$ASSET.tar.gz" -C build .
+          tar -czvf "$ASSET.tar.gz" -C package f4
         fi
 
         if [ "${{ matrix.goos }}" = "darwin" ]; then
@@ -572,11 +579,14 @@ jobs:
           ASSET="f4-$GOOS-$GOARCH"
           ARTIFACT_DIR="$BATCH_ROOT/artifacts/$ASSET"
           mkdir -p "$ARTIFACT_DIR"
+          PACKAGE_DIR="$BATCH_ROOT/packages/$ASSET"
+          mkdir -p "$PACKAGE_DIR/f4"
+          cp -a "$BUILD_DIR"/. "$PACKAGE_DIR/f4/"
 
           if [ "$GOOS" = "windows" ]; then
-            (cd "$BUILD_DIR" && zip -r "$ARTIFACT_DIR/$ASSET.zip" . </dev/null)
+            (cd "$PACKAGE_DIR" && zip -r "$ARTIFACT_DIR/$ASSET.zip" f4 </dev/null)
           else
-            tar -czvf "$ARTIFACT_DIR/$ASSET.tar.gz" -C "$BUILD_DIR" . </dev/null
+            tar -czvf "$ARTIFACT_DIR/$ASSET.tar.gz" -C "$PACKAGE_DIR" f4 </dev/null
           fi
         done < <(jq -c '.[]' <<<"$CELLS")
 
@@ -767,7 +777,12 @@ jobs:
     # itself into lite. No regular Windows updater looks for a .tar.gz, and
     # the lite updater unpacks one on every OS.
     - name: Package
-      run: tar -czvf "$ASSET.tar.gz" -C build .
+      run: |
+        set -euo pipefail
+        rm -rf package
+        mkdir -p package/f4
+        cp -a build/. package/f4/
+        tar -czvf "$ASSET.tar.gz" -C package f4
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
@@ -1235,7 +1250,10 @@ jobs:
         DEB_ARCH: ${{ matrix.deb_arch }}
       run: |
         set -euo pipefail
-        tar -czvf "$ASSET.tar.gz" -C build .
+        rm -rf package
+        mkdir -p package/f4
+        cp -a build/. package/f4/
+        tar -czvf "$ASSET.tar.gz" -C package f4
 
         VERSION="0.0.${GITHUB_RUN_NUMBER}"
         if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
@@ -1353,7 +1371,12 @@ jobs:
 
     - name: Package
       if: steps.affected.outputs.build == 'yes'
-      run: (cd build && zip -r ../f4-windows7-amd64.zip .)
+      run: |
+        set -euo pipefail
+        rm -rf package
+        mkdir -p package/f4
+        cp -a build/. package/f4/
+        (cd package && zip -r ../f4-windows7-amd64.zip f4)
 
     - name: Upload Artifact
       if: steps.affected.outputs.build == 'yes'
@@ -1525,7 +1548,12 @@ jobs:
 
     - name: Package
       if: steps.affected.outputs.build == 'yes'
-      run: (cd build && zip -r ../f4-legacy-windows-386.zip .)
+      run: |
+        set -euo pipefail
+        rm -rf package
+        mkdir -p package/f4
+        cp -a build/. package/f4/
+        (cd package && zip -r ../f4-legacy-windows-386.zip f4)
 
     - name: Upload Artifact
       if: steps.affected.outputs.build == 'yes'

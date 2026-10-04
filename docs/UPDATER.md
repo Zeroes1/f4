@@ -19,6 +19,12 @@ as done.
 So a release's file names are an interface with every build ever released,
 not only with the current code.
 
+Release archives now put their contents below a single `f4/` directory, so a
+manual extraction creates one tidy directory instead of scattering files into
+the current directory. The updater strips that wrapper while installing over
+the running binary, and still accepts the flat archives published before this
+layout change.
+
 ## How a build picks its archive
 
 The API lists a release's assets by name. The build asks for a list of

@@ -36,18 +36,34 @@ func zipEntries(data []byte) ([]archiveEntry, error) {
 	return entries, nil
 }
 
-func SevenZip(data []byte, destDir string) error {
+func sevenZipEntries(data []byte) ([]archiveEntry, error) {
 	szr, err := sevenzip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, f := range szr.File {
-		if err := extractEntry(archiveEntry{
+	entries := make([]archiveEntry, len(szr.File))
+	for i, f := range szr.File {
+		entries[i] = archiveEntry{
 			name:  f.Name,
 			isDir: f.FileInfo().IsDir(),
 			mode:  f.Mode(),
 			open:  f.Open,
-		}, destDir); err != nil {
+		}
+	}
+	return entries, nil
+}
+
+func SevenZip(data []byte, destDir string) error {
+	return sevenZip(data, destDir, "")
+}
+
+func sevenZip(data []byte, destDir, prefix string) error {
+	entries, err := sevenZipEntries(data)
+	if err != nil {
+		return err
+	}
+	for _, f := range entries {
+		if err := extractEntryWithPrefix(f, destDir, prefix); err != nil {
 			return err
 		}
 	}

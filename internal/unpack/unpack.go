@@ -103,7 +103,108 @@ type archiveEntry struct {
 	open  func() (io.ReadCloser, error)
 }
 
+// Extract unpacks an update archive. New f4 release archives carry their
+// contents below a single f4/ directory so extracting one by hand does not
+// scatter files into the current directory. Older releases were flat; keep
+// accepting them, and strip the wrapper only when every archive member is
+// below f4/.
+func Extract(data []byte, archiveKind, destDir string, workers int) error {
+	names, err := archiveNames(data, archiveKind)
+	if err != nil {
+		return err
+	}
+	prefix := f4ArchivePrefix(names)
+	switch archiveKind {
+	case "7z":
+		return sevenZip(data, destDir, prefix)
+	case "targz":
+		return tarGz(data, destDir, prefix)
+	default:
+		return zipParallel(data, destDir, workers, prefix)
+	}
+}
+
+func archiveNames(data []byte, archiveKind string) ([]string, error) {
+	switch archiveKind {
+	case "7z":
+		entries, err := sevenZipEntries(data)
+		if err != nil {
+			return nil, err
+		}
+		return entryNames(entries), nil
+	case "targz":
+		r := bytes.NewReader(data)
+		gzr, err := newGzipReader(r)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = gzr.Close() }()
+
+		tr := tar.NewReader(gzr)
+		var names []string
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				return names, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			names = append(names, hdr.Name)
+		}
+	default:
+		entries, err := zipEntries(data)
+		if err != nil {
+			return nil, err
+		}
+		return entryNames(entries), nil
+	}
+}
+
+func entryNames(entries []archiveEntry) []string {
+	names := make([]string, len(entries))
+	for i, entry := range entries {
+		names[i] = entry.name
+	}
+	return names
+}
+
+func f4ArchivePrefix(names []string) string {
+	const prefix = "f4"
+	nested := false
+	for _, name := range names {
+		name = strings.TrimSuffix(name, "/")
+		if name == "" || name == "." || name == prefix {
+			continue
+		}
+		if strings.HasPrefix(name, prefix+"/") {
+			nested = true
+			continue
+		}
+		return ""
+	}
+	if nested {
+		return prefix
+	}
+	return ""
+}
+
 func extractEntry(e archiveEntry, destDir string) error {
+	return extractEntryWithPrefix(e, destDir, "")
+}
+
+func extractEntryWithPrefix(e archiveEntry, destDir, prefix string) error {
+	if prefix != "" {
+		if e.name == prefix || e.name == prefix+"/" {
+			return nil
+		}
+		name, ok := strings.CutPrefix(e.name, prefix+"/")
+		if !ok {
+			return nil
+		}
+		e.name = name
+	}
+
 	targetPath, err := SanitizePath(e.name, destDir)
 	if err != nil {
 		return nil // Skip malicious/invalid paths
@@ -133,6 +234,10 @@ func extractEntry(e archiveEntry, destDir string) error {
 }
 
 func TarGz(data []byte, destDir string) error {
+	return tarGz(data, destDir, "")
+}
+
+func tarGz(data []byte, destDir, prefix string) error {
 	r := bytes.NewReader(data)
 	gzr, err := newGzipReader(r)
 	if err != nil {
@@ -153,24 +258,28 @@ func TarGz(data []byte, destDir string) error {
 		// bits are meaningful to the extracted file.
 		// #nosec G115 -- masking to 0777 bounds the os.FileMode conversion.
 		mode := os.FileMode(hdr.Mode & 0o777)
-		if err := extractEntry(archiveEntry{
+		if err := extractEntryWithPrefix(archiveEntry{
 			name:  hdr.Name,
 			isDir: hdr.Typeflag == tar.TypeDir,
 			mode:  mode,
 			open:  func() (io.ReadCloser, error) { return io.NopCloser(tr), nil },
-		}, destDir); err != nil {
+		}, destDir, prefix); err != nil {
 			return err
 		}
 	}
 }
 
 func Zip(data []byte, destDir string) error {
+	return zipWithPrefix(data, destDir, "")
+}
+
+func zipWithPrefix(data []byte, destDir, prefix string) error {
 	entries, err := zipEntries(data)
 	if err != nil {
 		return err
 	}
 	for _, e := range entries {
-		if err := extractEntry(e, destDir); err != nil {
+		if err := extractEntryWithPrefix(e, destDir, prefix); err != nil {
 			return err
 		}
 	}
@@ -179,12 +288,16 @@ func Zip(data []byte, destDir string) error {
 
 // ZipParallel: Zip with entries in parallel; falls back when <2 entries.
 func ZipParallel(data []byte, destDir string, workers int) error {
+	return zipParallel(data, destDir, workers, "")
+}
+
+func zipParallel(data []byte, destDir string, workers int, prefix string) error {
 	entries, err := zipEntries(data)
 	if err != nil {
 		return err
 	}
 	if workers < 2 || len(entries) < 2 {
-		return Zip(data, destDir)
+		return zipWithPrefix(data, destDir, prefix)
 	}
 	if workers > len(entries) {
 		workers = len(entries)
@@ -210,7 +323,7 @@ func ZipParallel(data []byte, destDir string, workers int) error {
 		go func() {
 			defer wg.Done()
 			for e := range jobs {
-				if err := extractEntry(e, destDir); err != nil {
+				if err := extractEntryWithPrefix(e, destDir, prefix); err != nil {
 					select {
 					case errCh <- err:
 					default:
