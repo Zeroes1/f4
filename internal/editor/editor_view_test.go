@@ -977,6 +977,47 @@ func TestEditorView_WordWrapScrolling(t *testing.T) {
 	}
 }
 
+func TestEditorView_WheelScrollsViewBeforeMovingCursor(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	var text strings.Builder
+	for i := 0; i < 12; i++ {
+		if i > 0 {
+			text.WriteByte('\n')
+		}
+		fmt.Fprintf(&text, "line %d", i)
+	}
+
+	ev := NewEditorView(piecetable.New([]byte(text.String())), nil, "test.txt")
+	defer ev.Close()
+	ev.SetPosition(0, 0, 79, 3)
+	ev.Engine.SetWidth(80)
+	ev.CursorLine = 0
+	ev.CursorPos = 0
+	ev.EnsureCursorVisible()
+
+	if !ev.scrollWheelLines(2) {
+		t.Fatal("initial wheel movement was not reported")
+	}
+	if ev.ScrollTopRow != 2 || ev.CursorLine != 2 {
+		t.Fatalf("after initial wheel: top=%d cursor=%d, want top=2 cursor=2", ev.ScrollTopRow, ev.CursorLine)
+	}
+
+	if !ev.scrollWheelLines(20) {
+		t.Fatal("wheel movement to the end was not reported")
+	}
+	if ev.ScrollTopRow != 9 || ev.CursorLine != 11 {
+		t.Fatalf("at the end: top=%d cursor=%d, want top=9 cursor=11", ev.ScrollTopRow, ev.CursorLine)
+	}
+
+	if !ev.scrollWheelLines(-20) {
+		t.Fatal("wheel movement back to the start was not reported")
+	}
+	if ev.ScrollTopRow != 0 || ev.CursorLine != 0 {
+		t.Fatalf("at the start: top=%d cursor=%d, want top=0 cursor=0", ev.ScrollTopRow, ev.CursorLine)
+	}
+}
+
 func TestEditorView_WordWrapInfiniteLoop(t *testing.T) {
 	// Text with wide character
 	Pt := piecetable.New([]byte("A世B"))

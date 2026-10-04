@@ -3325,24 +3325,50 @@ func (ev *EditorView) EnsureCursorVisible() {
 	}
 }
 
-// scrollWheelLines moves the cursor and the view by step lines, positive
-// down the text, the way one wheel notch does, and reports whether anything
-// moved so a coast stops at an end of the file instead of spinning in place.
+// scrollWheelLines scrolls the text by step visual rows, positive down the
+// file, keeping the cursor in the same screen row while the view can move.
+// Once the view reaches an end, the cursor continues on its own, matching the
+// panel wheel behaviour. It reports whether anything moved so a coast stops at
+// an end of the file instead of spinning in place.
 func (ev *EditorView) scrollWheelLines(step int) bool {
 	if step == 0 {
 		return false
 	}
-	beforeLine := ev.CursorLine
-	beforeTop := ev.ScrollTopRow
+	direction := 1
 	vk := uint16(vtinput.VK_DOWN)
 	if step < 0 {
+		direction = -1
 		vk = vtinput.VK_UP
 		step = -step
 	}
+
+	moved := false
 	for i := 0; i < step; i++ {
-		ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk})
+		beforeLine := ev.CursorLine
+		beforePos := ev.CursorPos
+		beforeTop := ev.ScrollTopRow
+		beforeVirtual := ev.CursorVirtualSpaces
+
+		// Keep the cursor's screen position while there is another visual row
+		// to reveal. At the document boundary scrollViewBy deliberately does
+		// nothing, so the normal arrow movement can take over there.
+		ev.scrollViewBy(direction)
+		if ev.CursorLine == beforeLine && ev.CursorPos == beforePos &&
+			ev.ScrollTopRow == beforeTop && ev.CursorVirtualSpaces == beforeVirtual {
+			ev.ProcessKey(&vtinput.InputEvent{
+				Type:           vtinput.KeyEventType,
+				KeyDown:        true,
+				VirtualKeyCode: vk,
+			})
+		}
+
+		if ev.CursorLine == beforeLine && ev.CursorPos == beforePos &&
+			ev.ScrollTopRow == beforeTop && ev.CursorVirtualSpaces == beforeVirtual {
+			break
+		}
+		moved = true
 	}
-	return ev.CursorLine != beforeLine || ev.ScrollTopRow != beforeTop
+	return moved
 }
 
 func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
