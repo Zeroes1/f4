@@ -55,7 +55,7 @@ func (m *mediumRow) GetCellText(col int) string {
 	if col >= 0 && col < len(m.fp.Table.Columns) {
 		width = m.fp.Table.Columns[col].Width
 	}
-	return formatPanelFileNameAt(e, width, m.fp.nameLeftPos)
+	return formatPanelFileNameAtWithOptions(e, width, m.fp.nameLeftPos, m.fp.uppercasePanelDirs())
 }
 
 type panelMatchSpan struct {
@@ -110,6 +110,10 @@ func (fp *FileSystemPanel) GetCellAttr(row, col int, defaultAttr uint64) uint64 
 }
 
 func (f *FileEntry) displayName(name string) string {
+	return f.displayNameWithOptions(name, false)
+}
+
+func (f *FileEntry) displayNameWithOptions(name string, uppercaseDirs bool) string {
 	if f.Name == ".." {
 		return ".."
 	}
@@ -122,6 +126,9 @@ func (f *FileEntry) displayName(name string) string {
 	// name already does (vtui substitutes "?" for whatever it still can't
 	// decode, same as before this mapping existed).
 	name = vfs.DisplayName(name)
+	if uppercaseDirs && f.IsDir {
+		name = strings.ToUpper(name)
+	}
 	marker := ""
 	if config.App.ShowHighlightMarks {
 		marker = theme.GlobalFileHighlighter.GetMarker(&f.VFSItem)
@@ -173,6 +180,10 @@ func formatPanelFileName(entry *FileEntry, width int) string {
 // that fit. In separate-extensions mode the extension keeps its right-aligned
 // field, so only the base name counts.
 func panelNameOverflow(entry *FileEntry, width int) int {
+	return panelNameOverflowWithOptions(entry, width, false)
+}
+
+func panelNameOverflowWithOptions(entry *FileEntry, width int, uppercaseDirs bool) int {
 	if width <= 0 {
 		return 0
 	}
@@ -182,20 +193,24 @@ func panelNameOverflow(entry *FileEntry, width int) int {
 			if baseWidth <= 0 {
 				return 0
 			}
-			return max(runewidth.StringWidth(entry.displayName(base))-baseWidth, 0)
+			return max(runewidth.StringWidth(entry.displayNameWithOptions(base, uppercaseDirs))-baseWidth, 0)
 		}
 	}
-	return max(runewidth.StringWidth(entry.displayName(entry.Name))-width, 0)
+	return max(runewidth.StringWidth(entry.displayNameWithOptions(entry.Name, uppercaseDirs))-width, 0)
 }
 
 // panelNameShift clamps a panel-wide scroll position to what this particular
 // name can absorb: a name that fits its column never moves, a longer one
 // stops once its last cell is visible (far2l's MakeCurLeftPos).
 func panelNameShift(entry *FileEntry, width, leftPos int) int {
+	return panelNameShiftWithOptions(entry, width, leftPos, false)
+}
+
+func panelNameShiftWithOptions(entry *FileEntry, width, leftPos int, uppercaseDirs bool) int {
 	if leftPos <= 0 {
 		return 0
 	}
-	return min(leftPos, panelNameOverflow(entry, width))
+	return min(leftPos, panelNameOverflowWithOptions(entry, width, uppercaseDirs))
 }
 
 // scrollPanelName drops shift leading display cells from a name. A wide
@@ -219,12 +234,16 @@ func panelExtensionFieldWidth(extension string) int {
 // panel's name scroll position applied (see nameLeftPos). Only the part of
 // the name that overflows the column can scroll out of view on the left.
 func formatPanelFileNameAt(entry *FileEntry, width, leftPos int) string {
+	return formatPanelFileNameAtWithOptions(entry, width, leftPos, false)
+}
+
+func formatPanelFileNameAtWithOptions(entry *FileEntry, width, leftPos int, uppercaseDirs bool) string {
 	if !shouldSeparatePanelExtension(entry) || width <= 0 {
-		return scrollPanelName(entry.displayName(entry.Name), panelNameShift(entry, width, leftPos))
+		return scrollPanelName(entry.displayNameWithOptions(entry.Name, uppercaseDirs), panelNameShiftWithOptions(entry, width, leftPos, uppercaseDirs))
 	}
 	base, extension := splitFileExtension(entry.Name)
 	if extension == "" {
-		return scrollPanelName(entry.displayName(entry.Name), panelNameShift(entry, width, leftPos))
+		return scrollPanelName(entry.displayNameWithOptions(entry.Name, uppercaseDirs), panelNameShiftWithOptions(entry, width, leftPos, uppercaseDirs))
 	}
 
 	extensionWidth := runewidth.StringWidth(extension)
@@ -238,7 +257,7 @@ func formatPanelFileNameAt(entry *FileEntry, width, leftPos int) string {
 		}
 		return runewidth.Truncate(extension, width, "")
 	}
-	left := scrollPanelName(entry.displayName(base), panelNameShift(entry, width, leftPos))
+	left := scrollPanelName(entry.displayNameWithOptions(base, uppercaseDirs), panelNameShiftWithOptions(entry, width, leftPos, uppercaseDirs))
 	left = runewidth.Truncate(left, width-extensionFieldWidth-1, "")
 	leftWidth := runewidth.StringWidth(left)
 	padding := width - leftWidth - extensionFieldWidth
@@ -1286,6 +1305,10 @@ func (fp *FileSystemPanel) EffectiveViewMode() ViewMode {
 		return fp.WideViewMode()
 	}
 	return fp.ViewMode
+}
+
+func (fp *FileSystemPanel) uppercasePanelDirs() bool {
+	return PanelViewModeSettings(fp.EffectiveViewMode()).UppercaseDirs
 }
 
 // gridColumnCount is the number of stripes: file-columns the entries flow

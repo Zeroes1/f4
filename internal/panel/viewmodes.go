@@ -167,6 +167,9 @@ type PanelViewSettings struct {
 	Name       string
 	Columns    []PanelColumn
 	FullScreen bool
+	// UppercaseDirs paints directory names in uppercase without changing the
+	// names used for sorting, navigation, selection or filesystem operations.
+	UppercaseDirs bool
 	// StatusColumns are the columns of the status line under the panel when
 	// it is switched on (Options -> Panel settings -> Show status line), the
 	// far2l/Far3 "status columns" of a mode (f4#410). Empty keeps f4's own
@@ -493,7 +496,9 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 	}
 	defer f.Close()
 
-	type rawMode struct{ name, columns, widths, fullScreen, statusColumns, statusWidths string }
+	type rawMode struct {
+		name, columns, widths, fullScreen, uppercaseDirs, statusColumns, statusWidths string
+	}
 	var raw [PanelViewModeCount]*rawMode
 	var current *rawMode
 	scanner := bufio.NewScanner(f)
@@ -534,6 +539,8 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			current.statusWidths = strings.TrimSpace(value)
 		case "FullScreen":
 			current.fullScreen = strings.TrimSpace(value)
+		case "UppercaseDirs":
+			current.uppercaseDirs = strings.TrimSpace(value)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -549,7 +556,12 @@ func loadPanelViewModes(path string) ([PanelViewModeCount]*PanelViewSettings, er
 			vtui.DebugLog("PANEL MODES: %s%d ignored: %v", panelModesSectionPrefix, key, err)
 			continue
 		}
-		override := &PanelViewSettings{Name: mode.name, Columns: columns, FullScreen: mode.fullScreen == "1"}
+		override := &PanelViewSettings{
+			Name:          mode.name,
+			Columns:       columns,
+			FullScreen:    mode.fullScreen == "1",
+			UppercaseDirs: mode.uppercaseDirs == "1",
+		}
 		if mode.statusColumns != "" {
 			if status, err := TextToViewSettings(mode.statusColumns, mode.statusWidths); err != nil {
 				vtui.DebugLog("PANEL MODES: %s%d status columns ignored: %v", panelModesSectionPrefix, key, err)
@@ -582,7 +594,11 @@ func savePanelViewModes(path string) error {
 		if settings.Name != "" {
 			fmt.Fprintf(&buf, "Name=%s\n", settings.Name)
 		}
-		fmt.Fprintf(&buf, "Columns=%s\nColumnWidths=%s\nFullScreen=%d\n", types, widths, fullScreen)
+		uppercaseDirs := 0
+		if settings.UppercaseDirs {
+			uppercaseDirs = 1
+		}
+		fmt.Fprintf(&buf, "Columns=%s\nColumnWidths=%s\nFullScreen=%d\nUppercaseDirs=%d\n", types, widths, fullScreen, uppercaseDirs)
 		if len(settings.StatusColumns) > 0 {
 			statusTypes, statusWidths := ViewSettingsToText(settings.StatusColumns)
 			fmt.Fprintf(&buf, "StatusColumns=%s\nStatusColumnWidths=%s\n", statusTypes, statusWidths)
@@ -911,9 +927,9 @@ func (fp *FileSystemPanel) cellText(e *FileEntry, column PanelColumn) string {
 			if e.Selected && e.Name != ".." {
 				mark = "√"
 			}
-			return mark + formatPanelFileNameAt(e, column.Width-1, fp.nameLeftPos)
+			return mark + formatPanelFileNameAtWithOptions(e, column.Width-1, fp.nameLeftPos, fp.uppercasePanelDirs())
 		}
-		return formatPanelFileNameAt(e, column.Width, fp.nameLeftPos)
+		return formatPanelFileNameAtWithOptions(e, column.Width, fp.nameLeftPos, fp.uppercasePanelDirs())
 	case SizeColumn, PhysicalColumn:
 		return panelSizeColumnText(e, column)
 	case DateColumn, TimeColumn, WDateColumn:

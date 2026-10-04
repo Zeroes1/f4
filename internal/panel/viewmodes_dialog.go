@@ -124,6 +124,10 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	if settings.FullScreen {
 		chkFullScreen.State = 1
 	}
+	chkUppercaseDirs := vtui.NewCheckbox(0, 0, i18n.Msg("Panel.Modes.UppercaseDirs"), false)
+	if settings.UppercaseDirs {
+		chkUppercaseDirs.State = 1
+	}
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	btnOk.IsDefault = true
 	btnReset := vtui.NewButton(0, 0, i18n.Msg("Panel.Modes.Reset"))
@@ -146,6 +150,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	dlg.AddItem(lblStatusWidths)
 	dlg.AddItem(editStatusWidths)
 	dlg.AddItem(chkFullScreen)
+	dlg.AddItem(chkUppercaseDirs)
 	dlg.AddItem(btnOk)
 	dlg.AddItem(btnReset)
 	dlg.AddItem(btnCancel)
@@ -163,6 +168,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	vbox.Add(lblStatusWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editStatusWidths, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(chkFullScreen, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	vbox.Add(chkUppercaseDirs, vtui.Margins{}, vtui.AlignLeft)
 	btnRow := vtui.NewHBoxLayout(0, 0, width-6, 1)
 	btnRow.HorizontalAlign = vtui.AlignCenter
 	btnRow.Spacing = 2
@@ -215,7 +221,13 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 				return
 			}
 		}
-		changed := &PanelViewSettings{Name: name, Columns: columns, FullScreen: chkFullScreen.State != 0, StatusColumns: status}
+		changed := &PanelViewSettings{
+			Name:          name,
+			Columns:       columns,
+			FullScreen:    chkFullScreen.State != 0,
+			UppercaseDirs: chkUppercaseDirs.State != 0,
+			StatusColumns: status,
+		}
 		finish(changed, false)
 	}
 

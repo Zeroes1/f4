@@ -162,13 +162,14 @@ func TestShowPanelModesMenuOpensAtActiveMode(t *testing.T) {
 }
 
 // viewModeDialogWidgets picks the edit dialog's controls out by the fixed
-// order editPanelViewMode adds them in: name, type and width (label, edit each), full-screen
-// checkbox, the three buttons, then the Columns... button.
-func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
+// order editPanelViewMode adds them in: name, type and width (label, edit each),
+// full-screen and uppercase-directory checkboxes, the three buttons, then the
+// Columns... button.
+func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen, uppercaseDirs *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
 	t.Helper()
 	children := dlg.GetChildren()
-	if len(children) != 15 {
-		t.Fatalf("dialog has %d children, want 15", len(children))
+	if len(children) != 16 {
+		t.Fatalf("dialog has %d children, want 16", len(children))
 	}
 	var assertOk bool
 	if editTypes, assertOk = children[3].(*vtui.Edit); !assertOk {
@@ -180,14 +181,17 @@ func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidth
 	if fullScreen, assertOk = children[10].(*vtui.Checkbox); !assertOk {
 		t.Fatalf("children[10] = %T, want *vtui.Checkbox", children[10])
 	}
-	if ok, assertOk = children[11].(*vtui.Button); !assertOk {
-		t.Fatalf("children[11] = %T, want *vtui.Button", children[11])
+	if uppercaseDirs, assertOk = children[11].(*vtui.Checkbox); !assertOk {
+		t.Fatalf("children[11] = %T, want *vtui.Checkbox", children[11])
 	}
-	if reset, assertOk = children[12].(*vtui.Button); !assertOk {
+	if ok, assertOk = children[12].(*vtui.Button); !assertOk {
 		t.Fatalf("children[12] = %T, want *vtui.Button", children[12])
 	}
-	if cancel, assertOk = children[13].(*vtui.Button); !assertOk {
+	if reset, assertOk = children[13].(*vtui.Button); !assertOk {
 		t.Fatalf("children[13] = %T, want *vtui.Button", children[13])
+	}
+	if cancel, assertOk = children[14].(*vtui.Button); !assertOk {
+		t.Fatalf("children[14] = %T, want *vtui.Button", children[14])
 	}
 	return
 }
@@ -234,7 +238,7 @@ func TestEditPanelViewModeSavesValidColumnsAndReturnsToMenu(t *testing.T) {
 	pos := panelModesMenuPos(ViewModeDetailed)
 
 	dlg := openViewModeEditDialog(t, pf, pos)
-	editTypes, editWidths, fullScreen, okBtn, _, _ := viewModeDialogWidgets(t, dlg)
+	editTypes, editWidths, fullScreen, uppercaseDirs, okBtn, _, _ := viewModeDialogWidgets(t, dlg)
 
 	if PanelViewModeCustomized(ViewModeDetailed) {
 		t.Fatal("mode is customized before any edit was saved")
@@ -243,6 +247,7 @@ func TestEditPanelViewModeSavesValidColumnsAndReturnsToMenu(t *testing.T) {
 	editTypes.SetText("N,S,N,S")
 	editWidths.SetText("0,7,0,7")
 	fullScreen.State = 1
+	uppercaseDirs.State = 1
 	okBtn.OnClick()
 
 	if !PanelViewModeCustomized(ViewModeDetailed) {
@@ -255,6 +260,9 @@ func TestEditPanelViewModeSavesValidColumnsAndReturnsToMenu(t *testing.T) {
 	}
 	if !settings.FullScreen {
 		t.Error("saved settings did not keep the full-screen checkbox")
+	}
+	if !settings.UppercaseDirs {
+		t.Error("saved settings did not keep the uppercase-directories checkbox")
 	}
 
 	// finish() closes the edit dialog and posts a task back to the menu.
@@ -274,7 +282,7 @@ func TestEditPanelViewModeRejectsBadColumnsWithoutClosing(t *testing.T) {
 	pos := panelModesMenuPos(ViewModeDetailed)
 
 	dlg := openViewModeEditDialog(t, pf, pos)
-	editTypes, editWidths, _, okBtn, _, _ := viewModeDialogWidgets(t, dlg)
+	editTypes, editWidths, _, _, okBtn, _, _ := viewModeDialogWidgets(t, dlg)
 
 	editTypes.SetText("ZZ")
 	editWidths.SetText("")
@@ -319,7 +327,7 @@ func TestEditPanelViewModeResetClearsCustomization(t *testing.T) {
 	pos := panelModesMenuPos(ViewModeDetailed)
 
 	dlg := openViewModeEditDialog(t, pf, pos)
-	_, _, _, _, resetBtn, _ := viewModeDialogWidgets(t, dlg)
+	_, _, _, _, _, resetBtn, _ := viewModeDialogWidgets(t, dlg)
 
 	resetBtn.OnClick()
 
@@ -342,7 +350,7 @@ func TestEditPanelViewModeCancelLeavesModeUnchanged(t *testing.T) {
 	pos := panelModesMenuPos(ViewModeDetailed)
 
 	dlg := openViewModeEditDialog(t, pf, pos)
-	editTypes, editWidths, _, _, _, cancelBtn := viewModeDialogWidgets(t, dlg)
+	editTypes, editWidths, _, _, _, _, cancelBtn := viewModeDialogWidgets(t, dlg)
 
 	editTypes.SetText("N,S,N,S")
 	editWidths.SetText("0,7,0,7")

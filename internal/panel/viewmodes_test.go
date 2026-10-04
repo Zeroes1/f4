@@ -319,7 +319,7 @@ func TestPanelModesFileRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	panelViewModes.overrides[ViewMode7] = &PanelViewSettings{Columns: columns, FullScreen: true}
+	panelViewModes.overrides[ViewMode7] = &PanelViewSettings{Columns: columns, FullScreen: true, UppercaseDirs: true}
 	if err := savePanelViewModes(path); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestPanelModesFileRoundTrip(t *testing.T) {
 	}
 	if text := string(data); !strings.Contains(text, "[Panel/ViewModes/Mode7]") ||
 		!strings.Contains(text, "Columns=N,SC,DM") || !strings.Contains(text, "ColumnWidths=0,11,16") ||
-		!strings.Contains(text, "FullScreen=1") || strings.Contains(text, "Mode1]") {
+		!strings.Contains(text, "FullScreen=1") || !strings.Contains(text, "UppercaseDirs=1") || strings.Contains(text, "Mode1]") {
 		t.Fatalf("panel_modes.ini:\n%s", text)
 	}
 	loaded, err := loadPanelViewModes(path)
@@ -342,7 +342,7 @@ func TestPanelModesFileRoundTrip(t *testing.T) {
 		}
 	}
 	got := loaded[ViewMode7]
-	if got == nil || !got.FullScreen {
+	if got == nil || !got.FullScreen || !got.UppercaseDirs {
 		t.Fatalf("mode 7 = %+v", got)
 	}
 	if types, widths := ViewSettingsToText(got.Columns); types != "N,SC,DM" || widths != "0,11,16" {
@@ -356,6 +356,33 @@ func TestPanelModesFileRoundTrip(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("panel_modes.ini still exists: %v", err)
+	}
+}
+
+func TestPanelModeUppercaseDirsOnlyChangesDirectoryDisplay(t *testing.T) {
+	resetPanelViewModes(true)
+	defer resetPanelViewModes(true)
+
+	settings := DefaultPanelViewSettings(ViewModeDetailed)
+	settings.UppercaseDirs = true
+	panelViewModes.overrides[ViewModeDetailed] = &settings
+	panelViewModes.generation++
+	entries := []*FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "Mixed Folder", IsDir: true}},
+		{VFSItem: vfs.VFSItem{Name: "Mixed File.txt"}},
+		{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+	}
+	fsp := newStableInfoTestPanel(0, 0, 60, 12, vfs.NewNullVFS(0), entries)
+	fsp.SetViewMode(ViewModeDetailed)
+
+	if got := strings.TrimSpace(fsp.GetCellText(0, 0)); got != "MIXED FOLDER" {
+		t.Errorf("directory display = %q, want uppercase", got)
+	}
+	if got := strings.TrimSpace(fsp.GetCellText(1, 0)); got != "Mixed File.txt" {
+		t.Errorf("file display = %q, want unchanged", got)
+	}
+	if got := strings.TrimSpace(fsp.GetCellText(2, 0)); got != ".." {
+		t.Errorf("parent display = %q, want unchanged", got)
 	}
 }
 
