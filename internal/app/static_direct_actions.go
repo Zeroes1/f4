@@ -137,6 +137,21 @@ func runFixedPanelSortNumeric(index int) bool {
 	return true
 }
 
+func fixedPanelSortSelectedFirstChecked(index int) bool {
+	_, fsp, ok := fixedRegularPanel(index)
+	return ok && fsp.SortSelectedFirst
+}
+
+func runFixedPanelSortSelectedFirst(index int) bool {
+	pf, fsp, ok := fixedRegularPanel(index)
+	if !ok {
+		return false
+	}
+	fsp.ToggleSortSelectedFirst()
+	pf.UpdateMenuCheckmarks()
+	return true
+}
+
 func runFixedPanelView(index int, mode panel.ViewMode) bool {
 	pf, _, ok := fixedRegularPanel(index)
 	if !ok {
@@ -326,6 +341,23 @@ func init() {
 			},
 			Checked: func() bool { return fixedPanelSortNumericChecked(side.index) },
 			Handler: func() bool { return runFixedPanelSortNumeric(side.index) },
+		})
+
+		registerAction(action.Action{
+			Name:         "Panel." + side.id + ".SortSelectedFirst",
+			Area:         "Shell",
+			Label:        "Selected First",
+			LabelKey:     "Menu.SortSelectedFirst",
+			Description:  fmt.Sprintf("Sort marked entries of the %s panel ahead of unmarked ones", strings.ToLower(side.id)),
+			DescKey:      "Action.Panel.SortSelectedFirst.Desc",
+			MenuPath:     side.menuPath,
+			HideFromMenu: true,
+			Visible: func() bool {
+				_, _, ok := fixedRegularPanel(side.index)
+				return ok
+			},
+			Checked: func() bool { return fixedPanelSortSelectedFirstChecked(side.index) },
+			Handler: func() bool { return runFixedPanelSortSelectedFirst(side.index) },
 		})
 
 		for _, aiView := range fixedAIViewActionSpecs {

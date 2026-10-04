@@ -1691,6 +1691,24 @@ func init() {
 		Handler: withPF(func(pf *panel.PanelsFrame) { vtui.FrameManager.EmitCommand(appcmd.CmSortNumeric, nil) }),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.SortSelectedFirst",
+		Area:        "Shell",
+		Label:       "Selected First",
+		LabelKey:    "Menu.SortSelectedFirst",
+		Description: "Sort marked entries ahead of unmarked ones",
+		DescKey:     "Action.Panel.SortSelectedFirst.Desc",
+		DefaultKeys: []string{"ShiftF12"},
+		Checked: func() bool {
+			pf := panel.FindPanelsFrameAnyScreen()
+			if pf == nil {
+				return false
+			}
+			fsp := pf.GetActivePanel()
+			return fsp != nil && fsp.SortSelectedFirst
+		},
+		Handler: withPF(func(pf *panel.PanelsFrame) { vtui.FrameManager.EmitCommand(appcmd.CmSortSelectedFirst, nil) }),
+	})
+	registerAction(action.Action{
 		Name:                "Panel.SortMenu",
 		Area:                "Shell",
 		Label:               "Sort Modes",

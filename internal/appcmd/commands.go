@@ -118,4 +118,9 @@ const (
 	CmRightViewMode8
 	CmRightViewMode9
 	CmRightViewMode0
+	// Appended for the same reason: "show selected first" (far's Shift+F12)
+	// is new and the commands above keep the numbers they had.
+	CmSortSelectedFirst
+	CmLeftSortSelectedFirst
+	CmRightSortSelectedFirst
 )
