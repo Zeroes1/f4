@@ -176,6 +176,12 @@ var architectureLayers = map[string]int{
 	// internal/theme and on internal/i18n (layer 1, the company
 	// internal/update and internal/textlayout keep).
 	"internal/textdiff": 0,
+
+	// The wheel-acceleration ramp: the coast queue every view shares. It
+	// reads internal/config the way internal/theme does, for the one
+	// [Mouse] Acceleration setting, and imports nothing else of ours.
+	"internal/wheel": 0,
+
 	"internal/diffview": 1,
 
 	// These two sit on vfs, which stays public.

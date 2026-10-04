@@ -16,6 +16,7 @@ import (
 	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -82,6 +83,10 @@ type ViewerView struct {
 
 	OnClose  func()
 	Codepage int
+
+	// wheelCoast is what a fast wheel spin leaves behind: lines the viewer
+	// still owes the scroll position (see internal/wheel).
+	wheelCoast wheel.Coast
 }
 
 func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, error) {
@@ -1322,18 +1327,38 @@ func (vv *ViewerView) ProcessMouse(e *vtinput.InputEvent) bool {
 	}
 	if e.WheelDirection != 0 {
 		vv.hoverURL = ""
+		direction := 1
 		speed := config.App.WheelViewerDown
-		vk := uint16(vtinput.VK_DOWN)
 		if e.WheelDirection > 0 {
+			direction = -1
 			speed = config.App.WheelViewerUp
-			vk = vtinput.VK_UP
 		}
-		for i := 0; i < config.WheelScrollLines(speed); i++ {
-			vv.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk})
-		}
+		// A spin faster than one notch per spin window queues extra lines
+		// the viewer keeps scrolling on its own (see internal/wheel).
+		vv.wheelCoast.Notch(direction, vv.scrollWheelLines)
+		vv.scrollWheelLines(direction * config.WheelScrollLines(speed))
 		return true
 	}
 	return false
+}
+
+// scrollWheelLines moves the view by step lines, positive down the file,
+// the way one wheel notch does, and reports whether anything moved so a
+// coast stops at the end of the file instead of spinning in place.
+func (vv *ViewerView) scrollWheelLines(step int) bool {
+	if step == 0 {
+		return false
+	}
+	before := vv.TopOffset
+	vk := uint16(vtinput.VK_DOWN)
+	if step < 0 {
+		vk = vtinput.VK_UP
+		step = -step
+	}
+	for i := 0; i < step; i++ {
+		vv.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk})
+	}
+	return vv.TopOffset != before
 }
 
 func (vv *ViewerView) urlLinkAtMouse(mx, my int) (UrlCellRange, bool) {
@@ -1390,6 +1415,8 @@ func (vv *ViewerView) menuBarPinned() bool {
 }
 
 func (vv *ViewerView) Close() {
+	// A coast already posted to the UI loop has no view left to scroll.
+	vv.wheelCoast.Stop()
 	if !vv.closeNotified {
 		vv.closeNotified = true
 		vv.notify(EventClose)

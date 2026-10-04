@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -902,6 +903,78 @@ func TestConfig_MouseWheelRoundTrip(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("wheel config field %d: expected %d, got %d", i, want[i], got[i])
 		}
+	}
+}
+
+func TestConfig_MouseAccelerationRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	userIniPath := filepath.Join(tmpDir, "settings.ini")
+
+	origUserPathFunc := GetUserConfigIniPath
+	GetUserConfigIniPath = func() string { return userIniPath }
+	origPathsFunc := GetConfigIniPaths
+	GetConfigIniPaths = func() []string { return []string{userIniPath} }
+
+	oldCfg := App
+	defer func() {
+		GetUserConfigIniPath = origUserPathFunc
+		GetConfigIniPaths = origPathsFunc
+		App = oldCfg
+	}()
+
+	App.WheelAcceleration = 7
+	SaveConfig()
+
+	App.WheelAcceleration = 1
+	LoadConfig()
+
+	if App.WheelAcceleration != 7 {
+		t.Errorf("Acceleration after a round trip = %d, want 7", App.WheelAcceleration)
+	}
+}
+
+// A settings file is user text: a value outside the documented range, or no
+// number at all, must land on a sane value instead of on nonsense.
+func TestConfig_MouseAccelerationClampsNonsense(t *testing.T) {
+	tmpDir := t.TempDir()
+	userIniPath := filepath.Join(tmpDir, "settings.ini")
+
+	origUserPathFunc := GetUserConfigIniPath
+	GetUserConfigIniPath = func() string { return userIniPath }
+	origPathsFunc := GetConfigIniPaths
+	GetConfigIniPaths = func() []string { return []string{userIniPath} }
+
+	oldCfg := App
+	defer func() {
+		GetUserConfigIniPath = origUserPathFunc
+		GetConfigIniPaths = origPathsFunc
+		App = oldCfg
+	}()
+
+	for _, tc := range []struct{ ini, want int }{
+		{WheelAccelerationMin - 5, WheelAccelerationMin},
+		{0, WheelAccelerationMin},
+		{WheelAccelerationMin, WheelAccelerationMin},
+		{7, 7},
+		{WheelAccelerationMax, WheelAccelerationMax},
+		{999, WheelAccelerationMax},
+	} {
+		iniText := fmt.Sprintf("[Mouse]\nAcceleration = %d\n", tc.ini)
+		if err := os.WriteFile(userIniPath, []byte(iniText), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		LoadConfig()
+		if App.WheelAcceleration != tc.want {
+			t.Errorf("Acceleration = %d: got %d, want %d", tc.ini, App.WheelAcceleration, tc.want)
+		}
+	}
+
+	if err := os.WriteFile(userIniPath, []byte("[Mouse]\nAcceleration = soon\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	LoadConfig()
+	if App.WheelAcceleration != WheelAccelerationDefault {
+		t.Errorf("unparsable Acceleration = %d, want the default %d", App.WheelAcceleration, WheelAccelerationDefault)
 	}
 }
 

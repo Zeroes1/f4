@@ -22,6 +22,7 @@ import (
 	"github.com/unxed/f4/internal/sysinfo"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/viewer"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -38,6 +39,10 @@ type QuickViewPanel struct {
 	src     *FileSystemPanel
 	Frame   *vtui.BorderedFrame
 	Focused bool
+
+	// wheelCoast is what a fast wheel spin leaves behind: lines the preview
+	// still owes the scroll position (see internal/wheel).
+	wheelCoast wheel.Coast
 
 	// Cache the last-computed preview so we don't re-read the file /
 	// re-scan the directory on every redraw.
@@ -495,17 +500,28 @@ func (q *QuickViewPanel) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.WheelDirection == 0 {
 		return false
 	}
-	step := 3
+	direction := 1
 	if e.WheelDirection > 0 {
-		q.ScrollY -= step
-	} else {
-		q.ScrollY += step
+		direction = -1
 	}
+	// A spin faster than one notch per spin window queues extra lines the
+	// preview keeps scrolling on its own (see internal/wheel).
+	q.wheelCoast.Notch(direction, q.scrollWheelBy)
+	q.scrollWheelBy(direction * 3)
+	vtui.FrameManager.HardRefresh()
+	return true
+}
+
+// scrollWheelBy moves the preview by step lines, positive down the file,
+// and reports whether anything moved so a coast stops at an end of the
+// preview instead of spinning in place.
+func (q *QuickViewPanel) scrollWheelBy(step int) bool {
+	before := q.ScrollY
+	q.ScrollY += step
 	if q.ScrollY < 0 {
 		q.ScrollY = 0
 	}
-	vtui.FrameManager.HardRefresh()
-	return true
+	return q.ScrollY != before
 }
 
 func (q *QuickViewPanel) GetSelectedName() string {

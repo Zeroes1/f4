@@ -12,6 +12,7 @@ import (
 	"github.com/unxed/f4/internal/textdiff"
 	"github.com/unxed/f4/internal/vtvibe"
 	"github.com/unxed/f4/internal/vtvibe/ap"
+	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -414,6 +415,10 @@ type aiReviewDiffPane struct {
 	topPos  int
 	onTab   func()
 	onUndo  func()
+
+	// wheelCoast is what a fast wheel spin leaves behind: lines the pane
+	// still owes the scroll position (see internal/wheel).
+	wheelCoast wheel.Coast
 }
 
 func newAIReviewDiffPane(w, h int) *aiReviewDiffPane {
@@ -511,14 +516,25 @@ func (p *aiReviewDiffPane) ProcessMouse(e *vtinput.InputEvent) bool {
 	if e.WheelDirection == 0 {
 		return false
 	}
-	const wheelLines = 3
+	direction := 1
 	if e.WheelDirection > 0 {
-		p.topPos -= wheelLines
-	} else {
-		p.topPos += wheelLines
+		direction = -1
 	}
-	p.clampTop()
+	// A spin faster than one notch per spin window queues extra lines the
+	// pane keeps scrolling on its own (see internal/wheel).
+	p.wheelCoast.Notch(direction, p.scrollBy)
+	p.scrollBy(direction * 3)
 	return true
+}
+
+// scrollBy moves the first shown line by step lines, positive down the
+// diff, and reports whether anything moved so a coast stops at an end of
+// the patch instead of spinning in place.
+func (p *aiReviewDiffPane) scrollBy(step int) bool {
+	before := p.topPos
+	p.topPos += step
+	p.clampTop()
+	return p.topPos != before
 }
 
 // aiReviewDiffLineAttr tints the base text attribute by marker, the same
