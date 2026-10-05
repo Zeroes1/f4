@@ -41,8 +41,11 @@ func TestMountRootUsesRuntimeDirectory(t *testing.T) {
 	if err := os.Setenv("XDG_RUNTIME_DIR", "/run/user/test"); err != nil {
 		t.Fatal(err)
 	}
-	if got := MountRoot(); got != "/run/user/test/f4/mnt" {
-		t.Fatalf("MountRoot() = %q, want %q", got, "/run/user/test/f4/mnt")
+	// MountRoot uses filepath.Join, so the expectation is OS-specific
+	// (backslashes on Windows).
+	want := filepath.Join("/run/user/test", "f4", "mnt")
+	if got := MountRoot(); got != want {
+		t.Fatalf("MountRoot() = %q, want %q", got, want)
 	}
 }
 
