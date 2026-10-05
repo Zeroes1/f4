@@ -198,3 +198,31 @@ func TestHotkeyDelAliasesResolve(t *testing.T) {
 		t.Errorf("explicit binding overridden by alias: got %q", got)
 	}
 }
+
+func TestEditorFAR3HotkeysResolve(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	hm.InitDefaults()
+	cases := map[string]string{
+		"CtrlN":          "Editor.MoveToScreenTop",
+		"CtrlE":          "Editor.MoveToScreenBottom",
+		"CtrlK":          "Editor.DeleteToLineEnd",
+		"AltD":           "Editor.DeleteToLineEnd",
+		"CtrlBack":       "Editor.DeleteWordBackward",
+		"CtrlT":          "Editor.DeleteSpacersForward",
+		"CtrlD":          "Editor.DeleteBlock",
+		"CtrlP":          "Editor.CopyBlockToCursor",
+		"CtrlM":          "Editor.MoveBlockToCursor",
+		"AltU":           "Editor.ShiftBlockLeft",
+		"AltI":           "Editor.ShiftBlockRight",
+		"CtrlShiftEnter": "Editor.InsertPassivePanelFileName",
+		"AltF7":          "Editor.SearchPrevious",
+		"AltF8":          "Editor.GoTo",
+		"CtrlO":          "Panel.ToggleWorkspace",
+		"ShiftF10":       "Editor.SaveAndQuit",
+	}
+	for key, want := range cases {
+		if got := hm.GetAction("Editor", key); got != want {
+			t.Errorf("Editor/%s = %q, want %q", key, got, want)
+		}
+	}
+}

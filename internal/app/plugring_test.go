@@ -37,6 +37,49 @@ func TestResolveAssetURL(t *testing.T) {
 	}
 }
 
+func TestResolvePlugRingAssetURLUsesMatchingFirstPartyRelease(t *testing.T) {
+	oldBuildVersion := buildVersion
+	t.Cleanup(func() { buildVersion = oldBuildVersion })
+
+	item := plughost.PlugRingItem{
+		FirstParty: true,
+		URL:        "https://github.com/unxed/f4/releases/download/{release}/android-plugin-{os}-{arch}.tgz",
+	}
+
+	tests := []struct {
+		name         string
+		buildVersion string
+		wantRelease  string
+	}{
+		{name: "nightly", wantRelease: "nightly"},
+		{name: "tagged prerelease", buildVersion: "v0.3.0-beta", wantRelease: "v0.3.0-beta"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buildVersion = tt.buildVersion
+			want := "https://github.com/unxed/f4/releases/download/" + tt.wantRelease +
+				"/android-plugin-" + runtime.GOOS + "-" + runtime.GOARCH + ".tgz"
+			if got := resolvePlugRingAssetURL(item); got != want {
+				t.Fatalf("resolvePlugRingAssetURL() = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestResolvePlugRingAssetURLDoesNotRewriteCommunityEntries(t *testing.T) {
+	oldBuildVersion := buildVersion
+	t.Cleanup(func() { buildVersion = oldBuildVersion })
+	buildVersion = "v0.3.0-beta"
+
+	item := plughost.PlugRingItem{
+		URL: "https://example.com/releases/{release}/plugin-{os}-{arch}.tgz",
+	}
+	want := "https://example.com/releases/{release}/plugin-" + runtime.GOOS + "-" + runtime.GOARCH + ".tgz"
+	if got := resolvePlugRingAssetURL(item); got != want {
+		t.Fatalf("resolvePlugRingAssetURL() = %q, want %q", got, want)
+	}
+}
+
 func TestBundledPlugRingCatalogUsesRemoteAssets(t *testing.T) {
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {

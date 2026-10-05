@@ -130,6 +130,7 @@ Settings.MacKeyboard
 Panel.Rescan
 Panel.Swap
 Panel.Toggle
+Panel.ToggleWorkspace
 Panel.ToggleLeftPanel
 Panel.ToggleRightPanel
 Panel.TogglePassivePanel
@@ -175,6 +176,7 @@ Terminal.ViewLog
 Terminal.EditLog
 Editor.Save
 Editor.SaveAs
+Editor.SaveAndQuit
 Editor.SwitchToViewer
 Editor.MarkdownPreview
 Editor.MarkdownSplit
@@ -184,8 +186,17 @@ Editor.Redo
 Editor.Copy
 Editor.Cut
 Editor.Paste
+Editor.AppendBlock
 Editor.SelectAll
+Editor.ClearSelection
 Editor.DeleteLine
+Editor.DeleteToLineEnd
+Editor.DeleteWordBackward
+Editor.DeleteBlock
+Editor.CopyBlockToCursor
+Editor.MoveBlockToCursor
+Editor.ShiftBlockLeft
+Editor.ShiftBlockRight
 Editor.DuplicateLine
 Editor.AddCursorAtNextOccurrence
 Editor.SkipOccurrence
@@ -193,6 +204,8 @@ Editor.RemoveLastOccurrence
 Editor.SelectAllOccurrences
 Editor.MoveLineUp
 Editor.MoveLineDown
+Editor.MoveToScreenTop
+Editor.MoveToScreenBottom
 Editor.Base64Menu
 Editor.Base64Encode
 Editor.Base64Decode
@@ -216,7 +229,10 @@ Editor.ConvertCodepage
 Editor.InsertLeftPanelPath
 Editor.InsertRightPanelPath
 Editor.InsertActivePanelFileName
+Editor.InsertPassivePanelFileName
+Editor.InsertFullFilePath
 Editor.DeleteSpacersForward
+Editor.ToggleStatusBar
 Editor.ColorerMatchPair
 Editor.ColorerSelectPair
 Editor.ColorerSelectBlock
