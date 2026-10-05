@@ -90,3 +90,23 @@ func TestUnescapeMountField(t *testing.T) {
 		}
 	}
 }
+
+func TestParseUserMountsRejectsDeviceAndPathEdgeCases(t *testing.T) {
+	input := `/dev/sdb1 /mediax/user/disk ext4 rw 0 0
+none /mnt/bind ext4 rw 0 0
+/dev/sdc1 /mnt/cache overlay rw 0 0
+/dev/sdd1 /run/media/user/disk ext4 rw 0 0
+`
+	want := []MountEntry{{Device: "/dev/sdd1", MountPoint: "/run/media/user/disk", FSType: "ext4"}}
+	if got := ParseUserMounts(input); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ParseUserMounts(edge cases) = %#v, want %#v", got, want)
+	}
+}
+
+func TestUnescapeMountFieldLeavesInvalidOctalEscapes(t *testing.T) {
+	for _, in := range []string{`bad\999`, `short\04`, `plain\q`} {
+		if got := unescapeMountField(in); got != in {
+			t.Errorf("unescapeMountField(%q) = %q, want unchanged", in, got)
+		}
+	}
+}
