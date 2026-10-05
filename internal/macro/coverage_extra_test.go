@@ -20,14 +20,14 @@ func TestMacroParsingHelpers(t *testing.T) {
 	}
 
 	events := parseMacroKeys("CtrlA not-a-far-key F5")
-	if len(events) != 2 {
-		t.Fatalf("parseMacroKeys returned %d events, want 2", len(events))
+	if len(events) != 3 {
+		t.Fatalf("parseMacroKeys returned %d events, want 3", len(events))
 	}
 	if got := keymap.EventToFarString(events[0]); got != "CtrlA" {
 		t.Errorf("first parsed key = %q, want CtrlA", got)
 	}
-	if got := keymap.EventToFarString(events[1]); got != "F5" {
-		t.Errorf("second parsed key = %q, want F5", got)
+	if got := keymap.EventToFarString(events[2]); got != "F5" {
+		t.Errorf("last parsed key = %q, want F5", got)
 	}
 }
 
