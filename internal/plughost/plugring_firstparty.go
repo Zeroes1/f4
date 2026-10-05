@@ -44,13 +44,9 @@ package plughost
 // the two are kept in sync by comment rather than by code sharing. Keep them
 // matching when either changes.
 //
-// The value stays an honest "not installable yet" placeholder until a tagged
-// release actually carries cloudfox-plugin-{os}-{arch}.tgz assets: as of
-// part 3, plugring-manifest.json's URL resolves against
-// releases/latest/download/, and no release has shipped that asset yet, so
-// installing this entry today 404s. Wiring the download/install path
-// (this file, and the PlugRingItemProblem/UI changes alongside it) does not
-// by itself make the asset exist -- see f4#1178 part 4 and later.
+// The value mirrors the plugin's manifest. The release-specific URL is filled
+// in by the app: tagged f4 builds use their own release tag, while nightly
+// and development builds use the moving nightly release.
 const cloudFoxPlugRingVersion = "0.0.0-part3-published-not-installable"
 
 // androidPlugRingVersion mirrors plugins/android/cmd/android-plugin/
@@ -60,9 +56,8 @@ const cloudFoxPlugRingVersion = "0.0.0-part3-published-not-installable"
 // go.mod (split out in the Android plugin's part 1). Keep the two matching
 // when either changes.
 //
-// Same "not installable yet" caveat as cloudFoxPlugRingVersion: nothing
-// about landing this first-party entry makes
-// android-plugin-{os}-{arch}.tgz actually exist on a tagged release.
+// Keep this in sync with the plugin's manifest; see
+// cloudFoxPlugRingVersion for the release URL selection rule.
 const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 
 // iosPlugRingVersion mirrors plugins/ios/cmd/ios-plugin/plugring-manifest.json's
@@ -72,12 +67,8 @@ const androidPlugRingVersion = "0.0.0-part3-published-not-installable"
 // module boundary, so the two are kept in sync by comment rather than by
 // code sharing. Keep them matching when either changes.
 //
-// The value stays an honest "not installable yet" placeholder until a
-// tagged release actually carries ios-plugin-{os}-{arch}.tgz assets:
-// plugring-manifest.json's URL resolves against releases/latest/download/
-// (f4#1178 part 2), and no release has shipped that asset yet, so
-// installing this entry today 404s. Wiring the download/install path (this
-// file, and the entry below) does not by itself make the asset exist.
+// Keep this in sync with the plugin's manifest; see
+// cloudFoxPlugRingVersion for the release URL selection rule.
 const iosPlugRingVersion = "0.0.0-part3-published-not-installable"
 
 // FirstPartyPlugRingItems returns f4's own first-party PlugRing catalog. It
@@ -98,7 +89,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry from in PlugRingItemProblem. See build-cloudfox-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/cloudfox-plugin-{os}-{arch}.tgz",
+			URL:        "https://github.com/unxed/f4/releases/download/{release}/cloudfox-plugin-{os}-{arch}.tgz",
 			Entrypoint: "cloudfox-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
@@ -116,7 +107,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry documents above. See build-android-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/android-plugin-{os}-{arch}.tgz",
+			URL:        "https://github.com/unxed/f4/releases/download/{release}/android-plugin-{os}-{arch}.tgz",
 			Entrypoint: "android-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},
@@ -136,7 +127,7 @@ func FirstPartyPlugRingItems() []PlugRingItem {
 			// entry from in PlugRingItemProblem. See build-ios-plugin in
 			// .github/workflows/build.yml for how each platform's asset gets
 			// this exact name.
-			URL:        "https://github.com/unxed/f4/releases/latest/download/ios-plugin-{os}-{arch}.tgz",
+			URL:        "https://github.com/unxed/f4/releases/download/{release}/ios-plugin-{os}-{arch}.tgz",
 			Entrypoint: "ios-plugin",
 			Category:   PlugRingCategoryFilesystem,
 			Runtimes:   []string{PlugRingRuntimeNative},

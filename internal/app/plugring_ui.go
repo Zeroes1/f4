@@ -267,6 +267,25 @@ func entrypointNeedsInterpreterOnPath(entrypoint string) bool {
 	return !strings.ContainsAny(interpreter, "/\\") && !strings.HasPrefix(interpreter, ".")
 }
 
+// firstPartyReleaseTag keeps a plugin download on the same release line as
+// the f4 binary doing the installation. Tagged builds carry their exact tag
+// in buildVersion; development and nightly builds use the moving nightly
+// release instead.
+func firstPartyReleaseTag() string {
+	if buildVersion != "" {
+		return buildVersion
+	}
+	return "nightly"
+}
+
+func resolvePlugRingAssetURL(item plughost.PlugRingItem) string {
+	url := plughost.ResolveAssetURL(item.URL)
+	if item.FirstParty {
+		url = strings.ReplaceAll(url, "{release}", firstPartyReleaseTag())
+	}
+	return url
+}
+
 func actionInstallPlugRingItem(pf *panel.PanelsFrame, parent *vtui.Window, item plughost.PlugRingItem, refresh func()) {
 	if !safePlugRingID(item.ID) {
 		vtui.ShowMessageOn(parent, " Error ", "Plugin catalog contains an invalid ID.", []string{"&Ok"})
@@ -309,7 +328,7 @@ func actionInstallPlugRingItem(pf *panel.PanelsFrame, parent *vtui.Window, item 
 		}
 	}
 
-	url := plughost.ResolveAssetURL(item.URL)
+	url := resolvePlugRingAssetURL(item)
 	isTarGz := strings.HasSuffix(url, ".tar.gz") || strings.HasSuffix(url, ".tgz")
 	isArchive := isTarGz || strings.HasSuffix(url, ".zip")
 
