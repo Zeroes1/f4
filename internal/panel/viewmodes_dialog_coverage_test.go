@@ -364,3 +364,36 @@ func TestEditPanelViewModeCancelLeavesModeUnchanged(t *testing.T) {
 		t.Fatalf("top frame after Cancel = %T, want the modes menu again", vtui.FrameManager.GetTopFrame())
 	}
 }
+
+// TestEditPanelViewModeFitsItsFrame is the regression test for the dialog
+// being three rows shorter than its own layout: the vbox stacked 19 rows of
+// controls starting two rows under the title, so the button row was laid out
+// below the bottom frame and only the modal clip kept it from painting over
+// the panels. Every control has to sit inside the frame, at the clearance the
+// standard layout rules ask for.
+func TestEditPanelViewModeFitsItsFrame(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 30)
+	vtui.FrameManager.Init(scr)
+
+	pf := base64TestPanel(t.TempDir(), "file.txt")
+	pf.GetActivePanel().ViewMode = ViewModeDetailed
+
+	dlg := openViewModeEditDialog(t, pf, panelModesMenuPos(ViewModeDetailed))
+
+	for _, e := range vtui.ValidateLayout(dlg) {
+		t.Errorf("mode edit dialog layout: %v", e)
+	}
+
+	children := dlg.GetChildren()
+	last := children[len(children)-1]
+	if _, ok := last.(*vtui.Button); !ok {
+		t.Fatalf("last control = %T, want the button row", last)
+	}
+	_, _, _, btnY2 := last.GetPosition()
+	if btnY2 > dlg.Y2-2 {
+		t.Errorf("button row ends at row %d, frame bottom is %d: the buttons do not fit",
+			btnY2, dlg.Y2)
+	}
+}
