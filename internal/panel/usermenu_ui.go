@@ -723,26 +723,49 @@ func (s *userMenuState) goBack(current *vtui.VMenu) {
 type userMenuItemDialog struct {
 	*vtui.Window
 	buttonRow   *vtui.HBoxLayout
-	firstButton *vtui.Button
+	labelEdit   *vtui.Edit
+	commandEdit *vtui.MultiLineEdit
+	separators  []*vtui.Separator
 }
 
-func (d *userMenuItemDialog) centerButtons() {
+func (d *userMenuItemDialog) layoutControls() {
 	if d.buttonRow == nil {
 		return
 	}
-	// Modal viewport resizing leaves controls at their original content width.
-	// Follow the visible frame horizontally while preserving vertical scrolling.
-	_, y, _, _ := d.firstButton.GetPosition()
-	d.buttonRow.SetPosition(d.X1+2, y, d.X2-2, y)
+	// Reflow against the visible frame, including modal viewport resizes which
+	// do not apply child grow modes in vtui.
+	d.labelEdit.SetPosition(d.X1+2, d.Y1+4, d.X2-2, d.Y1+4)
+	for i, sep := range d.separators {
+		y := d.Y1 + 5
+		if i == len(d.separators)-1 {
+			y = d.Y2 - 2
+		}
+		sep.SetPosition(d.X1, y, d.X2, y)
+	}
+	if d.commandEdit != nil {
+		d.commandEdit.SetPosition(d.X1+2, d.Y1+7, d.X2-2, d.Y2-3)
+	}
+	d.buttonRow.SetPosition(d.X1+2, d.Y2-1, d.X2-2, d.Y2-1)
 }
 
 func (d *userMenuItemDialog) ResizeConsole(w, h int) {
 	d.Window.ResizeConsole(w, h)
-	d.centerButtons()
+	d.layoutControls()
+}
+
+func (d *userMenuItemDialog) ChangeSize(w, h int) {
+	d.Window.ChangeSize(w, h)
+	d.layoutControls()
+}
+
+func (d *userMenuItemDialog) ProcessMouse(e *vtinput.InputEvent) bool {
+	handled := d.Window.ProcessMouse(e)
+	d.layoutControls()
+	return handled
 }
 
 func (d *userMenuItemDialog) Show(scr *vtui.ScreenBuf) {
-	d.centerButtons()
+	d.layoutControls()
 	d.Window.Show(scr)
 }
 
@@ -786,10 +809,14 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 
 	editHotkey := vtui.NewEdit(0, 0, 3, hotkey)
 	editLabel := vtui.NewEdit(0, 0, width-4, label)
+	editLabel.SetGrowMode(vtui.GrowHiX)
+	dlg.labelEdit = editLabel
 	var editCommand *vtui.MultiLineEdit
 	if !isSubmenu {
 		editCommand = vtui.NewMultiLineEdit(0, 0, width-4, cmdRowsVisible, "")
 		editCommand.SetLines(cmdLines)
+		editCommand.SetGrowMode(vtui.GrowHiX | vtui.GrowHiY)
+		dlg.commandEdit = editCommand
 	}
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, width-4, height-2)
@@ -802,6 +829,8 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 	}
 	addSeparator := func() {
 		sep := vtui.NewSeparator(0, 0, width, true, true)
+		sep.SetGrowMode(vtui.GrowHiX)
+		dlg.separators = append(dlg.separators, sep)
 		dlg.AddItem(sep)
 		vbox.Add(sep, vtui.Margins{Left: -2, Right: -2}, vtui.AlignFill)
 	}
@@ -812,10 +841,13 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 		addField(i18n.Msg("UserMenu.LabelCommand"), editCommand, vtui.AlignFill)
 	}
 	addSeparator()
+	dlg.separators[len(dlg.separators)-1].SetGrowMode(vtui.GrowHiX | vtui.GrowLoY | vtui.GrowHiY)
 
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Save"))
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
 	btnOk.IsDefault = true
+	btnOk.SetGrowMode(vtui.GrowLoY | vtui.GrowHiY)
+	btnCancel.SetGrowMode(vtui.GrowLoY | vtui.GrowHiY)
 
 	btnHbox := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	btnHbox.HorizontalAlign = vtui.AlignCenter
@@ -828,8 +860,12 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 	vbox.Add(btnHbox, vtui.Margins{}, vtui.AlignFill)
 	vbox.Apply()
 	dlg.buttonRow = btnHbox
-	dlg.firstButton = btnOk
-	dlg.centerButtons()
+	dlg.layoutControls()
+	dlg.MinW = 40
+	dlg.MinH = 8
+	if !isSubmenu {
+		dlg.MinH = 11
+	}
 
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnOk.OnClick = func() {
