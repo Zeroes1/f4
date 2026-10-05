@@ -720,6 +720,32 @@ func (s *userMenuState) goBack(current *vtui.VMenu) {
 	})
 }
 
+type userMenuItemDialog struct {
+	*vtui.Window
+	buttonRow   *vtui.HBoxLayout
+	firstButton *vtui.Button
+}
+
+func (d *userMenuItemDialog) centerButtons() {
+	if d.buttonRow == nil {
+		return
+	}
+	// Modal viewport resizing leaves controls at their original content width.
+	// Follow the visible frame horizontally while preserving vertical scrolling.
+	_, y, _, _ := d.firstButton.GetPosition()
+	d.buttonRow.SetPosition(d.X1+2, y, d.X2-2, y)
+}
+
+func (d *userMenuItemDialog) ResizeConsole(w, h int) {
+	d.Window.ResizeConsole(w, h)
+	d.centerButtons()
+}
+
+func (d *userMenuItemDialog) Show(scr *vtui.ScreenBuf) {
+	d.centerButtons()
+	d.Window.Show(scr)
+}
+
 func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuItem, idx int, isCreate bool, isSubmenu bool) {
 	title := i18n.Msg("UserMenu.EditTitle")
 	if isCreate {
@@ -746,52 +772,46 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 		}
 	}
 
-	// Number of visible rows in the multiline command field. Six matches
-	// FAR's edit-menu-item dialog and comfortably shows short scripts.
+	// Match Far's stacked menu-item editor: two labelled fields, a command
+	// section with six visible lines, and a separate button row.
 	const cmdRowsVisible = 6
-	width := 56
-	height := 11
+	width := 70
+	height := 8
 	if !isSubmenu {
-		// Extra rows for the multiline command box + one for its label row.
-		height = 11 + cmdRowsVisible + 1
+		height += cmdRowsVisible + 2
 	}
 
-	dlg := vtui.NewCenteredDialog(width, height, title)
+	dlg := &userMenuItemDialog{Window: vtui.NewCenteredDialog(width, height, title)}
 	dlg.ShowClose = true
 
-	editHotkey := vtui.NewEdit(0, 0, 10, hotkey)
-	editLabel := vtui.NewEdit(0, 0, 36, label)
+	editHotkey := vtui.NewEdit(0, 0, 3, hotkey)
+	editLabel := vtui.NewEdit(0, 0, width-4, label)
 	var editCommand *vtui.MultiLineEdit
 	if !isSubmenu {
 		editCommand = vtui.NewMultiLineEdit(0, 0, width-4, cmdRowsVisible, "")
 		editCommand.SetLines(cmdLines)
 	}
 
-	makeRow := func(labelText string, edit vtui.UIElement) *vtui.HBoxLayout {
-		hbox := vtui.NewHBoxLayout(0, 0, width-4, 1)
-		l := vtui.NewLabel(0, 0, dialog.PadLabel(labelText), edit)
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+1, width-4, height-2)
+	addField := func(labelText string, edit vtui.UIElement, align vtui.Alignment) {
+		l := vtui.NewLabel(0, 0, labelText, edit)
 		dlg.AddItem(l)
 		dlg.AddItem(edit)
-		hbox.Add(l, vtui.Margins{Right: 1}, vtui.AlignLeft)
-		hbox.Add(edit, vtui.Margins{}, vtui.AlignFill)
-		return hbox
+		vbox.Add(l, vtui.Margins{}, vtui.AlignLeft)
+		vbox.Add(edit, vtui.Margins{}, align)
 	}
-
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-4, height-4)
-	vbox.Add(makeRow(i18n.Msg("UserMenu.LabelHotkey"), editHotkey), vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(makeRow(i18n.Msg("UserMenu.LabelLabel"), editLabel), vtui.Margins{Top: 1}, vtui.AlignFill)
+	addSeparator := func() {
+		sep := vtui.NewSeparator(0, 0, width, true, true)
+		dlg.AddItem(sep)
+		vbox.Add(sep, vtui.Margins{Left: -2, Right: -2}, vtui.AlignFill)
+	}
+	addField(i18n.Msg("UserMenu.LabelHotkey"), editHotkey, vtui.AlignLeft)
+	addField(i18n.Msg("UserMenu.LabelLabel"), editLabel, vtui.AlignFill)
 	if !isSubmenu {
-		// Multi-line command box: label sits on its own row above the box
-		// (FAR's edit-menu-item dialog layout) so the multi-row edit
-		// doesn't leave the label floating next to just its first row.
-		cmdLabel := vtui.NewLabel(0, 0, i18n.Msg("UserMenu.LabelCommand"), editCommand)
-		dlg.AddItem(cmdLabel)
-		dlg.AddItem(editCommand)
-		cmdBox := vtui.NewHBoxLayout(0, 0, width-4, cmdRowsVisible)
-		cmdBox.Add(editCommand, vtui.Margins{}, vtui.AlignFill)
-		vbox.Add(cmdLabel, vtui.Margins{Top: 1}, vtui.AlignLeft)
-		vbox.Add(cmdBox, vtui.Margins{}, vtui.AlignFill)
+		addSeparator()
+		addField(i18n.Msg("UserMenu.LabelCommand"), editCommand, vtui.AlignFill)
 	}
+	addSeparator()
 
 	btnOk := vtui.NewButton(0, 0, i18n.Msg("vtui.Save"))
 	btnCancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
@@ -805,8 +825,11 @@ func showEditItemDialog(s *userMenuState, current *vtui.VMenu, items []UserMenuI
 	btnHbox.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
 	btnHbox.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
 
-	vbox.Add(btnHbox, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(btnHbox, vtui.Margins{}, vtui.AlignFill)
 	vbox.Apply()
+	dlg.buttonRow = btnHbox
+	dlg.firstButton = btnOk
+	dlg.centerButtons()
 
 	btnCancel.OnClick = func() { dlg.Close() }
 	btnOk.OnClick = func() {
