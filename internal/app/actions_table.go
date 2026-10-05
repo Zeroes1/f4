@@ -2551,7 +2551,7 @@ func init() {
 		DefaultKeys: []string{"CtrlVK_DB"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.VisualLeftFSP(); fsp != nil {
-				pf.InsertPathToCmdLine(fsp.Vfs.GetPath())
+				pf.InsertDirPathToCmdLine(fsp.Vfs.GetPath())
 			}
 		}),
 	})
@@ -2564,7 +2564,7 @@ func init() {
 		DefaultKeys: []string{"CtrlVK_DD"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.VisualRightFSP(); fsp != nil {
-				pf.InsertPathToCmdLine(fsp.Vfs.GetPath())
+				pf.InsertDirPathToCmdLine(fsp.Vfs.GetPath())
 			}
 		}),
 	})

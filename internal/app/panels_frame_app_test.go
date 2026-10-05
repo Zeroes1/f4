@@ -1434,7 +1434,7 @@ func TestPanelsFrame_CtrlBrackets_Insertion(t *testing.T) {
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
 	gotLeft := pf.CmdLine.Edit.GetText()
-	expectedLeft := leftPath
+	expectedLeft := leftPath + string(os.PathSeparator)
 	if gotLeft != expectedLeft {
 		t.Errorf("Ctrl+[ failed: expected %q, got %q", expectedLeft, gotLeft)
 	}
@@ -1448,7 +1448,7 @@ func TestPanelsFrame_CtrlBrackets_Insertion(t *testing.T) {
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
 	gotRight := pf.CmdLine.Edit.GetText()
-	expectedRight := rightPath
+	expectedRight := rightPath + string(os.PathSeparator)
 	if gotRight != expectedRight {
 		t.Errorf("Ctrl+] failed: expected %q, got %q", expectedRight, gotRight)
 	}
@@ -1487,8 +1487,8 @@ func TestPanelsFrame_CtrlBrackets_InsertionWhenPanelsHidden(t *testing.T) {
 		VirtualKeyCode:  vtinput.VK_OEM_4,
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
-	if got := pf.CmdLine.Edit.GetText(); got != leftPath {
-		t.Errorf("hidden-panels Ctrl+[ inserted %q, want %q", got, leftPath)
+	if got := pf.CmdLine.Edit.GetText(); got != leftPath+string(os.PathSeparator) {
+		t.Errorf("hidden-panels Ctrl+[ inserted %q, want %q", got, leftPath+string(os.PathSeparator))
 	}
 
 	pf.CmdLine.Clear()
@@ -1498,8 +1498,8 @@ func TestPanelsFrame_CtrlBrackets_InsertionWhenPanelsHidden(t *testing.T) {
 		VirtualKeyCode:  vtinput.VK_OEM_6,
 		ControlKeyState: vtinput.LeftCtrlPressed,
 	})
-	if got := pf.CmdLine.Edit.GetText(); got != rightPath {
-		t.Errorf("hidden-panels Ctrl+] inserted %q, want %q", got, rightPath)
+	if got := pf.CmdLine.Edit.GetText(); got != rightPath+string(os.PathSeparator) {
+		t.Errorf("hidden-panels Ctrl+] inserted %q, want %q", got, rightPath+string(os.PathSeparator))
 	}
 }
 
