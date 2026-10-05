@@ -191,6 +191,11 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			rules := vtui.DefaultLayoutRules
 			rules.MaxWidth = 120 // Allow configurator/large dialogs to exceed default 78 columns
+			if name == "Panel.SelectGroup" || name == "Panel.DeselectGroup" {
+				// Compact mask dialogs deliberately place the prompt and buttons
+				// immediately inside the frame, with no blank rows above/below.
+				rules.FrameClearanceY = 0
+			}
 			baseStrings := vtui.SnapshotStrings()
 			defer vtui.ReplaceStrings(baseStrings)
 
