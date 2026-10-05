@@ -373,12 +373,44 @@ func (s *historySearch) deleteSelected() bool {
 	if !ok || rec.Lock {
 		return false
 	}
+	// applyFilter opens at the last visible entry. Remember the visible
+	// neighbours so deleting one row does not throw the cursor to the end of
+	// the history (f4#1742), including when a filter or pinned section is on.
+	next, previous := s.visibleNeighbours()
 	s.all = append(s.all[:idx], s.all[idx+1:]...)
 	if idx < len(s.secondary) {
 		s.secondary = append(s.secondary[:idx], s.secondary[idx+1:]...)
 	}
+	if next > idx {
+		next--
+	}
+	if previous > idx {
+		previous--
+	}
 	s.applyFilter()
+	if next >= 0 && s.selectOriginalIndex(next) {
+		return true
+	}
+	s.selectOriginalIndex(previous)
 	return true
+}
+
+func (s *historySearch) visibleNeighbours() (next, previous int) {
+	next, previous = -1, -1
+	selected := s.menu.SelectPos
+	for i := selected + 1; i < len(s.menu.Items); i++ {
+		if entry, ok := s.menu.Items[i].UserData.(historySearchEntry); ok {
+			next = entry.index
+			break
+		}
+	}
+	for i := selected - 1; i >= 0; i-- {
+		if entry, ok := s.menu.Items[i].UserData.(historySearchEntry); ok {
+			previous = entry.index
+			break
+		}
+	}
+	return next, previous
 }
 
 // setItems replaces the full item list (used by the "clear all" and
