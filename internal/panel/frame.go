@@ -163,30 +163,65 @@ func (pf *PanelsFrame) AddCommandHistory(cmd string) {
 	pf.CmdLine.Edit.History = strHist
 }
 func (pf *PanelsFrame) InsertPathToCmdLine(path string) {
-	if path != "" {
+	if path == "" {
+		return
+	}
+	// A trailing separator is kept outside the quotes: it separates whatever
+	// the user types next, and inside a quoted Windows word a lone backslash
+	// right before the closing quote would escape that quote for the
+	// Microsoft C runtime.
+	quoted, trailing := path, ""
+	if c := path[len(path)-1]; c == '/' || c == '\\' {
+		quoted, trailing = path[:len(path)-1], string(c)
+	}
+	if quoted != "" {
 		special := " &|;<>()$`\\\"'"
 		if terminal.WindowsShellSyntax() {
 			// Backslash is the path separator there, not an escape
 			// character; with it in the set every single path got quoted.
 			special = " &|;<>()^\"'"
 		}
-		if strings.ContainsAny(path, special) {
+		if strings.ContainsAny(quoted, special) {
 			if terminal.WindowsShellSyntax() {
-				if !strings.HasPrefix(path, "\"") {
-					path = "\"" + path + "\""
+				if !strings.HasPrefix(quoted, "\"") {
+					quoted = "\"" + quoted + "\""
 				}
 			} else {
-				if !strings.HasPrefix(path, "'") {
-					path = "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
+				if !strings.HasPrefix(quoted, "'") {
+					quoted = "'" + strings.ReplaceAll(quoted, "'", "'\\''") + "'"
 				}
 			}
 		}
-		txt := pf.CmdLine.Edit.GetText()
-		if len(txt) > 0 && txt[len(txt)-1] != ' ' {
-			pf.CmdLine.InsertString(" ")
-		}
-		pf.CmdLine.InsertString(path)
 	}
+	txt := pf.CmdLine.Edit.GetText()
+	if len(txt) > 0 && txt[len(txt)-1] != ' ' {
+		pf.CmdLine.InsertString(" ")
+	}
+	pf.CmdLine.InsertString(quoted + trailing)
+}
+
+// InsertDirPathToCmdLine inserts a directory path into the command line with
+// a separator at its end, so a name typed next starts a new path component
+// instead of extending the last one. Roots already carry their separator and
+// are passed through unchanged.
+func (pf *PanelsFrame) InsertDirPathToCmdLine(path string) {
+	pf.InsertPathToCmdLine(pathWithTrailingSeparator(path))
+}
+
+// pathWithTrailingSeparator appends the separator the path itself is written
+// with. Slash-written paths ("/", "C:/work", "sftp://host/tmp") take "/",
+// backslash-written ones ("C:", "C:\work", "\\server\share") take "\".
+func pathWithTrailingSeparator(path string) string {
+	if path == "" || strings.HasSuffix(path, "/") || strings.HasSuffix(path, `\`) {
+		return path
+	}
+	if strings.Contains(path, `\`) && !strings.Contains(path, "/") {
+		return path + `\`
+	}
+	if len(path) == 2 && path[1] == ':' {
+		return path + `\`
+	}
+	return path + "/"
 }
 
 // HandlePanelPathEditHotkey inserts a panel path into the focused dialog edit.
@@ -7036,13 +7071,10 @@ func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 			prefixLen = 6
 		}
 		targetPath = strings.TrimSpace(trimmedCmd[prefixLen:])
-		// Remove quotes if user typed: cd "C:\My Folder" or cd '/tmp/a b'
-		if len(targetPath) >= 2 && targetPath[0] == '\'' && targetPath[len(targetPath)-1] == '\'' {
-			targetPath = targetPath[1 : len(targetPath)-1]
-			targetPath = strings.ReplaceAll(targetPath, "'\\''", "'")
-		} else if len(targetPath) >= 2 && targetPath[0] == '"' && targetPath[len(targetPath)-1] == '"' {
-			targetPath = targetPath[1 : len(targetPath)-1]
-		}
+		// Remove quotes if user typed: cd "C:\My Folder" or cd '/tmp/a b',
+		// with or without the separator the path hotkeys append after the
+		// closing quote: cd "C:\My Folder"\ or cd '/tmp/a b'/.
+		targetPath = stripDirChangeQuotes(targetPath)
 		return targetPath, true
 	}
 	if lowerCmd == "cd.." || lowerCmd == "cd .." {
@@ -7052,6 +7084,38 @@ func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 		return string(os.PathSeparator), true
 	}
 	return "", false
+}
+
+// stripDirChangeQuotes removes the quotes around a "cd" argument. A single
+// separator may follow the closing quote — the path hotkeys append one
+// outside the quotes, so cd "C:\My Folder"\ and cd '/tmp/a b'/ both land
+// here — and anything else after the closing quote is left untouched for the
+// shell to reject.
+func stripDirChangeQuotes(path string) string {
+	if len(path) < 2 || (path[0] != '"' && path[0] != '\'') {
+		return path
+	}
+	quote := path[0]
+	rest := path[1:]
+	if rest[len(rest)-1] == quote {
+		return unquoteDirChange(rest[:len(rest)-1], quote)
+	}
+	end := strings.IndexByte(rest, quote)
+	if end < 0 {
+		return path
+	}
+	trailer := rest[end+1:]
+	if trailer != "/" && trailer != `\` {
+		return path
+	}
+	return unquoteDirChange(rest[:end], quote) + trailer
+}
+
+func unquoteDirChange(body string, quote byte) string {
+	if quote == '\'' {
+		return strings.ReplaceAll(body, `'\''`, "'")
+	}
+	return body
 }
 
 // parsePlainEditCommand recognizes the file-opening form of the edit:
