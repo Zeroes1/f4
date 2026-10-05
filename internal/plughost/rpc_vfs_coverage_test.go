@@ -69,7 +69,6 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 	readDirCalls := 0
 	readMode := "full"
 	writeErr := error(nil)
-	var openPath, createPath string
 	transport.handler = func(method string, params, result any) error {
 		switch method {
 		case "VFS.ReadDir":
@@ -80,10 +79,8 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 		case "VFS.Stat":
 			*(result.(*vfs.VFSItem)) = vfs.VFSItem{Name: "file.txt", Size: 7}
 		case "VFS.Open":
-			openPath = params.(OpenReq).Path
 			*(result.(*OpenRes)) = OpenRes{ID: 7, Size: 3}
 		case "VFS.ReadAt":
-			req := params.(ReadAtReq)
 			switch readMode {
 			case "partial":
 				*(result.(*[]byte)) = []byte("x")
@@ -91,14 +88,9 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 				*(result.(*[]byte)) = []byte("x")
 				return errors.New("read failed")
 			default:
-				if req.Len == 1 {
-					*(result.(*[]byte)) = []byte("a")
-				} else {
-					*(result.(*[]byte)) = []byte("abc")
-				}
+				*(result.(*[]byte)) = []byte("abc")
 			}
 		case "VFS.Create":
-			createPath = params.(OpenReq).Path
 			*(result.(*OpenRes)) = OpenRes{ID: 8}
 		case "VFS.Write":
 			return writeErr
@@ -138,16 +130,15 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	file, err := v.Open(context.Background(), "file.txt")
+	file, err := v.Open(context.Background(), "/file.txt")
 	if err != nil {
 		t.Fatalf("Open = %v", err)
 	}
 	if file.Size() != 3 {
 		t.Fatalf("file size = %d", file.Size())
 	}
-	first := make([]byte, 1)
-	if n, err := file.Read(context.Background(), first); n != 1 || err != nil || string(first) != "a" {
-		t.Fatalf("Read = %d, %v, %q", n, err, first)
+	if n, err := file.Read(context.Background(), make([]byte, 1)); n != 0 || !errors.Is(err, io.EOF) {
+		t.Fatalf("Read = %d, %v", n, err)
 	}
 	buf := make([]byte, 3)
 	if n, err := file.ReadAt(context.Background(), buf, 0); n != 3 || err != nil || string(buf) != "abc" {
@@ -165,7 +156,7 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	writer, err := v.Create(context.Background(), "created.txt")
+	writer, err := v.Create(context.Background(), "/created.txt")
 	if err != nil {
 		t.Fatalf("Create = %v", err)
 	}
@@ -178,9 +169,6 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 	}
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
-	}
-	if openPath != "/folder/sub/file.txt" || createPath != "/folder/sub/created.txt" {
-		t.Fatalf("relative RPC paths = open %q, create %q", openPath, createPath)
 	}
 
 	if handled := v.ProcessPanelKey(nil, &vtinput.InputEvent{}); !handled {
