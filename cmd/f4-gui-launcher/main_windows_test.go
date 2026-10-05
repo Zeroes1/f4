@@ -116,8 +116,16 @@ func TestLauncherStartsF4WithoutAConsole(t *testing.T) {
 	}
 
 	// Without f4.exe next to it the launcher says so and exits with 2.
-	if err := os.Remove(filepath.Join(dir, "f4.exe")); err != nil {
-		t.Fatal(err)
+	// The stub reports before it has exited, and Windows refuses to delete a
+	// running executable ("Access is denied"), so retry until it is gone.
+	var rmErr error
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if rmErr = os.Remove(filepath.Join(dir, "f4.exe")); rmErr == nil {
+			break
+		}
+	}
+	if rmErr != nil {
+		t.Fatal(rmErr)
 	}
 	err := exec.Command(filepath.Join(dir, "f4-gui.exe")).Run()
 	var exit *exec.ExitError
