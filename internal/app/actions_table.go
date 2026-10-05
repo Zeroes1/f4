@@ -1963,14 +1963,15 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
-		Name:        "Panel.ToggleKeyBar",
-		Area:        "Shell",
-		Label:       "Toggle KeyBar",
-		LabelKey:    "Action.Panel.ToggleKeyBar",
-		Description: "Show or hide the KeyBar",
-		DescKey:     "Action.Panel.ToggleKeyBar.Desc",
-		DefaultKeys: []string{"CtrlB"},
-		MenuPath:    "Options",
+		Name:         "Panel.ToggleKeyBar",
+		Area:         "Shell",
+		Label:        "Toggle KeyBar",
+		LabelKey:     "Action.Panel.ToggleKeyBar",
+		Description:  "Show or hide the KeyBar",
+		DescKey:      "Action.Panel.ToggleKeyBar.Desc",
+		DefaultKeys:  []string{"CtrlB"},
+		DefaultAreas: []string{"Editor", "Viewer"},
+		MenuPath:     "Options",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.ShowKeyBar = !pf.ShowKeyBar
 			pf.ResizeConsole(pf.LastW, pf.LastH)
@@ -2049,6 +2050,17 @@ func init() {
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.TogglePanelsVisibility()
 		}),
+	})
+	registerAction(action.Action{
+		Name:         "Panel.ToggleWorkspace",
+		Area:         "Editor",
+		Label:        "Toggle panels",
+		Description:  "Show or hide the panels behind the editor",
+		DefaultKeys:  []string{"CtrlO"},
+		DefaultAreas: []string{"Viewer"},
+		MenuPath:     "Options",
+		HideFromMenu: true,
+		Handler:      withPF(func(pf *panel.PanelsFrame) { pf.TogglePanelsVisibility() }),
 	})
 	registerAction(action.Action{
 		Name:         "Panel.ToggleLeftPanel",
@@ -2625,6 +2637,21 @@ func init() {
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShowSaveAsDialog() }),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.SaveAndQuit",
+		Area:        "Editor",
+		Label:       "Save and quit",
+		Description: "Save the file and close the editor",
+		DefaultKeys: []string{"ShiftF10"},
+		MenuPath:    "File",
+		Handler: withEditor(func(ev *editor.EditorView) {
+			if ev.Modified {
+				ev.SaveToFile(func() { ev.Close() })
+			} else {
+				ev.Close()
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.SwitchToViewer",
 		Area:        "Editor",
 		Label:       "Switch to Viewer",
@@ -2682,7 +2709,7 @@ func init() {
 		LabelKey:    "Action.Editor.Undo",
 		Description: "Undo last change",
 		DescKey:     "Action.Editor.Undo.Desc",
-		DefaultKeys: []string{"CtrlZ"},
+		DefaultKeys: []string{"CtrlZ", "AltBS"},
 		MenuPath:    "Edit",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.Undo() }),
 	})
@@ -2748,6 +2775,15 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.AppendBlock",
+		Area:        "Editor",
+		Label:       "Append block to clipboard",
+		Description: "Append the selected block to the clipboard",
+		DefaultKeys: []string{"CtrlAdd"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.AppendSelectionToClipboard() }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.SelectAll",
 		Area:        "Editor",
 		Label:       "Select All",
@@ -2767,6 +2803,15 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.ClearSelection",
+		Area:        "Editor",
+		Label:       "Clear selection",
+		Description: "Clear the current block selection",
+		DefaultKeys: []string{"CtrlU"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ClearSelection() }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.DeleteLine",
 		Area:        "Editor",
 		Label:       "Delete Line",
@@ -2776,6 +2821,69 @@ func init() {
 		DefaultKeys: []string{"CtrlY"},
 		MenuPath:    "Edit",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteCurrentLine() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.DeleteToLineEnd",
+		Area:        "Editor",
+		Label:       "Delete to line end",
+		Description: "Delete from the cursor to the end of the line",
+		DefaultKeys: []string{"CtrlK", "AltD"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteToLineEnd() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.DeleteWordBackward",
+		Area:        "Editor",
+		Label:       "Delete word backward",
+		Description: "Delete the word to the left of the cursor",
+		DefaultKeys: []string{"CtrlBack"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteWordBackward() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.DeleteBlock",
+		Area:        "Editor",
+		Label:       "Delete block",
+		Description: "Delete the selected block",
+		DefaultKeys: []string{"CtrlD"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteSelection() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.CopyBlockToCursor",
+		Area:        "Editor",
+		Label:       "Copy block to cursor",
+		Description: "Copy the selected block to the cursor",
+		DefaultKeys: []string{"CtrlP"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.CopySelectionToCursor() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.MoveBlockToCursor",
+		Area:        "Editor",
+		Label:       "Move block to cursor",
+		Description: "Move the selected block to the cursor",
+		DefaultKeys: []string{"CtrlM"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.MoveSelectionToCursor() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ShiftBlockLeft",
+		Area:        "Editor",
+		Label:       "Shift block left",
+		Description: "Decrease indentation of the current or selected lines",
+		DefaultKeys: []string{"AltU"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShiftCurrentOrSelectedLines(true) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ShiftBlockRight",
+		Area:        "Editor",
+		Label:       "Shift block right",
+		Description: "Increase indentation of the current or selected lines",
+		DefaultKeys: []string{"AltI"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ShiftCurrentOrSelectedLines(false) }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.DuplicateLine",
@@ -2860,6 +2968,24 @@ func init() {
 		DefaultKeys: []string{"CtrlShiftDown"},
 		MenuPath:    "Edit",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.MoveLines(1) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.MoveToScreenTop",
+		Area:        "Editor",
+		Label:       "Move to screen top",
+		Description: "Move the cursor to the first visible screen line",
+		DefaultKeys: []string{"CtrlN"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.MoveToScreenEdge(false) }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.MoveToScreenBottom",
+		Area:        "Editor",
+		Label:       "Move to screen bottom",
+		Description: "Move the cursor to the last visible screen line",
+		DefaultKeys: []string{"CtrlE"},
+		MenuPath:    "Edit",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.MoveToScreenEdge(true) }),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.Base64Menu",
@@ -3112,7 +3238,7 @@ func init() {
 		LabelKey:    "Action.Editor.SearchPrevious",
 		Description: "Continue search backwards",
 		DescKey:     "Action.Editor.SearchPrevious.Desc",
-		DefaultKeys: []string{"CtrlShiftEnter"},
+		DefaultKeys: []string{"AltF7"},
 		Handler:     withEditor(func(ev *editor.EditorView) { repeatEditorSearchDirection(ev, true) }),
 	})
 
@@ -3296,6 +3422,7 @@ func init() {
 		LabelKey:    "Action.Editor.InsertActivePanelFileName",
 		Description: "Insert the active panel's current file name at cursor",
 		DescKey:     "Action.Editor.InsertActivePanelFileName.Desc",
+		DefaultKeys: []string{"ShiftEnter"},
 		MenuPath:    "Insert",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			if s := panel.ActivePanelNameForEditor(); s != "" {
@@ -3304,15 +3431,46 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Editor.InsertPassivePanelFileName",
+		Area:        "Editor",
+		Label:       "Insert passive panel file name",
+		Description: "Insert the passive panel's current file name at the cursor",
+		DefaultKeys: []string{"CtrlShiftEnter"},
+		MenuPath:    "Insert",
+		Handler: withEditor(func(ev *editor.EditorView) {
+			if s := panel.PassivePanelNameForEditor(); s != "" {
+				ev.InsertTextAtCursor([]byte(s))
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.InsertFullFilePath",
+		Area:        "Editor",
+		Label:       "Insert full editor file path",
+		Description: "Insert the full path of the file being edited",
+		DefaultKeys: []string{"CtrlF"},
+		MenuPath:    "Insert",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.InsertTextAtCursor([]byte(ev.FilePath)) }),
+	})
+	registerAction(action.Action{
 		Name:        "Editor.DeleteSpacersForward",
 		Area:        "Editor",
 		Label:       "Delete Word Forward",
 		LabelKey:    "Action.Editor.DeleteSpacersForward",
 		Description: "Delete spaces and word forward",
 		DescKey:     "Action.Editor.DeleteSpacersForward.Desc",
-		DefaultKeys: []string{"CtrlDel"},
+		DefaultKeys: []string{"CtrlT", "CtrlDel"},
 		MenuPath:    "Insert",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteSpacersForward() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.ToggleStatusBar",
+		Area:        "Editor",
+		Label:       "Toggle editor status bar",
+		Description: "Show or hide the editor title and status bar",
+		DefaultKeys: []string{"CtrlShiftB"},
+		MenuPath:    "Options",
+		Handler:     withEditor(func(ev *editor.EditorView) { ev.ToggleStatusBar() }),
 	})
 
 	// --- Viewer actions ---
@@ -3523,6 +3681,7 @@ func init() {
 		LabelKey:    "Menu.EditorSettings",
 		Description: "Open editor settings dialog",
 		DescKey:     "Action.Settings.Editor.Desc",
+		DefaultKeys: []string{"AltShiftF9"},
 		MenuPath:    "Options",
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditorSettings(pf) }),
 	})

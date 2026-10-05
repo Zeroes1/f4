@@ -91,9 +91,11 @@ type EditorView struct {
 	// glyphs of the Unicode Control Pictures block (U+2400..), so a NUL or ESC in
 	// a file is told apart from every other unprintable. Display only: widths,
 	// cursor columns and the file's bytes are unchanged (unxed/f4#1667).
-	ShowControlChars bool
-	SelActive        bool
-	SelAnchorOffset  int // Абсолютное смещение начала выделения
+	ShowControlChars  bool
+	SelActive         bool
+	SelAnchorOffset   int // Абсолютное смещение начала выделения
+	editorBookmarks   [10]int
+	editorBookmarkSet [10]bool
 	// extraCursors holds the secondary carets of a multi-caret edit, sorted
 	// by offset and without duplicates. The primary caret stays in
 	// CursorLine/CursorPos and is never listed here, so every existing
@@ -2158,6 +2160,16 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
 	//alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
 
+	// FAR's editor bookmarks use the side of Ctrl as a modifier: Right Ctrl
+	// (and Ctrl+Shift) stores, while Left Ctrl jumps.  There is no action per
+	// digit, so keep this small stateful shortcut in the editor itself.
+	if e.VirtualKeyCode >= vtinput.VK_0 && e.VirtualKeyCode <= vtinput.VK_9 && ctrl && !alt {
+		slot := int(e.VirtualKeyCode - vtinput.VK_0)
+		rctrl := (e.ControlKeyState & vtinput.RightCtrlPressed) != 0
+		ev.SetEditorBookmark(slot, shift || rctrl)
+		return true
+	}
+
 	// --- Autocomplete Interception ---
 	if ev.acEnabled && len(ev.acMatches) > 0 {
 		switch e.VirtualKeyCode {
@@ -2246,6 +2258,9 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 
 	switch e.VirtualKeyCode {
 	case vtinput.VK_UP, vtinput.VK_E:
+		if e.VirtualKeyCode == vtinput.VK_E && ctrl && !shift && !alt && LookupHotkey(e) {
+			return true
+		}
 		if e.VirtualKeyCode == vtinput.VK_E && !ctrl {
 			break
 		}
@@ -2476,6 +2491,9 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		return true
 
 	case vtinput.VK_RIGHT, vtinput.VK_D:
+		if e.VirtualKeyCode == vtinput.VK_D && ctrl && LookupHotkey(e) {
+			return true
+		}
 		isAlias := e.VirtualKeyCode == vtinput.VK_D
 		if isAlias && !ctrl {
 			break
@@ -2590,6 +2608,13 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		return true
 
 	case vtinput.VK_BACK:
+		if ctrl && !shift && !alt {
+			if LookupHotkey(e) {
+				return true
+			}
+			ev.DeleteWordBackward()
+			return true
+		}
 		// A vertical block is a selection too. It lives in rectSelActive
 		// rather than selActive, and checking only the latter is what made
 		// Del eat the character under the cursor while a block was up.
@@ -5901,11 +5926,9 @@ func (ev *EditorView) InsertTextAtCursor(data []byte) {
 	}
 }
 
-// deleteSpacersForward removes every run of spaces and tabs starting
-// at the cursor, stopping at the first non-spacer byte (or EOF). No-
-// op when the cursor is already on a non-spacer. Matches FAR's
-// Ctrl+Del behaviour word-for-word — "spacer" is the same tokeniser
-// term the issue uses.
+// DeleteSpacersForward removes the spacer run beginning at the cursor. FAR's
+// Ctrl+T/Ctrl+Del uses this same word-boundary behavior: when the cursor is in
+// whitespace it removes the separators up to the next word.
 func (ev *EditorView) DeleteSpacersForward() {
 	offset := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
 	total := ev.Pt.Size()
