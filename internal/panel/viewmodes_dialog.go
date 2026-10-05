@@ -106,7 +106,19 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	types, widths := ViewSettingsToText(settings.Columns)
 
 	const width = 64
-	const height = 20
+	// Rows the vbox stacks: five label/edit pairs, two checkboxes and the
+	// button row (13) plus the blank row before each group after the first
+	// (6). The frame, the row under the title and the row over the bottom
+	// frame add four more. The dialog used to be 20 rows tall, three short
+	// of that, so the button row landed below the bottom frame and only
+	// the modal clip kept it on screen.
+	const contentRows = 13 + 6
+	height := 4 + contentRows
+	// On a console shorter than the dialog the frame would be drawn past
+	// its bottom row; the modal viewport then scrolls the controls instead.
+	if scrH := vtui.FrameManager.GetScreenHeight(); scrH > 0 && height > scrH {
+		height = scrH
+	}
 	dlg := vtui.NewCenteredDialog(width, height, " "+panelViewModeName(key)+" ")
 	dlg.ShowClose = true
 
