@@ -1505,6 +1505,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── drives_bookmarks_ui.go
     │   │   ├── drives_bookmarks_ui_test.go
     │   │   ├── drives_menu.go
+    │   │   ├── drives_menu_ampersand_test.go
     │   │   ├── drives_menu_unix.go
     │   │   ├── drives_menu_windows.go
     │   │   ├── edit_command_test.go

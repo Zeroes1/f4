@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/sysinfo"
 	"github.com/unxed/f4/vfs/hostmode"
@@ -216,18 +217,23 @@ func driveMenuPlatformRowHasDetails(columns []driveMenuPlatformColumn) bool {
 	return false
 }
 
+// driveMenuPadColumn aligns one column of a drive row. The padding is worked
+// out from the text as it reads on screen, and only then is the text escaped
+// for the menu: a volume label such as "R&D" would otherwise be taken for a
+// hotkey marker, lose its ampersand and underline the next letter (f4#1148).
 func driveMenuPadColumn(column driveMenuPlatformColumn, width int, last bool) string {
+	text := dialog.EscapeAmpersand(column.text)
 	if last {
 		if column.rightAlign {
-			return strings.Repeat(" ", width-vtui.StringWidth(column.text)) + column.text
+			return strings.Repeat(" ", width-vtui.StringWidth(column.text)) + text
 		}
-		return column.text
+		return text
 	}
 	padding := width - vtui.StringWidth(column.text)
 	if column.rightAlign {
-		return strings.Repeat(" ", padding) + column.text
+		return strings.Repeat(" ", padding) + text
 	}
-	return column.text + strings.Repeat(" ", padding)
+	return text + strings.Repeat(" ", padding)
 }
 
 // driveMenuPlatformRowsText renders the platform rows as Far-style columns.
