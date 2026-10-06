@@ -1384,28 +1384,83 @@ func hiddenSortColumnTitle(mode SortMode, ascending bool, width int) string {
 }
 
 func (fp *FileSystemPanel) updateSortColumnTitles() {
-	visibleSortColumn := false
 	for column := range fp.Table.Columns {
-		title := panelColumnTitle(fp.panelColumnAt(column).Type)
-
-		mode, sortable := fp.columnSortMode(column)
-		if sortable && fp.SortMode != SortUnsorted && fp.SortMode == mode {
-			arrow := " ↓"
-			if fp.SortIsAscending() {
-				arrow = " ↑"
-			}
-			title += arrow
-			visibleSortColumn = true
-		}
-		fp.Table.Columns[column].Title = title
+		fp.Table.Columns[column].Title = fp.sortColumnLabel(column)
 	}
 
-	if fp.SortMode != SortUnsorted && !visibleSortColumn && len(fp.Table.Columns) > 0 {
+	if fp.sortModeIsHidden() {
 		right := hiddenSortColumnTitle(
 			fp.SortMode, fp.SortIsAscending(), fp.Table.Columns[0].Width)
 		fp.Table.Columns[0].Title = composePanelColumnTitle(
 			panelColumnTitle(fp.panelColumnAt(0).Type), right, fp.Table.Columns[0].Width)
 	}
+}
+
+// sortedByColumn reports whether the panel is sorted by what the column holds.
+func (fp *FileSystemPanel) sortedByColumn(column int) bool {
+	mode, sortable := fp.columnSortMode(column)
+	return sortable && fp.SortMode != SortUnsorted && fp.SortMode == mode
+}
+
+// sortModeIsHidden reports whether the active sort mode has no column of its
+// own in the current view; its label is then written into the first column's
+// header (see hiddenSortColumnTitle).
+func (fp *FileSystemPanel) sortModeIsHidden() bool {
+	if fp.SortMode == SortUnsorted || len(fp.Table.Columns) == 0 {
+		return false
+	}
+	for column := range fp.Table.Columns {
+		if fp.sortedByColumn(column) {
+			return false
+		}
+	}
+	return true
+}
+
+// sortColumnLabel is the text a column's header shows for the column itself:
+// its title, followed by the direction arrow when the panel is sorted by it.
+func (fp *FileSystemPanel) sortColumnLabel(column int) string {
+	title := panelColumnTitle(fp.panelColumnAt(column).Type)
+	if fp.sortedByColumn(column) {
+		if fp.SortIsAscending() {
+			return title + " ↑"
+		}
+		return title + " ↓"
+	}
+	return title
+}
+
+// headerLabelSpan is where the label of a column's header is drawn, in cells
+// counted from the column's left edge: start inclusive, end exclusive. Only
+// the label sorts (f4#1769); the blank rest of the header does not, so a
+// stray click near a title cannot flip the sort order or mode.
+func (fp *FileSystemPanel) headerLabelSpan(column int) (start, end int) {
+	tableColumn := fp.Table.Columns[column]
+	width := tableColumn.Width
+	label := fp.sortColumnLabel(column)
+	hiddenLabelColumn := column == 0 && fp.sortModeIsHidden()
+	room := width
+	if hiddenLabelColumn {
+		// The hidden mode's own label takes the right end and a gap; whatever
+		// is left of the header belongs to the column title, left-aligned.
+		room = width - runewidth.StringWidth(hiddenSortColumnTitle(fp.SortMode, fp.SortIsAscending(), width)) - 1
+	}
+	if room <= 0 {
+		return 0, 0
+	}
+	labelWidth := runewidth.StringWidth(label)
+	if labelWidth > room {
+		labelWidth = room
+	}
+	if !hiddenLabelColumn {
+		switch tableColumn.Alignment {
+		case vtui.AlignRight:
+			start = width - labelWidth
+		case vtui.AlignCenter:
+			start = (width - labelWidth) / 2
+		}
+	}
+	return start, start + labelWidth
 }
 
 func (fp *FileSystemPanel) headerSortModeAt(x, y int) (SortMode, bool) {
@@ -1418,6 +1473,9 @@ func (fp *FileSystemPanel) headerSortModeAt(x, y int) (SortMode, bool) {
 	columnX := fp.Table.X1
 	for column, tableColumn := range fp.Table.Columns {
 		if x >= columnX && x < columnX+tableColumn.Width {
+			if start, end := fp.headerLabelSpan(column); x < columnX+start || x >= columnX+end {
+				return SortUnsorted, false
+			}
 			return fp.columnSortMode(column)
 		}
 		columnX += tableColumn.Width
@@ -1433,15 +1491,8 @@ func (fp *FileSystemPanel) headerSortModeAt(x, y int) (SortMode, bool) {
 }
 
 func (fp *FileSystemPanel) hiddenSortModeHeaderAt(x int) (SortMode, bool) {
-	if fp.SortMode == SortUnsorted || len(fp.Table.Columns) == 0 {
+	if !fp.sortModeIsHidden() {
 		return SortUnsorted, false
-	}
-
-	for column := range fp.Table.Columns {
-		mode, sortable := fp.columnSortMode(column)
-		if sortable && mode == fp.SortMode {
-			return SortUnsorted, false
-		}
 	}
 
 	width := fp.Table.Columns[0].Width

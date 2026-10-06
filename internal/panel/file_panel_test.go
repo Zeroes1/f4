@@ -3665,7 +3665,8 @@ func TestFileSystemPanel_HeaderSortMappingAllViewModes(t *testing.T) {
 			fp.Resize(80, 12)
 			x := fp.Table.X1
 			for column, want := range tc.want {
-				mode, ok := fp.headerSortModeAt(x, fp.Table.Y1)
+				labelStart, _ := fp.headerLabelSpan(column)
+				mode, ok := fp.headerSortModeAt(x+labelStart, fp.Table.Y1)
 				if !ok || mode != want {
 					t.Fatalf("column %d maps to %v,%v; want %v,true", column, mode, ok, want)
 				}

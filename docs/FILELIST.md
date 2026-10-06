@@ -1540,6 +1540,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── grouping_menu.go
     │   │   ├── grouping_test.go
     │   │   ├── grouping_view.go
+    │   │   ├── header_label_zone_test.go
     │   │   ├── hints.go
     │   │   ├── host_console_replies.go
     │   │   ├── host_console_replies_test.go
