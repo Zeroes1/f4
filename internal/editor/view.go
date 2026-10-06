@@ -3369,6 +3369,14 @@ func (ev *EditorView) scrollWheelLines(step int) bool {
 
 	moved := false
 	for i := 0; i < step; i++ {
+		if ev.SelActive || ev.RectSelActive {
+			if !ev.scrollSelectionViewBy(direction) {
+				break
+			}
+			moved = true
+			continue
+		}
+
 		beforeLine := ev.CursorLine
 		beforePos := ev.CursorPos
 		beforeTop := ev.ScrollTopRow
@@ -3394,6 +3402,24 @@ func (ev *EditorView) scrollWheelLines(step int) bool {
 		moved = true
 	}
 	return moved
+}
+
+// scrollSelectionViewBy moves only the viewport while a selection is active.
+// Wheel scrolling must not turn a fixed selection into a growing one by
+// moving its cursor endpoint.
+func (ev *EditorView) scrollSelectionViewBy(delta int) bool {
+	height := ev.Y2 - ev.Y1
+	if height <= 0 {
+		return false
+	}
+	maxTop := max(ev.Engine.GetTotalVisualRows()-height, 0)
+	nextTop := min(max(ev.ScrollTopRow+delta, 0), maxTop)
+	if nextTop == ev.ScrollTopRow {
+		return false
+	}
+	ev.ScrollTopRow = nextTop
+	vtui.FrameManager.Redraw()
+	return true
 }
 
 func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {

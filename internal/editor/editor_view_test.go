@@ -1018,6 +1018,51 @@ func TestEditorView_WheelScrollsViewBeforeMovingCursor(t *testing.T) {
 	}
 }
 
+func TestEditorView_WheelScrollKeepsSelection(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	var text strings.Builder
+	for i := 0; i < 12; i++ {
+		if i > 0 {
+			text.WriteByte('\n')
+		}
+		fmt.Fprintf(&text, "line %d", i)
+	}
+
+	ev := NewEditorView(piecetable.New([]byte(text.String())), nil, "test.txt")
+	defer ev.Close()
+	ev.SetPosition(0, 0, 79, 3)
+	ev.Engine.SetWidth(80)
+	ev.CursorLine = 1
+	ev.CursorPos = len("line 1")
+	ev.SelActive = true
+	ev.SelAnchorOffset = 0
+	ev.EnsureCursorVisible()
+
+	minBefore, maxBefore := ev.GetSelectionRange()
+	if !ev.scrollWheelLines(2) {
+		t.Fatal("selection wheel movement was not reported")
+	}
+	minAfter, maxAfter := ev.GetSelectionRange()
+	if ev.ScrollTopRow != 2 {
+		t.Fatalf("selection wheel top=%d, want 2", ev.ScrollTopRow)
+	}
+	if ev.CursorLine != 1 || ev.CursorPos != len("line 1") {
+		t.Fatalf("selection wheel moved cursor to line=%d pos=%d", ev.CursorLine, ev.CursorPos)
+	}
+	if minAfter != minBefore || maxAfter != maxBefore {
+		t.Fatalf("selection changed from [%d:%d] to [%d:%d]", minBefore, maxBefore, minAfter, maxAfter)
+	}
+
+	if !ev.scrollWheelLines(-2) {
+		t.Fatal("selection wheel movement back was not reported")
+	}
+	minAfter, maxAfter = ev.GetSelectionRange()
+	if ev.ScrollTopRow != 0 || minAfter != minBefore || maxAfter != maxBefore {
+		t.Fatalf("selection changed while scrolling back: top=%d range=[%d:%d]", ev.ScrollTopRow, minAfter, maxAfter)
+	}
+}
+
 func TestEditorView_WordWrapInfiniteLoop(t *testing.T) {
 	// Text with wide character
 	Pt := piecetable.New([]byte("A世B"))

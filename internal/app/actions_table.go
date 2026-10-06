@@ -939,13 +939,13 @@ func init() {
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
 				var maskEdit *vtui.Edit
-				dlg := vtui.InputBox(i18n.Msg("Select.Title"), i18n.Msg("Select.Mask"), "*", func(mask string) {
+				dlg := dialog.MaskInputBox(i18n.Msg("Select.Title"), i18n.Msg("Select.Mask"), "*", func(mask string) {
 					history.CommitHistory(maskEdit, mask)
 					fsp.ApplyMaskSelection(mask, true)
 				})
 				// Plain DIF_HISTORY, as in far2l: the dialog opens on "*"
 				// rather than on whatever was selected last time.
-				maskEdit = history.AttachHistory(history.InputBoxEdit(dlg), history.FileMasksHistoryID)
+				maskEdit = history.AttachHistory(history.InputBoxEdit(dlg.Window), history.FileMasksHistoryID)
 			}
 		}),
 	})
@@ -961,11 +961,11 @@ func init() {
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
 				var maskEdit *vtui.Edit
-				dlg := vtui.InputBox(i18n.Msg("Deselect.Title"), i18n.Msg("Select.Mask"), "*", func(mask string) {
+				dlg := dialog.MaskInputBox(i18n.Msg("Deselect.Title"), i18n.Msg("Select.Mask"), "*", func(mask string) {
 					history.CommitHistory(maskEdit, mask)
 					fsp.ApplyMaskSelection(mask, false)
 				})
-				maskEdit = history.AttachHistory(history.InputBoxEdit(dlg), history.FileMasksHistoryID)
+				maskEdit = history.AttachHistory(history.InputBoxEdit(dlg.Window), history.FileMasksHistoryID)
 			}
 		}),
 	})
