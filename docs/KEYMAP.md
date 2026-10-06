@@ -220,3 +220,24 @@ normal action hotkey settings. In panels it saves clipboard images or offers an
 image/text choice; text-only clipboard data goes to the command line. See
 [Clipboard images](SETTINGS_CENTER.md#clipboard-images) for encoding and naming
 preferences. Editor and dialog clipboard shortcuts keep their existing actions.
+
+### Panel file clipboard (f4#1767)
+
+`Panel.CopyFilesToClipboard` (Ctrl+C) and `Panel.CutFilesToClipboard` remember the
+selected files of the active panel, or the file under the cursor when nothing is
+marked; the Files menu lists both. The files stay where they are. The next
+`Panel.Paste` (Ctrl+V, Shift+Insert) copies them, or, after a cut, moves them, into
+the directory of the active panel through the same file operations as F5 and F6, so
+the usual queue, conflict questions and progress apply. A copy can be pasted again;
+a cut is spent by the first paste.
+
+The paths of the files are put on the system clipboard as text, one per line. That
+text is how a paste recognizes the files as still current: if the clipboard holds
+anything else by then, the remembered files are forgotten and the paste is an
+ordinary text or image paste. While the command line holds text, Ctrl+C and Ctrl+V
+stay with the command line, and the paste is a text paste.
+
+Cut has no default key because Ctrl+X belongs to the command line history; bind it, or
+any other key, in `Options > Hotkey Configuration`. The remembered files are kept
+inside f4: other programs receive only the paths as text, and files copied in other
+programs cannot be pasted into a panel yet.

@@ -1510,6 +1510,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── edit_command_test.go
     │   │   ├── entry_totals_cache_test.go
     │   │   ├── exec.go
+    │   │   ├── file_clipboard.go
+    │   │   ├── file_clipboard_test.go
     │   │   ├── file_panel_test.go
     │   │   ├── folder_event_test.go
     │   │   ├── frame_coverage_batch22_test.go

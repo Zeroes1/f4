@@ -719,6 +719,33 @@ func init() {
 		Handler:     func() bool { return panel.ActionPasteClipboard(panel.FindPanelsFrame()) },
 	})
 	registerAction(action.Action{
+		Name:        "Panel.CopyFilesToClipboard",
+		Area:        "Shell",
+		Label:       "Copy files to clipboard",
+		LabelKey:    "Action.Panel.CopyFilesToClipboard",
+		Description: "Remember the selected files; paste (Ctrl+V) copies them into the active panel",
+		DescKey:     "Action.Panel.CopyFilesToClipboard.Desc",
+		// Ctrl+C is the default only because the command line, which owns it
+		// while it holds text, makes the action unavailable.
+		DefaultKeys: []string{"CtrlC"},
+		MenuPath:    "Files",
+		Enabled:     func() bool { return panel.PanelCanCopyFilesToClipboard(panel.FindPanelsFrame()) },
+		Handler:     func() bool { return panel.ActionCopyFilesToClipboard(panel.FindPanelsFrame(), false) },
+	})
+	registerAction(action.Action{
+		Name:        "Panel.CutFilesToClipboard",
+		Area:        "Shell",
+		Label:       "Cut files to clipboard",
+		LabelKey:    "Action.Panel.CutFilesToClipboard",
+		Description: "Remember the selected files; paste (Ctrl+V) moves them into the active panel",
+		DescKey:     "Action.Panel.CutFilesToClipboard.Desc",
+		// No default key: Ctrl+X belongs to the command line history, and the
+		// action can be bound to it, or to any other key, in Hotkey Configuration.
+		MenuPath: "Files",
+		Enabled:  func() bool { return panel.PanelCanCopyFilesToClipboard(panel.FindPanelsFrame()) },
+		Handler:  func() bool { return panel.ActionCopyFilesToClipboard(panel.FindPanelsFrame(), true) },
+	})
+	registerAction(action.Action{
 		Name:        "File.ApplyCommand",
 		Area:        "Shell",
 		Label:       "Apply command",

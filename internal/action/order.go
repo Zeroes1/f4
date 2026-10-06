@@ -96,6 +96,8 @@ var actionMenuOrder = []string{
 	"Panel.InsertPath",
 	"Panel.CopyName",
 	"Panel.Paste",
+	"Panel.CopyFilesToClipboard",
+	"Panel.CutFilesToClipboard",
 	"Panel.CopySelectedNames",
 	"Panel.CopySelectedPaths",
 	"Panel.CopySelectedRealPaths",

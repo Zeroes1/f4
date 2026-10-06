@@ -251,6 +251,10 @@ func ActionPasteClipboard(pf *PanelsFrame) bool {
 				release()
 				return
 			}
+			if pf.pasteFileClipboard(contents.Text, err) {
+				release()
+				return
+			}
 			if err != nil {
 				release()
 				showClipboardImageError(pf, err)

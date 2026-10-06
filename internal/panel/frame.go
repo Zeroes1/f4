@@ -301,6 +301,9 @@ type PanelsFrame struct {
 	// on disk (f4#1668).
 	dirWatch [2]panelDirWatch
 	DragOut  dragOutState
+	// fileClip is what Copy/Cut files to clipboard left for the next paste
+	// (f4#1767).
+	fileClip *fileClipboard
 	// externalUIRunner is normally nil, which selects the real desktop
 	// launcher. Tests install a per-frame recorder instead of spawning native
 	// Explorer/association windows.
