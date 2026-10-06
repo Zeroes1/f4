@@ -1639,6 +1639,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── sort_natural_test.go
     │   │   ├── state.go
     │   │   ├── strict_autofilter_test.go
+    │   │   ├── symlink_target.go
+    │   │   ├── symlink_target_test.go
     │   │   ├── temp_coverage_test.go
     │   │   ├── temp_dragout_test.go
     │   │   ├── temp.go

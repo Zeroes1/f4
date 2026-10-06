@@ -39,6 +39,11 @@ type FileEntry struct {
 	SizeCalculated bool
 	IsCached       bool
 	sourceOrder    uint64
+	// linkTarget is what a symlink points at, filled by symlinkTarget; the
+	// two flags say whether the answer is in or still on its way.
+	linkTarget   string
+	linkResolved bool
+	linkPending  bool
 }
 type mediumRow struct {
 	fp *FileSystemPanel
@@ -3248,13 +3253,11 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 			}
 
 			nameStr := e.Name
-			if e.IsSymlink && fp.Vfs != nil {
-				if target, err := vfs.Readlink(context.Background(), fp.Vfs, fp.Vfs.Join(fp.Vfs.GetPath(), e.Name)); err == nil && target != "" {
-					if fp.Vfs.GetPath() == "net://" {
-						nameStr = e.Name + " -> " + target
-					} else {
-						sizeStr = "→ " + target
-					}
+			if target, ok := fp.symlinkTarget(e); ok {
+				if fp.Vfs.GetPath() == "net://" {
+					nameStr = e.Name + " -> " + target
+				} else {
+					sizeStr = "→ " + target
 				}
 			}
 
@@ -3364,10 +3367,8 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 			if e.Name == ".." && hasCalculatedTotal {
 				curStr = fileops.FormatIntWithSpaces(calculatedTotal.Bytes)
 			}
-			if e.IsSymlink && fp.Vfs != nil {
-				if target, err := vfs.Readlink(context.Background(), fp.Vfs, fp.Vfs.Join(fp.Vfs.GetPath(), e.Name)); err == nil && target != "" {
-					curStr = "→ " + target
-				}
+			if target, ok := fp.symlinkTarget(e); ok {
+				curStr = "→ " + target
 			}
 			curStr = " ▸ " + curStr + " "
 			maxCurW := totalStart - (fp.X1 + 1)
