@@ -127,15 +127,16 @@ func TestDisplayPathErrorCleansNotListableError(t *testing.T) {
 // join is rebuilt rather than rebuilt-around, so errors.Is still walks every
 // part -- and a nil part stays nil, which is what makes a successful Close
 // cost nothing.
+//
+// The prefix only exists on Windows, where stripExtendedPrefix is real; the
+// platform-independent assertions below are the ones that must hold either
+// way.
 func TestDisplayPathErrorCleansJoinedErrors(t *testing.T) {
 	writeErr := &fs.PathError{Op: "write", Path: `\\?\C:\data\file`, Err: os.ErrPermission}
 	in := errors.Join(writeErr, nil)
 
 	out := displayPathError(in)
 
-	if msg := out.Error(); strings.Contains(msg, `\\?\`) {
-		t.Errorf("joined message still carries the extended-length prefix: %q", msg)
-	}
 	if !errors.Is(out, os.ErrPermission) {
 		t.Errorf("errors.Is(%v, os.ErrPermission) = false, want true", out)
 	}
@@ -143,9 +144,21 @@ func TestDisplayPathErrorCleansJoinedErrors(t *testing.T) {
 	if !errors.As(out, &reached) {
 		t.Fatalf("errors.As(%v, **fs.PathError) = false, want true", out)
 	}
-	if reached.Path != `C:\data\file` {
+	if reached.Op != "write" {
+		t.Errorf("Op = %q, want %q", reached.Op, "write")
+	}
+	if !strings.Contains(prepareOSPath(os.TempDir()), `\\?\`) {
+		// stripExtendedPrefix is a documented no-op off Windows: the path
+		// arrives unchanged, which is exactly what the contract asks for.
+		if reached.Path != `\\?\C:\data\file` {
+			t.Errorf("Path = %q, want the input unchanged off Windows", reached.Path)
+		}
+	} else if msg := out.Error(); strings.Contains(msg, `\\?\`) {
+		t.Errorf("joined message still carries the extended-length prefix: %q", msg)
+	} else if reached.Path != `C:\data\file` {
 		t.Errorf("Path = %q, want %q", reached.Path, `C:\data\file`)
 	}
+
 	// A join of nothing at all is nil, before and after: a Close that
 	// succeeded must not turn into an error.
 	if got := displayPathError(errors.Join(nil, nil)); got != nil {
