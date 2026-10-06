@@ -47,3 +47,24 @@ per file for grouping. Native listings enrich from the FileInfo already obtained
 on native Windows physical allocation size is unavailable from this listing.
 Providers must not mark substitute access/creation dates as real. CTime means
 creation on some filesystems and metadata change on others.
+
+## Elevated dispatcher on Windows (f4#1768, in progress)
+
+On Unix a root dispatcher, started through `sudo`, answers the file operations a
+user was refused; the socket's file permissions are what keep other users off
+it. Windows has no such boundary between two programs of one user: UAC asks for
+consent once, for f4, and a program that only finds the socket must not inherit
+it. The channel for the Windows dispatcher therefore starts with `CmdHello`,
+which carries a one-time random token (`NewSudoToken`) known only to the f4 that
+launched the dispatcher (`DialElevated`, `ServeElevated` in `vfs/sudo_elevated.go`).
+Until it is presented nothing is answered, a wrong token drops the connection
+without ending the dispatcher, and the dispatcher serves one authenticated client
+and exits when it leaves. Windows has no descriptor passing, so the framing
+(`vfs/sudo_frame.go`) carries messages only, bounded to 64 MiB each; file contents
+will cross as requests, not as handles.
+
+What is done: the authenticated channel. Still to come, one part at a time:
+launching the dispatcher through `ShellExecute "runas"`, the operations it
+serves, and the prompt in panels and in the editor that offers to retry a refused
+operation as administrator. Until the last part lands the Windows build still
+reports elevation as unavailable.

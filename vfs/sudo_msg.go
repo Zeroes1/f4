@@ -23,6 +23,11 @@ const (
 	// dispatcher's calls, which exist for permission-denied filesystem
 	// operations in general.
 	CmdUnmount
+	// CmdHello opens a session with an elevated dispatcher that cannot lean on
+	// the file system to say who is calling (Windows, f4#1768): Path carries the
+	// one-time token the dispatcher was started with. Nothing else is answered
+	// before it has been accepted.
+	CmdHello
 )
 
 // SudoRenameNoReplace, in Flags of a CmdRename, makes the dispatcher refuse to
