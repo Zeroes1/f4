@@ -52,7 +52,7 @@ func checkOSDirListable(dir string) error {
 func openOSDirOnce(dir string) error {
 	f, err := hostfs.Open(prepareOSPath(dir))
 	if err != nil {
-		return err
+		return displayPathError(err)
 	}
 	_ = f.Close() // Only whether the open succeeds is in question; nothing was read.
 	return nil
@@ -71,7 +71,7 @@ func refuseNotListable(dir string) error {
 	if globalSudoClient.IsAvailable() {
 		return nil
 	}
-	return &NotListableError{Path: dir, Err: err}
+	return displayPathError(&NotListableError{Path: dir, Err: err})
 }
 
 // NeedsElevationToEnter reports whether an ordinary, unprivileged open of dir
