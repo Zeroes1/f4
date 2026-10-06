@@ -1508,6 +1508,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── drives_menu_ampersand_test.go
     │   │   ├── drives_menu_unix.go
     │   │   ├── drives_menu_windows.go
+    │   │   ├── drives_tools_order.go
+    │   │   ├── drives_tools_order_test.go
     │   │   ├── edit_command_test.go
     │   │   ├── entry_totals_cache_test.go
     │   │   ├── exec.go

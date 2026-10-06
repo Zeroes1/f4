@@ -13,4 +13,4 @@ Each row shows the slot digit and the path, and `[ID]` after it for a plugin boo
 
 ## Drive-menu links
 
-The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a path only, in the same form as above, so a link made on a Docker, Kubernetes or MongoDB panel (or an `sftp://` one) brings that panel back. In the drive menu, Ctrl+Up and Ctrl+Down move the link under the cursor one place up or down, and the order is saved to the file.
+The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a path only, in the same form as above, so a link made on a Docker, Kubernetes or MongoDB panel (or an `sftp://` one) brings that panel back. In the drive menu, Ctrl+Up and Ctrl+Down move the link under the cursor one place up or down, and the order is saved to the file. The same keys move a tool row (a plugin such as AI, Android or Network) among the tool rows; that order is kept one name per line in `settings/drive-tools-order.txt` of the profile, and applies while the "sort plugins by hotkey" option is off.

@@ -6273,12 +6273,20 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				return strings.ToLower(driveMenuNameWithoutMarker(drives[i].Name)) <
 					strings.ToLower(driveMenuNameWithoutMarker(drives[j].Name))
 			})
+		} else if order, err := LoadDriveToolsOrder(DriveToolsOrderFilePath()); err != nil {
+			vtui.DebugLog("DRIVE TOOLS: load order failed: %v", err)
+		} else {
+			drives = orderDriveTools(drives, order)
 		}
 	}
+	// toolRows maps a menu row to its position in drives, for Ctrl+Up and
+	// Ctrl+Down on the tool rows (#1148).
+	toolRows := map[int]int{}
 	if len(drives) > 0 {
 		menu.AddSeparator()
-		for _, drv := range drives {
+		for index, drv := range drives {
 			factory := drv.Factory
+			toolRows[menu.GetItemCount()] = index
 
 			// Clean name: strip existing hotkeys/numbering if any
 			cleanName := drv.Name
@@ -6358,6 +6366,33 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			reopen := func() { pf.showDriveMenuAt(panelIdx, pos) }
 			pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
 			return true
+		}
+		// Ctrl+Up and Ctrl+Down move the tool (plugin) row under the cursor
+		// one place up or down within the tools, and the new order is saved
+		// (#1148). The sorted-by-name option keeps its own order, so there is
+		// nothing to move then.
+		if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
+			e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 &&
+			e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 &&
+			!driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuSortPluginsByHotkey) {
+			if index, ok := toolRows[menu.SelectPos]; ok {
+				delta := 1
+				if e.VirtualKeyCode == vtinput.VK_UP {
+					delta = -1
+				}
+				shown := make([]string, len(drives))
+				for i, drv := range drives {
+					shown[i] = drv.Name
+				}
+				pos := menu.SelectPos
+				if moved, err := moveDriveToolInFile(shown, drives[index].Name, delta); err != nil {
+					vtui.ShowMessageOn(menu, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
+				} else if moved {
+					menu.Close()
+					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+				}
+				return true
+			}
 		}
 		// Ctrl+Up and Ctrl+Down move the link under the cursor one place up or
 		// down, and the new order is saved (#1148).
