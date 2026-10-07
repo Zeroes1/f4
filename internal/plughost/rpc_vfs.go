@@ -145,7 +145,7 @@ func (v *RPCVFS) ReadDir(ctx context.Context, path string, onChunk func([]vfs.VF
 	if err == nil && len(items) > 0 {
 		onChunk(items)
 	}
-	return err
+	return rpcVFSError(err)
 }
 
 func (v *RPCVFS) Stat(ctx context.Context, path string) (vfs.VFSItem, error) {
@@ -157,26 +157,26 @@ func (v *RPCVFS) Stat(ctx context.Context, path string) (vfs.VFSItem, error) {
 	}
 	req := map[string]string{"Drive": v.driveName, "Path": path}
 	err := v.sess.Call("VFS.Stat", req, &item)
-	return item, err
+	return item, rpcVFSError(err)
 }
 
 func (v *RPCVFS) MkDir(ctx context.Context, p string) error {
 	req := MkDirReq{Drive: v.driveName, Path: v.pathForRPC(p)}
-	return v.sess.Call("VFS.MkDir", req, nil)
+	return rpcVFSError(v.sess.Call("VFS.MkDir", req, nil))
 }
 
 func (v *RPCVFS) Remove(ctx context.Context, p string) error {
 	req := RemoveReq{Drive: v.driveName, Path: v.pathForRPC(p)}
-	return v.sess.Call("VFS.Remove", req, nil)
+	return rpcVFSError(v.sess.Call("VFS.Remove", req, nil))
 }
 
 func (v *RPCVFS) Rename(ctx context.Context, old, new string) error {
 	req := RenameReq{Drive: v.driveName, Old: v.pathForRPC(old), New: v.pathForRPC(new)}
-	return v.sess.Call("VFS.Rename", req, nil)
+	return rpcVFSError(v.sess.Call("VFS.Rename", req, nil))
 }
 func (v *RPCVFS) SetAttributes(ctx context.Context, path string, item vfs.VFSItem) error {
 	req := SetAttrReq{Drive: v.driveName, Path: v.pathForRPC(path), Item: item}
-	return v.sess.Call("VFS.SetAttributes", req, nil)
+	return rpcVFSError(v.sess.Call("VFS.SetAttributes", req, nil))
 }
 
 func (v *RPCVFS) GetCapabilities() vfs.VFSCapabilities {
@@ -192,7 +192,7 @@ func (v *RPCVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error) {
 	var res OpenRes
 	err := v.sess.Call("VFS.Open", req, &res)
 	if err != nil {
-		return nil, err
+		return nil, rpcVFSError(err)
 	}
 	return &rpcFileWrapper{sess: v.sess, id: res.ID, size: res.Size}, nil
 }
@@ -202,7 +202,7 @@ func (v *RPCVFS) Create(ctx context.Context, p string) (io.WriteCloser, error) {
 	var res OpenRes
 	err := v.sess.Call("VFS.Create", req, &res)
 	if err != nil {
-		return nil, err
+		return nil, rpcVFSError(err)
 	}
 	return &rpcWriteWrapper{sess: v.sess, id: res.ID}, nil
 }
