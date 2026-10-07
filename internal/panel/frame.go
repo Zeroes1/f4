@@ -4435,6 +4435,10 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		return AppCommand(pf, cmd, args)
 	case appcmd.CmFindFile:
 		return AppCommand(pf, cmd, args)
+	case appcmd.CmWorkspaceNew:
+		return AppCommand(pf, cmd, args)
+	case appcmd.CmWorkspaceClose:
+		return WorkspaceClose()
 
 	case appcmd.CmWorkspaceNewTerminal:
 		// The side menus' "Terminal in New Workspace" item carried this
@@ -4484,6 +4488,9 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		appcmd.CmLanguage, appcmd.CmHelpLanguage, appcmd.CmUpdateSettings, appcmd.CmProxySettings,
 		appcmd.CmPlugins, appcmd.CmPlugRing:
 		return AppCommand(pf, cmd, args)
+	case appcmd.CmLeftDriveMenu:
+		pf.ShowDriveMenu(0)
+		return true
 	case appcmd.CmRightDriveMenu:
 		pf.ShowDriveMenu(1)
 		return true
