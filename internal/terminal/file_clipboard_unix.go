@@ -75,7 +75,7 @@ func readFileClipboard(ctx context.Context) ([]string, bool, error) {
 		if _, err := exec.LookPath(candidate.name); err != nil {
 			continue
 		}
-		out, err := exec.CommandContext(ctx, candidate.name, candidate.args...).Output()
+		out, err := exec.CommandContext(ctx, candidate.name, candidate.args...).Output() // #nosec G204 -- name and arguments come from the fixed table above, never from input.
 		if err != nil {
 			continue
 		}
