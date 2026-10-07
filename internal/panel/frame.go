@@ -6166,26 +6166,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	usedHotkeys := make(map[rune]bool)
 	usedHotkeys['o'] = true // "Other panel"
 
-	// 1. Other panel (focused by default)
-	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Panel.Other"), UserData: func(fsp *FileSystemPanel) {
-		otherFsp := pf.Panels[1-panelIdx].(*FileSystemPanel)
-		fsp.cancelProviderOpen()
-		if fsp.Vfs != nil {
-			_ = fsp.Vfs.Close()
-		}
-		fsp.Vfs = otherFsp.Vfs.Clone()
-		fsp.showCurrentVFSLoadingRows()
-		fsp.ReadDirectory()
-		pf.RefreshAll()
-	}})
-
-	// TempPanel is a native VFS panel, so it is available from the same
-	// Alt+F1/Alt+F2 drive menu as far2l's plugin panels.
-	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("TempPanel.Drive"), UserData: func(fsp *FileSystemPanel) {
-		pf.SwitchToVFS(fsp, NewTempPanelVFS(nil, GlobalTempPanelStore, 0))
-	}})
-
-	// 2. Fixed platform paths (Root, Home, physical disks). The metadata is
+	// 1. Fixed platform paths (physical disks, Root, Home). The metadata is
 	// rendered at menu-open time, just like Far's ChangeDiskMenu, so labels,
 	// filesystem types and free space reflect the current state. Collect all
 	// rows first: the formatter needs the whole list to align its columns.
@@ -6197,6 +6178,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		}
 		platformDrives = append(platformDrives, drv)
 	}
+	platformDrives = orderDriveMenuPlatformDrives(platformDrives)
 	platformNames := DriveMenuPlatformRowsText(func() []DriveMenuPlatformRow {
 		rows := make([]DriveMenuPlatformRow, len(platformDrives))
 		for i, drv := range platformDrives {
@@ -6240,6 +6222,26 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			pf.SwitchToVFS(fsp, factory())
 		}})
 	}
+
+	// 2. Other panel and the temporary panel follow the physical/platform
+	// entries, so the drive providers are the first useful choices in the menu.
+	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Panel.Other"), UserData: func(fsp *FileSystemPanel) {
+		otherFsp := pf.Panels[1-panelIdx].(*FileSystemPanel)
+		fsp.cancelProviderOpen()
+		if fsp.Vfs != nil {
+			_ = fsp.Vfs.Close()
+		}
+		fsp.Vfs = otherFsp.Vfs.Clone()
+		fsp.showCurrentVFSLoadingRows()
+		fsp.ReadDirectory()
+		pf.RefreshAll()
+	}})
+
+	// TempPanel is a native VFS panel, so it is available from the same
+	// Alt+F1/Alt+F2 drive menu as far2l's plugin panels.
+	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("TempPanel.Drive"), UserData: func(fsp *FileSystemPanel) {
+		pf.SwitchToVFS(fsp, NewTempPanelVFS(nil, GlobalTempPanelStore, 0))
+	}})
 
 	// 3. Folder bookmarks. far2l lists the assigned slots right here in
 	// the same menu (panels/panel.cpp, AddBookmarkItems) with the slot

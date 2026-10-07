@@ -314,6 +314,27 @@ func driveMenuPlatformItemVisible(drv sysinfo.DriveEntry, options uint32) bool {
 	}
 }
 
+// orderDriveMenuPlatformDrives keeps the platform provider order intact while
+// putting the synthetic Physical Disks entry first. The drive menu is the
+// user-facing place where that provider should be easiest to reach (f4#1148).
+func orderDriveMenuPlatformDrives(drives []sysinfo.DriveEntry) []sysinfo.DriveEntry {
+	if len(drives) < 2 {
+		return drives
+	}
+	ordered := make([]sysinfo.DriveEntry, 0, len(drives))
+	for _, drv := range drives {
+		if driveMenuKindFor(drv.Name, driveMenuInfoPathFor(drv)) == driveMenuKindPhysical {
+			ordered = append(ordered, drv)
+		}
+	}
+	for _, drv := range drives {
+		if driveMenuKindFor(drv.Name, driveMenuInfoPathFor(drv)) != driveMenuKindPhysical {
+			ordered = append(ordered, drv)
+		}
+	}
+	return ordered
+}
+
 func (pf *PanelsFrame) openDriveMenuOptions(panelIdx int, menu *vtui.VMenu) {
 	// F9 belongs to the drive menu, so it opens the drive-chooser page on
 	// its own rather than the whole Settings Center (#1148). The compact
