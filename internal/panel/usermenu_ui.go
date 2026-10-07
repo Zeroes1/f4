@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -187,28 +186,6 @@ func SaveRootForMode(mode MenuMode, path string, items []UserMenuItem) error {
 	default:
 		return saveFarMenuFile(path, items)
 	}
-}
-
-// SaveRootForModeVFS is the VFS-aware counterpart used by Settings Center
-// when the local menu lives in a directory that needs sudo. Create carries
-// the same elevation fallback as the rest of the local file operations.
-func SaveRootForModeVFS(ctx context.Context, fs vfs.VFS, mode MenuMode, path string, items []UserMenuItem) error {
-	if mode == MenuModeMain || fs == nil {
-		return SaveRootForMode(mode, path, items)
-	}
-	var buf bytes.Buffer
-	if err := WriteFarMenu(&buf, items); err != nil {
-		return err
-	}
-	f, err := fs.Create(ctx, path)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, &buf); err != nil {
-		_ = f.Close()
-		return err
-	}
-	return f.Close()
 }
 
 // defaultSavePath returns the path Ctrl+F4 should open in the editor
