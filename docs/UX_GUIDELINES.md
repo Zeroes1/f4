@@ -106,6 +106,19 @@ Hotkeys provide the fastest way to activate a specific function.
 *   `F1`: Opens the help topic associated with the currently focused element.
 *   **Mouse:** Click-and-drag on the top border moves the window. Click-and-drag on the bottom-right corner resizes it.
 
+Files → Apply Command uses a fixed ten-row form, initially 72 cells wide with
+a minimum measured from localized controls and normal side margins (48 cells
+in English, 59 in Russian). Command caption, command input, target count, parameter rule,
+execution mode, worker settings, button rule and centered buttons occupy
+consecutive inner rows. Both rules span the frame; buttons have a two-cell gap.
+The command input follows the frame width; mode keeps a 23-cell width and
+workers keeps a four-cell width. Unlimited follows workers with a fixed two-cell
+gap instead of following the right edge. Screen resizing uses half the available width
+(bounded by the minimum and screen width), and corner dragging changes width
+while preserving height. History, help, default action and cancellation retain
+their existing behavior. Its compact frame clearance exception applies only
+to File.ApplyCommand in the all-language layout validator.
+
 #### Groups (`RadioGroup`, `CheckGroup`)
 
 *   **Interaction Model:** These components separate the concepts of *cursor* and *selection*.
