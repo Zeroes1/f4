@@ -6123,16 +6123,16 @@ func (pf *PanelsFrame) ShowDriveMenu(panelIdx int) {
 // land on that drive, otherwise keep the historic default — the "Other panel"
 // entry after the platform drives.
 func (pf *PanelsFrame) driveMenuDefaultPos(panelIdx int) int {
+	platformDrives := driveMenuPlatformDrives(config.App.DriveMenuOptions)
 	fsp, ok := pf.Panels[panelIdx].(*FileSystemPanel)
 	if !ok {
-		return 0
+		return len(platformDrives)
 	}
 	osVFS, ok := fsp.Vfs.(*vfs.OSVFS)
 	if !ok {
-		return 0
+		return len(platformDrives)
 	}
 	cur := osVFS.GetPath()
-	platformDrives := driveMenuPlatformDrives(config.App.DriveMenuOptions)
 	for i, drv := range platformDrives {
 		if driveMatchesPath(drv, cur) {
 			return i
