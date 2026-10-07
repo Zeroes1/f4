@@ -1910,6 +1910,7 @@ KeyBar.F2Wrap=Wrap
 KeyBar.F2Unwrap=Unwrap
 KeyBar.F3=View
 KeyBar.F4=Edit
+KeyBar.F4Attr=Attr
 KeyBar.F5=Copy
 KeyBar.F6=RenMov
 KeyBar.F7=MkDir

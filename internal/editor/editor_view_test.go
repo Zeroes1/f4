@@ -5647,6 +5647,40 @@ func TestEditorView_MouseSelection_Release(t *testing.T) {
 	}
 }
 
+func TestEditorView_MouseSelection_ReleaseKeepsDraggedSelection(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	Pt := piecetable.New([]byte("data to copy"))
+	ev := NewEditorView(Pt, nil, "")
+	defer ev.Close()
+	ev.SetPosition(0, 0, 80, 24)
+
+	ev.ProcessMouse(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		MouseX: 0, MouseY: 1, ButtonState: vtinput.FromLeft1stButtonPressed,
+	})
+
+	// X11/Konsole can report drag motion without the held-button bit.
+	ev.ProcessMouse(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: false,
+		MouseX: 4, MouseY: 1, MouseEventFlags: vtinput.MouseMoved,
+	})
+	ev.ProcessMouse(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: false,
+		MouseX: 4, MouseY: 1,
+	})
+
+	if ev.mouseSelecting {
+		t.Fatal("linear mouse gesture should be released")
+	}
+	if !ev.SelActive {
+		t.Fatal("dragged selection should remain active after mouse release")
+	}
+	min, max := ev.GetSelectionRange()
+	if min != 0 || max != 4 {
+		t.Fatalf("dragged selection range = %d:%d, want 0:4", min, max)
+	}
+}
+
 // TestEditorView_InsertTextAtCursor covers the shared insert path
 // the new Ctrl+[/Ctrl+]/Ctrl+Enter shortcuts use — appends bytes
 // at cursor, updates line index, advances cursor by len(data).

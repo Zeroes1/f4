@@ -171,6 +171,30 @@ func cursorEntryEnabled() bool {
 	return idx >= 0 && idx < len(fsp.Entries) && fsp.Entries[idx].Name != ".."
 }
 
+// cursorOnDirectory reports whether the cursor of the active panel stands on
+// a folder, the case where F4 opens its attributes instead of an editor.
+func cursorOnDirectory() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return false
+	}
+	idx := fsp.GetCursorIndex()
+	return idx >= 0 && idx < len(fsp.Entries) && fsp.Entries[idx].Name != ".." && fsp.Entries[idx].IsDir
+}
+
+// editKeyBarLabel is what the F4 slot of the key bar says: "Edit" for a file
+// (the static label), "Attr" when the cursor is on a folder (f4#1794).
+func editKeyBarLabel() string {
+	if cursorOnDirectory() {
+		return i18n.Msg("KeyBar.F4Attr")
+	}
+	return ""
+}
+
 // oneRegularFileEnabled is the Enabled predicate for the commands that make a
 // copy of exactly one regular file (Encode/Decode as Base64): one entry
 // selected, and it is not a folder or "..". FileSystemPanel.GetSelectedNames
@@ -353,14 +377,39 @@ func init() {
 		Description: "Configure the size boundaries for panel groups",
 		DescKey:     "Group.Settings.Desc"})
 
+	// Menu items run synchronously from vtui's VMenu callback, before the menu
+	// frame is removed. In that window GetTopFrame is the menu rather than the
+	// editor that owns it, so resolve the active screen's editor underneath a
+	// menu overlay as well.
+	editorForAction := func() *editor.EditorView {
+		if vtui.FrameManager == nil {
+			return nil
+		}
+		if ev, ok := vtui.FrameManager.GetTopFrame().(*editor.EditorView); ok {
+			return ev
+		}
+		top := vtui.FrameManager.GetTopFrame()
+		if top == nil || top.GetType() != vtui.TypeMenu {
+			return nil
+		}
+		index := vtui.FrameManager.ActiveIdx
+		if index < 0 || index >= len(vtui.FrameManager.Screens) {
+			return nil
+		}
+		screen := vtui.FrameManager.Screens[index]
+		for i := len(screen.Frames) - 1; i >= 0; i-- {
+			if ev, ok := screen.Frames[i].(*editor.EditorView); ok && !ev.IsDone() {
+				return ev
+			}
+		}
+		return nil
+	}
+
 	// withMultiEditor is for the handful of actions that know about the
 	// multi-caret set and act on it themselves.
 	withMultiEditor := func(fn func(ev *editor.EditorView)) func() bool {
 		return func() bool {
-			if vtui.FrameManager == nil {
-				return false
-			}
-			if ev, ok := vtui.FrameManager.GetTopFrame().(*editor.EditorView); ok {
+			if ev := editorForAction(); ev != nil {
 				fn(ev)
 				return true
 			}
@@ -397,7 +446,7 @@ func init() {
 			if vtui.FrameManager == nil {
 				return false
 			}
-			if ev, ok := vtui.FrameManager.GetTopFrame().(*editor.EditorView); ok {
+			if ev := editorForAction(); ev != nil {
 				return fn(ev)
 			}
 			return false
@@ -693,6 +742,7 @@ func init() {
 		DefaultKeys: []string{"F4"},
 		MenuPath:    "Files",
 		Enabled:     cursorEntryEnabled,
+		KeyBarLabel: editKeyBarLabel,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditFile(pf) }),
 	})
 	registerAction(action.Action{

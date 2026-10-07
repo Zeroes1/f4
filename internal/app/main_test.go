@@ -16,6 +16,7 @@ import (
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
+	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/toast"
@@ -91,6 +92,11 @@ func installTestSeams() {
 	// test draws first depends on the shuffle seed, so the palette is sized
 	// here rather than left to whichever test happens to grow it.
 	theme.SetDefaultF4Palette()
+
+	// The file-list clipboard belongs to the whole desktop session; a paste
+	// test must see only the clipboard it stubs, not files another test
+	// binary left on the runner's.
+	terminal.DisableSystemFileClipboard()
 
 	vfs.InitSudoClient("/usr/bin/f4", "")
 

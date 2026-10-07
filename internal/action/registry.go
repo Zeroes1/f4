@@ -100,7 +100,13 @@ type Action struct {
 	// every RunAction call, so the same top-frame caveat documented on
 	// Visible applies here too.
 	Enabled func() bool
-	Handler func() bool
+	// KeyBarLabel, when set, lets the key bar name what the key does right
+	// now: it is asked wherever key-bar labels are built, and a non-empty
+	// answer replaces the static label on the bar. Menus and the command
+	// palette keep the static Label. F4 is the user: on a folder it opens the
+	// attributes, not an editor, and the bar should say so (f4#1794).
+	KeyBarLabel func() string
+	Handler     func() bool
 }
 
 // DisplayLabel returns the localized label, falling back to the English one.
