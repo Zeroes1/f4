@@ -492,6 +492,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── autosave_settings_test.go
     │   │   ├── background_jobs_window.go
     │   │   ├── background_jobs_window_test.go
+    │   │   ├── backspace_commandline_test.go
     │   │   ├── bom_test.go
     │   │   ├── bookmarks_dialog_test.go
     │   │   ├── bookmarks_test.go
@@ -669,6 +670,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── issue821_test.go
     │   │   ├── issue856_mouse_capture_test.go
     │   │   ├── issue95_followup_test.go
+    │   │   ├── keybar_folder_labels_test.go
     │   │   ├── keybar_injected_test.go
     │   │   ├── keymap_host_test.go
     │   │   ├── keymap_suspend.go

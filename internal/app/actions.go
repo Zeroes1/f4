@@ -28,6 +28,7 @@ import (
 	"github.com/unxed/f4/internal/ini"
 	"github.com/unxed/f4/internal/install"
 	"github.com/unxed/f4/internal/media"
+	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/internal/terminal"
@@ -2248,6 +2249,12 @@ func unknownSizeNote(stats vfs.OpStats) string {
 	return fmt.Sprintf(i18n.Msg("Panel.SizeUnknownFiles"), stats.UnknownSizeFiles)
 }
 
+// dirSizeResult is the line shown once a folder has been sized: its name, its
+// size and how many files and folders were counted in it.
+func dirSizeResult(name string, stats vfs.OpStats) string {
+	return fmt.Sprintf(i18n.Msg("Panel.DirSizeResultFmt"), name, numeric.FormatSize(stats.Bytes), stats.Files, stats.Dirs)
+}
+
 // actionCalcDirSizeAtCursor is Ctrl+Space: it sizes the folder under the
 // cursor of the active file panel and does nothing on a file.
 func actionCalcDirSizeAtCursor(pf *panel.PanelsFrame) {
@@ -2292,9 +2299,14 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 		func(totalStats vfs.OpStats) {
 			entry.Size = totalStats.Bytes
 			entry.SizeCalculated = true
+			// The size lands in the size column without a word, and a user who
+			// pressed F3 on a folder did not see where it went (f4#1795): say
+			// what was counted, and where a number is a lower bound, say that too.
+			msg := dirSizeResult(name, totalStats)
 			if note := unknownSizeNote(totalStats); note != "" {
-				toast.Show(note, 4*time.Second)
+				msg += " -- " + note
 			}
+			toast.Show(msg, 5*time.Second)
 			if fsp.SortMode == panel.SortSize || fsp.GroupBy == panel.GroupSize {
 				fsp.SortEntries()
 				// Keep cursor on the same item after re-sorting

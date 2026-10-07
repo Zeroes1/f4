@@ -195,6 +195,16 @@ func editKeyBarLabel() string {
 	return ""
 }
 
+// viewKeyBarLabel is what the F3 slot of the key bar says: "View" for a file
+// (the static label), "Size" when the cursor is on a folder, because F3 on a
+// folder works out its size (f4#1795).
+func viewKeyBarLabel() string {
+	if cursorOnDirectory() {
+		return i18n.Msg("KeyBar.F3Size")
+	}
+	return ""
+}
+
 // oneRegularFileEnabled is the Enabled predicate for the commands that make a
 // copy of exactly one regular file (Encode/Decode as Base64): one entry
 // selected, and it is not a folder or "..". FileSystemPanel.GetSelectedNames
@@ -687,6 +697,7 @@ func init() {
 		DefaultKeys: []string{"F3", "Num5"},
 		MenuPath:    "Files",
 		Enabled:     cursorEntryEnabled,
+		KeyBarLabel: viewKeyBarLabel,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionViewFile(pf) }),
 	})
 	registerAction(action.Action{
