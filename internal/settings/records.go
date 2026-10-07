@@ -11,6 +11,7 @@ import (
 
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/sysinfo"
 	"github.com/unxed/f4/sdk/f4settings"
 )
 
@@ -97,6 +98,65 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 			items[i] = panel.Bookmark{Path: r.Values["bookmark.Path"], Plugin: r.Values["Plugin"], PluginData: r.Values["PluginData"], PluginFile: r.Values["PluginFile"]}
 		}
 		return panel.SaveBookmarks(bookmarkPath, items)
+	}})
+	toolVisibilityPath := panel.DriveToolsVisibilityFilePath()
+	toolVisibility := recordCollection("drive-tools", "drives", "Tools", "Choose which registered drive-menu tools are shown.", "tool.Name", []f4settings.Field{
+		recordField("tool.Name", "Tool", "Registered drive-menu tool.", f4settings.String),
+		recordField("tool.Enabled", "Enabled", "Show this tool in the drive menu.", f4settings.Boolean),
+	})
+	toolVisibility.Fixed = true
+	toolVisibility.Ordered = false
+	p.stores = append(p.stores, settingsRecordStore{collection: toolVisibility, path: toolVisibilityPath, load: func() ([]f4settings.Record, error) {
+		disabled, err := panel.LoadDisabledDriveTools(toolVisibilityPath)
+		if err != nil {
+			return nil, err
+		}
+		hidden := map[string]bool{}
+		for _, name := range disabled {
+			hidden[name] = true
+		}
+		var rows []f4settings.Record
+		for i, entry := range sysinfo.DriveRegistrySnapshot() {
+			rows = append(rows, f4settings.Record{ID: fmt.Sprintf("drive-tool:%d", i), Values: map[string]string{
+				"tool.Name": entry.Name, "tool.Enabled": strconv.FormatBool(!hidden[entry.Name]),
+			}})
+		}
+		return rows, nil
+	}, save: func(rows []f4settings.Record) error {
+		disabled, err := panel.LoadDisabledDriveTools(toolVisibilityPath)
+		if err != nil {
+			return err
+		}
+		hidden := map[string]bool{}
+		for _, name := range disabled {
+			hidden[name] = true
+		}
+		for _, row := range rows {
+			name := strings.TrimSpace(row.Values["tool.Name"])
+			if name == "" {
+				continue
+			}
+			if row.Values["tool.Enabled"] == "true" {
+				delete(hidden, name)
+			} else {
+				hidden[name] = true
+			}
+		}
+		var names []string
+		for _, name := range disabled {
+			if hidden[name] {
+				names = append(names, name)
+				delete(hidden, name)
+			}
+		}
+		for _, row := range rows {
+			name := strings.TrimSpace(row.Values["tool.Name"])
+			if hidden[name] {
+				names = append(names, name)
+				delete(hidden, name)
+			}
+		}
+		return panel.SaveDisabledDriveTools(toolVisibilityPath, names)
 	}})
 	linkPath := panel.DriveBookmarksFilePath()
 	links := recordCollection("drive-links", "drives", "Drive links", "Named links shown in the drive chooser.", "link.Name", []f4settings.Field{recordField("link.Name", "Link name", "Display name in the drive chooser.", f4settings.String), recordField("link.Path", "Link path", "Directory or provider path opened by the link.", f4settings.Path), recordField("link.Hotkey", "Shortcut", "Far-style shortcut spelling, such as Q or CtrlF5. Capture fills it in from a key press.", f4settings.Chord)})

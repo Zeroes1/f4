@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/sysinfo"
 	"github.com/unxed/f4/sdk/f4settings"
 )
 
@@ -147,6 +148,34 @@ func TestSettingsCoreRecordProviderDriveLinksValidateAndRoundTrip(t *testing.T) 
 	row := loaded[0]
 	if row.Values["link.Name"] != "Home" || row.Values["link.Path"] != "/home/user" || row.Values["link.Hotkey"] != "Q" {
 		t.Fatalf("drive link round trip mismatch: %#v", row.Values)
+	}
+}
+
+func TestSettingsCoreRecordProviderDriveToolVisibilityRoundTrip(t *testing.T) {
+	restore := sysinfo.SnapshotDrives()
+	t.Cleanup(restore)
+	sysinfo.SetDrives([]sysinfo.DriveEntry{{Name: "AI"}, {Name: "Network"}})
+	p := newCoreRecordSettingsProvider()
+	store := settingsRecordStoreByID(t, p, "drive-tools")
+	t.Cleanup(func() { _ = os.Remove(store.path) })
+
+	rows, err := store.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].Values["tool.Enabled"] != "true" || rows[1].Values["tool.Enabled"] != "true" {
+		t.Fatalf("fresh tool visibility = %#v, want all enabled", rows)
+	}
+	rows[1].Values["tool.Enabled"] = "false"
+	if err := store.save(rows); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded[0].Values["tool.Enabled"] != "true" || loaded[1].Values["tool.Enabled"] != "false" {
+		t.Fatalf("saved tool visibility = %#v", loaded)
 	}
 }
 

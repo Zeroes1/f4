@@ -6285,6 +6285,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	drives := []sysinfo.DriveEntry(nil)
 	if driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuShowPlugins) {
 		drives = sysinfo.DriveRegistrySnapshot()
+		if disabled, err := LoadDisabledDriveTools(DriveToolsVisibilityFilePath()); err != nil {
+			vtui.DebugLog("DRIVE TOOLS: load visibility failed: %v", err)
+		} else {
+			drives = FilterVisibleDriveTools(drives, disabled)
+		}
 		if driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuSortPluginsByHotkey) {
 			sort.SliceStable(drives, func(i, j int) bool {
 				return strings.ToLower(driveMenuNameWithoutMarker(drives[i].Name)) <
