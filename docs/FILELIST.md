@@ -1500,6 +1500,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── custom_column_modes_test.go
     │   │   ├── dirwatch.go
     │   │   ├── dirwatch_test.go
+    │   │   ├── drive_menu_headings_test.go
     │   │   ├── drives_bookmarks.go
     │   │   ├── drives_bookmarks_test.go
     │   │   ├── drives_bookmarks_ui.go
@@ -1587,6 +1588,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── managed_exec_debounce_test.go
     │   │   ├── menubar_dropdown_test.go
     │   │   ├── menu_cache_test.go
+    │   │   ├── menu_marks.go
     │   │   ├── menukeys.go
     │   │   ├── menukeys_test.go
     │   │   ├── mock_pty_test.go
@@ -1736,6 +1738,8 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── rpc_panel_keys_test.go
     │   │   ├── rpc_vfs_coverage_test.go
     │   │   ├── rpc_vfs.go
+    │   │   ├── rpc_vfs_errors.go
+    │   │   ├── rpc_vfs_errors_test.go
     │   │   ├── rpc_vfs_test.go
     │   │   ├── scaffold.go
     │   │   ├── scaffold_test.go
