@@ -171,6 +171,30 @@ func cursorEntryEnabled() bool {
 	return idx >= 0 && idx < len(fsp.Entries) && fsp.Entries[idx].Name != ".."
 }
 
+// cursorOnDirectory reports whether the cursor of the active panel stands on
+// a folder, the case where F4 opens its attributes instead of an editor.
+func cursorOnDirectory() bool {
+	pf := panel.FindPanelsFrame()
+	if pf == nil {
+		return false
+	}
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return false
+	}
+	idx := fsp.GetCursorIndex()
+	return idx >= 0 && idx < len(fsp.Entries) && fsp.Entries[idx].Name != ".." && fsp.Entries[idx].IsDir
+}
+
+// editKeyBarLabel is what the F4 slot of the key bar says: "Edit" for a file
+// (the static label), "Attr" when the cursor is on a folder (f4#1794).
+func editKeyBarLabel() string {
+	if cursorOnDirectory() {
+		return i18n.Msg("KeyBar.F4Attr")
+	}
+	return ""
+}
+
 // oneRegularFileEnabled is the Enabled predicate for the commands that make a
 // copy of exactly one regular file (Encode/Decode as Base64): one entry
 // selected, and it is not a folder or "..". FileSystemPanel.GetSelectedNames
@@ -718,6 +742,7 @@ func init() {
 		DefaultKeys: []string{"F4"},
 		MenuPath:    "Files",
 		Enabled:     cursorEntryEnabled,
+		KeyBarLabel: editKeyBarLabel,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditFile(pf) }),
 	})
 	registerAction(action.Action{

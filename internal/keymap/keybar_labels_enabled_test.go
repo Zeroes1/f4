@@ -64,3 +64,38 @@ func TestKeyBarLabelsForArea_HonoursEnabled(t *testing.T) {
 		t.Error("an action with no Enabled predicate must never be marked disabled")
 	}
 }
+
+// TestKeyBarLabelsForArea_HonoursKeyBarLabel covers the dynamic caption (f4#1794):
+// a bound action whose KeyBarLabel answers puts that answer on the bar, and
+// an empty answer leaves the static label.
+func TestKeyBarLabelsForArea_HonoursKeyBarLabel(t *testing.T) {
+	restore := action.Snapshot()
+	defer restore()
+
+	dynamic := ""
+	action.RegisterAction(action.Action{
+		Name:        "Test.KeyBarLabel.F4",
+		Area:        "TestKeyBarLabelArea",
+		Label:       "Edit",
+		DefaultKeys: []string{"F4"},
+		KeyBarLabel: func() string { return dynamic },
+		Handler:     func() bool { return true },
+	})
+
+	oldHm := GlobalHotkeysMgr
+	oldLookup := LookupAction
+	t.Cleanup(func() {
+		GlobalHotkeysMgr = oldHm
+		LookupAction = oldLookup
+	})
+	LookupAction = action.Lookup
+	GlobalHotkeysMgr = NewHotkeyManager("")
+
+	if got := KeyBarLabelsForArea("TestKeyBarLabelArea", nil).Normal[3]; got != "Edit" {
+		t.Fatalf("with no dynamic answer the F4 label = %q, want the static %q", got, "Edit")
+	}
+	dynamic = "Attr"
+	if got := KeyBarLabelsForArea("TestKeyBarLabelArea", nil).Normal[3]; got != "Attr" {
+		t.Fatalf("with a dynamic answer the F4 label = %q, want %q", got, "Attr")
+	}
+}

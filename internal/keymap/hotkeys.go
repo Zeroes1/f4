@@ -625,7 +625,13 @@ func KeyBarLabelsForAreaExcept(area string, fallbacks *vtui.KeySet, drop func(ac
 					return "", false
 				}
 				if act, ok := LookupAction(actName); ok {
-					return action.PlainLabel(act.DisplayLabel()), act.Enabled != nil && !act.Enabled()
+					label := act.DisplayLabel()
+					if act.KeyBarLabel != nil {
+						if dynamic := act.KeyBarLabel(); dynamic != "" {
+							label = dynamic
+						}
+					}
+					return action.PlainLabel(label), act.Enabled != nil && !act.Enabled()
 				}
 			}
 		}
