@@ -105,6 +105,7 @@ type EditorView struct {
 	RectSelActive      bool
 	rectSelStartLine   int
 	rectSelStartCol    int
+	mouseSelecting     bool
 	mouseRectSelecting bool
 	hoverURL           string
 	hoverURLStart      int
@@ -3473,6 +3474,28 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 	}
 
+	// A linear mouse drag, like a rectangular drag above, keeps ownership of
+	// the gesture when a backend reports motion without the held-button bit.
+	// Without this state the motion falls through to case 0, leaving the
+	// cursor at the anchor; the following release then mistakes a drag for a
+	// plain click and clears the selection.
+	if ev.mouseSelecting {
+		if e.MouseEventFlags&vtinput.MouseMoved != 0 {
+			if ev.updateCursorFromMouse(int(e.MouseX), int(e.MouseY)) {
+				vtui.FrameManager.Redraw()
+			}
+			return true
+		}
+		if e.ButtonState == 0 || !e.KeyDown {
+			ev.mouseSelecting = false
+			if ev.SelActive && ev.SelAnchorOffset == ev.Li.GetLineOffset(ev.CursorLine)+ev.CursorPos {
+				ev.SelActive = false
+			}
+			vtui.FrameManager.Redraw()
+			return true
+		}
+	}
+
 	if ev.scrollBar != nil && ev.scrollBar.ProcessMouse(e) {
 		return true
 	}
@@ -3535,6 +3558,7 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					if e.MouseEventFlags&vtinput.MouseMoved == 0 {
 						ev.SelActive = true
 						ev.SelAnchorOffset = offset
+						ev.mouseSelecting = true
 					}
 				} else if ev.SelActive && e.MouseEventFlags&vtinput.MouseMoved != 0 {
 					ev.CursorLine = ev.Li.GetLineAtOffset(offset)
