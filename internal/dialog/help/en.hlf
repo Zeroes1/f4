@@ -657,7 +657,10 @@ $Panel Navigation Keys
   Alt+=         - Invert selection
   Numpad 5      - View file (also F3; Num Lock may be on or off)
   Ctrl+Space    - Calculate the size of the folder under the cursor (archives too;
-                  F3 on a folder does the same)
+                  F3 on a folder does the same: the key bar then reads Size,
+                  and when the count is done a message names the folder, its
+                  size and how many files and folders it holds, while the
+                  size itself appears in the size column)
 
 Extension selection is a standard Far Manager command. The main-keyboard
 aliases make it available without a numpad. Matching ignores case and uses
