@@ -2069,6 +2069,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── highlight_cache_test.go
     │   │   ├── highlight_edgecases_test.go
     │   │   ├── highlight_files_test.go
+    │   │   ├── highlight_hidden_dirs_test.go
     │   │   ├── highlight.go
     │   │   ├── style_combo_colors_test.go
     │   │   ├── style_completeness_test.go
