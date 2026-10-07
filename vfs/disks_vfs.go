@@ -33,13 +33,17 @@ func (f *diskFileWrapper) Read(ctx context.Context, p []byte) (n int, err error)
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
 	}
-	return f.File.Read(p)
+	// The handle was opened on prepareOSPath's extended-length name, so a
+	// read error carries it; show the device path the user recognises.
+	n, err = f.File.Read(p)
+	return n, displayPathError(err)
 }
 func (f *diskFileWrapper) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error) {
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
 	}
-	return f.File.ReadAt(p, off)
+	n, err = f.File.ReadAt(p, off)
+	return n, displayPathError(err)
 }
 
 // DisksVFS is a specialized virtual filesystem that lists
@@ -115,7 +119,7 @@ func (v *DisksVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) 
 			size, sizeErr := getDeviceSize(devPath, sudoF)
 			if sizeErr != nil {
 				_ = sudoF.Close() // The handle cannot be returned at the wrong offset.
-				return nil, sizeErr
+				return nil, displayPathError(sizeErr)
 			}
 			return &diskFileWrapper{File: sudoF, size: size}, nil
 		}
@@ -124,21 +128,21 @@ func (v *DisksVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) 
 			size, sizeErr := getDeviceSize(devPath, sudoF)
 			if sizeErr != nil {
 				_ = sudoF.Close() // The handle cannot be returned at the wrong offset.
-				return nil, sizeErr
+				return nil, displayPathError(sizeErr)
 			}
 			return &diskFileWrapper{File: sudoF, size: size}, nil
 		}
-		return nil, sudoErr
+		return nil, displayPathError(sudoErr)
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, displayPathError(err)
 	}
 
 	size, sizeErr := getDeviceSize(devPath, f)
 	if sizeErr != nil {
 		_ = f.Close() // The handle cannot be returned at the wrong offset.
-		return nil, sizeErr
+		return nil, displayPathError(sizeErr)
 	}
 	return &diskFileWrapper{File: f, size: size}, nil
 }
@@ -167,7 +171,7 @@ func (v *DisksVFS) PatchInPlace(ctx context.Context, path string, pieces []Patch
 		f, err = globalSudoClient.Open(prepareOSPath(devPath), os.O_RDWR, 0)
 	}
 	if err != nil {
-		return err
+		return displayPathError(err)
 	}
 	defer func() {
 		returnErr = errors.Join(returnErr, f.Close())
@@ -180,7 +184,7 @@ func (v *DisksVFS) PatchInPlace(ctx context.Context, path string, pieces []Patch
 		}
 		if p.Data != nil {
 			if _, err := f.WriteAt(p.Data, newOffset); err != nil {
-				return err
+				return displayPathError(err)
 			}
 		}
 		newOffset += p.Length

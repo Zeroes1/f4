@@ -59,7 +59,7 @@ func (v *OSVFS) FindFiles(ctx context.Context, dir string, q FindQuery) ([]Found
 			// inaccessible during a long search is treated like Far's scan:
 			// skip it and continue with the rest of the tree.
 			if current == dir {
-				return err
+				return displayPathError(err)
 			}
 			return nil
 		}

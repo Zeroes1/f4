@@ -81,7 +81,7 @@ func (v *OSVFS) resolveAndStat(path string) (abs string, st os.FileInfo, statErr
 	}
 
 	st, statErr = hostfs.Stat(prepareOSPath(abs))
-	return abs, st, statErr
+	return abs, st, displayPathError(statErr)
 }
 
 func (v *OSVFS) SetPath(path string) error {
@@ -113,7 +113,7 @@ func (v *OSVFS) resolvePathWithElevation(path string) (string, error) {
 				vtui.DebugLog("VFS: SetPath(%q) FAILED: not a directory (via sudo Stat)", abs)
 				return "", os.ErrInvalid
 			}
-			return "", sudoErr
+			return "", displayPathError(sudoErr)
 		}
 		return "", err
 	}
@@ -193,7 +193,7 @@ func (v *OSVFS) ReadDir(ctx context.Context, path string, onChunk func([]VFSItem
 		} else {
 			vtui.DebugLog("VFS: ReadDir(%q) FAILED: %v (Permission: %v, SudoAvailable: %v)", dirPath, err, os.IsPermission(err), globalSudoClient.IsAvailable())
 		}
-		return err
+		return displayPathError(err)
 	}
 
 	// hostfs.ReadDir returns the whole directory at once (both the posix
@@ -294,9 +294,9 @@ func (v *OSVFS) ReadDir(ctx context.Context, path string, onChunk func([]VFSItem
 func elevatedLookupError(op, path string, refused, sudoErr error) error {
 	var errno syscall.Errno
 	if errors.As(sudoErr, &errno) && (errno == syscall.ENOENT || errno == syscall.ENOTDIR) {
-		return &fs.PathError{Op: op, Path: path, Err: errno}
+		return &fs.PathError{Op: op, Path: stripExtendedPrefix(path), Err: errno}
 	}
-	return refused
+	return displayPathError(refused)
 }
 
 func (v *OSVFS) Stat(ctx context.Context, path string) (VFSItem, error) {
@@ -316,7 +316,7 @@ func (v *OSVFS) Stat(ctx context.Context, path string) (VFSItem, error) {
 			vtui.DebugLog("VFS: Sudo Stat(%q) FAILED: %v", path, sudoErr)
 			return VFSItem{}, elevatedLookupError("stat", preparedPath, err, sudoErr)
 		}
-		return VFSItem{}, err
+		return VFSItem{}, displayPathError(err)
 	}
 	isSymlink := linkInfo.Mode()&os.ModeSymlink != 0 || isReparsePoint(linkInfo)
 	info := linkInfo
@@ -370,7 +370,7 @@ func (v *OSVFS) Lstat(ctx context.Context, path string) (VFSItem, error) {
 			}
 			return VFSItem{}, elevatedLookupError("lstat", preparedPath, err, sudoErr)
 		}
-		return VFSItem{}, err
+		return VFSItem{}, displayPathError(err)
 	}
 	isSymlink := info.Mode()&os.ModeSymlink != 0 || isReparsePoint(info)
 	isDir := info.IsDir()
@@ -418,9 +418,9 @@ func (v *OSVFS) MkDir(ctx context.Context, path string) error {
 	err := hostfs.MkdirAll(prepareOSPath(path), 0755)
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for MkDir(%q), attempting sudo...", path)
-		return globalSudoClient.MkDir(prepareOSPath(path), 0755)
+		return displayPathError(globalSudoClient.MkDir(prepareOSPath(path), 0755))
 	}
-	return err
+	return displayPathError(err)
 }
 
 func (v *OSVFS) Remove(ctx context.Context, path string) error {
@@ -429,9 +429,9 @@ func (v *OSVFS) Remove(ctx context.Context, path string) error {
 	}
 	err := hostfs.RemoveAll(prepareOSPath(path))
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
-		return globalSudoClient.Remove(prepareOSPath(path))
+		return displayPathError(globalSudoClient.Remove(prepareOSPath(path)))
 	}
-	return err
+	return displayPathError(err)
 }
 
 func (v *OSVFS) Rename(ctx context.Context, old, new string) error {
@@ -443,9 +443,9 @@ func (v *OSVFS) Rename(ctx context.Context, old, new string) error {
 	}
 	err := hostfs.Rename(prepareOSPath(old), prepareOSPath(new))
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
-		return globalSudoClient.Rename(prepareOSPath(old), prepareOSPath(new))
+		return displayPathError(globalSudoClient.Rename(prepareOSPath(old), prepareOSPath(new)))
 	}
-	return err
+	return displayPathError(err)
 }
 
 // RenameNoReplace renames an OS object without ever replacing an unrelated
@@ -459,9 +459,9 @@ func (v *OSVFS) RenameNoReplace(ctx context.Context, old, new string) error {
 	err := renameNoReplace(prepareOSPath(old), prepareOSPath(new))
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for RenameNoReplace(%q), attempting sudo...", old)
-		return globalSudoClient.RenameNoReplace(prepareOSPath(old), prepareOSPath(new))
+		return displayPathError(globalSudoClient.RenameNoReplace(prepareOSPath(old), prepareOSPath(new)))
 	}
-	return err
+	return displayPathError(err)
 }
 func (v *OSVFS) SetAttributes(ctx context.Context, path string, item VFSItem) error {
 	if ctx.Err() != nil {
@@ -503,19 +503,19 @@ func (v *OSVFS) SetAttributes(ctx context.Context, path string, item VFSItem) er
 	// If any operation failed due to permissions, try sudo
 	if (os.IsPermission(errMode) || os.IsPermission(errOwn) || os.IsPermission(errTime) || os.IsPermission(errPlat)) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: SetAttributes permission denied, trying sudo for %q", path)
-		return globalSudoClient.SetAttributes(prepareOSPath(path), item)
+		return displayPathError(globalSudoClient.SetAttributes(prepareOSPath(path), item))
 	}
 
 	if errMode != nil {
-		return errMode
+		return displayPathError(errMode)
 	}
 	if errOwn != nil {
-		return errOwn
+		return displayPathError(errOwn)
 	}
 	if errTime != nil {
-		return errTime
+		return displayPathError(errTime)
 	}
-	return errPlat
+	return displayPathError(errPlat)
 }
 
 func (v *OSVFS) PatchInPlace(ctx context.Context, path string, pieces []PatchPiece) (returnErr error) {
@@ -527,7 +527,7 @@ func (v *OSVFS) PatchInPlace(ctx context.Context, path string, pieces []PatchPie
 
 	f, err := hostfs.OpenFile(prepareOSPath(path), os.O_RDWR, 0)
 	if err != nil {
-		return err
+		return displayPathError(err)
 	}
 	defer func() {
 		returnErr = errors.Join(returnErr, f.Close())
@@ -540,7 +540,7 @@ func (v *OSVFS) PatchInPlace(ctx context.Context, path string, pieces []PatchPie
 		}
 		if p.Data != nil {
 			if _, err := f.WriteAt(p.Data, newOffset); err != nil {
-				return err
+				return displayPathError(err)
 			}
 		}
 		newOffset += p.Length
@@ -549,7 +549,7 @@ func (v *OSVFS) PatchInPlace(ctx context.Context, path string, pieces []PatchPie
 	// before. WriteAt overwrites the prefix but does not remove the old tail,
 	// so truncate after the last piece to make the on-disk result match the
 	// logical piece stream.
-	return f.Truncate(newOffset)
+	return displayPathError(f.Truncate(newOffset))
 }
 func (v *OSVFS) GetCapabilities() VFSCapabilities {
 	return VFSCapabilities{
@@ -594,7 +594,7 @@ func (f *osFileWrapper) RefreshSize(ctx context.Context) (int64, error) {
 	}
 	info, err := f.Stat()
 	if err != nil {
-		return f.Size(), err
+		return f.Size(), displayPathError(err)
 	}
 	if info.Mode()&(os.ModeDevice|os.ModeCharDevice) != 0 {
 		// A device's length was probed by seeking to its end when it was
@@ -612,14 +612,16 @@ func (f *osFileWrapper) Read(ctx context.Context, p []byte) (n int, err error) {
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
 	}
-	return f.File.Read(p)
+	n, err = f.File.Read(p)
+	return n, displayPathError(err)
 }
 
 func (f *osFileWrapper) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error) {
 	if ctx.Err() != nil {
 		return 0, ctx.Err()
 	}
-	return f.File.ReadAt(p, off)
+	n, err = f.File.ReadAt(p, off)
+	return n, displayPathError(err)
 }
 func (f *osFileWrapper) Fd() uintptr {
 	if f.File != nil {
@@ -657,7 +659,7 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 	if err != nil {
 		if os.IsPermission(err) && !ElevationAllowed(ctx) {
 			vtui.DebugLog("VFS: Permission denied for Open(%q); the caller ruled out sudo", path)
-			return nil, err
+			return nil, displayPathError(err)
 		}
 		if os.IsPermission(err) && globalSudoClient.IsAvailable() {
 			vtui.DebugLog("VFS: Permission denied for Open(%q), attempting sudo...", path)
@@ -680,7 +682,7 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 				if info.Mode()&(os.ModeDevice|os.ModeCharDevice) != 0 {
 					if probedSize, found, err := probeSeekSize(sudoF); err != nil {
 						_ = sudoF.Close() // The read handle cannot be returned at the wrong offset.
-						return nil, err
+						return nil, displayPathError(err)
 					} else if found {
 						size = probedSize
 					}
@@ -691,18 +693,18 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 			vtui.DebugLog("VFS: Sudo Open(%q) FAILED: %v", path, sudoErr)
 			return nil, elevatedLookupError("open", prepareOSPath(path), err, sudoErr)
 		}
-		return nil, err
+		return nil, displayPathError(err)
 	}
 	info, err := f.Stat()
 	if err != nil {
 		_ = f.Close() // No writes occurred before the failed metadata read.
-		return nil, err
+		return nil, displayPathError(err)
 	}
 	size := info.Size()
 	if info.Mode()&(os.ModeDevice|os.ModeCharDevice) != 0 {
 		if probedSize, found, err := probeSeekSize(f); err != nil {
 			_ = f.Close() // The handle cannot be returned at the wrong offset.
-			return nil, err
+			return nil, displayPathError(err)
 		} else if found {
 			size = probedSize
 		}
@@ -764,13 +766,14 @@ func (v *OSVFS) Create(ctx context.Context, path string) (io.WriteCloser, error)
 	f, err := hostfs.OpenFile(prepared, flags, createMode)
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for Create(%q), attempting sudo...", path)
-		return globalSudoClient.Open(prepared, flags, uint32(createMode))
+		sudoF, sudoErr := globalSudoClient.Open(prepared, flags, uint32(createMode))
+		return sudoF, displayPathError(sudoErr)
 	}
 	if err != nil {
 		// Converting a nil *os.File directly to io.WriteCloser creates a
 		// non-nil interface. Return a literal nil so callers cannot accidentally
 		// use a writer after O_EXCL or another open failure.
-		return nil, err
+		return nil, displayPathError(err)
 	}
 	return f, nil
 }
@@ -895,6 +898,42 @@ func prepareOSPath(p string) string {
 	return `\\?\` + abs
 }
 
+// displayPathError reports an error against the plain path instead of the
+// extended-length form prepareOSPath handed to the OS. The \\?\ prefix is a
+// Win32 convention that exists so trailing dots, spaces and paths over
+// MAX_PATH survive the syscall; in a dialog it is noise that makes the path
+// unusable when copied back out ("Cannot access folder: open \\?\C:\...").
+// It is the exact counterpart of prepareOSPath on the way out.
+//
+// Only the path is rewritten. Op, the wrapped Errno and every errors.Is /
+// errors.As comparison are preserved, so a caller that already branched on
+// os.ErrPermission keeps branching on it -- this runs at the boundary of the
+// package, after those branches inside OSVFS have been taken.
+func displayPathError(err error) error {
+	if err == nil {
+		return nil
+	}
+	switch e := err.(type) {
+	case *fs.PathError:
+		return &fs.PathError{Op: e.Op, Path: stripExtendedPrefix(e.Path), Err: e.Err}
+	case *NotListableError:
+		return &NotListableError{Path: stripExtendedPrefix(e.Path), Err: displayPathError(e.Err)}
+	}
+	// errors.Join (PatchInPlace's deferred Close, rename_noreplace's rollback)
+	// holds its own unexported type; the []error it unwraps to is the way in.
+	// Rebuilding keeps the join semantics -- errors.Is walks every part --
+	// while each part is cleaned on its own.
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		parts := joined.Unwrap()
+		cleaned := make([]error, len(parts))
+		for i, part := range parts {
+			cleaned[i] = displayPathError(part)
+		}
+		return errors.Join(cleaned...)
+	}
+	return err
+}
+
 // stripExtendedPrefix removes the \\?\ prefix from paths returned by OS functions
 // (like EvalSymlinks) so they display nicely in the UI.
 func stripExtendedPrefix(p string) string {
@@ -923,7 +962,7 @@ func (v *OSVFS) Readlink(ctx context.Context, path string) (string, error) {
 	}
 	raw, err := hostfs.Readlink(prepareOSPath(abs))
 	if err != nil {
-		return "", err
+		return "", displayPathError(err)
 	}
 	// The target came straight from the OS and, like a directory entry's
 	// name, is not guaranteed to be valid UTF-8; map it the same way so it
@@ -950,9 +989,9 @@ func (v *OSVFS) Symlink(ctx context.Context, target, linkPath string) error {
 	err = hostfs.Symlink(target, prepareOSPath(abs))
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for Symlink(%q), attempting sudo...", linkPath)
-		return globalSudoClient.Symlink(target, prepareOSPath(abs))
+		return displayPathError(globalSudoClient.Symlink(target, prepareOSPath(abs)))
 	}
-	return err
+	return displayPathError(err)
 }
 
 // OpenWriteAt makes OSVFS a RandomWriteVFS. A local file is the case where
@@ -965,7 +1004,8 @@ func (v *OSVFS) OpenWriteAt(ctx context.Context, path string) (WriterAtCloser, e
 	if err != nil {
 		return nil, err
 	}
-	return hostfs.OpenFile(prepareOSPath(abs), os.O_RDWR|os.O_CREATE, 0o644)
+	f, err := hostfs.OpenFile(prepareOSPath(abs), os.O_RDWR|os.O_CREATE, 0o644)
+	return f, displayPathError(err)
 }
 
 func (v *OSVFS) Hardlink(ctx context.Context, target, linkPath string) error {
@@ -983,9 +1023,9 @@ func (v *OSVFS) Hardlink(ctx context.Context, target, linkPath string) error {
 	err = hostfs.Link(prepareOSPath(absTarget), prepareOSPath(absLink))
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for Hardlink(%q), attempting sudo...", linkPath)
-		return globalSudoClient.Hardlink(prepareOSPath(absTarget), prepareOSPath(absLink))
+		return displayPathError(globalSudoClient.Hardlink(prepareOSPath(absTarget), prepareOSPath(absLink)))
 	}
-	return err
+	return displayPathError(err)
 }
 
 func (v *OSVFS) Junction(ctx context.Context, target, linkPath string) error {
@@ -1004,5 +1044,6 @@ func (v *OSVFS) Junction(ctx context.Context, target, linkPath string) error {
 	// it already did before this change: only the PUA-mapping reversal is
 	// wanted, not the Windows \\?\ prefixing that the rest of prepareOSPath
 	// would add and that junction targets are not known to need.
-	return hostfs.Symlink(decodeMappedPathSegments(absTarget), prepareOSPath(absLink))
+	err = hostfs.Symlink(decodeMappedPathSegments(absTarget), prepareOSPath(absLink))
+	return displayPathError(err)
 }
