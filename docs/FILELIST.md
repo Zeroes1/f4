@@ -492,6 +492,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── autosave_settings_test.go
     │   │   ├── background_jobs_window.go
     │   │   ├── background_jobs_window_test.go
+    │   │   ├── backspace_commandline_test.go
     │   │   ├── bom_test.go
     │   │   ├── bookmarks_dialog_test.go
     │   │   ├── bookmarks_test.go
