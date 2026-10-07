@@ -1,11 +1,12 @@
 package app
 
 import (
-	"github.com/unxed/f4/internal/keymap"
 	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/dialog"
+	"github.com/unxed/f4/internal/keymap"
 )
 
 func TestGenerateKeysHelpTopic_Russian(t *testing.T) {
