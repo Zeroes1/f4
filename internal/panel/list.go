@@ -2729,8 +2729,16 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 		}
 	}
 
+	// Re-reading the directory the panel already shows keeps the rows and the
+	// cursor on screen. Throwing them away for an empty ".." skeleton would
+	// flash that skeleton with the cursor parked on it until the async ReadDir
+	// finishes -- the jump seen after a delete or an in-place copy, where
+	// dirwatch and the completion callback both re-read the same directory.
+	// The completion task below swaps in the fresh list atomically, the same
+	// contract the cached branch above follows. A directory the panel has
+	// never shown still needs the skeleton: there are no rows worth keeping.
 	isFirstChunk := true
-	if !keepEntries && !hasCache {
+	if !keepEntries && !hasCache && (directoryChanged || len(fp.AllEntries()) == 0) {
 		var entries []*FileEntry
 		if showUpEntry {
 			entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}
