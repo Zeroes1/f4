@@ -435,6 +435,7 @@ Every file tracked in the repository. Regenerate with
     │   └── workflows
     │       ├── build.yml
     │       ├── go-cache-salt
+    │       ├── mojibake-guard.yml
     │       ├── openwrt.yml
     │       ├── quick.yml
     │       └── sandbox.yml
