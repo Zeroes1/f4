@@ -14,7 +14,7 @@ func (fp *FileSystemPanel) ShowGroupMenu() {
 	for _, spec := range GroupModes {
 		prefix := "  "
 		if spec.Mode == fp.GroupBy {
-			prefix = "✓ "
+			prefix = MenuCheckMark + " "
 		}
 		menu.AddItem(vtui.MenuItem{Text: prefix + i18n.Msg("Group.By"+spec.ID)})
 	}
@@ -24,7 +24,7 @@ func (fp *FileSystemPanel) ShowGroupMenu() {
 	}{{"Group.Reverse", fp.GroupReverse}, {"Group.SeparateFolders", fp.GroupFoldersSeparately}, {"Group.Settings", false}} {
 		prefix := "  "
 		if option.checked {
-			prefix = "✓ "
+			prefix = MenuCheckMark + " "
 		}
 		menu.AddItem(vtui.MenuItem{Text: prefix + i18n.Msg(option.key)})
 	}

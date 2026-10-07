@@ -629,7 +629,13 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 	for idx, entry := range entries {
 		prefix := "  "
 		if entry.mode == fsp.SortMode {
-			prefix = "✓ "
+			// The mode in force carries its direction, the way the column
+			// header does; "unsorted" has none. ▲ and ▼ are in the console
+			// fonts that lack the check mark (f4#1769).
+			prefix = panel.MenuCheckMark + " "
+			if entry.mode != panel.SortUnsorted {
+				prefix = panel.SortModeMarker(fsp.SortIsAscending()) + " "
+			}
 			selected = idx
 		}
 		menu.AddItem(vtui.MenuItem{
@@ -638,12 +644,13 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		})
 	}
 
-	// The next two rows are toggles rather than modes, the way far puts "use
-	// sort groups" below the mode list. Their indices are len(entries) and
-	// len(entries)+1.
+	// The rows below the rule are options rather than modes, the way far puts
+	// "use sort groups" below the mode list. The rule is row len(entries); the
+	// options follow it (f4#1769).
+	menu.AddSeparator()
 	groupsPrefix := "  "
 	if fsp.UseSortGroups {
-		groupsPrefix = "✓ "
+		groupsPrefix = panel.MenuCheckMark + " "
 	}
 	menu.AddItem(vtui.MenuItem{
 		Text:     groupsPrefix + i18n.Msg("Menu.SortUseGroups"),
@@ -655,7 +662,7 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 	// same toggle-row style as "use sort groups" instead.
 	numericPrefix := "  "
 	if fsp.SortNumeric {
-		numericPrefix = "✓ "
+		numericPrefix = panel.MenuCheckMark + " "
 	}
 	menu.AddItem(vtui.MenuItem{
 		Text:     numericPrefix + i18n.Msg("Menu.SortNumeric"),
@@ -666,7 +673,7 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 	// third of the boolean modifiers between the sort modes and the group menu.
 	selectedPrefix := "  "
 	if fsp.SortSelectedFirst {
-		selectedPrefix = "✓ "
+		selectedPrefix = panel.MenuCheckMark + " "
 	}
 	menu.AddItem(vtui.MenuItem{
 		Text:     selectedPrefix + i18n.Msg("Menu.SortSelectedFirst"),
@@ -679,13 +686,13 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		switch {
 		case idx >= 0 && idx < len(entries):
 			fsp.SetSortMode(entries[idx].mode)
-		case idx == len(entries)+3:
+		case idx == len(entries)+4:
 			fsp.ShowGroupMenu()
-		case idx == len(entries)+2:
+		case idx == len(entries)+3:
 			fsp.ToggleSortSelectedFirst()
-		case idx == len(entries)+1:
+		case idx == len(entries)+2:
 			fsp.ToggleSortNumeric()
-		case idx == len(entries):
+		case idx == len(entries)+1:
 			fsp.ToggleSortGroups()
 		default:
 			return
@@ -694,7 +701,7 @@ func actionSortMenuForPanel(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 		vtui.FrameManager.Redraw()
 	}
 
-	w, h := 36, len(entries)+6
+	w, h := 36, len(entries)+7
 	panelX1, panelY1, panelX2, panelY2 := fsp.GetPosition()
 	panelW := panelX2 - panelX1 + 1
 	panelH := panelY2 - panelY1 + 1

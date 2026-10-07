@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/editor"
@@ -79,7 +80,7 @@ func TestActionSortMenuTogglesGroups(t *testing.T) {
 	menu := vtui.FrameManager.GetTopFrame().(*vtui.VMenu)
 	defer menu.Close()
 	want := !fsp.UseSortGroups
-	menu.OnAction(5)
+	menu.OnAction(6)
 	if fsp.UseSortGroups != want {
 		t.Fatalf("UseSortGroups after toggle = %v, want %v", fsp.UseSortGroups, want)
 	}
@@ -100,7 +101,7 @@ func TestActionSortMenuTogglesNumeric(t *testing.T) {
 	menu := vtui.FrameManager.GetTopFrame().(*vtui.VMenu)
 	defer menu.Close()
 	want := !fsp.SortNumeric
-	menu.OnAction(6)
+	menu.OnAction(7)
 	if fsp.SortNumeric != want {
 		t.Fatalf("SortNumeric after toggle = %v, want %v", fsp.SortNumeric, want)
 	}
@@ -176,5 +177,40 @@ func TestFileListedAsOnlyMatchesFiles(t *testing.T) {
 	}
 	if fileListedAs(context.Background(), v, dir, "missing.txt") {
 		t.Fatal("fileListedAs found a missing file")
+	}
+}
+
+// The check mark is missing from many console fonts; the sort menu marks the
+// mode in force with its direction and an option with the square-root sign
+// (f4#1769).
+func TestActionSortMenuMarkersNeedNoCheckMarkGlyph(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		t.Fatal("panels frame has no active panel")
+	}
+	fsp.UseSortGroups = true
+	fsp.SetSortMode(panel.SortName)
+
+	actionSortMenuForPanel(pf, fsp)
+	menu := vtui.FrameManager.GetTopFrame().(*vtui.VMenu)
+	defer menu.Close()
+	for i, item := range menu.Items {
+		if strings.Contains(item.Text, "✓") {
+			t.Errorf("row %d still uses the check mark: %q", i, item.Text)
+		}
+	}
+	if want := panel.SortModeMarker(fsp.SortIsAscending()) + " "; !strings.HasPrefix(menu.Items[0].Text, want) {
+		t.Errorf("sort by name row = %q, want the marker %q", menu.Items[0].Text, want)
+	}
+	if !strings.HasPrefix(menu.Items[6].Text, panel.MenuCheckMark+" ") {
+		t.Errorf("sort groups row = %q, want the %q marker", menu.Items[6].Text, panel.MenuCheckMark)
+	}
+	if panel.SortModeMarker(true) == panel.SortModeMarker(false) {
+		t.Error("ascending and descending use the same marker")
 	}
 }

@@ -1587,6 +1587,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── managed_exec_debounce_test.go
     │   │   ├── menubar_dropdown_test.go
     │   │   ├── menu_cache_test.go
+    │   │   ├── menu_marks.go
     │   │   ├── menukeys.go
     │   │   ├── menukeys_test.go
     │   │   ├── mock_pty_test.go
