@@ -58,7 +58,12 @@ func driveMenuNameWithoutMarker(name string) string {
 // default letter; PluginMenuItemText keeps the shortcut in a stable column
 // and preserves the same one-character accelerator behavior as F11.
 func driveMenuAssignableText(actionName, label string) string {
-	return PluginMenuItemText(label, PluginActionConfiguredKey(actionName), 1)
+	shortcut := PluginActionConfiguredKey(actionName)
+	if shortcut == "" {
+		clean, _, _ := vtui.ParseAmpersandString(label)
+		return clean
+	}
+	return PluginMenuItemText(label, shortcut, 1)
 }
 
 func driveMenuBaseName(name string) string {
