@@ -2217,3 +2217,9 @@ SettingsCenter.Text.8b621f099b5b0937a36eff5bd9083e385660fca832622425a70ed9ceb600
 SettingsCenter.Text.32775c43e59217b14a8150128cb90eca7e35a77627d4f74f6cd4ecfdfbe9ba12=Beste Komprimierung
 SettingsCenter.Text.986b4b1dd226b28694c61b1fb25efb345980c4d27be52f93600268979c09af72=Die JPEG-Qualität muss zwischen 1 und 100 liegen
 SettingsCenter.Text.983ea5e98aa7f8f7eb08adef934361480984c4c8bb76201aa8fff64f6da0051f=das Ziffernformat muss zwischen 1 und 20 Nullen enthalten
+SettingsCenter.Text.ea93d6a262ecb87a9fa4d09edbd7654c046597936a8e235fc3949eb01775ff99=Tools
+SettingsCenter.Text.ecb177517eae1ad7b9843b0a0419f4cb5d9f8cd8eb33b78f1db028a73ebf735c=Choose which registered drive-menu tools are shown.
+SettingsCenter.tool.Name.Description=Registered drive-menu tool.
+SettingsCenter.tool.Name.Label=Tool
+SettingsCenter.tool.Enabled.Description=Show this tool in the drive menu.
+SettingsCenter.tool.Enabled.Label=Enabled
