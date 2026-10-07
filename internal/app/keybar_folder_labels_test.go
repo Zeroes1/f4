@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/i18n"
@@ -40,6 +41,17 @@ func TestKeyBarNamesWhatF3AndF4DoOnAFolder(t *testing.T) {
 		}
 		if got := editKeyBarLabel(); got != tc.wantF4 {
 			t.Errorf("F4 label on %q = %q, want %q", tc.name, got, tc.wantF4)
+		}
+	}
+}
+
+// F3 on a folder ends with a line saying what was counted, so the number that
+// appears in the size column is not the only sign anything happened (f4#1795).
+func TestDirSizeResultNamesTheFolderItsSizeAndCounts(t *testing.T) {
+	got := dirSizeResult("photos", vfs.OpStats{Bytes: 3 * 1024 * 1024, Files: 12, Dirs: 2})
+	for _, want := range []string{"photos", "3.0 MB", "12", "2"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("dirSizeResult = %q, lacks %q", got, want)
 		}
 	}
 }
