@@ -3008,7 +3008,7 @@ func TestPanelsFrame_TerminalTabAutoComplete(t *testing.T) {
 	}
 }
 
-func TestDriveMenu_SmartHotkeys(t *testing.T) {
+func TestDriveMenuToolsHaveNoAutomaticHotkeys(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := NewPanelsFrame()
 	defer pf.Close()
@@ -3061,11 +3061,11 @@ func TestDriveMenu_SmartHotkeys(t *testing.T) {
 	nfText := menu.Items[nfIdx].Text
 	nullText := menu.Items[nullIdx].Text
 
-	if !strings.Contains(nfText, "&N") {
-		t.Errorf("NetFox should have 'N' as hotkey: %q", nfText)
+	if strings.Contains(nfText, "&") {
+		t.Errorf("NetFox should have no automatic hotkey: %q", nfText)
 	}
-	if !strings.Contains(nullText, "N&u") {
-		t.Errorf("Null VFS should have 'u' as hotkey (N is taken): %q", nullText)
+	if strings.Contains(nullText, "&") {
+		t.Errorf("Null VFS should have no automatic hotkey: %q", nullText)
 	}
 }
 
