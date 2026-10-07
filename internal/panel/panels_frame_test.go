@@ -494,7 +494,7 @@ func driveMenuFromFrame(frame vtui.Frame) (*vtui.VMenu, bool) {
 // wantDriveMenuRow re-derives from the rendered menu the row the cursor is
 // supposed to open on for a panel sitting at cur: the drive entry that owns
 // cur when the menu lists one (Windows drive letters), otherwise the "Other
-// panel" entry at row 0. Deliberately independent of driveMenuDefaultPos, so
+// panel" entry. Deliberately independent of driveMenuDefaultPos, so
 // the assertions still test something, and independent of the platform, so
 // the runner's drive layout cannot flip them -- GitHub's Windows images check
 // the tree out on D:, which is what made this a hard-coded 0 no longer true.
@@ -509,7 +509,17 @@ func wantDriveMenuRow(menu *vtui.VMenu, cur string) int {
 			return i
 		}
 	}
-	return 0
+	return otherPanelRow(menu)
+}
+
+func otherPanelRow(menu *vtui.VMenu) int {
+	want := strings.ReplaceAll(i18n.Msg("Panel.Other"), "&", "")
+	for i, item := range menu.Items {
+		if strings.ReplaceAll(item.Text, "&", "") == want {
+			return i
+		}
+	}
+	return -1
 }
 
 func TestPanelsFrame_DriveMenuBookmarkKeys(t *testing.T) {
@@ -740,7 +750,7 @@ func TestPanelsFrame_RightClickPanelPathOpensDriveMenuForThatPanel(t *testing.T)
 		t.Fatal("path context click incorrectly captured a panel drag")
 	}
 	menu := findDriveMenu(t)
-	menu.OnAction(0) // "Other panel" must apply to the right panel.
+	menu.OnAction(otherPanelRow(menu)) // "Other panel" must apply to the right panel.
 	if got := right.Vfs.GetPath(); got != leftPath {
 		t.Fatalf("drive menu changed path %q, want right panel to receive %q", got, leftPath)
 	}
@@ -2918,7 +2928,7 @@ func TestPanelsFrame_DriveMenu_OtherPanel(t *testing.T) {
 		t.Fatal("Drive menu not opened")
 	}
 
-	// "Other panel" stays at index 0, but the cursor now opens on the drive
+	// "Other panel" follows the platform drives, but the cursor opens on the drive
 	// the panel currently shows when the menu lists it (driveMenuDefaultPos,
 	// far2l parity), so the expected row depends on where the panel sits.
 	if menu.GetTitle() != i18n.Msg("Drive.Title") {
@@ -2929,8 +2939,8 @@ func TestPanelsFrame_DriveMenu_OtherPanel(t *testing.T) {
 		t.Errorf("Menu state invalid: pos=%d, want %d (panel at %q)", menu.SelectPos, want, cur)
 	}
 
-	// Trigger "Other panel" (idx 0)
-	menu.OnAction(0)
+	// Trigger "Other panel" by its rendered row.
+	menu.OnAction(otherPanelRow(menu))
 
 	// Left panel VFS path must now match Right panel's path
 	got := pf.Panels[0].(*FileSystemPanel).Vfs.GetPath()

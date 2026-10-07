@@ -241,7 +241,18 @@ func TestPanelsFrame_CtrlShiftArrowsOpenDriveMenuForPanelSide(t *testing.T) {
 				t.Fatal("Ctrl+Shift+Arrow was not handled")
 			}
 			menu := paneltest.FindDriveMenu(t)
-			menu.OnAction(0)
+			otherRow := -1
+			wantOther := strings.ReplaceAll(i18n.Msg("Panel.Other"), "&", "")
+			for i, item := range menu.Items {
+				if strings.ReplaceAll(item.Text, "&", "") == wantOther {
+					otherRow = i
+					break
+				}
+			}
+			if otherRow < 0 {
+				t.Fatal("Other panel row not found in drive menu")
+			}
+			menu.OnAction(otherRow)
 			want := paths[1-tt.panelIdx]
 			if got := pf.Panels[tt.panelIdx].(*panel.FileSystemPanel).Vfs.GetPath(); got != want {
 				t.Fatalf("drive menu changed path %q, want panel %d to receive %q", got, tt.panelIdx, want)
