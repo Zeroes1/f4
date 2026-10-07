@@ -6121,7 +6121,7 @@ func (pf *PanelsFrame) ShowDriveMenu(panelIdx int) {
 // panel currently shows; for f4 that means: if the panel is on a real
 // filesystem drive that appears in the menu (e.g. a Windows drive letter),
 // land on that drive, otherwise keep the historic default — the "Other panel"
-// entry at row 0.
+// entry after the platform drives.
 func (pf *PanelsFrame) driveMenuDefaultPos(panelIdx int) int {
 	fsp, ok := pf.Panels[panelIdx].(*FileSystemPanel)
 	if !ok {
@@ -6132,14 +6132,13 @@ func (pf *PanelsFrame) driveMenuDefaultPos(panelIdx int) int {
 		return 0
 	}
 	cur := osVFS.GetPath()
-	for i, drv := range sysinfo.GetPlatformDrives() {
+	platformDrives := driveMenuPlatformDrives(config.App.DriveMenuOptions)
+	for i, drv := range platformDrives {
 		if driveMatchesPath(drv, cur) {
-			// The "Other panel" and "Temporary panel" entries precede
-			// platform drives.
-			return i + 2
+			return i
 		}
 	}
-	return 0
+	return len(platformDrives)
 }
 
 // driveMatchesPath reports whether the platform drive entry drv is the one
@@ -6171,14 +6170,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// filesystem types and free space reflect the current state. Collect all
 	// rows first: the formatter needs the whole list to align its columns.
 	driveMenuOptions := config.App.DriveMenuOptions
-	platformDrives := make([]sysinfo.DriveEntry, 0)
-	for _, drv := range sysinfo.GetPlatformDrives() {
-		if !driveMenuPlatformItemVisible(drv, driveMenuOptions) {
-			continue
-		}
-		platformDrives = append(platformDrives, drv)
-	}
-	platformDrives = orderDriveMenuPlatformDrives(platformDrives)
+	platformDrives := driveMenuPlatformDrives(driveMenuOptions)
 	platformNames := DriveMenuPlatformRowsText(func() []DriveMenuPlatformRow {
 		rows := make([]DriveMenuPlatformRow, len(platformDrives))
 		for i, drv := range platformDrives {

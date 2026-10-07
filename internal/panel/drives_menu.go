@@ -335,6 +335,16 @@ func orderDriveMenuPlatformDrives(drives []sysinfo.DriveEntry) []sysinfo.DriveEn
 	return ordered
 }
 
+func driveMenuPlatformDrives(options uint32) []sysinfo.DriveEntry {
+	drives := make([]sysinfo.DriveEntry, 0)
+	for _, drv := range sysinfo.GetPlatformDrives() {
+		if driveMenuPlatformItemVisible(drv, options) {
+			drives = append(drives, drv)
+		}
+	}
+	return orderDriveMenuPlatformDrives(drives)
+}
+
 func (pf *PanelsFrame) openDriveMenuOptions(panelIdx int, menu *vtui.VMenu) {
 	// F9 belongs to the drive menu, so it opens the drive-chooser page on
 	// its own rather than the whole Settings Center (#1148). The compact
