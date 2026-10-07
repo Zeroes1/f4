@@ -106,6 +106,14 @@ Hotkeys provide the fastest way to activate a specific function.
 *   `F1`: Opens the help topic associated with the currently focused element.
 *   **Mouse:** Click-and-drag on the top border moves the window. Click-and-drag on the bottom-right corner resizes it.
 
+Select Group, Deselect Group and New File share a compact six-row input dialog:
+prompt, input, full-width separator and centered buttons occupy consecutive
+rows inside the frame. The minimum width is 30 cells. Screen resizing adjusts
+the width; corner dragging changes only the width and preserves the height.
+New File uses the same width calculation on opening and screen resizing:
+`min(screenWidth, max(30, screenWidth/2))`. It keeps its empty initial input,
+path hints and `NewEdit` history. Select/Deselect Group open 40 cells wide.
+
 #### Groups (`RadioGroup`, `CheckGroup`)
 
 *   **Interaction Model:** These components separate the concepts of *cursor* and *selection*.

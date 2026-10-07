@@ -21,6 +21,10 @@ const (
 	maskDialogHeight   = 6
 )
 
+func compactInputWidth(screenWidth int) int {
+	return min(screenWidth, max(maskDialogMinWidth, screenWidth/2))
+}
+
 func (d *MaskDialog) layoutControls() {
 	d.label.SetPosition(d.X1+2, d.Y1+1, d.X2-2, d.Y1+1)
 	d.edit.SetPosition(d.X1+2, d.Y1+2, d.X2-2, d.Y1+2)
@@ -31,13 +35,13 @@ func (d *MaskDialog) layoutControls() {
 func (d *MaskDialog) ChangeSize(width, _ int) {
 	d.Window.ChangeSize(width, maskDialogHeight)
 	d.layoutControls()
-	vtui.DebugLog("[FIX] Mask dialog layout: width=%d height=%d", d.X2-d.X1+1, d.Y2-d.Y1+1)
+	vtui.DebugLog("[FIX] Compact input dialog %q layout: width=%d height=%d", d.GetTitle(), d.X2-d.X1+1, d.Y2-d.Y1+1)
 }
 
 func (d *MaskDialog) ResizeConsole(width, height int) {
 	// Like the file dialogs, use half of the available screen width. Keep
 	// the smaller minimum local to mask selection, not copy/move dialogs.
-	dialogWidth := min(width, max(maskDialogMinWidth, width/2))
+	dialogWidth := compactInputWidth(width)
 	x, y := max(0, (width-dialogWidth)/2), max(0, (height-maskDialogHeight)/2)
 	d.SetPosition(x, y, x+dialogWidth-1, y+maskDialogHeight-1)
 	d.layoutControls()
@@ -63,11 +67,15 @@ func (d *MaskDialog) Show(screen *vtui.ScreenBuf) {
 // MaskInputBox opens the select/deselect group mask prompt. Its minimum is
 // ten columns narrower than vtui.InputBox's original 40-column window.
 func MaskInputBox(title, prompt, defaultText string, onOK func(string)) *MaskDialog {
-	d := &MaskDialog{Window: vtui.NewCenteredDialog(40, maskDialogHeight, title)}
+	return compactInputBox(40, title, prompt, defaultText, onOK)
+}
+
+func compactInputBox(width int, title, prompt, defaultText string, onOK func(string)) *MaskDialog {
+	d := &MaskDialog{Window: vtui.NewCenteredDialog(width, maskDialogHeight, title)}
 	d.ShowClose = true
 	d.edit = vtui.NewEdit(0, 0, 10, defaultText)
 	d.label = vtui.NewLabel(0, 0, prompt, d.edit)
-	d.rule = vtui.NewSeparator(0, 0, 40, true, true)
+	d.rule = vtui.NewSeparator(0, 0, width, true, true)
 	ok := vtui.NewButton(0, 0, i18n.Msg("vtui.Ok"))
 	cancel := vtui.NewButton(0, 0, i18n.Msg("vtui.Cancel"))
 	ok.IsDefault = true
@@ -83,7 +91,7 @@ func MaskInputBox(title, prompt, defaultText string, onOK func(string)) *MaskDia
 	d.AddItem(ok)
 	d.AddItem(cancel)
 	d.AddItem(d.rule)
-	d.buttons = vtui.NewHBoxLayout(0, 0, 36, 1)
+	d.buttons = vtui.NewHBoxLayout(0, 0, width-4, 1)
 	d.buttons.HorizontalAlign = vtui.AlignCenter
 	d.buttons.Spacing = 2
 	d.buttons.Add(ok, vtui.Margins{}, vtui.AlignTop)

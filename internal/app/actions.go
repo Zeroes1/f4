@@ -2164,7 +2164,7 @@ func actionNewFile(pf *panel.PanelsFrame) {
 		}
 		activeVfs := fsp.Vfs
 		var nameEdit *vtui.Edit
-		dlg := vtui.InputBox(i18n.Msg("Edit.NewFileTitle"), i18n.Msg("Edit.NewFilePrompt"), "", func(name string) {
+		dlg := dialog.NewFileInputBox(func(name string) {
 			// Record what was actually typed, before the fallback below
 			// turns an empty prompt into a placeholder name.
 			history.CommitHistory(nameEdit, name)
@@ -2184,10 +2184,10 @@ func actionNewFile(pf *panel.PanelsFrame) {
 			}
 			actionOpenEditor(pf, activeVfs, path)
 		})
-		history.InputBoxEdit(dlg).PathHintsEnabled = true
+		history.InputBoxEdit(dlg.Window).PathHintsEnabled = true
 		// Plain DIF_HISTORY, as in far2l's dlgOpenEditor: the prompt opens
 		// empty rather than on the last file that was created this way.
-		nameEdit = history.AttachHistory(history.InputBoxEdit(dlg), history.NewEditHistoryID)
+		nameEdit = history.AttachHistory(history.InputBoxEdit(dlg.Window), history.NewEditHistoryID)
 	}
 }
 
