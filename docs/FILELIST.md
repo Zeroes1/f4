@@ -669,6 +669,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── issue821_test.go
     │   │   ├── issue856_mouse_capture_test.go
     │   │   ├── issue95_followup_test.go
+    │   │   ├── keybar_folder_labels_test.go
     │   │   ├── keybar_injected_test.go
     │   │   ├── keymap_host_test.go
     │   │   ├── keymap_suspend.go
