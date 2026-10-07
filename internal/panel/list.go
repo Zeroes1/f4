@@ -2729,16 +2729,26 @@ func (fp *FileSystemPanel) readDirectoryEx(keepEntries bool) {
 		}
 	}
 
-	// Re-reading the directory the panel already shows keeps the rows and the
-	// cursor on screen. Throwing them away for an empty ".." skeleton would
-	// flash that skeleton with the cursor parked on it until the async ReadDir
-	// finishes -- the jump seen after a delete or an in-place copy, where
-	// dirwatch and the completion callback both re-read the same directory.
-	// The completion task below swaps in the fresh list atomically, the same
-	// contract the cached branch above follows. A directory the panel has
-	// never shown still needs the skeleton: there are no rows worth keeping.
+	// Building the skeleton drops whatever rows the panel is showing, so it
+	// happens only for a directory the panel has nothing to show about: one it
+	// has never read. Two cases keep the rows instead:
+	//
+	//   - a reload of the directory already on screen, where those rows are
+	//     the freshest view there is. Replacing them with an empty ".."
+	//     skeleton flashes it with the cursor parked on it until the async
+	//     ReadDir finishes -- the jump seen after a delete or an in-place
+	//     copy, which reloads twice (dirwatch plus the completion callback).
+	//   - a navigation with SyncPanelLoad on, which promises to replace the
+	//     listing only once the whole directory is ready. Dropping to ".."
+	//     until then parks the cursor on it and bounces it onto the row the
+	//     user navigated from the moment the listing arrives -- the jump seen
+	//     on Ctrl+PgUp.
+	// The completion task below swaps in the fresh list atomically either way,
+	// the same contract the cached branch above follows.
+	buildSkeleton := len(fp.AllEntries()) == 0 ||
+		(directoryChanged && !config.App.SyncPanelLoad)
 	isFirstChunk := true
-	if !keepEntries && !hasCache && (directoryChanged || len(fp.AllEntries()) == 0) {
+	if !keepEntries && !hasCache && buildSkeleton {
 		var entries []*FileEntry
 		if showUpEntry {
 			entries = []*FileEntry{{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}}}

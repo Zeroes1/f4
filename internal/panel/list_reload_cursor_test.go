@@ -88,13 +88,78 @@ func TestReloadSameDirectoryKeepsRowsAndCursor(t *testing.T) {
 	}
 }
 
-// TestReloadOtherDirectoryShowsSkeleton is the other half of the fix: a panel
-// that really navigates away must not keep the old directory's rows on screen
-// while the new one loads.
-func TestReloadOtherDirectoryShowsSkeleton(t *testing.T) {
+// TestNavigationToParentKeepsRowsUnderSyncLoad is the Ctrl+PgUp half of the
+// jump: with SyncPanelLoad on, leaving a directory replaced the rows with a
+// ".." skeleton and parked the cursor on it until the parent's listing
+// arrived, so the cursor visibly bounced off ".." and onto the directory the
+// user had just left.
+func TestNavigationToParentKeepsRowsUnderSyncLoad(t *testing.T) {
 	oldCfg := config.App
 	defer func() { config.App = oldCfg }()
 	config.App.SyncPanelLoad = true
+
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	parent := t.TempDir()
+	child := filepath.Join(parent, "POPCNT")
+	if err := os.Mkdir(child, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	// #nosec G304 -- the path is inside the private test temp directory.
+	if err := os.WriteFile(filepath.Join(child, "inside.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fp := NewFileSystemPanel(0, 0, 80, 25, vfs.NewOSVFS(child))
+	t.Cleanup(func() {
+		fp.cancelProviderOpen()
+		if fp.Vfs != nil {
+			_ = fp.Vfs.Close()
+		}
+		if fp.CancelLoad != nil {
+			fp.CancelLoad()
+		}
+		fp.StopLoadingAnimation()
+	})
+	waitForLoad(t, fp)
+	insideRow := indexOfRow(fp, "inside.txt")
+	if insideRow < 0 {
+		t.Fatalf("panel rows = %v, want the child directory loaded", panelNames(fp))
+	}
+	fp.SetCursorIndex(insideRow)
+
+	// What Panel.GoParent does: point the panel at the parent, name the
+	// directory we left as the pending selection, re-read.
+	if err := fp.SetKnownDirectoryPath(parent); err != nil {
+		t.Fatal(err)
+	}
+	fp.PendingSelection = "POPCNT"
+	fp.ReadDirectory()
+
+	if name := fp.GetRawSelectedName(); name != "inside.txt" {
+		t.Errorf("cursor right after Ctrl+PgUp = %q, rows %v: the panel dropped to a \"..\" skeleton before the parent listing was ready",
+			name, panelNames(fp))
+	}
+	waitForLoad(t, fp)
+
+	if indexOfRow(fp, "inside.txt") >= 0 {
+		t.Errorf("child rows survived navigation to the parent: %v", panelNames(fp))
+	}
+	if name := fp.GetRawSelectedName(); name != "POPCNT" {
+		t.Errorf("cursor after Ctrl+PgUp = %q, want POPCNT; rows %v", name, panelNames(fp))
+	}
+}
+
+// TestReloadOtherDirectoryShowsSkeleton is the other half of the fix: with
+// SyncPanelLoad off, a panel that navigates away from a directory it has
+// never cached still drops to the skeleton while the new listing is read --
+// keeping the rows only replaces them a chunk later, so the skeleton is what
+// the user sees first there. With SyncPanelLoad on the rows stay instead, see
+// TestNavigationToParentKeepsRowsUnderSyncLoad.
+func TestReloadOtherDirectoryShowsSkeleton(t *testing.T) {
+	oldCfg := config.App
+	defer func() { config.App = oldCfg }()
+	config.App.SyncPanelLoad = false
 
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
