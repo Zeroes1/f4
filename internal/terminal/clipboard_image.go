@@ -27,7 +27,7 @@ func ReadClipboardContents(ctx context.Context) (ClipboardContents, error) {
 		return ClipboardContents{}, err
 	}
 	if img != nil {
-		files, cut, _ := readFileClipboard(ctx)
+		files, cut, _ := readNativeFileClipboard(ctx)
 		if len(files) == 0 {
 			payload := vtui.ParseURIList(contents.Text)
 			files = payload.Paths
@@ -37,7 +37,7 @@ func ReadClipboardContents(ctx context.Context) (ClipboardContents, error) {
 
 	// Keep vtui's far2l, authorization and terminal integrations for text.
 	text := vtui.GetClipboard()
-	files, cut, _ := readFileClipboard(ctx)
+	files, cut, _ := readNativeFileClipboard(ctx)
 	if len(files) == 0 {
 		payload := vtui.ParseURIList(contents.Text)
 		if len(payload.Paths) == 0 {
