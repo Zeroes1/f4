@@ -50,6 +50,14 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 	if next := strings.ReplaceAll(menu.Items[tools+1].Text, "&", ""); next != "Alpha" {
 		t.Fatalf("the row after the Tools rule is %q, want the first tool", next)
 	}
+	for _, item := range menu.Items {
+		clean := strings.ReplaceAll(item.Text, "&", "")
+		if clean == "Alpha" || clean == "Beta" {
+			if strings.Contains(item.Text, "&") {
+				t.Errorf("tool row %q unexpectedly has an automatic hotkey: %q", clean, item.Text)
+			}
+		}
+	}
 	if _, ok := captions[i18n.Msg("Drive.Links")]; !ok {
 		t.Fatalf("no Links caption in the rules: %v", captions)
 	}

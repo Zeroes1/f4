@@ -653,6 +653,14 @@ func IsPluginActionName(name string) bool {
 	return strings.HasPrefix(name, "plugin.command.") || strings.HasPrefix(name, "plugin.legacy.")
 }
 
+// IsDriveMenuActionName identifies accelerators assigned to rows which are
+// local to the Alt+F1/Alt+F2 drive menu. They persist in the hotkeys file, but
+// the menu owns the printable key while it is open instead of dispatching it
+// as an application action.
+func IsDriveMenuActionName(name string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(name)), "drivemenu.")
+}
+
 // pluginReservedKeys are bare keys the panels and the plugin menu need for
 // themselves. The first version of the F4 dialog accepted any key at all, so a
 // user could hand Del to a plugin and end up with no working Del anywhere --
@@ -797,6 +805,8 @@ func PluginCommandActionName(id string) string { return "Plugin.Command." + id }
 func LegacyPluginActionName(index int) string {
 	return "Plugin.Legacy." + strconv.Itoa(index)
 }
+
+func DriveMenuActionName(id string) string { return "DriveMenu." + id }
 
 func ConfiguredHotkeyAction(hm *HotkeyManager, area, key string) string {
 	if hm == nil {

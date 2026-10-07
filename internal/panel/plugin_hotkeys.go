@@ -356,24 +356,28 @@ func PluginActionDefaultShortcut(name string) string {
 
 func assignPluginHotkey(actionName, label string, onComplete func()) {
 	hm := keymap.GlobalHotkeysMgr
-	if hm == nil || vtui.FrameManager == nil || !keymap.IsPluginActionName(actionName) {
+	if hm == nil || vtui.FrameManager == nil || !isMenuHotkeyActionName(actionName) {
 		return
 	}
 	showPluginHotkeyDialog(hm, actionName, label, onComplete)
+}
+
+func isMenuHotkeyActionName(name string) bool {
+	return keymap.IsPluginActionName(name) || keymap.IsDriveMenuActionName(name)
 }
 
 // bindPluginMenuHotkey stores a letter for the entry. A letter identifies
 // exactly one row, so it is taken away from whoever held it, and the entry
 // loses whatever it held before: one hot key per plugin, as in Far.
 func bindPluginMenuHotkey(hm *keymap.HotkeyManager, actionName string, r rune) bool {
-	if hm == nil || r == 0 || !keymap.IsPluginActionName(actionName) {
+	if hm == nil || r == 0 || !isMenuHotkeyActionName(actionName) {
 		return false
 	}
 	key := string(unicode.ToUpper(r))
 	for _, area := range []string{"Shell", "Common"} {
 		for boundKey, binding := range hm.Bindings[area] {
 			name := strings.SplitN(binding, ":", 2)[0]
-			if !keymap.IsPluginActionName(name) {
+			if !isMenuHotkeyActionName(name) {
 				continue
 			}
 			if strings.EqualFold(boundKey, key) || strings.EqualFold(name, actionName) {

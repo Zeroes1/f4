@@ -281,7 +281,7 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 			// line while remaining persisted for that menu and its display.
 			// A chord assigned in the hotkey dialog (Ctrl+F9 and friends) is a
 			// real hotkey and keeps being dispatched here.
-			if keymap.IsPluginActionName(actionName) && panel.IsPluginMenuHotkey(keyStr) {
+			if isMenuAcceleratorAction(actionName, keyStr) {
 				return false
 			}
 			if strings.EqualFold(actionName, "none") {
@@ -341,7 +341,7 @@ func macroLookupHotkey(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// Plugin menu accelerators are activated by the F11 menu's ampersand
 	// hotkeys. They are deliberately not global Shell hotkeys, so an injected
 	// key (for example from a key-bar click) must not bypass that rule either.
-	if keymap.IsPluginActionName(actionName) && panel.IsPluginMenuHotkey(keyStr) {
+	if isMenuAcceleratorAction(actionName, keyStr) {
 		return false
 	}
 	if strings.EqualFold(actionName, "none") {
@@ -358,4 +358,9 @@ func macroLookupHotkey(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// frame below it.
 	RunAction(actionName)
 	return true
+}
+
+func isMenuAcceleratorAction(actionName, key string) bool {
+	return (keymap.IsPluginActionName(actionName) || keymap.IsDriveMenuActionName(actionName)) &&
+		panel.IsPluginMenuHotkey(key)
 }

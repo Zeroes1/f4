@@ -53,6 +53,14 @@ func driveMenuNameWithoutMarker(name string) string {
 	return strings.TrimSpace(strings.ReplaceAll(name, "&", ""))
 }
 
+// driveMenuAssignableText renders a row whose accelerator is user-configured
+// through F4. Unlike platform drives, these rows intentionally have no
+// default letter; PluginMenuItemText keeps the shortcut in a stable column
+// and preserves the same one-character accelerator behavior as F11.
+func driveMenuAssignableText(actionName, label string) string {
+	return PluginMenuItemText(label, PluginActionConfiguredKey(actionName), 1)
+}
+
 func driveMenuBaseName(name string) string {
 	name = driveMenuNameWithoutMarker(name)
 	switch {

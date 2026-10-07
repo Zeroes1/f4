@@ -6164,10 +6164,13 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	menu := vtui.NewVMenu(i18n.Msg("Drive.Title"))
 
 	usedHotkeys := make(map[rune]bool)
-	usedHotkeys['o'] = true // "Other panel"
+	driveHotkeyRows := make(map[int]string)
 
-	// 1. Other panel (focused by default)
-	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("Panel.Other"), UserData: func(fsp *FileSystemPanel) {
+	// 1. Other panel (focused by default). It has no automatic accelerator;
+	// F4 can assign one explicitly, just like the tool rows below.
+	otherAction := keymap.DriveMenuActionName("other")
+	driveHotkeyRows[menu.GetItemCount()] = otherAction
+	menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(otherAction, i18n.Msg("Panel.Other")), UserData: func(fsp *FileSystemPanel) {
 		otherFsp := pf.Panels[1-panelIdx].(*FileSystemPanel)
 		fsp.cancelProviderOpen()
 		if fsp.Vfs != nil {
@@ -6181,7 +6184,9 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 
 	// TempPanel is a native VFS panel, so it is available from the same
 	// Alt+F1/Alt+F2 drive menu as far2l's plugin panels.
-	menu.AddItem(vtui.MenuItem{Text: i18n.Msg("TempPanel.Drive"), UserData: func(fsp *FileSystemPanel) {
+	temporaryAction := keymap.DriveMenuActionName("temporary")
+	driveHotkeyRows[menu.GetItemCount()] = temporaryAction
+	menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(temporaryAction, i18n.Msg("TempPanel.Drive")), UserData: func(fsp *FileSystemPanel) {
 		pf.SwitchToVFS(fsp, NewTempPanelVFS(nil, GlobalTempPanelStore, 0))
 	}})
 
@@ -6212,6 +6217,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	for i, drv := range platformDrives {
 		factory := drv.Factory
 		name := platformNames[i]
+		if strings.EqualFold(driveMenuNameWithoutMarker(drv.Name), "Windows Registry") {
+			actionName := keymap.DriveMenuActionName("platform.windows-registry")
+			driveHotkeyRows[menu.GetItemCount()] = actionName
+			name = driveMenuAssignableText(actionName, name)
+		}
 		// WINE.md §18.2, "список дисков, Alt+F1": posix personality has no
 		// drive letters -- its "/ Root" and "~ Home" rows need the same
 		// hotkey treatment as the Linux build's, matching
@@ -6302,22 +6312,13 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			}
 			cleanName = strings.ReplaceAll(cleanName, "&", "")
 
-			// Smart hotkey assignment from clean name
-			hotkeyAssigned := false
-			var sb strings.Builder
-			for _, r := range cleanName {
-				rl := unicode.ToLower(r)
-				if !hotkeyAssigned && unicode.IsLetter(r) && !usedHotkeys[rl] {
-					sb.WriteRune('&')
-					sb.WriteRune(r)
-					usedHotkeys[rl] = true
-					hotkeyAssigned = true
-				} else {
-					sb.WriteRune(r)
-				}
-			}
+			// Tools deliberately have no automatic accelerator. A user can
+			// assign one with F4, without it moving randomly when a drive or
+			// link takes the same letter.
+			actionName := keymap.DriveMenuActionName("tool." + cleanName)
+			driveHotkeyRows[menu.GetItemCount()] = actionName
 
-			menu.AddItem(vtui.MenuItem{Text: sb.String(), UserData: func(fsp *FileSystemPanel) {
+			menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(actionName, cleanName), UserData: func(fsp *FileSystemPanel) {
 				pf.SwitchToVFS(fsp, factory())
 			}})
 		}
@@ -6439,6 +6440,14 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 					vtui.FrameManager.PostTask(func() { ShowBookmarksDialogAt(pf, slot, reopen) })
 					return true
 				}
+				if actionName, ok := driveHotkeyRows[pos]; ok {
+					label := menu.Items[pos].Text
+					assignPluginHotkey(actionName, label, func() {
+						menu.Close()
+						vtui.FrameManager.PostTask(reopen)
+					})
+					return true
+				}
 			case vtinput.VK_DELETE:
 				if onDriveBookmark {
 					pf.deleteDriveBookmark(menu, driveBookmarks, driveBookmarkIndex, reopen)
@@ -6467,6 +6476,22 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 					menu.SetSelectPos(row)
 					menu.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
 					return true
+				}
+			}
+		}
+
+		// Explicit F4 assignments are menu-local accelerators. Handle them
+		// before VMenu's own ampersand scan so an intentional assignment wins
+		// over a built-in drive-letter marker with the same character.
+		if e.KeyDown {
+			key := keymap.EventToHotkeyString(e)
+			if IsPluginMenuHotkey(key) {
+				for row, actionName := range driveHotkeyRows {
+					if strings.EqualFold(PluginActionConfiguredKey(actionName), key) {
+						menu.SetSelectPos(row)
+						menu.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+						return true
+					}
 				}
 			}
 		}
