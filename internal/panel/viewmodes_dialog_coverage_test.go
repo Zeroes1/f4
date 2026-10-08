@@ -163,8 +163,8 @@ func TestShowPanelModesMenuOpensAtActiveMode(t *testing.T) {
 
 // viewModeDialogWidgets picks the edit dialog's controls out by the fixed
 // order editPanelViewMode adds them in: name, type and width (label, edit each),
-// full-screen and uppercase-directory checkboxes, the three buttons, then the
-// Columns... button.
+// full-screen and uppercase-directory checkboxes, then the buttons in the order
+// they stand on the row: OK, Columns..., Reset, Cancel.
 func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen, uppercaseDirs *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
 	t.Helper()
 	children := dlg.GetChildren()
@@ -187,11 +187,11 @@ func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidth
 	if ok, assertOk = children[12].(*vtui.Button); !assertOk {
 		t.Fatalf("children[12] = %T, want *vtui.Button", children[12])
 	}
-	if reset, assertOk = children[13].(*vtui.Button); !assertOk {
-		t.Fatalf("children[13] = %T, want *vtui.Button", children[13])
-	}
-	if cancel, assertOk = children[14].(*vtui.Button); !assertOk {
+	if reset, assertOk = children[14].(*vtui.Button); !assertOk {
 		t.Fatalf("children[14] = %T, want *vtui.Button", children[14])
+	}
+	if cancel, assertOk = children[15].(*vtui.Button); !assertOk {
+		t.Fatalf("children[15] = %T, want *vtui.Button", children[15])
 	}
 	return
 }
@@ -212,6 +212,47 @@ func openViewModeEditDialog(t *testing.T, pf *PanelsFrame, pos int) *vtui.Window
 		t.Fatalf("top frame after selecting a mode = %T, want the edit dialog", vtui.FrameManager.GetTopFrame())
 	}
 	return dlg
+}
+
+// Tab walks the buttons of the mode dialog in the order they stand on the row,
+// and the dialog is tall enough for the button row to be inside the frame
+// (f4#410).
+func TestViewModeDialogTabOrderFollowsTheButtonRowAndFitsTheFrame(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	withTempPanelModesFile(t)
+
+	pf := base64TestPanel(t.TempDir(), "file.txt")
+	dlg := openViewModeEditDialog(t, pf, panelModesMenuPos(ViewModeDetailed))
+
+	children := dlg.GetChildren()
+	var buttons []*vtui.Button
+	for _, child := range children {
+		if b, ok := child.(*vtui.Button); ok {
+			buttons = append(buttons, b)
+		}
+	}
+	if len(buttons) != 4 {
+		t.Fatalf("dialog has %d buttons, want 4", len(buttons))
+	}
+	want := []string{i18n.Msg("vtui.Ok"), i18n.Msg("Panel.Modes.EditColumns"), i18n.Msg("Panel.Modes.Reset"), i18n.Msg("vtui.Cancel")}
+	for i, b := range buttons {
+		if got, w := b.GetCaption(), strings.ReplaceAll(want[i], "&", ""); got != w {
+			t.Errorf("button %d in Tab order is %q, want %q", i, got, w)
+		}
+	}
+	// The row of buttons stands left to right in that same order, and above
+	// the bottom frame.
+	for i := 1; i < len(buttons); i++ {
+		if buttons[i].X1 <= buttons[i-1].X1 {
+			t.Errorf("button %q (x=%d) does not stand right of %q (x=%d)", buttons[i].GetCaption(), buttons[i].X1, buttons[i-1].GetCaption(), buttons[i-1].X1)
+		}
+	}
+	for _, b := range buttons {
+		if b.Y1 >= dlg.Y2 {
+			t.Errorf("button %q at y=%d is not above the bottom frame (y=%d)", b.GetCaption(), b.Y1, dlg.Y2)
+		}
+	}
 }
 
 func withTempPanelModesFile(t *testing.T) {

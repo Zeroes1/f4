@@ -163,10 +163,13 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	dlg.AddItem(editStatusWidths)
 	dlg.AddItem(chkFullScreen)
 	dlg.AddItem(chkUppercaseDirs)
+	// Tab walks the controls in the order they are added, so the buttons go in
+	// the order they stand on the row: Columns... used to come after Cancel
+	// (f4#410).
 	dlg.AddItem(btnOk)
+	dlg.AddItem(btnColumns)
 	dlg.AddItem(btnReset)
 	dlg.AddItem(btnCancel)
-	dlg.AddItem(btnColumns)
 
 	vbox := vtui.NewVBoxLayout(dlg.X1+3, dlg.Y1+2, width-6, height-4)
 	vbox.Add(lblName, vtui.Margins{}, vtui.AlignLeft)
