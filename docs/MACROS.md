@@ -86,6 +86,10 @@ anything else by virtual key code in hex.
 `NumEnter` and `NumDel` are the numeric keypad's Enter and Del, as distinct
 from the main ones.
 
+A plain `BS` or `Del` belongs to the command line while it holds text: neither a
+recorded macro nor a remapped hotkey on that key runs then, the key edits the line.
+The macro runs on an empty command line, so `BS` can still be "up one folder".
+
 ## Sending keys
 
 ```lua

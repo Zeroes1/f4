@@ -6374,22 +6374,29 @@ func (ev *EditorView) DuplicateLines() {
 	if first < 0 {
 		first = 0
 	}
-	ev.EnsureIndexedToLine(last + 1)
-	if last >= ev.Li.LineCount() {
-		last = ev.Li.LineCount() - 1
+	lineCount := ev.Li.LineCount()
+	if first >= lineCount {
+		return
+	}
+	if last >= lineCount {
+		last = lineCount - 1
 	}
 	if last < first {
 		return
 	}
 
 	start := ev.Li.GetLineOffset(first)
-	end := ev.Pt.Size()
-	terminated := last+1 < ev.Li.LineCount()
-	if terminated {
-		end = ev.Li.GetLineOffset(last + 1)
-	}
-	if end < start {
+	lastStart := ev.Li.GetLineOffset(last)
+	end, terminated, ok := ev.findLineEnd(lastStart)
+	if !ok || end < start {
 		return
+	}
+	// Keep the next line visible to the incremental index update. The line
+	// scanner may not have reached it yet; adding just this boundary is enough
+	// for UpdateAfterInsert to preserve both the new copy and the old next line,
+	// without scanning the rest of the file on the UI thread.
+	if terminated {
+		ev.Li.AppendOffsets([]int{end}, ev.Pt.Size())
 	}
 
 	block, err := ev.Pt.GetRange(start, end-start)
@@ -6441,6 +6448,35 @@ func (ev *EditorView) DuplicateLines() {
 	ev.CursorPos = newOffset - ev.Li.GetLineOffset(ev.CursorLine)
 	ev.updateDesiredVisualCol()
 	ev.EnsureCursorVisible()
+}
+
+// findLineEnd returns the first byte after the newline terminating the line
+// that starts at start. It deliberately does not extend the global line
+// index: commands such as duplicate-line must remain responsive while a large
+// file is being indexed in the background. The bytes read here are only the
+// line being copied, not the unindexed remainder of the file.
+func (ev *EditorView) findLineEnd(start int) (end int, terminated, ok bool) {
+	size := ev.Pt.Size()
+	if start < 0 || start > size {
+		return 0, false, false
+	}
+	if start == size {
+		return size, false, true
+	}
+
+	const chunkSize = 256 * 1024
+	for pos := start; pos < size; {
+		take := min(chunkSize, size-pos)
+		data, err := ev.Pt.GetRange(pos, take)
+		if err != nil || len(data) == 0 {
+			return 0, false, false
+		}
+		if idx := bytes.IndexByte(data, '\n'); idx >= 0 {
+			return pos + idx + 1, true, true
+		}
+		pos += len(data)
+	}
+	return size, false, true
 }
 
 // trailingLineTerminator returns the end-of-line bytes data ends with, or nil
