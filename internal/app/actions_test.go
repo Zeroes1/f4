@@ -2749,7 +2749,11 @@ func TestActionOpenViewer_PromptStaysAboveDelayedProgressDialog(t *testing.T) {
 		if top := vtui.FrameManager.GetTopFrame(); top != nil && strings.Contains(top.GetTitle(), "Opening") {
 			t.Fatal("progress dialog appeared after the prompt was dismissed")
 		}
-		if len(vtui.FrameManager.Screens) > 1 {
+		// Wait for the viewer itself, not for any second screen: a screen
+		// left over from an earlier test would end the test while the open
+		// worker is still running, and that worker then races whatever
+		// swaps vtui.FrameManager next.
+		if _, ok := vtui.FrameManager.GetTopFrame().(*viewer.ViewerView); ok {
 			vtui.FrameManager.CloseActiveScreen()
 			return
 		}
