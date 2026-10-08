@@ -54,6 +54,7 @@ const (
 	ColEditorStatus
 	ColEditorScrollbar
 	ColEditorWrapMark
+	ColEditorSelectedText
 
 	// Chroma (plugins/chroma) syntax-highlighting token colors. f4#1470:
 	// these used to be a hardcoded palette independent of the active theme;
@@ -155,6 +156,9 @@ func SetDefaultF4Palette() {
 	// far2l marks a wrapped (not a real newline) row end with a small
 	// arrow-like glyph; reuse the viewer's own continuation-arrow colour.
 	vtui.Palette[ColEditorWrapMark] = vtui.Palette[ColViewerArrows]
+	// Selected text of the editor: the colour the editor always used for it, that of a
+	// selection in a dialog's edit line (see InheritsFrom on its slot).
+	vtui.Palette[ColEditorSelectedText] = vtui.Palette[vtui.ColDialogEditSelected]
 
 	// Chroma syntax colors (f4#1470): only the foreground half is ever read
 	// (plugins/chroma.GetSyntaxAttr paints it over the editor's own base
@@ -195,6 +199,15 @@ type ColorSlot struct {
 	// never mention them). Themes that DO set the slot are unaffected:
 	// this only fills in slots no theme file ever addressed.
 	InheritsBackgroundFrom string
+
+	// InheritsFrom names another slot's Canonical key. When a theme file sets
+	// no expression for this slot at all, the whole colour (foreground and
+	// background) is copied from that other slot. It is for a slot that was
+	// split off an element which already had its colour: the new row is
+	// optional, and a theme that lacks it looks exactly as before (f4#234:
+	// Editor.Text.Selected is the colour of Dialog.Edit.Selected until a theme
+	// says otherwise).
+	InheritsFrom string
 }
 
 var ColorGroups = []string{
@@ -332,6 +345,7 @@ var ColorSlots = []ColorSlot{
 	{Canonical: "Editor.Scrollbar", Index: ColEditorScrollbar, Group: "Editor", ConstantName: "ColEditorScrollbar", InheritsBackgroundFrom: "Editor.Text"},
 	{Canonical: "Editor.Status", Index: ColEditorStatus, Group: "Editor", ConstantName: "ColEditorStatus"},
 	{Canonical: "Editor.WrapMark", Index: ColEditorWrapMark, Group: "Editor", ConstantName: "ColEditorWrapMark", InheritsBackgroundFrom: "Editor.Text"},
+	{Canonical: "Editor.Text.Selected", Index: ColEditorSelectedText, Group: "Editor", ConstantName: "ColEditorSelectedText", Aliases: []string{"Editor.Selected"}, InheritsFrom: "Dialog.Edit.Selected"},
 
 	// Editor.Syntax.* feed plugins/chroma's syntax highlighter (f4#1470),
 	// one slot per Chroma token category it distinguishes.
@@ -458,6 +472,14 @@ func FinishColors() {
 // the field's doc comment on ColorSlot for why this exists (f4#1232).
 func applyBackgroundInheritance() {
 	for _, slot := range ColorSlots {
+		if slot.InheritsFrom != "" {
+			if _, explicit := colorSourceExpressions[slot.Canonical]; !explicit {
+				if targetIndex, ok := colorMap[slot.InheritsFrom]; ok {
+					vtui.Palette[slot.Index] = vtui.Palette[targetIndex]
+				}
+			}
+			continue
+		}
 		if slot.InheritsBackgroundFrom == "" {
 			continue
 		}

@@ -30,23 +30,28 @@ func TestShowGroupMenuActions(t *testing.T) {
 	if !ok {
 		t.Fatalf("top frame = %T, want grouping menu", vtui.FrameManager.GetTopFrame())
 	}
-	if got, want := len(menu.Items), len(GroupModes)+3; got != want {
+	if got, want := len(menu.Items), len(GroupModes)+4; got != want {
 		t.Fatalf("menu items = %d, want %d", got, want)
+	}
+
+	// The modes stand apart from the options under a rule (f4#1769).
+	if !menu.Items[len(GroupModes)].Separator {
+		t.Fatalf("row %d is %q, want the rule between the modes and the options", len(GroupModes), menu.Items[len(GroupModes)].Text)
 	}
 
 	menu.OnAction(0)
 	if fp.GroupBy != GroupModes[0].Mode || fp.GroupReverse || fp.GroupFoldersSeparately {
 		t.Fatalf("group mode action = mode %v reverse=%t folders=%t", fp.GroupBy, fp.GroupReverse, fp.GroupFoldersSeparately)
 	}
-	menu.OnAction(len(GroupModes))
+	menu.OnAction(len(GroupModes) + 1)
 	if !fp.GroupReverse {
 		t.Fatal("reverse action did not toggle reverse grouping")
 	}
-	menu.OnAction(len(GroupModes) + 1)
+	menu.OnAction(len(GroupModes) + 2)
 	if !fp.GroupFoldersSeparately {
 		t.Fatal("folder-separation action did not toggle folder grouping")
 	}
-	menu.OnAction(len(GroupModes) + 2)
+	menu.OnAction(len(GroupModes) + 3)
 	if !groupSettingsOpened {
 		t.Fatal("settings action did not run Panel.GroupSettings")
 	}

@@ -85,3 +85,38 @@ func TestApplyColorIni_ExplicitSlotIsNotOverriddenByInheritance(t *testing.T) {
 		t.Errorf("Viewer.Scrollbar = #%06x, want the theme's own #abcdef, inheritance must not override it", bg)
 	}
 }
+
+// The colour of selected text in the editor (f4#234) was always that of a
+// selection in a dialog's edit line. A theme written before the slot existed
+// has no row for it and must look as before; a theme with the row sets its own.
+func TestApplyColorIni_EditorSelectedTextFollowsDialogEditSelectedUntilSet(t *testing.T) {
+	saved := append([]uint64(nil), vtui.Palette...)
+	t.Cleanup(func() { vtui.Palette = saved })
+
+	write := func(body string) *ini.File {
+		path := filepath.Join(t.TempDir(), "theme.ini")
+		if err := os.WriteFile(path, []byte("[farcolors]\n"+body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return ini.Load(path)
+	}
+
+	vtui.SetDefaultPalette()
+	SetDefaultF4Palette()
+	vtui.Palette[ColEditorSelectedText] = vtui.SetRGBBoth(0, 0x010203, 0x040506)
+	InitColors(write("Dialog.Edit.Selected = foreground:#ffffff | background:#000080\n"))
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColEditorSelectedText]); fg != 0xffffff || bg != 0x000080 {
+		t.Errorf("without a row the editor selection = #%06x on #%06x, want that of Dialog.Edit.Selected #ffffff on #000080", fg, bg)
+	}
+
+	vtui.SetDefaultPalette()
+	SetDefaultF4Palette()
+	InitColors(write("Dialog.Edit.Selected = foreground:#ffffff | background:#000080\n" +
+		"Editor.Text.Selected = foreground:#000000 | background:#ffff00\n"))
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColEditorSelectedText]); fg != 0x000000 || bg != 0xffff00 {
+		t.Errorf("with a row the editor selection = #%06x on #%06x, want #000000 on #ffff00", fg, bg)
+	}
+	if fg, bg := GetColorRGBBoth(vtui.Palette[vtui.ColDialogEditSelected]); fg != 0xffffff || bg != 0x000080 {
+		t.Errorf("Dialog.Edit.Selected changed to #%06x on #%06x with the editor row", fg, bg)
+	}
+}

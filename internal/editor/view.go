@@ -1194,7 +1194,7 @@ func (ev *EditorView) renderHex(scr *vtui.ScreenBuf, width, contentHeight int) {
 			}
 			cellAttr := bgAttr
 			if ev.IsFocused() && currOffset+i == absPos {
-				cellAttr = vtui.Palette[vtui.ColDialogEditSelected]
+				cellAttr = vtui.Palette[theme.ColEditorSelectedText]
 			}
 			scr.Write(asciiStartX+i, ev.Y1+1+y, []vtui.CharInfo{{Char: uint64(r), Attributes: cellAttr}})
 		}
@@ -1239,7 +1239,7 @@ func (ev *EditorView) renderDecode(scr *vtui.ScreenBuf, width, contentHeight int
 
 		cellAttr := bgAttr
 		if ev.IsFocused() && absPos >= currOffset && absPos < currOffset+instLen {
-			cellAttr = vtui.Palette[vtui.ColDialogEditSelected]
+			cellAttr = vtui.Palette[theme.ColEditorSelectedText]
 		}
 
 		scr.Write(ev.X1, ev.Y1+1+y, vtui.StringToCharInfo(line, offAttr))
@@ -1577,7 +1577,7 @@ func (ev *EditorView) DisplayObject(scr *vtui.ScreenBuf) {
 	}
 
 	bgAttr := ev.colorerBaseAttr()
-	selAttr := vtui.Palette[vtui.ColDialogEditSelected]
+	selAttr := vtui.Palette[theme.ColEditorSelectedText]
 
 	if ev.Saving {
 		scr.FillRect(ev.X1, ev.Y1+1, ev.X2, ev.Y2, ' ', bgAttr)
@@ -1904,7 +1904,7 @@ DoneRendering:
 	// extra caret sits on with the selection colour is what the rest of the
 	// editor already does to say "this is where the text will change".
 	if len(ev.extraCursors) > 0 {
-		caretAttr := vtui.Palette[vtui.ColDialogEditSelected]
+		caretAttr := vtui.Palette[theme.ColEditorSelectedText]
 		size := ev.Pt.Size()
 		for _, caret := range ev.extraCursors {
 			off := caret.off
