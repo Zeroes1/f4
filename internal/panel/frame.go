@@ -1327,15 +1327,16 @@ func (pf *PanelsFrame) BuildPrompt() []vtui.CharInfo {
 	}
 
 	baseAttr := vtui.Palette[theme.ColCommandLinePrompt]
-	// Only the user@host part gets a colour of its own, the way bash shows it.
-	// Everything else stays on CommandLine.Prefix so the prompt follows the
-	// active theme instead of a hardcoded blue and white.
-	greenAttr := vtui.SetRGBFore(baseAttr, 0x8AE234)
+	// The user@host part and the path have colours of their own (CommandLine.User,
+	// CommandLine.Path, f4#234); the separators and the suffix stay on
+	// CommandLine.Prefix, so the prompt follows the active theme.
+	userAttr := vtui.Palette[theme.ColCommandLineUser]
+	pathAttr := vtui.Palette[theme.ColCommandLinePath]
 
 	var prompt []vtui.CharInfo
-	prompt = append(prompt, vtui.StringToCharInfo(userHostStr, greenAttr)...)
+	prompt = append(prompt, vtui.StringToCharInfo(userHostStr, userAttr)...)
 	prompt = append(prompt, vtui.StringToCharInfo(sepStr, baseAttr)...)
-	prompt = append(prompt, vtui.StringToCharInfo(displayPath, baseAttr)...)
+	prompt = append(prompt, vtui.StringToCharInfo(displayPath, pathAttr)...)
 	prompt = append(prompt, vtui.StringToCharInfo(suffixStr, baseAttr)...)
 
 	return prompt

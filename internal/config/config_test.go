@@ -993,3 +993,55 @@ func TestNormalizeDragOutModifier(t *testing.T) {
 		}
 	}
 }
+
+func TestRefreshHighlightIniHeaderReplacesOnlyTheComments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "highlight.ini")
+	userRules := "[Highlight_1]\nMask = *.go\nNormalColor = 0x0a\n\n[Highlight_2]\nMask = *.txt\n"
+	old := "# an old header\n# without the new keys\n\n" + userRules
+	if err := os.WriteFile(path, []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !RefreshHighlightIniHeader(path) {
+		t.Fatal("a stale header must be refreshed")
+	}
+	data, _ := os.ReadFile(path)
+	got := string(data)
+	if !strings.HasSuffix(got, userRules) {
+		t.Errorf("user rules must stay untouched, got:\n%s", got)
+	}
+	if strings.Contains(got, "an old header") {
+		t.Error("the old header comments must be gone")
+	}
+	if !strings.Contains(got, "# NormalFileName =") {
+		t.Error("the refreshed file must carry the current key documentation")
+	}
+	if RefreshHighlightIniHeader(path) {
+		t.Error("a file that is already current must not be rewritten")
+	}
+}
+
+func TestRefreshHighlightIniHeaderLeavesOtherFilesAlone(t *testing.T) {
+	dir := t.TempDir()
+	if RefreshHighlightIniHeader(filepath.Join(dir, "missing.ini")) {
+		t.Error("a missing file has nothing to refresh")
+	}
+	noSection := filepath.Join(dir, "plain.ini")
+	if err := os.WriteFile(noSection, []byte("# only comments\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if RefreshHighlightIniHeader(noSection) {
+		t.Error("a file with no section must not be touched")
+	}
+
+	fresh := filepath.Join(dir, "fresh.ini")
+	CreateDefaultHighlightIni(fresh)
+	before, _ := os.ReadFile(fresh)
+	if RefreshHighlightIniHeader(fresh) {
+		t.Error("the stock file is already current")
+	}
+	after, _ := os.ReadFile(fresh)
+	if string(before) != string(after) {
+		t.Error("the stock file must stay byte-for-byte the same")
+	}
+}

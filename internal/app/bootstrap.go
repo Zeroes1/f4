@@ -1216,6 +1216,10 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	highlightPath := filepath.Join(configDir, "highlight.ini")
 	if _, err := os.Stat(highlightPath); os.IsNotExist(err) {
 		config.CreateDefaultHighlightIni(highlightPath)
+	} else if config.RefreshHighlightIniHeader(highlightPath) {
+		// The comments of a file made by an older f4 are brought up to date
+		// (f4#912); the rules under them are not touched.
+		vtui.DebugLog("highlight.ini: header comments refreshed")
 	}
 	if _, err := os.Stat(highlightPath); err == nil {
 		loadHighlightIni(ini.Load(highlightPath))
