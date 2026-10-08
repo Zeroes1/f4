@@ -89,7 +89,8 @@ You can filter files by specifying the following flags in `IncludeAttributes` or
 * `ReadOnly` (or `ro`): Match write-protected files (lacking write perms on Unix, or having the read-only attribute on Windows).
 * `System` (or `sys`): Match Windows system files.
 * `Archive` (or `arc`): Match Windows archive files.
-* `Symlink` (or `symlink`, `link`, `sym`, `l`): Match symbolic links.
+* `Symlink` (or `link`, `sym`, `l`): Match links of every kind, a Windows junction included.
+* `Junction` (or `junc`, `j`): Match only Windows directory junctions and volume mount points (nothing on other systems).
 
 ---
 
