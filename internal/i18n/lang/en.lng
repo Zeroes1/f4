@@ -1710,6 +1710,8 @@ QuickView.Size=Size
 QuickView.Image=<image>
 QuickView.Binary=<binary content — hex preview>
 QuickView.ReadError=Read failed
+QuickView.ImageCopied=Image copied to clipboard
+QuickView.ImagePathCopied=Image clipboard unavailable, path copied
 
 Player.Title= Player
 Player.Idle=Nothing playing. F5 in the other panel adds files to the playlist; Enter on a recording plays it.

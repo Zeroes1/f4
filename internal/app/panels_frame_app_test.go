@@ -809,9 +809,16 @@ func TestPanelsFrame_B_TogglesInfoPanelUnits(t *testing.T) {
 	if pf.AltPanels[0] == nil {
 		t.Fatal("Ctrl+L should install info panel")
 	}
+	// While the file panel keeps the focus, B is command-line text (#1804).
+	send(vtinput.VK_B)
+	if config.App.InfoPanelBytes {
+		t.Errorf("info panel visible but unfocused: B must not flip units")
+	}
+	// Tab into the info panel, then `B` should flip units.
+	send(vtinput.VK_TAB)
 	send(vtinput.VK_B)
 	if !config.App.InfoPanelBytes {
-		t.Errorf("with info panel: B should flip units to bytes")
+		t.Errorf("with info panel focused: B should flip units to bytes")
 	}
 	send(vtinput.VK_B)
 	if config.App.InfoPanelBytes {
@@ -966,8 +973,8 @@ func TestPanelsFrame_QuickViewWheel_ActivePanelScrolls(t *testing.T) {
 }
 
 // TestPanelsFrame_BToggle_WithQuickView ensures pressing plain `B`
-// while a quick-view alt is up flips config.App.InfoPanelBytes. Before
-// this PR the B toggle only fired for `info` alts.
+// while a quick-view alt has the focus flips config.App.InfoPanelBytes,
+// and that it stays command-line text while the file panel has it (#1804).
 func TestPanelsFrame_BToggle_WithQuickView(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	pf := paneltest.SetupMockPanelsFrame(t)
@@ -985,12 +992,20 @@ func TestPanelsFrame_BToggle_WithQuickView(t *testing.T) {
 	}
 
 	before := config.App.InfoPanelBytes
-	pressKey(pf, &vtinput.InputEvent{
-		Type: vtinput.KeyEventType, KeyDown: true,
-		VirtualKeyCode: vtinput.VK_B,
-	})
+	pressB := func() {
+		pressKey(pf, &vtinput.InputEvent{
+			Type: vtinput.KeyEventType, KeyDown: true,
+			VirtualKeyCode: vtinput.VK_B,
+		})
+	}
+	pressB()
+	if config.App.InfoPanelBytes != before {
+		t.Error("B with QuickView visible but unfocused must not flip InfoPanelBytes")
+	}
+	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_TAB})
+	pressB()
 	if config.App.InfoPanelBytes == before {
-		t.Error("B with QuickView visible should flip InfoPanelBytes")
+		t.Error("B with QuickView focused should flip InfoPanelBytes")
 	}
 	// Flip back so the test is idempotent across a full suite.
 	config.App.InfoPanelBytes = before
