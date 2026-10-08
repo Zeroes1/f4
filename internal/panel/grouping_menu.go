@@ -18,6 +18,9 @@ func (fp *FileSystemPanel) ShowGroupMenu() {
 		}
 		menu.AddItem(vtui.MenuItem{Text: prefix + i18n.Msg("Group.By"+spec.ID)})
 	}
+	// The rows below the rule are options, not modes; the rule is row
+	// len(GroupModes) and the options follow it (f4#1769).
+	menu.AddSeparator()
 	for _, option := range []struct {
 		key     string
 		checked bool
@@ -33,17 +36,17 @@ func (fp *FileSystemPanel) ShowGroupMenu() {
 		switch {
 		case idx >= 0 && idx < len(GroupModes):
 			fp.SetGrouping(GroupModes[idx].Mode, fp.GroupReverse, fp.GroupFoldersSeparately)
-		case idx == len(GroupModes):
-			fp.SetGrouping(fp.GroupBy, !fp.GroupReverse, fp.GroupFoldersSeparately)
 		case idx == len(GroupModes)+1:
-			fp.SetGrouping(fp.GroupBy, fp.GroupReverse, !fp.GroupFoldersSeparately)
+			fp.SetGrouping(fp.GroupBy, !fp.GroupReverse, fp.GroupFoldersSeparately)
 		case idx == len(GroupModes)+2:
+			fp.SetGrouping(fp.GroupBy, fp.GroupReverse, !fp.GroupFoldersSeparately)
+		case idx == len(GroupModes)+3:
 			RunAction("Panel.GroupSettings")
 		}
 		vtui.FrameManager.Redraw()
 	}
 	w := min(52, vtui.FrameManager.GetScreenSize())
-	h := min(len(GroupModes)+5, vtui.FrameManager.GetScreenHeight())
+	h := min(len(GroupModes)+6, vtui.FrameManager.GetScreenHeight())
 	x := max(0, (fp.X1+fp.X2-w+1)/2)
 	x = min(x, vtui.FrameManager.GetScreenSize()-w)
 	y := max(0, (vtui.FrameManager.GetScreenHeight()-h)/2)
