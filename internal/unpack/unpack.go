@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
@@ -100,6 +101,9 @@ type archiveEntry struct {
 	name  string
 	isDir bool
 	mode  os.FileMode
+	// mtime is the member's own modification time; zero when the archive has
+	// none. The extracted file takes it (applyArchiveTimes).
+	mtime time.Time
 	open  func() (io.ReadCloser, error)
 }
 
@@ -230,6 +234,9 @@ func extractEntryWithPrefix(e archiveEntry, destDir, prefix string) error {
 	}
 	err = writeFileSafe(targetPath, rc, mode)
 	_ = rc.Close()
+	if err == nil {
+		applyArchiveTimes(targetPath, e.mtime)
+	}
 	return err
 }
 
@@ -262,6 +269,7 @@ func tarGz(data []byte, destDir, prefix string) error {
 			name:  hdr.Name,
 			isDir: hdr.Typeflag == tar.TypeDir,
 			mode:  mode,
+			mtime: hdr.ModTime,
 			open:  func() (io.ReadCloser, error) { return io.NopCloser(tr), nil },
 		}, destDir, prefix); err != nil {
 			return err
