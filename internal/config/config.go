@@ -1995,6 +1995,7 @@ func RefreshHighlightIniHeader(path string) bool {
 	if oldHeader == newHeader {
 		return false
 	}
+	// #nosec G703 -- path is the highlight.ini inside the profile directory, built by the caller.
 	if err := os.WriteFile(path, []byte(newHeader+rest), 0600); err != nil {
 		return false
 	}
