@@ -55,6 +55,8 @@ const (
 	ColEditorScrollbar
 	ColEditorWrapMark
 	ColEditorSelectedText
+	ColCommandLinePath
+	ColCommandLineUser
 
 	// Chroma (plugins/chroma) syntax-highlighting token colors. f4#1470:
 	// these used to be a hardcoded palette independent of the active theme;
@@ -159,6 +161,11 @@ func SetDefaultF4Palette() {
 	// Selected text of the editor: the colour the editor always used for it, that of a
 	// selection in a dialog's edit line (see InheritsFrom on its slot).
 	vtui.Palette[ColEditorSelectedText] = vtui.Palette[vtui.ColDialogEditSelected]
+	// The command line's prompt: the path and the user@host part, each with a slot of
+	// its own (f4#234). The path used to wear CommandLine.Prefix and the user part
+	// a green nothing could change; those are the defaults.
+	vtui.Palette[ColCommandLinePath] = vtui.Palette[ColCommandLinePrompt]
+	vtui.Palette[ColCommandLineUser] = vtui.SetRGBFore(vtui.Palette[ColCommandLinePrompt], 0x8AE234)
 
 	// Chroma syntax colors (f4#1470): only the foreground half is ever read
 	// (plugins/chroma.GetSyntaxAttr paints it over the editor's own base
@@ -328,6 +335,8 @@ var ColorSlots = []ColorSlot{
 	// Command line Group
 	{Canonical: "CommandLine", Index: ColCommandLineText, Group: "Command line", ConstantName: "ColCommandLineText", Aliases: []string{"CommandLine.Text"}},
 	{Canonical: "CommandLine.Prefix", Index: ColCommandLinePrompt, Group: "Command line", ConstantName: "ColCommandLinePrompt", Aliases: []string{"CommandLine.Prompt"}},
+	{Canonical: "CommandLine.Path", Index: ColCommandLinePath, Group: "Command line", ConstantName: "ColCommandLinePath", InheritsFrom: "CommandLine.Prefix"},
+	{Canonical: "CommandLine.User", Index: ColCommandLineUser, Group: "Command line", ConstantName: "ColCommandLineUser", Aliases: []string{"CommandLine.Prompt.User"}, InheritsBackgroundFrom: "CommandLine.Prefix"},
 	{Canonical: "CommandLine.Selected", Index: ColCommandLineSelectedText, Group: "Command line", ConstantName: "ColCommandLineSelectedText", Aliases: []string{"CommandLine.SelectedText", "CommandLine.Text.Selected"}},
 	{Canonical: "CommandLine.Prompt.Inactive", Index: ColCommandLineInactivePrompt, Group: "Command line", ConstantName: "ColCommandLineInactivePrompt"},
 	{Canonical: "CommandLine.UserScreen", Index: ColCommandLineUserScreen, Group: "Command line", ConstantName: "ColCommandLineUserScreen"},

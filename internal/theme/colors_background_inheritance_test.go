@@ -120,3 +120,39 @@ func TestApplyColorIni_EditorSelectedTextFollowsDialogEditSelectedUntilSet(t *te
 		t.Errorf("Dialog.Edit.Selected changed to #%06x on #%06x with the editor row", fg, bg)
 	}
 }
+
+// The prompt of the command line (f4#234): the path follows CommandLine.Prefix
+// and the user@host part keeps its green on Prefix's background, until a theme
+// has rows for them.
+func TestApplyColorIni_CommandLinePromptSlotsFollowPrefixUntilSet(t *testing.T) {
+	saved := append([]uint64(nil), vtui.Palette...)
+	t.Cleanup(func() { vtui.Palette = saved })
+
+	load := func(body string) {
+		path := filepath.Join(t.TempDir(), "theme.ini")
+		if err := os.WriteFile(path, []byte("[farcolors]\n"+body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		vtui.SetDefaultPalette()
+		SetDefaultF4Palette()
+		InitColors(ini.Load(path))
+	}
+
+	load("CommandLine.Prefix = foreground:#ffff00 | background:#000080\n")
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColCommandLinePath]); fg != 0xffff00 || bg != 0x000080 {
+		t.Errorf("CommandLine.Path without a row = #%06x on #%06x, want that of Prefix #ffff00 on #000080", fg, bg)
+	}
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColCommandLineUser]); fg != 0x8ae234 || bg != 0x000080 {
+		t.Errorf("CommandLine.User without a row = #%06x on #%06x, want the green #8ae234 on Prefix's #000080", fg, bg)
+	}
+
+	load("CommandLine.Prefix = foreground:#ffff00 | background:#000080\n" +
+		"CommandLine.Path = foreground:#00ffff | background:#000000\n" +
+		"CommandLine.User = foreground:#ff00ff | background:#000000\n")
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColCommandLinePath]); fg != 0x00ffff || bg != 0x000000 {
+		t.Errorf("CommandLine.Path with a row = #%06x on #%06x, want #00ffff on #000000", fg, bg)
+	}
+	if fg, bg := GetColorRGBBoth(vtui.Palette[ColCommandLineUser]); fg != 0xff00ff || bg != 0x000000 {
+		t.Errorf("CommandLine.User with a row = #%06x on #%06x, want #ff00ff on #000000", fg, bg)
+	}
+}
