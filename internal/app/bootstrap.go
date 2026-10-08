@@ -1184,6 +1184,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	panel.AppCommand = handlePanelsAppCommand
 	panel.RunAction = RunAction
 	panel.BuildMenuBarItems = BuildMenuBarItems
+	panel.RefreshMenuRowStates = refreshMenuRowStates
 	panel.SaveSession = SaveSession
 	panel.GetMenuContentSignal = func() panel.MenuContentSignalValue {
 		return panel.MenuContentSignalValue{

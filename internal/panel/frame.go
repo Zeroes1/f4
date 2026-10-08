@@ -950,6 +950,10 @@ func (pf *PanelsFrame) GetMenuBar() *vtui.MenuBar {
 		return nil
 	}
 	pf.MenuBar.Items = pf.BuildMenuItems()
+	// A cache hit returns the rows as they were built, with the dimmed flags
+	// of that moment; those follow the cursor and the selection, which the
+	// cache key does not cover.
+	RefreshMenuRowStates(pf.MenuBar.Items)
 	pf.UpdateMenuCheckmarks()
 	// After the checkmarks: they set the text of the left and right side
 	// menus' rows again (indices 0 and 4 — see UpdateMenuCheckmarks), which is

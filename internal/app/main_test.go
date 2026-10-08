@@ -132,6 +132,7 @@ func installTestSeams() {
 	panel.AppCommand = handlePanelsAppCommand
 	panel.RunAction = RunAction
 	panel.BuildMenuBarItems = BuildMenuBarItems
+	panel.RefreshMenuRowStates = refreshMenuRowStates
 	panel.SaveSession = SaveSession
 	panel.OpenEditor = actionOpenEditor
 	panel.OpenViewer = actionOpenViewer
