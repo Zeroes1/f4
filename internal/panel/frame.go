@@ -2667,6 +2667,13 @@ func (pf *PanelsFrame) commandLineOwnsDeletion(e *vtinput.InputEvent) bool {
 	return mods == 0
 }
 
+// CommandLineOwnsDeletion is commandLineOwnsDeletion for the macro layer: a
+// plain Backspace or Delete that the command line is about to take must not
+// be played back as a recorded macro first (f4#1797).
+func (pf *PanelsFrame) CommandLineOwnsDeletion(e *vtinput.InputEvent) bool {
+	return pf.commandLineOwnsDeletion(e)
+}
+
 // VetoActionKey reports modal input states in which the panels must see
 // the key before the global hotkey dispatcher. During fast find,
 // printable characters and the gray selection keys belong to the

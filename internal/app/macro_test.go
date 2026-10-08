@@ -1213,3 +1213,47 @@ func TestMacro_ReassignAndCleanup(t *testing.T) {
 		t.Error("Lua script file should be deleted from disk")
 	}
 }
+
+// A recorded macro on Backspace (the user's "go up" for an empty command line)
+// must not run while the command line holds text: Backspace edits it (f4#1797).
+func TestMacroFilterLetsCommandLineDeleteBeforeRecordedMacro(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	oldConfig := config.App
+	oldHotkeys, oldMacros, oldRemap := keymap.GlobalHotkeysMgr, macro.MacroMgr, keymap.GlobalKeyRemap
+	t.Cleanup(func() {
+		config.App = oldConfig
+		keymap.GlobalHotkeysMgr, macro.MacroMgr, keymap.GlobalKeyRemap = oldHotkeys, oldMacros, oldRemap
+	})
+	config.App.NavigationMode = config.NavigationClassic
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	keymap.GlobalKeyRemap = nil
+	mgr := macro.NewMacroManager("")
+	mgr.Macros["Shell"] = map[string][]*vtinput.InputEvent{
+		"BS": {{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_PRIOR, ControlKeyState: vtinput.LeftCtrlPressed}},
+	}
+
+	pf := panel.NewPanelsFrame()
+	t.Cleanup(pf.Close)
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	backspace := func() *vtinput.InputEvent {
+		return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_BACK}
+	}
+
+	pf.CmdLine.Edit.SetText("abc")
+	pf.CmdLine.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_END})
+	if macroFilter(mgr, backspace()) {
+		t.Fatal("the recorded Backspace macro ran over a command line that holds text")
+	}
+	if !pf.ProcessKey(backspace()) || pf.CmdLine.Edit.GetText() != "ab" {
+		t.Fatalf("command line after Backspace = %q, want %q", pf.CmdLine.Edit.GetText(), "ab")
+	}
+
+	pf.CmdLine.Clear()
+	if !macroFilter(mgr, backspace()) {
+		t.Fatal("the recorded Backspace macro did not run on an empty command line")
+	}
+}

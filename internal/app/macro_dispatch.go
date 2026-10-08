@@ -127,6 +127,16 @@ func macroCommandLine() string {
 	return pf.CmdLine.Edit.GetText()
 }
 
+// macroCommandLineOwnsDeletion reports whether e is a plain Backspace or Delete
+// that the command line of the panels takes because it holds text.
+func macroCommandLineOwnsDeletion(area string, e *vtinput.InputEvent) bool {
+	if area != "Shell" && area != "Terminal" {
+		return false
+	}
+	pf := panel.FindPanelsFrameAnyScreen()
+	return pf != nil && pf.CommandLineOwnsDeletion(e)
+}
+
 func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	if e.Type != vtinput.KeyEventType {
 		return false
@@ -221,7 +231,14 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// Check if this key triggers a macro
 	keyStr := keymap.EventToFarString(e)
 
-	if areaMacros, ok := m.Macros[currentArea]; ok {
+	// Backspace and Delete edit a command line that holds text before any
+	// remapped hotkey, and a recorded macro on the same key is no exception:
+	// a user who bound Backspace to "up one folder" for an empty command line
+	// otherwise lost it for editing as soon as the macro was played back
+	// from the key (f4#1797).
+	commandLineEdits := macroCommandLineOwnsDeletion(currentArea, e)
+
+	if areaMacros, ok := m.Macros[currentArea]; ok && !commandLineEdits {
 		if seq, ok := areaMacros[keyStr]; ok {
 			vtui.DebugLog("MACRO: Playing back macro for %s in area %s", keyStr, currentArea)
 			vtui.FrameManager.InjectEvents(seq)
@@ -229,7 +246,7 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 		}
 	}
 
-	if commonMacros, ok := m.Macros["Common"]; ok {
+	if commonMacros, ok := m.Macros["Common"]; ok && !commandLineEdits {
 		if seq, ok := commonMacros[keyStr]; ok {
 			vtui.DebugLog("MACRO: Playing back macro for %s in area Common", keyStr)
 			vtui.FrameManager.InjectEvents(seq)
