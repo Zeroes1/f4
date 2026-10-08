@@ -1830,8 +1830,11 @@ func ApplyCursorSettings() {
 	vtui.SetCursorStyle(insert, overtype, App.CursorBlink)
 }
 
-func CreateDefaultHighlightIni(path string) {
-	content := `# User highlight rules and sort groups.
+// defaultHighlightIni is the highlight.ini a new profile gets: the comments that
+// describe every key, and the sort groups. Everything before the first section
+// is the header, which RefreshHighlightIniHeader keeps up to date in files that
+// already exist (f4#912).
+const defaultHighlightIni = `# User highlight rules and sort groups.
 #
 # f4 applies file highlighting rules from both the active Color Style (Theme)
 # and this file. By default, rules in this file have higher priority.
@@ -1944,8 +1947,58 @@ Name = Media
 Group = 3
 Mask = *.mp3, *.flac, *.ogg, *.wav, *.mp4, *.mkv, *.avi, *.webm, *.mov
 `
+
+// CreateDefaultHighlightIni writes the stock highlight.ini.
+func CreateDefaultHighlightIni(path string) {
+	content := defaultHighlightIni
 	_ = os.WriteFile(path, []byte(content), 0600)
 	_ = os.Chmod(path, 0600)
+}
+
+// highlightIniHeader splits a highlight.ini at its first section: the lines
+// before it are the header (comments and blank lines), the rest is the user's
+// rules. ok is false for a file with no section at all.
+func highlightIniHeader(text string) (header, rest string, ok bool) {
+	pos := 0
+	for pos < len(text) {
+		end := strings.IndexByte(text[pos:], '\n')
+		line := text[pos:]
+		next := len(text)
+		if end >= 0 {
+			line = text[pos : pos+end]
+			next = pos + end + 1
+		}
+		if strings.HasPrefix(strings.TrimSpace(line), "[") {
+			return text[:pos], text[pos:], true
+		}
+		pos = next
+	}
+	return text, "", false
+}
+
+// RefreshHighlightIniHeader rewrites the comments at the top of an existing
+// highlight.ini with those of the stock file, so that a file made by an older f4
+// describes the keys the current one reads (f4#912). Only the lines before the
+// first section are replaced; the rules stay as they are. It reports whether the
+// file was changed. A file with no section, or one it cannot write, is left alone.
+func RefreshHighlightIniHeader(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	text := strings.ReplaceAll(string(data), "\r\n", "\n")
+	oldHeader, rest, ok := highlightIniHeader(text)
+	if !ok {
+		return false
+	}
+	newHeader, _, _ := highlightIniHeader(defaultHighlightIni)
+	if oldHeader == newHeader {
+		return false
+	}
+	if err := os.WriteFile(path, []byte(newHeader+rest), 0600); err != nil {
+		return false
+	}
+	return true
 }
 
 // ApplyProxySettings publishes the configured proxy to netproxy, which is
