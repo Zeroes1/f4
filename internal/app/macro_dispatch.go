@@ -142,6 +142,11 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 		return false
 	}
 
+	// Wayland reports the translated keysym for the active layout. Restore the
+	// physical Latin VK before remaps and native handlers inspect the event, so
+	// Ctrl+N remains Ctrl+N when the Russian layout produces Ctrl+т.
+	keymap.NormalizeLayoutShortcut(e)
+
 	// The user's key remap (keymap.ini) substitutes the key before anything
 	// else sees the event, so macros, plugin interception, configurable
 	// hotkeys and the frames themselves all agree on which key was pressed.
