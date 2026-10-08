@@ -240,6 +240,7 @@ Trash.Unsupported=Эта файловая система не поддержив
 
 Copy.Title= Копирование
 Copy.Prompt=Копировать %d элемент(ов) в:
+Copy.PromptOne=Копировать «%s» в:
 Copy.Btn=&Копировать
 Copy.Rights=П&рава доступа:
 Copy.Rights.Default=по умолчанию
@@ -287,6 +288,7 @@ FileOp.BtnBackground=&В фоновом режиме
 
 Move.Title= Переименование/Перенос
 Move.Prompt=Переименовать или перенести %d элемент(ов) в:
+Move.PromptOne=Переименовать или перенести «%s» в:
 Move.Btn=&Перенести
 
 ConfigEditor.Title= Редактор конфигурации - f4:config
