@@ -1868,7 +1868,7 @@ const defaultHighlightIni = `# User highlight rules and sort groups.
 # background, or both:
 #   foreground:#FF00FF | background:#008080
 # Other useful keys are IncludeAttributes/ExcludeAttributes (Directory,
-# Hidden, Executable, ReadOnly, System, Archive, Symlink), SizeAbove,
+# Hidden, Executable, ReadOnly, System, Archive, Symlink, Junction), SizeAbove,
 # SizeBelow, DateType, DateAfter, DateBefore, Mark, and ContinueProcessing.
 #
 # Sections are tried in the order of their numbers and the first match wins,

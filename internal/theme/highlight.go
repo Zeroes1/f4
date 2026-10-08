@@ -25,6 +25,7 @@ const (
 	AttrSystem
 	AttrArchive
 	AttrSymlink
+	AttrJunction
 )
 
 type DateType int
@@ -412,6 +413,8 @@ func parseAttrFlags(s string) AttrFlags {
 			flags |= AttrArchive
 		case "symlink", "link", "sym", "l":
 			flags |= AttrSymlink
+		case "junction", "junc", "j":
+			flags |= AttrJunction
 		}
 	}
 	return flags
@@ -456,19 +459,23 @@ func (r *HighlightRule) Match(item *vfs.VFSItem) bool {
 			return isArchive == set
 		case AttrSymlink:
 			return item.IsSymlink == set
+		case AttrJunction:
+			// Only a Windows directory junction or volume mount point;
+			// Symlink keeps matching every link, a junction included.
+			return (vfs.LinkKindOf(item) == vfs.LinkJunction) == set
 		}
 		return true
 	}
 
 	// Проверка AttrSet (должны присутствовать)
-	for _, f := range []AttrFlags{AttrDirectory, AttrHidden, AttrExecutable, AttrReadOnly, AttrSystem, AttrArchive, AttrSymlink} {
+	for _, f := range []AttrFlags{AttrDirectory, AttrHidden, AttrExecutable, AttrReadOnly, AttrSystem, AttrArchive, AttrSymlink, AttrJunction} {
 		if r.AttrSet&f != 0 && !matchAttr(f, true) {
 			return false
 		}
 	}
 
 	// Проверка AttrClear (должны отсутствовать)
-	for _, f := range []AttrFlags{AttrDirectory, AttrHidden, AttrExecutable, AttrReadOnly, AttrSystem, AttrArchive, AttrSymlink} {
+	for _, f := range []AttrFlags{AttrDirectory, AttrHidden, AttrExecutable, AttrReadOnly, AttrSystem, AttrArchive, AttrSymlink, AttrJunction} {
 		if r.AttrClear&f != 0 && !matchAttr(f, false) {
 			return false
 		}
