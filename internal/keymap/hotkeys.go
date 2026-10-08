@@ -67,7 +67,7 @@ func (hm *HotkeyManager) Generation() uint64 {
 
 // GetConditions returns the user-friendly names of all registered conditions.
 func GetConditions() []string {
-	return []string{"None", "SearchFirst", "EmptyCommandLine", "CommandLineNotEmpty", "EscToggle", "TerminalQuiet", "AltPanelVisible", "NoAltScreenApp", "NoTerminalApp"}
+	return []string{"None", "SearchFirst", "EmptyCommandLine", "CommandLineNotEmpty", "EscToggle", "TerminalQuiet", "AltPanelVisible", "AltPanelFocused", "NoAltScreenApp", "NoTerminalApp"}
 }
 
 // RegisterCondition adds a dynamic boolean check accessible by hotkey bindings.

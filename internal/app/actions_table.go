@@ -2432,7 +2432,7 @@ func init() {
 		Label:       "Toggle Bytes Format",
 		Description: "Flip number formatting in info and quick view panels",
 		DescKey:     "Action.Panel.ToggleInfoBytes.Desc",
-		DefaultKeys: []string{"B:AltPanelVisible"},
+		DefaultKeys: []string{"B:AltPanelFocused"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			config.App.InfoPanelBytes = !config.App.InfoPanelBytes
 			config.RequestSaveConfig()

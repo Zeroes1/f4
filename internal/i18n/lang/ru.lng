@@ -1711,6 +1711,8 @@ QuickView.Size=Размер
 QuickView.Image=<изображение>
 QuickView.Binary=<бинарные данные — шестнадцатеричный просмотр>
 QuickView.ReadError=Ошибка чтения
+QuickView.ImageCopied=Изображение скопировано в буфер обмена
+QuickView.ImagePathCopied=Буфер обмена для изображений недоступен, скопирован путь
 
 Player.Title= Плеер
 Player.Idle=Ничего не играет. F5 в другой панели добавляет файлы в плейлист; Enter на записи проигрывает её.

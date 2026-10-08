@@ -137,6 +137,18 @@ var hotkeyConditions = map[string]func() bool{
 		}
 		return false
 	},
+	// altpanelfocused is altpanelvisible narrowed to the panel holding the
+	// focus, so its keys stay ordinary command-line text until the user
+	// Tabs into it (#1804). It reads the frame's focus state rather than
+	// the panel's own flag, which only the next redraw brings up to date.
+	"altpanelfocused": func() bool {
+		pf := FindPanelsFrameAnyScreen()
+		if pf == nil || !pf.ShowPanels || pf.CommandLineFocused || pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+			return false
+		}
+		a := pf.AltPanels[pf.ActiveIdx]
+		return a != nil && (a.Kind() == "info" || a.Kind() == "quick_view")
+	},
 }
 
 // nativeShortcutOwnedByCurrentContext filters framework fallbacks that never
