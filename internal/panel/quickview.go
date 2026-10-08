@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -20,7 +21,9 @@ import (
 	"github.com/unxed/f4/internal/media"
 	"github.com/unxed/f4/internal/numeric"
 	"github.com/unxed/f4/internal/sysinfo"
+	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
@@ -118,6 +121,21 @@ type QuickViewPanel struct {
 	displayToSource []int
 	displayWrap     bool
 	displayWidth    int
+
+	// The line cursor and the marks Ins / Shift+arrows set, as in the info
+	// panel (#1804). cursorY is a display line; marks are source lines, so
+	// a mark covers every row a wrapped line takes and survives F2.
+	// followCursor asks the next Show to scroll the cursor into view; the
+	// wheel leaves it unset and the cursor is dragged along instead.
+	cursorY      int
+	followCursor bool
+	marks        map[int]bool
+	// The folder summary has its own cursor and marks over its
+	// label/value rows (quickview_dir.go). Marks are keyed by label: rows
+	// such as Physical size appear while the scan runs, shifting indices.
+	dirRows   []quickViewDirRow
+	dirCursor int
+	dirMarks  map[string]bool
 }
 
 // quickViewSelectionKey prevents identical-looking paths from different VFS
@@ -169,9 +187,11 @@ func (q *QuickViewPanel) SetFocus(f bool) {
 }
 func (q *QuickViewPanel) IsFocused() bool { return q.Focused }
 
-// ProcessKey handles scroll / wrap-toggle keys while focused. Any
-// key we don't recognise falls through (return false), letting the
-// global handler chain deal with Ctrl+Q close, Tab, etc.
+// ProcessKey handles cursor, marking, copy and wrap-toggle keys while
+// focused. The arrows move a line cursor the view follows; Shift+arrows and
+// Ins mark lines the way the info panel marks rows, and C copies them. Any
+// key we don't recognise falls through (return false), letting the global
+// handler chain deal with Ctrl+Q close, Tab, B etc.
 func (q *QuickViewPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	if !e.KeyDown || !q.Focused {
 		return false
@@ -186,18 +206,52 @@ func (q *QuickViewPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	switch e.VirtualKeyCode {
 	case vtinput.VK_UP:
-		q.ScrollY--
+		if shift {
+			q.toggleMarkAtCursor()
+			q.moveCursorToSource(-1)
+		} else {
+			q.moveCursor(-1)
+		}
 	case vtinput.VK_DOWN:
-		q.ScrollY++
+		if shift {
+			q.toggleMarkAtCursor()
+			q.moveCursorToSource(+1)
+		} else {
+			q.moveCursor(+1)
+		}
 	case vtinput.VK_PRIOR: // PgUp
-		q.ScrollY -= q.pageHeight()
+		if shift {
+			q.toggleMarkAtCursor()
+		}
+		q.moveCursor(-q.textPageHeight())
 	case vtinput.VK_NEXT: // PgDn
-		q.ScrollY += q.pageHeight()
+		if shift {
+			q.toggleMarkAtCursor()
+		}
+		q.moveCursor(q.textPageHeight())
 	case vtinput.VK_HOME:
-		q.ScrollY = 0
+		if shift {
+			q.toggleMarkAtCursor()
+		}
+		q.moveCursor(-(1 << 30))
 		q.scrollX = 0
 	case vtinput.VK_END:
-		q.ScrollY = 1 << 30 // clamped by Show
+		if shift {
+			q.toggleMarkAtCursor()
+		}
+		q.moveCursor(1 << 30)
+	case vtinput.VK_INSERT:
+		if shift {
+			return false
+		}
+		q.toggleMarkAtCursor()
+		q.moveCursorToSource(+1)
+	case vtinput.VK_C:
+		if shift {
+			return false
+		}
+		q.copyCurrent()
+		return true
 	case vtinput.VK_LEFT:
 		if !q.Wrap {
 			q.scrollX--
@@ -249,6 +303,162 @@ func (q *QuickViewPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	vtui.FrameManager.HardRefresh()
 	return true
+}
+
+// moveCursor shifts the line cursor by delta display lines, clamped to the
+// text, and has the next Show bring it into view.
+func (q *QuickViewPanel) moveCursor(delta int) {
+	if q.cacheDir {
+		q.moveDirCursor(delta)
+		return
+	}
+	n := len(q.displayLines)
+	if n == 0 {
+		q.cursorY = 0
+		return
+	}
+	q.cursorY = min(max(q.cursorY+delta, 0), n-1)
+	q.followCursor = true
+}
+
+// moveCursorToSource steps to the first display line of the next (+1) or
+// previous (-1) source line, so marking a wrapped line moves past all of it.
+func (q *QuickViewPanel) moveCursorToSource(direction int) {
+	if q.cacheDir {
+		q.moveDirCursor(direction)
+		return
+	}
+	src, ok := q.cursorSource()
+	if !ok {
+		return
+	}
+	target := src + direction
+	if target < 0 || target >= len(q.cacheLines) {
+		return
+	}
+	q.cursorY = firstDisplayForSource(q.displayToSource, target)
+	q.followCursor = true
+}
+
+// cursorSource is the source line under the cursor.
+func (q *QuickViewPanel) cursorSource() (int, bool) {
+	if !q.hasTextLines() || q.cursorY < 0 || q.cursorY >= len(q.displayToSource) {
+		return 0, false
+	}
+	return q.displayToSource[q.cursorY], true
+}
+
+// hasTextLines reports whether the preview is lines a cursor can walk:
+// text, hex rows or a provider's report — not a folder or a picture.
+func (q *QuickViewPanel) hasTextLines() bool {
+	return q.cacheValid && !q.cacheDir && !q.cacheImage && !q.cacheLoading && q.cacheReadErr == nil && len(q.cacheLines) > 0
+}
+
+func (q *QuickViewPanel) toggleMarkAtCursor() {
+	if q.cacheDir {
+		q.toggleDirMark()
+		return
+	}
+	src, ok := q.cursorSource()
+	if !ok {
+		return
+	}
+	if q.marks[src] {
+		delete(q.marks, src)
+		return
+	}
+	if q.marks == nil {
+		q.marks = make(map[int]bool)
+	}
+	q.marks[src] = true
+}
+
+// clearMarks drops the marks and the cursor along with the text they point
+// into: a new file, the hex toggle or another codepage.
+func (q *QuickViewPanel) clearMarks() {
+	q.marks = nil
+	q.cursorY = 0
+	q.dirMarks = nil
+	q.dirCursor = -1
+}
+
+// copyCurrent is C. Marked lines are copied in file order, one per line;
+// with none marked, the line under the cursor. A folder copies its rows the
+// way the info panel does, a picture goes to the clipboard as an image.
+func (q *QuickViewPanel) copyCurrent() {
+	switch {
+	case !q.cacheValid || q.cacheLoading:
+		return
+	case q.cacheDir:
+		q.copyDirRows()
+	case q.cacheImage:
+		q.copyImage()
+	case len(q.marks) > 0:
+		var lines []string
+		for i, line := range q.cacheLines {
+			if q.marks[i] {
+				lines = append(lines, line)
+			}
+		}
+		q.copyText(strings.Join(lines, "\n"), len(lines))
+	default:
+		if src, ok := q.cursorSource(); ok {
+			q.copyText(q.cacheLines[src], 0)
+		}
+	}
+}
+
+// copyText puts text on the clipboard; rows > 0 reports a count instead of
+// echoing the text, as the info panel does for its marked rows.
+func (q *QuickViewPanel) copyText(text string, rows int) {
+	if text == "" {
+		return
+	}
+	terminal.SetF4Clipboard(text)
+	if rows > 0 {
+		toast.Show(fmt.Sprintf("%s: %d", i18n.Msg("InfoPanel.CopiedRows"), rows), 2*time.Second)
+		return
+	}
+	shown := strings.ReplaceAll(text, "\n", " ")
+	toast.Show(fmt.Sprintf("%s: %s", i18n.Msg("InfoPanel.Copied"), runewidth.Truncate(shown, 60, "…")), 2*time.Second)
+}
+
+// copyImage decodes the full picture away from the UI goroutine and puts it
+// on the clipboard as PNG. Where no image clipboard exists (a TTY over SSH)
+// the path is copied as text instead, so C still yields something useful.
+func (q *QuickViewPanel) copyImage() {
+	path, source, frames := q.cachePath, q.src.Vfs, vtui.FrameManager
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := quickViewCopyImage(ctx, source, path)
+		frames.PostTask(func() {
+			if err == nil {
+				toast.Show(i18n.Msg("QuickView.ImageCopied"), 2*time.Second)
+				return
+			}
+			vtui.DebugLog("quick view: image clipboard: %v", err)
+			terminal.SetF4Clipboard(path)
+			toast.Show(fmt.Sprintf("%s: %s", i18n.Msg("QuickView.ImagePathCopied"), path), 3*time.Second)
+		})
+	}()
+}
+
+// quickViewCopyImage is the seam tests replace to keep the system clipboard
+// out of their way.
+var quickViewCopyImage = func(ctx context.Context, source vfs.VFS, path string) error {
+	surf, _, err := media.LoadImage(ctx, source, path)
+	if err != nil {
+		return err
+	}
+	if surf == nil || !surf.Valid() {
+		return terminal.ErrImageClipboardUnavailable
+	}
+	var buf bytes.Buffer
+	if err := media.EncodeClipboardImage(&buf, surf.ToRGBA(), "png", "speed", 0); err != nil {
+		return err
+	}
+	return terminal.SetImageClipboard(ctx, buf.Bytes())
 }
 
 func (q *QuickViewPanel) selectedFile() (string, *FileEntry, bool) {
@@ -303,6 +513,7 @@ func (q *QuickViewPanel) applyPreviewCodepage(cpID int, autoDetect bool) bool {
 	} else {
 		q.cacheLines = quickViewTextLines(decoded)
 	}
+	q.clearMarks()
 	q.displayLines = nil
 	q.displayToSource = nil
 	q.updateFrameTitle()
@@ -401,6 +612,7 @@ func (q *QuickViewPanel) toggleHexMode() bool {
 		return false
 	}
 	q.hexMode = !q.hexMode
+	q.clearMarks()
 	if q.hexMode {
 		q.cacheLines = hexDumpLines(q.cacheRaw)
 	} else {
@@ -477,6 +689,7 @@ func (q *QuickViewPanel) scrollToSource(source int) {
 	q.displayWrap = q.Wrap
 	q.displayWidth = innerW
 	q.ScrollY = firstDisplayForSource(q.displayToSource, source)
+	q.cursorY = q.ScrollY
 	q.hasPin = false
 }
 
@@ -531,6 +744,11 @@ func (q *QuickViewPanel) GetSelectedName() string {
 	return q.src.GetSelectedName()
 }
 
+// textPageHeight is how many text rows fit under the two-line header.
+func (q *QuickViewPanel) textPageHeight() int {
+	return max(q.pageHeight()-2, 1)
+}
+
 func (q *QuickViewPanel) pageHeight() int {
 	h := q.Y2 - q.Y1 - 1 // room between borders
 	if h < 1 {
@@ -563,7 +781,7 @@ func (q *QuickViewPanel) Show(scr *vtui.ScreenBuf) {
 	y := q.Y1 + 1
 	maxY := q.Y2 - 1
 
-	writeLine := func(s string) {
+	writeLineAttr := func(s string, attr uint64) {
 		if y > maxY {
 			return
 		}
@@ -584,6 +802,7 @@ func (q *QuickViewPanel) Show(scr *vtui.ScreenBuf) {
 		scr.Write(q.X1+1, y, ci)
 		y++
 	}
+	writeLine := func(s string) { writeLineAttr(s, attr) }
 
 	writeColored := func(s string, runeStart int, attrs []uint64) {
 		if y > maxY {
@@ -630,10 +849,10 @@ func (q *QuickViewPanel) Show(scr *vtui.ScreenBuf) {
 	}
 
 	if q.cacheDir {
-		q.renderDir(item, writeLine)
+		q.renderDir(item, writeLineAttr, attr)
 		return
 	}
-	q.renderFile(item, innerW, writeLine, writeColored, attr, scr)
+	q.renderFile(item, innerW, writeLine, writeLineAttr, writeColored, attr, scr)
 
 	// Vertical scrollbar over the right border. Repaints column X2
 	// with scrollbar glyphs, so if a wide content line ever bled
@@ -645,8 +864,25 @@ func (q *QuickViewPanel) Show(scr *vtui.ScreenBuf) {
 	}
 }
 
-func (q *QuickViewPanel) renderDir(item *FileEntry, writeLine func(string)) {
-	writeLine(" " + i18n.Msg("QuickView.Folder") + " \"" + item.Name + "\"")
+func (q *QuickViewPanel) renderDir(item *FileEntry, writeLineAttr func(string, uint64), attr uint64) {
+	q.dirRows = q.dirSummary(item.Name)
+	q.settleDirCursor()
+	for i, row := range q.dirRows {
+		writeLineAttr(row.text, q.dirRowAttr(i, attr))
+	}
+}
+
+// dirSummary is the folder report renderDir draws and C copies.
+func (q *QuickViewPanel) dirSummary(name string) []quickViewDirRow {
+	var rows []quickViewDirRow
+	writeLine := func(s string) { rows = append(rows, quickViewDirRow{text: s}) }
+	field := func(label, value string) {
+		rows = append(rows, quickViewDirRow{label: label, value: value, text: fmt.Sprintf(" %-14s %s", label, value)})
+	}
+	rows = append(rows, quickViewDirRow{
+		label: i18n.Msg("QuickView.Folder"), value: name,
+		text: " " + i18n.Msg("QuickView.Folder") + " \"" + name + "\"",
+	})
 	writeLine("")
 	q.scanMu.Lock()
 	stats := q.scanStats
@@ -665,8 +901,8 @@ func (q *QuickViewPanel) renderDir(item *FileEntry, writeLine func(string)) {
 
 	writeLine(" " + i18n.Msg("QuickView.Contains") + ":")
 	writeLine("")
-	writeLine(fmt.Sprintf(" %-14s %d", i18n.Msg("QuickView.FolderCount"), dirs))
-	writeLine(fmt.Sprintf(" %-14s %d", i18n.Msg("QuickView.FileCount"), stats.Files))
+	field(i18n.Msg("QuickView.FolderCount"), fmt.Sprint(dirs))
+	field(i18n.Msg("QuickView.FileCount"), fmt.Sprint(stats.Files))
 	// "Files size" adds dir-inode Sizes to file bytes — that's what
 	// far2l puts in "Размер файлов" (see far2l/src/dirinfo.cpp:
 	// FileSize += FindData.nFileSize for directories). On Windows,
@@ -679,27 +915,27 @@ func (q *QuickViewPanel) renderDir(item *FileEntry, writeLine func(string)) {
 	if runtime.GOOS == "windows" {
 		logical = stats.Bytes
 	}
-	writeLine(fmt.Sprintf(" %-14s %s", i18n.Msg("QuickView.FilesSize"), formatBytes(numeric.NonNegativeUint64(logical))))
+	field(i18n.Msg("QuickView.FilesSize"), formatBytes(numeric.NonNegativeUint64(logical)))
 	// Physical size + Ratio need per-item on-disk footprint. Stub /
 	// remote VFSes leave PhysicalBytes at 0 during the whole scan —
 	// hide the rows in that case. Ratio is also hidden when it would
 	// just read "100%" — on Unix that's every uncompressed tree, and
 	// a constant carries no information for the reader.
 	if stats.PhysicalBytes > 0 {
-		writeLine(fmt.Sprintf(" %-14s %s", i18n.Msg("QuickView.PhysicalSize"), formatBytes(numeric.NonNegativeUint64(stats.PhysicalBytes))))
+		field(i18n.Msg("QuickView.PhysicalSize"), formatBytes(numeric.NonNegativeUint64(stats.PhysicalBytes)))
 		if stats.PhysicalBytes < logical {
 			// Ratio interpretation matches far/far2l — >100% means "on
 			// disk it takes less than the logical size", i.e. real
 			// NTFS compression / sparse regions.
 			ratio := int((logical * 100) / stats.PhysicalBytes)
-			writeLine(fmt.Sprintf(" %-14s %d%%", i18n.Msg("QuickView.Ratio"), ratio))
+			field(i18n.Msg("QuickView.Ratio"), fmt.Sprintf("%d%%", ratio))
 		}
 	}
 	// Cluster size stands on its own — shown even when PhysicalBytes
 	// couldn't be filled (VFS without per-item support).
 	if cluster > 0 {
 		writeLine("")
-		writeLine(fmt.Sprintf(" %-14s %s", i18n.Msg("QuickView.ClusterSize"), formatBytes(cluster)))
+		field(i18n.Msg("QuickView.ClusterSize"), formatBytes(cluster))
 	}
 	// Single "scanning" hint per far2l — one trailing line at the
 	// bottom, not repeated on every row.
@@ -711,6 +947,7 @@ func (q *QuickViewPanel) renderDir(item *FileEntry, writeLine func(string)) {
 		writeLine("")
 		writeLine(" " + i18n.Msg("QuickView.ReadError") + ": " + serr.Error())
 	}
+	return rows
 }
 
 // startDirScan cancels any running scan and kicks off a fresh async
@@ -826,7 +1063,7 @@ func (q *QuickViewPanel) Close() {
 	q.cacheValid = false
 }
 
-func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(string), writeColored func(string, int, []uint64), attr uint64, scr *vtui.ScreenBuf) {
+func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(string), writeLineAttr func(string, uint64), writeColored func(string, int, []uint64), attr uint64, scr *vtui.ScreenBuf) {
 	if q.cacheReadErr != nil {
 		writeLine(" " + i18n.Msg("QuickView.ReadError") + ": " + q.cacheReadErr.Error())
 		return
@@ -857,7 +1094,11 @@ func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(
 
 	// Re-flow if wrap flag / innerW changed.
 	if q.displayLines == nil || q.displayWrap != q.Wrap || q.displayWidth != innerW {
+		cursorSrc, keepCursor := q.cursorSource()
 		q.displayLines, q.displayToSource = q.buildDisplayLines(innerW)
+		if keepCursor {
+			q.cursorY = firstDisplayForSource(q.displayToSource, cursorSrc)
+		}
 		q.displayWrap = q.Wrap
 		q.displayWidth = innerW
 		if q.hasPin {
@@ -875,8 +1116,21 @@ func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
+	q.cursorY = min(max(q.cursorY, 0), max(len(q.displayLines)-1, 0))
+	if q.followCursor && viewH > 0 {
+		if q.cursorY < q.ScrollY {
+			q.ScrollY = q.cursorY
+		} else if q.cursorY >= q.ScrollY+viewH {
+			q.ScrollY = q.cursorY - viewH + 1
+		}
+	}
+	q.followCursor = false
 	if q.ScrollY > maxScroll {
 		q.ScrollY = maxScroll
+	}
+	// The wheel scrolled without the cursor: drag it along.
+	if viewH > 0 {
+		q.cursorY = min(max(q.cursorY, q.ScrollY), max(q.ScrollY+viewH-1, 0))
 	}
 
 	// Emit visible slice with optional horizontal shift.
@@ -893,6 +1147,10 @@ func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(
 			skipped = len(line) - len(trimmed)
 			line = trimmed
 		}
+		if lineAttr, special := q.lineAttr(i); special {
+			writeLineAttr(line, lineAttr)
+			continue
+		}
 		if colors != nil && i < len(q.displayToSource) {
 			if attrs := colors.LineAttrs(q.displayToSource[i]); attrs != nil {
 				writeColored(line, q.displayRuneOffset(i)+utf8.RuneCountInString(q.displayLines[i][:skipped]), attrs)
@@ -901,6 +1159,22 @@ func (q *QuickViewPanel) renderFile(item *FileEntry, innerW int, writeLine func(
 		}
 		writeLine(line)
 	}
+}
+
+// lineAttr is the colour of display line i when the cursor or a mark sits
+// on it, in the info panel's order: marked, cursor, cursor on a mark.
+func (q *QuickViewPanel) lineAttr(i int) (uint64, bool) {
+	marked := i < len(q.displayToSource) && q.marks[q.displayToSource[i]]
+	cursor := q.Focused && i == q.cursorY
+	switch {
+	case cursor && marked:
+		return vtui.Palette[theme.ColPanelSelectedCursor], true
+	case cursor:
+		return vtui.Palette[theme.ColPanelCursor], true
+	case marked:
+		return vtui.Palette[theme.ColPanelSelectedText], true
+	}
+	return 0, false
 }
 
 // quickViewColorKey identifies the text a colorizer was started for.
@@ -1147,6 +1421,7 @@ func (q *QuickViewPanel) refreshCache(key quickViewSelectionKey, path string, it
 	q.cacheLines = nil
 	q.cacheReadErr = nil
 	q.lastSearchSource = -1
+	q.clearMarks()
 	q.updateFrameTitle()
 
 	if item.IsDir {
@@ -1292,6 +1567,7 @@ func (q *QuickViewPanel) applyFilePreview(result quickViewFileResult) {
 	q.cacheLines = append(q.cacheLines[:0], result.Lines...)
 	q.cacheReadErr = result.Err
 	q.hexMode = result.Binary
+	q.clearMarks()
 	if remembered, ok := q.rememberedCodepage(); ok && q.cacheRaw != nil {
 		q.applyPreviewCodepage(remembered, false)
 	}
