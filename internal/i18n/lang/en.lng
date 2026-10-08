@@ -240,6 +240,7 @@ Trash.Unsupported=Recycle Bin is not available for this file system. Use Shift+D
 
 Copy.Title= Copy
 Copy.Prompt=Copy %d item(s) to:
+Copy.PromptOne=Copy "%s" to:
 Copy.Btn=&Copy
 Copy.Rights=Access ri&ghts:
 Copy.Rights.Default=Default
@@ -287,6 +288,7 @@ FileOp.BtnBackground=&Background
 
 Move.Title= Move
 Move.Prompt=Rename or move %d item(s) to:
+Move.PromptOne=Rename or move "%s" to:
 Move.Btn=&Rename
 
 ConfigEditor.Title= Configuration editor - f4:config

@@ -2466,6 +2466,20 @@ func treeCopyMoveTarget(pf *panel.PanelsFrame) (*panel.TreePanel, *panel.FileSys
 	return t, t.Source()
 }
 
+// copyMovePromptText is the line above the destination field of the F5/F6
+// dialog: the name of the item when exactly one is processed, the count
+// otherwise (f4#891).
+func copyMovePromptText(isMove bool, names []string) string {
+	key := "Copy.Prompt"
+	if isMove {
+		key = "Move.Prompt"
+	}
+	if len(names) == 1 {
+		return fmt.Sprintf(i18n.Msg(key+"One"), vtui.TruncateMiddle(names[0], 40))
+	}
+	return fmt.Sprintf(i18n.Msg(key), len(names))
+}
+
 func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	fspSrc := pf.GetActivePanel()
 	fspDst := pf.GetInactivePanel()
@@ -2486,11 +2500,10 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	}
 
 	title := i18n.Msg("Copy.Title")
-	prompt := i18n.Msg("Copy.Prompt")
 	if isMove {
 		title = i18n.Msg("Move.Title")
-		prompt = i18n.Msg("Move.Prompt")
 	}
+	promptText := copyMovePromptText(isMove, names)
 
 	srcVfs := fspSrc.Vfs
 	srcBasePath := srcVfs.GetPath()
@@ -2598,7 +2611,7 @@ func actionCopyMove(pf *panel.PanelsFrame, isMove bool) {
 	dlg := dialog.NewFileDialog(title, boxHeight)
 	width, height := dlg.Size()
 
-	promptLbl := vtui.NewLabel(0, 0, fmt.Sprintf(prompt, len(names)), nil)
+	promptLbl := vtui.NewLabel(0, 0, promptText, nil)
 	dlg.AddItem(promptLbl)
 
 	editDest := vtui.NewEdit(0, 0, 10, initialDest)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/menuhotkeys"
@@ -14,6 +15,49 @@ import (
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
+
+// menuRowEnabled remembers, per menu row, the function that says whether the
+// row can be used right now. BuildMenuBarItems fills it as it builds; the
+// panels frame caches the built rows between frames, and
+// refreshMenuRowStates uses these functions to keep the dimmed flags of the
+// cached rows current (f4#1814).
+var (
+	menuRowEnabledMu sync.Mutex
+	menuRowEnabled   = map[history.MenuHistoryItemKey]func() bool{}
+)
+
+func rememberMenuRowEnabled(key history.MenuHistoryItemKey, enabled func() bool) {
+	if enabled == nil {
+		return
+	}
+	menuRowEnabledMu.Lock()
+	menuRowEnabled[key] = enabled
+	menuRowEnabledMu.Unlock()
+}
+
+// refreshMenuRowStates sets the Disabled flag of every row that has an
+// Enabled function to its answer now.
+func refreshMenuRowStates(items []vtui.MenuBarItem) {
+	menuRowEnabledMu.Lock()
+	defer menuRowEnabledMu.Unlock()
+	if len(menuRowEnabled) == 0 {
+		return
+	}
+	var refresh func(rows []vtui.MenuItem)
+	refresh = func(rows []vtui.MenuItem) {
+		for i := range rows {
+			if key, ok := rows[i].UserData.(history.MenuHistoryItemKey); ok {
+				if enabled := menuRowEnabled[key]; enabled != nil {
+					rows[i].Disabled = !enabled()
+				}
+			}
+			refresh(rows[i].SubItems)
+		}
+	}
+	for i := range items {
+		refresh(items[i].SubItems)
+	}
+}
 
 // BuildMenuBarItems generates the top-level menu structure for an area
 // from the action registry. Every action with a MenuPath set appears in
@@ -73,6 +117,7 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 			OnClick:  func() { RunAction(a.Name) },
 			UserData: history.MenuHistoryItemKey(a.Name),
 		}
+		rememberMenuRowEnabled(history.MenuHistoryItemKey(a.Name), a.Enabled)
 		item.Shortcut = keymap.MenuShortcutsForAction(area, a.Name)
 		if a.MenuLast {
 			if a.MenuSeparatorBefore {
@@ -137,6 +182,9 @@ func BuildMenuBarItems(area string) []vtui.MenuBarItem {
 			if len(m.items) > 0 {
 				m.items = append(m.items, vtui.MenuItem{Separator: true})
 			}
+		}
+		if command.Enabled != nil {
+			rememberMenuRowEnabled(history.MenuHistoryItemKey("plugin:"+command.ID), func() bool { return command.Enabled(app) })
 		}
 		m.items = append(m.items, vtui.MenuItem{
 			Text: text,

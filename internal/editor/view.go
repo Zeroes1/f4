@@ -5784,12 +5784,18 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 			}
 		}
 
-		// Restore original metadata (owner, group, perms, times). Remote VFSes may
-		// explicitly not support attributes; local failures are a committed but
-		// user-visible partial save and must not be silently ignored.
+		// Restore original metadata (owner, group, perms). The times are not part
+		// of it: the file was just written, and putting its old modification time
+		// back made every save look like no save at all to make, backup tools and
+		// the file's own properties (f4#1817). Remote VFSes may explicitly not
+		// support attributes; local failures are a committed but user-visible
+		// partial save and must not be silently ignored.
 		var metadataErr error
 		if statErr == nil {
-			if attrErr := ev.Vfs.SetAttributes(ctx.Context, finalFilePath, originalStat); attrErr != nil && fileops.IsLocalOSVFS(ev.Vfs) {
+			restore := originalStat
+			restore.MTime = time.Time{}
+			restore.ATime = time.Time{}
+			if attrErr := ev.Vfs.SetAttributes(ctx.Context, finalFilePath, restore); attrErr != nil && fileops.IsLocalOSVFS(ev.Vfs) {
 				metadataErr = attrErr
 			}
 		}
