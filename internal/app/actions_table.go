@@ -859,6 +859,9 @@ func init() {
 		DefaultKeys: []string{"F6"},
 		MenuPath:    "Files",
 		Enabled:     fileCopyMoveEnabled(true),
+		// The menu says "Rename or move"; a key-bar slot is too short for that and
+		// lost its tail ("Rename or"). The slot has its own short caption (f4#891).
+		KeyBarLabel: func() string { return i18n.Msg("KeyBar.F6") },
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionCopyMove(pf, true) }),
 	})
 	registerAction(action.Action{

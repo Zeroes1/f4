@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/vfs"
@@ -53,5 +54,24 @@ func TestDirSizeResultNamesTheFolderItsSizeAndCounts(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("dirSizeResult = %q, lacks %q", got, want)
 		}
+	}
+}
+
+// The F6 slot of the key bar carries the short caption of the slot, not the
+// long name the menu gives the action ("Rename or move"), which the slot cut off
+// (f4#891).
+func TestKeyBarF6UsesTheShortCaption(t *testing.T) {
+	act, ok := action.Lookup("File.Move")
+	if !ok {
+		t.Fatal("File.Move is not registered")
+	}
+	if act.KeyBarLabel == nil {
+		t.Fatal("File.Move has no key-bar caption of its own")
+	}
+	if got, want := act.KeyBarLabel(), i18n.Msg("KeyBar.F6"); got != want || got == "" {
+		t.Fatalf("F6 caption = %q, want %q", got, want)
+	}
+	if got := act.KeyBarLabel(); len([]rune(got)) > 8 {
+		t.Fatalf("F6 caption %q is longer than a key-bar slot", got)
 	}
 }
