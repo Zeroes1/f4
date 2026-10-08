@@ -93,6 +93,7 @@ func AddMissingColorKeys(path string, file *ini.File) int {
 	}
 
 	out := append(append(append([]string{}, lines[:insertAt]...), block...), lines[insertAt:]...)
+	// #nosec G703 -- path is the user's farcolors.ini in the profile directory, given by UserColorOverridesPath.
 	if err := os.WriteFile(path, []byte(strings.Join(out, newline)), 0600); err != nil {
 		return 0
 	}

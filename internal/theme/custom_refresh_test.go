@@ -57,6 +57,7 @@ func TestApplyColorStyle_CustomFileGainsNewKeys(t *testing.T) {
 		t.Fatalf("test setup: dropped %v, want both keys", dropped)
 	}
 	aged := strings.Join(kept, "\n")
+	// #nosec G703 -- path is inside the test's temp directory.
 	if err := os.WriteFile(path, []byte(aged), 0o600); err != nil {
 		t.Fatal(err)
 	}
