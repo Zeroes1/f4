@@ -51,3 +51,26 @@ func TestConsoleRowText(t *testing.T) {
 		}
 	}
 }
+
+// The Ctrl+O snapshot of a large window is read and written in strips that
+// each fit the console's shared heap on XP, and together cover every row once.
+func TestConsoleStrips(t *testing.T) {
+	for _, tc := range []struct{ w, h int }{{80, 25}, {240, 67}, {80, 300}, {1, 3}, {80, 0}} {
+		next := 0
+		for _, s := range ConsoleStrips(tc.w, tc.h) {
+			if s.Row != next || s.Rows < 1 {
+				t.Fatalf("%dx%d: strip %+v after row %d", tc.w, tc.h, s, next)
+			}
+			if s.Rows > 1 && s.Rows*tc.w > maxConsoleReadCells {
+				t.Fatalf("%dx%d: strip %+v is %d cells, over %d", tc.w, tc.h, s, s.Rows*tc.w, maxConsoleReadCells)
+			}
+			next += s.Rows
+		}
+		if next != tc.h {
+			t.Fatalf("%dx%d: strips cover %d rows", tc.w, tc.h, next)
+		}
+	}
+	if n := len(ConsoleStrips(240, 67)); n < 2 {
+		t.Fatalf("a 240x67 window (16080 cells, 64 KB) went in %d call(s)", n)
+	}
+}
