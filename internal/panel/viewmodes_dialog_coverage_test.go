@@ -163,13 +163,14 @@ func TestShowPanelModesMenuOpensAtActiveMode(t *testing.T) {
 
 // viewModeDialogWidgets picks the edit dialog's controls out by the fixed
 // order editPanelViewMode adds them in: name, type and width (label, edit each),
-// full-screen and uppercase-directory checkboxes, then the buttons in the order
-// they stand on the row: OK, Columns..., Reset, Cancel.
+// the status line's Columns... button, full-screen and uppercase-directory
+// checkboxes, then the buttons in the order they stand on the row: OK,
+// Columns..., Reset, Cancel.
 func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidths *vtui.Edit, fullScreen, uppercaseDirs *vtui.Checkbox, ok, reset, cancel *vtui.Button) {
 	t.Helper()
 	children := dlg.GetChildren()
-	if len(children) != 16 {
-		t.Fatalf("dialog has %d children, want 16", len(children))
+	if len(children) != 17 {
+		t.Fatalf("dialog has %d children, want 17", len(children))
 	}
 	var assertOk bool
 	if editTypes, assertOk = children[3].(*vtui.Edit); !assertOk {
@@ -178,20 +179,20 @@ func viewModeDialogWidgets(t *testing.T, dlg *vtui.Window) (editTypes, editWidth
 	if editWidths, assertOk = children[5].(*vtui.Edit); !assertOk {
 		t.Fatalf("children[5] = %T, want *vtui.Edit", children[5])
 	}
-	if fullScreen, assertOk = children[10].(*vtui.Checkbox); !assertOk {
-		t.Fatalf("children[10] = %T, want *vtui.Checkbox", children[10])
-	}
-	if uppercaseDirs, assertOk = children[11].(*vtui.Checkbox); !assertOk {
+	if fullScreen, assertOk = children[11].(*vtui.Checkbox); !assertOk {
 		t.Fatalf("children[11] = %T, want *vtui.Checkbox", children[11])
 	}
-	if ok, assertOk = children[12].(*vtui.Button); !assertOk {
-		t.Fatalf("children[12] = %T, want *vtui.Button", children[12])
+	if uppercaseDirs, assertOk = children[12].(*vtui.Checkbox); !assertOk {
+		t.Fatalf("children[12] = %T, want *vtui.Checkbox", children[12])
 	}
-	if reset, assertOk = children[14].(*vtui.Button); !assertOk {
-		t.Fatalf("children[14] = %T, want *vtui.Button", children[14])
+	if ok, assertOk = children[13].(*vtui.Button); !assertOk {
+		t.Fatalf("children[13] = %T, want *vtui.Button", children[13])
 	}
-	if cancel, assertOk = children[15].(*vtui.Button); !assertOk {
+	if reset, assertOk = children[15].(*vtui.Button); !assertOk {
 		t.Fatalf("children[15] = %T, want *vtui.Button", children[15])
+	}
+	if cancel, assertOk = children[16].(*vtui.Button); !assertOk {
+		t.Fatalf("children[16] = %T, want *vtui.Button", children[16])
 	}
 	return
 }

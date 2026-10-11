@@ -112,11 +112,12 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	const width = 64
 	// Rows the vbox stacks: five label/edit pairs, the status line's
 	// Columns... button, two checkboxes and the button row (14) plus the
-	// blank row before each group after the first (6). The frame, the row under the title and the row over the bottom
+	// blank row before each group after the first and before that button
+	// (7). The frame, the row under the title and the row over the bottom
 	// frame add four more. The dialog used to be 20 rows tall, three short
 	// of that, so the button row landed below the bottom frame and only
 	// the modal clip kept it on screen.
-	const contentRows = 14 + 6
+	const contentRows = 14 + 7
 	height := 4 + contentRows
 	// On a console shorter than the dialog the frame would be drawn past
 	// its bottom row; the modal viewport then scrolls the controls instead.
@@ -190,7 +191,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	vbox.Add(editStatusTypes, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(lblStatusWidths, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(editStatusWidths, vtui.Margins{}, vtui.AlignFill)
-	vbox.Add(btnStatusColumns, vtui.Margins{}, vtui.AlignLeft)
+	vbox.Add(btnStatusColumns, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(chkFullScreen, vtui.Margins{Top: 1}, vtui.AlignLeft)
 	vbox.Add(chkUppercaseDirs, vtui.Margins{}, vtui.AlignLeft)
 	btnRow := vtui.NewHBoxLayout(0, 0, width-6, 1)
