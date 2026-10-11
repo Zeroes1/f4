@@ -178,7 +178,8 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			}
 		}
 		if b, ok := r.control.(*settingsCheckbox); ok {
-			b.lines = settingsWrap(r.field.Label.Resolve(config.App.Language, i18n.Msg), max(1, x2-x1-9))
+			r.controlX = settingsFieldIndent(r.field.ID)
+			b.lines = settingsWrap(r.field.Label.Resolve(config.App.Language, i18n.Msg), max(1, x2-x1-9-r.controlX))
 			b.SetText(b.lines[0])
 			r.label = nil
 			r.controlHeight = len(b.lines)

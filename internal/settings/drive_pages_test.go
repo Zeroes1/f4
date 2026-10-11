@@ -210,3 +210,40 @@ func TestDriveChooserWindowListsTheToolsOnItsToolsPage(t *testing.T) {
 		t.Errorf("tool check boxes = %v", labels)
 	}
 }
+
+// f4#1148 (mitek1977-coder): on Drive options the two tool options are named
+// ShowTools and SortToolsByHotkey, the second set in four columns under the
+// first, and the tools are not listed again under them: they have a page of
+// their own in this window.
+func TestDriveOptionsPageNamesIndentAndNoToolsList(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 129, 44)
+	c.selectCategory(driveOptionsPage)
+
+	x := map[string]int{}
+	for _, row := range c.page.rows {
+		if row.control != nil && row.control.GetId() == "collection:drive-tools" {
+			t.Error("the tools are listed again on the Drive options page")
+		}
+		if b, ok := row.control.(*settingsCheckbox); ok {
+			x[strings.TrimSpace(b.lines[0])] = row.controlX
+		}
+	}
+	show, okShow := x["ShowTools"]
+	sort, okSort := x["SortToolsByHotkey"]
+	if !okShow || !okSort {
+		t.Fatalf("no ShowTools / SortToolsByHotkey check boxes among %v", x)
+	}
+	if sort != show+4 {
+		t.Errorf("SortToolsByHotkey at column %d, ShowTools at %d: want four columns in", sort, show)
+	}
+}
