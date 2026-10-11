@@ -1201,6 +1201,15 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		comboLinks := vtui.NewComboBox(0, 0, 30, linkNames)
 		comboLinks.Menu.SetSelectPos(0)
 		comboLinks.Edit.SetText(linkNames[0])
+		// A name chosen from the list is selected in the field, ready for
+		// Ctrl+Ins (DkmS1953, f4#1861). It is not put on the clipboard by
+		// itself: that would replace what is there without being asked.
+		comboLinks.Menu.OnAction = func(idx int) {
+			if idx >= 0 && idx < len(linkNames) {
+				comboLinks.Edit.SetText(linkNames[idx])
+				comboLinks.Edit.SelectAll()
+			}
+		}
 		lblLinks := vtui.NewLabel(0, 0, fmt.Sprintf(i18n.Msg("Attributes.HardLinks"), len(linkNames)), comboLinks)
 		rowLinks := vtui.NewHBoxLayout(0, 0, 54, 1)
 		rowLinks.Add(lblLinks, vtui.Margins{Right: 1}, vtui.AlignLeft)
