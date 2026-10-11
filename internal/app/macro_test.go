@@ -1257,3 +1257,29 @@ func TestMacroFilterLetsCommandLineDeleteBeforeRecordedMacro(t *testing.T) {
 		t.Fatal("the recorded Backspace macro did not run on an empty command line")
 	}
 }
+
+// f4#1870 (DkmS1953): with the workspace tab strip shown, the recording mark
+// was written on row 0, which vtui paints the strip over right after OnRender,
+// so it never showed. It now goes on the first row under the strip.
+func TestMacroRecordingIndicatorBelowWorkspaceStrip_Issue1870(t *testing.T) {
+	scr := initFrameworkActionTestScreen(t)
+	vtui.FrameManager.ConfigureWorkspaceTabs(vtui.WorkspaceTabsAlways, vtui.WorkspaceCtrlTabDirect)
+	inset := vtui.FrameManager.WorkspaceTopInset()
+	if inset == 0 {
+		t.Fatal("the tab strip reserves no row; the case of the report is not set up")
+	}
+	previous := macro.MacroMgr
+	t.Cleanup(func() { macro.MacroMgr = previous })
+	macro.MacroMgr = macro.NewMacroManager(filepath.Join(t.TempDir(), "macros.ini"))
+
+	drawMacroRecordingIndicator(scr)
+	if got := scr.GetCell(1, inset).Char; got == 'R' {
+		t.Fatal("the mark is drawn while nothing is being recorded")
+	}
+
+	macro.MacroMgr.Recording = true
+	drawMacroRecordingIndicator(scr)
+	if got := scr.GetCell(1, inset).Char; got != 'R' {
+		t.Fatalf("row %d under the tab strip has U+%04X, want the R mark", inset, got)
+	}
+}
