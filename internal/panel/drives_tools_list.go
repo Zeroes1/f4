@@ -30,7 +30,7 @@ func DriveMenuToolChoices() []DriveToolChoice {
 		}
 	}
 	plugins := sysinfo.DriveRegistrySnapshot()
-	sortByName := driveMenuOptionEnabled(config.App.DriveMenuOptions, config.DriveMenuSortPluginsByHotkey)
+	sortByName := DriveToolsSortedByName()
 	if sortByName {
 		sort.SliceStable(plugins, func(i, j int) bool {
 			return strings.ToLower(driveMenuNameWithoutMarker(plugins[i].Name)) <
@@ -58,6 +58,12 @@ func DriveMenuToolChoices() []DriveToolChoice {
 		ordered = append(ordered, byKey[e.Name])
 	}
 	return ordered
+}
+
+// DriveToolsSortedByName reports whether SortToolsByHotkey is on: the plugins'
+// tools are then in name order and cannot be moved.
+func DriveToolsSortedByName() bool {
+	return driveMenuOptionEnabled(config.App.DriveMenuOptions, config.DriveMenuSortPluginsByHotkey)
 }
 
 // driveToolLabel is a tool's name without its accelerator mark.

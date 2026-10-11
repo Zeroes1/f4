@@ -41,6 +41,26 @@ type settingsRow struct {
 type settingsCheckbox struct {
 	*vtui.Checkbox
 	lines []string
+
+	// boxOnly leaves a click on the label to select the row: only the
+	// "[x]" itself toggles it (the drive menu's Tools page, f4#1148).
+	boxOnly bool
+	// onFocused is called when the check box gets the focus.
+	onFocused func()
+}
+
+func (b *settingsCheckbox) ProcessMouse(e *vtinput.InputEvent) bool {
+	if b.boxOnly && (int(e.MouseY) != b.Y1 || int(e.MouseX) >= b.X1+3) {
+		return false
+	}
+	return b.Checkbox.ProcessMouse(e)
+}
+
+func (b *settingsCheckbox) SetFocus(f bool) {
+	b.Checkbox.SetFocus(f)
+	if f && b.onFocused != nil {
+		b.onFocused()
+	}
 }
 
 func (b *settingsCheckbox) Show(scr *vtui.ScreenBuf) {
@@ -582,6 +602,9 @@ type settingsCenter struct {
 	offsets                 map[string]int
 	closed                  bool
 	scoped                  bool
+	// driveToolSelected is the field of the tool last selected on the drive
+	// menu's Tools page, the one Up and Down move (f4#1148).
+	driveToolSelected string
 	// fullLists shows the record lists of a page in full, not in five rows.
 	fullLists bool
 	// fieldPrefix and fieldTitle narrow a scoped window further, to the fields
@@ -1270,6 +1293,9 @@ func (c *settingsCenter) selectCategory(id string) {
 	if c.fieldPrefix == "" {
 		c.addCollections(id)
 		c.addCommands(id)
+		if id == driveToolsPage {
+			c.addDriveToolMoves(id)
+		}
 	}
 	c.layoutWindow()
 	c.page.scroll = c.offsets[id]
@@ -1319,11 +1345,15 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		r.controlHeight = 4
 		control = e
 	case f4settings.Boolean:
-		b := &settingsCheckbox{Checkbox: vtui.NewCheckbox(0, 0, f.Label.Resolve(config.App.Language, i18n.Msg), false)}
+		b := &settingsCheckbox{Checkbox: vtui.NewCheckbox(0, 0, f.Label.Resolve(config.App.Language, i18n.Msg), false), boxOnly: settingsCheckboxBoxOnly(f.ID)}
 		if value == "true" {
 			b.State = 1
 		}
 		b.OnChange = func(n int) { change(strconv.FormatBool(n == 1)) }
+		if b.boxOnly {
+			id := f.ID
+			b.onFocused = func() { c.driveToolSelected = id }
+		}
 		control = b
 	case f4settings.ChoiceKind:
 		f = settingsFieldChoiceHelp(f)

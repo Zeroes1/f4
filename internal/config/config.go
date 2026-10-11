@@ -972,6 +972,10 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 		cfg.WorkspaceTabMode = int(vtui.WorkspaceTabsOnCtrl)
 	case "never":
 		cfg.WorkspaceTabMode = int(vtui.WorkspaceTabsNever)
+	case "whilectrl":
+		// Shown for as long as a plain Ctrl is held (f4#1870); "ctrl" is
+		// the Ctrl+Tab mode vtui#496 made of the old one.
+		cfg.WorkspaceTabMode = int(vtui.WorkspaceTabsWhileCtrl)
 	default:
 		cfg.WorkspaceTabMode = int(vtui.WorkspaceTabsMultiple)
 	}
@@ -1331,6 +1335,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 		workspaceTabMode = "ctrl"
 	} else if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsNever) {
 		workspaceTabMode = "never"
+	} else if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsWhileCtrl) {
+		workspaceTabMode = "whilectrl"
 	}
 	ctrlTabMode := "direct"
 	if cfg.CtrlTabShowsMenu {

@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"strings"
+
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/sdk/f4settings"
 	"github.com/unxed/vtui"
@@ -109,6 +111,13 @@ func showDriveChooser(sessions []*settingsSession) bool {
 // settingsFieldIndent is how far in a check box sits under the one it depends
 // on: SortToolsByHotkey only matters while ShowTools is on, and is drawn four
 // columns in under it (mitek1977-coder, f4#1148).
+// settingsCheckboxBoxOnly is true for the check boxes of the Tools page: a
+// click on a tool's name selects it, the way a list row is selected, and
+// only a click on its "[x]" shows or hides the tool (f4#1148).
+func settingsCheckboxBoxOnly(id string) bool {
+	return strings.HasPrefix(id, driveToolFieldPrefix)
+}
+
 func settingsFieldIndent(id string) int {
 	if id == driveMenuOptionFieldID("Drive.SortToolsByHotkey") {
 		return 4
