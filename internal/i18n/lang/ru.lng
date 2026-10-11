@@ -2030,7 +2030,6 @@ Attributes.Target=&Цель:
 Attributes.LinkKindSymlink=Тип ссылки: символическая ссылка
 Attributes.LinkKindJunction=Тип ссылки: связь каталогов (junction)
 Attributes.HardLinks=Жёстких ссылок: %d
-Attributes.HardLinksMore=  … и ещё %d
 Attributes.MTime=Изменён:
 Attributes.LastWrite=Изменён:
 Attributes.Created=Создан:
