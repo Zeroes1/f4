@@ -89,17 +89,36 @@ func TestAttributesListHardLinkNames(t *testing.T) {
 		t.Fatal("a file system without the names gave some")
 	}
 
-	height := func(fs vfs.VFS) int {
+	open := func(fs vfs.VFS) *vtui.Window {
 		vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 		ShowAttributesWindows(nil, fs, `E:\a.txt`, vfs.VFSItem{Name: "a.txt"})
 		win, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
 		if !ok {
 			t.Fatal("no attributes dialog")
 		}
-		return win.Y2 - win.Y1
+		return win
 	}
-	// Six names: the count, four names and "… and 2 more".
-	if got, base := height(v), height(v.OSVFS); got != base+2+maxShownLinkNames+1 {
-		t.Fatalf("dialog height %d, without links %d", got, base)
+	// The names are in a drop-down list on one row, however many there are:
+	// the dialog grew by a row per name before, past the screen for a file
+	// with many (DkmS1953).
+	base := open(v.OSVFS)
+	win := open(v)
+	if got, want := win.Y2-win.Y1, base.Y2-base.Y1+2; got != want {
+		t.Fatalf("dialog height %d with six names, want %d", got, want)
+	}
+	var combo *vtui.ComboBox
+	for _, child := range win.GetChildren() {
+		if c, ok := child.(*vtui.ComboBox); ok && len(c.Menu.Items) == len(v.names) {
+			combo = c
+		}
+	}
+	if combo == nil {
+		t.Fatal("no drop-down list with all six names")
+	}
+	if combo.DropdownOnly {
+		t.Error("the list's field takes no selection, so a name cannot be copied from it")
+	}
+	if got := combo.Edit.GetText(); got != v.names[0] {
+		t.Errorf("the list shows %q, want the file's own name %q", got, v.names[0])
 	}
 }

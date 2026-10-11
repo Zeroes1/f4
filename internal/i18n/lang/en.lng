@@ -2030,7 +2030,6 @@ Attributes.Target=T&arget:
 Attributes.LinkKindSymlink=Link type: symbolic link
 Attributes.LinkKindJunction=Link type: directory junction
 Attributes.HardLinks=Hard links: %d
-Attributes.HardLinksMore=  … and %d more
 Attributes.MTime=Modified:
 Attributes.LastWrite=Last write:
 Attributes.Created=Created:
