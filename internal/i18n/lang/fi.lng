@@ -889,6 +889,7 @@ SettingsCenter.DriveTab.Options=Asemavalinnat
 SettingsCenter.DriveTab.Bookmarks=Kirjanmerkit
 SettingsCenter.DriveTab.Links=Linkit
 SettingsCenter.DriveTools.Show=Näytä tämä työkalu asemavalikossa.
+SettingsCenter.DriveTools.Move=Siirrä valittua työkalua asemavalikossa ylös tai alas.
 SettingsCenter.Category.editor=Editori ja katselin
 SettingsCenter.Category.history=Historia
 SettingsCenter.Category.keyboard=Näppäimistö ja pikanäppäimet

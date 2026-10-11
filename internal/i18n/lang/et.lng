@@ -889,6 +889,7 @@ SettingsCenter.DriveTab.Options=Ketta valikud
 SettingsCenter.DriveTab.Bookmarks=Järjehoidjad
 SettingsCenter.DriveTab.Links=Lingid
 SettingsCenter.DriveTools.Show=Näita seda tööriista ketaste menüüs.
+SettingsCenter.DriveTools.Move=Liiguta valitud tööriista ketaste menüüs üles või alla.
 SettingsCenter.Category.editor=Redaktor ja vaatur
 SettingsCenter.Category.history=Ajalugu
 SettingsCenter.Category.keyboard=Klaviatuur ja kiirklahvid

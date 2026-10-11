@@ -892,6 +892,7 @@ SettingsCenter.DriveTab.Options=Opciones de unidades
 SettingsCenter.DriveTab.Bookmarks=Marcadores
 SettingsCenter.DriveTab.Links=Enlaces
 SettingsCenter.DriveTools.Show=Mostrar esta herramienta en el menú de unidades.
+SettingsCenter.DriveTools.Move=Mover la herramienta seleccionada hacia arriba o hacia abajo en el menú de unidades.
 SettingsCenter.Category.editor=Editor y visor
 SettingsCenter.Category.history=Historial
 SettingsCenter.Category.keyboard=Teclado y atajos

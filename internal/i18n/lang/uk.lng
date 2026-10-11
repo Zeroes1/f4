@@ -893,6 +893,7 @@ SettingsCenter.DriveTab.Options=Параметри дисків
 SettingsCenter.DriveTab.Bookmarks=Закладки
 SettingsCenter.DriveTab.Links=Посилання
 SettingsCenter.DriveTools.Show=Показувати цей інструмент у меню дисків.
+SettingsCenter.DriveTools.Move=Перемістити вибраний інструмент вище або нижче в меню дисків.
 SettingsCenter.Category.editor=Редактор і переглядач
 SettingsCenter.Category.history=Історія
 SettingsCenter.Category.keyboard=Клавіатура та сполучення клавіш

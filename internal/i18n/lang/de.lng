@@ -892,6 +892,7 @@ SettingsCenter.DriveTab.Options=Laufwerksoptionen
 SettingsCenter.DriveTab.Bookmarks=Lesezeichen
 SettingsCenter.DriveTab.Links=Verknüpfungen
 SettingsCenter.DriveTools.Show=Dieses Werkzeug im Laufwerksmenü anzeigen.
+SettingsCenter.DriveTools.Move=Das ausgewählte Werkzeug im Laufwerksmenü nach oben oder unten verschieben.
 SettingsCenter.Category.editor=Editor und Betrachter
 SettingsCenter.Category.history=Verlauf
 SettingsCenter.Category.keyboard=Tastatur und Tastenkürzel

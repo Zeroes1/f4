@@ -892,6 +892,7 @@ SettingsCenter.DriveTab.Options=Možnosti disku
 SettingsCenter.DriveTab.Bookmarks=Záložky
 SettingsCenter.DriveTab.Links=Odkazy
 SettingsCenter.DriveTools.Show=Zobrazit tento nástroj v nabídce disků.
+SettingsCenter.DriveTools.Move=Přesunout vybraný nástroj v nabídce disků nahoru nebo dolů.
 SettingsCenter.Category.editor=Editor a prohlížeč
 SettingsCenter.Category.history=Historie
 SettingsCenter.Category.keyboard=Klávesnice a zkratky

@@ -813,6 +813,7 @@ SettingsCenter.DriveTab.Options=Meghajtó-beállítások
 SettingsCenter.DriveTab.Bookmarks=Könyvjelzők
 SettingsCenter.DriveTab.Links=Hivatkozások
 SettingsCenter.DriveTools.Show=Az eszköz megjelenítése a meghajtómenüben.
+SettingsCenter.DriveTools.Move=A kijelölt eszköz mozgatása felfelé vagy lefelé a meghajtómenüben.
 SettingsCenter.Category.editor=Szerkesztő és megjelenítő
 SettingsCenter.Category.history=Előzmények
 SettingsCenter.Category.keyboard=Billentyűzet és gyorsbillentyűk
