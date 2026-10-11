@@ -4857,6 +4857,17 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 			i18n.Msg("KeyBar.CtrlF1"), i18n.Msg("KeyBar.CtrlF2"), i18n.Msg("KeyBar.CtrlF3"), i18n.Msg("KeyBar.CtrlF4"), i18n.Msg("KeyBar.CtrlF5"), i18n.Msg("KeyBar.CtrlF6"), i18n.Msg("KeyBar.CtrlF7"), "", "", "", i18n.Msg("KeyBar.CtrlF11"), i18n.Msg("KeyBar.CtrlF12"),
 		},
 	}
+	if pf.PanelsLocked() {
+		// A terminal-only workspace (Ctrl+Shift+O) has no panels to copy,
+		// move or delete in: the key bar said 5Copy, 7MkDir, 8Delete and
+		// 10Quit there although those keys do nothing (montoner0, #128).
+		// Only what still works is named -- help, the window list and the
+		// menu, plus the Terminal bindings that resolve below (F3/F4, the
+		// terminal log).
+		fallbacks = &vtui.KeySet{Normal: vtui.KeyBarLabels{
+			i18n.Msg("KeyBar.F1"), "", "", "", "", "", "", "", i18n.Msg("KeyBar.F9"), "", "", i18n.Msg("KeyBar.F12"),
+		}}
+	}
 	if inst := pf.focusedPluginPanel(); inst != nil {
 		return pf.pluginPanelKeyLabels(inst, fallbacks)
 	}
