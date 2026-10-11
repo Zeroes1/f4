@@ -343,6 +343,7 @@ Quit.Btn=&გამოსვლა
 Macro.AssignTitle= მაკროსის მინიჭება
 Macro.AssignPrompt=დააჭირეთ სასურველ კლავიშთა კომბინაციას
 Macro.AssignCancel=გასაუქმებლად დააჭირეთ Esc-ს
+Macro.AssignEmpty=არაფერი ჩაიწერა: დაჭერილი ღილაკის მაკრო წაიშლება.
 
 Menu.Language=ენა (Language)
 Menu.HelpLanguage=დახმარების ენა (Help Language)

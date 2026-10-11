@@ -346,6 +346,7 @@ Quit.Btn=&Ukončit
 Macro.AssignTitle= Přiřadit makro
 Macro.AssignPrompt=Stiskněte požadovanou klávesovou kombinaci
 Macro.AssignCancel=Stiskněte Esc pro zrušení
+Macro.AssignEmpty=Nic nebylo nahráno: makro stisknuté klávesy bude odstraněno.
 
 Menu.Language=Jazyk
 Menu.HelpLanguage=Jazyk nápovědy

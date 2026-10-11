@@ -346,6 +346,7 @@ Quit.Btn=&Verlassen
 Macro.AssignTitle= Makro zuweisen
 Macro.AssignPrompt=Drücken Sie die gewünschte Tastenkombination
 Macro.AssignCancel=Drücken Sie Esc zum Abbrechen
+Macro.AssignEmpty=Nichts aufgezeichnet: Das Makro der gedrückten Taste wird entfernt.
 
 Menu.Language=Sprache
 Menu.HelpLanguage=Hilfesprache

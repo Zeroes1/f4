@@ -346,6 +346,7 @@ Quit.Btn=&Wyjdź
 Macro.AssignTitle= Przypisz makro
 Macro.AssignPrompt=Naciśnij żądaną kombinację klawiszy
 Macro.AssignCancel=Naciśnij Esc, aby anulować
+Macro.AssignEmpty=Nic nie nagrano: makro naciśniętego klawisza zostanie usunięte.
 
 Menu.Language=Język
 Menu.HelpLanguage=Język pomocy

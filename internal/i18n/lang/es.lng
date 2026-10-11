@@ -346,6 +346,7 @@ Quit.Btn=&Salir
 Macro.AssignTitle= Asignar Macro
 Macro.AssignPrompt=Presione la combinación de teclas deseada
 Macro.AssignCancel=Presione Esc para cancelar
+Macro.AssignEmpty=No se grabó nada: se eliminará la macro de la tecla que pulse.
 
 Menu.Language=Idioma
 Menu.HelpLanguage=Idioma de ayuda

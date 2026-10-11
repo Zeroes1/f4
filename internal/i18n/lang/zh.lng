@@ -332,6 +332,7 @@ Quit.Btn=离开(&L)
 Macro.AssignTitle= 分配宏
 Macro.AssignPrompt=请按下所需的快捷键组合
 Macro.AssignCancel=按 Esc 键取消
+Macro.AssignEmpty=未录制任何内容：所按键的宏将被删除。
 
 Menu.Language=语言
 Menu.HelpLanguage=帮助语言

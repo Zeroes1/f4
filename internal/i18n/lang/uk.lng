@@ -346,6 +346,7 @@ Quit.Btn=&Вийти
 Macro.AssignTitle= Призначити макрос
 Macro.AssignPrompt=Натисніть бажану комбінацію клавіш
 Macro.AssignCancel=Натисніть Esc для скасування
+Macro.AssignEmpty=Нічого не записано: макрос натиснутої клавіші буде видалено.
 
 Menu.Language=Мова (Language)
 Menu.HelpLanguage=Мова довідки (Help Language)

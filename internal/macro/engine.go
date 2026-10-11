@@ -198,10 +198,29 @@ type MacroAssignFrame struct {
 
 func NewMacroAssignFrame(m *MacroManager) *MacroAssignFrame {
 	width, height := 42, 7
+	// An empty recording removes the macro of the key pressed next: say so
+	// before that key is pressed, not only afterwards (DkmS1953, f4#1870).
+	var warning []string
+	if len(m.Buffer) == 0 {
+		width = 50
+		warning = vtui.WrapText(i18n.Msg("Macro.AssignEmpty"), width-4)
+		height += len(warning) + 1
+	}
 	base := vtui.NewCenteredDialog(width, height, i18n.Msg("Macro.AssignTitle"))
 	f := &MacroAssignFrame{
 		Window: base,
 		mgr:    m,
+	}
+
+	vbox := vtui.NewVBoxLayout(f.X1+2, f.Y1+2, width-4, height-4)
+	for i, line := range warning {
+		text := vtui.NewText(0, 0, line, vtui.Palette[vtui.ColDialogHighlightText])
+		f.AddItem(text)
+		margins := vtui.Margins{}
+		if i == len(warning)-1 {
+			margins.Bottom = 1
+		}
+		vbox.Add(text, margins, vtui.AlignCenter)
 	}
 
 	prompt := vtui.NewText(0, 0, i18n.Msg("Macro.AssignPrompt"), vtui.Palette[vtui.ColDialogText])
@@ -210,7 +229,6 @@ func NewMacroAssignFrame(m *MacroManager) *MacroAssignFrame {
 	cancelPrompt := vtui.NewText(0, 0, i18n.Msg("Macro.AssignCancel"), vtui.Palette[vtui.ColDialogText])
 	f.AddItem(cancelPrompt)
 
-	vbox := vtui.NewVBoxLayout(f.X1+2, f.Y1+2, width-4, height-4)
 	vbox.Add(prompt, vtui.Margins{}, vtui.AlignCenter)
 	vbox.Add(cancelPrompt, vtui.Margins{Top: 1}, vtui.AlignCenter)
 	vbox.Apply()

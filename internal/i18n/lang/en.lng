@@ -1082,6 +1082,7 @@ Quit.Btn=&Leave
 Macro.AssignTitle= Assign Macro
 Macro.AssignPrompt=Press the desired key combination
 Macro.AssignCancel=Press Esc to cancel
+Macro.AssignEmpty=Nothing was recorded: the macro of the key you press will be removed.
 Macro.Reloaded=Reloaded %d Lua macro(s)
 Macro.ReloadFailed=Some Lua macro files could not be loaded
 

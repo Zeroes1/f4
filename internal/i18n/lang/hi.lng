@@ -292,6 +292,7 @@ Quit.Btn=&छोड़ें
 Macro.AssignTitle= मैक्रो असाइन करें
 Macro.AssignPrompt=वांछित कुंजी संयोजन दबाएं
 Macro.AssignCancel=रद्द करने के लिए Esc दबाएं
+Macro.AssignEmpty=कुछ भी रिकॉर्ड नहीं हुआ: दबाई गई कुंजी का मैक्रो हटा दिया जाएगा।
 
 Menu.Language=भाषा
 Menu.HelpLanguage=सहायता भाषा
