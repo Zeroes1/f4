@@ -1,6 +1,7 @@
 package vfs
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,5 +61,55 @@ func TestElevatedFileOpsPathOperations(t *testing.T) {
 	}
 	if r := ElevatedFileOps(SudoRequest{Cmd: CmdStat, Path: filepath.Join(dir, "missing")}); r.Error == "" {
 		t.Error("Stat of a missing file reported no error")
+	}
+}
+
+// f4#1768 step 3b: a file's contents go by requests -- written in chunks,
+// read back in chunks, the end of the file said with IsEOF.
+func TestElevatedFileOpsReadWriteByRequests(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "data.bin")
+	if err := os.WriteFile(file, []byte("old contents that must go"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdWriteAt, Path: file, Data: []byte("hello "), Flags: SudoWriteTruncate, Mode: 0o600}); r.Error != "" {
+		t.Fatalf("first chunk: %s", r.Error)
+	}
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdWriteAt, Path: file, Offset: 6, Data: []byte("world")}); r.Error != "" {
+		t.Fatalf("second chunk: %s", r.Error)
+	}
+	if got, _ := os.ReadFile(file); string(got) != "hello world" {
+		t.Fatalf("file holds %q", got)
+	}
+
+	// The request travels as a JSON frame: the bytes must survive it.
+	var buf bytes.Buffer
+	if err := writeSudoFrame(&buf, SudoRequest{Cmd: CmdReadAt, Path: file, Offset: 0, Size: 6}); err != nil {
+		t.Fatal(err)
+	}
+	var req SudoRequest
+	if err := readSudoFrame(&buf, &req); err != nil {
+		t.Fatal(err)
+	}
+	r := ElevatedFileOps(req)
+	if r.Error != "" || string(r.Data) != "hello " || r.IsEOF {
+		t.Fatalf("first read = %q eof %v err %q", r.Data, r.IsEOF, r.Error)
+	}
+	if err := writeSudoFrame(&buf, r); err != nil {
+		t.Fatal(err)
+	}
+	var back SudoResponse
+	if err := readSudoFrame(&buf, &back); err != nil || string(back.Data) != "hello " {
+		t.Fatalf("answer after the frame = %q, %v", back.Data, err)
+	}
+	r = ElevatedFileOps(SudoRequest{Cmd: CmdReadAt, Path: file, Offset: 6, Size: 100})
+	if r.Error != "" || string(r.Data) != "world" || !r.IsEOF {
+		t.Fatalf("last read = %q eof %v err %q", r.Data, r.IsEOF, r.Error)
+	}
+
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdReadAt, Path: file, Size: SudoChunkLimit + 1}); r.Error == "" {
+		t.Error("a read over the chunk limit was accepted")
+	}
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdReadAt, Path: file + ".missing", Size: 10}); r.Error == "" {
+		t.Error("reading a missing file reported no error")
 	}
 }

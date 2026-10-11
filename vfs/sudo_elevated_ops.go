@@ -1,6 +1,9 @@
 package vfs
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,8 +14,8 @@ import (
 // Symlink and Hardlink, done with the dispatcher's rights. It is the same work
 // the Unix dispatcher does in handleSudoClient, written once for every
 // platform. A file's contents cannot travel as a descriptor between processes
-// on Windows (CmdOpen and CmdCreate pass one with SCM_RIGHTS on Unix), so they
-// are refused here until reading and writing by requests is added.
+// on Windows (CmdOpen and CmdCreate pass one with SCM_RIGHTS on Unix): they
+// are refused here, and the contents go by CmdReadAt and CmdWriteAt instead.
 func ElevatedFileOps(req SudoRequest) SudoResponse {
 	var resp SudoResponse
 	fail := func(err error) {
@@ -79,6 +82,10 @@ func ElevatedFileOps(req SudoRequest) SudoResponse {
 			err = applyPlatformAttributes(req.Path, req.Item)
 		}
 		fail(err)
+	case CmdReadAt:
+		resp.Data, resp.IsEOF, resp.Error = elevatedReadAt(req)
+	case CmdWriteAt:
+		fail(elevatedWriteAt(req))
 	default:
 		resp.Error = "operation not supported by the elevated dispatcher yet"
 	}
@@ -101,4 +108,46 @@ func elevatedItem(path string, info os.FileInfo) VFSItem {
 	fillPlatformTimes(&item, info)
 	fillPhysicalSizeCheap(&item, info)
 	return item
+}
+
+// elevatedReadAt answers a CmdReadAt; the error is the answer's Error text.
+func elevatedReadAt(req SudoRequest) ([]byte, bool, string) {
+	if req.Size <= 0 || req.Size > SudoChunkLimit || req.Offset < 0 {
+		return nil, false, fmt.Sprintf("read size must be 1..%d bytes at a non-negative offset", SudoChunkLimit)
+	}
+	f, err := os.Open(req.Path)
+	if err != nil {
+		return nil, false, err.Error()
+	}
+	defer func() { _ = f.Close() }() // read-only: nothing to flush
+	buf := make([]byte, req.Size)
+	n, err := f.ReadAt(buf, req.Offset)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, false, err.Error()
+	}
+	return buf[:n], n < req.Size, ""
+}
+
+// elevatedWriteAt does a CmdWriteAt.
+func elevatedWriteAt(req SudoRequest) error {
+	if len(req.Data) > SudoChunkLimit || req.Offset < 0 {
+		return fmt.Errorf("write of %d bytes at %d is out of range", len(req.Data), req.Offset)
+	}
+	flags := os.O_WRONLY | os.O_CREATE
+	if req.Flags&SudoWriteTruncate != 0 {
+		flags |= os.O_TRUNC
+	}
+	mode := os.FileMode(req.Mode)
+	if mode == 0 {
+		mode = 0o644
+	}
+	f, err := os.OpenFile(req.Path, flags, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteAt(req.Data, req.Offset); err != nil {
+		_ = f.Close() // the write error is the one to report
+		return err
+	}
+	return f.Close()
 }
