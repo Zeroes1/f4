@@ -1051,3 +1051,34 @@ func TestRefreshHighlightIniHeaderLeavesOtherFilesAlone(t *testing.T) {
 		t.Error("the stock file must stay byte-for-byte the same")
 	}
 }
+
+// f4#1870: the tab strip shown while a plain Ctrl is held is a mode of its
+// own, saved as "whilectrl"; "ctrl" stays the Ctrl+Tab mode of vtui#496.
+func TestConfig_WorkspaceTabModeWhileCtrlRoundTrips_Issue1870(t *testing.T) {
+	userIniPath := filepath.Join(t.TempDir(), "settings.ini")
+	origUserPathFunc := GetUserConfigIniPath
+	origPathsFunc := GetConfigIniPaths
+	oldCfg := App
+	defer func() {
+		GetUserConfigIniPath = origUserPathFunc
+		GetConfigIniPaths = origPathsFunc
+		App = oldCfg
+	}()
+	GetUserConfigIniPath = func() string { return userIniPath }
+	GetConfigIniPaths = func() []string { return []string{userIniPath} }
+
+	App.WorkspaceTabMode = int(vtui.WorkspaceTabsWhileCtrl)
+	SaveConfig()
+	data, err := os.ReadFile(userIniPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "WorkspaceTabMode = whilectrl") {
+		t.Fatalf("saved settings do not name the mode whilectrl:\n%s", data)
+	}
+	App.WorkspaceTabMode = int(vtui.WorkspaceTabsOnCtrl)
+	LoadConfig()
+	if App.WorkspaceTabMode != int(vtui.WorkspaceTabsWhileCtrl) {
+		t.Fatalf("WorkspaceTabMode after load = %d, want WorkspaceTabsWhileCtrl %d", App.WorkspaceTabMode, vtui.WorkspaceTabsWhileCtrl)
+	}
+}
