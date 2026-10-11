@@ -9,7 +9,9 @@ import (
 
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/sysinfo"
+	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/sdk/f4settings"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -251,5 +253,65 @@ func TestDriveOptionsPageNamesIndentAndNoToolsList(t *testing.T) {
 	}
 	if sort != show+4 {
 		t.Errorf("SortToolsByHotkey at column %d, ShowTools at %d: want four columns in", sort, show)
+	}
+}
+
+// f4#1148 (mitek1977-coder): on the Tools page a click on a tool's name
+// selects its row and leaves it shown or hidden; only a click on "[x]"
+// toggles it.
+func TestDriveToolsPageClickOnNameSelectsWithoutToggling(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	old := sysinfo.DriveRegistrySnapshot()
+	t.Cleanup(func() { sysinfo.SetDrives(old) })
+	sysinfo.SetDrives([]sysinfo.DriveEntry{{Name: "Alpha tool"}, {Name: "Beta tool"}})
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 129, 34)
+	c.selectCategory(driveToolsPage)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	c.Show(scr)
+
+	var boxes []*settingsCheckbox
+	for _, row := range c.page.rows {
+		if b, ok := row.control.(*settingsCheckbox); ok && strings.HasPrefix(b.GetId(), "setting:"+driveToolFieldPrefix) {
+			boxes = append(boxes, b)
+		}
+	}
+	if len(boxes) < 2 {
+		t.Fatalf("%d tool check boxes on the Tools page", len(boxes))
+	}
+	click := func(x, y int) {
+		for _, down := range []bool{true, false} {
+			buttons := uint32(0)
+			if down {
+				buttons = vtinput.FromLeft1stButtonPressed
+			}
+			c.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseX: testutil.Int16(x), MouseY: testutil.Int16(y), KeyDown: down, ButtonState: buttons})
+		}
+	}
+	b := boxes[1]
+	click(b.X1+6, b.Y1)
+	if b.State != 1 {
+		t.Errorf("a click on the name toggled the tool: state %d", b.State)
+	}
+	if !b.IsFocused() {
+		t.Error("a click on the name did not select the tool's row")
+	}
+	click(b.X1+1, b.Y1)
+	if b.State != 0 {
+		t.Errorf("a click on [x] did not toggle the tool: state %d", b.State)
+	}
+
+	// Elsewhere in Settings a click on the label still toggles.
+	if settingsCheckboxBoxOnly(driveMenuOptionFieldID("Drive.ShowTools")) {
+		t.Error("the Drive options check boxes became box-only too")
 	}
 }

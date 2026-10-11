@@ -41,6 +41,17 @@ type settingsRow struct {
 type settingsCheckbox struct {
 	*vtui.Checkbox
 	lines []string
+
+	// boxOnly leaves a click on the label to select the row: only the
+	// "[x]" itself toggles it (the drive menu's Tools page, f4#1148).
+	boxOnly bool
+}
+
+func (b *settingsCheckbox) ProcessMouse(e *vtinput.InputEvent) bool {
+	if b.boxOnly && (int(e.MouseY) != b.Y1 || int(e.MouseX) >= b.X1+3) {
+		return false
+	}
+	return b.Checkbox.ProcessMouse(e)
 }
 
 func (b *settingsCheckbox) Show(scr *vtui.ScreenBuf) {
@@ -1319,7 +1330,7 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		r.controlHeight = 4
 		control = e
 	case f4settings.Boolean:
-		b := &settingsCheckbox{Checkbox: vtui.NewCheckbox(0, 0, f.Label.Resolve(config.App.Language, i18n.Msg), false)}
+		b := &settingsCheckbox{Checkbox: vtui.NewCheckbox(0, 0, f.Label.Resolve(config.App.Language, i18n.Msg), false), boxOnly: settingsCheckboxBoxOnly(f.ID)}
 		if value == "true" {
 			b.State = 1
 		}
