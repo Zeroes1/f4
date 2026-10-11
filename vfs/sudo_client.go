@@ -70,6 +70,9 @@ func (c *SudoClient) Connect() error {
 	if c.conn != nil {
 		return nil // Already connected
 	}
+	if connectsByUAC() {
+		return c.connectElevatedLocked()
+	}
 
 	vtui.DebugLog("SUDO_CLIENT: Initializing connection... UID=%d GID=%d", os.Getuid(), os.Getgid())
 	c.sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("f4-sudo-%d.sock", os.Getpid()))
