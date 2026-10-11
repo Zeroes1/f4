@@ -43,3 +43,17 @@ func consoleRowText(chars []uint16) string {
 	}
 	return sb.String()
 }
+
+// ConsoleStrip is a run of rows read or written in one console call.
+type ConsoleStrip struct{ Row, Rows int }
+
+// ConsoleStrips splits rows rows of a console width columns wide into strips
+// of at most ConsoleReadRows(width) rows, in order and without gaps.
+func ConsoleStrips(width, rows int) []ConsoleStrip {
+	step := ConsoleReadRows(width)
+	var strips []ConsoleStrip
+	for row := 0; row < rows; row += step {
+		strips = append(strips, ConsoleStrip{Row: row, Rows: min(step, rows-row)})
+	}
+	return strips
+}
