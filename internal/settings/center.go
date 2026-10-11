@@ -602,6 +602,8 @@ type settingsCenter struct {
 	offsets                 map[string]int
 	closed                  bool
 	scoped                  bool
+	// onApplied runs after Apply or OK has written every change.
+	onApplied func()
 	// driveToolSelected is the field of the tool last selected on the drive
 	// menu's Tools page, the one Up and Down move (f4#1148).
 	driveToolSelected string
@@ -1442,6 +1444,9 @@ func (c *settingsCenter) commit(closeAfter bool) {
 		if index >= len(c.sessions) {
 			c.status = Phrase("Settings applied.")
 			c.rebuildCategory()
+			if c.onApplied != nil {
+				c.onApplied()
+			}
 			if closeAfter {
 				c.Close()
 			}
