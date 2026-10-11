@@ -227,13 +227,16 @@ func TestViewModeDialogTabOrderFollowsTheButtonRowAndFitsTheFrame(t *testing.T) 
 
 	children := dlg.GetChildren()
 	var buttons []*vtui.Button
+	statusColumns := strings.ReplaceAll(i18n.Msg("Panel.Modes.EditStatusColumns"), "&", "")
 	for _, child := range children {
-		if b, ok := child.(*vtui.Button); ok {
+		// The status line's Columns... stands under its own fields, not
+		// in the row of buttons (f4#410).
+		if b, ok := child.(*vtui.Button); ok && b.GetCaption() != statusColumns {
 			buttons = append(buttons, b)
 		}
 	}
 	if len(buttons) != 4 {
-		t.Fatalf("dialog has %d buttons, want 4", len(buttons))
+		t.Fatalf("dialog has %d buttons in its row, want 4", len(buttons))
 	}
 	want := []string{i18n.Msg("vtui.Ok"), i18n.Msg("Panel.Modes.EditColumns"), i18n.Msg("Panel.Modes.Reset"), i18n.Msg("vtui.Cancel")}
 	for i, b := range buttons {
@@ -436,5 +439,56 @@ func TestEditPanelViewModeFitsItsFrame(t *testing.T) {
 	if btnY2 > dlg.Y2-2 {
 		t.Errorf("button row ends at row %d, frame bottom is %d: the buttons do not fit",
 			btnY2, dlg.Y2)
+	}
+}
+
+// f4#410 (montoner0): the status line's columns get the list editor too, from
+// a button of their own that edits the status line fields, not the panel's.
+func TestViewModeDialogEditsStatusColumnsInTheList(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	withTempPanelModesFile(t)
+	old := editModeColumns
+	t.Cleanup(func() { editModeColumns = old })
+	var gotTypes, gotWidths string
+	editModeColumns = func(types, widths string, onOk func(types, widths string)) {
+		gotTypes, gotWidths = types, widths
+		onOk("N,S", "0,8")
+	}
+
+	pf := base64TestPanel(t.TempDir(), "file.txt")
+	dlg := openViewModeEditDialog(t, pf, panelModesMenuPos(ViewModeDetailed))
+	statusColumns := strings.ReplaceAll(i18n.Msg("Panel.Modes.EditStatusColumns"), "&", "")
+	var button *vtui.Button
+	var edits []*vtui.Edit
+	for _, child := range dlg.GetChildren() {
+		switch c := child.(type) {
+		case *vtui.Button:
+			if c.GetCaption() == statusColumns {
+				button = c
+			}
+		case *vtui.Edit:
+			edits = append(edits, c)
+		}
+	}
+	if button == nil || len(edits) != 5 {
+		t.Fatalf("status columns button %v, %d edits", button != nil, len(edits))
+	}
+	statusTypes, statusWidths := edits[3], edits[4]
+	statusTypes.SetText("S,D")
+	statusWidths.SetText("6,8")
+	panelTypes := edits[1].GetText()
+	if button.Y1 <= statusWidths.Y1 || button.Y1 >= dlg.Y2 {
+		t.Errorf("button at row %d, status widths at %d, frame ends at %d", button.Y1, statusWidths.Y1, dlg.Y2)
+	}
+	button.OnClick()
+	if gotTypes != "S,D" || gotWidths != "6,8" {
+		t.Errorf("the list editor got %q / %q, want the status line's S,D / 6,8", gotTypes, gotWidths)
+	}
+	if statusTypes.GetText() != "N,S" || statusWidths.GetText() != "0,8" {
+		t.Errorf("status fields after the list = %q / %q", statusTypes.GetText(), statusWidths.GetText())
+	}
+	if edits[1].GetText() != panelTypes {
+		t.Error("the list changed the panel's column types instead of the status line's")
 	}
 }

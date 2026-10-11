@@ -186,6 +186,7 @@ Panel.Modes.FullScreen=&Full screen
 Panel.Modes.UppercaseDirs=Show folders in &uppercase
 Panel.Modes.Reset=&Reset
 Panel.Modes.EditColumns=Co&lumns...
+Panel.Modes.EditStatusColumns=S&tatus line columns...
 Panel.Modes.ColumnsTitle=Columns
 Panel.Modes.ColumnsHint=Ins add, Del remove, Ctrl+Up/Down move, F4 width
 Panel.Modes.AddColumn=Add column

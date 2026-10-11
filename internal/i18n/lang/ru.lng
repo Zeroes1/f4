@@ -186,6 +186,7 @@ Panel.Modes.FullScreen=&Полноэкранный режим
 Panel.Modes.UppercaseDirs=Показывать папки &заглавными буквами
 Panel.Modes.Reset=С&брос
 Panel.Modes.EditColumns=&Колонки...
+Panel.Modes.EditStatusColumns=Колонки строки состо&яния...
 Panel.Modes.ColumnsTitle=Колонки
 Panel.Modes.ColumnsHint=Ins добавить, Del удалить, Ctrl+Up/Down сдвиг, F4 ширина
 Panel.Modes.AddColumn=Добавить колонку
