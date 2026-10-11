@@ -346,6 +346,7 @@ Quit.Btn=&Выйсці
 Macro.AssignTitle= Прызначыць макрас
 Macro.AssignPrompt=Націсніце жаданую камбінацыю клавіш
 Macro.AssignCancel=Націсніце Esc для адмены
+Macro.AssignEmpty=Нічога не запісана: макрас націснутай клавішы будзе выдалены.
 
 Menu.Language=Мова (Language)
 Menu.HelpLanguage=Мова даведкі (Help Language)

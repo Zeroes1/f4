@@ -343,6 +343,7 @@ Quit.Btn=&Iziet
 Macro.AssignTitle= Piešķirt makrosu
 Macro.AssignPrompt=Nospiediet vēlamo taustiņu kombināciju
 Macro.AssignCancel=Nospiediet Esc, lai atceltu
+Macro.AssignEmpty=Nekas netika ierakstīts: nospiestā taustiņa makross tiks noņemts.
 
 Menu.Language=Valoda
 Menu.HelpLanguage=Palīdzības valoda
