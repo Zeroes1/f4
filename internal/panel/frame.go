@@ -6530,7 +6530,18 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				}
 			}
 		}
+		// The built-in tools can be hidden on the Tools page too; the
+		// plugins' hidden ones are already out of drives (f4#1148).
+		hiddenTools := map[string]bool{}
+		if disabled, err := LoadDisabledDriveTools(DriveToolsVisibilityFilePath()); err == nil {
+			for _, name := range disabled {
+				hiddenTools[name] = true
+			}
+		}
 		for _, r := range rows {
+			if hiddenTools[r.key] {
+				continue
+			}
 			toolRows[menu.GetItemCount()] = r.key
 			r.add()
 		}

@@ -140,7 +140,7 @@ func TestDriveToolsPageHidesAndShowsTools(t *testing.T) {
 	if err := panel.SaveDisabledDriveTools(path, []string{"Gone plugin", "Beta tool"}); err != nil {
 		t.Fatal(err)
 	}
-	p := driveToolsProvider{drives: []sysinfo.DriveEntry{{Name: "&A Alpha tool"}, {Name: "Beta tool"}, {Name: "Gamma tool"}}}
+	p := driveToolsProvider{tools: []panel.DriveToolChoice{{Key: "&A Alpha tool", Label: "A Alpha tool"}, {Key: "Beta tool", Label: "Beta tool"}, {Key: "Gamma tool", Label: "Gamma tool"}}}
 	cat := p.Catalog()
 	if len(cat.Fields) != 3 || cat.Fields[0].Label.English != "A Alpha tool" || cat.Fields[0].Category != driveToolsPage {
 		t.Fatalf("catalog fields = %+v", cat.Fields)
@@ -206,8 +206,14 @@ func TestDriveChooserWindowListsTheToolsOnItsToolsPage(t *testing.T) {
 			labels = append(labels, row.field.Label.English)
 		}
 	}
-	if fmt.Sprint(labels) != "[A Alpha tool Beta tool]" {
-		t.Errorf("tool check boxes = %v", labels)
+	// The built-in tools come first, as in the drive menu (mitek1977-coder,
+	// f4#1148); Windows Registry among them only where there is one.
+	want := "[Other panel Temporary panel A Alpha tool Beta tool]"
+	if len(labels) == 5 {
+		want = "[Other panel Temporary panel Windows Registry A Alpha tool Beta tool]"
+	}
+	if fmt.Sprint(labels) != want {
+		t.Errorf("tool check boxes = %v, want %s", labels, want)
 	}
 }
 
