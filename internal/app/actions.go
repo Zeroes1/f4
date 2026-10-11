@@ -2978,7 +2978,11 @@ func actionCreateLink(pf *panel.PanelsFrame) {
 		initialDest += sep
 	}
 
-	dlg := vtui.NewCenteredDialog(52, 11, i18n.Msg("Link.Title"))
+	// Taller than its rows need: the link type sits above the buttons, as in
+	// far2l and far3 (DkmS1953, f4#1861), and the rows under it leave its
+	// list room to open without covering them, as f4#608 asked.
+	const linkDialogWidth, linkDialogHeight = 52, 16
+	dlg := vtui.NewCenteredDialog(linkDialogWidth, linkDialogHeight, i18n.Msg("Link.Title"))
 	dlg.ShowClose = true
 
 	promptLbl := vtui.NewLabel(0, 0, prompt, nil)
@@ -3075,29 +3079,32 @@ func actionCreateLink(pf *panel.PanelsFrame) {
 	}
 	btnCancel.OnClick = func() { dlg.Close() }
 
-	dlg.AddItem(btnOk)
-	dlg.AddItem(btnCancel)
 	dlg.AddItem(lblType)
 	dlg.AddItem(comboType)
+	sepButtons := vtui.NewSeparator(0, 0, linkDialogWidth, true, true)
+	dlg.AddItem(sepButtons)
+	dlg.AddItem(btnOk)
+	dlg.AddItem(btnCancel)
 
-	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, 52-4, 11-4)
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, linkDialogWidth-4, linkDialogHeight-4)
 	vbox.Add(promptLbl, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(editDest, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	rowType := vtui.NewHBoxLayout(0, 0, 52-4, 1)
+	rowType := vtui.NewHBoxLayout(0, 0, linkDialogWidth-4, 1)
 	rowType.Add(lblType, vtui.Margins{Right: 1}, vtui.AlignLeft)
 	rowType.Add(comboType, vtui.Margins{}, vtui.AlignFill)
 
-	hbox := vtui.NewHBoxLayout(0, 0, 52-4, 1)
+	hbox := vtui.NewHBoxLayout(0, 0, linkDialogWidth-4, 1)
 	hbox.HorizontalAlign = vtui.AlignCenter
 	hbox.Spacing = 2
 	hbox.Add(btnOk, vtui.Margins{}, vtui.AlignTop)
 	hbox.Add(btnCancel, vtui.Margins{}, vtui.AlignTop)
 
-	// Keep the action row above the link-type selector. ComboBox.Open() places
-	// its popup below the field, so the popup cannot cover these buttons.
-	vbox.Add(hbox, vtui.Margins{Top: 1}, vtui.AlignFill)
+	// ComboBox.Open() drops its list under the field: three types and the
+	// frame are five rows, so the rule and the buttons start below them.
 	vbox.Add(rowType, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Add(sepButtons, vtui.Margins{Top: len(linkTypes) + 2, Left: -2, Right: -2}, vtui.AlignFill)
+	vbox.Add(hbox, vtui.Margins{}, vtui.AlignFill)
 	vbox.Apply()
 	dlg.SetFocusedItem(editDest)
 
