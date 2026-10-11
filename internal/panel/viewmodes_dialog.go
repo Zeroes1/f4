@@ -126,6 +126,7 @@ func editPanelViewMode(pf *PanelsFrame, pos int) {
 	}
 	dlg := vtui.NewCenteredDialog(width, height, " "+panelViewModeName(key)+" ")
 	dlg.ShowClose = true
+	dlg.SetHelp("PanelModes")
 
 	editName := vtui.NewEdit(0, 0, width-6, settings.Name)
 	if settings.Name == "" {

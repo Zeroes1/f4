@@ -121,6 +121,7 @@ func showModeColumnsEditor(types, widths string, onOk func(types, widths string)
 	const height = 18
 	dlg := vtui.NewCenteredDialog(width, height, " "+i18n.Msg("Panel.Modes.ColumnsTitle")+" ")
 	dlg.ShowClose = true
+	dlg.SetHelp("PanelModes")
 
 	lb := vtui.NewListBox(dlg.X1+3, dlg.Y1+2, width-6, height-7, nil)
 	hint := vtui.NewText(dlg.X1+3, dlg.Y2-4, i18n.Msg("Panel.Modes.ColumnsHint"), 0)
