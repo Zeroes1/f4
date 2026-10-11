@@ -186,9 +186,17 @@ Panel.Modes.FullScreen=&Full screen
 Panel.Modes.UppercaseDirs=Show folders in &uppercase
 Panel.Modes.Reset=&Reset
 Panel.Modes.EditColumns=Co&lumns...
+Panel.Modes.EditStatusColumns=S&tatus line columns...
 Panel.Modes.ColumnsTitle=Columns
 Panel.Modes.ColumnsHint=Ins add, Del remove, Ctrl+Up/Down move, F4 width
 Panel.Modes.AddColumn=Add column
+Panel.Modes.Modifier.NameM=selection mark before the name
+Panel.Modes.Modifier.SizeC=digit group separators
+Panel.Modes.Modifier.SizeE=no space before the unit
+Panel.Modes.Modifier.SizeF=fractional size, 1.25 K
+Panel.Modes.Modifier.SizeT=units of 1000, not 1024
+Panel.Modes.Modifier.DateB=short date
+Panel.Modes.Modifier.DateM=month as a name
 Panel.Modes.ColumnWidthPrompt=Width (0 = default, N% = share):
 Panel.Modes.BadColumnType=Unknown column type: "%s"
 Panel.Modes.BadColumnWidth=Invalid column width: "%s"

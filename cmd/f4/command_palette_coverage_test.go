@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 69
+const commandPaletteF4Surfaces = 70
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -284,6 +284,9 @@ var commandPaletteNewVMenuAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"panel.showModeColumnsEditor#1": {
 		class: paletteAuditModalLocal, rationale: "the type picker of the column list inside the panel mode dialog (Settings.PanelModes, f4#410); it only chooses which column the local list adds",
+	},
+	"panel.showModeColumnsEditor#2": {
+		class: paletteAuditModalLocal, rationale: "the modifier picker after a column type in the same list (SC, SE, DMB..., f4#410); it only chooses which variant of that column the local list adds",
 	},
 	"app.actionFoldersHistory#1": {
 		class: paletteAuditDynamicAction, rationale: "the registered folder-history action opens a runtime history list",
