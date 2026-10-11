@@ -6401,7 +6401,8 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 					continue
 				}
 				if firstBookmark {
-					menu.AddSeparator()
+					// Captioned in the rule, as Tools and Links are (f4#1148).
+					menu.AddItem(vtui.MenuItem{Separator: true, Text: strings.TrimSpace(i18n.Msg("Bookmarks.Title"))})
 					firstBookmark = false
 				}
 				bookmark := set[i]
@@ -6409,7 +6410,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				usedHotkeys[rune('0'+i)] = true
 				bookmarkRows[menu.GetItemCount()] = i
 				menu.AddItem(vtui.MenuItem{
-					Text: fmt.Sprintf("&%d  %s", i, dialog.EscapeAmpersand(dialog.TruncPathLeft(path, 64))),
+					Text: fmt.Sprintf("&%d %s", i, dialog.EscapeAmpersand(dialog.TruncPathLeft(path, 64))),
 					UserData: func(fsp *FileSystemPanel) {
 						pf.NavigateToBookmark(fsp, bookmark)
 					},
@@ -6529,7 +6530,18 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				}
 			}
 		}
+		// The built-in tools can be hidden on the Tools page too; the
+		// plugins' hidden ones are already out of drives (f4#1148).
+		hiddenTools := map[string]bool{}
+		if disabled, err := LoadDisabledDriveTools(DriveToolsVisibilityFilePath()); err == nil {
+			for _, name := range disabled {
+				hiddenTools[name] = true
+			}
+		}
 		for _, r := range rows {
+			if hiddenTools[r.key] {
+				continue
+			}
 			toolRows[menu.GetItemCount()] = r.key
 			r.add()
 		}

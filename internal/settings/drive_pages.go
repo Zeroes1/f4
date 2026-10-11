@@ -62,11 +62,17 @@ func splitDriveChooser(sessions []*settingsSession) {
 				cat.Fields[i].Category = driveOptionsPage
 			}
 		}
-		cat.Collections = append([]f4settings.Collection(nil), s.catalog.Collections...)
-		for i := range cat.Collections {
-			if cat.Collections[i].Category == "drives" {
-				cat.Collections[i].Category = driveChooserPageOf(cat.Collections[i].ID)
+		cat.Collections = nil
+		for _, col := range s.catalog.Collections {
+			// The tools have a page of their own here; their list under the
+			// drive options repeated it (mitek1977-coder, f4#1148).
+			if col.Category == "drives" && col.ID == "drive-tools" {
+				continue
 			}
+			if col.Category == "drives" {
+				col.Category = driveChooserPageOf(col.ID)
+			}
+			cat.Collections = append(cat.Collections, col)
 		}
 		cat.Commands = append([]f4settings.Command(nil), s.catalog.Commands...)
 		for i := range cat.Commands {
@@ -98,4 +104,14 @@ func showDriveChooser(sessions []*settingsSession) bool {
 	vtui.FrameManager.Push(c)
 	c.refreshSchemeChoices()
 	return true
+}
+
+// settingsFieldIndent is how far in a check box sits under the one it depends
+// on: SortToolsByHotkey only matters while ShowTools is on, and is drawn four
+// columns in under it (mitek1977-coder, f4#1148).
+func settingsFieldIndent(id string) int {
+	if id == driveMenuOptionFieldID("Drive.SortToolsByHotkey") {
+		return 4
+	}
+	return 0
 }

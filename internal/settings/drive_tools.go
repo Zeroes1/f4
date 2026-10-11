@@ -3,7 +3,6 @@ package settings
 import (
 	"context"
 	"strconv"
-	"strings"
 
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/sysinfo"
@@ -18,23 +17,28 @@ import (
 
 const driveToolFieldPrefix = "drivetool."
 
+// tools are listed in the order of the drive menu, the built-in ones
+// included (panel.DriveMenuToolChoices, f4#1148).
 type driveToolsProvider struct {
-	drives []sysinfo.DriveEntry
+	tools []panel.DriveToolChoice
 }
 
-// driveToolName is the tool as the old window of the tools named it: the name
-// without its accelerator mark.
-func driveToolName(drv sysinfo.DriveEntry) string {
-	return strings.TrimSpace(strings.ReplaceAll(drv.Name, "&", ""))
+// entries are the tools as the visibility file names them.
+func (p driveToolsProvider) entries() []sysinfo.DriveEntry {
+	entries := make([]sysinfo.DriveEntry, len(p.tools))
+	for i, t := range p.tools {
+		entries[i] = sysinfo.DriveEntry{Name: t.Key}
+	}
+	return entries
 }
 
 func (p driveToolsProvider) Catalog() f4settings.Catalog {
 	cat := f4settings.Catalog{ID: "drive-tools", Categories: driveChooserPages}
-	for i, drv := range p.drives {
+	for i, tool := range p.tools {
 		cat.Fields = append(cat.Fields, f4settings.Field{
 			ID:          driveToolField(i),
 			Category:    driveToolsPage,
-			Label:       f4settings.Text{English: driveToolName(drv), Literal: true},
+			Label:       f4settings.Text{English: tool.Label, Literal: true},
 			Description: f4settings.Text{Key: "SettingsCenter.DriveTools.Show", English: "Show this tool in the drive menu."},
 			Kind:        f4settings.Boolean,
 			Default:     "true",
@@ -55,15 +59,15 @@ func (p driveToolsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		hidden[name] = true
 	}
 	values := map[string]string{}
-	for i, drv := range p.drives {
-		values[driveToolField(i)] = boolText(!hidden[drv.Name])
+	for i, tool := range p.tools {
+		values[driveToolField(i)] = boolText(!hidden[tool.Key])
 	}
 	d := f4settings.NewDraft(values, nil)
 	d.CommitFunc = func(ctx context.Context, d *f4settings.Draft) f4settings.Result {
 		result := f4settings.Result{Errors: map[string]error{}}
 		changed := false
-		shown := make([]bool, len(p.drives))
-		for i := range p.drives {
+		shown := make([]bool, len(p.tools))
+		for i := range p.tools {
 			id := driveToolField(i)
 			shown[i] = d.Values[id] != "false"
 			if d.Dirty(id) {
@@ -79,11 +83,11 @@ func (p driveToolsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 			result.Errors[driveToolsPage] = err
 			return result
 		}
-		if err := panel.SaveDisabledDriveTools(panel.DriveToolsVisibilityFilePath(), panel.HiddenDriveToolsAfter(current, p.drives, shown)); err != nil {
+		if err := panel.SaveDisabledDriveTools(panel.DriveToolsVisibilityFilePath(), panel.HiddenDriveToolsAfter(current, p.entries(), shown)); err != nil {
 			result.Errors[driveToolsPage] = err
 			return result
 		}
-		for i := range p.drives {
+		for i := range p.tools {
 			if id := driveToolField(i); d.Dirty(id) {
 				result.Applied = append(result.Applied, id)
 			}
@@ -103,7 +107,7 @@ func boolText(v bool) string {
 // newDriveToolsSession is the session of the Tools page for the tools the
 // drive menu knows now.
 func newDriveToolsSession() (*settingsSession, error) {
-	p := driveToolsProvider{drives: sysinfo.DriveRegistrySnapshot()}
+	p := driveToolsProvider{tools: panel.DriveMenuToolChoices()}
 	d, err := p.Begin(context.Background())
 	if err != nil {
 		return nil, err
