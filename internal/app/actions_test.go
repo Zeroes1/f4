@@ -3541,6 +3541,22 @@ func TestActionCreateLink_Flow(t *testing.T) {
 	}
 
 	assertComboMenuDoesNotCoverButtons(t, dlg, "link")
+	// The link type is above the buttons, as in far2l and far3 (DkmS1953,
+	// f4#1861); the dialog is tall enough for its list to stay off them.
+	for _, child := range dlg.GetChildren() {
+		combo, ok := child.(*vtui.ComboBox)
+		if !ok {
+			continue
+		}
+		_, comboY, _, _ := combo.GetPosition()
+		for _, other := range dlg.GetChildren() {
+			if button, ok := other.(*vtui.Button); ok {
+				if _, buttonY, _, _ := button.GetPosition(); buttonY <= comboY {
+					t.Fatalf("button at row %d is not below the link type at row %d", buttonY, comboY)
+				}
+			}
+		}
+	}
 	focusDlg, ok := top.(dialogFocusContainer)
 	if !ok {
 		t.Fatal("link dialog does not expose focus traversal")

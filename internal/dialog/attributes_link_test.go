@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -120,5 +121,20 @@ func TestAttributesListHardLinkNames(t *testing.T) {
 	}
 	if got := combo.Edit.GetText(); got != v.names[0] {
 		t.Errorf("the list shows %q, want the file's own name %q", got, v.names[0])
+	}
+
+	// A name chosen from the list is selected in the field, so Ctrl+Ins
+	// copies it at once (DkmS1953, f4#1861).
+	combo.Menu.OnAction(2)
+	if got := combo.Edit.GetText(); got != v.names[2] {
+		t.Fatalf("after choosing the third name the field shows %q, want %q", got, v.names[2])
+	}
+	previous := vtui.GetClipboard()
+	t.Cleanup(func() { vtui.SetClipboard(previous) })
+	vtui.SetClipboard("")
+	combo.Edit.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
+		VirtualKeyCode: vtinput.VK_INSERT, ControlKeyState: vtinput.LeftCtrlPressed})
+	if got := vtui.GetClipboard(); got != v.names[2] {
+		t.Errorf("Ctrl+Ins right after choosing copied %q, want the chosen name %q", got, v.names[2])
 	}
 }
