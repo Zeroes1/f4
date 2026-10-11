@@ -321,6 +321,17 @@ func TestDriveToolsPageClickOnNameSelectsWithoutToggling(t *testing.T) {
 // follows.
 func TestDriveToolsPageUpDownMovesTheSelectedTool(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	// Apply writes the order file of the shared test profile: put it back,
+	// or the other tests read this test's order.
+	path := panel.DriveToolsOrderFilePath()
+	before, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr != nil {
+			_ = os.Remove(path)
+		} else {
+			_ = os.WriteFile(path, before, 0o600) // #nosec G703 -- the test's own profile file, put back.
+		}
+	})
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	old := sysinfo.DriveRegistrySnapshot()
 	t.Cleanup(func() { sysinfo.SetDrives(old) })
