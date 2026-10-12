@@ -22,6 +22,9 @@ type SudoClient struct {
 	appPath  string
 	askPass  string // Command to run for asking password
 	attempts int
+	// consented: the user agreed to elevate through UAC in this session
+	// (f4#1768); later connects go straight to UAC.
+	consented bool
 }
 
 var globalSudoClient *SudoClient
@@ -343,6 +346,11 @@ func newSudoRemoteError(msg string) error {
 
 // Open uses SudoClient to securely fetch a File Descriptor to a protected file.
 func (c *SudoClient) Open(path string, flags int, mode uint32) (*os.File, error) {
+	if connectsByUAC() {
+		// No descriptor crosses from the elevated dispatcher (f4#1768): refuse
+		// before UAC is asked for nothing. OSVFS reads and writes by requests.
+		return nil, &os.PathError{Op: "open", Path: path, Err: errors.ErrUnsupported}
+	}
 	_, f, err := c.SendRequest(SudoRequest{Cmd: CmdOpen, Path: path, Flags: flags, Mode: mode})
 	return f, err
 }

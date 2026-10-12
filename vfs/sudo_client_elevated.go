@@ -3,6 +3,7 @@ package vfs
 import (
 	"errors"
 	"fmt"
+	"github.com/unxed/vtui"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -17,6 +18,39 @@ var launchElevated = LaunchElevatedDispatcher
 // listen once UAC was asked: the user has to read and answer the prompt.
 var elevatedConnectTimeout = 2 * time.Minute
 
+// confirmElevation asks the user whether to retry an operation as
+// administrator before UAC is asked; a variable so a test can answer it.
+var confirmElevation = askElevationOnUI
+
+// ErrElevationDeclined: the user did not agree to elevate.
+var ErrElevationDeclined = errors.New("elevation declined")
+
+// askElevationOnUI shows the question on the UI goroutine and waits for the
+// answer, at most elevatedConnectTimeout; like the sudo password dialog, it
+// must not be called on the UI goroutine itself.
+func askElevationOnUI() bool {
+	if vtui.FrameManager == nil {
+		return false
+	}
+	answer := make(chan bool, 1)
+	globalSudoClient.RunOnUI(func() {
+		dlg := vtui.ShowMessageEx(vtui.Msg("Elevation.Title"), vtui.Msg("Elevation.Text"),
+			[]string{vtui.Msg("Elevation.Continue"), vtui.Msg("vtui.Cancel")}, vtui.MessageWarn)
+		dlg.OnResult = func(code int) {
+			select {
+			case answer <- code == 0:
+			default:
+			}
+		}
+	})
+	select {
+	case ok := <-answer:
+		return ok
+	case <-time.After(elevatedConnectTimeout):
+		return false
+	}
+}
+
 // connectsByUAC reports that this platform elevates through UAC and the
 // elevated dispatcher of f4#1768, not through sudo.
 func connectsByUAC() bool { return runtime.GOOS == "windows" }
@@ -24,6 +58,12 @@ func connectsByUAC() bool { return runtime.GOOS == "windows" }
 // connectElevatedLocked starts the elevated dispatcher with a fresh one-time
 // token and connects to it (f4#1768, step 4). c.mu is held.
 func (c *SudoClient) connectElevatedLocked() error {
+	if !c.consented {
+		if !confirmElevation() {
+			return ErrElevationDeclined
+		}
+		c.consented = true
+	}
 	token, err := NewSudoToken()
 	if err != nil {
 		return err
