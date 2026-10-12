@@ -686,6 +686,15 @@ func (v *OSVFS) Open(ctx context.Context, path string) (ReadAtCloser, error) {
 			if update, ok := ctx.Value(ProgressKey).(ProgressCallback); ok && update != nil {
 				update("Requesting sudo access...", -1)
 			}
+			if connectsByUAC() {
+				// No descriptor crosses to this process from the elevated
+				// dispatcher: the contents come by requests (f4#1768).
+				ef, efErr := openElevatedFile(globalSudoClient, prepareOSPath(path))
+				if efErr != nil {
+					return nil, elevatedLookupError("open", prepareOSPath(path), err, efErr)
+				}
+				return ef, nil
+			}
 			sudoF, sudoErr := sudoOpenCancellable(ctx, prepareOSPath(path))
 			if sudoErr == nil {
 				info, _ := sudoF.Stat()
@@ -777,6 +786,14 @@ func (v *OSVFS) Create(ctx context.Context, path string) (io.WriteCloser, error)
 	f, err := hostfs.OpenFile(prepared, flags, createMode)
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for Create(%q), attempting sudo...", path)
+		if connectsByUAC() {
+			// Written by requests through the elevated dispatcher (f4#1768);
+			// a device or an O_EXCL create is left to the local error.
+			if flags&os.O_TRUNC == 0 {
+				return nil, displayPathError(err)
+			}
+			return newElevatedWriter(globalSudoClient, prepared, uint32(createMode)), nil
+		}
 		sudoF, sudoErr := globalSudoClient.Open(prepared, flags, uint32(createMode))
 		return sudoF, displayPathError(sudoErr)
 	}
