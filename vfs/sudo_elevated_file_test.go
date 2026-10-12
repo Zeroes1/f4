@@ -133,3 +133,35 @@ func TestElevatedExclusiveCreateRefusesATakenName(t *testing.T) {
 		t.Fatalf("the taken file changed: %q %v", got, err)
 	}
 }
+
+// Unpacking an update or a plugin into a protected folder writes through
+// SudoClient.CreateFile; on Windows that goes by requests, and the contents
+// are there once Close returns.
+func TestElevatedCreateFileWritesByRequestsOnWindowsPath(t *testing.T) {
+	c := connectTestElevated(t)
+	oldUAC := connectsByUAC
+	t.Cleanup(func() { connectsByUAC = oldUAC })
+	connectsByUAC = func() bool { return true }
+
+	target := filepath.Join(t.TempDir(), "plugin.bin")
+	if err := os.WriteFile(target, []byte("old contents, longer"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := c.CreateFile(target, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, isFile := w.(*os.File); isFile {
+		t.Fatal("got a descriptor on the Windows path")
+	}
+	if _, err := io.Copy(w, bytes.NewReader([]byte("new"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// #nosec G304 -- the path is inside the private test temp directory.
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Fatalf("after CreateFile: %q %v", got, err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/unxed/vtui"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -52,8 +53,9 @@ func askElevationOnUI() bool {
 }
 
 // connectsByUAC reports that this platform elevates through UAC and the
-// elevated dispatcher of f4#1768, not through sudo.
-func connectsByUAC() bool { return runtime.GOOS == "windows" }
+// elevated dispatcher of f4#1768, not through sudo; a variable so a test can
+// take the Windows path on any platform.
+var connectsByUAC = func() bool { return runtime.GOOS == "windows" }
 
 // connectElevatedLocked starts the elevated dispatcher with a fresh one-time
 // token and connects to it (f4#1768, step 4). c.mu is held.
@@ -91,6 +93,21 @@ func (c *SudoClient) connectElevatedLocked() error {
 func (c *SudoClient) ReadAt(path string, offset int64, size int) (data []byte, eof bool, err error) {
 	resp, _, err := c.SendRequest(SudoRequest{Cmd: CmdReadAt, Path: path, Offset: offset, Size: size})
 	return resp.Data, resp.IsEOF, err
+}
+
+// CreateFile creates or truncates path with mode for writing as the
+// elevated side: on Windows by requests through the dispatcher (no
+// descriptor crosses), elsewhere as the descriptor sudo's dispatcher hands
+// over. What was written is only certain once Close returns nil.
+func (c *SudoClient) CreateFile(path string, mode uint32) (io.WriteCloser, error) {
+	if connectsByUAC() {
+		return newElevatedWriter(c, path, mode), nil
+	}
+	f, err := c.Open(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // CreateExclusive creates path empty with mode through the dispatcher, only
