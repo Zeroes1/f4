@@ -1954,6 +1954,8 @@ Bookmarks.SaveError=Не удалось сохранить закладки:\n%v
 Bookmarks.EditTitle= Изменить путь закладки
 Bookmarks.EditPrompt=&Путь:
 Bookmarks.PanelPluginUnavailable=Плагин панели "%s" недоступен; открыта только папка
+Bookmarks.DeleteTitle= Удалить закладку 
+Bookmarks.DeleteQuestion=Удалить закладку %d «%s»?
 
 KeyBar.F1=Справка
 KeyBar.F2=Меню
