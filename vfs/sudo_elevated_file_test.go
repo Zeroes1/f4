@@ -3,6 +3,7 @@ package vfs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -105,5 +106,62 @@ func TestElevatedFileReadsAndWritesThroughTheDispatcher(t *testing.T) {
 	}
 	if st, _ := os.Stat(path); st.Size() != int64(len(big)) {
 		t.Fatalf("big file size %d, want %d", st.Size(), len(big))
+	}
+}
+
+// The editor stages its save in a fresh sibling created with O_EXCL; through
+// the dispatcher that create must fail for a taken name and leave it alone.
+func TestElevatedExclusiveCreateRefusesATakenName(t *testing.T) {
+	c := connectTestElevated(t)
+	stage := filepath.Join(t.TempDir(), ".f4tmp-stage")
+	if err := c.CreateExclusive(stage, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w := newElevatedWriter(c, stage, 0o600)
+	w.sent = true // as OSVFS.Create leaves it after CreateExclusive
+	if _, err := w.Write([]byte("staged")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CreateExclusive(stage, 0o600); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("second exclusive create: %v, want ErrExist", err)
+	}
+	// #nosec G304 -- the path is inside the private test temp directory.
+	if got, err := os.ReadFile(stage); err != nil || string(got) != "staged" {
+		t.Fatalf("the taken file changed: %q %v", got, err)
+	}
+}
+
+// Unpacking an update or a plugin into a protected folder writes through
+// SudoClient.CreateFile; on Windows that goes by requests, and the contents
+// are there once Close returns.
+func TestElevatedCreateFileWritesByRequestsOnWindowsPath(t *testing.T) {
+	c := connectTestElevated(t)
+	oldUAC := connectsByUAC
+	t.Cleanup(func() { connectsByUAC = oldUAC })
+	connectsByUAC = func() bool { return true }
+
+	target := filepath.Join(t.TempDir(), "plugin.bin")
+	if err := os.WriteFile(target, []byte("old contents, longer"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w, err := c.CreateFile(target, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, isFile := w.(*os.File); isFile {
+		t.Fatal("got a descriptor on the Windows path")
+	}
+	if _, err := io.Copy(w, bytes.NewReader([]byte("new"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// #nosec G304 -- the path is inside the private test temp directory.
+	if got, err := os.ReadFile(target); err != nil || string(got) != "new" {
+		t.Fatalf("after CreateFile: %q %v", got, err)
 	}
 }

@@ -42,6 +42,10 @@ const (
 // write: the first chunk of a file written anew.
 const SudoWriteTruncate = 1
 
+// SudoWriteExclusive, in Flags of a CmdWriteAt, creates the file only when
+// it does not exist yet (O_EXCL): the editor's staged sibling (f4#1768).
+const SudoWriteExclusive = 2
+
 // SudoChunkLimit is the most a CmdReadAt answers or a CmdWriteAt carries,
 // well inside sudoFrameLimit once base64 has grown it by a third.
 const SudoChunkLimit = 4 << 20

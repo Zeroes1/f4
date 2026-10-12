@@ -162,6 +162,9 @@ func elevatedWriteAt(req SudoRequest) error {
 	if req.Flags&SudoWriteTruncate != 0 {
 		flags |= os.O_TRUNC
 	}
+	if req.Flags&SudoWriteExclusive != 0 {
+		flags |= os.O_EXCL
+	}
 	mode := os.FileMode(req.Mode)
 	if mode == 0 {
 		mode = 0o644
