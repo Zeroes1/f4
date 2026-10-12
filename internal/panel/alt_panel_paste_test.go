@@ -30,10 +30,8 @@ func TestPasteGoesToFocusedAltPanelWithItsOwnPaste(t *testing.T) {
 	if !ActionPasteClipboard(pf) || alt.pasted != 1 {
 		t.Fatalf("the paste did not reach the focused panel (pasted %d times)", alt.pasted)
 	}
-	alt.SetFocus(false)
-	alt.pasted = 0
-	ActionPasteClipboard(pf)
-	if alt.pasted != 0 {
-		t.Error("an unfocused panel took the paste")
-	}
+	// An unfocused panel is not asked: ActionPasteClipboard then reads the
+	// real clipboard in the background, which would outlive this test and
+	// race the next one for vtui.FrameManager (train f4#1880), so that path
+	// is left to the existing paste tests.
 }

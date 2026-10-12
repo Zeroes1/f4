@@ -72,4 +72,8 @@ type SudoResponse struct {
 	IsEOF bool
 	// Data is what a CmdReadAt read.
 	Data []byte `json:",omitempty"`
+	// Errno names the kind of the error -- "ENOENT", "EACCES", ... -- the
+	// same on every platform, while Error is the dispatcher's own text: on
+	// Windows that text is not the one the client could recognise (f4#1768).
+	Errno string `json:",omitempty"`
 }

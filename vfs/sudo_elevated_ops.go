@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 )
 
 // ElevatedFileOps answers the file operations of the elevated dispatcher
@@ -21,6 +23,7 @@ func ElevatedFileOps(req SudoRequest) SudoResponse {
 	fail := func(err error) {
 		if err != nil {
 			resp.Error = err.Error()
+			resp.Errno = sudoErrnoName(err)
 		}
 	}
 	switch req.Cmd {
@@ -83,7 +86,9 @@ func ElevatedFileOps(req SudoRequest) SudoResponse {
 		}
 		fail(err)
 	case CmdReadAt:
-		resp.Data, resp.IsEOF, resp.Error = elevatedReadAt(req)
+		var err error
+		resp.Data, resp.IsEOF, err = elevatedReadAt(req)
+		fail(err)
 	case CmdWriteAt:
 		fail(elevatedWriteAt(req))
 	default:
@@ -110,22 +115,42 @@ func elevatedItem(path string, info os.FileInfo) VFSItem {
 	return item
 }
 
-// elevatedReadAt answers a CmdReadAt; the error is the answer's Error text.
-func elevatedReadAt(req SudoRequest) ([]byte, bool, string) {
+// elevatedReadAt answers a CmdReadAt.
+func elevatedReadAt(req SudoRequest) ([]byte, bool, error) {
 	if req.Size <= 0 || req.Size > SudoChunkLimit || req.Offset < 0 {
-		return nil, false, fmt.Sprintf("read size must be 1..%d bytes at a non-negative offset", SudoChunkLimit)
+		return nil, false, fmt.Errorf("read size must be 1..%d bytes at a non-negative offset", SudoChunkLimit)
 	}
 	f, err := os.Open(req.Path)
 	if err != nil {
-		return nil, false, err.Error()
+		return nil, false, err
 	}
 	defer func() { _ = f.Close() }() // read-only: nothing to flush
 	buf := make([]byte, req.Size)
 	n, err := f.ReadAt(buf, req.Offset)
 	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, false, err.Error()
+		return nil, false, err
 	}
-	return buf[:n], n < req.Size, ""
+	return buf[:n], n < req.Size, nil
+}
+
+// sudoErrnoName names the kind of err for SudoResponse.Errno, "" when it is
+// none the client decides by.
+func sudoErrnoName(err error) string {
+	switch {
+	case errors.Is(err, ErrDestinationExists):
+		return "EEXIST_DEST"
+	case errors.Is(err, fs.ErrNotExist):
+		return "ENOENT"
+	case errors.Is(err, fs.ErrExist):
+		return "EEXIST"
+	case errors.Is(err, fs.ErrPermission):
+		return "EACCES"
+	case errors.Is(err, syscall.ENOTDIR):
+		return "ENOTDIR"
+	case errors.Is(err, syscall.ENOTEMPTY):
+		return "ENOTEMPTY"
+	}
+	return ""
 }
 
 // elevatedWriteAt does a CmdWriteAt.
