@@ -1871,6 +1871,26 @@ const defaultHighlightIni = `# User highlight rules and sort groups.
 # A comment takes a whole line. There are no trailing comments: '#' also opens
 # a color literal, so anything after a value stays part of that value.
 #
+# Sort groups put files of one kind together on a panel that has "Use sort
+# groups" switched on (Left/Right menu). There are two ways to define them, and
+# both may be used in one file:
+#
+# 1. Add "Group = N" to a coloured [Highlight_N] section: its mask and
+#    attributes then decide both the colour and the position, and sections
+#    with the same Group number form one cluster. Remember that the first
+#    matching Highlight section wins, so a Highlight section written only for
+#    sorting hides the colours of the sections below it unless it also says
+#    ContinueProcessing = 1.
+# 2. A [SortGroup_N] section is a rule that only sorts and colours nothing;
+#    the examples below are of this kind. It has the same Mask and attribute
+#    keys and does not interfere with the colours.
+#
+# Sort groups are switched on by default for new panels. To turn them off for
+# a panel, clear Left/Right menu -> "Use sort groups"; f4 remembers the choice.
+# They only take effect while at least one Group is defined in this file.
+#
+# f4 reads this file at start: restart it after editing.
+#
 # Uncomment and adapt these examples. They are commented out deliberately, so
 # they do not change the panel.
 #
@@ -1892,25 +1912,17 @@ const defaultHighlightIni = `# User highlight rules and sort groups.
 # FileNameUnderCursor = foreground:#FF00FF | background:#008080
 # FileNameSelectedUnderCursor = foreground:#FFFF00 | background:#008080
 #
-# Sort groups put files of one kind together on a panel that has "Use sort
-# groups" switched on (Left/Right menu). There are two ways to define them, and
-# both may be used in one file:
+# [Highlight_102]
+# Name = Documents (a colour and a sort group at once)
+# Mask = *.pdf, *.doc, *.docx, *.odt
+# ExcludeAttributes = Directory
+# Group = 4
+# NormalFileName = foreground:#00FFFF
 #
-# 1. Add "Group = N" to a coloured [Highlight_N] section: its mask and
-#    attributes then decide both the colour and the position, and sections
-#    with the same Group number form one cluster. Remember that the first
-#    matching Highlight section wins, so a Highlight section written only for
-#    sorting hides the colours of the sections below it unless it also says
-#    ContinueProcessing = 1.
-# 2. A [SortGroup_N] section is a rule that only sorts and colours nothing;
-#    the examples below are of this kind. It has the same Mask and attribute
-#    keys and does not interfere with the colours.
-#
-# Sort groups are switched on by default for new panels. To turn them off for
-# a panel, clear Left/Right menu -> "Use sort groups"; f4 remembers the choice.
-# They only take effect while at least one Group is defined in this file.
-#
-# f4 reads this file at start: restart it after editing.
+# [SortGroup_6]
+# Name = Sources (a sort group only, no colour)
+# Group = 5
+# Mask = *.go, *.c, *.h, *.cpp, *.py, *.pas
 
 [SortGroup_1]
 Name = Executables

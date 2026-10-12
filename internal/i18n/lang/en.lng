@@ -1954,6 +1954,8 @@ Bookmarks.SaveError=Failed to save bookmarks:\n%v
 Bookmarks.EditTitle= Edit bookmark path
 Bookmarks.EditPrompt=&Path:
 Bookmarks.PanelPluginUnavailable=Panel plugin "%s" is not available; opened the folder only
+Bookmarks.DeleteTitle= Delete bookmark 
+Bookmarks.DeleteQuestion=Delete bookmark %d "%s"?
 
 KeyBar.F1=Help
 KeyBar.F2=Menu
