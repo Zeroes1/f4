@@ -787,8 +787,18 @@ func (v *OSVFS) Create(ctx context.Context, path string) (io.WriteCloser, error)
 	if err != nil && os.IsPermission(err) && globalSudoClient.IsAvailable() {
 		vtui.DebugLog("VFS: Permission denied for Create(%q), attempting sudo...", path)
 		if connectsByUAC() {
-			// Written by requests through the elevated dispatcher (f4#1768);
-			// a device or an O_EXCL create is left to the local error.
+			// Written by requests through the elevated dispatcher (f4#1768).
+			// An O_EXCL create (the editor's staged sibling) makes the empty
+			// file there first, so a taken name fails here and not at Close;
+			// a device is left to the local error.
+			if flags&os.O_EXCL != 0 {
+				if exErr := globalSudoClient.CreateExclusive(prepared, uint32(createMode)); exErr != nil {
+					return nil, displayPathError(exErr)
+				}
+				w := newElevatedWriter(globalSudoClient, prepared, uint32(createMode))
+				w.sent = true // created empty above: nothing to truncate
+				return w, nil
+			}
 			if flags&os.O_TRUNC == 0 {
 				return nil, displayPathError(err)
 			}

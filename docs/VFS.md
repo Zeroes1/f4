@@ -86,6 +86,8 @@ messages, `confirmElevation`), and only after a yes starts the dispatcher, so
 UAC asks. The yes holds until f4 exits; a no is not remembered, like a cancelled
 sudo password. `Open` and `Create` on this path read and write through
 `elevatedFile` and `elevatedWriter` (`vfs/sudo_elevated_file.go`);
-`SudoClient.Open`, which hands out a descriptor, is refused up front. Still to
-come: the editor saving through the dispatcher, a create that must not replace
-(`O_EXCL`), and checks on Windows 10/11 and Server 2019.
+`SudoClient.Open`, which hands out a descriptor, is refused up front. A create
+that must not replace (`O_EXCL`, the editor's staged sibling when it saves)
+makes the empty file through the dispatcher first (`SudoWriteExclusive`), so a
+taken name fails at `Create` and the editor's temp-then-rename save works
+elevated. Still to come: checks on Windows 10/11 and Server 2019.

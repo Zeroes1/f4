@@ -93,6 +93,13 @@ func (c *SudoClient) ReadAt(path string, offset int64, size int) (data []byte, e
 	return resp.Data, resp.IsEOF, err
 }
 
+// CreateExclusive creates path empty with mode through the dispatcher, only
+// when nothing is there yet (CmdWriteAt with SudoWriteExclusive).
+func (c *SudoClient) CreateExclusive(path string, mode uint32) error {
+	_, _, err := c.SendRequest(SudoRequest{Cmd: CmdWriteAt, Path: path, Flags: SudoWriteExclusive, Mode: mode})
+	return err
+}
+
 // WriteAt writes data into path at offset through the dispatcher, creating
 // the file with mode when it is missing; truncate empties it first
 // (CmdWriteAt).
