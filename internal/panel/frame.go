@@ -419,6 +419,17 @@ type PanelsFrame struct {
 	lastAlt        bool
 	lastBusy       bool
 	lastShowPanels bool
+	// lastPtyW/lastPtyH remember the size last passed to SetPtySize.
+	// ResizeConsole is also the generic re-layout entry point and runs with
+	// the same w/h after menus, command start/finish (Show()'s isBusy flip),
+	// panel toggles, etc. ResizePseudoConsole with an unchanged size still
+	// makes ConPTY emit a repaint frame, which re-paints the just-echoed
+	// command line a second time next to its live copy. Guard SetPtySize on
+	// this instead of on TermView size: the PTY itself is created at a
+	// hardcoded 80x24 (newPTYWithAPI) and must still receive its first real
+	// size even when TermView is already there (the bootstrap ResizeConsole
+	// runs before the PTY exists).
+	lastPtyW, lastPtyH int
 
 	LastAutoRefresh    time.Time
 	LastKey            rune
@@ -1528,8 +1539,17 @@ func (pf *PanelsFrame) InitPTY() {
 
 	// Read on the goroutine that starts this work, not inside it: the
 	// work outlives the call, and reading the global from it races
-	// anything that reassigns vtui.FrameManager meanwhile.
+	// anything that reassigns vtui.FrameManager meanwhile. The geometry
+	// is computed here too, on the UI thread: ownTermGeometry and
+	// CellSize read UI state (ShowKeyBar, ShellMode, TermView) that the
+	// background goroutine must not touch.
 	uiFrames := vtui.FrameManager
+	topInset := uiFrames.WorkspaceTopInset()
+	screenW := uiFrames.GetScreenSize()
+	screenH := uiFrames.GetScreenHeight()
+	vw, vh := pf.ownTermGeometry(screenW, screenH, topInset)
+	cw, ch := pf.TermView.CellSize()
+	tvW, tvH := pf.TermView.Size()
 	go func() {
 		pf.PtyMutex.Lock()
 		if pf.Closed {
@@ -1548,6 +1568,23 @@ func (pf *PanelsFrame) InitPTY() {
 				pf.reportLocalPTYFailure(err)
 				return
 			}
+
+			// newPTYWithAPI creates the ConPTY at a hardcoded 80x24. Resize
+			// it to the real terminal geometry BEFORE the shell starts, so
+			// cmd.exe never writes 80x24-anchored coordinates into the
+			// already-grown grid. Otherwise the parser lays that banner/prompt
+			// out at the wrong rows (ghost copy; gravity then anchors the
+			// prompt in the middle of a tall window, #1673). Running `cls`
+			// after startup hides the bug because ED2 resets both sides.
+			//
+			// TermView is already sized by bootstrap ResizeConsole (it
+			// resizes TermView regardless of PTY existence). lastPtyW/lastPtyH
+			// are UI-thread fields and are intentionally NOT set here — the
+			// shell-start PostTask and the first ResizeConsole record the
+			// size on their own. The vw/vh/cw/ch geometry was computed on
+			// the UI thread before this goroutine started.
+			terminal.SetPtySize(p, vw, vh, cw, ch)
+			vtui.DebugLog("PTY_INIT_SIZE: ConPTY resized to %dx%d (cell %dx%d) before shell start (screen %dx%d, TermView %dx%d)", vw, vh, cw, ch, screenW, screenH, tvW, tvH)
 
 			if terminal.WindowsShellSyntax() {
 				os.Setenv("PROMPT", windowsShellPrompt)
@@ -1607,6 +1644,15 @@ func (pf *PanelsFrame) InitPTY() {
 			pf.localShellStarted(inheritedEnvironmentGeneration)
 
 			uiFrames.PostTask(func() {
+				// ResizeConsole's own lastPtyW==0 guard (see below)
+				// initializes lastPtyW from the computed w/termH. Setting
+				// it here from TermView.Size() would race: TermView is
+				// still 80x24 if this PostTask runs before the bootstrap
+				// Show()-ResizeConsole, making the guard see a spurious
+				// 80->147 change and call SetPtySize a second time with
+				// the same dimensions — ResizePseudoConsole with an
+				// unchanged size still makes ConPTY emit a repaint frame
+				// that double-paints the shell's just-written banner/prompt.
 				pf.ResizeConsole(pf.LastW, pf.LastH)
 				pf.RefreshAll()
 				uiFrames.Redraw()
@@ -1934,6 +1980,27 @@ func (pf *PanelsFrame) openMenuBarFromClick(e *vtinput.InputEvent, my int) bool 
 	return true
 }
 
+// ownTermGeometry computes the terminal area layout for ShellModeOwn the same
+// way ResizeConsole does. InitPTY uses it to pre-size the ConPTY before the
+// shell starts — TermView is still 80x24 at that point (bootstrap ResizeConsole
+// has not run yet), so reading TermView.Size() would be useless.
+func (pf *PanelsFrame) ownTermGeometry(screenW, screenH, topInset int) (termW, termH int) {
+	contentY1 := topInset
+	if pf.menuBarPinned() {
+		contentY1++
+	}
+	termY2 := screenH - 1
+	if pf.ShowKeyBar && !pf.TermView.OnAltScreen() &&
+		(pf.ShellMode == terminal.ShellModeOwn || !pf.IsPtyBusy()) {
+		termY2 = screenH - 2
+	}
+	termH = termY2 - contentY1 + 1
+	if termH < 0 {
+		termH = 0
+	}
+	return screenW, termH
+}
+
 func (pf *PanelsFrame) ResizeConsole(w, h int) {
 	oldW, oldH := pf.LastW, pf.LastH
 	pf.LastW, pf.LastH = w, h
@@ -2015,19 +2082,76 @@ func (pf *PanelsFrame) ResizeConsole(w, h int) {
 			termH = 0
 		}
 
+		// Position and resize TermView regardless of whether a PTY exists
+		// yet: bootstrap ResizeConsole runs before InitPTY creates the PTY,
+		// and the shell must not write 147x36-anchored output into an 80x24
+		// grid (#1673: ghost copy whose gravity anchors the prompt in the
+		// middle of a tall window). The size change is recorded before the
+		// resize so the erase below can key on it.
+		sizeChanged := pf.TermView.Width != w || pf.TermView.Height != termH
+		pf.TermView.SetPosition(0, contentY1, w-1, termY2)
+		pf.TermView.Resize(w, termH)
+
 		if pty := pf.localPTY(); pty != nil {
-			pf.TermView.SetPosition(0, contentY1, w-1, termY2)
-			pf.TermView.Resize(w, termH)
-			pf.PtyMutex.Lock()
-			cw, ch := pf.TermView.CellSize()
-			{
-				vtui.DebugLog("REFLOW_PTY: outer %dx%d -> child %dx%d (cell %dx%d, rows %d..%d)", w, h, w, termH, cw, ch, contentY1, termY2)
-				terminal.SetPtySize(pty, w, termH, cw, ch)
-				for _, remotePty := range pf.RemotePtys {
-					terminal.SetPtySize(remotePty, w, termH, cw, ch)
-				}
+			// ResizeConsole is also the generic "re-layout" entry point
+			// (pf.ResizeConsole(pf.LastW, pf.LastH) after menus, command
+			// start/finish via Show()'s isBusy flip, panel toggles, ...) —
+			// the same w/h every time. Resize is a no-op then, and so must
+			// the erase AND SetPtySize below be: wiping the grid when
+			// no host repaint follows makes every dir output vanish, and
+			// ResizePseudoConsole with an unchanged size still makes ConPTY
+			// emit a repaint frame that double-paints live command output.
+			//
+			// The erase is keyed on the size change computed above: it
+			// clears the pre-resize layout before the host repaint lays the
+			// content out at the new rows (#1673). When only the PTY is
+			// catching up (startup PostTask after the pre-Run resize in
+			// InitPTY), the shell already wrote at the correct coordinates —
+			// erasing would just flash an empty screen before the repaint
+			// restores it. Running `cls` after startup hides the bug because
+			// ED2 resets both sides.
+			//
+			// SetPtySize is keyed on the PTY's own last-told size
+			// (lastPtyW/lastPtyH), not on TermView's: the PTY is created at
+			// a hardcoded 80x24 (newPTYWithAPI) while the bootstrap
+			// ResizeConsole has already grown TermView to the real size.
+			ptySizeChanged := pf.lastPtyW != w || pf.lastPtyH != termH
+			// First ResizeConsole after PTY creation: InitPTY already
+			// pre-resized the ConPTY to ownTermGeometry(screen) before the
+			// shell started. Show() with panels on fires ResizeConsole via
+			// the lastShowPanels flip BEFORE the shell-start PostTask runs,
+			// so lastPtyW is still zero here. Initialize from the computed
+			// w/termH (the same geometry InitPTY used), NOT from
+			// TermView.Size() — TermView is still 80x24 at this point and
+			// would report a spurious change.
+			if pf.lastPtyW == 0 && pf.lastPtyH == 0 {
+				pf.lastPtyW, pf.lastPtyH = w, termH
+				ptySizeChanged = false
 			}
-			pf.PtyMutex.Unlock()
+			// Alternate-screen apps own their own grid; never wipe it here.
+			// Windows-only: ConPTY repaints the whole buffer after
+			// ResizePseudoConsole, so the erase is immediately followed by
+			// a host repaint that lays the content out at the new rows
+			// (#1673). On Linux/macOS bash/zsh redraw at most the prompt
+			// line on SIGWINCH — erasing there would wipe command output
+			// with nothing to restore it (e.g. Ctrl+O with
+			// AlwaysShowMenuBar changes the terminal height).
+			if sizeChanged && !pf.TermView.OnAltScreen() && runtime.GOOS == "windows" {
+				pf.TermView.EraseDisplayNoHistory(2, terminal.DefaultTermAttr)
+			}
+			if ptySizeChanged {
+				pf.lastPtyW, pf.lastPtyH = w, termH
+				pf.PtyMutex.Lock()
+				cw, ch := pf.TermView.CellSize()
+				{
+					vtui.DebugLog("REFLOW_PTY: outer %dx%d -> child %dx%d (cell %dx%d, rows %d..%d)", w, h, w, termH, cw, ch, contentY1, termY2)
+					terminal.SetPtySize(pty, w, termH, cw, ch)
+					for _, remotePty := range pf.RemotePtys {
+						terminal.SetPtySize(remotePty, w, termH, cw, ch)
+					}
+				}
+				pf.PtyMutex.Unlock()
+			}
 		}
 	}
 
