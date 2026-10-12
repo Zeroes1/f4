@@ -687,7 +687,14 @@ func parseNumber(text string) (float64, error) {
 // value does not fit, the tail is replaced with a truncation marker, the way
 // the original grid signals clipped content.
 func (s *Sheet) FitCell(col, row int) string {
-	width := s.ColumnWidth(col)
+	return s.FitCellWidth(col, row, s.ColumnWidth(col))
+}
+
+// FitCellWidth renders a cell into a field narrower than its column. The
+// frame uses it when the column separators are switched on: the separator
+// takes the last cell of the column, so the text must fit into width-1
+// instead of overwriting it.
+func (s *Sheet) FitCellWidth(col, row, width int) string {
 	cell := s.cells[Point{Col: col, Row: row}]
 	text := cell.DisplayText()
 	justify := JustifyLeft
