@@ -33,9 +33,9 @@ const (
 
 var imageViewBackAttr = vtui.SetRGBBoth(0, 0xC0C0C0, 0x101010)
 
-// imageOverlayAttr is what the info panel is written with. The background
-// only matters on backends that paint it over the picture; where the terminal
-// honours a negative z index, the picture shows through it.
+// imageOverlayAttr is what the info panel is written with. It is written
+// after the picture, so on every backend it lies on top of it, background
+// and all (vtui's painter's order, #1885).
 var imageOverlayAttr = vtui.SetRGBBoth(0, 0xFFFFFF, 0x202020)
 
 // ImageView shows a single picture Full screen.
