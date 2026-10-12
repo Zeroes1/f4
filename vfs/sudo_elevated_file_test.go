@@ -20,7 +20,7 @@ func connectTestElevated(t *testing.T) *SudoClient {
 		go func() { _ = RunElevatedDispatcher(sock, token, ElevatedFileOps) }()
 		return nil
 	}
-	c := &SudoClient{appPath: "f4.exe"}
+	c := &SudoClient{appPath: "f4.exe", consented: true}
 	c.mu.Lock()
 	err := c.connectElevatedLocked()
 	c.mu.Unlock()

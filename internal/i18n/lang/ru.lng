@@ -216,6 +216,10 @@ Panels.Prompt=>
 Edit.NewFileTitle= Создать новый файл
 Edit.NewFilePrompt=Имя &файла:
 
+Elevation.Title= Права администратора 
+Elevation.Text=Для этой операции нужны права администратора. Если согласиться, Windows один раз запросит разрешение, и f4 сохранит эти права до закрытия.
+Elevation.Continue=&Продолжить как администратор
+
 MakeFolder.Title= Создать папку
 MakeFolder.Prompt=Создать &папку:
 

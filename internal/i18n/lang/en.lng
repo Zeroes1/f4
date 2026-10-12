@@ -216,6 +216,10 @@ Panels.Prompt=>
 Edit.NewFileTitle= Create New File
 Edit.NewFilePrompt=File &name:
 
+Elevation.Title= Administrator rights 
+Elevation.Text=This operation needs administrator rights. If you agree, Windows asks for permission once, and f4 keeps these rights until it is closed.
+Elevation.Continue=&Continue as administrator
+
 MakeFolder.Title= Create Folder
 MakeFolder.Prompt=Create the &folder:
 
