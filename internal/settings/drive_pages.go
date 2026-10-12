@@ -108,7 +108,10 @@ func showDriveChooser(sessions []*settingsSession) bool {
 	c.navigate(driveOptionsPage, "", "", false)
 	c.ResizeConsole(vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight())
 	vtui.FrameManager.Push(c)
-	c.refreshSchemeChoices()
+	// No refreshSchemeChoices: the window shows only the drive pages, never
+	// the editor's colour scheme, and the background scheme listing outlived
+	// the window -- on CI (12-10-2026) it raced with the next test and wrote
+	// colorer's cache into a temp HOME being removed.
 	return true
 }
 
