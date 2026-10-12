@@ -1923,32 +1923,6 @@ const defaultHighlightIni = `# User highlight rules and sort groups.
 # Name = Sources (a sort group only, no colour)
 # Group = 5
 # Mask = *.go, *.c, *.h, *.cpp, *.py, *.pas
-
-[SortGroup_1]
-Name = Executables
-Group = 0
-IncludeAttributes = executable
-ExcludeAttributes = directory
-
-[SortGroup_2]
-Name = Executables (by name)
-Group = 0
-Mask = *.exe, *.com, *.bat, *.cmd, *.ps1, *.sh
-
-[SortGroup_3]
-Name = Archives
-Group = 1
-Mask = *.zip, *.7z, *.rar, *.tar, *.tgz, *.gz, *.bz2, *.xz, *.zst
-
-[SortGroup_4]
-Name = Images
-Group = 2
-Mask = *.png, *.jpg, *.jpeg, *.gif, *.bmp, *.webp, *.svg, *.ico, *.tif, *.tiff
-
-[SortGroup_5]
-Name = Media
-Group = 3
-Mask = *.mp3, *.flac, *.ogg, *.wav, *.mp4, *.mkv, *.avi, *.webm, *.mov
 `
 
 // CreateDefaultHighlightIni writes the stock highlight.ini.
