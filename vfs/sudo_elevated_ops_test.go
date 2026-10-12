@@ -2,6 +2,7 @@ package vfs
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -111,5 +112,30 @@ func TestElevatedFileOpsReadWriteByRequests(t *testing.T) {
 	}
 	if r := ElevatedFileOps(SudoRequest{Cmd: CmdReadAt, Path: file + ".missing", Size: 10}); r.Error == "" {
 		t.Error("reading a missing file reported no error")
+	}
+}
+
+// f4#1768: the client decides by the kind of an error the dispatcher names,
+// not by its text, which on Windows is not the Unix one.
+func TestSudoErrorKindTravelsWithTheAnswer(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdStat, Path: missing}); r.Errno != "ENOENT" {
+		t.Errorf("Stat of a missing file: Errno %q", r.Errno)
+	}
+	if r := ElevatedFileOps(SudoRequest{Cmd: CmdReadAt, Path: missing, Size: 1}); r.Errno != "ENOENT" {
+		t.Errorf("ReadAt of a missing file: Errno %q", r.Errno)
+	}
+	windowsText := "CreateFile " + missing + ": The system cannot find the file specified."
+	if err := newSudoRemoteErrorCode(windowsText, "ENOENT"); !errors.Is(err, os.ErrNotExist) || err.Error() != windowsText {
+		t.Errorf("ENOENT with a Windows text = %v", err)
+	}
+	if err := newSudoRemoteErrorCode("Access is denied.", "EACCES"); !errors.Is(err, os.ErrPermission) {
+		t.Errorf("EACCES = %v", err)
+	}
+	if err := newSudoRemoteErrorCode("whatever", "EEXIST_DEST"); !errors.Is(err, ErrDestinationExists) {
+		t.Errorf("EEXIST_DEST = %v", err)
+	}
+	if err := newSudoRemoteErrorCode("plain failure", ""); errors.Is(err, os.ErrNotExist) || err.Error() != "plain failure" {
+		t.Errorf("no code = %v", err)
 	}
 }

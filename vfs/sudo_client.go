@@ -287,7 +287,7 @@ func (c *SudoClient) SendRequest(req SudoRequest) (SudoResponse, *os.File, error
 		if f != nil {
 			_ = f.Close() // The rejected response's descriptor was never used.
 		}
-		return resp, nil, newSudoRemoteError(resp.Error)
+		return resp, nil, newSudoRemoteErrorCode(resp.Error, resp.Errno)
 	}
 
 	return resp, f, nil
@@ -310,6 +310,24 @@ type sudoRemoteError struct {
 
 func (e *sudoRemoteError) Error() string { return e.msg }
 func (e *sudoRemoteError) Unwrap() error { return e.errno }
+
+// sudoErrnoByName is SudoResponse.Errno read back.
+var sudoErrnoByName = map[string]syscall.Errno{
+	"ENOENT": syscall.ENOENT, "EEXIST": syscall.EEXIST, "EACCES": syscall.EACCES,
+	"ENOTDIR": syscall.ENOTDIR, "ENOTEMPTY": syscall.ENOTEMPTY,
+}
+
+// newSudoRemoteErrorCode is newSudoRemoteError for an answer that names its
+// kind: the name decides, whatever language or platform the text is in.
+func newSudoRemoteErrorCode(msg, code string) error {
+	if code == "EEXIST_DEST" {
+		return ErrDestinationExists
+	}
+	if errno, ok := sudoErrnoByName[code]; ok {
+		return &sudoRemoteError{msg: msg, errno: errno}
+	}
+	return newSudoRemoteError(msg)
+}
 
 func newSudoRemoteError(msg string) error {
 	if strings.HasSuffix(msg, ErrDestinationExists.Error()) {
