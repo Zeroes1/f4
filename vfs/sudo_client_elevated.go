@@ -3,7 +3,6 @@ package vfs
 import (
 	"errors"
 	"fmt"
-	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/vtui"
 	"os"
 	"path/filepath"
@@ -35,8 +34,8 @@ func askElevationOnUI() bool {
 	}
 	answer := make(chan bool, 1)
 	globalSudoClient.RunOnUI(func() {
-		dlg := vtui.ShowMessageEx(i18n.Msg("Elevation.Title"), i18n.Msg("Elevation.Text"),
-			[]string{i18n.Msg("Elevation.Continue"), vtui.Msg("vtui.Cancel")}, vtui.MessageWarn)
+		dlg := vtui.ShowMessageEx(vtui.Msg("Elevation.Title"), vtui.Msg("Elevation.Text"),
+			[]string{vtui.Msg("Elevation.Continue"), vtui.Msg("vtui.Cancel")}, vtui.MessageWarn)
 		dlg.OnResult = func(code int) {
 			select {
 			case answer <- code == 0:
