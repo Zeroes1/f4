@@ -3814,7 +3814,7 @@ func init() {
 		LabelKey:    "Action.Viewer.SearchPrevious",
 		Description: "Continue search backwards",
 		DescKey:     "Action.Viewer.SearchPrevious.Desc",
-		DefaultKeys: []string{"CtrlShiftEnter"},
+		DefaultKeys: []string{"CtrlShiftEnter", "ShiftF7"},
 		MenuPath:    "Search",
 		Handler:     withViewer(func(vv *viewer.ViewerView) { actionViewerSearchAgain(vv, true) }),
 	})
