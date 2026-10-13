@@ -73,11 +73,20 @@ func splitDriveChooser(sessions []*settingsSession) {
 			}
 			cat.Categories = append(cat.Categories, c)
 		}
-		cat.Fields = append([]f4settings.Field(nil), s.catalog.Fields...)
-		for i := range cat.Fields {
-			if cat.Fields[i].Category == "drives" {
-				cat.Fields[i].Category = driveOptionsPage
+		cat.Fields = nil
+		for _, f := range s.catalog.Fields {
+			if f.Category == "drives" {
+				if driveChooserLeavesOut(f.ID) {
+					continue
+				}
+				f.Category = driveOptionsPage
+				// "Takes effect: next drive menu" is no news under the menu
+				// itself, which Apply redraws (mitek1977-coder, f4#1148).
+				if strings.HasPrefix(f.ID, "DriveMenuOptions.") {
+					f.Timing = ""
+				}
 			}
+			cat.Fields = append(cat.Fields, f)
 		}
 		cat.Collections = nil
 		for _, col := range s.catalog.Collections {
@@ -99,6 +108,19 @@ func splitDriveChooser(sessions []*settingsSession) {
 		}
 		s.catalog = cat
 	}
+}
+
+// driveChooserLeavesOut is true for the drive menu options the F9 window does
+// not show (mitek1977-coder, f4#1148): the Tools page already says which tools
+// the menu shows and in what order, and the Bookmarks and Links pages have the
+// bookmarks. They stay in the main Settings window.
+func driveChooserLeavesOut(id string) bool {
+	for _, label := range []string{"Drive.ShowTools", "Drive.SortToolsByHotkey", "Drive.ShowBookmarks"} {
+		if id == driveMenuOptionFieldID(label) {
+			return true
+		}
+	}
+	return false
 }
 
 func showDriveChooser(sessions []*settingsSession) bool {

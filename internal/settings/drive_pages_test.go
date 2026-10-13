@@ -219,11 +219,11 @@ func TestDriveChooserWindowListsTheToolsOnItsToolsPage(t *testing.T) {
 	}
 }
 
-// f4#1148 (mitek1977-coder): on Drive options the two tool options are named
-// ShowTools and SortToolsByHotkey, the second set in four columns under the
-// first, and the tools are not listed again under them: they have a page of
-// their own in this window.
-func TestDriveOptionsPageNamesIndentAndNoToolsList(t *testing.T) {
+// f4#1148 (mitek1977-coder): Drive options names its check boxes in words
+// (12.10 list, point 5), leaves out the tool and bookmark options, which the
+// Tools, Bookmarks and Links pages already cover, says nothing about when an
+// option takes effect, and does not list the tools again.
+func TestDriveOptionsPageNamesAndNoToolsList(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	if !OpenCategoryOnly("drives") {
@@ -237,22 +237,23 @@ func TestDriveOptionsPageNamesIndentAndNoToolsList(t *testing.T) {
 	c.SetPosition(0, 0, 129, 44)
 	c.selectCategory(driveOptionsPage)
 
-	x := map[string]int{}
+	var names []string
 	for _, row := range c.page.rows {
 		if row.control != nil && row.control.GetId() == "collection:drive-tools" {
 			t.Error("the tools are listed again on the Drive options page")
 		}
-		if b, ok := row.control.(*settingsCheckbox); ok {
-			x[strings.TrimSpace(b.lines[0])] = row.controlX
+		if row.field.Timing != "" && strings.HasPrefix(row.field.ID, "DriveMenuOptions.") {
+			t.Errorf("%s still says it takes effect %q", row.field.ID, row.field.Timing)
+		}
+		if b, ok := row.control.(*settingsCheckbox); ok && strings.HasPrefix(row.field.ID, "DriveMenuOptions.") {
+			names = append(names, strings.TrimSpace(b.lines[0]))
 		}
 	}
-	show, okShow := x["ShowTools"]
-	sort, okSort := x["SortToolsByHotkey"]
-	if !okShow || !okSort {
-		t.Fatalf("no ShowTools / SortToolsByHotkey check boxes among %v", x)
-	}
-	if sort != show+4 {
-		t.Errorf("SortToolsByHotkey at column %d, ShowTools at %d: want four columns in", sort, show)
+	want := "[Show disk type Show disk label Use shell name Show file system type Show size Show size float " +
+		"Show network path Show removable drive parameters Show CD drive parameters Show remote drive parameters " +
+		"Detect virtual drives]"
+	if fmt.Sprint(names) != want {
+		t.Errorf("check boxes = %v\nwant %s", names, want)
 	}
 }
 
