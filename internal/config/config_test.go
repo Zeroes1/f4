@@ -488,6 +488,9 @@ func TestCreateDefaultHighlightIniDocumentsColorOptions(t *testing.T) {
 	if !strings.Contains(content, "# [SortGroup_") {
 		t.Error("generated highlight.ini has no dedicated sort-group example")
 	}
+	if !strings.HasSuffix(strings.TrimSuffix(content, "\n"), "#") {
+		t.Error("generated highlight.ini must end its comments with a standalone # separator")
+	}
 	if first, desc := strings.Index(content, "# [Highlight_"), strings.Index(content, "Sort groups put files of one kind together"); first < desc {
 		t.Errorf("the first example (at %d) is above the description of the sort groups (at %d)", first, desc)
 	}
