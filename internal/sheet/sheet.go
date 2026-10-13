@@ -28,6 +28,9 @@ type Sheet struct {
 	// AutoRecalc re-evaluates formulas after every edit. Turning it off is
 	// useful while loading or importing many cells at once.
 	AutoRecalc bool
+	// CSVSeparator is the field delimiter used by ExportCSV/ImportCSV.
+	// Default is ',' (comma). Can be changed to '\t' (tab), ';' (semicolon), etc.
+	CSVSeparator rune
 
 	lastError   Point
 	hasError    bool
@@ -44,11 +47,12 @@ type snapshot struct {
 // New returns an empty sheet with default column widths.
 func New() *Sheet {
 	return &Sheet{
-		cells:       make(map[Point]*Cell),
-		widths:      make(map[int]int),
-		AutoRecalc:  true,
-		undoEnabled: true,
-		lastError:   Point{Col: -1, Row: -1},
+		cells:        make(map[Point]*Cell),
+		widths:       make(map[int]int),
+		AutoRecalc:   true,
+		undoEnabled:  true,
+		lastError:    Point{Col: -1, Row: -1},
+		CSVSeparator: ',',
 	}
 }
 
@@ -744,9 +748,11 @@ func (s *Sheet) ExportText(w io.Writer) error {
 }
 
 // ExportCSV writes the displayed values, one record per row.
+// The field delimiter is taken from s.CSVSeparator (default ',').
 func (s *Sheet) ExportCSV(w io.Writer) error {
 	maxCol, maxRow := s.Bounds()
 	writer := csv.NewWriter(w)
+	writer.Comma = s.CSVSeparator
 	for row := 0; row <= maxRow; row++ {
 		record := make([]string, maxCol+1)
 		for col := 0; col <= maxCol; col++ {
@@ -761,8 +767,10 @@ func (s *Sheet) ExportCSV(w io.Writer) error {
 }
 
 // ImportCSV replaces the sheet content with the records of a CSV stream.
+// The field delimiter is taken from s.CSVSeparator (default ',').
 func (s *Sheet) ImportCSV(r io.Reader) error {
 	reader := csv.NewReader(r)
+	reader.Comma = s.CSVSeparator
 	reader.FieldsPerRecord = -1
 	reader.LazyQuotes = true
 	records, err := reader.ReadAll()
