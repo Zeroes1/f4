@@ -3564,7 +3564,7 @@ func TestActionCreateLink_Flow(t *testing.T) {
 			}
 		}
 	}
-	dlg.Show(screen)
+	top.Show(screen)
 	var screenDump bytes.Buffer
 	screen.Dump(&screenDump)
 	for _, option := range linkTypeGroup.Items {
