@@ -2727,6 +2727,7 @@ Sheet.MenuGotoError=Go to last error
 Sheet.MenuCellFormat=Cell format
 Sheet.MenuColumnWidth=Column width...
 Sheet.MenuSeparators=Toggle column separators
+Sheet.MenuCSVSeparator=CSV separator...
 Sheet.MenuInsertRow=Insert row
 Sheet.MenuInsertColumn=Insert column
 Sheet.MenuDeleteRow=Delete row

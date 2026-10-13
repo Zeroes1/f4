@@ -2727,6 +2727,7 @@ Sheet.MenuGotoError=Перейти к последней ошибке
 Sheet.MenuCellFormat=Формат ячейки
 Sheet.MenuColumnWidth=Ширина колонки...
 Sheet.MenuSeparators=Разделители колонок
+Sheet.MenuCSVSeparator=Разделитель CSV...
 Sheet.MenuInsertRow=Вставить строку
 Sheet.MenuInsertColumn=Вставить колонку
 Sheet.MenuDeleteRow=Удалить строку

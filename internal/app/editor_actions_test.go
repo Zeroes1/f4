@@ -211,8 +211,6 @@ func TestHotkeyDelAliasesResolve(t *testing.T) {
 	cases := []struct{ area, key, want string }{
 		{"Editor", "ShiftDel", "Editor.Cut"},
 		{"Editor", "ShiftNumDel", "Editor.Cut"},
-		{"Editor", "CtrlDel", "Editor.DeleteSpacersForward"},
-		{"Editor", "CtrlNumDel", "Editor.DeleteSpacersForward"},
 	}
 	for _, c := range cases {
 		if got := hm.GetAction(c.area, c.key); got != c.want {
@@ -224,6 +222,11 @@ func TestHotkeyDelAliasesResolve(t *testing.T) {
 	hm.Bind("Editor", "ShiftNumDel", "Editor.Copy")
 	if got := hm.GetAction("Editor", "ShiftNumDel"); got != "Editor.Copy" {
 		t.Errorf("explicit binding overridden by alias: got %q", got)
+	}
+	for _, key := range []string{"CtrlDel", "CtrlNumDel"} {
+		if got := hm.GetAction("Editor", key); got != "" {
+			t.Errorf("GetAction(%q, %q) = %q, want no action so the editor handles Ctrl+Del", "Editor", key, got)
+		}
 	}
 }
 

@@ -3634,7 +3634,7 @@ func init() {
 		LabelKey:    "Action.Editor.DeleteSpacersForward",
 		Description: "Delete spaces and word forward",
 		DescKey:     "Action.Editor.DeleteSpacersForward.Desc",
-		DefaultKeys: []string{"CtrlT", "CtrlDel"},
+		DefaultKeys: []string{"CtrlT"},
 		MenuPath:    "Insert",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteSpacersForward() }),
 	})
