@@ -28,6 +28,20 @@ var driveChooserPages = []f4settings.Category{
 	{ID: driveLinksPage, Label: f4settings.Text{Key: "SettingsCenter.DriveTab.Links", English: "Links"}},
 }
 
+// lastDriveChooserPage is the page the drive menu's F9 window was closed on;
+// the next F9 opens it again (mitek1977-coder, f4#1148). Empty until the
+// window has been closed once.
+var lastDriveChooserPage string
+
+func isDriveChooserPage(id string) bool {
+	for _, page := range driveChooserPages {
+		if page.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func driveChooserPageIDs() []string {
 	ids := make([]string, len(driveChooserPages))
 	for i, page := range driveChooserPages {
@@ -105,7 +119,11 @@ func showDriveChooser(sessions []*settingsSession) bool {
 	// Opened by F9 in the drive menu: the menu under the window shows
 	// what Apply wrote without the window closing (f4#1148).
 	c.onApplied = func() { panel.RefreshDriveMenuBelow(c) }
-	c.navigate(driveOptionsPage, "", "", false)
+	page := driveOptionsPage
+	if isDriveChooserPage(lastDriveChooserPage) {
+		page = lastDriveChooserPage
+	}
+	c.navigate(page, "", "", false)
 	c.ResizeConsole(vtui.FrameManager.GetScreenSize(), vtui.FrameManager.GetScreenHeight())
 	vtui.FrameManager.Push(c)
 	// No refreshSchemeChoices: the window shows only the drive pages, never

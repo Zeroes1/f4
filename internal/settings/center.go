@@ -712,6 +712,8 @@ func newSettingsCenter(sessions []*settingsSession) *settingsCenter {
 			c.closed = true
 			if !c.fullLists {
 				lastSettingsCategory = c.category
+			} else if isDriveChooserPage(c.category) {
+				lastDriveChooserPage = c.category
 			}
 			c.offsets[c.category] = c.page.scroll
 			lastSettingsOffsets = map[string]int{}

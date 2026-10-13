@@ -427,3 +427,41 @@ func TestDriveToolsPageUpDownMovesTheSelectedTool(t *testing.T) {
 		t.Errorf("drive menu tools = %v, want Beta tool before Alpha tool", menu)
 	}
 }
+
+// f4#1148 (mitek1977-coder): F9 in the drive menu opens the window on the
+// page it was closed on last time, not always on Drive options.
+func TestDriveChooserWindowReopensOnTheLastPage(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	old := lastDriveChooserPage
+	t.Cleanup(func() { lastDriveChooserPage = old })
+	lastDriveChooserPage = ""
+
+	open := func() *settingsCenter {
+		t.Helper()
+		if !OpenCategoryOnly("drives") {
+			t.Fatal("the window did not open")
+		}
+		c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+		if !ok {
+			t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+		}
+		return c
+	}
+	c := open()
+	if c.category != driveOptionsPage {
+		t.Fatalf("first open: page = %q, want %q", c.category, driveOptionsPage)
+	}
+	c.selectCategory(driveBookmarksPage)
+	c.OnResult(-1)
+	vtui.FrameManager.Pop()
+
+	c = open()
+	defer vtui.FrameManager.Pop()
+	if c.category != driveBookmarksPage {
+		t.Fatalf("reopened: page = %q, want %q", c.category, driveBookmarksPage)
+	}
+	if lastSettingsCategory == driveBookmarksPage {
+		t.Errorf("the main Settings window would open on %q too", driveBookmarksPage)
+	}
+}
