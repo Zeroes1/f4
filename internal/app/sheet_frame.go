@@ -653,7 +653,7 @@ func sheetOpen(sf *SheetFrame, path string) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".xlsx":
 		loaded, err = sheet.LoadXLSX(path)
-	case ".csv":
+	case ".csv", ".tsv", ".tab":
 		loaded, err = loadSheetCSV(path)
 	default:
 		loaded, err = sheet.Load(context.Background(), path)
