@@ -83,9 +83,10 @@ func driveBookmarkDialogWidth(screenWidth int) int {
 }
 
 func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFinish func(bool, DriveBookmark)) *driveBookmarkEditDialog {
-	// Six rows of fields, the rule and the buttons, with no blank rows
-	// between them (mitek1977-coder, f4#1148).
-	const height = 12
+	// Six rows of fields, the rule and the buttons; the only blank row is the
+	// one between the path and the hot key, none under the top border or
+	// above the bottom one (mitek1977-coder, f4#1148).
+	const height = 11
 	screenW := 0
 	if vtui.FrameManager != nil {
 		screenW = vtui.FrameManager.GetScreenSize()
@@ -132,7 +133,7 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	dialog.AddItem(createButton)
 	dialog.AddItem(cancelButton)
 
-	vbox := vtui.NewVBoxLayout(dialog.X1+2, dialog.Y1+2, width-4, height-4)
+	vbox := vtui.NewVBoxLayout(dialog.X1+2, dialog.Y1+1, width-4, height-2)
 	vbox.Add(nameLabel, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(dialog.nameEdit, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(pathLabel, vtui.Margins{}, vtui.AlignLeft)
@@ -140,7 +141,7 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	hotkeyRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	hotkeyRow.Add(hotkeyLabel, vtui.Margins{Right: 1}, vtui.AlignLeft)
 	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{}, vtui.AlignLeft)
-	vbox.Add(hotkeyRow, vtui.Margins{}, vtui.AlignFill)
+	vbox.Add(hotkeyRow, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Add(hotkeyHint, vtui.Margins{}, vtui.AlignLeft)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter

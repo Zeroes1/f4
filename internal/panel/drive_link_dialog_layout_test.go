@@ -7,8 +7,10 @@ import (
 )
 
 // f4#1148 (mitek1977-coder): the Ins/F4 dialog of the drive menu's Links has
-// no blank rows between its fields, and its buttons sit right under a rule.
-func TestDriveLinkDialogHasNoBlankRows(t *testing.T) {
+// Name: right under the top border, one blank row between the path and the
+// hot key and none elsewhere, and its buttons right under a rule and right
+// above the bottom border (12.10 list, point 7).
+func TestDriveLinkDialogRows(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	d := NewDriveBookmarkEditDialog(DriveBookmark{}, "/tmp", nil)
 	var sep *vtui.Separator
@@ -32,8 +34,11 @@ func TestDriveLinkDialogHasNoBlankRows(t *testing.T) {
 	if pathY != nameY+2 {
 		t.Errorf("Path field at row %d, Name field at %d: want only the Path label between them", pathY, nameY)
 	}
-	if hotkeyY != pathY+1 {
-		t.Errorf("Hot key at row %d, Path field at %d: want no blank row", hotkeyY, pathY)
+	if nameY != d.Y1+2 {
+		t.Errorf("Name field at row %d, top border at %d: want only the Name label between them", nameY, d.Y1)
+	}
+	if hotkeyY != pathY+2 {
+		t.Errorf("Hot key at row %d, Path field at %d: want one blank row between", hotkeyY, pathY)
 	}
 	if sepY != hotkeyY+2 {
 		t.Errorf("rule at row %d, Hot key at %d: want only the hint between them", sepY, hotkeyY)
@@ -41,7 +46,7 @@ func TestDriveLinkDialogHasNoBlankRows(t *testing.T) {
 	if buttonY != sepY+1 {
 		t.Errorf("buttons at row %d, rule at %d: want them right under it", buttonY, sepY)
 	}
-	if buttonY >= d.Y2 {
-		t.Errorf("buttons at row %d are not inside the frame ending at %d", buttonY, d.Y2)
+	if buttonY != d.Y2-1 {
+		t.Errorf("buttons at row %d, bottom border at %d: want them right above it", buttonY, d.Y2)
 	}
 }
