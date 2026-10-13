@@ -893,6 +893,7 @@ SettingsCenter.DriveTab.Bookmarks=סימניות
 SettingsCenter.DriveTab.Links=קישורים
 SettingsCenter.DriveTools.Show=הצג כלי זה בתפריט הכוננים.
 SettingsCenter.DriveTools.Move=הזז את הכלי הנבחר למעלה או למטה בתפריט הכוננים.
+SettingsCenter.DriveTools.Hotkey=מקש הקיצור של הכלי הנבחר בתפריט הכוננים: אות או ספרה; ריק – ללא. F4 על הכלי בתפריט קובע את אותו מקש.
 SettingsCenter.Category.editor=עורך ומציג
 SettingsCenter.Category.history=היסטוריה
 SettingsCenter.Category.keyboard=מקלדת וקיצורי מקשים

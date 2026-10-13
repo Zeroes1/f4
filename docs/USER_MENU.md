@@ -21,6 +21,19 @@ interpreter, and removes the file afterward.
 Items without a shebang retain the existing FarMenu-compatible behavior: each
 non-comment command line is sent to the command window in sequence.
 
+For example, to save a listing of the passive panel in a hidden file in that
+same directory, create an F2 item with the label `Save passive-panel listing`
+and this command:
+
+```text
+#!/usr/bin/env bash
+ls -la !#!/ > !#!/.dir.txt
+```
+
+`!#` switches subsequent substitutions to the passive panel, and `!/` expands
+to that panel's directory. The label is separate from the command, so it can
+describe the action without exposing the substitution syntax in the menu.
+
 The in-place item editor (F4 in the user menu) places the hotkey and item
 label below their captions. The command field shows six lines, with a
 separator above the command section and another above the Save/Cancel buttons.

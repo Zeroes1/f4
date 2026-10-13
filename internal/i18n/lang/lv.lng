@@ -893,6 +893,7 @@ SettingsCenter.DriveTab.Bookmarks=Grāmatzīmes
 SettingsCenter.DriveTab.Links=Saites
 SettingsCenter.DriveTools.Show=Rādīt šo rīku disku izvēlnē.
 SettingsCenter.DriveTools.Move=Pārvietot izvēlēto rīku disku izvēlnē uz augšu vai uz leju.
+SettingsCenter.DriveTools.Hotkey=Izvēlētā rīka karstais taustiņš disku izvēlnē: burts vai cipars; tukšs — nav. F4 uz rīka izvēlnē iestata to pašu taustiņu.
 SettingsCenter.Category.editor=Redaktors un skatītājs
 SettingsCenter.Category.history=Vēsture
 SettingsCenter.Category.keyboard=Tastatūra un īsinājumtaustiņi

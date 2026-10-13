@@ -2761,6 +2761,7 @@ SettingsCenter.DriveTab.Bookmarks=Закладки
 SettingsCenter.DriveTab.Links=Ссылки
 SettingsCenter.DriveTools.Show=Показывать этот инструмент в меню дисков.
 SettingsCenter.DriveTools.Move=Переместить выбранный инструмент выше или ниже в меню дисков.
+SettingsCenter.DriveTools.Hotkey=Горячая клавиша выбранного инструмента в меню дисков: буква или цифра; пусто — без клавиши. F4 на инструменте в меню задаёт ту же клавишу.
 SettingsCenter.Category.editor=Редактор и просмотр
 SettingsCenter.Category.history=История
 SettingsCenter.Category.keyboard=Клавиатура и сочетания

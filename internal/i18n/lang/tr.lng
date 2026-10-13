@@ -893,6 +893,7 @@ SettingsCenter.DriveTab.Bookmarks=Yer imleri
 SettingsCenter.DriveTab.Links=Bağlantılar
 SettingsCenter.DriveTools.Show=Bu aracı sürücü menüsünde göster.
 SettingsCenter.DriveTools.Move=Seçili aracı sürücü menüsünde yukarı veya aşağı taşı.
+SettingsCenter.DriveTools.Hotkey=Sürücü menüsünde seçili aracın kısayol tuşu: bir harf ya da rakam; yoksa boş. Menüde araç üzerinde F4 aynı tuşu atar.
 SettingsCenter.Category.editor=Düzenleyici ve görüntüleyici
 SettingsCenter.Category.history=Geçmiş
 SettingsCenter.Category.keyboard=Klavye ve kısayollar

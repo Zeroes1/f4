@@ -10,6 +10,7 @@ import (
 	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/sdk/f4settings"
@@ -29,12 +30,14 @@ type settingsRow struct {
 	controlX, controlY int
 	controlWidth       int
 	gap                int
-	read               func() string
-	write              func(string)
-	traceRecord        string // record ID for diagnostics when the row edits a collection record
-	values             func() map[string]string
-	matchFunc          func() bool
-	unavailableReason  string
+	// padTop is the number of blank lines above the row.
+	padTop            int
+	read              func() string
+	write             func(string)
+	traceRecord       string // record ID for diagnostics when the row edits a collection record
+	values            func() map[string]string
+	matchFunc         func() bool
+	unavailableReason string
 }
 
 // Keep the familiar checkbox label on the control, wrapping only when needed.
@@ -182,6 +185,14 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			if r.field.Label.Resolve(config.App.Language, i18n.Msg) == box.title {
 				r.label = nil
 			}
+		case *panel.HotkeyEdit:
+			// "Hot key:" and the one-character field one column after it
+			// on the same line (mitek1977-coder, f4#1148).
+			label := r.field.Label.Resolve(config.App.Language, i18n.Msg)
+			r.label = []string{label}
+			r.controlX = vtui.StringWidth(label) + 1
+			r.controlWidth = 1
+			r.gap = 0
 		case *settingsEdit:
 			width := r.field.InputWidth
 			if width == 0 && r.field.Kind == f4settings.Integer {
@@ -205,6 +216,7 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			r.controlHeight = len(b.lines)
 			r.gap = 0
 		}
+		v.total += r.padTop
 		r.y = v.total
 		r.controlY = len(r.label)
 		if r.controlX > 0 {
@@ -605,8 +617,10 @@ type settingsCenter struct {
 	// onApplied runs after Apply or OK has written every change.
 	onApplied func()
 	// driveToolSelected is the field of the tool last selected on the drive
-	// menu's Tools page, the one Up and Down move (f4#1148).
+	// menu's Tools page, the one Up and Down move and whose hot key the
+	// "Hot key:" field shows (f4#1148).
 	driveToolSelected string
+	driveToolHotkey   *panel.HotkeyEdit
 	// fullLists shows the record lists of a page in full, not in five rows.
 	fullLists bool
 	// fieldPrefix and fieldTitle narrow a scoped window further, to the fields
@@ -1356,7 +1370,10 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		b.OnChange = func(n int) { change(strconv.FormatBool(n == 1)) }
 		if b.boxOnly {
 			id := f.ID
-			b.onFocused = func() { c.driveToolSelected = id }
+			b.onFocused = func() {
+				c.driveToolSelected = id
+				c.showDriveToolHotkey()
+			}
 		}
 		control = b
 	case f4settings.ChoiceKind:

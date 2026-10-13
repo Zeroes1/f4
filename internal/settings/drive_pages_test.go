@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/sysinfo"
 	"github.com/unxed/f4/internal/testutil"
@@ -464,5 +465,95 @@ func TestDriveChooserWindowReopensOnTheLastPage(t *testing.T) {
 	}
 	if lastSettingsCategory == driveBookmarksPage {
 		t.Errorf("the main Settings window would open on %q too", driveBookmarksPage)
+	}
+}
+
+// f4#1148 (mitek1977-coder, 12.10 list, second point 5): on the Tools page
+// Up and Down stand one blank line under the tools, and one more blank line
+// down is "Hot key:" with a one-character field one column after it. The
+// field shows the selected tool's hot key; Apply binds what it holds, as F4
+// on the tool in the drive menu does.
+func TestDriveToolsPageHotKeyField(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	old := sysinfo.DriveRegistrySnapshot()
+	t.Cleanup(func() { sysinfo.SetDrives(old) })
+	sysinfo.SetDrives([]sysinfo.DriveEntry{{Name: "Alpha tool"}, {Name: "Beta tool"}})
+	oldHotkeys := keymap.GlobalHotkeysMgr
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = oldHotkeys })
+	alpha, beta := panel.DriveToolActionName("Alpha tool"), panel.DriveToolActionName("Beta tool")
+	hm := &keymap.HotkeyManager{Bindings: map[string]map[string]string{"Shell": {"A": beta}}}
+	keymap.GlobalHotkeysMgr = hm
+
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 129, 34)
+	c.selectCategory(driveToolsPage)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 35)
+	c.Show(scr)
+
+	var lastTool, bar, hotkeyRow *settingsRow
+	boxes := map[string]*settingsCheckbox{}
+	for _, row := range c.page.rows {
+		switch control := row.control.(type) {
+		case *settingsCheckbox:
+			if control.boxOnly {
+				lastTool = row
+				boxes[row.field.Label.English] = control
+			}
+		case *settingsButtonRow:
+			bar = row
+		case *panel.HotkeyEdit:
+			hotkeyRow = row
+		}
+	}
+	if lastTool == nil || bar == nil || hotkeyRow == nil {
+		t.Fatalf("tools %v, Up/Down %v, Hot key %v: want all three on the page", lastTool != nil, bar != nil, hotkeyRow != nil)
+	}
+	if bar.y != lastTool.y+lastTool.height+1 {
+		t.Errorf("Up/Down at line %d, last tool at %d: want one blank line between", bar.y, lastTool.y)
+	}
+	if hotkeyRow.y != bar.y+bar.height+1 {
+		t.Errorf("Hot key: at line %d, Up/Down at %d: want one blank line between", hotkeyRow.y, bar.y)
+	}
+	field := hotkeyRow.control.(*panel.HotkeyEdit)
+	if want := c.page.X1 + 2 + vtui.StringWidth("Hot key:") + 1; field.X1 != want || field.X2 != want {
+		t.Errorf("hot key field at columns %d..%d, want one cell at %d", field.X1, field.X2, want)
+	}
+	if field.Y1 != c.page.Y1+hotkeyRow.y-c.page.scroll {
+		t.Errorf("hot key field on line %d, want the line of its label", field.Y1)
+	}
+
+	key := func(e vtui.UIElement, vk uint16, ch rune) {
+		e.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, Char: ch})
+	}
+	boxes["Beta tool"].SetFocus(true)
+	if got := field.GetText(); got != "A" {
+		t.Errorf("Beta tool selected: field = %q, want A", got)
+	}
+	boxes["Alpha tool"].SetFocus(true)
+	if got := field.GetText(); got != "" {
+		t.Errorf("Alpha tool selected: field = %q, want empty", got)
+	}
+	key(field, 'B', 'b')
+	boxes["Beta tool"].SetFocus(true)
+	key(field, vtinput.VK_DELETE, 0)
+	if area, k := keymap.ConfiguredHotkeyBinding(hm, alpha); k != "" {
+		t.Fatalf("before Apply Alpha tool already has %s:%s", area, k)
+	}
+
+	c.commit(false)
+	if _, k := keymap.ConfiguredHotkeyBinding(hm, alpha); k != "B" {
+		t.Errorf("after Apply Alpha tool's hot key = %q, want B", k)
+	}
+	if _, k := keymap.ConfiguredHotkeyBinding(hm, beta); k != "" {
+		t.Errorf("after Apply Beta tool's hot key = %q, want none", k)
 	}
 }

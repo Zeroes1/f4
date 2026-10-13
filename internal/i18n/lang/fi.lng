@@ -893,6 +893,7 @@ SettingsCenter.DriveTab.Bookmarks=Kirjanmerkit
 SettingsCenter.DriveTab.Links=Linkit
 SettingsCenter.DriveTools.Show=Näytä tämä työkalu asemavalikossa.
 SettingsCenter.DriveTools.Move=Siirrä valittua työkalua asemavalikossa ylös tai alas.
+SettingsCenter.DriveTools.Hotkey=Valitun työkalun pikanäppäin asemavalikossa: kirjain tai numero; tyhjä tarkoittaa ei mitään. F4 työkalun kohdalla valikossa asettaa saman näppäimen.
 SettingsCenter.Category.editor=Editori ja katselin
 SettingsCenter.Category.history=Historia
 SettingsCenter.Category.keyboard=Näppäimistö ja pikanäppäimet

@@ -896,6 +896,7 @@ SettingsCenter.DriveTab.Bookmarks=Zakładki
 SettingsCenter.DriveTab.Links=Łącza
 SettingsCenter.DriveTools.Show=Pokaż to narzędzie w menu dysków.
 SettingsCenter.DriveTools.Move=Przesuń wybrane narzędzie w górę lub w dół w menu dysków.
+SettingsCenter.DriveTools.Hotkey=Skrót klawiszowy wybranego narzędzia w menu dysków: litera lub cyfra; puste oznacza brak. F4 na narzędziu w menu ustawia ten sam klawisz.
 SettingsCenter.Category.editor=Edytor i przeglądarka
 SettingsCenter.Category.history=Historia
 SettingsCenter.Category.keyboard=Klawiatura i skróty
