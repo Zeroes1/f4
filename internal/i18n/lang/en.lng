@@ -2761,6 +2761,7 @@ SettingsCenter.DriveTab.Bookmarks=Bookmarks
 SettingsCenter.DriveTab.Links=Links
 SettingsCenter.DriveTools.Show=Show this tool in the drive menu.
 SettingsCenter.DriveTools.Move=Move the selected tool up or down in the drive menu.
+SettingsCenter.DriveTools.Hotkey=The hot key of the selected tool in the drive menu: a letter or a digit; empty for none. F4 on the tool in the menu sets the same key.
 SettingsCenter.Category.editor=Editor & viewer
 SettingsCenter.Category.history=History
 SettingsCenter.Category.keyboard=Keyboard & shortcuts

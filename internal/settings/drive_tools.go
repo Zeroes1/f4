@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -58,6 +59,12 @@ func (p driveToolsProvider) Catalog() f4settings.Catalog {
 
 func driveToolField(i int) string { return driveToolFieldPrefix + strconv.Itoa(i) }
 
+// driveToolHotkeyValue is the draft value, with no field of its own, of the
+// i-th tool's hot key: a letter or a digit, or "" for none. The "Hot key:"
+// field under Up and Down shows and edits the one of the selected tool, and
+// Apply binds it as F4 in the drive menu does (mitek1977-coder, f4#1148).
+func driveToolHotkeyValue(i int) string { return "drivetools-hotkey." + strconv.Itoa(i) }
+
 // orderText is the order value for fields, the Tools page's fields in the
 // order they are shown.
 func driveToolsOrderText(fields []f4settings.Field) string {
@@ -105,9 +112,15 @@ func (p driveToolsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 		values[driveToolField(i)] = boolText(!hidden[tool.Key])
 	}
 	values[driveToolsOrderValue] = driveToolsOrderText(p.Catalog().Fields)
+	for i, tool := range p.tools {
+		values[driveToolHotkeyValue(i)] = panel.DriveToolHotkeyText(tool.Key, tool.Label)
+	}
 	d := f4settings.NewDraft(values, nil)
 	d.CommitFunc = func(ctx context.Context, d *f4settings.Draft) f4settings.Result {
-		result := f4settings.Result{Errors: map[string]error{}}
+		result := f4settings.Result{Errors: map[string]error{}, Values: map[string]string{}}
+		if p.commitHotkeys(d, &result) {
+			return result
+		}
 		changed := false
 		shown := make([]bool, len(p.tools))
 		for i := range p.tools {
@@ -151,6 +164,34 @@ func (p driveToolsProvider) Begin(context.Context) (*f4settings.Draft, error) {
 	return d, nil
 }
 
+// commitHotkeys binds the hot keys changed on the page. A letter belongs to one
+// row of the drive menu, so giving it to a tool may take it from another one:
+// every tool's hot key is read back afterwards. It reports true when a hot key
+// could not be set and the rest of the page must wait.
+func (p driveToolsProvider) commitHotkeys(d *f4settings.Draft, result *f4settings.Result) bool {
+	dirty := false
+	for i, tool := range p.tools {
+		id := driveToolHotkeyValue(i)
+		if !d.Dirty(id) {
+			continue
+		}
+		dirty = true
+		if _, ok := panel.SetDriveToolHotkey(tool.Key, tool.Label, d.Values[id]); !ok {
+			result.Errors[driveToolsPage] = errors.New(i18n.Msg("Plugins.HotkeyFieldInvalid"))
+			return true
+		}
+	}
+	if !dirty {
+		return false
+	}
+	for i, tool := range p.tools {
+		id := driveToolHotkeyValue(i)
+		result.Values[id] = panel.DriveToolHotkeyText(tool.Key, tool.Label)
+		result.Applied = append(result.Applied, id)
+	}
+	return false
+}
+
 func boolText(v bool) string {
 	if v {
 		return "true"
@@ -191,8 +232,57 @@ func (c *settingsCenter) addDriveToolMoves(category string) {
 			bar.AddItem(b)
 		}
 		c.page.AddItem(bar)
-		c.page.rows = append(c.page.rows, &settingsRow{field: f4settings.Field{Category: category, Label: f4settings.Text{English: "Up / Down"}, Description: f4settings.Text{Key: "SettingsCenter.DriveTools.Move", English: "Move the selected tool up or down in the drive menu."}}, session: s, control: bar, match: true})
+		// One blank line between the tools and Up / Down, another before
+		// "Hot key:" (mitek1977-coder, f4#1148).
+		c.page.rows = append(c.page.rows, &settingsRow{field: f4settings.Field{Category: category, Label: f4settings.Text{English: "Up / Down"}, Description: f4settings.Text{Key: "SettingsCenter.DriveTools.Move", English: "Move the selected tool up or down in the drive menu."}}, session: s, control: bar, match: true, padTop: 1})
+
+		hotkey := panel.NewHotkeyEdit("")
+		hotkey.SetId("drive-tools-hotkey")
+		hotkey.OnChange = func(text string) {
+			if i, ok := driveToolIndex(c.driveToolSelected); ok {
+				s.draft.Values[driveToolHotkeyValue(i)] = text
+			}
+		}
+		c.driveToolHotkey = hotkey
+		c.page.AddItem(hotkey)
+		c.page.rows = append(c.page.rows, &settingsRow{field: f4settings.Field{Category: category, Label: f4settings.Text{Key: "DriveLink.Hotkey", English: "Hot key:"}, Description: f4settings.Text{Key: "SettingsCenter.DriveTools.Hotkey", English: "The hot key of the selected tool in the drive menu: a letter or a digit; empty for none. F4 on the tool in the menu sets the same key."}}, session: s, control: hotkey, match: true, padTop: 1})
+		if _, ok := driveToolIndex(c.driveToolSelected); !ok {
+			for _, f := range s.catalog.Fields {
+				if strings.HasPrefix(f.ID, driveToolFieldPrefix) {
+					c.driveToolSelected = f.ID
+					break
+				}
+			}
+		}
+		c.showDriveToolHotkey()
 	}
+}
+
+// driveToolIndex is the tool's index in driveToolsProvider.tools for the
+// field id of its check box.
+func driveToolIndex(id string) (int, bool) {
+	if !strings.HasPrefix(id, driveToolFieldPrefix) {
+		return 0, false
+	}
+	i, err := strconv.Atoi(strings.TrimPrefix(id, driveToolFieldPrefix))
+	return i, err == nil
+}
+
+// showDriveToolHotkey puts the selected tool's hot key, as the page holds it,
+// into the "Hot key:" field.
+func (c *settingsCenter) showDriveToolHotkey() {
+	if c.driveToolHotkey == nil {
+		return
+	}
+	text := ""
+	if i, ok := driveToolIndex(c.driveToolSelected); ok {
+		for _, s := range c.sessions {
+			if _, isTools := s.provider.(driveToolsProvider); isTools {
+				text = s.draft.Values[driveToolHotkeyValue(i)]
+			}
+		}
+	}
+	c.driveToolHotkey.SetText(text)
 }
 
 // moveDriveTool moves the selected tool's field delta places on the page and

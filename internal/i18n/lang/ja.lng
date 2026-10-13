@@ -888,6 +888,7 @@ SettingsCenter.DriveTab.Bookmarks=ブックマーク
 SettingsCenter.DriveTab.Links=リンク
 SettingsCenter.DriveTools.Show=このツールをドライブメニューに表示します。
 SettingsCenter.DriveTools.Move=選択したツールをドライブメニュー内で上または下に移動します。
+SettingsCenter.DriveTools.Hotkey=ドライブメニューで選択したツールのホットキー: 英字または数字。空欄はなし。メニューのツール上で F4 を押しても同じキーを設定します。
 SettingsCenter.Category.editor=エディターとビューアー
 SettingsCenter.Category.history=履歴
 SettingsCenter.Category.keyboard=キーボードとショートカット

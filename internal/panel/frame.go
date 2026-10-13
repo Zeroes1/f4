@@ -6553,7 +6553,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		// like to the plugin tools below (f4#1148).
 		rows := []toolRow{
 			{key: driveToolKeyOtherPanel, add: func() {
-				otherAction := keymap.DriveMenuActionName("other")
+				otherAction := DriveToolActionName(driveToolKeyOtherPanel)
 				driveHotkeyRows[menu.GetItemCount()] = otherAction
 				driveHotkeyLabels[menu.GetItemCount()] = i18n.Msg("Panel.Other")
 				menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(otherAction, i18n.Msg("Panel.Other")), UserData: func(fsp *FileSystemPanel) {
@@ -6571,7 +6571,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			// TempPanel is a native VFS panel, so it is available from the same
 			// Alt+F1/Alt+F2 drive menu as far2l's plugin panels.
 			{key: driveToolKeyTemporaryPanel, add: func() {
-				temporaryAction := keymap.DriveMenuActionName("temporary")
+				temporaryAction := DriveToolActionName(driveToolKeyTemporaryPanel)
 				driveHotkeyRows[menu.GetItemCount()] = temporaryAction
 				driveHotkeyLabels[menu.GetItemCount()] = i18n.Msg("TempPanel.Drive")
 				menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(temporaryAction, i18n.Msg("TempPanel.Drive")), UserData: func(fsp *FileSystemPanel) {
@@ -6581,7 +6581,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		}
 		if registryDrive != nil {
 			rows = append(rows, toolRow{key: driveToolKeyRegistry, add: func() {
-				registryAction := keymap.DriveMenuActionName("platform.windows-registry")
+				registryAction := DriveToolActionName(driveToolKeyRegistry)
 				driveHotkeyRows[menu.GetItemCount()] = registryAction
 				driveHotkeyLabels[menu.GetItemCount()] = driveMenuNameWithoutMarker(registryDrive.Name)
 				registryFactory := registryDrive.Factory
@@ -6594,17 +6594,12 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			drv := drv
 			rows = append(rows, toolRow{key: drv.Name, add: func() {
 				factory := drv.Factory
-				// Clean name: strip existing hotkeys/numbering if any
-				cleanName := drv.Name
-				if idx := strings.Index(cleanName, ". "); idx != -1 {
-					cleanName = cleanName[idx+2:]
-				}
-				cleanName = strings.ReplaceAll(cleanName, "&", "")
+				cleanName := driveToolCleanName(drv.Name)
 
 				// Tools deliberately have no automatic accelerator. A user can
 				// assign one with F4, without it moving randomly when a drive or
 				// link takes the same letter.
-				actionName := keymap.DriveMenuActionName("tool." + cleanName)
+				actionName := DriveToolActionName(drv.Name)
 				driveHotkeyRows[menu.GetItemCount()] = actionName
 				driveHotkeyLabels[menu.GetItemCount()] = cleanName
 

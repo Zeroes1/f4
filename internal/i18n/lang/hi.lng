@@ -555,6 +555,7 @@ SettingsCenter.DriveTab.Bookmarks=बुकमार्क
 SettingsCenter.DriveTab.Links=लिंक
 SettingsCenter.DriveTools.Show=इस टूल को ड्राइव मेनू में दिखाएँ।
 SettingsCenter.DriveTools.Move=चुने गए टूल को ड्राइव मेनू में ऊपर या नीचे ले जाएँ।
+SettingsCenter.DriveTools.Hotkey=ड्राइव मेनू में चुने गए टूल की हॉट की: एक अक्षर या अंक; न होने पर खाली। मेनू में टूल पर F4 वही की सेट करता है।
 SettingsCenter.Category.editor=संपादक और दर्शक
 SettingsCenter.Category.history=इतिहास
 SettingsCenter.Category.keyboard=कीबोर्ड और शॉर्टकट
