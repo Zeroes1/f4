@@ -3,6 +3,7 @@ package editor
 import (
 	"context"
 	"errors"
+	"runtime"
 	"runtime/debug"
 
 	"github.com/unxed/f4/internal/fileops"
@@ -81,12 +82,17 @@ type fileDescriptor interface {
 }
 
 // CanMemoryMapFile reports whether a local file is safe to map while it is
-// being edited. Windows cannot replace or rewrite a file that has an active
-// read-only mapping, and preserving a hard link requires exactly that kind of
-// in-place rewrite. Use the regular asynchronous reader for multiply-linked
-// files so saving them does not fail with a sharing violation.
+// being edited. Windows cannot reliably replace or rewrite a file while any
+// path to it has an active read-only mapping (including paths reached through
+// SUBST drives). Use the regular asynchronous reader there so saving works
+// regardless of the spelling or aliasing of the file's path. On other systems,
+// avoid mapping multiply-linked files because saving them must preserve the
+// shared file identity with an in-place rewrite.
 func CanMemoryMapFile(ctx context.Context, v vfs.VFS, path string) bool {
 	if !fileops.IsLocalOSVFS(v) {
+		return false
+	}
+	if runtime.GOOS == "windows" {
 		return false
 	}
 	item, err := v.Stat(ctx, path)
