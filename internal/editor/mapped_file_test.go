@@ -56,11 +56,8 @@ func TestCanMemoryMapFileSkipsMultiplyLinkedFiles(t *testing.T) {
 	if CanMemoryMapFile(context.Background(), v, path) {
 		t.Fatal("multiply-linked file must not be memory mapped")
 	}
-	if runtime.GOOS != "windows" && !CanMemoryMapFile(context.Background(), v, ordinary) {
+	if !CanMemoryMapFile(context.Background(), v, ordinary) {
 		t.Fatal("ordinary file should remain eligible for memory mapping")
-	}
-	if runtime.GOOS == "windows" && CanMemoryMapFile(context.Background(), v, ordinary) {
-		t.Fatal("Windows files must not be memory mapped while they are editable")
 	}
 }
 

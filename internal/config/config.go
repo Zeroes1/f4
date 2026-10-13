@@ -1923,7 +1923,6 @@ const defaultHighlightIni = `# User highlight rules and sort groups.
 # Name = Sources (a sort group only, no colour)
 # Group = 5
 # Mask = *.go, *.c, *.h, *.cpp, *.py, *.pas
-#
 `
 
 // CreateDefaultHighlightIni writes the stock highlight.ini.
