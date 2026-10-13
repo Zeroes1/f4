@@ -210,7 +210,7 @@ func (m *MacroManager) Save() {
 
 			var parts []string
 			for _, e := range seq {
-				parts = append(parts, keymap.EventToFarString(e))
+				parts = append(parts, recordedEventKey(e))
 			}
 			fmt.Fprintf(&sb, "Sequence=%s\n\n", strings.Join(parts, " "))
 		}

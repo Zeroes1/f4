@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/vtinput"
@@ -45,6 +46,18 @@ func RecordedMacroToLua(area, key, description string, events []*vtinput.InputEv
 	return sb.String()
 }
 
+// recordedEventKey keeps printable text as text. EventToFarString is a key-name
+// codec and deliberately canonicalizes letters to uppercase for hotkey matching;
+// using it for recorded text silently changed lowercase input on macro replay.
+func recordedEventKey(event *vtinput.InputEvent) string {
+	mods := keymap.NormalizeMods(event.ControlKeyState)
+	if mods&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 &&
+		event.Char != 0 && unicode.IsPrint(event.Char) && !unicode.IsSpace(event.Char) {
+		return string(event.Char)
+	}
+	return keymap.EventToFarString(event)
+}
+
 // recordedKeyLines turns events into Far key names, wrapped into lines.
 func recordedKeyLines(events []*vtinput.InputEvent) []string {
 	var lines []string
@@ -54,7 +67,7 @@ func recordedKeyLines(events []*vtinput.InputEvent) []string {
 		if event == nil {
 			continue
 		}
-		name := keymap.EventToFarString(event)
+		name := recordedEventKey(event)
 		if name == "" {
 			continue
 		}
