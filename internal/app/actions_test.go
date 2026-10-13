@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/unxed/f4/internal/panel"
@@ -3484,7 +3485,9 @@ func TestActionEditFile_DirectoryRedirectsToAttributes(t *testing.T) {
 }
 func TestActionCreateLink_Flow(t *testing.T) {
 	t.Cleanup(paneltest.SwapFrameManager(t))
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(80, 25)
+	vtui.FrameManager.Init(screen)
 	theme.SetDefaultF4Palette()
 
 	pf := panel.NewPanelsFrame()
@@ -3540,22 +3543,37 @@ func TestActionCreateLink_Flow(t *testing.T) {
 		t.Fatal("Destination edit field not found in dialog")
 	}
 
-	assertComboMenuDoesNotCoverButtons(t, dlg, "link")
-	// The link type is above the buttons, as in far2l and far3 (DkmS1953,
-	// f4#1861); the dialog is tall enough for its list to stay off them.
+	var linkTypeGroup *vtui.RadioGroup
 	for _, child := range dlg.GetChildren() {
-		combo, ok := child.(*vtui.ComboBox)
-		if !ok {
-			continue
+		if group, ok := child.(*vtui.RadioGroup); ok {
+			linkTypeGroup = group
 		}
-		_, comboY, _, _ := combo.GetPosition()
-		for _, other := range dlg.GetChildren() {
-			if button, ok := other.(*vtui.Button); ok {
-				if _, buttonY, _, _ := button.GetPosition(); buttonY <= comboY {
-					t.Fatalf("button at row %d is not below the link type at row %d", buttonY, comboY)
-				}
+	}
+	if linkTypeGroup == nil {
+		t.Fatal("link type radio buttons not found")
+	}
+	if linkTypeGroup.Selected != 0 || len(linkTypeGroup.Items) != 3 {
+		t.Fatalf("link type options = %+v, selected %d; want three options and symlink selected", linkTypeGroup.Items, linkTypeGroup.Selected)
+	}
+	_, groupY, _, groupBottom := linkTypeGroup.GetPosition()
+	for _, child := range dlg.GetChildren() {
+		if button, ok := child.(*vtui.Button); ok {
+			_, buttonY, _, _ := button.GetPosition()
+			if buttonY <= groupBottom {
+				t.Fatalf("button at row %d overlaps link type options ending at row %d", buttonY, groupBottom)
 			}
 		}
+	}
+	dlg.Show(screen)
+	var screenDump bytes.Buffer
+	screen.Dump(&screenDump)
+	for _, option := range linkTypeGroup.Items {
+		if !strings.Contains(screenDump.String(), option) {
+			t.Errorf("link type option %q is not visible in dialog screen dump:\n%s", option, screenDump.String())
+		}
+	}
+	if groupY <= 0 {
+		t.Fatalf("link type options have invalid screen row %d", groupY)
 	}
 	focusDlg, ok := top.(dialogFocusContainer)
 	if !ok {
@@ -3929,8 +3947,8 @@ func TestActionCreateLink_RelativeNameIsNextToTheSource(t *testing.T) {
 		switch c := child.(type) {
 		case *vtui.Edit:
 			c.SetText("hl.txt")
-		case *vtui.ComboBox:
-			c.Menu.SetSelectPos(2) // hard link
+		case *vtui.RadioGroup:
+			c.Selected = 2 // hard link
 		}
 	}
 	testutil.ClickDialogButton(t, dlg, "Create link")
