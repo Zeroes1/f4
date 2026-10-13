@@ -851,6 +851,7 @@ SettingsCenter.DriveTab.Links=الروابط
 SettingsCenter.DriveTools.Show=عرض هذه الأداة في قائمة الأقراص.
 SettingsCenter.DriveTools.Move=نقل الأداة المحددة لأعلى أو لأسفل في قائمة الأقراص.
 SettingsCenter.DriveTools.Hotkey=مفتاح الاختصار للأداة المحددة في قائمة الأقراص: حرف أو رقم؛ فارغ لعدم وجوده. يضبط F4 على الأداة في القائمة المفتاح نفسه.
+SettingsCenter.DriveLinks.Hotkey=مفتاح الاختصار للرابط في قائمة الأقراص: حرف أو رقم؛ فارغ لعدم وجوده.
 SettingsCenter.Category.editor=المحرر والعارض
 SettingsCenter.Category.history=السجل
 SettingsCenter.Category.keyboard=لوحة المفاتيح والاختصارات

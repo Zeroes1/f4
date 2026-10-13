@@ -894,6 +894,7 @@ SettingsCenter.DriveTab.Links=Lingid
 SettingsCenter.DriveTools.Show=Näita seda tööriista ketaste menüüs.
 SettingsCenter.DriveTools.Move=Liiguta valitud tööriista ketaste menüüs üles või alla.
 SettingsCenter.DriveTools.Hotkey=Valitud tööriista kiirklahv draivimenüüs: täht või number; tühi tähendab, et klahvi pole. F4 tööriistal menüüs määrab sama klahvi.
+SettingsCenter.DriveLinks.Hotkey=Lingi kiirklahv draivimenüüs: täht või number; tühi tähendab, et klahvi pole.
 SettingsCenter.Category.editor=Redaktor ja vaatur
 SettingsCenter.Category.history=Ajalugu
 SettingsCenter.Category.keyboard=Klaviatuur ja kiirklahvid

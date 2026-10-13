@@ -815,6 +815,7 @@ SettingsCenter.DriveTab.Links=链接
 SettingsCenter.DriveTools.Show=在驱动器菜单中显示此工具。
 SettingsCenter.DriveTools.Move=在驱动器菜单中上移或下移所选工具。
 SettingsCenter.DriveTools.Hotkey=驱动器菜单中所选工具的热键：一个字母或数字；留空表示无。在菜单中的工具上按 F4 设置的是同一个键。
+SettingsCenter.DriveLinks.Hotkey=驱动器菜单中链接的热键：一个字母或数字；留空表示无。
 SettingsCenter.Category.editor=编辑器与查看器
 SettingsCenter.Category.history=历史记录
 SettingsCenter.Category.keyboard=键盘与快捷键

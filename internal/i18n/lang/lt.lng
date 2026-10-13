@@ -894,6 +894,7 @@ SettingsCenter.DriveTab.Links=Nuorodos
 SettingsCenter.DriveTools.Show=Rodyti šį įrankį diskų meniu.
 SettingsCenter.DriveTools.Move=Perkelti pasirinktą įrankį diskų meniu aukštyn arba žemyn.
 SettingsCenter.DriveTools.Hotkey=Pasirinkto įrankio spartusis klavišas diskų meniu: raidė arba skaitmuo; tuščia – jokio. F4 ant įrankio meniu nustato tą patį klavišą.
+SettingsCenter.DriveLinks.Hotkey=Nuorodos spartusis klavišas diskų meniu: raidė arba skaitmuo; tuščia – jokio.
 SettingsCenter.Category.editor=Redaktorius ir žiūryklė
 SettingsCenter.Category.history=Istorija
 SettingsCenter.Category.keyboard=Klaviatūra ir spartieji klavišai

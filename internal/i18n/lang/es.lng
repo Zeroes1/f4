@@ -897,6 +897,7 @@ SettingsCenter.DriveTab.Links=Enlaces
 SettingsCenter.DriveTools.Show=Mostrar esta herramienta en el menú de unidades.
 SettingsCenter.DriveTools.Move=Mover la herramienta seleccionada hacia arriba o hacia abajo en el menú de unidades.
 SettingsCenter.DriveTools.Hotkey=La tecla rápida de la herramienta seleccionada en el menú de unidades: una letra o un dígito; vacío para ninguna. F4 sobre la herramienta en el menú establece la misma tecla.
+SettingsCenter.DriveLinks.Hotkey=La tecla rápida del enlace en el menú de unidades: una letra o un dígito; vacío para ninguna.
 SettingsCenter.Category.editor=Editor y visor
 SettingsCenter.Category.history=Historial
 SettingsCenter.Category.keyboard=Teclado y atajos

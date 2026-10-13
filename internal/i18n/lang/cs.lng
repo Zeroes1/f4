@@ -897,6 +897,7 @@ SettingsCenter.DriveTab.Links=Odkazy
 SettingsCenter.DriveTools.Show=Zobrazit tento nástroj v nabídce disků.
 SettingsCenter.DriveTools.Move=Přesunout vybraný nástroj v nabídce disků nahoru nebo dolů.
 SettingsCenter.DriveTools.Hotkey=Klávesová zkratka vybraného nástroje v nabídce disků: písmeno nebo číslice; prázdné = žádná. F4 na nástroji v nabídce nastaví tutéž klávesu.
+SettingsCenter.DriveLinks.Hotkey=Klávesová zkratka odkazu v nabídce disků: písmeno nebo číslice; prázdné = žádná.
 SettingsCenter.Category.editor=Editor a prohlížeč
 SettingsCenter.Category.history=Historie
 SettingsCenter.Category.keyboard=Klávesnice a zkratky

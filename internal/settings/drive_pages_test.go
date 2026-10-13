@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
@@ -555,5 +556,85 @@ func TestDriveToolsPageHotKeyField(t *testing.T) {
 	}
 	if _, k := keymap.ConfiguredHotkeyBinding(hm, beta); k != "" {
 		t.Errorf("after Apply Beta tool's hot key = %q, want none", k)
+	}
+}
+
+// f4#1148 (mitek1977-coder, 12.10 list, point 6): the Links page edits a
+// link's hot key as the drive menu's link dialog does, in a one-character
+// field after "Hot key:" on the same line, with no chord field and no Capture.
+func TestDriveLinksPageHotKeyField(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := panel.DriveBookmarksFilePath()
+	before, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr != nil {
+			_ = os.Remove(path)
+		} else {
+			_ = os.WriteFile(path, before, 0o600) // #nosec G703 -- the test's own profile file, put back.
+		}
+	})
+	if err := panel.SaveDriveBookmarks(path, []panel.DriveBookmark{{Name: "Home", Path: "/home", Hotkey: "H"}}); err != nil {
+		t.Fatal(err)
+	}
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 99, 30)
+	c.selectCategory(driveLinksPage)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 31)
+	c.Show(scr)
+
+	var field *panel.HotkeyEdit
+	var row *settingsRow
+	for _, r := range c.page.rows {
+		if _, chord := r.control.(*settingsChord); chord {
+			t.Errorf("the Links page still has a chord field with Capture (%s)", r.field.ID)
+		}
+		if e, ok := r.control.(*panel.HotkeyEdit); ok && r.field.ID == "link.Hotkey" {
+			field, row = e, r
+		}
+	}
+	if field == nil {
+		t.Fatal("no one-character hot key field for the link")
+	}
+	if got := row.field.Label.Resolve("English", func(string) string { return "" }); got != "Hot key:" {
+		t.Errorf("label = %q, want Hot key:", got)
+	}
+	if want := c.page.X1 + 2 + vtui.StringWidth("Hot key:") + 1; field.X1 != want || field.X2 != want {
+		t.Errorf("field at columns %d..%d, want one cell at %d", field.X1, field.X2, want)
+	}
+	if field.Y1 != c.page.Y1+row.y-c.page.scroll {
+		t.Errorf("field on line %d, want the line of its label", field.Y1)
+	}
+	if got := field.GetText(); got != "H" {
+		t.Errorf("field = %q, want H", got)
+	}
+	field.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'Q', Char: 'q'})
+
+	c.commit(false)
+	// The core settings commit in the background.
+	deadline := time.After(10 * time.Second)
+	for c.running != nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(5 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("Apply did not finish; status is %q", c.status)
+		}
+	}
+	links, err := panel.LoadDriveBookmarks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || !strings.EqualFold(links[0].Hotkey, "Q") {
+		t.Errorf("links after Apply = %+v, want Home with hot key Q", links)
 	}
 }

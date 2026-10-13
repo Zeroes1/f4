@@ -818,6 +818,7 @@ SettingsCenter.DriveTab.Links=Hivatkozások
 SettingsCenter.DriveTools.Show=Az eszköz megjelenítése a meghajtómenüben.
 SettingsCenter.DriveTools.Move=A kijelölt eszköz mozgatása felfelé vagy lefelé a meghajtómenüben.
 SettingsCenter.DriveTools.Hotkey=A kijelölt eszköz gyorsbillentyűje a meghajtómenüben: betű vagy számjegy; üres, ha nincs. Az F4 az eszközön a menüben ugyanezt a billentyűt állítja be.
+SettingsCenter.DriveLinks.Hotkey=A hivatkozás gyorsbillentyűje a meghajtómenüben: betű vagy számjegy; üres, ha nincs.
 SettingsCenter.Category.editor=Szerkesztő és megjelenítő
 SettingsCenter.Category.history=Előzmények
 SettingsCenter.Category.keyboard=Billentyűzet és gyorsbillentyűk

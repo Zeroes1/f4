@@ -894,6 +894,7 @@ SettingsCenter.DriveTab.Links=ბმულები
 SettingsCenter.DriveTools.Show=ამ ხელსაწყოს ჩვენება დისკების მენიუში.
 SettingsCenter.DriveTools.Move=არჩეული ხელსაწყოს გადატანა ზემოთ ან ქვემოთ დისკების მენიუში.
 SettingsCenter.DriveTools.Hotkey=დისკების მენიუში არჩეული ხელსაწყოს სწრაფი ღილაკი: ასო ან ციფრი; ცარიელი — არცერთი. მენიუში ხელსაწყოზე F4 იმავე ღილაკს აყენებს.
+SettingsCenter.DriveLinks.Hotkey=ბმულის სწრაფი ღილაკი დისკების მენიუში: ასო ან ციფრი; ცარიელი — არცერთი.
 SettingsCenter.Category.editor=რედაქტორი და დამთვალიერებელი
 SettingsCenter.Category.history=ისტორია
 SettingsCenter.Category.keyboard=კლავიატურა და მალსახმობები

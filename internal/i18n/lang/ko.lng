@@ -889,6 +889,7 @@ SettingsCenter.DriveTab.Links=링크
 SettingsCenter.DriveTools.Show=이 도구를 드라이브 메뉴에 표시합니다.
 SettingsCenter.DriveTools.Move=선택한 도구를 드라이브 메뉴에서 위나 아래로 이동합니다.
 SettingsCenter.DriveTools.Hotkey=드라이브 메뉴에서 선택한 도구의 단축키: 글자 또는 숫자, 비워 두면 없음. 메뉴의 도구에서 F4를 눌러도 같은 키를 지정합니다.
+SettingsCenter.DriveLinks.Hotkey=드라이브 메뉴에서 링크의 단축키: 글자 또는 숫자, 비워 두면 없음.
 SettingsCenter.Category.editor=편집기 및 뷰어
 SettingsCenter.Category.history=기록
 SettingsCenter.Category.keyboard=키보드 및 단축키

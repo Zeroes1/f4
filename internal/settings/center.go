@@ -1356,6 +1356,14 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 	var control vtui.UIElement
 	switch f.Kind {
 	case f4settings.Chord:
+		if f.InputWidth == 1 {
+			// One key, no Capture: a letter or a digit replaces it,
+			// Delete clears it (the Links page, f4#1148).
+			e := panel.NewHotkeyEdit(value)
+			e.OnChange = change
+			control = e
+			break
+		}
 		control = newSettingsChord(value, change)
 	case f4settings.Multiline:
 		e := vtui.NewMultiLineEdit(0, 0, 20, 4, value)

@@ -98,6 +98,9 @@ func splitDriveChooser(sessions []*settingsSession) {
 			if col.Category == "drives" {
 				col.Category = driveChooserPageOf(col.ID)
 			}
+			if col.ID == "drive-links" {
+				col.Fields = driveLinkPageFields(col.Fields)
+			}
 			cat.Collections = append(cat.Collections, col)
 		}
 		cat.Commands = append([]f4settings.Command(nil), s.catalog.Commands...)
@@ -108,6 +111,22 @@ func splitDriveChooser(sessions []*settingsSession) {
 		}
 		s.catalog = cat
 	}
+}
+
+// driveLinkPageFields are the link fields as the Links page edits them: the
+// hot key in a one-character field after "Hot key:", as in the link dialog of
+// the drive menu, instead of a chord field with Capture (mitek1977-coder,
+// f4#1148). The main Settings window keeps the chord field.
+func driveLinkPageFields(fields []f4settings.Field) []f4settings.Field {
+	out := append([]f4settings.Field(nil), fields...)
+	for i := range out {
+		if out[i].ID == "link.Hotkey" {
+			out[i].Label = f4settings.Text{Key: "DriveLink.Hotkey", English: "Hot key:"}
+			out[i].Description = f4settings.Text{Key: "SettingsCenter.DriveLinks.Hotkey", English: "The link's hot key in the drive menu: a letter or a digit; empty for none."}
+			out[i].InputWidth = 1
+		}
+	}
+	return out
 }
 
 // driveChooserLeavesOut is true for the drive menu options the F9 window does

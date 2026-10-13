@@ -815,6 +815,7 @@ SettingsCenter.DriveTab.Links=Հղումներ
 SettingsCenter.DriveTools.Show=Ցուցադրել այս գործիքը սկավառակների ընտրացանկում։
 SettingsCenter.DriveTools.Move=Տեղափոխել ընտրված գործիքը վեր կամ վար սկավառակների ընտրացանկում։
 SettingsCenter.DriveTools.Hotkey=Սկավառակների ընտրացանկում ընտրված գործիքի արագ ստեղնը՝ տառ կամ թվանշան, դատարկ՝ առանց ստեղնի։ Ընտրացանկում գործիքի վրա F4-ը նշանակում է նույն ստեղնը։
+SettingsCenter.DriveLinks.Hotkey=Հղման արագ ստեղնը սկավառակների ընտրացանկում՝ տառ կամ թվանշան, դատարկ՝ առանց ստեղնի։
 SettingsCenter.Category.editor=Խմբագրիչ և դիտարկիչ
 SettingsCenter.Category.history=Պատմություն
 SettingsCenter.Category.keyboard=Ստեղնաշար և ստեղնային համակցություններ
