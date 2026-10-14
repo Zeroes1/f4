@@ -317,6 +317,36 @@ func settingsDimRect(scr *vtui.ScreenBuf, x1, y1, x2, y2 int) {
 		}
 	}
 }
+
+// neighbourGroupControl is the first control that can take the focus in the
+// group after (direction 1) or before (-1) the group of the focused control,
+// or nil when there is no such group on the page.
+func (v *settingsViewport) neighbourGroupControl(direction int) vtui.UIElement {
+	if v.fullPage != nil {
+		return nil
+	}
+	focused := v.GetFocusedItem()
+	current := -1
+	for i, box := range v.boxes {
+		for _, r := range box.rows {
+			if r.control != nil && r.control == focused {
+				current = i
+			}
+		}
+	}
+	if current < 0 {
+		return nil
+	}
+	for i := current + direction; i >= 0 && i < len(v.boxes); i += direction {
+		for _, r := range v.boxes[i].rows {
+			if r.control != nil && r.control.CanFocus() && !r.control.IsDisabled() {
+				return r.control
+			}
+		}
+	}
+	return nil
+}
+
 func (v *settingsViewport) notifyFocus() {
 	focused := v.GetFocusedItem()
 	for _, r := range v.rows {
@@ -1089,6 +1119,15 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 			direction := 1
 			if e.ControlKeyState&vtinput.ShiftPressed != 0 {
 				direction = -1
+			}
+			// On a page of several groups Tab goes to the next group first
+			// and leaves the page after the last one (f4#1899, point 2).
+			if focused == c.page {
+				if target := c.page.neighbourGroupControl(direction); target != nil {
+					c.page.SetFocusedItem(target)
+					c.page.notifyFocus()
+					return true
+				}
 			}
 			c.movePaneFocus(panes, focused, direction)
 			return true

@@ -909,6 +909,7 @@ func TestSettingsHelpScrollsFromTheKeyboard(t *testing.T) {
 		t.Fatal("a description that does not fit cannot take the focus")
 	}
 	c.SetFocusedItem(c.page)
+	c.page.SetFocusedItem(lastPageControl(c))
 	key(vtinput.VK_TAB)
 	if c.GetFocusedItem() != c.help {
 		t.Fatalf("Tab from the page went to %T, want the description", c.GetFocusedItem())
@@ -935,5 +936,64 @@ func TestSettingsHelpScrollsFromTheKeyboard(t *testing.T) {
 	c.help.text = "Short."
 	if c.help.CanFocus() {
 		t.Error("a description that fits still takes the focus")
+	}
+}
+
+// lastPageControl is the last control of the page that can take the focus.
+func lastPageControl(c *settingsCenter) vtui.UIElement {
+	var last vtui.UIElement
+	for _, r := range c.page.rows {
+		if r.control != nil && r.control.CanFocus() && !r.control.IsDisabled() {
+			last = r.control
+		}
+	}
+	return last
+}
+
+// f4#1899 (point 2): on a page of several groups Tab goes to the first
+// control of the next group and Shift+Tab to that of the previous one;
+// Tab in the last group leaves the page.
+func TestSettingsTabMovesBetweenGroups(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.selectCategory("panels")
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	key := func(shift bool) {
+		ev := &vtinput.InputEvent{KeyDown: true, VirtualKeyCode: vtinput.VK_TAB}
+		if shift {
+			ev.ControlKeyState = vtinput.ShiftPressed
+		}
+		c.ProcessKey(ev)
+	}
+	var firsts []vtui.UIElement
+	for _, box := range c.page.boxes {
+		for _, r := range box.rows {
+			if r.control != nil && r.control.CanFocus() && !r.control.IsDisabled() {
+				firsts = append(firsts, r.control)
+				break
+			}
+		}
+	}
+	if len(firsts) < 2 {
+		t.Skipf("the panels page has %d groups; the test needs two", len(firsts))
+	}
+	c.SetFocusedItem(c.page)
+	c.page.SetFocusedItem(firsts[0])
+	for i := 1; i < len(firsts); i++ {
+		key(false)
+		if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != firsts[i] {
+			t.Fatalf("Tab %d did not reach the first control of group %d", i, i)
+		}
+	}
+	key(true)
+	if c.page.GetFocusedItem() != firsts[len(firsts)-2] {
+		t.Fatal("Shift+Tab did not go back to the previous group")
+	}
+	c.page.SetFocusedItem(firsts[len(firsts)-1])
+	key(false)
+	if c.GetFocusedItem() == c.page {
+		t.Fatal("Tab in the last group did not leave the page")
 	}
 }
