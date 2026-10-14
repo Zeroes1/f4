@@ -934,11 +934,7 @@ func (c *settingsCenter) ResizeConsole(w, h int) {
 		dw, dh := min(w, max(72, w/2)), min(h, max(22, h*3/4))
 		c.SetPosition((w-dw)/2, (h-dh)/2, (w+dw)/2-1, (h+dh)/2-1)
 		c.positioned = true
-		if w < c.minSettingsScreenWidth() || h < smallSettingsScreenHeight {
-			c.SavedBounds = &vtui.Rect{X1: c.X1, Y1: c.Y1, X2: c.X2, Y2: c.Y2}
-			top := vtui.FrameManager.WorkspaceTopInset()
-			c.SetPosition(0, top, w-1, max(top, h-2))
-		}
+		c.maximizeForCategory()
 	} else if c.SavedBounds != nil {
 		// Match vtui's BaseWindow.ToggleZoom: the workspace tab strip owns the
 		// rows above and the key bar owns the row below, and both are drawn
@@ -949,6 +945,19 @@ func (c *settingsCenter) ResizeConsole(w, h int) {
 	} else {
 		c.fitBounds()
 	}
+}
+
+// maximizeForCategory expands the dialog when the newly selected page needs
+// more room than its ordinary window can provide. In particular, users often
+// open Settings on another page and navigate to Hotkeys afterwards (#1239).
+func (c *settingsCenter) maximizeForCategory() {
+	if !c.positioned || c.SavedBounds != nil ||
+		(c.screenW >= c.minSettingsScreenWidth() && c.screenH >= smallSettingsScreenHeight) {
+		return
+	}
+	c.SavedBounds = &vtui.Rect{X1: c.X1, Y1: c.Y1, X2: c.X2, Y2: c.Y2}
+	top := vtui.FrameManager.WorkspaceTopInset()
+	c.SetPosition(0, top, c.screenW-1, max(top, c.screenH-2))
 }
 
 func (c *settingsCenter) SetPosition(x1, y1, x2, y2 int) {
@@ -1422,6 +1431,7 @@ func (c *settingsCenter) selectCategory(id string) {
 		c.offsets[c.category] = c.page.scroll
 	}
 	c.category = id
+	c.maximizeForCategory()
 	c.page.Group = vtui.NewGroup(c.page.X1, c.page.Y1, c.page.X2-c.page.X1+1, c.page.Y2-c.page.Y1+1)
 	c.page.SetOwner(c.Window)
 	c.page.rows = nil
