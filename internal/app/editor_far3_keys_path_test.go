@@ -79,3 +79,57 @@ func TestEditorFAR3KeysWorkThroughTheKeyPath(t *testing.T) {
 		t.Errorf("Ctrl+Delete left %q, want %q", got, "say world\n")
 	}
 }
+
+// Ctrl+Backspace at the start of a line and Ctrl+Delete at the end of one are
+// plain Backspace/Delete in far2l and join the lines. The word-delete actions
+// do nothing there, so the key has to get past the hotkey dispatcher to the
+// editor's own handling (f4#1729).
+func TestEditorFAR3WordDeleteJoinsLinesAtLineEdges(t *testing.T) {
+	oldHotkeys := keymap.GlobalHotkeysMgr
+	oldMacro := macro.MacroMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	keymap.GlobalHotkeysMgr.InitDefaults()
+	macro.MacroMgr = &macro.MacroManager{}
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = oldHotkeys
+		macro.MacroMgr = oldMacro
+	})
+
+	press := func(ev *editor.EditorView, vk uint16, char rune) {
+		e := &vtinput.InputEvent{
+			Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, Char: char,
+			ControlKeyState: vtinput.LeftCtrlPressed,
+		}
+		if !macroFilter(macro.MacroMgr, e) {
+			ev.ProcessKey(e)
+		}
+	}
+	open := func(text string) *editor.EditorView {
+		vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+		ev := editor.NewEditorView(piecetable.New([]byte(text)), nil, "")
+		t.Cleanup(func() { ev.Close() })
+		ev.SetPosition(0, 0, 80, 24)
+		vtui.FrameManager.Push(ev)
+		return ev
+	}
+	text := func(ev *editor.EditorView) string {
+		data, _ := ev.Pt.Bytes()
+		return string(data)
+	}
+
+	ev := open("ab\ncd\n")
+	ev.CursorLine = 1
+	ev.CursorPos = 0
+	press(ev, vtinput.VK_BACK, 0x7f)
+	if got := text(ev); got != "abcd\n" {
+		t.Errorf("Ctrl+Backspace at the start of a line left %q, want %q", got, "abcd\n")
+	}
+
+	ev = open("ab\ncd\n")
+	ev.CursorLine = 0
+	ev.CursorPos = 2
+	press(ev, vtinput.VK_DELETE, 0)
+	if got := text(ev); got != "abcd\n" {
+		t.Errorf("Ctrl+Delete at the end of a line left %q, want %q", got, "abcd\n")
+	}
+}
