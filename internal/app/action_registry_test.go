@@ -141,8 +141,8 @@ func TestHotkeyManager_ViewerEditorSearchDirections(t *testing.T) {
 		{"Editor", "AltF7", "Editor.SearchPrevious"},
 		{"Editor", "CtrlShiftEnter", "Editor.InsertPassivePanelFileName"},
 		{"Viewer", "CtrlEnter", "Viewer.SearchNext"},
+		{"Viewer", "ShiftF7", "Viewer.SearchNext"},
 		{"Viewer", "CtrlShiftEnter", "Viewer.SearchPrevious"},
-		{"Viewer", "ShiftF7", "Viewer.SearchPrevious"},
 	}
 	for _, tc := range cases {
 		if got := hm.GetAction(tc.area, tc.key); got != tc.want {
