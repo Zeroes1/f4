@@ -449,18 +449,27 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 	c.selectCategory("panels")
 	c.SetFocusedItem(c.page)
 	first, last := c.page.rows[1].control, c.page.rows[3].control
+	// f4#1899, point 6: the page does not go round. Up on the first setting
+	// reaches the search field, Down on the last one the buttons, and Up
+	// from the buttons comes back to the last setting.
 	c.page.SetFocusedItem(first)
 	key(vtinput.VK_UP, false)
-	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
-		t.Fatal("Up must wrap inside content")
+	if c.GetFocusedItem() != c.search {
+		t.Fatalf("Up on the first setting went to %T, want the search field", c.GetFocusedItem())
 	}
-	key(vtinput.VK_DOWN, false)
-	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != first {
-		t.Fatal("Down must wrap inside content")
-	}
+	c.SetFocusedItem(c.page)
+	c.page.SetFocusedItem(first)
 	key(vtinput.VK_DOWN, false)
 	if c.page.GetFocusedItem() != last {
 		t.Fatal("navigation must skip unavailable setting")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.apply {
+		t.Fatalf("Down on the last setting went to %T, want Apply", c.GetFocusedItem())
+	}
+	key(vtinput.VK_UP, false)
+	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
+		t.Fatal("Up from Apply did not come back to the last setting")
 	}
 	key(vtinput.VK_LEFT, false)
 	if c.GetFocusedItem() != c.sidebar {

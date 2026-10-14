@@ -348,10 +348,17 @@ func (v *settingsViewport) ProcessKey(e *vtinput.InputEvent) bool {
 	if v.fullPage != nil {
 		return v.fullPage.ProcessKey(e)
 	}
-	v.WrapFocus = true
+	// Up on the first setting and Down on the last one do not go round the
+	// page: they are reported as not handled, and the window moves the focus
+	// to the next group, the search field above or the buttons below
+	// (f4#1899, point 6).
+	v.WrapFocus = false
 	handled := v.Group.ProcessKey(e)
 	v.notifyFocus()
-	if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN || e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT) {
+	if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) {
+		return handled
+	}
+	if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT) {
 		return true
 	}
 	// PgUp: if not at top, scroll to top; if at top, let parent handle focus movement.
@@ -1108,7 +1115,14 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 					}
 					return true
 				}
-				c.page.ProcessKey(e)
+				if !c.page.ProcessKey(e) && e.KeyDown {
+					switch e.VirtualKeyCode {
+					case vtinput.VK_DOWN:
+						c.movePaneFocus([]vtui.UIElement{c.apply, c.ok, c.cancel}, nil, 1)
+					case vtinput.VK_UP:
+						c.SetFocusedItem(c.search)
+					}
+				}
 				return true
 			case c.help:
 				c.help.ProcessKey(e)
@@ -1117,6 +1131,12 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				direction := 1
 				if e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_LEFT {
 					direction = -1
+				}
+				if e.VirtualKeyCode == vtinput.VK_UP && (focused == c.apply || focused == c.ok || focused == c.cancel) && c.page.CanFocus() {
+					// Up from the buttons goes back to the settings above.
+					c.SetFocusedItem(c.page)
+					c.page.notifyFocus()
+					return true
 				}
 				if focused == c.clearSearch || focused == c.previous || focused == c.next {
 					c.movePaneFocus([]vtui.UIElement{c.clearSearch, c.previous, c.next}, focused, direction)
