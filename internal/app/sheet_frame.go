@@ -628,9 +628,18 @@ func sheetSave(sf *SheetFrame, path string) {
 	}
 	path = sheetResolvePath(path)
 	var err error
-	switch strings.ToLower(filepath.Ext(path)) {
+	switch ext := strings.ToLower(filepath.Ext(path)); ext {
 	case ".xlsx":
 		err = sf.doc.SaveXLSX(path)
+	case ".csv", ".tsv", ".tab":
+		// A CSV file is saved as CSV: the native format written under
+		// the .csv name replaced the user's data with a database file no
+		// other program reads (f4#1892). A tab-separated name gets tabs
+		// unless the sheet already has a delimiter other than the comma.
+		if ext != ".csv" && sf.doc.CSVSeparator == ',' {
+			sf.doc.CSVSeparator = '\t'
+		}
+		err = exportSheetCSV(sf.doc, path)
 	default:
 		err = sf.doc.Save(context.Background(), path)
 	}

@@ -56,3 +56,37 @@ func TestSheetOpensTSVAndSemicolonFilesInColumns(t *testing.T) {
 		t.Error("the spreadsheet menu has no CSV separator item")
 	}
 }
+
+// f4#1892: Save (F2) of a sheet opened from a CSV file writes CSV with the
+// sheet's delimiter, not the native format under the .csv name.
+func TestSheetSaveKeepsCSVFilesCSV(t *testing.T) {
+	sf := newSheetFrameForTest(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "table.csv")
+	if err := os.WriteFile(path, []byte("name;value\nalpha;42\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sheetOpen(sf, path)
+	if sf.doc == nil || sf.doc.Cell(1, 1).DisplayText() != "42" {
+		t.Fatal("the CSV file did not open in columns")
+	}
+	sf.doc.SetText(1, 1, "43")
+	sheetSave(sf, path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != "name;value\nalpha;43\n" {
+		t.Errorf("saved file = %q, want the CSV with ; and the new value", got)
+	}
+
+	tsv := filepath.Join(dir, "new.tsv")
+	sheetSave(sf, tsv)
+	data, err = os.ReadFile(tsv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(data); got != "name;value\nalpha;43\n" {
+		t.Errorf("saved .tsv = %q, want the sheet's own delimiter kept", got)
+	}
+}
