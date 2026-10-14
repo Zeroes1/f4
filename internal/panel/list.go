@@ -25,9 +25,11 @@ import (
 	"github.com/unxed/f4/internal/fileops"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/media"
+	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/wheel"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/f4/vfs/hostmode"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -2167,6 +2169,12 @@ func (fp *FileSystemPanel) updateTitle(err error) {
 			if prefix := tp.GetTitle(); prefix != "" {
 				title = prefix + ":" + title
 			}
+		} else if _, local := fp.Vfs.(*vfs.OSVFS); local && !terminal.WindowsShellSyntax() {
+			// The home directory as "~", like the prompt of the command line
+			// (f4#1924); a Windows-style shell shows the full path there too.
+			if home, _ := hostmode.UserHomeDir(); home != "" {
+				title = homeTildePath(title, home)
+			}
 		}
 	}
 
@@ -2177,6 +2185,23 @@ func (fp *FileSystemPanel) updateTitle(err error) {
 	}
 	fp.currentTitle = title
 	fp.Frame.SetTitle("")
+}
+
+// homeTildePath writes the home directory at the start of p as "~": the home
+// itself becomes "~", a path inside it "~/rest". Another directory that only
+// shares the prefix (/home/user2 for /home/user) is left as it is.
+func homeTildePath(p, home string) string {
+	home = strings.TrimRight(home, "/")
+	if home == "" {
+		return p
+	}
+	if p == home {
+		return "~"
+	}
+	if strings.HasPrefix(p, home+"/") {
+		return "~" + p[len(home):]
+	}
+	return p
 }
 
 func (fp *FileSystemPanel) StopLoadingAnimation() {
