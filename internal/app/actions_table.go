@@ -3804,7 +3804,7 @@ func init() {
 		LabelKey:    "Action.Viewer.SearchNext",
 		Description: "Continue search forwards",
 		DescKey:     "Action.Viewer.SearchNext.Desc",
-		DefaultKeys: []string{"CtrlEnter"},
+		DefaultKeys: []string{"CtrlEnter", "ShiftF7"},
 		MenuPath:    "Search",
 		Handler:     withViewer(func(vv *viewer.ViewerView) { actionViewerSearchAgain(vv, false) }),
 	})
@@ -3815,7 +3815,7 @@ func init() {
 		LabelKey:    "Action.Viewer.SearchPrevious",
 		Description: "Continue search backwards",
 		DescKey:     "Action.Viewer.SearchPrevious.Desc",
-		DefaultKeys: []string{"CtrlShiftEnter", "ShiftF7"},
+		DefaultKeys: []string{"CtrlShiftEnter"},
 		MenuPath:    "Search",
 		Handler:     withViewer(func(vv *viewer.ViewerView) { actionViewerSearchAgain(vv, true) }),
 	})
