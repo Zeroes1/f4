@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/editor"
@@ -1835,12 +1836,25 @@ func showSettingsCenter(sessions []*settingsSession, category, collection, recor
 	return true
 }
 
+// schemeRefreshes counts the background scheme listings still running. A
+// listing starts a Colorer session, which reads process-wide state such as
+// os.Stdout, so a test that opens this window waits for it before it ends
+// (main 059c5e62d, 14-10-2026: the listing outlived its test and raced with
+// the next test putting os.Stdout back).
+var schemeRefreshes sync.WaitGroup
+
+// WaitSchemeRefreshes returns once every background scheme listing has read
+// what it needed; their results may still be on their way to the UI thread.
+func WaitSchemeRefreshes() { schemeRefreshes.Wait() }
+
 // Catalogs can live on an unavailable network share. Enumerate their labels
 // outside the UI thread and ignore results after the editing session closes.
 func (c *settingsCenter) refreshSchemeChoices() {
 	source := editor.CurrentColorerSource()
+	schemeRefreshes.Add(1)
 	vtui.RunAsync(func(task *vtui.TaskContext) {
 		schemes := editor.ListColorerSchemesFor(source)
+		schemeRefreshes.Done()
 		task.RunOnUI(func() {
 			if c.closed || source != editor.CurrentColorerSource() {
 				return
