@@ -91,7 +91,8 @@ func TestEditorCopyPasteActionsWorkWhileEditMenuIsOpen(t *testing.T) {
 	}
 }
 
-func TestEditorAmountInWordsActionReplacesSelection(t *testing.T) {
+// f4#1463 (DkmS1953): the words go to the clipboard and the number stays.
+func TestEditorAmountInWordsActionCopiesTheWords(t *testing.T) {
 	ev := newActionTestEditor(t, "5 руб")
 	vtui.FrameManager.Push(ev)
 	ev.SelActive = true
@@ -102,8 +103,11 @@ func TestEditorAmountInWordsActionReplacesSelection(t *testing.T) {
 	if !RunAction("Editor.AmountInWords") {
 		t.Fatal("Editor.AmountInWords did not run on the editor")
 	}
-	if got, want := ev.GetText(), "пять рублей"; got != want {
+	if got, want := ev.GetText(), "5 руб"; got != want {
 		t.Fatalf("text after Editor.AmountInWords = %q, want %q", got, want)
+	}
+	if got, want := vtui.GetClipboard(), "пять рублей"; got != want {
+		t.Fatalf("clipboard after Editor.AmountInWords = %q, want %q", got, want)
 	}
 }
 

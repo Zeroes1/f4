@@ -3222,7 +3222,7 @@ func init() {
 		Area:        "Editor",
 		Label:       "Amount in words",
 		LabelKey:    "Action.Editor.AmountInWords",
-		Description: "Replace the selected number or amount of money (1234.56 rub, $12.50, 99 EUR) with it written in words",
+		Description: "Copy the selected number or amount of money (1234.56 rub, $12.50, 99 EUR), written in words, to the clipboard",
 		DescKey:     "Action.Editor.AmountInWords.Desc",
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
@@ -3231,7 +3231,8 @@ func init() {
 				vtui.ShowMessage(i18n.Msg("Editor.AmountInWords.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
 				return
 			}
-			toast.Show(result, 2*time.Second)
+			terminal.SetF4Clipboard(result)
+			toast.Show(fmt.Sprintf(i18n.Msg("Editor.AmountInWords.Copied"), result), 3*time.Second)
 		}),
 	})
 	registerAction(action.Action{
