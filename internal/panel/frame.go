@@ -6798,6 +6798,25 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				return true
 			}
 		}
+		// Shift+Up and Shift+Down move the folder bookmark under the cursor
+		// one place up or down among the listed ones, and the new order is
+		// saved (#1148).
+		if isDriveMenuMoveKey(e) {
+			if slot, ok := bookmarkRows[menu.SelectPos]; ok {
+				delta := 1
+				if e.VirtualKeyCode == vtinput.VK_UP {
+					delta = -1
+				}
+				pos := menu.SelectPos
+				if moved, err := moveBookmarkSlotInFile(slot, delta); err != nil {
+					vtui.ShowMessageOn(menu, i18n.Msg("Bookmarks.Title"), fmt.Sprintf(i18n.Msg("Bookmarks.SaveError"), err), []string{"&Ok"})
+				} else if moved {
+					menu.Close()
+					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+				}
+				return true
+			}
+		}
 		if e.KeyDown && e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|
 			vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			pos := menu.SelectPos
