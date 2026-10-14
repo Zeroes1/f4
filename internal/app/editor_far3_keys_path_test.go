@@ -67,16 +67,34 @@ func TestEditorFAR3KeysWorkThroughTheKeyPath(t *testing.T) {
 		t.Errorf("Ctrl+Backspace left %q, want the word before the cursor gone", got)
 	}
 
-	// Ctrl+Delete must reach EditorView.ProcessKey, not the separate
-	// DeleteSpacersForward action (which intentionally stays on Ctrl+T).
-	if got := keymap.GlobalHotkeysMgr.GetAction("Editor", "CtrlDel"); got != "" {
-		t.Fatalf("Ctrl+Delete resolves to %q and would bypass the editor's word-delete handler", got)
+	// Ctrl+Delete is an action so it appears in generated help. Its handler
+	// preserves the editor's line-join behavior at the end of a line.
+	if got, want := keymap.GlobalHotkeysMgr.GetAction("Editor", "CtrlDel"), "Editor.DeleteWordForward"; got != want {
+		t.Fatalf("Ctrl+Delete resolves to %q, want %q", got, want)
 	}
 	ev = open("say hello world\n")
 	ev.CursorPos = len("say ")
 	press(ev, vtinput.VK_DELETE, 0)
 	if got := text(ev); got != "say world\n" {
 		t.Errorf("Ctrl+Delete left %q, want %q", got, "say world\n")
+	}
+
+	// At the end of a line Ctrl+Delete is plain Delete and joins the lines.
+	ev = open("ab\ncd\n")
+	ev.CursorPos = 2
+	press(ev, vtinput.VK_DELETE, 0)
+	if got := text(ev); got != "abcd\n" {
+		t.Errorf("Ctrl+Delete at end of line left %q, want %q", got, "abcd\n")
+	}
+
+	// A selection takes precedence over word deletion.
+	ev = open("say hello world\n")
+	ev.SelActive = true
+	ev.SelAnchorOffset = len("say ")
+	ev.CursorPos = len("say hello")
+	press(ev, vtinput.VK_DELETE, 0)
+	if got := text(ev); got != "say  world\n" {
+		t.Errorf("Ctrl+Delete with selection left %q, want %q", got, "say  world\n")
 	}
 }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/f4/vfs/hostmode"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -3014,6 +3015,24 @@ func init() {
 		DefaultKeys: []string{"CtrlBS"},
 		MenuPath:    "Edit",
 		Handler:     withEditor(func(ev *editor.EditorView) { ev.DeleteWordBackward() }),
+	})
+	registerAction(action.Action{
+		Name:        "Editor.DeleteWordForward",
+		Area:        "Editor",
+		Label:       "Delete word forward",
+		Description: "Delete the word to the right of the cursor",
+		DefaultKeys: []string{"CtrlDel"},
+		MenuPath:    "Edit",
+		Handler: withEditor(func(ev *editor.EditorView) {
+			if !ev.SelActive && !ev.RectSelActive && ev.CursorVirtualSpaces == 0 &&
+				ev.CursorPos >= ev.GetLineLength(ev.CursorLine) {
+				ev.ProcessKey(&vtinput.InputEvent{
+					Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DELETE,
+				})
+				return
+			}
+			ev.DeleteWordForward()
+		}),
 	})
 	registerAction(action.Action{
 		Name:        "Editor.DeleteBlock",

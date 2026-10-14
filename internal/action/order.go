@@ -216,6 +216,7 @@ var actionMenuOrder = []string{
 	"Editor.DeleteLine",
 	"Editor.DeleteToLineEnd",
 	"Editor.DeleteWordBackward",
+	"Editor.DeleteWordForward",
 	"Editor.DeleteBlock",
 	"Editor.CopyBlockToCursor",
 	"Editor.MoveBlockToCursor",

@@ -228,8 +228,8 @@ func TestHotkeyDelAliasesResolve(t *testing.T) {
 		t.Errorf("explicit binding overridden by alias: got %q", got)
 	}
 	for _, key := range []string{"CtrlDel", "CtrlNumDel"} {
-		if got := hm.GetAction("Editor", key); got != "" {
-			t.Errorf("GetAction(%q, %q) = %q, want no action so the editor handles Ctrl+Del", "Editor", key, got)
+		if got := hm.GetAction("Editor", key); got != "Editor.DeleteWordForward" {
+			t.Errorf("GetAction(%q, %q) = %q, want Editor.DeleteWordForward", "Editor", key, got)
 		}
 	}
 }
@@ -243,6 +243,7 @@ func TestEditorFAR3HotkeysResolve(t *testing.T) {
 		"CtrlK":          "Editor.DeleteToLineEnd",
 		"AltD":           "Editor.DeleteToLineEnd",
 		"CtrlBS":         "Editor.DeleteWordBackward",
+		"CtrlDel":        "Editor.DeleteWordForward",
 		"CtrlT":          "Editor.DeleteSpacersForward",
 		"CtrlD":          "Editor.DeleteBlock",
 		"CtrlP":          "Editor.CopyBlockToCursor",
