@@ -1120,6 +1120,11 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				}
 				if focused == c.clearSearch || focused == c.previous || focused == c.next {
 					c.movePaneFocus([]vtui.UIElement{c.clearSearch, c.previous, c.next}, focused, direction)
+				} else if horizontal := e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT; horizontal && !c.hasButtonBeyond(focused, direction) {
+					// Right on the last button and Left on the first leave the
+					// row the way Tab and Shift+Tab do, instead of going round
+					// it (f4#1899, points 3 and 4).
+					c.movePaneFocus(panes, focused, direction)
 				} else {
 					c.movePaneFocus([]vtui.UIElement{c.apply, c.ok, c.cancel}, focused, direction)
 				}
@@ -1130,6 +1135,27 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 	handled := c.BaseWindow.ProcessKey(e)
 	c.syncWindowBounds()
 	return handled
+}
+
+// hasButtonBeyond reports whether Apply, OK and Cancel have a button that can
+// take the focus past focused in direction, without going round the row.
+func (c *settingsCenter) hasButtonBeyond(focused vtui.UIElement, direction int) bool {
+	buttons := []vtui.UIElement{c.apply, c.ok, c.cancel}
+	index := -1
+	for i, b := range buttons {
+		if b == focused {
+			index = i
+		}
+	}
+	if index < 0 {
+		return true
+	}
+	for i := index + direction; i >= 0 && i < len(buttons); i += direction {
+		if buttons[i].CanFocus() && !buttons[i].IsDisabled() {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *settingsCenter) movePaneFocus(items []vtui.UIElement, focused vtui.UIElement, direction int) {

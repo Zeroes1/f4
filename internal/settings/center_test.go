@@ -485,6 +485,22 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 	if c.GetFocusedItem() != c.apply {
 		t.Fatal("arrows escaped bottom buttons")
 	}
+	// f4#1899, points 3 and 4: Left on the first button and Right on the
+	// last one leave the row as Shift+Tab and Tab do.
+	key(vtinput.VK_RIGHT, false)
+	if c.GetFocusedItem() != c.ok {
+		t.Fatal("Right on Apply did not reach OK")
+	}
+	key(vtinput.VK_RIGHT, false)
+	key(vtinput.VK_RIGHT, false)
+	if c.GetFocusedItem() != c.search {
+		t.Fatalf("Right on Cancel went to %T %s, want the first control, as Tab", c.GetFocusedItem(), c.GetFocusedItem().GetId())
+	}
+	c.SetFocusedItem(c.apply)
+	key(vtinput.VK_LEFT, false)
+	if c.GetFocusedItem() != c.page {
+		t.Fatalf("Left on Apply went to %T %s, want the page, as Shift+Tab", c.GetFocusedItem(), c.GetFocusedItem().GetId())
+	}
 	for _, cat := range c.categories {
 		if got := c.categoryLabel(cat.ID); got != cat.Label.Resolve(config.App.Language, i18n.Msg) {
 			t.Fatalf("duplicated display title: %q", got)
