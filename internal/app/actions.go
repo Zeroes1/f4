@@ -3835,15 +3835,11 @@ func actionMkDir(pf *panel.PanelsFrame) {
 		}
 
 		if mode == 0 { // Queue
-			rk := fileops.GetResourceKey(activeVfs)
-			var keys []string
-			if rk != "" {
-				keys = append(keys, rk)
-			}
+			// MkDir does not conflict with copying on the same disk — no resource key needed.
 			task := &fileops.QueueTask{
 				Type:       "MkDir",
 				Desc:       desc,
-				ResKeys:    keys,
+				ResKeys:    nil,
 				Run:        runFunc,
 				OnComplete: onDone,
 			}

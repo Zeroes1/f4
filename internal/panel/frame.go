@@ -4855,6 +4855,7 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 		if pf.Wide {
 			pf.WidePanel = 1 - pf.WidePanel
 		}
+		pf.swapPanelSizes()
 		pf.ResizeConsole(pf.LastW, pf.LastH)
 		return true
 	case appcmd.CmSortName:
@@ -7674,4 +7675,19 @@ func smbTargetFor(cur vfs.VFS, target string) string {
 		return uri
 	}
 	return target
+}
+
+// swapPanelSizes keeps each panel's size when Ctrl+U swaps the panels, as
+// far2l does: the split moves to the other side of the middle and the two
+// height decrements trade places (f4#1901). The new sizes are the ones saved.
+func (pf *PanelsFrame) swapPanelSizes() {
+	if pf.WidthDecrement == 0 && pf.LeftHeightDecrement == pf.RightHeightDecrement {
+		return
+	}
+	pf.WidthDecrement = -pf.WidthDecrement
+	pf.LeftHeightDecrement, pf.RightHeightDecrement = pf.RightHeightDecrement, pf.LeftHeightDecrement
+	config.App.WidthDecrement = pf.WidthDecrement
+	config.App.LeftHeightDecrement = pf.LeftHeightDecrement
+	config.App.RightHeightDecrement = pf.RightHeightDecrement
+	config.RequestSaveConfig()
 }
