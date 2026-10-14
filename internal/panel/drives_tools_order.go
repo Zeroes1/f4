@@ -12,7 +12,7 @@ import (
 // The plugin rows of the drive menu (AI, Android, Network and the rest) are
 // the "tools" of f4#1148. Their order is the order they registered in, which
 // the user cannot influence; this file keeps the order the user chose with
-// Shift+Up and Shift+Down in the menu, one tool name per line.
+// Ctrl+Up and Ctrl+Down in the menu, one tool name per line.
 
 // Keys of the built-in tool rows in the order file. A plugin's name is its
 // key; these cannot be one, since a plugin name never starts with "@".

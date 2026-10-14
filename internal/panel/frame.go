@@ -6559,7 +6559,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			})
 		}
 	}
-	// toolRows maps a menu row to the key of its tool, for Shift+Up and Shift+Down
+	// toolRows maps a menu row to the key of its tool, for Ctrl+Up and Ctrl+Down
 	// on the tool rows (#1148). Every row of the Tools section is a tool: the
 	// built-in ones (Other panel, Temporary panel, the registry) are ordered
 	// together with the plugins', each under a key no plugin name can have.
@@ -6628,7 +6628,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				}})
 			}})
 		}
-		// The order the user chose with Shift+Up / Shift+Down, for every tool;
+		// The order the user chose with Ctrl+Up / Ctrl+Down, for every tool;
 		// the sorted-by-name option keeps the plugins in name order instead.
 		if !driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuSortPluginsByHotkey) {
 			if order, err := LoadDriveToolsOrder(DriveToolsOrderFilePath()); err != nil {
@@ -6748,10 +6748,12 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			pf.openDriveBookmarkEditor(panelIdx, menu, driveBookmarks, -1, reopen)
 			return true
 		}
-		// Shift+Up and Shift+Down move the tool row under the cursor, a
-		// built-in one or a plugin's, one place up or down within the tools,
-		// and the new order is saved (#1148).
-		if isDriveMenuMoveKey(e) {
+		// Ctrl+Up and Ctrl+Down move the tool row under the cursor, a built-in
+		// one or a plugin's, one place up or down within the tools, and the new
+		// order is saved (#1148).
+		if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
+			e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 &&
+			e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			if key, ok := toolRows[menu.SelectPos]; ok {
 				// The sorted-by-name option puts the plugin tools in name order
 				// itself, so a move would be undone at once; say so instead of
@@ -6780,9 +6782,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				return true
 			}
 		}
-		// Shift+Up and Shift+Down move the link under the cursor one place up
-		// or down, and the new order is saved (#1148).
-		if isDriveMenuMoveKey(e) {
+		// Ctrl+Up and Ctrl+Down move the link under the cursor one place up or
+		// down, and the new order is saved (#1148).
+		if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
+			e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0 &&
+			e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed|vtinput.ShiftPressed) == 0 {
 			if index, ok := driveBookmarkRows[menu.SelectPos]; ok {
 				delta := 1
 				if e.VirtualKeyCode == vtinput.VK_UP {
@@ -7705,13 +7709,4 @@ func (pf *PanelsFrame) swapPanelSizes() {
 	config.App.LeftHeightDecrement = pf.LeftHeightDecrement
 	config.App.RightHeightDecrement = pf.RightHeightDecrement
 	config.RequestSaveConfig()
-}
-
-// isDriveMenuMoveKey is Shift+Up or Shift+Down, which move the tool or the
-// link under the cursor of the drive menu; the bookmark dialog moves its rows
-// with the same keys (mitek1977-coder, f4#1148).
-func isDriveMenuMoveKey(e *vtinput.InputEvent) bool {
-	return e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
-		e.ControlKeyState&vtinput.ShiftPressed != 0 &&
-		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0
 }

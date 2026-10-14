@@ -16,7 +16,7 @@ type DriveToolChoice struct{ Key, Label string }
 // DriveMenuToolChoices lists every tool of the drive menu, shown or hidden, in
 // the order the menu has them: Other panel, Temporary panel and, where there
 // is one, Windows Registry, then the plugins' tools; arranged as the user left
-// them with Shift+Up/Down, or with the plugins by name when SortToolsByHotkey
+// them with Ctrl+Up/Down, or with the plugins by name when SortToolsByHotkey
 // is on (mitek1977-coder, f4#1148).
 func DriveMenuToolChoices() []DriveToolChoice {
 	choices := []DriveToolChoice{
