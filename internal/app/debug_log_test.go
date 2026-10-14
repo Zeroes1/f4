@@ -51,7 +51,7 @@ func TestConfigureF4DebugLogPath_PreservesExplicitValue(t *testing.T) {
 	for _, value := range []string{"", "stderr", "test", filepath.Join(t.TempDir(), "custom.log")} {
 		t.Run(value, func(t *testing.T) {
 			configDir := filepath.Join(t.TempDir(), "Profile")
-			// #nosec G204 -- invoke this test binary with a fixed test selector.
+			// #nosec G204 G702 -- re-execute this test binary with a fixed test selector.
 			cmd := exec.Command(os.Args[0], "-test.run=^TestConfigureF4DebugLogPath_PreservesExplicitValue$")
 			for _, entry := range os.Environ() {
 				if !strings.HasPrefix(entry, "VTUI_DEBUG=") &&
