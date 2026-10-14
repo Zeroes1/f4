@@ -45,6 +45,7 @@ func TestValidateActiveColors_ShippedStylesPassClean(t *testing.T) {
 	defer func() { UserColorOverridesPath = oldPath }()
 
 	for _, style := range AvailableColorStyles() {
+		config.App.ColorStyle = style.Name
 		if err := ApplyColorStyle(style.Name); err != nil {
 			t.Fatalf("ApplyColorStyle(%q): %v", style.Name, err)
 		}
@@ -101,6 +102,7 @@ func TestValidateActiveColorsChecksFastFindCompositeContrast(t *testing.T) {
 	if err := ApplyColorStyle("Radiola"); err != nil {
 		t.Fatal(err)
 	}
+	config.App.ColorStyle = "Radiola"
 	saved := append([]uint64(nil), vtui.Palette...)
 	defer func() { vtui.Palette = saved }()
 

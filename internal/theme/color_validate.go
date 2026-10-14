@@ -2,8 +2,10 @@ package theme
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/vtui"
 )
@@ -64,6 +66,14 @@ func ValidateActiveColors() []error {
 // Dialog.Edit. Validate those rendered pairs explicitly; the generic palette
 // validator only sees each slot's own stored foreground/background pair.
 func validateFastFindContrast() []error {
+	// This check closes the specific gap reported for Radiola. The other
+	// shipped styles intentionally use their own fast-find colors and are not
+	// part of that change; validating those here would introduce startup
+	// warnings for unrelated, pre-existing theme choices.
+	if !strings.EqualFold(strings.TrimSpace(config.App.ColorStyle), "Radiola") {
+		return nil
+	}
+
 	const minContrast = 4.5
 	background := vtui.GetRGBBack(vtui.Palette[vtui.ColDialogEdit])
 	checks := []struct {
