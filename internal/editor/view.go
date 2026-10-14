@@ -2258,8 +2258,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		} else if shift {
 			ev.RectSelActive = false
 			if !ev.SelActive {
-				ev.SelActive = true
-				ev.SelAnchorOffset = ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
+				ev.StartSelection(ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos)
 			}
 		} else {
 			ev.SelActive = false
@@ -3574,8 +3573,7 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					ev.updateDesiredVisualCol()
 
 					if e.MouseEventFlags&vtinput.MouseMoved == 0 {
-						ev.SelActive = true
-						ev.SelAnchorOffset = offset
+						ev.StartSelection(offset)
 						ev.mouseSelecting = true
 					}
 				} else if ev.SelActive && e.MouseEventFlags&vtinput.MouseMoved != 0 {
@@ -5379,8 +5377,7 @@ func (ev *EditorView) selectWordUnderCursor() {
 			endOff += utf8.RuneLen(lineRunes[i])
 		}
 
-		ev.SelActive = true
-		ev.SelAnchorOffset = lineStart + startOff
+		ev.StartSelection(lineStart + startOff)
 		ev.CursorPos = endOff
 		ev.updateDesiredVisualCol()
 		ev.EnsureCursorVisible()
@@ -6025,6 +6022,14 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 			}
 		})
 	})
+}
+
+// StartSelection starts a linear selection from anchor to the cursor. Every
+// place that starts one goes through it, so whatever a selection keeps besides
+// its anchor is reset in one place (persistent blocks, f4#1729).
+func (ev *EditorView) StartSelection(anchor int) {
+	ev.SelActive = true
+	ev.SelAnchorOffset = anchor
 }
 
 func (ev *EditorView) GetSelectionRange() (int, int) {
@@ -7179,8 +7184,7 @@ func (ev *EditorView) Search(pattern string, caseSensitive, reverse, regexp, who
 // selectFoundPattern selects a match found by Search or FindAll: the match
 // becomes the active selection and the cursor lands at its end.
 func (ev *EditorView) selectFoundPattern(off, length int) {
-	ev.SelActive = true
-	ev.SelAnchorOffset = off
+	ev.StartSelection(off)
 
 	end := off + length
 	// A search reads the whole buffer, so it can find a match in text the

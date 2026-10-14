@@ -2970,8 +2970,7 @@ func init() {
 		MenuPath:    "Edit",
 		Handler: withEditor(func(ev *editor.EditorView) {
 			ev.RectSelActive = false
-			ev.SelActive = true
-			ev.SelAnchorOffset = 0
+			ev.StartSelection(0)
 			lastLine := ev.Li.LineCount() - 1
 			ev.CursorLine = lastLine
 			ev.CursorPos = ev.GetLineLength(lastLine)
