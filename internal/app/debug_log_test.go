@@ -41,6 +41,7 @@ func TestConfigureF4DebugLogPath_PreservesExplicitValue(t *testing.T) {
 		if got := os.Getenv("VTUI_DEBUG"); got != value {
 			t.Fatalf("VTUI_DEBUG = %q, want explicit value %q", got, value)
 		}
+		// #nosec G703 -- configDir is generated in this test's temporary directory.
 		if _, err := os.Stat(filepath.Join(configDir, "logs")); !os.IsNotExist(err) {
 			t.Fatalf("preserving explicit VTUI_DEBUG created profile logs directory: %v", err)
 		}
@@ -50,6 +51,7 @@ func TestConfigureF4DebugLogPath_PreservesExplicitValue(t *testing.T) {
 	for _, value := range []string{"", "stderr", "test", filepath.Join(t.TempDir(), "custom.log")} {
 		t.Run(value, func(t *testing.T) {
 			configDir := filepath.Join(t.TempDir(), "Profile")
+			// #nosec G204 -- invoke this test binary with a fixed test selector.
 			cmd := exec.Command(os.Args[0], "-test.run=^TestConfigureF4DebugLogPath_PreservesExplicitValue$")
 			for _, entry := range os.Environ() {
 				if !strings.HasPrefix(entry, "VTUI_DEBUG=") &&
