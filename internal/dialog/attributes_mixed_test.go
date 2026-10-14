@@ -3,6 +3,7 @@ package dialog
 import (
 	"context"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -409,12 +410,15 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	var editMTime *vtui.Edit
 	var chkHidden *vtui.Checkbox
 	var setButton, securityButton *vtui.Button
+	var flagsList *vtui.ListBox
 	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
 		switch c := el.(type) {
 		case *vtui.Text:
 			texts = append(texts, c.GetText())
 		case *vtui.Edit:
 			editMTime = c
+		case *vtui.ListBox:
+			flagsList = c
 		case *vtui.Checkbox:
 			if strings.Contains(c.GetText(), i18n.Msg("Attributes.Hidden")) {
 				chkHidden = c
@@ -429,17 +433,23 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 		}
 		return true
 	})
-	if editMTime == nil || chkHidden == nil || setButton == nil || securityButton == nil {
+	if editMTime == nil || chkHidden == nil || setButton == nil || securityButton == nil || flagsList == nil {
 		t.Fatal("Windows multiple-selection dialog controls not found")
 	}
 	all := strings.Join(texts, "\n")
 	if !strings.Contains(all, attributesSelectionSummary(targets)) {
 		t.Errorf("dialog lacks the selection summary %q:\n%s", attributesSelectionSummary(targets), all)
 	}
-	for _, want := range []string{"Compressed (?)", "Directory (?)"} {
-		if !strings.Contains(all, want) {
-			t.Errorf("advanced flags lack %q:\n%s", want, all)
+	if !flagsList.ShowScrollBar {
+		t.Error("advanced attributes list has no scrollbar")
+	}
+	for _, want := range []string{"Compressed: ?", "Directory: ?", "Device: no", "Recall on data access: no"} {
+		if !slices.Contains(flagsList.Items, want) {
+			t.Errorf("advanced attributes list lacks %q: %v", want, flagsList.Items)
 		}
+	}
+	if len(flagsList.Items) != 16 {
+		t.Errorf("advanced attributes count = %d, want 16", len(flagsList.Items))
 	}
 	if got := editMTime.GetText(); got != "" {
 		t.Errorf("last write field = %q, want blank for a multiple selection", got)

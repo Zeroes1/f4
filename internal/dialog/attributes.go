@@ -617,7 +617,8 @@ func (mixedOctalValidator) Error(owner vtui.Frame) {
 	vtui.ShowMessageOn(owner, i18n.Msg("Error.Title"), i18n.Msg("Attributes.OctalMixedError"), []string{i18n.Msg("vtui.Ok")})
 }
 
-// windowsAdvancedFlags are the flags the Windows dialog shows but does not edit.
+// windowsAdvancedFlags are Windows file attributes listed separately from the four
+// common editable checkboxes in the dialog.
 var windowsAdvancedFlags = []struct {
 	bit  uint32
 	name string
@@ -629,26 +630,34 @@ var windowsAdvancedFlags = []struct {
 	{0x00001000, "Offline"},
 	{0x00002000, "Not Content Indexed"},
 	{0x00000010, "Directory"},
+	{0x00000040, "Device"},
+	{0x00008000, "Integrity stream"},
+	{0x00010000, "Virtual"},
+	{0x00020000, "No scrub data"},
+	{0x00040000, "Recall on open"},
+	{0x00080000, "Pinned"},
+	{0x00100000, "Unpinned"},
+	{0x00200000, "Strictly sequential"},
+	{0x00400000, "Recall on data access"},
 }
 
-// windowsAdvancedFlagsText lists the advanced flags of the selection. A flag
-// only some of the objects have is marked "(?)", the way a mixed checkbox
-// shows "?".
-func windowsAdvancedFlagsText(targets []AttributesTarget) string {
+// windowsAdvancedFlagsLines lists every known Windows file attribute, including
+// unset ones, so users can distinguish "not set" from "not supported". A
+// mixed selection uses "?", matching the three-state checkboxes above.
+func windowsAdvancedFlagsLines(targets []AttributesTarget) []string {
 	winAttrs := func(item vfs.VFSItem) uint32 { return item.WinAttrs }
-	var names []string
+	lines := make([]string, 0, len(windowsAdvancedFlags))
 	for _, flag := range windowsAdvancedFlags {
+		state := "no"
 		switch mixedAttributeState(targets, flag.bit, winAttrs) {
 		case 1:
-			names = append(names, flag.name)
+			state = "yes"
 		case 2:
-			names = append(names, flag.name+" (?)")
+			state = "?"
 		}
+		lines = append(lines, flag.name+": "+state)
 	}
-	if len(names) == 0 {
-		return "None"
-	}
-	return strings.Join(names, ", ")
+	return lines
 }
 
 func ShowAttributesUnix(refresh func(), v vfs.VFS, path string, item vfs.VFSItem) {
@@ -1116,7 +1125,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	path := targets[0].Path
 	item := targets[0].Item
 	multiple := len(targets) > 1
-	width, height := 60, 22
+	width, height := 60, 25
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1223,7 +1232,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	dlg.AddItem(gbAttr)
 	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	gbAdv := vtui.NewGroupBox(0, 0, 54, 3, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
+	gbAdv := vtui.NewGroupBox(0, 0, 54, 6, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
 	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
 
@@ -1363,10 +1372,14 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbVBox.Add(chkAR, vtui.Margins{}, vtui.AlignLeft)
 	gbVBox.Apply()
 
-	lblAdv := vtui.NewText(0, 0, vtui.TruncateMiddle(windowsAdvancedFlagsText(targets), 50), vtui.Palette[vtui.ColDialogText])
-	gbAdv.AddItem(lblAdv)
-	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-4, 1)
-	gbAdvVBox.Add(lblAdv, vtui.Margins{}, vtui.AlignLeft)
+	flagsList := vtui.NewListBox(0, 0, 50, 4, windowsAdvancedFlagsLines(targets))
+	flagsList.ShowScrollBar = true
+	if flagsList.ScrollBar != nil {
+		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
+	}
+	gbAdv.AddItem(flagsList)
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+1, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-2, 4)
+	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
 	btnSet.OnClick = func() {
