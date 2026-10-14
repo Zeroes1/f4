@@ -10,8 +10,9 @@ import (
 	"github.com/unxed/f4/vfs"
 )
 
-// NewTerminalLogVFS reads back what the terminal has shown. fallback, when
-// set, replaces tv as the data source entirely: ShellModeSimpleInline's
+// NewTerminalLogVFS reads back what the terminal has shown, including its
+// colours as SGR sequences. fallback, when set, replaces tv as the data source
+// entirely: ShellModeSimpleInline's
 // no-PTY console view has no tv anything the user ran was fed into.
 func NewTerminalLogVFS(tv *TerminalView, fallback func() []byte) *TerminalLogVFS {
 	return &TerminalLogVFS{tv: tv, fallback: fallback}
@@ -55,7 +56,8 @@ func (v *TerminalLogVFS) SetAttributes(ctx context.Context, path string, item vf
 func (v *TerminalLogVFS) GetCapabilities() vfs.VFSCapabilities {
 	return vfs.VFSCapabilities{HasRandomAccess: true, HasUnixPermissions: false}
 }
-func (v *TerminalLogVFS) IsReadOnly() bool { return true }
+func (v *TerminalLogVFS) IsReadOnly() bool   { return true }
+func (v *TerminalLogVFS) ANSIViewMode() bool { return true }
 func (v *TerminalLogVFS) Search(ctx context.Context, path string, pattern string) (chan int64, error) {
 	return nil, nil
 }
@@ -67,7 +69,7 @@ func (v *TerminalLogVFS) Clone() vfs.VFS     { return v }
 func (v *TerminalLogVFS) Close() error       { return nil }
 
 func (v *TerminalLogVFS) Open(ctx context.Context, path string) (vfs.ReadAtCloser, error) {
-	src := func() []byte { return v.tv.GetAllLogBytes() }
+	src := func() []byte { return v.tv.GetAllLogANSIBytes() }
 	if v.fallback != nil {
 		src = v.fallback
 	}

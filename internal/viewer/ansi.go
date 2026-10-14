@@ -270,3 +270,11 @@ func isANSIFileName(name string) bool {
 	}
 	return false
 }
+
+func ansiViewMode(path string, source any) bool {
+	if isANSIFileName(path) {
+		return true
+	}
+	provider, ok := source.(interface{ ANSIViewMode() bool })
+	return ok && provider.ANSIViewMode()
+}

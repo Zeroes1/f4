@@ -137,7 +137,7 @@ func NewViewerView(ctx context.Context, v vfs.VFS, path string) (*ViewerView, er
 		Codepage:   cpID,
 		// Files named for terminal art are shown in colour from the start,
 		// as far2l does (f4#1705).
-		AnsiMode: isANSIFileName(path),
+		AnsiMode: ansiViewMode(path, v),
 	}
 	vv.ScrollBar = vtui.NewScrollBar(0, 0, 0)
 	vv.ScrollBar.ColorIdx = theme.ColViewerScrollbar

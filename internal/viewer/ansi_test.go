@@ -6,6 +6,22 @@ import (
 	"github.com/unxed/vtui"
 )
 
+type ansiViewModeSource bool
+
+func (s ansiViewModeSource) ANSIViewMode() bool { return bool(s) }
+
+func TestANSIViewModeIncludesVirtualSource(t *testing.T) {
+	if !ansiViewMode("Terminal Log", ansiViewModeSource(true)) {
+		t.Fatal("virtual ANSI source should enable ANSI view mode")
+	}
+	if ansiViewMode("plain.log", ansiViewModeSource(false)) {
+		t.Fatal("virtual source disabled ANSI view mode")
+	}
+	if !ansiViewMode("colors.ansi", nil) {
+		t.Fatal("ANSI filename should continue to enable ANSI view mode")
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	in := []byte("a\x1b[1mb\x1b[0;32mc\x1b[?25hd\x1b[")
 	plain, orig, seqs := stripANSI(in)
