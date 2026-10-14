@@ -850,19 +850,22 @@ func TestSettingsCenterOpensMaximizedForHotkeysAtItsComputedThreshold(t *testing
 
 func TestSettingsCenterMaximizesWhenNavigatingToHotkeys(t *testing.T) {
 	previousHost := host
-	Configure(hotkeyTableSizeFakeHost{minPageWidth: 60})
+	fake := hotkeyTableSizeFakeHost{minPageWidth: 60}
+	Configure(fake)
 	t.Cleanup(func() { Configure(previousHost) })
 
 	d, _ := (coreSettingsProvider{}).Begin(context.Background())
 	defer d.Close()
 	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
-	c.ResizeConsole(200, 60)
+	threshold := minScreenWidthForWindow(fake.minPageWidth + c.categorySidebarNaturalWidth() + 1 + 4)
+	width := threshold - 1
+	c.ResizeConsole(width, 60)
 	if c.SavedBounds != nil {
 		t.Fatal("ordinary settings page should start at its ordinary size in a large terminal")
 	}
 
 	c.selectCategory("hotkeys")
-	if c.SavedBounds == nil || c.X1 != 0 || c.X2 != 199 || c.Y1 != 0 || c.Y2 != 58 {
+	if c.SavedBounds == nil || c.X1 != 0 || c.X2 != width-1 || c.Y1 != 0 || c.Y2 != 58 {
 		t.Fatalf("navigating to Hotkeys left the dialog at %d,%d–%d,%d with saved bounds %v; want a maximized dialog", c.X1, c.Y1, c.X2, c.Y2, c.SavedBounds)
 	}
 }
