@@ -83,7 +83,7 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 
 // f4#1148 (mitek1977-coder): the bookmark slots get their caption in the rule
 // above them, like Tools and Links; the slot digit is one space from the path,
-// as on the Tools and Links rows; and the bottom line lists Ctrl+Up/Down
+// as on the Tools and Links rows; and the bottom line lists Shift+Up/Down
 // rather than the second key for Ins.
 func TestDriveMenuBookmarksCaptionAndSpacing(t *testing.T) {
 	cfg := t.TempDir()
@@ -131,7 +131,7 @@ func TestDriveMenuBookmarksCaptionAndSpacing(t *testing.T) {
 	if !ok {
 		t.Fatalf("top frame is %T", top)
 	}
-	if strings.Contains(frame.bottomHint, "Ctrl+N") || !strings.HasSuffix(strings.TrimSpace(frame.bottomHint), "Ctrl+Up/Down") {
-		t.Errorf("bottom line %q: want no Ctrl+N and Ctrl+Up/Down at the end", frame.bottomHint)
+	if strings.Contains(frame.bottomHint, "Ctrl+N") || !strings.HasSuffix(strings.TrimSpace(frame.bottomHint), "Shift+Up/Down") {
+		t.Errorf("bottom line %q: want no Ctrl+N and Shift+Up/Down at the end", frame.bottomHint)
 	}
 }
