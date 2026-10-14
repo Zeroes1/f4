@@ -77,7 +77,8 @@ func TestDriveMenuToolChoicesFollowTheMenu(t *testing.T) {
 }
 
 // f4#1148 (mitek1977-coder): Shift+Up and Shift+Down move a tool of the drive
-// menu, as in the bookmark dialog; Ctrl+Up and Ctrl+Down no longer do.
+// menu, as in the bookmark dialog; Ctrl+Up and Ctrl+Down no longer do; the
+// menu is replaced without a frame drawn in between.
 func TestDriveMenuShiftDownMovesTheTool(t *testing.T) {
 	cfg := t.TempDir()
 	oldUserConfigDir := config.UserConfigDir
@@ -135,5 +136,15 @@ func TestDriveMenuShiftDownMovesTheTool(t *testing.T) {
 	down(vtinput.ShiftPressed)
 	if got := order(); got != "[Beta Alpha]" {
 		t.Errorf("after Shift+Down the tools are %s, want [Beta Alpha]", got)
+	}
+	// The old menu stays open until the task that opens the new one closes
+	// it, so no frame is drawn without a menu (no flicker); a key that
+	// reaches it meanwhile, as a held Shift+Down repeats, moves nothing.
+	if menu.IsDone() {
+		t.Error("the menu was closed before its replacement opened")
+	}
+	down(vtinput.ShiftPressed)
+	if got := order(); got != "[Beta Alpha]" {
+		t.Errorf("a second Shift+Down before the menu came back moved the tools to %s", got)
 	}
 }

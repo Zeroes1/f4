@@ -6730,8 +6730,17 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		}
 	}
 
+	// A moved row reopens the menu: the old menu is closed in the same task
+	// that opens the new one, so no frame without a menu is drawn between
+	// them (the window flickered on every move, mitek1977-coder, f4#1148).
+	// Until then moving swallows the keys that still reach the old menu, as
+	// a held Shift+Down repeats.
+	moving := false
 	// Обработка физических клавиш / и ~ (layout-independent)
 	menu.OnKeyDown = func(e *vtinput.InputEvent) bool {
+		if moving {
+			return true
+		}
 		// far2l binds three keys on the bookmark rows of this menu
 		// (panels/panel.cpp:544-600): Ins opens the bookmarks dialog, F4
 		// opens it on the slot under the cursor, Del clears that slot.
@@ -6774,8 +6783,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				if moved, err := moveDriveToolInFile(shown, key, delta); err != nil {
 					vtui.ShowMessageOn(menu, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
 				} else if moved {
-					menu.Close()
-					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+					moving = true
+					vtui.FrameManager.PostTask(func() {
+						menu.Close()
+						pf.showDriveMenuAt(panelIdx, pos+delta)
+					})
 				}
 				return true
 			}
@@ -6792,8 +6804,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				if moved, err := moveDriveBookmarkInFile(index, delta); err != nil {
 					vtui.ShowMessageOn(menu, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
 				} else if moved {
-					menu.Close()
-					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+					moving = true
+					vtui.FrameManager.PostTask(func() {
+						menu.Close()
+						pf.showDriveMenuAt(panelIdx, pos+delta)
+					})
 				}
 				return true
 			}
@@ -6811,8 +6826,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				if moved, err := moveBookmarkSlotInFile(slot, delta); err != nil {
 					vtui.ShowMessageOn(menu, i18n.Msg("Bookmarks.Title"), fmt.Sprintf(i18n.Msg("Bookmarks.SaveError"), err), []string{"&Ok"})
 				} else if moved {
-					menu.Close()
-					vtui.FrameManager.PostTask(func() { pf.showDriveMenuAt(panelIdx, pos+delta) })
+					moving = true
+					vtui.FrameManager.PostTask(func() {
+						menu.Close()
+						pf.showDriveMenuAt(panelIdx, pos+delta)
+					})
 				}
 				return true
 			}
