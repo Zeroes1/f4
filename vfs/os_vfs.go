@@ -239,13 +239,24 @@ func (v *OSVFS) ReadDir(ctx context.Context, path string, onChunk func([]VFSItem
 			}
 			// If it's not a direct directory, it might be a symlink or a Windows Junction.
 			// If it's not a regular file, ask the OS to resolve the final target.
+			entryPath := hostpath.Join(dirPath, e.Name())
 			if !isDir && !e.Type().IsRegular() {
-				if target, err := hostfs.Stat(hostpath.Join(dirPath, e.Name())); err == nil {
+				if target, err := hostfs.Stat(entryPath); err == nil {
 					isDir = target.IsDir()
 				}
 			}
+			reparseTag := readReparseTag(entryPath, info)
+			// IO_REPARSE_TAG_MOUNT_POINT is a directory junction: NTFS only
+			// ever puts one on a directory, so a mount point stays a
+			// directory even when its target is missing (dangling) or
+			// unreadable. Without this the row is drawn as a file, Enter
+			// falls into the file-open path, and the failure is silent —
+			// the classic case being the "My Music"/"My Pictures" junctions
+			// under Public\Documents whose targets do not exist.
+			if reparseTag == ReparseTagMountPoint {
+				isDir = true
+			}
 
-			entryPath := hostpath.Join(dirPath, e.Name())
 			item := VFSItem{
 				KnownMetadata: MetadataExplicit | MetadataHidden,
 				// e.Name() is the raw byte string the OS handed back, which
@@ -258,7 +269,7 @@ func (v *OSVFS) ReadDir(ctx context.Context, path string, onChunk func([]VFSItem
 				SizeKnown:    info != nil,
 				IsDir:        isDir,
 				IsSymlink:    isSymlink,
-				ReparseTag:   readReparseTag(entryPath, info),
+				ReparseTag:   reparseTag,
 				MTime:        mtime,
 				IsExecutable: isExec,
 				IsHidden:     isHidden(entryPath, e.Name(), info),
@@ -319,6 +330,7 @@ func (v *OSVFS) Stat(ctx context.Context, path string) (VFSItem, error) {
 		return VFSItem{}, displayPathError(err)
 	}
 	isSymlink := linkInfo.Mode()&os.ModeSymlink != 0 || isReparsePoint(linkInfo)
+	reparseTag := readReparseTag(path, linkInfo)
 	info := linkInfo
 	if isSymlink {
 		// Preserve the historical Stat view of the target while exposing that
@@ -328,6 +340,9 @@ func (v *OSVFS) Stat(ctx context.Context, path string) (VFSItem, error) {
 			info = targetInfo
 		}
 	}
+	// See ReadDir: a mount point is a directory by definition even when
+	// its target cannot be reached.
+	isDir := info.IsDir() || reparseTag == ReparseTagMountPoint
 
 	item := VFSItem{
 		KnownMetadata: MetadataExplicit | MetadataPermissions | MetadataExecutable | MetadataHidden | MetadataMTime,
@@ -335,9 +350,9 @@ func (v *OSVFS) Stat(ctx context.Context, path string) (VFSItem, error) {
 		Name:         decodeUTF8OrMap([]byte(info.Name())),
 		Size:         info.Size(),
 		SizeKnown:    true,
-		IsDir:        info.IsDir(),
+		IsDir:        isDir,
 		IsSymlink:    isSymlink,
-		ReparseTag:   readReparseTag(path, linkInfo),
+		ReparseTag:   reparseTag,
 		MTime:        info.ModTime(),
 		UnixMode:     uint32(info.Mode().Perm()),
 		IsExecutable: info.Mode().Perm()&0111 != 0,
@@ -373,11 +388,17 @@ func (v *OSVFS) Lstat(ctx context.Context, path string) (VFSItem, error) {
 		return VFSItem{}, displayPathError(err)
 	}
 	isSymlink := info.Mode()&os.ModeSymlink != 0 || isReparsePoint(info)
+	reparseTag := readReparseTag(absPath, info)
 	isDir := info.IsDir()
 	if isSymlink {
 		if target, err := hostfs.Stat(preparedPath); err == nil {
 			isDir = target.IsDir()
 		}
+	}
+	// See ReadDir: a mount point is a directory by definition even when
+	// its target cannot be reached.
+	if reparseTag == ReparseTagMountPoint {
+		isDir = true
 	}
 
 	item := VFSItem{
@@ -388,7 +409,7 @@ func (v *OSVFS) Lstat(ctx context.Context, path string) (VFSItem, error) {
 		SizeKnown:    true,
 		IsDir:        isDir,
 		IsSymlink:    isSymlink,
-		ReparseTag:   readReparseTag(absPath, info),
+		ReparseTag:   reparseTag,
 		MTime:        info.ModTime(),
 		UnixMode:     uint32(info.Mode().Perm()),
 		IsExecutable: info.Mode().Perm()&0111 != 0,
