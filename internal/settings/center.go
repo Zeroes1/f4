@@ -463,7 +463,16 @@ func newSettingsHelp() *settingsHelp {
 	h.bar.OnScroll = func(n int) { h.top = n }
 	return h
 }
-func (h *settingsHelp) CanFocus() bool { return !h.IsDisabled() }
+
+// CanFocus is true only while the description does not fit: a block with
+// nothing to scroll is no stop for Tab or the arrows (f4#1899, point 5).
+func (h *settingsHelp) CanFocus() bool { return !h.IsDisabled() && h.maxTop() > 0 }
+
+// maxTop is the last line the description can start from.
+func (h *settingsHelp) maxTop() int {
+	lines := settingsWrap(h.text, max(1, h.X2-h.X1))
+	return max(0, len(lines)-(h.Y2-h.Y1+1))
+}
 func (h *settingsHelp) Show(scr *vtui.ScreenBuf) {
 	if h.IsDisabled() {
 		return
@@ -479,6 +488,11 @@ func (h *settingsHelp) Show(scr *vtui.ScreenBuf) {
 		scr.Write(h.X1, h.Y1+i-h.top, vtui.StringToCharInfo(lines[i], vtui.Palette[vtui.ColDialogText]))
 	}
 	h.bar.SetPosition(h.X2, h.Y1, h.X2, h.Y2)
+	// The scroll bar is the only mark of the focus on this block.
+	h.bar.ColorIdx = vtui.ColDialogBox
+	if h.IsFocused() {
+		h.bar.ColorIdx = vtui.ColDialogHighlightText
+	}
 	h.bar.PgStep = height
 	h.bar.SetParams(h.top, 0, max(0, len(lines)-height))
 	if len(lines) > height {
@@ -492,15 +506,28 @@ func (h *settingsHelp) ProcessKey(e *vtinput.InputEvent) bool {
 	if !e.KeyDown {
 		return false
 	}
+	// Up on the first line and Down on the last one are not handled: the
+	// window moves the focus on, as on the settings page.
+	last := h.maxTop()
 	switch e.VirtualKeyCode {
 	case vtinput.VK_DOWN:
+		if h.top >= last {
+			return false
+		}
 		h.top++
 	case vtinput.VK_UP:
-		h.top = max(0, h.top-1)
+		if h.top <= 0 {
+			return false
+		}
+		h.top--
 	case vtinput.VK_NEXT:
-		h.top += max(1, h.Y2-h.Y1)
+		h.top = min(last, h.top+max(1, h.Y2-h.Y1))
 	case vtinput.VK_PRIOR:
 		h.top = max(0, h.top-(h.Y2-h.Y1))
+	case vtinput.VK_HOME:
+		h.top = 0
+	case vtinput.VK_END:
+		h.top = last
 	default:
 		return false
 	}
@@ -1052,7 +1079,11 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 		if !c.previous.IsDisabled() {
 			panes = append(panes, c.previous, c.next)
 		}
-		panes = append(panes, c.sidebar, c.page, c.apply, c.ok, c.cancel)
+		panes = append(panes, c.sidebar, c.page)
+		if c.help.CanFocus() {
+			panes = append(panes, c.help)
+		}
+		panes = append(panes, c.apply, c.ok, c.cancel)
 		focused := c.GetFocusedItem()
 		if e.VirtualKeyCode == vtinput.VK_TAB {
 			direction := 1
@@ -1125,7 +1156,17 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 				}
 				return true
 			case c.help:
-				c.help.ProcessKey(e)
+				if !c.help.ProcessKey(e) && e.KeyDown {
+					switch e.VirtualKeyCode {
+					case vtinput.VK_DOWN:
+						c.movePaneFocus([]vtui.UIElement{c.apply, c.ok, c.cancel}, nil, 1)
+					case vtinput.VK_UP:
+						if c.page.CanFocus() {
+							c.SetFocusedItem(c.page)
+							c.page.notifyFocus()
+						}
+					}
+				}
 				return true
 			default:
 				direction := 1

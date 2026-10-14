@@ -888,3 +888,52 @@ func TestSettingsCenterShowsAnOperationsProgress(t *testing.T) {
 		t.Fatalf("the progress line stayed after the operation finished: %q", c.status)
 	}
 }
+
+// f4#1899 (point 5): a description longer than its block can be scrolled
+// from the keyboard. Tab stops on it after the page; Up/Down/Home/End
+// scroll it; past its first and last line the arrows go on to the page
+// and to the buttons.
+func TestSettingsHelpScrollsFromTheKeyboard(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.selectCategory("panels")
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	key := func(k uint16) {
+		c.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: k})
+	}
+	c.help.text = strings.Repeat("A long description line that wraps. ", 120)
+	c.help.top = 0
+	if !c.help.CanFocus() || c.help.maxTop() == 0 {
+		t.Fatal("a description that does not fit cannot take the focus")
+	}
+	c.SetFocusedItem(c.page)
+	key(vtinput.VK_TAB)
+	if c.GetFocusedItem() != c.help {
+		t.Fatalf("Tab from the page went to %T, want the description", c.GetFocusedItem())
+	}
+	key(vtinput.VK_DOWN)
+	if c.help.top != 1 {
+		t.Fatalf("Down scrolled to line %d, want 1", c.help.top)
+	}
+	key(vtinput.VK_END)
+	if c.help.top != c.help.maxTop() {
+		t.Fatalf("End scrolled to line %d, want %d", c.help.top, c.help.maxTop())
+	}
+	key(vtinput.VK_DOWN)
+	if c.GetFocusedItem() != c.apply {
+		t.Fatalf("Down on the last line went to %T, want Apply", c.GetFocusedItem())
+	}
+	c.SetFocusedItem(c.help)
+	key(vtinput.VK_HOME)
+	key(vtinput.VK_UP)
+	if c.GetFocusedItem() != c.page {
+		t.Fatalf("Up on the first line went to %T, want the page", c.GetFocusedItem())
+	}
+
+	c.help.text = "Short."
+	if c.help.CanFocus() {
+		t.Error("a description that fits still takes the focus")
+	}
+}
