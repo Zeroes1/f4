@@ -131,6 +131,28 @@ func TestLayoutViewerTextRowANSIIgnoresSequences(t *testing.T) {
 	}
 }
 
+// f4#1929: a line that begins with a colour keeps it. The row before it ends
+// at its newline, so the next row starts at the colour's sequence rather than
+// after it.
+func TestANSILineStartingWithColourKeepsIt(t *testing.T) {
+	data := []byte("\x1b[31mred\x1b[0m\n\x1b[32mgreen\x1b[0m\n")
+	base := vtui.SetIndexBack(vtui.SetIndexFore(0, 7), 0)
+	state := base
+	var fores []uint8
+	for off := 0; off < len(data); {
+		row := layoutViewerTextRowANSI(data[off:], 80, 8, false, true)
+		cells, _ := ansiRowCells(data[off:off+row.textLen], base, &state, 8, 80)
+		if len(cells) == 0 || row.lineLen == 0 {
+			t.Fatalf("empty row at byte %d: %+v", off, row)
+		}
+		fores = append(fores, vtui.GetIndexFore(cells[0].Attributes))
+		off += row.lineLen
+	}
+	if len(fores) != 2 || fores[0] != 1 || fores[1] != 2 {
+		t.Errorf("the rows start with colours %v, want [1 2]", fores)
+	}
+}
+
 func TestANSIRowCellsCarryColoursAcrossRows(t *testing.T) {
 	base := vtui.SetIndexBack(vtui.SetIndexFore(0, 7), 0)
 	state := base

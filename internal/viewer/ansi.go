@@ -123,15 +123,18 @@ func parseANSIParams(b []byte) (params []int, ok bool) {
 
 // layoutViewerTextRowANSI is layoutViewerTextRow for text that may hold
 // escape sequences: the row is laid out on the text without them and the
-// counts are carried back to data.
+// counts are carried back to data. The row ends right after its last
+// character, so the sequences before the first character of the next row
+// start that row: a line of a terminal log that begins with a colour keeps it
+// (f4#1929).
 func layoutViewerTextRowANSI(data []byte, width, tabSize int, wrap, ansi bool) viewerTextRow {
 	if !ansi {
 		return layoutViewerTextRow(data, width, tabSize, wrap)
 	}
 	plain, orig, _ := stripANSI(data)
 	row := layoutViewerTextRow(plain, width, tabSize, wrap)
-	if row.lineLen >= 0 && row.lineLen < len(orig) {
-		row.lineLen = orig[row.lineLen]
+	if row.lineLen > 0 && row.lineLen <= len(plain) {
+		row.lineLen = orig[row.lineLen-1] + 1
 	}
 	if row.textLen >= 0 && row.textLen < len(orig) {
 		row.textLen = orig[row.textLen]
