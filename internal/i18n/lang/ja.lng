@@ -2249,3 +2249,4 @@ SettingsCenter.tool.Name.Description=登録済みドライブメニュー ツー
 SettingsCenter.tool.Name.Label=ツール
 SettingsCenter.tool.Enabled.Description=このツールをドライブメニューに表示します。
 SettingsCenter.tool.Enabled.Label=有効
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=サイズを表示しているときのみ使用できます。

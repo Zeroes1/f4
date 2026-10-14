@@ -2257,3 +2257,4 @@ SettingsCenter.tool.Name.Description=Registriertes Werkzeug des Laufwerksmenüs.
 SettingsCenter.tool.Name.Label=Werkzeug
 SettingsCenter.tool.Enabled.Description=Dieses Werkzeug im Laufwerksmenü anzeigen.
 SettingsCenter.tool.Enabled.Label=Aktiviert
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Nur verfügbar, wenn die Größe angezeigt wird.

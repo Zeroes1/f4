@@ -4125,6 +4125,7 @@ SettingsCenter.tool.Name.Description=Registered drive-menu tool.
 SettingsCenter.tool.Name.Label=Tool
 SettingsCenter.tool.Enabled.Description=Show this tool in the drive menu.
 SettingsCenter.tool.Enabled.Label=Enabled
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Available only while the size is shown.
 
 Group.Menu=Group by…
 Group.Menu.Desc=Show panel grouping modes

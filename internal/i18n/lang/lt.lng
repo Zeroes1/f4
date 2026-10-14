@@ -2254,3 +2254,4 @@ SettingsCenter.tool.Name.Description=Registruotas diskų meniu įrankis.
 SettingsCenter.tool.Name.Label=Įrankis
 SettingsCenter.tool.Enabled.Description=Rodyti šį įrankį diskų meniu.
 SettingsCenter.tool.Enabled.Label=Įjungta
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Galima tik tada, kai rodomas dydis.

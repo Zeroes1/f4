@@ -2257,3 +2257,4 @@ SettingsCenter.tool.Name.Description=Herramienta registrada del menú de unidade
 SettingsCenter.tool.Name.Label=Herramienta
 SettingsCenter.tool.Enabled.Description=Mostrar esta herramienta en el menú de unidades.
 SettingsCenter.tool.Enabled.Label=Activado
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Disponible solo cuando se muestra el tamaño.

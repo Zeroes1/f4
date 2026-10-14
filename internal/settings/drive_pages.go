@@ -182,10 +182,12 @@ func settingsCheckboxBoxOnly(id string) bool {
 }
 
 // settingsFieldIndent is how far in a check box sits under the one it depends
-// on: SortToolsByHotkey only matters while ShowTools is on, and is drawn four
-// columns in under it (mitek1977-coder, f4#1148).
+// on: SortToolsByHotkey only matters while ShowTools is on, ShowSizeFloat
+// while ShowSize is on, and each is drawn four columns in under the other
+// (mitek1977-coder, f4#1148).
 func settingsFieldIndent(id string) int {
-	if id == driveMenuOptionFieldID("Drive.SortToolsByHotkey") {
+	switch id {
+	case driveMenuOptionFieldID("Drive.SortToolsByHotkey"), driveMenuOptionFieldID("Drive.ShowSizeFloat"):
 		return 4
 	}
 	return 0

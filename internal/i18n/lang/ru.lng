@@ -4125,6 +4125,7 @@ SettingsCenter.tool.Name.Description=Зарегистрированный инс
 SettingsCenter.tool.Name.Label=Инструмент
 SettingsCenter.tool.Enabled.Description=Показывать этот инструмент в меню дисков.
 SettingsCenter.tool.Enabled.Label=Включён
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Доступно, только когда показывается размер.
 
 Group.Menu=Группировать по…
 Group.Menu.Desc=Открыть меню группировки панели

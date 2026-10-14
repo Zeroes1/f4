@@ -2257,3 +2257,4 @@ SettingsCenter.tool.Name.Description=Registrovaný nástroj nabídky disků.
 SettingsCenter.tool.Name.Label=Nástroj
 SettingsCenter.tool.Enabled.Description=Zobrazit tento nástroj v nabídce disků.
 SettingsCenter.tool.Enabled.Label=Povoleno
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Dostupné jen při zobrazení velikosti.

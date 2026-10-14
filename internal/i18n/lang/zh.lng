@@ -2175,3 +2175,4 @@ SettingsCenter.tool.Name.Description=已注册的驱动器菜单工具。
 SettingsCenter.tool.Name.Label=工具
 SettingsCenter.tool.Enabled.Description=在驱动器菜单中显示此工具。
 SettingsCenter.tool.Enabled.Label=已启用
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=仅在显示大小时可用。

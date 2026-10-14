@@ -259,6 +259,56 @@ func TestDriveOptionsPageNamesAndNoToolsList(t *testing.T) {
 	}
 }
 
+// f4#1148 (mitek1977-coder): "Show size float" sits four columns in under
+// "Show size" and is grayed out while "Show size" is off.
+func TestDriveOptionsShowSizeFloatDependsOnShowSize(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 129, 44)
+	c.selectCategory(driveOptionsPage)
+
+	var size, float *settingsRow
+	for _, row := range c.page.rows {
+		switch row.field.ID {
+		case driveMenuOptionFieldID("Drive.ShowSize"):
+			size = row
+		case driveMenuOptionFieldID("Drive.ShowSizeFloat"):
+			float = row
+		}
+	}
+	if size == nil || float == nil {
+		t.Fatal("Show size or Show size float is not on the page")
+	}
+	if float.controlX != 4 || size.controlX != 0 {
+		t.Errorf("indents: Show size %d, Show size float %d; want 0 and 4", size.controlX, float.controlX)
+	}
+	box := size.control.(*settingsCheckbox)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(130, 45)
+	set := func(on bool) {
+		if (box.State == 1) != on {
+			box.Toggle()
+		}
+		c.Show(scr)
+	}
+	set(false)
+	if !float.control.IsDisabled() {
+		t.Error("Show size float is available with Show size off")
+	}
+	set(true)
+	if float.control.IsDisabled() {
+		t.Error("Show size float is grayed out with Show size on")
+	}
+}
+
 // f4#1148 (mitek1977-coder): on the Tools page a click on a tool's name
 // selects its row and leaves it shown or hidden; only a click on "[x]"
 // toggles it.

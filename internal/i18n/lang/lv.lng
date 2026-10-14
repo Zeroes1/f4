@@ -2254,3 +2254,4 @@ SettingsCenter.tool.Name.Description=Reģistrēts disku izvēlnes rīks.
 SettingsCenter.tool.Name.Label=Rīks
 SettingsCenter.tool.Enabled.Description=Rādīt šo rīku disku izvēlnē.
 SettingsCenter.tool.Enabled.Label=Iespējots
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Pieejams tikai, ja tiek rādīts izmērs.

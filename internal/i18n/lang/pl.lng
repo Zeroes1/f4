@@ -2257,3 +2257,4 @@ SettingsCenter.tool.Name.Description=Zarejestrowane narzędzie menu dysku.
 SettingsCenter.tool.Name.Label=Narzędzie
 SettingsCenter.tool.Enabled.Description=Pokaż to narzędzie w menu dysku.
 SettingsCenter.tool.Enabled.Label=Włączone
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Dostępne tylko, gdy rozmiar jest wyświetlany.

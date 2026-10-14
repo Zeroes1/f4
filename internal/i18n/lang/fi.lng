@@ -2254,3 +2254,4 @@ SettingsCenter.tool.Name.Description=Rekisteröity levyvalikon työkalu.
 SettingsCenter.tool.Name.Label=Työkalu
 SettingsCenter.tool.Enabled.Description=Näytä tämä työkalu levyvalikossa.
 SettingsCenter.tool.Enabled.Label=Käytössä
+SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Käytettävissä vain, kun koko näytetään.
