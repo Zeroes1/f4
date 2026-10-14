@@ -353,6 +353,26 @@ func (v *settingsViewport) ProcessKey(e *vtinput.InputEvent) bool {
 	if e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN || e.VirtualKeyCode == vtinput.VK_LEFT || e.VirtualKeyCode == vtinput.VK_RIGHT) {
 		return true
 	}
+	// PgUp: if not at top, scroll to top; if at top, let parent handle focus movement.
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_PRIOR {
+		if v.scroll > 0 {
+			v.scroll = 0
+			v.positionRows()
+			v.notifyFocus()
+			return true
+		}
+		return false
+	}
+	// PgDown: if not at bottom, scroll to bottom; if at bottom, let parent handle.
+	if e.KeyDown && e.VirtualKeyCode == vtinput.VK_NEXT {
+		if v.scroll < v.bar.Max {
+			v.scroll = v.bar.Max
+			v.positionRows()
+			v.notifyFocus()
+			return true
+		}
+		return false
+	}
 	return handled
 }
 func (v *settingsViewport) ProcessMouse(e *vtinput.InputEvent) bool {
@@ -1064,6 +1084,26 @@ func (c *settingsCenter) ProcessKey(e *vtinput.InputEvent) bool {
 					}
 					if e.VirtualKeyCode == vtinput.VK_LEFT {
 						c.SetFocusedItem(c.sidebar)
+					}
+					return true
+				}
+				// PgUp at top of page -> move focus to sidebar (left half).
+				if e.VirtualKeyCode == vtinput.VK_PRIOR && e.KeyDown {
+					if !c.page.ProcessKey(e) {
+						c.SetFocusedItem(c.sidebar)
+						return true
+					}
+					return true
+				}
+				// PgDown at bottom of page -> move focus to help/buttons area.
+				if e.VirtualKeyCode == vtinput.VK_NEXT && e.KeyDown {
+					if !c.page.ProcessKey(e) {
+						if c.help.CanFocus() {
+							c.SetFocusedItem(c.help)
+						} else if c.apply.CanFocus() {
+							c.SetFocusedItem(c.apply)
+						}
+						return true
 					}
 					return true
 				}
