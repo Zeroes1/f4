@@ -1917,3 +1917,5 @@ SettingsCenter.tool.Name.Label=उपकरण
 SettingsCenter.tool.Enabled.Description=इस उपकरण को ड्राइव मेनू में दिखाएँ।
 SettingsCenter.tool.Enabled.Label=सक्षम
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=केवल तब उपलब्ध जब आकार दिखाया जाता है।
+SettingsCenter.EditorPersistentBlocks.Description=कर्सर हटने पर भी चुना गया ब्लॉक बना रहता है; टाइपिंग, Enter और Backspace कर्सर पर काम करते हैं और ब्लॉक को नहीं छूते। Ctrl+P ब्लॉक को कर्सर पर कॉपी करता है और Ctrl+M ले जाता है, Del उसे हटाता है, Ctrl+U चयन हटाता है।
+SettingsCenter.EditorPersistentBlocks.Label=स्थायी ब्लॉक

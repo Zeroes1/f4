@@ -91,9 +91,14 @@ type EditorView struct {
 	// glyphs of the Unicode Control Pictures block (U+2400..), so a NUL or ESC in
 	// a file is told apart from every other unprintable. Display only: widths,
 	// cursor columns and the file's bytes are unchanged (unxed/f4#1667).
-	ShowControlChars  bool
-	SelActive         bool
-	SelAnchorOffset   int // Абсолютное смещение начала выделения
+	ShowControlChars bool
+	SelActive        bool
+	SelAnchorOffset  int // Абсолютное смещение начала выделения
+	// selFrozen marks a persistent block (EditorPersistentBlocks, f4#1729):
+	// the selection stays from SelAnchorOffset to selEndOffset while the
+	// cursor moves, and edits elsewhere shift both ends.
+	selFrozen         bool
+	selEndOffset      int
 	editorBookmarks   [10]int
 	editorBookmarkSet [10]bool
 	// extraCursors holds the secondary carets of a multi-caret edit, sorted
@@ -509,6 +514,7 @@ func NewEditorViewWith(Pt *piecetable.PieceTable, v vfs.VFS, path string, useEdi
 		Codepage:         65001,
 		BinaryFile:       editorBufferHasNUL(Pt),
 	}
+	Li.OnEdit = ev.shiftFrozenBlock
 	if ev.TabSize <= 0 {
 		ev.TabSize = 8
 	}
@@ -2257,9 +2263,17 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 			}
 		} else if shift {
 			ev.RectSelActive = false
-			if !ev.SelActive {
+			if !ev.SelActive || ev.selFrozen {
 				ev.StartSelection(ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos)
 			}
+		} else if config.App.EditorPersistentBlocks && ev.SelActive {
+			// A persistent block stays where it is when the cursor
+			// moves on (f4#1729).
+			if !ev.selFrozen {
+				ev.selEndOffset = ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
+				ev.selFrozen = true
+			}
+			ev.RectSelActive = false
 		} else {
 			ev.SelActive = false
 			ev.RectSelActive = false
@@ -2624,7 +2638,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 			}
 			// At the start of a line Ctrl+Backspace is Backspace and joins
 			// the line to the one above, as in far2l (editor.cpp, KEY_CTRLBS).
-			if ev.CursorPos > 0 || ev.CursorVirtualSpaces > 0 || ev.SelActive || ev.RectSelActive {
+			if ev.CursorPos > 0 || ev.CursorVirtualSpaces > 0 || ev.selectionTakesInput() {
 				ev.DeleteWordBackward()
 				return true
 			}
@@ -2632,7 +2646,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		// A vertical block is a selection too. It lives in rectSelActive
 		// rather than selActive, and checking only the latter is what made
 		// Del eat the character under the cursor while a block was up.
-		if ev.SelActive || ev.RectSelActive {
+		if ev.selectionTakesInput() {
 			ev.DeleteSelection()
 		} else {
 			offset := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
@@ -2696,7 +2710,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		// Ctrl+Del deletes the word to the right (f4#1729). At the end of a
 		// line it is Del and joins the next line, as in far2l (editor.cpp,
 		// KEY_CTRLDEL).
-		if ctrl && !shift && !alt && (ev.SelActive || ev.RectSelActive ||
+		if ctrl && !shift && !alt && (ev.selectionTakesInput() ||
 			(ev.CursorVirtualSpaces == 0 && ev.CursorPos < ev.GetLineLength(ev.CursorLine))) {
 			ev.DeleteWordForward()
 			ev.updateDesiredVisualCol()
@@ -2732,7 +2746,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 	case vtinput.VK_RETURN:
 		ev.noteBufferEdit()
 		ev.saveUndo(opOther)
-		if ev.SelActive || ev.RectSelActive {
+		if ev.selectionTakesInput() {
 			ev.inGroup = true
 			ev.DeleteSelection()
 			ev.inGroup = false
@@ -2787,7 +2801,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		if !shift && !ctrl && !alt {
 			ev.noteBufferEdit()
 			ev.saveUndo(opTyping)
-			if ev.SelActive || ev.RectSelActive {
+			if ev.selectionTakesInput() {
 				ev.inGroup = true
 				ev.DeleteSelection()
 				ev.inGroup = false
@@ -2833,7 +2847,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 	if e.Char != 0 && !ctrl {
 		ev.noteBufferEdit()
 		ev.saveUndo(opTyping)
-		if ev.SelActive || ev.RectSelActive {
+		if ev.selectionTakesInput() {
 			ev.inGroup = true
 			ev.DeleteSelection()
 			ev.inGroup = false
@@ -6030,6 +6044,39 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 func (ev *EditorView) StartSelection(anchor int) {
 	ev.SelActive = true
 	ev.SelAnchorOffset = anchor
+	ev.selFrozen = false
+}
+
+// selectionTakesInput is true when typing, Enter, Tab and Backspace replace
+// the selection rather than work at the cursor: always, except for a
+// persistent block (f4#1729).
+func (ev *EditorView) selectionTakesInput() bool {
+	return (ev.SelActive && !ev.selFrozen) || ev.RectSelActive
+}
+
+// shiftFrozenBlock keeps a persistent block on its text when the buffer
+// changes at offset by delta bytes (LineIndex.OnEdit).
+func (ev *EditorView) shiftFrozenBlock(offset, delta int) {
+	if !ev.selFrozen {
+		return
+	}
+	shift := func(pos int) int {
+		if delta > 0 {
+			if pos >= offset {
+				return pos + delta
+			}
+			return pos
+		}
+		if pos >= offset-delta {
+			return pos + delta
+		}
+		if pos > offset {
+			return offset
+		}
+		return pos
+	}
+	ev.SelAnchorOffset = shift(ev.SelAnchorOffset)
+	ev.selEndOffset = shift(ev.selEndOffset)
 }
 
 func (ev *EditorView) GetSelectionRange() (int, int) {
@@ -6037,6 +6084,9 @@ func (ev *EditorView) GetSelectionRange() (int, int) {
 		return 0, 0
 	}
 	cursorOffset := ev.Li.GetLineOffset(ev.CursorLine) + ev.CursorPos
+	if ev.selFrozen {
+		cursorOffset = min(max(ev.selEndOffset, 0), ev.Pt.Size())
+	}
 	min, max := ev.SelAnchorOffset, cursorOffset
 	if min > max {
 		min, max = max, min
@@ -6056,7 +6106,7 @@ func (ev *EditorView) InsertTextAtCursor(data []byte) {
 	}
 	ev.noteBufferEdit()
 	ev.saveUndo(opOther)
-	if ev.SelActive || ev.RectSelActive {
+	if ev.selectionTakesInput() {
 		ev.inGroup = true
 		ev.DeleteSelection()
 		ev.inGroup = false

@@ -65,7 +65,7 @@ func wordEndForward(line []rune, pos int) int {
 // dispatcher runs the action before EditorView.ProcessKey sees the key, so a
 // no-op at the line start would swallow it (f4#1729).
 func (ev *EditorView) DeleteWordBackward() {
-	if ev.SelActive || ev.RectSelActive {
+	if ev.selectionTakesInput() {
 		ev.DeleteSelection()
 		return
 	}
@@ -97,7 +97,7 @@ func (ev *EditorView) DeleteWordBackward() {
 // (wordEndForward). At the end of a line it does nothing; the caller treats
 // the key as Del, which joins the lines, as far2l does.
 func (ev *EditorView) DeleteWordForward() {
-	if ev.SelActive || ev.RectSelActive {
+	if ev.selectionTakesInput() {
 		ev.DeleteSelection()
 		return
 	}
@@ -140,6 +140,7 @@ func (ev *EditorView) deleteRange(start, end int) {
 
 func (ev *EditorView) ClearSelection() {
 	ev.SelActive = false
+	ev.selFrozen = false
 	ev.RectSelActive = false
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()

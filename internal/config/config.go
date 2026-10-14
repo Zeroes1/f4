@@ -540,6 +540,7 @@ type F4Config struct {
 	EditorExpandTabs                int
 	EditorAutoIndent                bool
 	EditorCursorBeyondEOL           bool
+	EditorPersistentBlocks          bool
 	EditorTabSize                   int
 	EditorUseEditorConfig           bool
 	EditorCrosshair                 bool
@@ -770,6 +771,7 @@ var App = F4Config{
 	EditorExpandTabs:                0,
 	EditorAutoIndent:                true,
 	EditorCursorBeyondEOL:           false,
+	EditorPersistentBlocks:          false,
 	EditorTabSize:                   4,
 	EditorUseEditorConfig:           true,
 	EditorCrosshair:                 false,
@@ -1142,6 +1144,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	_, _ = fmt.Sscanf(merged.GetString("Editor", "ExpandTabs", "0"), "%d", &cfg.EditorExpandTabs)
 	cfg.EditorAutoIndent = merged.GetString("Editor", "AutoIndent", "1") == "1"
 	cfg.EditorCursorBeyondEOL = merged.GetString("Editor", "CursorBeyondEOL", "0") == "1"
+	cfg.EditorPersistentBlocks = merged.GetString("Editor", "PersistentBlocks", "0") == "1"
 	cfg.EditorUseEditorConfig = merged.GetString("Editor", "UseEditorConfig", "1") == "1"
 	cfg.EditorCrosshair = merged.GetString("Editor", "Crosshair", "0") == "1"
 	cfg.EditorShowControlChars = merged.GetString("Editor", "ShowControlChars", "0") == "1"
@@ -1459,6 +1462,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "ExpandTabs = %d\n", cfg.EditorExpandTabs)
 	fmt.Fprintf(&sb, "AutoIndent = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorAutoIndent])
 	fmt.Fprintf(&sb, "CursorBeyondEOL = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCursorBeyondEOL])
+	fmt.Fprintf(&sb, "PersistentBlocks = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorPersistentBlocks])
 	fmt.Fprintf(&sb, "UseEditorConfig = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorUseEditorConfig])
 	fmt.Fprintf(&sb, "Crosshair = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorCrosshair])
 	fmt.Fprintf(&sb, "ShowControlChars = %d\n", map[bool]int{true: 1, false: 0}[cfg.EditorShowControlChars])

@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=Työkalu
 SettingsCenter.tool.Enabled.Description=Näytä tämä työkalu levyvalikossa.
 SettingsCenter.tool.Enabled.Label=Käytössä
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Käytettävissä vain, kun koko näytetään.
+SettingsCenter.EditorPersistentBlocks.Description=Valittu lohko säilyy, kun kohdistin siirtyy pois; kirjoitus, Enter ja Askelpalautin toimivat kohdistimen kohdalla eivätkä koske lohkoon. Ctrl+P kopioi ja Ctrl+M siirtää lohkon kohdistimeen, Del poistaa sen, Ctrl+U poistaa valinnan.
+SettingsCenter.EditorPersistentBlocks.Label=Pysyvät lohkot

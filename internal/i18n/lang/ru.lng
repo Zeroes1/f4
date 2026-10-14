@@ -4129,6 +4129,8 @@ SettingsCenter.tool.Name.Label=Инструмент
 SettingsCenter.tool.Enabled.Description=Показывать этот инструмент в меню дисков.
 SettingsCenter.tool.Enabled.Label=Включён
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Доступно, только когда показывается размер.
+SettingsCenter.EditorPersistentBlocks.Description=Выделенный блок остаётся, когда курсор уходит с него; ввод, Enter и Backspace работают у курсора и блок не трогают. Ctrl+P копирует, а Ctrl+M переносит блок к курсору, Del удаляет его, Ctrl+U снимает выделение.
+SettingsCenter.EditorPersistentBlocks.Label=Постоянные блоки
 
 Group.Menu=Группировать по…
 Group.Menu.Desc=Открыть меню группировки панели

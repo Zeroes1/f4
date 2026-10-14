@@ -124,6 +124,7 @@ EditorTabSize|editor|Text input|Tab width|Set tab-stop width for newly opened ed
 EditorExpandTabs|editor|Text input|Tab key inserts|Insert a literal tab or spaces to the next tab stop. Legacy New and All modes currently have identical insertion behavior; existing tabs are not converted.|0:Tab character;1:Spaces;2:Spaces (legacy All)|new editors
 EditorAutoIndent|editor|Text input|Automatic indentation|Copy the current line's leading spaces and tabs when inserting a newline.||new editors
 EditorCursorBeyondEOL|editor|Text input|Cursor beyond end of line|Allow virtual space after the line end. Inserting text pads the gap with spaces.||new editors
+EditorPersistentBlocks|editor|Text input|Persistent blocks|Keep a selected block when the cursor moves away; typing, Enter and Backspace then work at the cursor and leave the block. Ctrl+P copies and Ctrl+M moves the block to the cursor, Del deletes it, Ctrl+U removes the selection.||live
 EditorUseEditorConfig|editor|Text input|Read adjacent .editorconfig|Apply matching indent_style, indent_size and tab_width from .editorconfig beside the opened file. Parent-directory discovery and the full standard are not implemented.||new editors
 EditorAutoComplete|editor|Completion|Editor completion|Enable completion in newly opened named files whose basenames match the configured masks.||new editors
 EditorAutoCompleteMask|editor|Completion|Completion filename masks|Semicolon-separated, case-insensitive filename patterns selecting files eligible for editor completion.||new editors

@@ -2258,3 +2258,5 @@ SettingsCenter.tool.Name.Label=Narzędzie
 SettingsCenter.tool.Enabled.Description=Pokaż to narzędzie w menu dysku.
 SettingsCenter.tool.Enabled.Label=Włączone
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Dostępne tylko, gdy rozmiar jest wyświetlany.
+SettingsCenter.EditorPersistentBlocks.Description=Zaznaczony blok pozostaje, gdy kursor go opuszcza; pisanie, Enter i Backspace działają przy kursorze i nie ruszają bloku. Ctrl+P kopiuje, a Ctrl+M przenosi blok do kursora, Del go usuwa, Ctrl+U usuwa zaznaczenie.
+SettingsCenter.EditorPersistentBlocks.Label=Trwałe bloki

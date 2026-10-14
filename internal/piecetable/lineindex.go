@@ -61,6 +61,11 @@ type LineIndex struct {
 	// wide is the fallback layout: absolute offsets, one int each.
 	wide    []int
 	useWide bool
+
+	// OnEdit, when set, hears every insertion (delta > 0) and deletion
+	// (delta < 0) at offset, after the index is updated; the editor keeps a
+	// persistent block in place with it.
+	OnEdit func(offset, delta int)
 }
 
 // NewLineIndex creates a new empty index.
@@ -426,6 +431,9 @@ func (Li *LineIndex) GetLineAtOffset(offset int) int {
 
 // UpdateAfterInsert incrementally updates the index after data insertion.
 func (Li *LineIndex) UpdateAfterInsert(offset int, data []byte) {
+	if Li.OnEdit != nil && len(data) > 0 {
+		defer Li.OnEdit(offset, len(data))
+	}
 	Li.mu.Lock()
 	defer Li.mu.Unlock()
 	lenData := len(data)
@@ -457,6 +465,9 @@ func (Li *LineIndex) UpdateAfterInsert(offset int, data []byte) {
 
 // UpdateAfterDelete incrementally updates the index after data deletion.
 func (Li *LineIndex) UpdateAfterDelete(offset, length int) {
+	if Li.OnEdit != nil && length > 0 {
+		defer Li.OnEdit(offset, -length)
+	}
 	Li.mu.Lock()
 	defer Li.mu.Unlock()
 	if length == 0 {

@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=Įrankis
 SettingsCenter.tool.Enabled.Description=Rodyti šį įrankį diskų meniu.
 SettingsCenter.tool.Enabled.Label=Įjungta
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Galima tik tada, kai rodomas dydis.
+SettingsCenter.EditorPersistentBlocks.Description=Pažymėtas blokas išlieka, kai žymeklis iš jo pasitraukia; rašymas, Enter ir Backspace veikia ties žymekliu ir bloko neliečia. Ctrl+P kopijuoja, o Ctrl+M perkelia bloką prie žymeklio, Del jį ištrina, Ctrl+U panaikina žymėjimą.
+SettingsCenter.EditorPersistentBlocks.Label=Nuolatiniai blokai

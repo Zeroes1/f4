@@ -2258,3 +2258,5 @@ SettingsCenter.tool.Name.Label=Herramienta
 SettingsCenter.tool.Enabled.Description=Mostrar esta herramienta en el menú de unidades.
 SettingsCenter.tool.Enabled.Label=Activado
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Disponible solo cuando se muestra el tamaño.
+SettingsCenter.EditorPersistentBlocks.Description=El bloque seleccionado se mantiene cuando el cursor se aleja; escribir, Enter y Retroceso actúan en el cursor y no tocan el bloque. Ctrl+P copia y Ctrl+M mueve el bloque al cursor, Supr lo borra y Ctrl+U quita la selección.
+SettingsCenter.EditorPersistentBlocks.Label=Bloques persistentes

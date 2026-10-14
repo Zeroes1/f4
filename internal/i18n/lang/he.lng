@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=כלי
 SettingsCenter.tool.Enabled.Description=הצג כלי זה בתפריט הכונן.
 SettingsCenter.tool.Enabled.Label=מופעל
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=זמין רק כאשר הגודל מוצג.
+SettingsCenter.EditorPersistentBlocks.Description=בלוק נבחר נשאר כשהסמן מתרחק ממנו; הקלדה, Enter ו-Backspace פועלים במקום הסמן ואינם נוגעים בבלוק. Ctrl+P מעתיק ו-Ctrl+M מעביר את הבלוק אל הסמן, Del מוחק אותו, Ctrl+U מבטל את הבחירה.
+SettingsCenter.EditorPersistentBlocks.Label=בלוקים קבועים

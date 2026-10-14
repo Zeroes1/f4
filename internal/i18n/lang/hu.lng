@@ -2179,3 +2179,5 @@ SettingsCenter.tool.Name.Label=Eszköz
 SettingsCenter.tool.Enabled.Description=Az eszköz megjelenítése a meghajtómenüben.
 SettingsCenter.tool.Enabled.Label=Engedélyezve
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Csak a méret megjelenítésekor érhető el.
+SettingsCenter.EditorPersistentBlocks.Description=A kijelölt blokk megmarad, amikor a kurzor elhagyja; a gépelés, az Enter és a Backspace a kurzornál működik, és nem érinti a blokkot. A Ctrl+P a kurzorhoz másolja, a Ctrl+M áthelyezi a blokkot, a Del törli, a Ctrl+U megszünteti a kijelölést.
+SettingsCenter.EditorPersistentBlocks.Label=Állandó blokkok

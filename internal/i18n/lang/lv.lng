@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=Rīks
 SettingsCenter.tool.Enabled.Description=Rādīt šo rīku disku izvēlnē.
 SettingsCenter.tool.Enabled.Label=Iespējots
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Pieejams tikai, ja tiek rādīts izmērs.
+SettingsCenter.EditorPersistentBlocks.Description=Iezīmētais bloks saglabājas, kad kursors to atstāj; rakstīšana, Enter un Backspace darbojas pie kursora un bloku neskar. Ctrl+P kopē un Ctrl+M pārvieto bloku pie kursora, Del to izdzēš, Ctrl+U noņem iezīmējumu.
+SettingsCenter.EditorPersistentBlocks.Label=Pastāvīgie bloki

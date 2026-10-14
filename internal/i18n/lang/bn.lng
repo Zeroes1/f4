@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=সরঞ্জাম
 SettingsCenter.tool.Enabled.Description=ড্রাইভ মেনুতে এই সরঞ্জামটি দেখান।
 SettingsCenter.tool.Enabled.Label=সক্রিয়
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=শুধু আকার দেখানো হলে পাওয়া যায়।
+SettingsCenter.EditorPersistentBlocks.Description=কার্সার সরে গেলেও নির্বাচিত ব্লক থেকে যায়; টাইপ করা, Enter ও Backspace কার্সারে কাজ করে এবং ব্লকে হাত দেয় না। Ctrl+P ব্লকটি কার্সারে কপি করে ও Ctrl+M সরায়, Del মুছে দেয়, Ctrl+U নির্বাচন সরায়।
+SettingsCenter.EditorPersistentBlocks.Label=স্থায়ী ব্লক

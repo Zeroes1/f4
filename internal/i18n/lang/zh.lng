@@ -2176,3 +2176,5 @@ SettingsCenter.tool.Name.Label=工具
 SettingsCenter.tool.Enabled.Description=在驱动器菜单中显示此工具。
 SettingsCenter.tool.Enabled.Label=已启用
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=仅在显示大小时可用。
+SettingsCenter.EditorPersistentBlocks.Description=光标移开后所选块仍保留；输入、Enter 和 Backspace 在光标处生效，不影响该块。Ctrl+P 将块复制到光标处，Ctrl+M 移动到光标处，Del 删除该块，Ctrl+U 取消选择。
+SettingsCenter.EditorPersistentBlocks.Label=持久块

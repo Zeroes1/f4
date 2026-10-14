@@ -2212,3 +2212,5 @@ SettingsCenter.tool.Name.Label=أداة
 SettingsCenter.tool.Enabled.Description=إظهار هذه الأداة في قائمة الأقراص.
 SettingsCenter.tool.Enabled.Label=ممكّن
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=متاح فقط عند عرض الحجم.
+SettingsCenter.EditorPersistentBlocks.Description=تبقى الكتلة المحددة عندما يبتعد المؤشر عنها؛ تعمل الكتابة و Enter و Backspace عند المؤشر ولا تمس الكتلة. ينسخ Ctrl+P الكتلة إلى المؤشر وينقلها Ctrl+M، ويحذفها Del، ويلغي Ctrl+U التحديد.
+SettingsCenter.EditorPersistentBlocks.Label=الكتل الدائمة

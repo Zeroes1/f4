@@ -4129,6 +4129,8 @@ SettingsCenter.tool.Name.Label=Tool
 SettingsCenter.tool.Enabled.Description=Show this tool in the drive menu.
 SettingsCenter.tool.Enabled.Label=Enabled
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Available only while the size is shown.
+SettingsCenter.EditorPersistentBlocks.Description=Keep a selected block when the cursor moves away; typing, Enter and Backspace then work at the cursor and leave the block. Ctrl+P copies and Ctrl+M moves the block to the cursor, Del deletes it, Ctrl+U removes the selection.
+SettingsCenter.EditorPersistentBlocks.Label=Persistent blocks
 
 Group.Menu=Group by…
 Group.Menu.Desc=Show panel grouping modes

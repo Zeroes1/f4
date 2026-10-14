@@ -2250,3 +2250,5 @@ SettingsCenter.tool.Name.Label=ツール
 SettingsCenter.tool.Enabled.Description=このツールをドライブメニューに表示します。
 SettingsCenter.tool.Enabled.Label=有効
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=サイズを表示しているときのみ使用できます。
+SettingsCenter.EditorPersistentBlocks.Description=カーソルを動かしても選択したブロックが残ります。入力、Enter、Backspace はカーソル位置で働き、ブロックには触れません。Ctrl+P でブロックをカーソル位置にコピー、Ctrl+M で移動、Del で削除、Ctrl+U で選択を解除します。
+SettingsCenter.EditorPersistentBlocks.Label=永続ブロック

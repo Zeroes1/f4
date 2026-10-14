@@ -2176,3 +2176,5 @@ SettingsCenter.tool.Name.Label=Գործիք
 SettingsCenter.tool.Enabled.Description=Ցուցադրել այս գործիքը սկավառակի ցանկում։
 SettingsCenter.tool.Enabled.Label=Միացված
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Հասանելի է միայն, երբ չափը ցուցադրվում է։
+SettingsCenter.EditorPersistentBlocks.Description=Ընտրված բլոկը մնում է, երբ կուրսորը հեռանում է նրանից. մուտքագրումը, Enter-ը և Backspace-ը աշխատում են կուրսորի մոտ և բլոկին չեն դիպչում։ Ctrl+P-ն պատճենում է, Ctrl+M-ը տեղափոխում բլոկը կուրսորի մոտ, Del-ը ջնջում է այն, Ctrl+U-ն հանում է ընտրությունը։
+SettingsCenter.EditorPersistentBlocks.Label=Մշտական բլոկներ

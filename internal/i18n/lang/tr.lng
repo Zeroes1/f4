@@ -2255,3 +2255,5 @@ SettingsCenter.tool.Name.Label=Araç
 SettingsCenter.tool.Enabled.Description=Bu aracı sürücü menüsünde göster.
 SettingsCenter.tool.Enabled.Label=Etkin
 SettingsCenter.Text.c93af727d6cd311ddb857a5ff38a0e55bd593b51549a429f3989e777b3a669e0=Yalnızca boyut gösterilirken kullanılabilir.
+SettingsCenter.EditorPersistentBlocks.Description=İmleç uzaklaştığında seçili blok korunur; yazma, Enter ve Geri silme imleçte çalışır ve bloğa dokunmaz. Ctrl+P bloğu imlece kopyalar, Ctrl+M taşır, Del siler, Ctrl+U seçimi kaldırır.
+SettingsCenter.EditorPersistentBlocks.Label=Kalıcı bloklar
