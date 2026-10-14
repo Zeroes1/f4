@@ -1378,7 +1378,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
 	}
 	gbAdv.AddItem(flagsList)
-	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+1, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-2, 4)
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 4)
 	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
