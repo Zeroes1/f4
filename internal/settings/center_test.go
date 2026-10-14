@@ -449,18 +449,27 @@ func TestSettingsPaneKeyboardPolicy(t *testing.T) {
 	c.selectCategory("panels")
 	c.SetFocusedItem(c.page)
 	first, last := c.page.rows[1].control, c.page.rows[3].control
+	// f4#1899, point 6: the page does not go round. Up on the first setting
+	// reaches the search field, Down on the last one the buttons, and Up
+	// from the buttons comes back to the last setting.
 	c.page.SetFocusedItem(first)
 	key(vtinput.VK_UP, false)
-	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
-		t.Fatal("Up must wrap inside content")
+	if c.GetFocusedItem() != c.search {
+		t.Fatalf("Up on the first setting went to %T, want the search field", c.GetFocusedItem())
 	}
-	key(vtinput.VK_DOWN, false)
-	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != first {
-		t.Fatal("Down must wrap inside content")
-	}
+	c.SetFocusedItem(c.page)
+	c.page.SetFocusedItem(first)
 	key(vtinput.VK_DOWN, false)
 	if c.page.GetFocusedItem() != last {
 		t.Fatal("navigation must skip unavailable setting")
+	}
+	key(vtinput.VK_DOWN, false)
+	if c.GetFocusedItem() != c.apply {
+		t.Fatalf("Down on the last setting went to %T, want Apply", c.GetFocusedItem())
+	}
+	key(vtinput.VK_UP, false)
+	if c.GetFocusedItem() != c.page || c.page.GetFocusedItem() != last {
+		t.Fatal("Up from Apply did not come back to the last setting")
 	}
 	key(vtinput.VK_LEFT, false)
 	if c.GetFocusedItem() != c.sidebar {
@@ -877,5 +886,54 @@ func TestSettingsCenterShowsAnOperationsProgress(t *testing.T) {
 	pump(func() bool { return c.running == nil })
 	if c.status != "" {
 		t.Fatalf("the progress line stayed after the operation finished: %q", c.status)
+	}
+}
+
+// f4#1899 (point 5): a description longer than its block can be scrolled
+// from the keyboard. Tab stops on it after the page; Up/Down/Home/End
+// scroll it; past its first and last line the arrows go on to the page
+// and to the buttons.
+func TestSettingsHelpScrollsFromTheKeyboard(t *testing.T) {
+	d, _ := (coreSettingsProvider{}).Begin(context.Background())
+	defer d.Close()
+	c := newSettingsCenter([]*settingsSession{{catalog: (coreSettingsProvider{}).Catalog(), draft: d}})
+	c.selectCategory("panels")
+	c.ResizeConsole(130, 35)
+	c.SetPosition(0, 0, 129, 34)
+	key := func(k uint16) {
+		c.ProcessKey(&vtinput.InputEvent{KeyDown: true, VirtualKeyCode: k})
+	}
+	c.help.text = strings.Repeat("A long description line that wraps. ", 120)
+	c.help.top = 0
+	if !c.help.CanFocus() || c.help.maxTop() == 0 {
+		t.Fatal("a description that does not fit cannot take the focus")
+	}
+	c.SetFocusedItem(c.page)
+	key(vtinput.VK_TAB)
+	if c.GetFocusedItem() != c.help {
+		t.Fatalf("Tab from the page went to %T, want the description", c.GetFocusedItem())
+	}
+	key(vtinput.VK_DOWN)
+	if c.help.top != 1 {
+		t.Fatalf("Down scrolled to line %d, want 1", c.help.top)
+	}
+	key(vtinput.VK_END)
+	if c.help.top != c.help.maxTop() {
+		t.Fatalf("End scrolled to line %d, want %d", c.help.top, c.help.maxTop())
+	}
+	key(vtinput.VK_DOWN)
+	if c.GetFocusedItem() != c.apply {
+		t.Fatalf("Down on the last line went to %T, want Apply", c.GetFocusedItem())
+	}
+	c.SetFocusedItem(c.help)
+	key(vtinput.VK_HOME)
+	key(vtinput.VK_UP)
+	if c.GetFocusedItem() != c.page {
+		t.Fatalf("Up on the first line went to %T, want the page", c.GetFocusedItem())
+	}
+
+	c.help.text = "Short."
+	if c.help.CanFocus() {
+		t.Error("a description that fits still takes the focus")
 	}
 }
