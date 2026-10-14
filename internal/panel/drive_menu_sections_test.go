@@ -161,9 +161,11 @@ func TestDriveMenuShiftDownMovesTheBookmark(t *testing.T) {
 	if !ok {
 		t.Fatal("no drive menu on top")
 	}
+	// The row is found by its slot digit: the menu cuts a long path from
+	// the left, and the temporary directories of macOS and Windows are long.
 	row := -1
 	for i, item := range menu.Items {
-		if strings.Contains(item.Text, placeA) {
+		if strings.HasPrefix(item.Text, "&3 ") {
 			row = i
 		}
 	}
