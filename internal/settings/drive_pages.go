@@ -23,7 +23,7 @@ const (
 
 var driveChooserPages = []f4settings.Category{
 	{ID: driveOptionsPage, Label: f4settings.Text{Key: "SettingsCenter.DriveTab.Options", English: "Drive options"}},
-	{ID: driveToolsPage, Label: f4settings.Text{English: "Tools"}},
+	{ID: driveToolsPage, Label: f4settings.Text{English: "Tools & Plugins"}},
 	{ID: driveBookmarksPage, Label: f4settings.Text{Key: "SettingsCenter.DriveTab.Bookmarks", English: "Bookmarks"}},
 	{ID: driveLinksPage, Label: f4settings.Text{Key: "SettingsCenter.DriveTab.Links", English: "Links"}},
 }

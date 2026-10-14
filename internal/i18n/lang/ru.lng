@@ -2365,7 +2365,7 @@ CommandPalette.Bookmark.Home.Desc=Открыть домашнюю папку в 
 
 Drive.Title= Диски
 Drive.Links=Links
-Drive.Tools=Инструменты
+Drive.Tools=Инструменты и плагины
 Drive.ToolsSortedByName=Инструменты-плагины отсортированы по имени (параметр меню), поэтому порядок менять нельзя. Отключите «Сортировать инструменты по сочетанию клавиш» в окне настроек, раздел «Выбор диска».
 Drive.BottomHint= Ins Del F4 F9 Ctrl+Up/Down
 Drive.UnmountFailedTitle=Не удалось размонтировать
@@ -4096,6 +4096,7 @@ SettingsCenter.Text.32775c43e59217b14a8150128cb90eca7e35a77627d4f74f6cd4ecfdfbe9
 SettingsCenter.Text.986b4b1dd226b28694c61b1fb25efb345980c4d27be52f93600268979c09af72=Качество JPEG должно быть от 1 до 100
 SettingsCenter.Text.983ea5e98aa7f8f7eb08adef934361480984c4c8bb76201aa8fff64f6da0051f=Формат номера должен содержать от 1 до 20 нулей
 SettingsCenter.Text.ea93d6a262ecb87a9fa4d09edbd7654c046597936a8e235fc3949eb01775ff99=Инструменты
+SettingsCenter.Text.ce2990349ebbafc9c53b7c8ba980e803a32368dfc3f37fd89f5a40397afeb18e=Инструменты и плагины
 SettingsCenter.Text.ecb177517eae1ad7b9843b0a0419f4cb5d9f8cd8eb33b78f1db028a73ebf735c=Выбор зарегистрированных инструментов, показываемых в меню дисков.
 SettingsCenter.Text.fcf11f73b06570d1a8dd703ea5456fa58584662b8ea6003a588dc503c5fa80a9=Меню F11
 SettingsCenter.Text.8d78d31f5db14305d03e11a18a3c8844871deb801132e40bc699a37a58946c17=Выберите, какие строки меню плагинов (F11) показывать. У скрытой строки сохраняется её горячая клавиша.

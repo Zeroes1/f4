@@ -101,7 +101,7 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 		return panel.SaveBookmarks(bookmarkPath, items)
 	}})
 	toolVisibilityPath := panel.DriveToolsVisibilityFilePath()
-	toolVisibility := recordCollection("drive-tools", "drives", "Tools", "Choose which registered drive-menu tools are shown.", "tool.Name", []f4settings.Field{
+	toolVisibility := recordCollection("drive-tools", "drives", "Tools & Plugins", "Choose which registered drive-menu tools are shown.", "tool.Name", []f4settings.Field{
 		recordField("tool.Name", "Tool", "Registered drive-menu tool.", f4settings.String),
 		recordField("tool.Enabled", "Enabled", "Show this tool in the drive menu.", f4settings.Boolean),
 	})
