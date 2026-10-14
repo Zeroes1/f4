@@ -764,12 +764,6 @@ func (pf *PanelsFrame) leftMenu() vtui.MenuBarItem {
 			{Text: "&4. " + i18n.Msg("Action.AI.ViewMem"), Command: appcmd.CmLeftAIMem, Shortcut: "Ctrl+4"},
 			{Separator: true},
 			{Text: sideMenuText("Menu.Left.DriveMenu"), Command: appcmd.CmLeftDriveMenu, Shortcut: "Alt+F1"},
-			{Separator: true},
-			{Text: i18n.Msg("FileOp.BtnBackground"), Command: appcmd.CmBackground},
-			{Text: i18n.Msg("Action.Workspace.New"), Command: appcmd.CmWorkspaceNew, Shortcut: "Ctrl+N"},
-			{Text: i18n.Msg("Action.Workspace.NewTerminal"), Command: appcmd.CmWorkspaceNewTerminal, Shortcut: "Ctrl+Shift+O"},
-			{Text: i18n.Msg("Action.Workspace.Close"), Command: appcmd.CmWorkspaceClose, Shortcut: "Ctrl+W"},
-			{Text: i18n.Msg("Menu.Exit"), Command: vtui.CmQuit},
 		}}
 	}
 	return vtui.MenuBarItem{Label: menuhotkeys.Auto(i18n.Msg("Menu.Left")), SubItems: withExtraViewModeRows(leftViewModeCommands, []vtui.MenuItem{
@@ -789,12 +783,6 @@ func (pf *PanelsFrame) leftMenu() vtui.MenuBarItem {
 		{Text: sideMenuText("Group.Menu"), Command: appcmd.CmLeftGroupMenu},
 		{Separator: true},
 		{Text: sideMenuText("Menu.Left.DriveMenu"), Command: appcmd.CmLeftDriveMenu, Shortcut: "Alt+F1"},
-		{Separator: true},
-		{Text: i18n.Msg("FileOp.BtnBackground"), Command: appcmd.CmBackground},
-		{Text: i18n.Msg("Action.Workspace.New"), Command: appcmd.CmWorkspaceNew, Shortcut: "Ctrl+N"},
-		{Text: i18n.Msg("Action.Workspace.NewTerminal"), Command: appcmd.CmWorkspaceNewTerminal, Shortcut: "Ctrl+Shift+O"},
-		{Text: i18n.Msg("Action.Workspace.Close"), Command: appcmd.CmWorkspaceClose, Shortcut: "Ctrl+W"},
-		{Text: i18n.Msg("Menu.Exit"), Command: vtui.CmQuit},
 	})}
 }
 
@@ -832,6 +820,37 @@ func (pf *PanelsFrame) rightMenu() vtui.MenuBarItem {
 		{Separator: true},
 		{Text: sideMenuText("Menu.Right.DriveMenu"), Command: appcmd.CmRightDriveMenu, Shortcut: "Alt+F2"},
 	})}
+}
+
+// sessionMenuItems are the rows that act on f4 itself rather than on a panel:
+// background, the workspaces and Exit. They end the Files menu, where they
+// are reachable with the panels hidden too; the Left menu, which had them,
+// is about the left panel (Alexey5112, f4#1784).
+func sessionMenuItems() []vtui.MenuItem {
+	return []vtui.MenuItem{
+		{Text: i18n.Msg("FileOp.BtnBackground"), Command: appcmd.CmBackground},
+		{Text: i18n.Msg("Action.Workspace.New"), Command: appcmd.CmWorkspaceNew, Shortcut: "Ctrl+N"},
+		{Text: i18n.Msg("Action.Workspace.NewTerminal"), Command: appcmd.CmWorkspaceNewTerminal, Shortcut: "Ctrl+Shift+O"},
+		{Text: i18n.Msg("Action.Workspace.Close"), Command: appcmd.CmWorkspaceClose, Shortcut: "Ctrl+W"},
+		{Text: i18n.Msg("Menu.Exit"), Command: vtui.CmQuit},
+	}
+}
+
+// appendSessionMenuItems puts sessionMenuItems at the end of the Files menu,
+// after a separator.
+func appendSessionMenuItems(items []vtui.MenuBarItem) []vtui.MenuBarItem {
+	filesLabel := i18n.Msg("Menu.Shell.Files")
+	for i := range items {
+		if items[i].Label != filesLabel {
+			continue
+		}
+		if len(items[i].SubItems) > 0 {
+			items[i].SubItems = append(items[i].SubItems, vtui.MenuItem{Separator: true})
+		}
+		items[i].SubItems = append(items[i].SubItems, sessionMenuItems()...)
+		break
+	}
+	return items
 }
 
 // appendTerminalMenuItems keeps terminal-specific log commands reachable from
@@ -940,11 +959,11 @@ func (pf *PanelsFrame) BuildMenuItems() []vtui.MenuBarItem {
 	}
 	var items []vtui.MenuBarItem
 	if !pf.ShowPanels {
-		items = appendTerminalMenuItems(BuildMenuBarItems("Shell"))
+		items = appendSessionMenuItems(appendTerminalMenuItems(BuildMenuBarItems("Shell")))
 		menuhotkeys.UniqueBar(items)
 	} else {
 		items = []vtui.MenuBarItem{pf.LeftMenu()}
-		items = append(items, BuildMenuBarItems("Shell")...)
+		items = append(items, appendSessionMenuItems(BuildMenuBarItems("Shell"))...)
 		items = append(items, pf.RightMenu())
 		// Also here, so that no menu ever holds the default-hotkey marker.
 		menuhotkeys.UniqueBar(items)
