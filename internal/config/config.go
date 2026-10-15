@@ -599,6 +599,10 @@ type F4Config struct {
 	// never queues) to WheelAccelerationMax. The spin window, the coast
 	// step and its delay are tuned in code, see internal/wheel.
 	WheelAcceleration int
+	// ElevationIdleSeconds: how long the elevated helper of Windows (UAC) may
+	// stay without requests before f4 closes it and asks again next time;
+	// 0 keeps administrator rights until f4 exits (f4#1768).
+	ElevationIdleSeconds int
 	// Path hints (autocomplete in path inputs and the command line).
 	PathHintTimeout     int  // seconds for a VFS ReadDir behind a hint
 	PathHintFullPath    bool // show full paths in the hint, false = final element only
@@ -812,6 +816,7 @@ var App = F4Config{
 	WheelTableUp:                    0,
 	WheelTableDown:                  0,
 	WheelAcceleration:               WheelAccelerationDefault,
+	ElevationIdleSeconds:            DefaultElevationIdleSeconds,
 	PathHintTimeout:                 2,
 	PathHintFullPath:                false,
 	PathHintSource:                  2,
@@ -1195,6 +1200,13 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	// code (see internal/wheel), and the value is clamped into its range.
 	cfg.WheelAcceleration = loadWheelInt(merged, "Acceleration", WheelAccelerationDefault, WheelAccelerationMin, WheelAccelerationMax)
 
+	// [Elevation]
+	cfg.ElevationIdleSeconds = DefaultElevationIdleSeconds
+	_, _ = fmt.Sscanf(merged.GetString("Elevation", "IdleSeconds", strconv.Itoa(DefaultElevationIdleSeconds)), "%d", &cfg.ElevationIdleSeconds)
+	if cfg.ElevationIdleSeconds < 0 {
+		cfg.ElevationIdleSeconds = 0
+	}
+
 	// [PathHints]
 	cfg.PathHintTimeout = 2
 	_, _ = fmt.Sscanf(merged.GetString("PathHints", "Timeout", "2"), "%d", &cfg.PathHintTimeout)
@@ -1513,6 +1525,8 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "TableUp = %d\n", cfg.WheelTableUp)
 	fmt.Fprintf(&sb, "TableDown = %d\n", cfg.WheelTableDown)
 	fmt.Fprintf(&sb, "Acceleration = %d\n", cfg.WheelAcceleration)
+	sb.WriteString("\n[Elevation]\n")
+	fmt.Fprintf(&sb, "IdleSeconds = %d\n", cfg.ElevationIdleSeconds)
 	sb.WriteString("\n[PathHints]\n")
 	fmt.Fprintf(&sb, "Timeout = %d\n", cfg.PathHintTimeout)
 	fmt.Fprintf(&sb, "FullPath = %d\n", map[bool]int{true: 1, false: 0}[cfg.PathHintFullPath])

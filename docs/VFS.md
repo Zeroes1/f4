@@ -83,7 +83,12 @@ travel as a code (`SudoResponse.Errno`), not as Windows message text.
 On Windows the client is on: when an `OSVFS` operation is refused, `SudoClient`
 first asks the user whether to continue as administrator (`Elevation.*`
 messages, `confirmElevation`), and only after a yes starts the dispatcher, so
-UAC asks. The yes holds until f4 exits; a no is not remembered, like a cancelled
+UAC asks. The yes holds while the dispatcher works: after `[Elevation]
+IdleSeconds` of `settings.ini` (120 by default; f4:config) without a request
+the client closes it (`ElevationIdle`, `closeIfIdle`), the dispatcher exits
+with its client, and the next refused operation asks again, as Far does. A
+request in progress is never cut: the timer waits for it and starts over. 0
+keeps the dispatcher until f4 exits. A no is not remembered, like a cancelled
 sudo password. `Open` and `Create` on this path read and write through
 `elevatedFile` and `elevatedWriter` (`vfs/sudo_elevated_file.go`);
 `SudoClient.Open`, which hands out a descriptor, is refused up front. A create

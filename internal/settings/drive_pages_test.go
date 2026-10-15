@@ -222,8 +222,8 @@ func TestDriveChooserWindowListsTheToolsOnItsToolsPage(t *testing.T) {
 }
 
 // f4#1148 (mitek1977-coder): Drive options names its check boxes in words
-// (12.10 list, point 5), leaves out the tool and bookmark options, which the
-// Tools, Bookmarks and Links pages already cover, says nothing about when an
+// (12.10 list, point 5), leaves out the tool options, which the Tools page
+// already covers (Show Bookmarks is on the Bookmarks page), says nothing about when an
 // option takes effect, and does not list the tools again.
 func TestDriveOptionsPageNamesAndNoToolsList(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
@@ -686,5 +686,64 @@ func TestDriveLinksPageHotKeyField(t *testing.T) {
 	}
 	if len(links) != 1 || !strings.EqualFold(links[0].Hotkey, "Q") {
 		t.Errorf("links after Apply = %+v, want Home with hot key Q", links)
+	}
+}
+
+// f4#1148 (mitek1977-coder, 15.10 list, point 2): the Bookmarks page of the
+// F9 window has "Show Bookmarks" over the list of the folder bookmark slots,
+// one blank line between them, and the box clears the drive menu's option;
+// the Drive options page does not repeat it.
+func TestDriveBookmarksPageShowBookmarksSwitch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 129, 44)
+	id := driveMenuOptionFieldID("Drive.ShowBookmarks")
+
+	c.selectCategory(driveOptionsPage)
+	for _, row := range c.page.rows {
+		if row.field.ID == id {
+			t.Fatal("Show Bookmarks is still on the Drive options page")
+		}
+	}
+
+	c.selectCategory(driveBookmarksPage)
+	var box, list *settingsRow
+	for _, row := range c.page.rows {
+		switch {
+		case row.field.ID == id:
+			box = row
+		case row.control != nil && row.control.GetId() == "collection:bookmarks":
+			list = row
+		}
+	}
+	if box == nil || list == nil {
+		t.Fatalf("Bookmarks page: Show Bookmarks %v, bookmark list %v", box != nil, list != nil)
+	}
+	check, ok := box.control.(*settingsCheckbox)
+	if !ok {
+		t.Fatalf("Show Bookmarks is a %T, want a check box", box.control)
+	}
+	if got := strings.TrimSpace(check.lines[0]); got != "Show bookmarks" {
+		t.Errorf("check box label = %q, want %q", got, "Show bookmarks")
+	}
+	if box.y >= list.y {
+		t.Fatalf("Show Bookmarks (line %d) is not above the list (line %d)", box.y, list.y)
+	}
+	if gap := list.y - (box.y + box.height); gap != 1 {
+		t.Errorf("%d blank lines between Show Bookmarks and the list, want 1", gap)
+	}
+
+	// Apply writes the switch into the drive menu's options.
+	check.OnChange(0)
+	if got := box.session.draft.Values[id]; got != "false" {
+		t.Errorf("draft value after unchecking = %q, want false", got)
 	}
 }

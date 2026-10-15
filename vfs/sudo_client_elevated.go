@@ -23,6 +23,58 @@ var elevatedConnectTimeout = 2 * time.Minute
 // administrator before UAC is asked; a variable so a test can answer it.
 var confirmElevation = askElevationOnUI
 
+// ElevationIdle is how long the elevated dispatcher may wait without a
+// request before f4 closes it, so that f4 does not keep administrator rights
+// for the rest of the session: the next operation that needs them asks again,
+// as Far does (f4#1768, step 6a). 0 keeps it until f4 exits. A function, so
+// that the app reads its setting (config.App.ElevationIdleSeconds) each time.
+var ElevationIdle = func() time.Duration { return 2 * time.Minute }
+
+// elevationTimer is the part of *time.Timer the idle timer uses.
+type elevationTimer interface{ Stop() bool }
+
+// elevationAfterFunc and elevationNow are time.AfterFunc and time.Now;
+// variables so a test can drive the idle timer by hand.
+var (
+	elevationAfterFunc = func(d time.Duration, f func()) elevationTimer { return time.AfterFunc(d, f) }
+	elevationNow       = time.Now
+)
+
+// armIdleLocked notes that the elevated dispatcher has just answered and
+// (re)starts the timer that closes it after ElevationIdle without requests.
+// c.mu is held.
+func (c *SudoClient) armIdleLocked() {
+	idle := ElevationIdle()
+	if !connectsByUAC() || idle <= 0 || c.conn == nil {
+		return
+	}
+	c.lastUsed = elevationNow()
+	if c.idle != nil {
+		c.idle.Stop()
+	}
+	c.idle = elevationAfterFunc(idle, c.closeIfIdle)
+}
+
+// closeIfIdle closes the elevated dispatcher and forgets the consent once it
+// has been idle for ElevationIdle. A request in progress holds c.mu, so it is
+// never cut: this waits for it, sees the fresh lastUsed and waits again.
+func (c *SudoClient) closeIfIdle() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	idle := ElevationIdle()
+	if c.conn == nil || idle <= 0 {
+		return
+	}
+	if left := idle - elevationNow().Sub(c.lastUsed); left > 0 {
+		c.idle = elevationAfterFunc(left, c.closeIfIdle)
+		return
+	}
+	vtui.DebugLog("SUDO_CLIENT: the elevated dispatcher was idle for %v; closing it", idle)
+	_ = c.conn.Close() // the dispatcher exits when its client goes away
+	c.conn, c.idle = nil, nil
+	c.consented = false
+}
+
 // ErrElevationDeclined: the user did not agree to elevate.
 var ErrElevationDeclined = errors.New("elevation declined")
 
@@ -79,6 +131,7 @@ func (c *SudoClient) connectElevatedLocked() error {
 		conn, err := DialElevated(sock, token, 10*time.Second)
 		if err == nil {
 			c.conn, c.sockPath = conn, sock
+			c.armIdleLocked()
 			return nil
 		}
 		if errors.Is(err, ErrSudoAccessDenied) || time.Now().After(deadline) {
