@@ -97,8 +97,15 @@ type EditorView struct {
 	// selFrozen marks a persistent block (EditorPersistentBlocks, f4#1729):
 	// the selection stays from SelAnchorOffset to selEndOffset while the
 	// cursor moves, and edits elsewhere shift both ends.
-	selFrozen         bool
-	selEndOffset      int
+	selFrozen    bool
+	selEndOffset int
+	// rectFrozen is the same for the vertical block: its far corner stays
+	// at rectEndLine/rectEndCol, and rectLines is the line count the last
+	// edit left, to move the block along when lines come or go above it.
+	rectFrozen        bool
+	rectEndLine       int
+	rectEndCol        int
+	rectLines         int
 	editorBookmarks   [10]int
 	editorBookmarkSet [10]bool
 	// extraCursors holds the secondary carets of a multi-caret edit, sorted
@@ -113,13 +120,17 @@ type EditorView struct {
 	mouseSelecting   bool
 	// mouseKeptBlock is the persistent block a click put aside: a click
 	// that turns out not to be a drag gives it back (f4#1729).
-	mouseKeptBlock     bool
-	mouseKeptAnchor    int
-	mouseKeptEnd       int
-	mouseRectSelecting bool
-	hoverURL           string
-	hoverURLStart      int
-	editSession        int // Unique ID to fence background tasks
+	mouseKeptBlock  bool
+	mouseKeptAnchor int
+	mouseKeptEnd    int
+	// mouseKeptRect is the same for a persistent vertical block.
+	mouseKeptRect                          bool
+	mouseKeptRectLine, mouseKeptRectCol    int
+	mouseKeptRectEndLine, mouseKeptRectEnd int
+	mouseRectSelecting                     bool
+	hoverURL                               string
+	hoverURLStart                          int
+	editSession                            int // Unique ID to fence background tasks
 
 	// wheelCoast is what a fast wheel spin leaves behind: lines the editor
 	// still owes the cursor (see internal/wheel).
@@ -2261,10 +2272,8 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 	handleNav := func() {
 		if alt {
 			ev.SelActive = false
-			if !ev.RectSelActive {
-				ev.RectSelActive = true
-				ev.rectSelStartLine = ev.CursorLine
-				ev.rectSelStartCol = ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+			if !ev.RectSelActive || ev.rectFrozen {
+				ev.StartRectSelection(ev.CursorLine, ev.getVisualColOf(ev.CursorLine, ev.CursorPos))
 			}
 		} else if shift {
 			ev.RectSelActive = false
@@ -2279,6 +2288,13 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 				ev.selFrozen = true
 			}
 			ev.RectSelActive = false
+		} else if config.App.EditorPersistentBlocks && ev.RectSelActive {
+			if !ev.rectFrozen {
+				ev.rectEndLine = ev.CursorLine
+				ev.rectEndCol = ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+				ev.rectLines = ev.Li.LineCount()
+				ev.rectFrozen = true
+			}
 		} else {
 			ev.SelActive = false
 			ev.RectSelActive = false
@@ -3096,11 +3112,12 @@ func (ev *EditorView) fillCellsWithLinks(target []vtui.CharInfo, data []byte, de
 		}
 
 		if ev.RectSelActive {
-			minY, maxY := ev.rectSelStartLine, ev.CursorLine
+			endLine, endCol := ev.rectSelEnd()
+			minY, maxY := ev.rectSelStartLine, endLine
 			if minY > maxY {
 				minY, maxY = maxY, minY
 			}
-			minX, maxX := ev.rectSelStartCol, ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+			minX, maxX := ev.rectSelStartCol, endCol
 			if minX > maxX {
 				minX, maxX = maxX, minX
 			}
@@ -3531,8 +3548,14 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					ev.SelActive, ev.selFrozen = true, true
 					ev.SelAnchorOffset, ev.selEndOffset = ev.mouseKeptAnchor, ev.mouseKeptEnd
 				}
+				if ev.mouseKeptRect {
+					ev.StartRectSelection(ev.mouseKeptRectLine, ev.mouseKeptRectCol)
+					ev.rectEndLine, ev.rectEndCol = ev.mouseKeptRectEndLine, ev.mouseKeptRectEnd
+					ev.rectLines = ev.Li.LineCount()
+					ev.rectFrozen = true
+				}
 			}
-			ev.mouseKeptBlock = false
+			ev.mouseKeptBlock, ev.mouseKeptRect = false, false
 			vtui.FrameManager.Redraw()
 			return true
 		}
@@ -3584,9 +3607,7 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 				ev.updateDesiredVisualCol()
 
 				if e.MouseEventFlags&vtinput.MouseMoved == 0 {
-					ev.RectSelActive = true
-					ev.rectSelStartLine = ev.CursorLine
-					ev.rectSelStartCol = visualCol
+					ev.StartRectSelection(ev.CursorLine, visualCol)
 					ev.mouseRectSelecting = true
 				}
 			} else {
@@ -3594,6 +3615,11 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					ev.mouseKeptBlock = ev.SelActive && ev.selFrozen
 					if ev.mouseKeptBlock {
 						ev.mouseKeptAnchor, ev.mouseKeptEnd = ev.SelAnchorOffset, ev.selEndOffset
+					}
+					ev.mouseKeptRect = ev.RectSelActive && ev.rectFrozen
+					if ev.mouseKeptRect {
+						ev.mouseKeptRectLine, ev.mouseKeptRectCol = ev.rectSelStartLine, ev.rectSelStartCol
+						ev.mouseKeptRectEndLine, ev.mouseKeptRectEnd = ev.rectEndLine, ev.rectEndCol
 					}
 					ev.SelActive = false
 					ev.RectSelActive = false
@@ -3631,9 +3657,7 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 				ev.updateDesiredVisualCol()
 
 				if e.MouseEventFlags&vtinput.MouseMoved == 0 {
-					ev.RectSelActive = true
-					ev.rectSelStartLine = ev.CursorLine
-					ev.rectSelStartCol = visualCol
+					ev.StartRectSelection(ev.CursorLine, visualCol)
 					ev.mouseRectSelecting = true
 				}
 			} else if ev.RectSelActive && e.MouseEventFlags&vtinput.MouseMoved != 0 {
@@ -6066,12 +6090,39 @@ func (ev *EditorView) StartSelection(anchor int) {
 // the selection rather than work at the cursor: always, except for a
 // persistent block (f4#1729).
 func (ev *EditorView) selectionTakesInput() bool {
-	return (ev.SelActive && !ev.selFrozen) || ev.RectSelActive
+	return (ev.SelActive && !ev.selFrozen) || (ev.RectSelActive && !ev.rectFrozen)
+}
+
+// StartRectSelection starts a vertical block at line and visual column col,
+// its far corner following the cursor.
+func (ev *EditorView) StartRectSelection(line, col int) {
+	ev.RectSelActive = true
+	ev.rectSelStartLine = line
+	ev.rectSelStartCol = col
+	ev.rectFrozen = false
+}
+
+// rectSelEnd is the far corner of the vertical block: the cursor, or where a
+// persistent block was left (f4#1729).
+func (ev *EditorView) rectSelEnd() (line, col int) {
+	if ev.rectFrozen {
+		return ev.rectEndLine, ev.rectEndCol
+	}
+	return ev.CursorLine, ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
 }
 
 // shiftFrozenBlock keeps a persistent block on its text when the buffer
 // changes at offset by delta bytes (LineIndex.OnEdit).
 func (ev *EditorView) shiftFrozenBlock(offset, delta int) {
+	if ev.rectFrozen {
+		// Lines that come or go above a vertical block move it.
+		lines := ev.Li.LineCount()
+		if moved := lines - ev.rectLines; moved != 0 && offset <= ev.Li.GetLineOffset(min(ev.rectSelStartLine, ev.rectEndLine)) {
+			ev.rectSelStartLine += moved
+			ev.rectEndLine += moved
+		}
+		ev.rectLines = lines
+	}
 	if !ev.selFrozen {
 		return
 	}
@@ -6181,11 +6232,12 @@ func (ev *EditorView) DeleteSpacersForward() {
 func (ev *EditorView) CopySelection() {
 	if ev.RectSelActive {
 		GlobalLastClipboardWasRectangular = true
-		minY, maxY := ev.rectSelStartLine, ev.CursorLine
+		endLine, endCol := ev.rectSelEnd()
+		minY, maxY := ev.rectSelStartLine, endLine
 		if minY > maxY {
 			minY, maxY = maxY, minY
 		}
-		minX, maxX := ev.rectSelStartCol, ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+		minX, maxX := ev.rectSelStartCol, endCol
 		if minX > maxX {
 			minX, maxX = maxX, minX
 		}
@@ -6366,11 +6418,12 @@ func (ev *EditorView) PasteText(text string) {
 
 func (ev *EditorView) DeleteSelection() {
 	if ev.RectSelActive {
-		minY, maxY := ev.rectSelStartLine, ev.CursorLine
+		endLine, endCol := ev.rectSelEnd()
+		minY, maxY := ev.rectSelStartLine, endLine
 		if minY > maxY {
 			minY, maxY = maxY, minY
 		}
-		minX, maxX := ev.rectSelStartCol, ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+		minX, maxX := ev.rectSelStartCol, endCol
 		if minX > maxX {
 			minX, maxX = maxX, minX
 		}
@@ -6511,7 +6564,8 @@ func (ev *EditorView) preferredLineEnding(line int) []byte {
 // that line: Shift+Down over one line selects one line, not two.
 func (ev *EditorView) selectedLineSpan() (int, int) {
 	if ev.RectSelActive {
-		first, last := ev.rectSelStartLine, ev.CursorLine
+		endLine, _ := ev.rectSelEnd()
+		first, last := ev.rectSelStartLine, endLine
 		if first > last {
 			first, last = last, first
 		}
