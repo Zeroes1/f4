@@ -26,7 +26,6 @@ import (
 	"github.com/mattn/go-runewidth"
 
 	"github.com/unxed/f4/internal/config"
-	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
@@ -6676,7 +6675,8 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// the same menu (panels/panel.cpp, AddBookmarkItems) with the slot
 	// digit as the hotkey, so Alt+F1 followed by 6 lands on slot 6.
 	// Unassigned slots are left out.
-	bookmarkRows := map[int]int{} // menu row -> slot, for the keys below
+	bookmarkRows := map[int]int{}     // menu row -> slot, for the keys below
+	bookmarkPaths := map[int]string{} // menu row -> path, cut to the box once its width is known
 	if driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuShowBookmarks) {
 		if set, err := LoadBookmarks(BookmarksFilePath()); err == nil {
 			firstBookmark := true
@@ -6693,8 +6693,9 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 				path := bookmark.Path
 				usedHotkeys[rune('0'+i)] = true
 				bookmarkRows[menu.GetItemCount()] = i
+				bookmarkPaths[menu.GetItemCount()] = path
 				menu.AddItem(vtui.MenuItem{
-					Text: fmt.Sprintf("&%d %s", i, dialog.EscapeAmpersand(dialog.TruncPathLeft(path, 64))),
+					Text: driveMenuBookmarkText(i, path, 64),
 					UserData: func(fsp *FileSystemPanel) {
 						pf.NavigateToBookmark(fsp, bookmark)
 					},
@@ -6946,16 +6947,15 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 
 	menu.SetSelectPos(selectPos)
 
-	// Bookmark rows carry paths, so the box no longer fits a fixed width.
-	w, h := 26, menu.GetItemCount()+2
-	for _, it := range menu.Items {
-		clean, _, _ := vtui.ParseAmpersandString(it.Text)
-		if iw := runewidth.StringWidth(clean) + 6; iw > w {
-			w = iw
-		}
-	}
+	// The box is as wide as the Drive, Tools and Links rows with one blank
+	// after the longest; the bookmark paths are cut to it instead of
+	// widening it (f4#1148).
+	w, h := driveMenuBoxWidth(menu.Items, bookmarkRows, i18n.Msg("Drive.Title"), i18n.Msg("Drive.BottomHint")), menu.GetItemCount()+2
 	if pf.LastW > 0 && w > pf.LastW-4 {
 		w = pf.LastW - 4
+	}
+	for row, slot := range bookmarkRows {
+		menu.Items[row].Text = driveMenuBookmarkText(slot, bookmarkPaths[row], w-driveMenuBoxChrome-2)
 	}
 	if pf.LastH > 0 && h > pf.LastH-2 {
 		h = pf.LastH - 2

@@ -123,7 +123,9 @@ func TestDriveMenuBookmarksCaptionAndSpacing(t *testing.T) {
 	if rule := menu.Items[row-1]; !rule.Separator || rule.Text != caption {
 		t.Errorf("the rule above the bookmarks is %+v, want a separator captioned %q", rule, caption)
 	}
-	if want := "&3 " + dialog.EscapeAmpersand(dialog.TruncPathLeft(place, 64)); menu.Items[row].Text != want {
+	// The path is cut to the box (f4#1148), so compare with it cut the same way.
+	boxWidth := menu.X2 - menu.X1 + 1
+	if want := "&3 " + dialog.EscapeAmpersand(dialog.TruncPathLeft(place, boxWidth-driveMenuBoxChrome-2)); menu.Items[row].Text != want {
 		t.Errorf("bookmark row %q, want %q", menu.Items[row].Text, want)
 	}
 

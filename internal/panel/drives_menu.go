@@ -57,6 +57,47 @@ func driveMenuNameWithoutMarker(name string) string {
 // through F4. Unlike platform drives, these rows intentionally have no
 // default letter; PluginMenuItemText keeps the shortcut in a stable column
 // and preserves the same one-character accelerator behavior as F11.
+// driveMenuBoxChrome is what a row of the drive menu takes beside its text:
+// the two borders, the blank before the text and the one blank after the
+// longest row (f4#1148: "the right border one character after the last
+// character").
+const driveMenuBoxChrome = 4
+
+// driveMenuBoxWidth is the width of the drive menu box: the widest row of the
+// Drive, Tools and Links sections plus driveMenuBoxChrome. The rows in skip
+// (the bookmarks) do not count: their paths are cut to the box afterwards. A
+// section rule or a caption (the title, the key hint at the bottom) is never
+// cut, so the box is at least as wide as each of them needs.
+func driveMenuBoxWidth(items []vtui.MenuItem, skip map[int]int, captions ...string) int {
+	w := 0
+	need := func(n int) {
+		if n > w {
+			w = n
+		}
+	}
+	for _, caption := range captions {
+		need(vtui.StringWidth(caption) + 4) // Painter.DrawTitle keeps a title whole in a box 4 wider
+	}
+	for i, it := range items {
+		if _, ok := skip[i]; ok {
+			continue
+		}
+		clean, _, _ := vtui.ParseAmpersandString(it.Text)
+		if it.Separator {
+			need(vtui.StringWidth(clean) + 6) // the rule draws its caption with a blank on each side
+			continue
+		}
+		need(vtui.StringWidth(clean) + driveMenuBoxChrome)
+	}
+	return w
+}
+
+// driveMenuBookmarkText is the row of the folder bookmark in slot: its hotkey
+// digit and the path, cut on the left to width columns.
+func driveMenuBookmarkText(slot int, path string, width int) string {
+	return fmt.Sprintf("&%d %s", slot, dialog.EscapeAmpersand(dialog.TruncPathLeft(path, width)))
+}
+
 func driveMenuAssignableText(actionName, label string) string {
 	shortcut := PluginActionConfiguredKey(actionName)
 	if shortcut == "" {
