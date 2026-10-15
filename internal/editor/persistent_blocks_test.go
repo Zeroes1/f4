@@ -154,4 +154,14 @@ func TestPersistentVerticalBlock_Issue1729(t *testing.T) {
 	if got := block(); got != want {
 		t.Fatalf("after a line above it the block copies %q, want %q", got, want)
 	}
+
+	// A click elsewhere moves the cursor and leaves the block.
+	ev.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true, MouseX: 4, MouseY: 4, ButtonState: vtinput.FromLeft1stButtonPressed})
+	ev.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseX: 4, MouseY: 4})
+	if !ev.RectSelActive {
+		t.Fatal("a click dropped the vertical block")
+	}
+	if got := block(); got != want {
+		t.Fatalf("after a click the block copies %q, want %q", got, want)
+	}
 }

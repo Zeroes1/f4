@@ -120,13 +120,17 @@ type EditorView struct {
 	mouseSelecting   bool
 	// mouseKeptBlock is the persistent block a click put aside: a click
 	// that turns out not to be a drag gives it back (f4#1729).
-	mouseKeptBlock     bool
-	mouseKeptAnchor    int
-	mouseKeptEnd       int
-	mouseRectSelecting bool
-	hoverURL           string
-	hoverURLStart      int
-	editSession        int // Unique ID to fence background tasks
+	mouseKeptBlock  bool
+	mouseKeptAnchor int
+	mouseKeptEnd    int
+	// mouseKeptRect is the same for a persistent vertical block.
+	mouseKeptRect                          bool
+	mouseKeptRectLine, mouseKeptRectCol    int
+	mouseKeptRectEndLine, mouseKeptRectEnd int
+	mouseRectSelecting                     bool
+	hoverURL                               string
+	hoverURLStart                          int
+	editSession                            int // Unique ID to fence background tasks
 
 	// wheelCoast is what a fast wheel spin leaves behind: lines the editor
 	// still owes the cursor (see internal/wheel).
@@ -3544,8 +3548,14 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					ev.SelActive, ev.selFrozen = true, true
 					ev.SelAnchorOffset, ev.selEndOffset = ev.mouseKeptAnchor, ev.mouseKeptEnd
 				}
+				if ev.mouseKeptRect {
+					ev.StartRectSelection(ev.mouseKeptRectLine, ev.mouseKeptRectCol)
+					ev.rectEndLine, ev.rectEndCol = ev.mouseKeptRectEndLine, ev.mouseKeptRectEnd
+					ev.rectLines = ev.Li.LineCount()
+					ev.rectFrozen = true
+				}
 			}
-			ev.mouseKeptBlock = false
+			ev.mouseKeptBlock, ev.mouseKeptRect = false, false
 			vtui.FrameManager.Redraw()
 			return true
 		}
@@ -3605,6 +3615,11 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 					ev.mouseKeptBlock = ev.SelActive && ev.selFrozen
 					if ev.mouseKeptBlock {
 						ev.mouseKeptAnchor, ev.mouseKeptEnd = ev.SelAnchorOffset, ev.selEndOffset
+					}
+					ev.mouseKeptRect = ev.RectSelActive && ev.rectFrozen
+					if ev.mouseKeptRect {
+						ev.mouseKeptRectLine, ev.mouseKeptRectCol = ev.rectSelStartLine, ev.rectSelStartCol
+						ev.mouseKeptRectEndLine, ev.mouseKeptRectEnd = ev.rectEndLine, ev.rectEndCol
 					}
 					ev.SelActive = false
 					ev.RectSelActive = false
