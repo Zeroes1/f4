@@ -2346,7 +2346,9 @@ func init() {
 		LabelKey:    "Menu.Panel.Tree",
 		Description: "Toggle the directory tree panel",
 		DescKey:     "Action.Panel.Tree.Desc",
-		DefaultKeys: []string{"CtrlT"},
+		// Alt+F10 is where Far kept its folder tree; Ctrl+T stays first so
+		// the menu keeps showing it.
+		DefaultKeys: []string{"CtrlT", "AltF10"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.ToggleAltPanel("tree", func(src *panel.FileSystemPanel) panel.AltPanel { return panel.NewTreePanel(src) })
 		}),

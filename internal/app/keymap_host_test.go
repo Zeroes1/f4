@@ -282,3 +282,19 @@ func TestNoAltScreenApp_SimpleInline_IgnoresBackgroundTermView(t *testing.T) {
 		t.Errorf("Terminal CtrlO in term.ShellModeOwn with AltScreen app active: got %q, want empty (must fall through to app)", got)
 	}
 }
+
+// TestTreeOpensOnAltF10_Issue1602: Far users reach the folder tree with
+// Alt+F10, so it opens the tree as Ctrl+T does, and the menu still names Ctrl+T.
+func TestTreeOpensOnAltF10_Issue1602(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	hm.InitDefaults()
+
+	for _, key := range []string{"CtrlT", "AltF10"} {
+		if got := hm.GetAction("Shell", key); got != "Panel.Tree" {
+			t.Errorf("%s = %q, want Panel.Tree", key, got)
+		}
+	}
+	if got := hm.GetKeyForAction("Shell", "Panel.Tree"); got != "CtrlT" {
+		t.Errorf("menu key for Panel.Tree = %q, want CtrlT", got)
+	}
+}
