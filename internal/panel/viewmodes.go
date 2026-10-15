@@ -1157,6 +1157,20 @@ var panelOwnerNames sync.Map // "u:<id>" or "g:<id>" -> name
 // panelOwnerText names the owner or group of an entry. Names are looked up
 // only for the local filesystem: a remote host's ids mean nothing in the
 // local user database, so they stay numbers.
+// statusLineOwnerText is "owner group" of e for the status line under the
+// panel, or "" when the file system does not report them (Windows, most
+// plugin panels) or for "..". f4#1962.
+func statusLineOwnerText(filesystem vfs.VFS, e *FileEntry) string {
+	owner := panelOwnerText(filesystem, e, false)
+	if owner == "" {
+		return ""
+	}
+	if group := panelOwnerText(filesystem, e, true); group != "" {
+		return owner + " " + group
+	}
+	return owner
+}
+
 func panelOwnerText(filesystem vfs.VFS, e *FileEntry, group bool) string {
 	if e.Name == ".." {
 		return ""

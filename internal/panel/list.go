@@ -3424,6 +3424,11 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 			}
 
 			rightStr := fmt.Sprintf("%s  %s", sizeStr, dateStr)
+			if owner := statusLineOwnerText(fp.Vfs, e); owner != "" {
+				// Who owns the file, as far2l shows it, between the size
+				// (or the link target) and the date (f4#1962).
+				rightStr = fmt.Sprintf("%s  %s  %s", sizeStr, owner, dateStr)
+			}
 
 			if fp.Vfs != nil && fp.Vfs.GetPath() == "net://" {
 				rightStr = ""
