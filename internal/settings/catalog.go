@@ -102,6 +102,7 @@ ClipboardImagePrefix|operations|Clipboard images|Filename prefix|Literal filenam
 ClipboardImageTemplate|operations|Clipboard images|Filename stem template|Ctrl+G scalar substitutions and prompts, with exactly one !{seq}! token. !{prefix}! inserts the prefix. The image extension is appended automatically.||new operations
 ClipboardImageDigitFormat|operations|Clipboard images|Digit format|A run of zeros gives the minimum number of sequence digits, for example 000 produces 001.||new operations
 FileOpPathDisplay|operations|Execution|Progress path display|Show the current name, full path, or source and destination paths in operation progress.|0:Name;1:Full path;2:Source and destination|live
+ElevationIdleSeconds|operations|Execution|Administrator rights idle time (seconds)|Windows: after this many seconds without an operation that needs administrator rights, f4 drops them and the next such operation asks again. 0 keeps them until f4 exits.||live
 CopyAccessRights|operations|Execution|Access rights of copies|Permissions a copied file or folder receives. The copy dialog starts from this value and stores the choice made there.|0:Default;1:Copy from source;2:Inherit from destination|new operations
 ApplyCommandParallelism|operations|Execution|Concurrent Apply commands|Maximum concurrent commands in Apply command. Zero means unlimited. The initial default is the logical CPU count.||new operations
 ConfirmCopy|operations|Confirmations|Confirm copy|Show the copy destination and options dialog before an ordinary copy.||new operations

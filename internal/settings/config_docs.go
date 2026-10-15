@@ -71,8 +71,6 @@ func ConfigOptionDoc(section, key string) dialog.ConfigOptionDoc {
 // after the text. The keys are settings.ini's; configOptionLayoutExtraDoc
 // covers the far2l [Layout] keys f4 only keeps.
 var configOptionExtraDocs = map[string]string{
-	"Elevation.IdleSeconds": "Windows: seconds the administrator helper started after the UAC prompt may stay without a file operation; then f4 closes it, " +
-		"and the next operation that needs administrator rights asks again, as Far does. 0 keeps the rights until f4 exits. 120 by default.",
 	"Interface.FallbackLanguage": "Language of the interface strings the interface language does not translate, tried before English.",
 	"Panel.ArchiveEnterExcludeMask": "Files Enter does not open as an archive even when their content is one, such as office documents and e-books, which are ZIP inside. " +
 		"A far2l file mask: \"|\" starts the exceptions to it.",
