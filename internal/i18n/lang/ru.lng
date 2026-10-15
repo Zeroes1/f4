@@ -2076,6 +2076,7 @@ Attributes.ReadOnly=&Только для чтения
 Attributes.Hidden=&Скрытый
 Attributes.System=&Системный
 Attributes.Archive=&Архивный
+Attributes.NotContentIndexed=Не индексировать содержимое
 Attributes.Recursive=&Подпапки
 Attributes.RecursiveApplied=Обновлено объектов: %d
 
