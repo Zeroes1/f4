@@ -1140,9 +1140,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	multiple := len(targets) > 1
 	width, height := 60, 26
 	showCompression := runtime.GOOS == "windows" && fileops.IsLocalOSVFS(v) && !hostmode.Posix()
-	if showCompression {
-		height++
-	}
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1250,9 +1247,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
 
 	gbAdvHeight := 6
-	if showCompression {
-		gbAdvHeight++
-	}
 	gbAdv := vtui.NewGroupBox(0, 0, 54, gbAdvHeight, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
 	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
@@ -1373,11 +1367,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 
 	// Apply second pass for GroupBox
 	gbVBox := vtui.NewVBoxLayout(gbAttr.X1+2, gbAttr.Y1+1, gbAttr.X2-gbAttr.X1-4, 4)
-	gbAdvVBoxHeight := 4
-	if showCompression {
-		gbAdvVBoxHeight++
-	}
-	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, gbAdvVBoxHeight)
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 4)
 	var compressionCheckbox *vtui.Checkbox
 	chkRO := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.ReadOnly"), multiple)
 	chkHD := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Hidden"), multiple)
@@ -1404,7 +1394,13 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbAdv.AddItem(chkNotContentIndexed)
 	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 4)
 	gbAdvVBox.Add(chkNotContentIndexed, vtui.Margins{}, vtui.AlignLeft)
-	flagsList := vtui.NewListBox(0, 0, 50, 3, windowsAdvancedFlagsLines(targets))
+	flagsListHeight := 4
+	if showCompression {
+		// Keep the dialog within a standard 25-line terminal: the compression
+		// checkbox shares one row with the scrollable advanced-attributes list.
+		flagsListHeight--
+	}
+	flagsList := vtui.NewListBox(0, 0, 50, flagsListHeight, windowsAdvancedFlagsLines(targets))
 	flagsList.ShowScrollBar = true
 	if flagsList.ScrollBar != nil {
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
