@@ -408,7 +408,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	dlg := fm.GetTopFrame().(vtui.Container)
 	var texts []string
 	var editMTime *vtui.Edit
-	var chkHidden *vtui.Checkbox
+	var chkHidden, chkNotContentIndexed *vtui.Checkbox
 	var setButton, securityButton *vtui.Button
 	var flagsList *vtui.ListBox
 	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
@@ -420,8 +420,11 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 		case *vtui.ListBox:
 			flagsList = c
 		case *vtui.Checkbox:
-			if strings.Contains(c.GetText(), i18n.Msg("Attributes.Hidden")) {
+			switch {
+			case strings.Contains(c.GetText(), i18n.Msg("Attributes.Hidden")):
 				chkHidden = c
+			case c.GetText() == "Not Content Indexed":
+				chkNotContentIndexed = c
 			}
 		case *vtui.Button:
 			switch {
@@ -433,7 +436,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 		}
 		return true
 	})
-	if editMTime == nil || chkHidden == nil || setButton == nil || securityButton == nil || flagsList == nil {
+	if editMTime == nil || chkHidden == nil || chkNotContentIndexed == nil || setButton == nil || securityButton == nil || flagsList == nil {
 		t.Fatal("Windows multiple-selection dialog controls not found")
 	}
 	all := strings.Join(texts, "\n")
@@ -459,6 +462,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	}
 
 	chkHidden.State = 1
+	chkNotContentIndexed.State = 1
 	setButton.OnClick()
 	runUITasksUntil(t, fm.TaskChan, dlg.(vtui.Frame).IsDone)
 
@@ -472,7 +476,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 		if !got.MTime.Equal(target.Item.MTime) {
 			t.Errorf("%s: mtime = %v, want its own %v", target.Path, got.MTime, target.Item.MTime)
 		}
-		if want := target.Item.WinAttrs | 2; got.WinAttrs != want {
+		if want := target.Item.WinAttrs | 2 | 0x2000; got.WinAttrs != want {
 			t.Errorf("%s: attributes = %#x, want %#x", target.Path, got.WinAttrs, want)
 		}
 		wantMode := target.Item.UnixMode

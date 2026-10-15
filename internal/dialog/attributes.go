@@ -346,8 +346,9 @@ type windowsAttributesEdit struct {
 	// platform can set one (vfs.OSVFS.SupportsSetBTime; f4#1404).
 	setBTime bool
 	btime    time.Time
-	// winAttrs holds the new ordinary flags, keepWinAttrs the ordinary flags
-	// each object keeps.
+	// winAttrs holds the new editable flags, keepWinAttrs the flags each
+	// object keeps. Most advanced flags are display-only; Not Content Indexed
+	// is editable through SetFileAttributes.
 	winAttrs     uint32
 	keepWinAttrs uint32
 	// setUnixMode is set where Read only is carried by the mode as well
@@ -357,7 +358,7 @@ type windowsAttributesEdit struct {
 }
 
 func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []AttributesTarget, edit windowsAttributesEdit) error {
-	const editableWinAttrs = uint32(1 | 2 | 4 | 32)
+	const editableWinAttrs = uint32(1 | 2 | 4 | 32 | 0x2000)
 	for _, target := range targets {
 		item := target.Item
 		if edit.setMTime {
@@ -372,9 +373,8 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 		if edit.setUnixMode {
 			item.UnixMode = edit.unixMode
 		}
-		// The dialog edits only the four ordinary Windows flags. Keep
-		// directory/reparse/compression and other provider-specific flags from
-		// each target instead of copying those of the first selected object.
+		// Keep directory/reparse/compression and other provider-specific flags
+		// from each target instead of copying those of the first selected one.
 		editable := editableWinAttrs &^ edit.keepWinAttrs
 		item.WinAttrs = (item.WinAttrs &^ editable) | (edit.winAttrs & editable)
 		if err := v.SetAttributes(ctx, target.Path, item); err != nil {
@@ -1125,7 +1125,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	path := targets[0].Path
 	item := targets[0].Item
 	multiple := len(targets) > 1
-	width, height := 60, 25
+	width, height := 60, 26
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1232,7 +1232,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	dlg.AddItem(gbAttr)
 	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	gbAdv := vtui.NewGroupBox(0, 0, 54, 6, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
+	gbAdv := vtui.NewGroupBox(0, 0, 54, 7, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
 	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
 
@@ -1372,13 +1372,17 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbVBox.Add(chkAR, vtui.Margins{}, vtui.AlignLeft)
 	gbVBox.Apply()
 
+	chkNotContentIndexed := vtui.NewCheckbox(0, 0, "Not Content Indexed", multiple)
+	chkNotContentIndexed.State = mixedAttributeState(targets, 0x00002000, func(item vfs.VFSItem) uint32 { return item.WinAttrs })
+	gbAdv.AddItem(chkNotContentIndexed)
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 5)
+	gbAdvVBox.Add(chkNotContentIndexed, vtui.Margins{}, vtui.AlignLeft)
 	flagsList := vtui.NewListBox(0, 0, 50, 4, windowsAdvancedFlagsLines(targets))
 	flagsList.ShowScrollBar = true
 	if flagsList.ScrollBar != nil {
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
 	}
 	gbAdv.AddItem(flagsList)
-	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 4)
 	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
@@ -1454,6 +1458,12 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 			case 1:
 				edit.winAttrs |= flag.bit
 			}
+		}
+		switch chkNotContentIndexed.State {
+		case 2:
+			edit.keepWinAttrs |= 0x00002000
+		case 1:
+			edit.winAttrs |= 0x00002000
 		}
 
 		newLinkTarget := ""
