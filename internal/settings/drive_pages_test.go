@@ -211,7 +211,12 @@ func TestDriveChooserWindowListsTheToolsOnItsToolsPage(t *testing.T) {
 		}
 	}
 	// The built-in tools come first, as in the drive menu (mitek1977-coder,
-	// f4#1148); Windows Registry among them only where there is one.
+	// f4#1148): Physical Disks, the first tool by default, then Other panel and
+	// Temporary panel, Windows Registry among them only where there is one.
+	if len(labels) == 0 || !strings.HasPrefix(labels[0], "Physical Disks") {
+		t.Fatalf("tool check boxes = %v, want Physical Disks first", labels)
+	}
+	labels = labels[1:]
 	want := "[Other panel Temporary panel A Alpha tool Beta tool]"
 	if len(labels) == 5 {
 		want = "[Other panel Temporary panel Windows Registry A Alpha tool Beta tool]"

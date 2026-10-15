@@ -80,7 +80,7 @@ func TestDriveMenuBookmarksComeAfterTheTools(t *testing.T) {
 // f4#1148: with every tool hidden on the Tools page the menu has no Tools rule
 // with nothing under it.
 func TestDriveMenuHasNoToolsRuleWithoutTools(t *testing.T) {
-	_, menu, _ := driveMenuSectionsSetup(t, []string{driveToolKeyOtherPanel, driveToolKeyTemporaryPanel, driveToolKeyRegistry, "Alpha", "Beta"})
+	_, menu, _ := driveMenuSectionsSetup(t, []string{driveToolKeyPhysicalDisks, driveToolKeyOtherPanel, driveToolKeyTemporaryPanel, driveToolKeyRegistry, "Alpha", "Beta"})
 	if _, ok := ruleRows(menu)[strings.TrimSpace(i18n.Msg("Drive.Tools"))]; ok {
 		t.Fatal("the Tools rule is shown with every tool hidden")
 	}

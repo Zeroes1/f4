@@ -6501,6 +6501,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	mountRows := map[int]int{}
 	var registryDrive *sysinfo.DriveEntry
 	registryName := ""
+	var physicalDrive *sysinfo.DriveEntry
 	for i, drv := range platformDrives {
 		factory := drv.Factory
 		name := platformNames[i]
@@ -6508,6 +6509,11 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 			// A tool, not a drive: it is listed in the Tools section (f4#1148).
 			registryDrive = &platformDrives[i]
 			registryName = name
+			continue
+		}
+		if isPhysicalDisksDrive(drv.Name) {
+			// A tool as well, the first of them by default (f4#1148).
+			physicalDrive = &platformDrives[i]
 			continue
 		}
 		// WINE.md §18.2, "список дисков, Alt+F1": posix personality has no
@@ -6567,7 +6573,20 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		}
 		// None has an automatic accelerator; F4 can assign one to each, just
 		// like to the plugin tools below (f4#1148).
-		rows := []toolRow{
+		var rows []toolRow
+		if physicalDrive != nil {
+			rows = append(rows, toolRow{key: driveToolKeyPhysicalDisks, add: func() {
+				physicalAction := DriveToolActionName(driveToolKeyPhysicalDisks)
+				label := driveMenuNameWithoutMarker(physicalDrive.Name)
+				driveHotkeyRows[menu.GetItemCount()] = physicalAction
+				driveHotkeyLabels[menu.GetItemCount()] = label
+				physicalFactory := physicalDrive.Factory
+				menu.AddItem(vtui.MenuItem{Text: driveMenuAssignableText(physicalAction, label), UserData: func(fsp *FileSystemPanel) {
+					pf.SwitchToVFS(fsp, physicalFactory())
+				}})
+			}})
+		}
+		rows = append(rows, []toolRow{
 			{key: driveToolKeyOtherPanel, add: func() {
 				otherAction := DriveToolActionName(driveToolKeyOtherPanel)
 				driveHotkeyRows[menu.GetItemCount()] = otherAction
@@ -6594,7 +6613,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 					pf.SwitchToVFS(fsp, NewTempPanelVFS(nil, GlobalTempPanelStore, 0))
 				}})
 			}},
-		}
+		}...)
 		if registryDrive != nil {
 			rows = append(rows, toolRow{key: driveToolKeyRegistry, add: func() {
 				registryAction := DriveToolActionName(driveToolKeyRegistry)

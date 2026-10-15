@@ -44,14 +44,16 @@ func TestDriveMenuToolChoicesFollowTheMenu(t *testing.T) {
 		}
 		return fmt.Sprint(out)
 	}
-	if got := keys(); got != "[@other-panel @temporary-panel Alpha Beta]" {
+	// Physical Disks is the first tool by default (f4#1148).
+	if got := keys(); got != "[@physical-disks @other-panel @temporary-panel Alpha Beta]" {
 		t.Fatalf("default order %s", got)
 	}
 	// Shift+Up/Down in the menu stored Beta first and Other panel after Alpha.
 	if err := SaveDriveToolsOrder(DriveToolsOrderFilePath(), []string{"Beta", driveToolKeyTemporaryPanel, "Alpha", driveToolKeyOtherPanel}); err != nil {
 		t.Fatal(err)
 	}
-	if got := keys(); got != "[Beta @temporary-panel Alpha @other-panel]" {
+	// A tool the stored order does not name (Physical Disks, new in it) comes last.
+	if got := keys(); got != "[Beta @temporary-panel Alpha @other-panel @physical-disks]" {
 		t.Fatalf("stored order %s", got)
 	}
 

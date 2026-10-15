@@ -56,7 +56,9 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 	builtin := map[string]bool{
 		strings.TrimSpace(strings.ReplaceAll(i18n.Msg("Panel.Other"), "&", "")):     true,
 		strings.TrimSpace(strings.ReplaceAll(i18n.Msg("TempPanel.Drive"), "&", "")): true,
-		"Windows Registry": true,
+		"Windows Registry":      true,
+		"Physical Disks (/dev)": true, // a tool since f4#1148
+		"Physical Disks":        true,
 	}
 	first := tools + 1
 	for first < len(menu.Items) && builtin[strings.TrimSpace(strings.ReplaceAll(menu.Items[first].Text, "&", ""))] {

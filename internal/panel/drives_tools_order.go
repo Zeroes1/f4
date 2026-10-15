@@ -20,6 +20,7 @@ const (
 	driveToolKeyOtherPanel     = "@other-panel"
 	driveToolKeyTemporaryPanel = "@temporary-panel"
 	driveToolKeyRegistry       = "@windows-registry"
+	driveToolKeyPhysicalDisks  = "@physical-disks"
 )
 
 // DriveToolsOrderFilePath is where the chosen order of the drive menu's tool

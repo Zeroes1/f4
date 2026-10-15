@@ -153,8 +153,14 @@ func driveMenuInfoPathFor(drv sysinfo.DriveEntry) string {
 	return driveMenuInfoPath(drv.Name)
 }
 
+// isPhysicalDisksDrive reports whether a platform drive is the Physical Disks
+// provider, listed among the tools of the drive menu (f4#1148).
+func isPhysicalDisksDrive(name string) bool {
+	return strings.Contains(strings.ToLower(name), "physical disk")
+}
+
 func driveMenuKindFor(name, path string) driveMenuKind {
-	if strings.Contains(strings.ToLower(name), "physical disk") {
+	if isPhysicalDisksDrive(name) {
 		return driveMenuKindPhysical
 	}
 	if path == "" {
