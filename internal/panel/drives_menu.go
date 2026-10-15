@@ -210,10 +210,20 @@ type driveMenuPlatformColumn struct {
 // driveMenuPlatformRowFor collects the metadata for one built-in drive. sysinfo.FsInfo
 // is deliberately used only for built-in local rows: plugin VFSes can be
 // remote and may block while resolving their metadata.
+// driveMenuRowKind and driveMenuRowFS are driveMenuKindFor and sysinfo.FS;
+// variables so a test can give a drive a kind and a file system.
+var (
+	driveMenuRowKind = driveMenuKindFor
+	driveMenuRowFS   = sysinfo.FS
+	// driveMenuPlatformDrives is sysinfo.GetPlatformDrives, the Drive section
+	// of the menu; a variable for the same reason.
+	driveMenuPlatformDrives = sysinfo.GetPlatformDrives
+)
+
 func driveMenuPlatformRowFor(drv sysinfo.DriveEntry, options uint32) DriveMenuPlatformRow {
 	row := DriveMenuPlatformRow{Base: driveMenuBaseName(drv.Name)}
 	path := driveMenuInfoPathFor(drv)
-	kind := driveMenuKindFor(drv.Name, path)
+	kind := driveMenuRowKind(drv.Name, path)
 
 	if driveMenuOptionEnabled(options, config.DriveMenuShowType) {
 		row.Kind = driveMenuKindLabel(kind)
@@ -221,16 +231,17 @@ func driveMenuPlatformRowFor(drv sysinfo.DriveEntry, options uint32) DriveMenuPl
 
 	info, infoOK := sysinfo.FSInfo{}, false
 	if path != "" {
-		info, infoOK = sysinfo.FS(path)
+		info, infoOK = driveMenuRowFS(path)
 	}
 	if infoOK {
-		if driveMenuOptionEnabled(options, config.DriveMenuShowLabel) && info.Label != "" {
+		parameters := driveMenuKindShowsParameters(kind, options)
+		if parameters && driveMenuOptionEnabled(options, config.DriveMenuShowLabel) && info.Label != "" {
 			row.Label = info.Label
 		}
-		if driveMenuOptionEnabled(options, config.DriveMenuShowFilesystem) && info.Type != "" {
+		if parameters && driveMenuOptionEnabled(options, config.DriveMenuShowFilesystem) && info.Type != "" {
 			row.Filesystem = info.Type
 		}
-		if driveMenuOptionEnabled(options, config.DriveMenuShowSize) {
+		if parameters && driveMenuOptionEnabled(options, config.DriveMenuShowSize) {
 			decimal := driveMenuOptionEnabled(options, config.DriveMenuShowSizeFloat)
 			row.Total = DriveMenuSize(info.Total, decimal)
 			row.Free = DriveMenuSize(info.Free, decimal)
@@ -356,8 +367,11 @@ func DriveMenuOptionsDialogSize() (int, int) {
 	return width, len(DriveMenuOptionSpecs) + 7
 }
 
-func driveMenuPlatformItemVisible(drv sysinfo.DriveEntry, options uint32) bool {
-	kind := driveMenuKindFor(drv.Name, driveMenuInfoPathFor(drv))
+// driveMenuKindShowsParameters reports whether the drive menu shows the label,
+// the file system and the size of a drive of this kind. "Show removable / CD /
+// remote drive parameters" hide only those: the drive itself always stays in
+// the list (mitek1977-coder, f4#1148).
+func driveMenuKindShowsParameters(kind driveMenuKind, options uint32) bool {
 	switch kind {
 	case driveMenuKindRemovable:
 		return driveMenuOptionEnabled(options, config.DriveMenuShowRemovable)

@@ -6483,13 +6483,9 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// filesystem types and free space reflect the current state. Collect all
 	// rows first: the formatter needs the whole list to align its columns.
 	driveMenuOptions := config.App.DriveMenuOptions
-	platformDrives := make([]sysinfo.DriveEntry, 0)
-	for _, drv := range sysinfo.GetPlatformDrives() {
-		if !driveMenuPlatformItemVisible(drv, driveMenuOptions) {
-			continue
-		}
-		platformDrives = append(platformDrives, drv)
-	}
+	// Every drive is listed; the removable, CD and remote options only hide
+	// the parameters of such a drive (driveMenuKindShowsParameters, f4#1148).
+	platformDrives := append([]sysinfo.DriveEntry(nil), driveMenuPlatformDrives()...)
 	platformNames := DriveMenuPlatformRowsText(func() []DriveMenuPlatformRow {
 		rows := make([]DriveMenuPlatformRow, len(platformDrives))
 		for i, drv := range platformDrives {
