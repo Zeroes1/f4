@@ -34,6 +34,15 @@ panel session:
 FISH+ keeps its server-side search, line indexing, delta writes, scans, duplicate
 search and command jobs whenever the device tools support them. Its job scratch
 directory candidates include Android's shell-writable `/data/local/tmp`.
+On a FISH+ device, uploading a file (F5 onto the device) goes through ADB Sync
+SEND instead of the shell: the shell reads a base64 payload one byte at a time
+(f4#1761 measured about 200 KB/s on a real phone), while SEND runs at the speed
+of `adb push`. A
+new file gets mode 0644 like `adb push`; a regular file that is replaced keeps
+its permission bits. A symlink, a directory, an unsafe path, or a Sync service
+that does not answer fall back to the FISH+ writer. Listing, reading and every
+other operation stay on the FISH+ shell, and the panel info shows
+`upload=ADB Sync` next to the backend details.
 An established FISH+ shell is pooled per ADB serial for the lifetime of the
 plugin. Leaving the device closes the panel view but keeps a parentless anchor;
 entering it again validates the helper with one `noop` and reuses the same
