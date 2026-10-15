@@ -15,7 +15,7 @@ import (
 // SetFileAttributes cannot change FILE_ATTRIBUTE_COMPRESSED.
 const fsctlSetCompression = 0x0009c040
 
-func setWindowsFileCompression(v vfs.VFS, path string, compressed bool) error {
+func setWindowsFileCompression(v vfs.VFS, path string, compressed bool) (retErr error) {
 	if hostmode.Posix() {
 		return fmt.Errorf("NTFS compression is unavailable in POSIX mode")
 	}
@@ -37,7 +37,11 @@ func setWindowsFileCompression(v vfs.VFS, path string, compressed bool) error {
 	if err != nil {
 		return err
 	}
-	defer windows.CloseHandle(h)
+	defer func() {
+		if closeErr := windows.CloseHandle(h); retErr == nil {
+			retErr = closeErr
+		}
+	}()
 
 	format := uint16(0)
 	if compressed {
