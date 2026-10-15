@@ -162,6 +162,8 @@ var actionMenuOrder = []string{
 	"Panel.QuickView",
 	"Panel.AutoFilter",
 	"Panel.Player",
+	"Panel.Player.SeekBack",
+	"Panel.Player.SeekForward",
 	"Panel.Tree",
 	"Panel.SplitLeft",
 	"Panel.SplitRight",

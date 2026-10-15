@@ -2340,6 +2340,44 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.Player.SeekBack",
+		Area:        "Shell",
+		Label:       "Seek Back 5 Seconds",
+		LabelKey:    "Action.Panel.Player.SeekBack",
+		Description: "Seek backward while the file panel has focus",
+		DescKey:     "Action.Panel.Player.SeekBack.Desc",
+		DefaultKeys: []string{"CtrlAltLeft"},
+		MenuPath:    "Commands",
+		MenuSubPath: "Player",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+				return
+			}
+			if player, ok := pf.AltPanels[pf.ActiveIdx].(*panel.PlayerPanel); ok {
+				player.SeekBy(-5 * time.Second)
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.Player.SeekForward",
+		Area:        "Shell",
+		Label:       "Seek Forward 5 Seconds",
+		LabelKey:    "Action.Panel.Player.SeekForward",
+		Description: "Seek forward while the file panel has focus",
+		DescKey:     "Action.Panel.Player.SeekForward.Desc",
+		DefaultKeys: []string{"CtrlAltRight"},
+		MenuPath:    "Commands",
+		MenuSubPath: "Player",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+				return
+			}
+			if player, ok := pf.AltPanels[pf.ActiveIdx].(*panel.PlayerPanel); ok {
+				player.SeekBy(5 * time.Second)
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.Tree",
 		Area:        "Shell",
 		Label:       "Tree",
