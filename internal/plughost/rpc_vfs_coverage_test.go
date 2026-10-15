@@ -69,7 +69,7 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 	readDirCalls := 0
 	readMode := "full"
 	writeErr := error(nil)
-	closeCalls := 0
+	closeCalls := make(map[uint32]int)
 	var openPath, createPath string
 	transport.handler = func(method string, params, result any) error {
 		switch method {
@@ -104,7 +104,7 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 		case "VFS.Write":
 			return writeErr
 		case "VFS.CloseFile":
-			closeCalls++
+			closeCalls[params.(CloseReq).ID]++
 		case "VFS.ProcessKey":
 			*(result.(*bool)) = true
 		}
@@ -182,8 +182,8 @@ func TestRPCVFSOperationsAndWrappers(t *testing.T) {
 	if err := writer.Close(); err == nil || err.Error() != "write failed" {
 		t.Fatalf("Close after failed flush = %v, want write failed", err)
 	}
-	if closeCalls != 1 {
-		t.Fatalf("CloseFile RPC calls = %d, want 1 even after flush error", closeCalls)
+	if closeCalls[8] != 1 {
+		t.Fatalf("created file CloseFile RPC calls = %d, want 1 even after flush error", closeCalls[8])
 	}
 	if openPath != "/folder/sub/file.txt" || createPath != "/folder/sub/created.txt" {
 		t.Fatalf("relative RPC paths = open %q, create %q", openPath, createPath)
