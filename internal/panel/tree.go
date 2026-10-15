@@ -603,8 +603,44 @@ func (t *TreePanel) processKey(e *vtinput.InputEvent) bool {
 func (t *TreePanel) ProcessMouse(e *vtinput.InputEvent) bool {
 	before := t.SelectedPath()
 	handled := t.Table.ProcessMouse(e)
+	if t.toggleOnMouse(e) {
+		handled = true
+	}
 	t.followCursor(before)
 	return handled
+}
+
+// toggleOnMouse expands or collapses the folder under the mouse, as Right
+// and Left do (f4#1602: the tree could only be opened with the keys): a left
+// click on the "+"/"-" marker of a row, or a double click on the rest of it.
+// A double click on the marker is the second toggle of the same gesture --
+// the first press has already done it -- so it is left alone. Table has
+// already moved the cursor onto the clicked row.
+func (t *TreePanel) toggleOnMouse(e *vtinput.InputEvent) bool {
+	if e.Type != vtinput.MouseEventType || e.ButtonState != vtinput.FromLeft1stButtonPressed || !vtui.IsMousePress(e) {
+		return false
+	}
+	if !t.Table.HitTest(int(e.MouseX), int(e.MouseY)) || t.Table.GetClickIndex(int(e.MouseY)) < 0 {
+		return false
+	}
+	idx := t.cursorIndex()
+	if idx < 0 || !t.items[idx].expandable {
+		return false
+	}
+	markerX := t.Table.X1 + t.items[idx].depth*2
+	onMarker := int(e.MouseX) >= markerX && int(e.MouseX) <= markerX+1
+	double := e.MouseEventFlags&vtinput.DoubleClick != 0
+	if onMarker == double {
+		return false
+	}
+	if t.items[idx].collapsed {
+		t.expandAt(idx)
+	} else {
+		t.collapseAt(idx)
+	}
+	t.syncRows()
+	t.setCursor(idx)
+	return true
 }
 
 // followCursor shows the folder under the cursor in the panel that opened
