@@ -106,16 +106,11 @@ type EditorView struct {
 	// CursorLine/CursorPos and is never listed here, so every existing
 	// single-caret path keeps working untouched. Selections are still the
 	// primary caret's alone.
-	extraCursors     []extraCaret
-	RectSelActive    bool
-	rectSelStartLine int
-	rectSelStartCol  int
-	mouseSelecting   bool
-	// mouseKeptBlock is the persistent block a click put aside: a click
-	// that turns out not to be a drag gives it back (f4#1729).
-	mouseKeptBlock     bool
-	mouseKeptAnchor    int
-	mouseKeptEnd       int
+	extraCursors       []extraCaret
+	RectSelActive      bool
+	rectSelStartLine   int
+	rectSelStartCol    int
+	mouseSelecting     bool
 	mouseRectSelecting bool
 	hoverURL           string
 	hoverURLStart      int
@@ -3526,13 +3521,7 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 			ev.mouseSelecting = false
 			if ev.SelActive && ev.SelAnchorOffset == ev.Li.GetLineOffset(ev.CursorLine)+ev.CursorPos {
 				ev.SelActive = false
-				if ev.mouseKeptBlock {
-					// A click, not a drag: the persistent block stays.
-					ev.SelActive, ev.selFrozen = true, true
-					ev.SelAnchorOffset, ev.selEndOffset = ev.mouseKeptAnchor, ev.mouseKeptEnd
-				}
 			}
-			ev.mouseKeptBlock = false
 			vtui.FrameManager.Redraw()
 			return true
 		}
@@ -3591,10 +3580,6 @@ func (ev *EditorView) ProcessMouse(e *vtinput.InputEvent) bool {
 				}
 			} else {
 				if !ev.SelActive || e.MouseEventFlags&vtinput.MouseMoved == 0 {
-					ev.mouseKeptBlock = ev.SelActive && ev.selFrozen
-					if ev.mouseKeptBlock {
-						ev.mouseKeptAnchor, ev.mouseKeptEnd = ev.SelAnchorOffset, ev.selEndOffset
-					}
 					ev.SelActive = false
 					ev.RectSelActive = false
 					ev.CursorLine = ev.Li.GetLineAtOffset(offset)
