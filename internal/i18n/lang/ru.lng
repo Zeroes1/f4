@@ -2075,6 +2075,7 @@ Attributes.Execute=Выполнение
 Attributes.ReadOnly=&Только для чтения
 Attributes.Compressed=&Сжатие
 Attributes.Encrypted=&Шифрование
+Attributes.Sparse=&Разреженный
 Attributes.Hidden=&Скрытый
 Attributes.System=&Системный
 Attributes.Archive=&Архивный
