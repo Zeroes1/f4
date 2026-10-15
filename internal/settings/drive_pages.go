@@ -80,6 +80,12 @@ func splitDriveChooser(sessions []*settingsSession) {
 					continue
 				}
 				f.Category = driveOptionsPage
+				if f.ID == driveMenuOptionFieldID("Drive.ShowBookmarks") {
+					// The switch of the Bookmarks section stands over the
+					// bookmark list, in the list's own box (f4#1148).
+					f.Category = driveBookmarksPage
+					f.Group = driveBookmarksGroup
+				}
 				// "Takes effect: next drive menu" is no news under the menu
 				// itself, which Apply redraws (mitek1977-coder, f4#1148).
 				if strings.HasPrefix(f.ID, "DriveMenuOptions.") {
@@ -129,12 +135,15 @@ func driveLinkPageFields(fields []f4settings.Field) []f4settings.Field {
 	return out
 }
 
+// driveBookmarksGroup is the box of the Bookmarks page: the list's own group,
+// so that "Show Bookmarks" stands in it above the list.
+const driveBookmarksGroup = "Folder bookmark slots"
+
 // driveChooserLeavesOut is true for the drive menu options the F9 window does
 // not show (mitek1977-coder, f4#1148): the Tools page already says which tools
-// the menu shows and in what order, and the Bookmarks and Links pages have the
-// bookmarks. They stay in the main Settings window.
+// the menu shows and in what order. They stay in the main Settings window.
 func driveChooserLeavesOut(id string) bool {
-	for _, label := range []string{"Drive.ShowTools", "Drive.SortToolsByHotkey", "Drive.ShowBookmarks"} {
+	for _, label := range []string{"Drive.ShowTools", "Drive.SortToolsByHotkey"} {
 		if id == driveMenuOptionFieldID(label) {
 			return true
 		}
