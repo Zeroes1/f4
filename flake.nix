@@ -47,7 +47,7 @@
           # Must track go.mod/go.sum: after a dependency change nix build
           # fails with "hash mismatch in fixed-output derivation ... got:
           # sha256-...", and that got: value is the new vendorHash.
-          vendorHash = "sha256-ZlLAfmuoL8vojasstdGXvbG0XJ7YgclalUQvvXjX3Mg=";
+          vendorHash = "sha256-JxbSavgBdiQPdF9e8nB0U7yHSeO+EceSNDqdFZXFMJ4=";
 
           subPackages = [ "cmd/f4" ];
           tags = lib.optionals ttyOnly [ "tty_only" "vtui_noebiten" "vtui_nogogpu" ];
