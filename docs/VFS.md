@@ -88,8 +88,9 @@ IdleSeconds` of `settings.ini` (120 by default; f4:config) without a request
 the client closes it (`ElevationIdle`, `closeIfIdle`), the dispatcher exits
 with its client, and the next refused operation asks again, as Far does. A
 request in progress is never cut: the timer waits for it and starts over. 0
-keeps the dispatcher until f4 exits. A no is not remembered, like a cancelled
-sudo password. `Open` and `Create` on this path read and write through
+keeps the dispatcher until f4 exits, and so does the box "Do not ask again
+until f4 exits" in the question (off by default; `remember`, f4#1768 step
+6b). A no is not remembered, like a cancelled sudo password. `Open` and `Create` on this path read and write through
 `elevatedFile` and `elevatedWriter` (`vfs/sudo_elevated_file.go`);
 `SudoClient.Open`, which hands out a descriptor, is refused up front. A create
 that must not replace (`O_EXCL`, the editor's staged sibling when it saves)

@@ -30,6 +30,9 @@ type SudoClient struct {
 	// timer that closes it once it has been idle for ElevationIdle.
 	lastUsed time.Time
 	idle     elevationTimer
+	// remember: the user ticked "do not ask again until f4 exits" (f4#1768,
+	// step 6b); the idle timer is off for the rest of the session.
+	remember bool
 }
 
 var globalSudoClient *SudoClient

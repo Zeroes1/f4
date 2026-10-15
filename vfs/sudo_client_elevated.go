@@ -20,8 +20,102 @@ var launchElevated = LaunchElevatedDispatcher
 var elevatedConnectTimeout = 2 * time.Minute
 
 // confirmElevation asks the user whether to retry an operation as
-// administrator before UAC is asked; a variable so a test can answer it.
+// administrator before UAC is asked, and whether to keep the rights until f4
+// exits; a variable so a test can answer it.
 var confirmElevation = askElevationOnUI
+
+// ErrElevationDeclined: the user did not agree to elevate.
+var ErrElevationDeclined = errors.New("elevation declined")
+
+// askElevationOnUI shows the question on the UI goroutine and waits for the
+// answer, at most elevatedConnectTimeout; like the sudo password dialog, it
+// must not be called on the UI goroutine itself. agree is the first button;
+// remember is the "do not ask again until f4 exits" box (f4#1768, step 6b).
+func askElevationOnUI() (agree, remember bool) {
+	if vtui.FrameManager == nil {
+		return false, false
+	}
+	type answer struct{ agree, remember bool }
+	got := make(chan answer, 1)
+	globalSudoClient.RunOnUI(func() {
+		dlg, box := newElevationDialog()
+		dlg.OnResult = func(code int) {
+			select {
+			case got <- answer{code == 0, code == 0 && box.State == 1}:
+			default:
+			}
+		}
+		vtui.FrameManager.Push(dlg)
+	})
+	select {
+	case a := <-got:
+		return a.agree, a.remember
+	case <-time.After(elevatedConnectTimeout):
+		return false, false
+	}
+}
+
+// newElevationDialog is the question: the text, the box "do not ask again
+// until f4 exits" (off), and the buttons Continue as administrator (exit code
+// 0) and Cancel (1).
+func newElevationDialog() (*vtui.Window, *vtui.Checkbox) {
+	const maxWidth, padding = 72, 4
+	lines := vtui.WrapText(vtui.Msg("Elevation.Text"), maxWidth-padding)
+	box := vtui.NewCheckbox(0, 0, vtui.Msg("Elevation.Remember"), false)
+	labels := []string{vtui.Msg("Elevation.Continue"), vtui.Msg("vtui.Cancel")}
+
+	widest := 0
+	need := func(w int) {
+		if w > widest {
+			widest = w
+		}
+	}
+	for _, l := range lines {
+		need(vtui.StringWidth(l))
+	}
+	clean, _, _ := vtui.ParseAmpersandString(vtui.Msg("Elevation.Remember"))
+	need(vtui.StringWidth(clean) + 4) // "[ ] "
+	buttonsWidth := 2 * (len(labels) - 1)
+	for _, b := range labels {
+		clean, _, _ := vtui.ParseAmpersandString(b)
+		buttonsWidth += vtui.StringWidth(clean) + 4 // "[ " and " ]"
+	}
+	need(buttonsWidth)
+	need(vtui.StringWidth(vtui.Msg("Elevation.Title")) + 6 - padding)
+	width := widest + padding
+	if width > maxWidth {
+		width = maxWidth
+	}
+	// The frame, a blank row, the text, a blank row, the box, a blank row,
+	// the buttons, a blank row, the frame.
+	height := len(lines) + 8
+
+	dlg := vtui.NewCenteredDialog(width, height, vtui.Msg("Elevation.Title"))
+	dlg.Modal = true
+	dlg.IsWarning = true
+	vbox := vtui.NewVBoxLayout(dlg.X1+2, dlg.Y1+2, width-padding, height-padding)
+	for _, l := range lines {
+		txt := vtui.NewText(0, 0, l, vtui.Palette[vtui.ColDialogText])
+		dlg.AddItem(txt)
+		vbox.Add(txt, vtui.Margins{}, vtui.AlignLeft)
+	}
+	dlg.AddItem(box)
+	vbox.Add(box, vtui.Margins{Top: 1}, vtui.AlignLeft)
+	hbox := vtui.NewHBoxLayout(0, 0, width-padding, 1)
+	hbox.HorizontalAlign = vtui.AlignCenter
+	hbox.Spacing = 2
+	for i, label := range labels {
+		code := i
+		btn := vtui.NewButton(0, 0, label)
+		btn.IsDefault = i == 0
+		btn.OnClick = func() { dlg.SetExitCode(code) }
+		dlg.AddItem(btn)
+		hbox.Add(btn, vtui.Margins{}, vtui.AlignTop)
+	}
+	vbox.Add(hbox, vtui.Margins{Top: 1}, vtui.AlignFill)
+	vbox.Apply()
+	return dlg, box
+}
 
 // ElevationIdle is how long the elevated dispatcher may wait without a
 // request before f4 closes it, so that f4 does not keep administrator rights
@@ -45,7 +139,7 @@ var (
 // c.mu is held.
 func (c *SudoClient) armIdleLocked() {
 	idle := ElevationIdle()
-	if !connectsByUAC() || idle <= 0 || c.conn == nil {
+	if !connectsByUAC() || idle <= 0 || c.conn == nil || c.remember {
 		return
 	}
 	c.lastUsed = elevationNow()
@@ -75,35 +169,6 @@ func (c *SudoClient) closeIfIdle() {
 	c.consented = false
 }
 
-// ErrElevationDeclined: the user did not agree to elevate.
-var ErrElevationDeclined = errors.New("elevation declined")
-
-// askElevationOnUI shows the question on the UI goroutine and waits for the
-// answer, at most elevatedConnectTimeout; like the sudo password dialog, it
-// must not be called on the UI goroutine itself.
-func askElevationOnUI() bool {
-	if vtui.FrameManager == nil {
-		return false
-	}
-	answer := make(chan bool, 1)
-	globalSudoClient.RunOnUI(func() {
-		dlg := vtui.ShowMessageEx(vtui.Msg("Elevation.Title"), vtui.Msg("Elevation.Text"),
-			[]string{vtui.Msg("Elevation.Continue"), vtui.Msg("vtui.Cancel")}, vtui.MessageWarn)
-		dlg.OnResult = func(code int) {
-			select {
-			case answer <- code == 0:
-			default:
-			}
-		}
-	})
-	select {
-	case ok := <-answer:
-		return ok
-	case <-time.After(elevatedConnectTimeout):
-		return false
-	}
-}
-
 // connectsByUAC reports that this platform elevates through UAC and the
 // elevated dispatcher of f4#1768, not through sudo; a variable so a test can
 // take the Windows path on any platform.
@@ -113,10 +178,11 @@ var connectsByUAC = func() bool { return runtime.GOOS == "windows" }
 // token and connects to it (f4#1768, step 4). c.mu is held.
 func (c *SudoClient) connectElevatedLocked() error {
 	if !c.consented {
-		if !confirmElevation() {
+		agree, remember := confirmElevation()
+		if !agree {
 			return ErrElevationDeclined
 		}
-		c.consented = true
+		c.consented, c.remember = true, remember
 	}
 	token, err := NewSudoToken()
 	if err != nil {

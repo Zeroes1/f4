@@ -219,6 +219,7 @@ Edit.NewFilePrompt=File &name:
 Elevation.Title= Administrator rights 
 Elevation.Text=This operation needs administrator rights. If you agree, Windows asks for permission, and f4 keeps these rights while it needs them; after a pause without such operations (two minutes by default) it drops them and asks again.
 Elevation.Continue=&Continue as administrator
+Elevation.Remember=&Do not ask again until f4 exits
 
 MakeFolder.Title= Create Folder
 MakeFolder.Prompt=Create the &folder:
