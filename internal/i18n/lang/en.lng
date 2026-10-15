@@ -2085,6 +2085,11 @@ Attributes.Hidden=&Hidden
 Attributes.System=&System
 Attributes.Archive=&Archive
 Attributes.NotContentIndexed=Not Content Indexed
+Attributes.Temporary=Temporary
+Attributes.Offline=Offline
+Attributes.Pinned=Pinned
+Attributes.Unpinned=Unpinned
+Attributes.PinnedExclusive=Pinned and Unpinned cannot both be set
 Attributes.Recursive=&Subfolders
 Attributes.RecursiveApplied=%d objects updated
 

@@ -2085,6 +2085,11 @@ Attributes.Hidden=&Скрытый
 Attributes.System=&Системный
 Attributes.Archive=&Архивный
 Attributes.NotContentIndexed=Не индексировать содержимое
+Attributes.Temporary=Временный
+Attributes.Offline=Автономный
+Attributes.Pinned=Закреплён
+Attributes.Unpinned=Не закреплён
+Attributes.PinnedExclusive=Нельзя одновременно задать «Закреплён» и «Не закреплён»
 Attributes.Recursive=&Подпапки
 Attributes.RecursiveApplied=Обновлено объектов: %d
 
