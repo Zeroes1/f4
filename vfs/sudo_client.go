@@ -22,9 +22,14 @@ type SudoClient struct {
 	appPath  string
 	askPass  string // Command to run for asking password
 	attempts int
-	// consented: the user agreed to elevate through UAC in this session
-	// (f4#1768); later connects go straight to UAC.
+	// consented: the user agreed to elevate through UAC (f4#1768); later
+	// connects go straight to UAC until the elevated dispatcher is closed as
+	// idle (ElevationIdle), after which the user is asked again.
 	consented bool
+	// lastUsed and idle: when the elevated dispatcher last answered, and the
+	// timer that closes it once it has been idle for ElevationIdle.
+	lastUsed time.Time
+	idle     elevationTimer
 }
 
 var globalSudoClient *SudoClient
@@ -285,6 +290,7 @@ func (c *SudoClient) SendRequest(req SudoRequest) (SudoResponse, *os.File, error
 		c.conn = nil
 		return SudoResponse{}, nil, err
 	}
+	c.armIdleLocked()
 
 	if resp.Error != "" {
 		if f != nil {

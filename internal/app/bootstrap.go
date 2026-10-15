@@ -384,6 +384,9 @@ func Main() {
 	}
 	absExecPath, _ := filepath.Abs(execPath)
 	vfs.InitSudoClient(absExecPath, "")
+	// The UAC helper is closed after this long idle (f4#1768); read on each
+	// use, so a change in f4:config applies at once.
+	vfs.ElevationIdle = func() time.Duration { return time.Duration(config.App.ElevationIdleSeconds) * time.Second }
 
 	// The elevated dispatcher inherits F4_ASKPASS_PARENT from the client that
 	// started sudo. Dispatcher mode must win over askpass mode; otherwise the
