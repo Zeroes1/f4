@@ -146,8 +146,23 @@ func (s *cmdShellSim) run(command string) {
 // that delivers the text late, with slack for the test scheduler.
 const settledWithin = 120 * time.Millisecond
 
+// settledGrace is extra time given to an execution that is expected to have
+// ended. A loaded Windows runner stretches the 20ms timers of the sim well past
+// settledWithin (main 72bdcb32d: two attempts in a row, while the same tree
+// passed in the train), and the end is only a timer firing a little late. It
+// stays well below the release (cmdPromptMaxAttempts looks, 400ms with the
+// sim's delays), so a prompt that only the release would end still fails.
+const settledGrace = 250 * time.Millisecond
+
 func (s *cmdShellSim) expectExecuting(want bool, what string) {
 	s.t.Helper()
+	if !want {
+		deadline := time.Now().Add(settledGrace)
+		for s.pf.Executing && time.Now().Before(deadline) {
+			testutil.DrainUITasks()
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	if s.pf.Executing != want {
 		s.t.Errorf("[%s] %s: executing=%v, want %v", s.build.name, what, s.pf.Executing, want)
 	}
