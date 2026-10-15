@@ -184,9 +184,7 @@ func (ev *EditorView) SortLines(ascending, caseSensitive bool) error {
 		ev.StartSelection(selectionAnchor)
 	}
 	if rectSelectionWasActive {
-		ev.RectSelActive = true
-		ev.rectSelStartLine = rectStartLine
-		ev.rectSelStartCol = rectStartCol
+		ev.StartRectSelection(rectStartLine, rectStartCol)
 	}
 	ev.updateDesiredVisualCol()
 	ev.EnsureCursorVisible()

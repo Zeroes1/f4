@@ -5,6 +5,7 @@ import (
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
 
 func persistentKey(ev *EditorView, vk uint16, state vtinput.ControlKeyState, ch rune) {
@@ -109,5 +110,48 @@ func TestPersistentBlockSurvivesAClick_Issue1729(t *testing.T) {
 	}
 	if got := selectedText(t, ev); got != "hello" {
 		t.Fatalf("after a click the block is %q, want %q", got, "hello")
+	}
+}
+
+// A vertical block (Alt+arrows) is persistent too: it stays when the cursor
+// moves on, typing works at the cursor, and a line added above it moves it
+// down with its text.
+func TestPersistentVerticalBlock_Issue1729(t *testing.T) {
+	old := config.App.EditorPersistentBlocks
+	t.Cleanup(func() { config.App.EditorPersistentBlocks = old })
+	config.App.EditorPersistentBlocks = true
+
+	ev := newFAR3Editor(t, "abcdef\nghijkl\nmnopqr\n")
+	for i := 0; i < 3; i++ {
+		persistentKey(ev, vtinput.VK_RIGHT, vtinput.LeftAltPressed, 0)
+	}
+	persistentKey(ev, vtinput.VK_DOWN, vtinput.LeftAltPressed, 0)
+	persistentKey(ev, vtinput.VK_DOWN, 0, 0)
+	if !ev.RectSelActive {
+		t.Fatal("the vertical block went away when the cursor moved on")
+	}
+
+	block := func() string {
+		vtui.SetClipboard("")
+		ev.CopySelection()
+		return vtui.GetClipboard()
+	}
+	want := block()
+	if want == "" {
+		t.Fatal("the vertical block copies nothing")
+	}
+
+	persistentKey(ev, 0, 0, 'X')
+	if got := ev.GetText(); got != "abcdef\nghijkl\nmnoXpqr\n" {
+		t.Fatalf("typing gave %q", got)
+	}
+	if got := block(); got != want {
+		t.Fatalf("after typing below it the block copies %q, want %q", got, want)
+	}
+
+	ev.CursorLine, ev.CursorPos = 0, 0
+	persistentKey(ev, vtinput.VK_RETURN, 0, 0)
+	if got := block(); got != want {
+		t.Fatalf("after a line above it the block copies %q, want %q", got, want)
 	}
 }

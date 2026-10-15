@@ -141,6 +141,7 @@ func (ev *EditorView) deleteRange(start, end int) {
 func (ev *EditorView) ClearSelection() {
 	ev.SelActive = false
 	ev.selFrozen = false
+	ev.rectFrozen = false
 	ev.RectSelActive = false
 	if vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
