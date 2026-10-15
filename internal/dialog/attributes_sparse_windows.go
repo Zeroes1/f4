@@ -4,7 +4,6 @@ package dialog
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/f4/vfs/hostmode"
