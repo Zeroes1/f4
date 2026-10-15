@@ -353,6 +353,8 @@ type windowsAttributesEdit struct {
 	keepWinAttrs   uint32
 	setCompression bool
 	compressed     bool
+	setEncryption  bool
+	encrypted      bool
 	// setUnixMode is set where Read only is carried by the mode as well
 	// (native Windows semantics); the mode then follows the Read only box.
 	setUnixMode bool
@@ -362,8 +364,21 @@ type windowsAttributesEdit struct {
 func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []AttributesTarget, edit windowsAttributesEdit) error {
 	const editableWinAttrs = uint32(1 | 2 | 4 | 32 | 0x2000)
 	for _, target := range targets {
+		// EFS encryption and NTFS compression are mutually exclusive. When
+		// the user switches from encrypted to compressed, decrypt first;
+		// when switching the other way, the compression call must come first.
+		if edit.setEncryption && !edit.encrypted {
+			if err := setWindowsFileEncryption(v, target.Path, false); err != nil {
+				return fmt.Errorf("%s: %w", target.Path, err)
+			}
+		}
 		if edit.setCompression {
 			if err := setWindowsFileCompression(v, target.Path, edit.compressed); err != nil {
+				return fmt.Errorf("%s: %w", target.Path, err)
+			}
+		}
+		if edit.setEncryption && edit.encrypted {
+			if err := setWindowsFileEncryption(v, target.Path, edit.encrypted); err != nil {
 				return fmt.Errorf("%s: %w", target.Path, err)
 			}
 		}
@@ -386,6 +401,12 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 			item.WinAttrs &^= 0x00000800
 			if edit.compressed {
 				item.WinAttrs |= 0x00000800
+			}
+		}
+		if edit.setEncryption {
+			item.WinAttrs &^= 0x00004000
+			if edit.encrypted {
+				item.WinAttrs |= 0x00004000
 			}
 		}
 		editable := editableWinAttrs &^ edit.keepWinAttrs
@@ -1140,6 +1161,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	multiple := len(targets) > 1
 	width, height := 60, 26
 	showCompression := runtime.GOOS == "windows" && fileops.IsLocalOSVFS(v) && !hostmode.Posix()
+	showEncryption := showCompression
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1366,7 +1388,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 
 	// Apply second pass for GroupBox
 	gbVBox := vtui.NewVBoxLayout(gbAttr.X1+2, gbAttr.Y1+1, gbAttr.X2-gbAttr.X1-4, 4)
-	var compressionCheckbox *vtui.Checkbox
+	var compressionCheckbox, encryptionCheckbox *vtui.Checkbox
 	chkRO := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.ReadOnly"), multiple)
 	chkHD := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Hidden"), multiple)
 	chkSY := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.System"), multiple)
@@ -1394,9 +1416,13 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbAdvVBox.Add(chkNotContentIndexed, vtui.Margins{}, vtui.AlignLeft)
 	flagsListHeight := 3
 	if showCompression {
-		// Keep the dialog within a standard 25-line terminal: the compression
-		// checkbox shares one row with the scrollable advanced-attributes list.
 		flagsListHeight--
+	}
+	if showEncryption {
+		flagsListHeight--
+	}
+	if flagsListHeight < 1 {
+		flagsListHeight = 1
 	}
 	flagsList := vtui.NewListBox(0, 0, 50, flagsListHeight, windowsAdvancedFlagsLines(targets))
 	flagsList.ShowScrollBar = true
@@ -1411,6 +1437,14 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		gbAdvVBox.Add(chkCompressed, vtui.Margins{}, vtui.AlignLeft)
 		compressionCheckbox = chkCompressed
 	}
+	if showEncryption {
+		state := mixedAttributeState(targets, 0x00004000, func(item vfs.VFSItem) uint32 { return item.WinAttrs })
+		chkEncrypted := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Encrypted"), state == 1)
+		chkEncrypted.State = state
+		gbAdv.AddItem(chkEncrypted)
+		gbAdvVBox.Add(chkEncrypted, vtui.Margins{}, vtui.AlignLeft)
+		encryptionCheckbox = chkEncrypted
+	}
 	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
@@ -1421,6 +1455,13 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 			if state != mixedAttributeState(targets, 0x00000800, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) {
 				edit.setCompression = true
 				edit.compressed = state == 1
+			}
+		}
+		if encryptionCheckbox != nil {
+			state := encryptionCheckbox.State
+			if state != mixedAttributeState(targets, 0x00004000, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) {
+				edit.setEncryption = true
+				edit.encrypted = state == 1
 			}
 		}
 		if text := editMTime.GetText(); text != initialMTime {

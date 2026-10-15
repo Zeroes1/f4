@@ -400,7 +400,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	firstTime := time.Date(2001, 2, 3, 4, 5, 6, 789, time.Local)
 	secondTime := time.Date(2011, 12, 13, 14, 15, 16, 17, time.Local)
 	targets := []AttributesTarget{
-		{Path: "dir", Item: vfs.VFSItem{Name: "dir", IsDir: true, WinAttrs: 0x10, UnixMode: 0755, MTime: firstTime}},
+		{Path: "dir", Item: vfs.VFSItem{Name: "dir", IsDir: true, WinAttrs: 0x4010, UnixMode: 0755, MTime: firstTime}},
 		{Path: "packed.txt", Item: vfs.VFSItem{Name: "packed.txt", WinAttrs: 0x800, UnixMode: 0600, MTime: secondTime}},
 	}
 
@@ -408,7 +408,7 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	dlg := fm.GetTopFrame().(vtui.Container)
 	var texts []string
 	var editMTime *vtui.Edit
-	var chkHidden, chkNotContentIndexed *vtui.Checkbox
+	var chkHidden, chkNotContentIndexed, chkEncrypted *vtui.Checkbox
 	var setButton, securityButton *vtui.Button
 	var flagsList *vtui.ListBox
 	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
@@ -425,6 +425,8 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 				chkHidden = c
 			case c.GetText() == "Not Content Indexed":
 				chkNotContentIndexed = c
+			case c.GetText() == i18n.Msg("Attributes.Encrypted"):
+				chkEncrypted = c
 			}
 		case *vtui.Button:
 			switch {
@@ -438,6 +440,13 @@ func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.
 	})
 	if editMTime == nil || chkHidden == nil || chkNotContentIndexed == nil || setButton == nil || securityButton == nil || flagsList == nil {
 		t.Fatal("Windows multiple-selection dialog controls not found")
+	}
+	if runtime.GOOS == "windows" && !hostmode.Posix() {
+		if chkEncrypted == nil || chkEncrypted.State != 2 {
+			t.Fatalf("Encrypted checkbox = %v, want mixed state for the selection", chkEncrypted)
+		}
+	} else if chkEncrypted != nil {
+		t.Fatal("Encrypted checkbox must be hidden outside native local Windows filesystems")
 	}
 	all := strings.Join(texts, "\n")
 	if !strings.Contains(all, attributesSelectionSummary(targets)) {

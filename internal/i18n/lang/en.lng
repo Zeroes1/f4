@@ -2074,6 +2074,7 @@ Attributes.Write=Write
 Attributes.Execute=Execute
 Attributes.ReadOnly=&Read only
 Attributes.Compressed=&Compressed
+Attributes.Encrypted=&Encrypted
 Attributes.Hidden=&Hidden
 Attributes.System=&System
 Attributes.Archive=&Archive
