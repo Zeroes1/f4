@@ -6486,6 +6486,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// Every drive is listed; the removable, CD and remote options only hide
 	// the parameters of such a drive (driveMenuKindShowsParameters, f4#1148).
 	platformDrives := append([]sysinfo.DriveEntry(nil), driveMenuPlatformDrives()...)
+	driveSignature := driveListSignature(platformDrives)
 	platformNames := DriveMenuPlatformRowsText(func() []DriveMenuPlatformRow {
 		rows := make([]DriveMenuPlatformRow, len(platformDrives))
 		for i, drv := range platformDrives {
@@ -6986,6 +6987,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		}
 	}
 	vtui.FrameManager.Push(&DriveMenuFrame{VMenu: menu, bottomHint: i18n.Msg("Drive.BottomHint")})
+	pf.watchDriveList(panelIdx, menu, driveSignature)
 }
 
 // clearBookmarkSlot empties one slot straight from the drive menu, which

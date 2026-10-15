@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/dialog"
@@ -406,6 +408,98 @@ func RefreshDriveMenuBelow(settings vtui.Frame) {
 	}
 }
 
+// driveMenuWatchEvery is how often an open drive menu looks for drives that
+// came or went: a USB stick plugged in or pulled out (mitek1977-coder,
+// f4#1148). 0 turns the watch off.
+var driveMenuWatchEvery = 2 * time.Second
+
+// driveListSignature is what the drive menu compares to see that the drives
+// changed: their names and the paths it reads their parameters from.
+func driveListSignature(drives []sysinfo.DriveEntry) string {
+	var b strings.Builder
+	for _, d := range drives {
+		b.WriteString(d.Name)
+		b.WriteByte(0)
+		b.WriteString(d.InfoPath)
+		b.WriteByte(0)
+	}
+	return b.String()
+}
+
+// watchDriveList looks at the drives every driveMenuWatchEvery while menu is
+// open and rebuilds it when they change (refreshDriveMenuIfChanged). The list
+// is read off the UI goroutine, since a slow drive may keep it waiting; the
+// menu is rebuilt on it.
+func (pf *PanelsFrame) watchDriveList(panelIdx int, menu *vtui.VMenu, signature string) {
+	fm, every, list := vtui.FrameManager, driveMenuWatchEvery, driveMenuPlatformDrives
+	if fm == nil || every <= 0 {
+		return
+	}
+	var stopped atomic.Bool
+	go func() {
+		ticker := time.NewTicker(every)
+		defer ticker.Stop()
+		for range ticker.C {
+			if stopped.Load() {
+				return
+			}
+			current := driveListSignature(list())
+			fm.PostTask(func() {
+				if !pf.refreshDriveMenuIfChanged(panelIdx, menu, signature, current) {
+					stopped.Store(true)
+				}
+			})
+		}
+	}()
+}
+
+// refreshDriveMenuIfChanged rebuilds menu when the drives changed from
+// signature to current, keeping the cursor on the row it was on and any
+// window opened over the menu (the settings of the drive chooser) on top of
+// it. It reports whether menu should still be watched: false once it is
+// closed or replaced by the rebuilt one, which has a watch of its own.
+func (pf *PanelsFrame) refreshDriveMenuIfChanged(panelIdx int, menu *vtui.VMenu, signature, current string) bool {
+	fm := vtui.FrameManager
+	if fm == nil || menu.IsDone() {
+		return false
+	}
+	frames := fm.GetActiveFrames(fm.ActiveIdx)
+	at := -1
+	for i, f := range frames {
+		if dm, ok := f.(*DriveMenuFrame); ok && dm.VMenu == menu {
+			at = i
+		}
+	}
+	if at < 0 {
+		return false
+	}
+	if current == signature {
+		return true
+	}
+	row := ""
+	if menu.SelectPos >= 0 && menu.SelectPos < len(menu.Items) {
+		row = menu.Items[menu.SelectPos].Text
+	}
+	above := append([]vtui.Frame(nil), frames[at+1:]...)
+	for i := len(above) - 1; i >= 0; i-- {
+		fm.RemoveFrame(above[i])
+	}
+	fm.RemoveFrame(frames[at])
+	pf.showDriveMenuAt(panelIdx, menu.SelectPos)
+	if rebuilt, ok := fm.GetTopFrame().(*DriveMenuFrame); ok {
+		for i, it := range rebuilt.Items {
+			if row != "" && it.Text == row {
+				rebuilt.SetSelectPos(i)
+				break
+			}
+		}
+	}
+	for _, f := range above {
+		fm.Push(f)
+	}
+	return false
+}
+
 func (pf *PanelsFrame) openDriveMenuOptions(panelIdx int, menu *vtui.VMenu) {
 	// The menu is built once, from the settings of the moment: rebuild it
 	// when the window opened below applies new ones. The window is taken off
@@ -421,10 +515,13 @@ func (pf *PanelsFrame) openDriveMenuOptions(panelIdx int, menu *vtui.VMenu) {
 		if n < 2 || frames[n-1] != settings {
 			return
 		}
+		// Not the menu F9 was pressed in: watchDriveList may have rebuilt
+		// it since, when a drive came or went.
 		under, ok := frames[n-2].(*DriveMenuFrame)
-		if !ok || under.VMenu != current || current.IsDone() {
+		if !ok || under.IsDone() {
 			return
 		}
+		current = under.VMenu
 		pos := current.SelectPos
 		fm.RemoveFrame(settings)
 		fm.RemoveFrame(under)
