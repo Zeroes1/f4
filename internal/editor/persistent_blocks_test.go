@@ -82,3 +82,32 @@ func TestSelectionWithoutPersistentBlocksGoesWithTheCursor(t *testing.T) {
 		t.Fatalf("the selection %q stayed after Down", selectedText(t, ev))
 	}
 }
+
+// A click elsewhere moves the cursor and leaves a persistent block; a drag
+// makes a new one.
+func TestPersistentBlockSurvivesAClick_Issue1729(t *testing.T) {
+	old := config.App.EditorPersistentBlocks
+	t.Cleanup(func() { config.App.EditorPersistentBlocks = old })
+	config.App.EditorPersistentBlocks = true
+
+	ev := newFAR3Editor(t, "hello world\nsecond line\n")
+	for i := 0; i < 5; i++ {
+		persistentKey(ev, vtinput.VK_RIGHT, vtinput.ShiftPressed, 0)
+	}
+	persistentKey(ev, vtinput.VK_DOWN, 0, 0)
+
+	// The editor sits at 0,0 (newFAR3Editor): its text starts on row 1,
+	// so row 2 is the second line.
+	mouse := func(x, y int16, state uint32, flags uint32) {
+		ev.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: state != 0,
+			MouseX: x, MouseY: y, ButtonState: state, MouseEventFlags: flags})
+	}
+	mouse(2, 2, vtinput.FromLeft1stButtonPressed, 0)
+	mouse(2, 2, 0, 0)
+	if ev.CursorLine != 1 || ev.CursorPos != 2 {
+		t.Errorf("the click put the cursor at %d:%d, want 1:2", ev.CursorLine, ev.CursorPos)
+	}
+	if got := selectedText(t, ev); got != "hello" {
+		t.Fatalf("after a click the block is %q, want %q", got, "hello")
+	}
+}
