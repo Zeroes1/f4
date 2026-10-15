@@ -353,8 +353,6 @@ type windowsAttributesEdit struct {
 	keepWinAttrs   uint32
 	setCompression bool
 	compressed     bool
-	setSparse      bool
-	sparse         bool
 	setEncryption  bool
 	encrypted      bool
 	// setUnixMode is set where Read only is carried by the mode as well
@@ -371,11 +369,6 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 		// when switching the other way, the compression call must come first.
 		if edit.setEncryption && !edit.encrypted {
 			if err := setWindowsFileEncryption(v, target.Path, false); err != nil {
-				return fmt.Errorf("%s: %w", target.Path, err)
-			}
-		}
-		if edit.setSparse {
-			if err := setWindowsFileSparse(v, target.Path, edit.sparse); err != nil {
 				return fmt.Errorf("%s: %w", target.Path, err)
 			}
 		}
@@ -408,12 +401,6 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 			item.WinAttrs &^= 0x00000800
 			if edit.compressed {
 				item.WinAttrs |= 0x00000800
-			}
-		}
-		if edit.setSparse {
-			item.WinAttrs &^= 0x00000200
-			if edit.sparse {
-				item.WinAttrs |= 0x00000200
 			}
 		}
 		if edit.setEncryption {
@@ -1147,15 +1134,6 @@ func mixedAttributeState(targets []AttributesTarget, bit uint32, value func(vfs.
 	return 0
 }
 
-func allTargetsAreFiles(targets []AttributesTarget) bool {
-	for _, target := range targets {
-		if target.Item.IsDir || target.Item.IsSymlink {
-			return false
-		}
-	}
-	return true
-}
-
 var DefaultNativePropertiesOpener = showNativePropertiesOS
 
 // ShowAttributesWindowsWithProperties keeps the native shell boundary
@@ -1184,7 +1162,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	width, height := 60, 26
 	showCompression := runtime.GOOS == "windows" && fileops.IsLocalOSVFS(v) && !hostmode.Posix()
 	showEncryption := showCompression
-	showSparse := showCompression && allTargetsAreFiles(targets)
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1411,7 +1388,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 
 	// Apply second pass for GroupBox
 	gbVBox := vtui.NewVBoxLayout(gbAttr.X1+2, gbAttr.Y1+1, gbAttr.X2-gbAttr.X1-4, 4)
-	var compressionCheckbox, encryptionCheckbox, sparseCheckbox *vtui.Checkbox
+	var compressionCheckbox, encryptionCheckbox *vtui.Checkbox
 	chkRO := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.ReadOnly"), multiple)
 	chkHD := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Hidden"), multiple)
 	chkSY := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.System"), multiple)
@@ -1444,9 +1421,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	if showEncryption {
 		flagsListHeight--
 	}
-	if showSparse {
-		flagsListHeight--
-	}
 	if flagsListHeight < 1 {
 		flagsListHeight = 1
 	}
@@ -1471,14 +1445,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		gbAdvVBox.Add(chkEncrypted, vtui.Margins{}, vtui.AlignLeft)
 		encryptionCheckbox = chkEncrypted
 	}
-	if showSparse {
-		state := mixedAttributeState(targets, 0x00000200, func(item vfs.VFSItem) uint32 { return item.WinAttrs })
-		chkSparse := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Sparse"), state == 1)
-		chkSparse.State = state
-		gbAdv.AddItem(chkSparse)
-		gbAdvVBox.Add(chkSparse, vtui.Margins{}, vtui.AlignLeft)
-		sparseCheckbox = chkSparse
-	}
 	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
@@ -1496,13 +1462,6 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 			if state != mixedAttributeState(targets, 0x00004000, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) {
 				edit.setEncryption = true
 				edit.encrypted = state == 1
-			}
-		}
-		if sparseCheckbox != nil {
-			state := sparseCheckbox.State
-			if state != mixedAttributeState(targets, 0x00000200, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) {
-				edit.setSparse = true
-				edit.sparse = state == 1
 			}
 		}
 		if text := editMTime.GetText(); text != initialMTime {

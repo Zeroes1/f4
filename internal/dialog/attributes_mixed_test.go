@@ -386,52 +386,6 @@ func TestAttributesDialog_UnixTypedMixedDigitKeepsBits(t *testing.T) {
 	}
 }
 
-func TestAllTargetsAreFiles(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		targets []AttributesTarget
-		want    bool
-	}{
-		{name: "single file", targets: []AttributesTarget{{Item: vfs.VFSItem{}}}, want: true},
-		{name: "multiple files", targets: []AttributesTarget{{Item: vfs.VFSItem{}}, {Item: vfs.VFSItem{}}}, want: true},
-		{name: "directory", targets: []AttributesTarget{{Item: vfs.VFSItem{IsDir: true}}}},
-		{name: "symlink", targets: []AttributesTarget{{Item: vfs.VFSItem{IsSymlink: true}}}},
-		{name: "mixed", targets: []AttributesTarget{{Item: vfs.VFSItem{}}, {Item: vfs.VFSItem{IsDir: true}}}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := allTargetsAreFiles(tc.targets); got != tc.want {
-				t.Errorf("allTargetsAreFiles() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestAttributesDialog_SparseCheckboxForLocalFiles(t *testing.T) {
-	if runtime.GOOS != "windows" || hostmode.Posix() {
-		t.Skip("requires native Windows")
-	}
-	fm := vtui.FrameManager
-	fm.Init(vtui.NewSilentScreenBuf())
-	v := vfs.NewOSVFS(t.TempDir())
-	targets := []AttributesTarget{
-		{Path: "a.txt", Item: vfs.VFSItem{Name: "a.txt", WinAttrs: 0x200}},
-		{Path: "b.txt", Item: vfs.VFSItem{Name: "b.txt"}},
-	}
-	ShowAttributesWindowsWithPropertiesForTargets(nil, v, targets, func(string) error { return nil })
-	dlg := fm.GetTopFrame().(vtui.Container)
-	var sparse *vtui.Checkbox
-	walkUI(dlg.(vtui.UIElement), func(el vtui.UIElement) bool {
-		if chk, ok := el.(*vtui.Checkbox); ok && chk.GetText() == i18n.Msg("Attributes.Sparse") {
-			sparse = chk
-		}
-		return true
-	})
-	if sparse == nil || sparse.State != 2 {
-		t.Fatalf("Sparse checkbox = %v, want a mixed-state checkbox", sparse)
-	}
-	fm.Pop()
-}
-
 func TestAttributesDialog_WindowsMultipleSelectionDescribesSelection(t *testing.T) {
 	fm := vtui.FrameManager
 	fm.Init(vtui.NewSilentScreenBuf())
