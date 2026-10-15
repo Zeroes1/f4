@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -148,6 +149,26 @@ func (it treeItem) GetCellText(int) string {
 	}
 	b.WriteString(it.name)
 	return b.String()
+}
+
+// GetCellAttr implements vtui.CellColorableRow: a tree row is a directory, so
+// it takes the color the file panels give a directory by the highlight rules
+// (highlight.ini, Settings Center), cursor and inactive-cursor states included
+// (f4#1602, part 13). The connectors and the +/- marker share the row's color.
+func (it treeItem) GetCellAttr(_ int, defaultAttr uint64) uint64 {
+	if theme.GlobalFileHighlighter == nil {
+		return defaultAttr
+	}
+	isCursor := defaultAttr == vtui.Palette[theme.ColPanelCursor] ||
+		defaultAttr == vtui.Palette[theme.ColPanelSelectedCursor] ||
+		defaultAttr == vtui.Palette[theme.ColPanelInactiveCursor] ||
+		defaultAttr == vtui.Palette[theme.ColPanelInactiveSelectedCursor]
+	item := vfs.VFSItem{
+		Name:     it.name,
+		IsDir:    true,
+		IsHidden: runtime.GOOS != "windows" && strings.HasPrefix(it.name, "."),
+	}
+	return theme.GlobalFileHighlighter.GetColor(&item, defaultAttr, false, isCursor)
 }
 
 // TreePanel is far2l/DOS Navigator's directory tree (far2l: Alt+F10; DOS

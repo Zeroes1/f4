@@ -4,10 +4,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/ini"
 	"github.com/unxed/f4/internal/testutil"
+	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -606,4 +609,33 @@ func TestTreeMouseExpandCollapse_Issue1602(t *testing.T) {
 	if len(tp.items) != 3 || !childA().collapsed {
 		t.Errorf("a double click on the name did not collapse childA: %d items", len(tp.items))
 	}
+}
+
+// TestTreeRowTakesTheDirectoryHighlightColor_Issue1602: the tree paints a folder
+// with the color the highlight rules give a directory, not the plain panel text
+// color (part 13).
+func TestTreeRowTakesTheDirectoryHighlightColor_Issue1602(t *testing.T) {
+	vtui.SetDefaultPalette()
+	theme.SetDefaultF4Palette()
+	oldRules, oldUser := theme.GlobalFileHighlighter.Rules, theme.GlobalFileHighlighter.UserRules
+	defer func() {
+		theme.GlobalFileHighlighter.Rules = oldRules
+		theme.GlobalFileHighlighter.UserRules = oldUser
+	}()
+	theme.GlobalFileHighlighter.LoadFromIni(ini.Parse(strings.NewReader(`[Highlight_0]
+Name = Directories
+IncludeAttributes = Directory
+NormalColor = foreground:#00FF00
+`)))
+
+	plain := vtui.Palette[theme.ColPanelText]
+	row := treeItem{name: "work", path: "/work", depth: 1}
+	got := row.GetCellAttr(0, plain)
+	if got == plain {
+		t.Fatal("a folder row kept the plain panel text color despite the directory rule")
+	}
+	if want := theme.GlobalFileHighlighter.GetColor(&vfs.VFSItem{Name: "work", IsDir: true}, plain, false, false); got != want {
+		t.Errorf("tree row color %#x differs from the file panel's directory color %#x", got, want)
+	}
+
 }
