@@ -1232,7 +1232,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	dlg.AddItem(gbAttr)
 	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	gbAdv := vtui.NewGroupBox(0, 0, 54, 7, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
+	gbAdv := vtui.NewGroupBox(0, 0, 54, 6, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
 	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
 
@@ -1372,12 +1372,12 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbVBox.Add(chkAR, vtui.Margins{}, vtui.AlignLeft)
 	gbVBox.Apply()
 
-	chkNotContentIndexed := vtui.NewCheckbox(0, 0, "Not Content Indexed", multiple)
+	chkNotContentIndexed := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.NotContentIndexed"), multiple)
 	chkNotContentIndexed.State = mixedAttributeState(targets, 0x00002000, func(item vfs.VFSItem) uint32 { return item.WinAttrs })
 	gbAdv.AddItem(chkNotContentIndexed)
-	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 5)
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, 4)
 	gbAdvVBox.Add(chkNotContentIndexed, vtui.Margins{}, vtui.AlignLeft)
-	flagsList := vtui.NewListBox(0, 0, 50, 4, windowsAdvancedFlagsLines(targets))
+	flagsList := vtui.NewListBox(0, 0, 50, 3, windowsAdvancedFlagsLines(targets))
 	flagsList.ShowScrollBar = true
 	if flagsList.ScrollBar != nil {
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
