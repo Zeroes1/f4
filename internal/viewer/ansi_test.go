@@ -1,8 +1,14 @@
 package viewer
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/unxed/f4/internal/piecetable"
+	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
 
@@ -180,5 +186,59 @@ func TestIsANSIFileName(t *testing.T) {
 		if got := isANSIFileName(name); got != want {
 			t.Errorf("isANSIFileName(%q) = %v, want %v", name, got, want)
 		}
+	}
+}
+
+func TestANSIStateOverCarriesColoursAcrossChunks(t *testing.T) {
+	base := vtui.SetIndexBack(vtui.SetIndexFore(0, 7), 0)
+	state := ansiStateOver([]byte("plain\n\x1b[32mgreen\n"), base, base)
+	if vtui.GetIndexFore(state) != 2 {
+		t.Fatalf("fg %d after a green line, want 2", vtui.GetIndexFore(state))
+	}
+	state = ansiStateOver([]byte("more\n\x1b[0mreset\n"), base, state)
+	if state != base {
+		t.Errorf("state %#x after a reset, want the base %#x", state, base)
+	}
+}
+
+// A window that opens in the middle of a log continues the colours of the
+// lines above it (f4#1929).
+func TestANSIStateAtContinuesColoursFromAbove(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "log.txt")
+	content := "one\n\x1b[31mred\nstill red\n\x1b[0mplain\nlast\n"
+	if err := os.WriteFile(tmp, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	vb, err := NewViewerBackend(context.Background(), vfs.NewOSVFS(t.TempDir()), tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = vb.Close() }()
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	for i := 0; i < 100; i++ {
+		if _, err := vb.ReadAt(0, 1); err != piecetable.ErrLoading {
+			break
+		}
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+
+	base := vtui.SetIndexBack(vtui.SetIndexFore(0, 7), 0)
+	vv := &ViewerView{Backend: vb}
+	still := int64(len("one\n\x1b[31mred\n"))
+	if got := vtui.GetIndexFore(vv.ansiStateAt(still, base)); got != 1 {
+		t.Errorf("fg %d at the second red line, want 1", got)
+	}
+	// Scrolling down uses the cached state and gives the same result as a
+	// scan from the start.
+	plain := int64(len("one\n\x1b[31mred\nstill red\n\x1b[0m"))
+	if got := vv.ansiStateAt(plain, base); got != base {
+		t.Errorf("state %#x after the reset, want the base %#x", got, base)
+	}
+	if got := vv.ansiStateAt(still, base); vtui.GetIndexFore(got) != 1 {
+		t.Errorf("fg %d scrolling back up, want 1", vtui.GetIndexFore(got))
 	}
 }

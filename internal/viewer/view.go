@@ -57,6 +57,9 @@ type ViewerView struct {
 	DisasmMode int
 	TopOffset  int64 // Current byte offset of the first visible line
 
+	// ansiCache keeps the last ansiStateAt result (see ansi.go).
+	ansiCache ansiStateCache
+
 	// For Text mode: offsets of lines currently on screen
 	lineOffsets         []int64
 	rowCells            []vtui.CharInfo
@@ -660,6 +663,10 @@ func (vv *ViewerView) renderText(scr *vtui.ScreenBuf, width, contentHeight int) 
 	}
 	attr := vv.textAttr()
 	ansiState := attr
+	if vv.AnsiMode && vv.TopOffset > 0 {
+		// A window that opens mid-file continues the colours above it.
+		ansiState = vv.ansiStateAt(vv.TopOffset, attr)
+	}
 	var hlLines []WindowLine
 	hlTexts := map[int64]string{}
 	lineStart, hlOK := int64(0), hl != nil
