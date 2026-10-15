@@ -349,8 +349,10 @@ type windowsAttributesEdit struct {
 	// winAttrs holds the new editable flags, keepWinAttrs the flags each
 	// object keeps. Most advanced flags are display-only; Not Content Indexed
 	// is editable through SetFileAttributes.
-	winAttrs     uint32
-	keepWinAttrs uint32
+	winAttrs       uint32
+	keepWinAttrs   uint32
+	setCompression bool
+	compressed     bool
 	// setUnixMode is set where Read only is carried by the mode as well
 	// (native Windows semantics); the mode then follows the Read only box.
 	setUnixMode bool
@@ -360,6 +362,11 @@ type windowsAttributesEdit struct {
 func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []AttributesTarget, edit windowsAttributesEdit) error {
 	const editableWinAttrs = uint32(1 | 2 | 4 | 32 | 0x2000)
 	for _, target := range targets {
+		if edit.setCompression {
+			if err := setWindowsFileCompression(v, target.Path, edit.compressed); err != nil {
+				return fmt.Errorf("%s: %w", target.Path, err)
+			}
+		}
 		item := target.Item
 		if edit.setMTime {
 			item.MTime = edit.mtime
@@ -375,6 +382,12 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 		}
 		// Keep directory/reparse/compression and other provider-specific flags
 		// from each target instead of copying those of the first selected one.
+		if edit.setCompression {
+			item.WinAttrs &^= 0x00000800
+			if edit.compressed {
+				item.WinAttrs |= 0x00000800
+			}
+		}
 		editable := editableWinAttrs &^ edit.keepWinAttrs
 		item.WinAttrs = (item.WinAttrs &^ editable) | (edit.winAttrs & editable)
 		if err := v.SetAttributes(ctx, target.Path, item); err != nil {
@@ -1126,6 +1139,10 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	item := targets[0].Item
 	multiple := len(targets) > 1
 	width, height := 60, 26
+	showCompression := runtime.GOOS == "windows" && fileops.IsLocalOSVFS(v) && !hostmode.Posix()
+	if showCompression {
+		height++
+	}
 
 	// Read-only Created/Accessed rows (f4#1404 follow-up). No "Changed" row
 	// here: Windows has no ctime-shaped "metadata changed" timestamp to show,
@@ -1232,7 +1249,11 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	dlg.AddItem(gbAttr)
 	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
 
-	gbAdv := vtui.NewGroupBox(0, 0, 54, 6, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
+	gbAdvHeight := 6
+	if showCompression {
+		gbAdvHeight++
+	}
+	gbAdv := vtui.NewGroupBox(0, 0, 54, gbAdvHeight, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
 	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
 
@@ -1352,6 +1373,12 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 
 	// Apply second pass for GroupBox
 	gbVBox := vtui.NewVBoxLayout(gbAttr.X1+2, gbAttr.Y1+1, gbAttr.X2-gbAttr.X1-4, 4)
+	gbAdvVBoxHeight := 4
+	if showCompression {
+		gbAdvVBoxHeight++
+	}
+	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3, gbAdvVBoxHeight)
+	var compressionCheckbox *vtui.Checkbox
 	chkRO := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.ReadOnly"), multiple)
 	chkHD := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Hidden"), multiple)
 	chkSY := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.System"), multiple)
@@ -1383,11 +1410,25 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox
 	}
 	gbAdv.AddItem(flagsList)
+	if showCompression {
+		chkCompressed := vtui.NewCheckbox(0, 0, i18n.Msg("Attributes.Compressed"), mixedAttributeState(targets, 0x00000800, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) == 1)
+		chkCompressed.State = mixedAttributeState(targets, 0x00000800, func(item vfs.VFSItem) uint32 { return item.WinAttrs })
+		gbAdv.AddItem(chkCompressed)
+		gbAdvVBox.Add(chkCompressed, vtui.Margins{}, vtui.AlignLeft)
+		compressionCheckbox = chkCompressed
+	}
 	gbAdvVBox.Add(flagsList, vtui.Margins{}, vtui.AlignFill)
 	gbAdvVBox.Apply()
 
 	btnSet.OnClick = func() {
 		var edit windowsAttributesEdit
+		if compressionCheckbox != nil {
+			state := compressionCheckbox.State
+			if state != mixedAttributeState(targets, 0x00000800, func(item vfs.VFSItem) uint32 { return item.WinAttrs }) {
+				edit.setCompression = true
+				edit.compressed = state == 1
+			}
+		}
 		if text := editMTime.GetText(); text != initialMTime {
 			nt, err := time.ParseInLocation(attributesTimeFormat, text, time.Local)
 			if err != nil {

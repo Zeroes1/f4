@@ -2073,6 +2073,7 @@ Attributes.Read=Read
 Attributes.Write=Write
 Attributes.Execute=Execute
 Attributes.ReadOnly=&Read only
+Attributes.Compressed=&Compressed
 Attributes.Hidden=&Hidden
 Attributes.System=&System
 Attributes.Archive=&Archive

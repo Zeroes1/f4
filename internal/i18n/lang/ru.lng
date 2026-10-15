@@ -2073,6 +2073,7 @@ Attributes.Read=Чтение
 Attributes.Write=Запись
 Attributes.Execute=Выполнение
 Attributes.ReadOnly=&Только для чтения
+Attributes.Compressed=&Сжатие
 Attributes.Hidden=&Скрытый
 Attributes.System=&Системный
 Attributes.Archive=&Архивный
