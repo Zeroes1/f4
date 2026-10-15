@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
@@ -547,5 +548,62 @@ func TestTreeExplorerModeShowsTheFolderUnderTheCursor_Issue1602(t *testing.T) {
 	}
 	if got := src.Vfs.GetPath(); got != second {
 		t.Errorf("after Enter the panel shows %q, want %q", got, second)
+	}
+}
+
+// TestTreeMouseExpandCollapse_Issue1602: a click on the "+"/"-" marker of a
+// folder, or a double click on its name, opens and closes it like Right and
+// Left; one click on the name only moves the cursor.
+func TestTreeMouseExpandCollapse_Issue1602(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "childA", "grandchild"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "childB"), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	tp := newBareTreePanel(root)
+	tp.Table.ShowHeader = false
+	tp.Table.SetPosition(0, 0, 39, 9)
+	tp.expandAt(0)
+	tp.syncRows()
+
+	click := func(row, x int, flags uint32) {
+		t.Helper()
+		down := &vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: true,
+			ButtonState: vtinput.FromLeft1stButtonPressed, MouseEventFlags: flags,
+			MouseX: testutil.Int16(x), MouseY: testutil.Int16(row)}
+		tp.ProcessMouse(down)
+		tp.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, MouseX: down.MouseX, MouseY: down.MouseY})
+	}
+	childA := func() treeItem { return tp.items[1] }
+
+	// childA is row 1 at depth 1: "├─" takes two columns, the marker is columns 2-3.
+	if len(tp.items) != 3 || !childA().collapsed {
+		t.Fatalf("setup: items %d, childA collapsed %v", len(tp.items), childA().collapsed)
+	}
+	click(1, 6, 0)
+	if len(tp.items) != 3 || !childA().collapsed {
+		t.Errorf("a single click on the name changed the tree: %d items", len(tp.items))
+	}
+	click(1, 2, 0)
+	if len(tp.items) != 4 || childA().collapsed {
+		t.Errorf("a click on the + marker did not expand childA: %d items", len(tp.items))
+	}
+	click(1, 2, 0)
+	if len(tp.items) != 3 || !childA().collapsed {
+		t.Errorf("a click on the - marker did not collapse childA: %d items", len(tp.items))
+	}
+	click(1, 6, vtinput.DoubleClick)
+	if len(tp.items) != 4 || childA().collapsed {
+		t.Errorf("a double click on the name did not expand childA: %d items", len(tp.items))
+	}
+	click(1, 2, vtinput.DoubleClick)
+	if len(tp.items) != 4 {
+		t.Errorf("the second press of a double click on the marker toggled again: %d items", len(tp.items))
+	}
+	click(1, 6, vtinput.DoubleClick)
+	if len(tp.items) != 3 || !childA().collapsed {
+		t.Errorf("a double click on the name did not collapse childA: %d items", len(tp.items))
 	}
 }
