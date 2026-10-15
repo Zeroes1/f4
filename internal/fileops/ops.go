@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -437,6 +438,11 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 	// A wildcard in the last component is a rename mask, as in far2l: the
 	// files land in the directory before it, under names the mask generates.
 	// Taken literally it would instead create a file called "*.1".
+	// The null device takes a copy and keeps nothing (far2l's "copy to nul",
+	// f4#1966). A move would delete the sources after "copying" them into it,
+	// so a move to the null device is left to fail as it always did.
+	toNull := !isMove && IsNullDeviceDest(destInput, runtime.GOOS)
+
 	mask := destMask(destInput)
 	if mask != "" {
 		destInput = destWithoutMask(destInput)
@@ -444,8 +450,11 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 
 	names = append([]string(nil), names...)
 	dstVfs, destPath := resolveFileOpDestinationAt(srcVfs, dstVfs, srcBasePath, destInput)
+	if toNull {
+		dstVfs, destPath = discardVFS{}, "/"
+	}
 
-	isTargetDir := len(names) > 1 || mask != ""
+	isTargetDir := len(names) > 1 || mask != "" || toNull
 	if !isTargetDir {
 		if strings.HasSuffix(destInput, "/") || strings.HasSuffix(destInput, "\\") {
 			isTargetDir = true
@@ -519,7 +528,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 				reporter.UpdateScan(currentPath, stats.Files, stats.Dirs)
 			}
 		}
-		bulkCopyEligible := !isMove && mask == "" && !SameVFSInstance(srcVfs, dstVfs) && transferNamesAreIdentity(srcVfs, dstVfs, srcBasePath, names) && opts.bulkCompatible()
+		bulkCopyEligible := !isMove && !toNull && mask == "" && !SameVFSInstance(srcVfs, dstVfs) && transferNamesAreIdentity(srcVfs, dstVfs, srcBasePath, names) && opts.bulkCompatible()
 		if _, ok := srcVfs.(vfs.BulkCopierAt); ok && bulkCopyEligible {
 			if bulkScanner, ok := srcVfs.(vfs.BulkScannerAt); ok {
 				totalStats, scanErr = bulkScanner.ScanBulkAt(ctx, srcBasePath, names, scanCallback)

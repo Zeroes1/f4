@@ -97,3 +97,16 @@ that must not replace (`O_EXCL`, the editor's staged sibling when it saves)
 makes the empty file through the dispatcher first (`SudoWriteExclusive`), so a
 taken name fails at `Create` and the editor's temp-then-rename save works
 elevated. Still to come: checks on Windows 10/11 and Server 2019.
+
+## Copying to the null device (f4#1966)
+
+F5 onto the null device reads every selected file (folders recursively) and
+keeps nothing, as in far2l: a quick way to check that the files on a flash
+drive are readable. The destination is recognised by `IsNullDeviceDest`
+(`internal/fileops/null_device.go`): `/dev/null`, `\\.\nul`, `\\?\nul` (a
+trailing separator is fine) everywhere, and the bare `nul` / `nul:` on Windows
+only — on other systems `nul` stays an ordinary file name. The copy then runs
+against `discardVFS`, which accepts any folder or file below its root and
+stores nothing, so the progress dialog, read errors and the "ignore errors"
+report work as for any other copy. A move onto the null device is not turned
+into a copy: it would delete the sources after "copying" them into nothing.
