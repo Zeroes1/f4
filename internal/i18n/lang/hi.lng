@@ -1862,6 +1862,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=f4 को सर्वर-से-सर्वर कॉपी या मूव के दूसरे चरण को प्रमाणित करने के लिए सहेजे गए कनेक्शन के पासवर्ड का उपयोग करने दें, SSH कीज़ या एजेंट एक्सेस की आवश्यकता के बजाय. डिफ़ॉल्ट रूप से बंद: इससे वह पासवर्ड दूसरे सर्वर को पता चल जाता है.
 SettingsCenter.TreeRootWholeVolume.Label=ट्री पैनल को पूरे वॉल्यूम की जड़ पर रखें
 SettingsCenter.TreeRootWholeVolume.Description=स्रोत पैनल के संपूर्ण वर्तमान वॉल्यूम की जड़ पर निर्देशिका ट्री (Ctrl+T) खोलता है, जैसे far2l करता है। बंद होने पर यह इसके बजाय स्रोत पैनल की वर्तमान निर्देशिका की जड़ पर खोलता है।
+SettingsCenter.TreeExplorerMode.Label=एक्सप्लोरर जैसा ट्री
+SettingsCenter.TreeExplorerMode.Description=जब तक डायरेक्टरी ट्री (Ctrl+T) खुला है, उसे खोलने वाला पैनल ट्री के कर्सर के नीचे वाला फ़ोल्डर दिखाता है, और Enter ट्री बंद किए बिना उस पैनल पर चला जाता है। बंद होने पर ट्री far2l की तरह काम करता है: Enter फ़ोल्डर में जाता है और ट्री बंद करता है।
 SettingsCenter.GlyphStyle.Label=फ़्रेम और नियंत्रण के प्रतीक
 SettingsCenter.GlyphStyle.Description=ग्राफ़िकल विंडो फ़्रेम, चेकबॉक्स और रेडियो बटन कैसे बनाती हैं: «क्लासिक» चौकोर कोने और [x] बॉक्स रखता है, «गोल» गोल कोने और गोल बटन बनाता है। टेक्स्ट टर्मिनल प्रभावित नहीं होते।
 SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=गोल

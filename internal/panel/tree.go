@@ -565,6 +565,13 @@ func (t *TreePanel) SetFocus(f bool) {
 func (t *TreePanel) IsFocused() bool { return t.Focused }
 
 func (t *TreePanel) ProcessKey(e *vtinput.InputEvent) bool {
+	before := t.SelectedPath()
+	handled := t.processKey(e)
+	t.followCursor(before)
+	return handled
+}
+
+func (t *TreePanel) processKey(e *vtinput.InputEvent) bool {
 	if e != nil && e.KeyDown {
 		switch e.VirtualKeyCode {
 		case vtinput.VK_RETURN:
@@ -593,7 +600,31 @@ func (t *TreePanel) ProcessKey(e *vtinput.InputEvent) bool {
 	return t.Table.ProcessKey(e)
 }
 
-func (t *TreePanel) ProcessMouse(e *vtinput.InputEvent) bool { return t.Table.ProcessMouse(e) }
+func (t *TreePanel) ProcessMouse(e *vtinput.InputEvent) bool {
+	before := t.SelectedPath()
+	handled := t.Table.ProcessMouse(e)
+	t.followCursor(before)
+	return handled
+}
+
+// followCursor shows the folder under the cursor in the panel that opened
+// the tree when the tree works like Explorer's (TreeExplorerMode, f4#1602):
+// the tree on one side, the files of the folder chosen in it on the other.
+// A folder the panel cannot list leaves the panel where it was, without a
+// message: the cursor only passes over it.
+func (t *TreePanel) followCursor(before string) {
+	if !config.App.TreeExplorerMode || t.src == nil {
+		return
+	}
+	path := t.SelectedPath()
+	if path == "" || path == before {
+		return
+	}
+	if pf := FindPanelsFrameAnyScreen(); pf != nil {
+		var refused error
+		pf.navigateToPath(t.src, path, &refused)
+	}
+}
 
 func (t *TreePanel) GetSelectedName() string {
 	idx := t.cursorIndex()
@@ -832,6 +863,16 @@ func (t *TreePanel) activateSelected() {
 		return
 	}
 	pf.NavigateToPath(t.src, path)
+	if config.App.TreeExplorerMode {
+		// Like Explorer's: Enter goes over to the files of the folder and
+		// the tree stays open beside them.
+		for i, p := range pf.Panels {
+			if p == Panel(t.src) {
+				pf.ActiveIdx = i
+			}
+		}
+		return
+	}
 	pf.ToggleAltPanel("tree", nil)
 }
 

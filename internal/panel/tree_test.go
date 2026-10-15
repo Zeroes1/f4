@@ -483,3 +483,69 @@ func TestNewTreePanel_ResumesExpandedBranchesAcrossInstances(t *testing.T) {
 		t.Error("a freshly opened tree panel should resume \"other/deep\" already expanded too")
 	}
 }
+
+// explorerTreeSetup opens a tree beside src the way Ctrl+T does, with the
+// cursor on the root row and two child folders under it.
+func explorerTreeSetup(t *testing.T) (*PanelsFrame, *FileSystemPanel, *TreePanel, string, string) {
+	t.Helper()
+	pf := setupMockPanelsFrame(t)
+	vtui.FrameManager.Push(pf)
+	t.Cleanup(func() { vtui.FrameManager.RemoveFrame(pf) })
+
+	root := t.TempDir()
+	first, second := filepath.Join(root, "a"), filepath.Join(root, "b")
+	for _, dir := range []string{first, second} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+	src := NewFileSystemPanel(0, 0, 40, 20, vfs.NewOSVFS(root))
+	waitForLoad(t, src)
+	pf.Panels[pf.ActiveIdx] = src
+
+	tp := newBareTreePanel(root)
+	tp.src = src
+	tp.expandAt(0)
+	tp.syncRows()
+	opp := 1 - pf.ActiveIdx
+	pf.AltPanels[opp] = tp
+	pf.ActiveIdx = opp
+	return pf, src, tp, first, second
+}
+
+func TestTreeExplorerModeShowsTheFolderUnderTheCursor_Issue1602(t *testing.T) {
+	saved := config.App.TreeExplorerMode
+	t.Cleanup(func() { config.App.TreeExplorerMode = saved })
+	down := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN}
+
+	config.App.TreeExplorerMode = false
+	_, src, tp, _, _ := explorerTreeSetup(t)
+	start := src.Vfs.GetPath()
+	tp.ProcessKey(down)
+	if got := src.Vfs.GetPath(); got != start {
+		t.Fatalf("with the setting off the panel moved to %q", got)
+	}
+
+	config.App.TreeExplorerMode = true
+	pf, src, tp, first, second := explorerTreeSetup(t)
+	tp.ProcessKey(down)
+	if got := src.Vfs.GetPath(); got != first {
+		t.Fatalf("after Down the panel shows %q, want %q", got, first)
+	}
+	tp.ProcessKey(down)
+	if got := src.Vfs.GetPath(); got != second {
+		t.Fatalf("after the second Down the panel shows %q, want %q", got, second)
+	}
+
+	opp := pf.ActiveIdx
+	tp.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
+	if pf.AltPanels[opp] != tp {
+		t.Errorf("Enter closed the tree")
+	}
+	if pf.Panels[pf.ActiveIdx] != Panel(src) {
+		t.Errorf("Enter did not move to the panel with the files")
+	}
+	if got := src.Vfs.GetPath(); got != second {
+		t.Errorf("after Enter the panel shows %q, want %q", got, second)
+	}
+}

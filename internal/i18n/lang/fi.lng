@@ -2200,6 +2200,8 @@ SettingsCenter.Text.8073366d24da5d88e95db932adcc8319a0e5d2e3eb9ce7a6273b4ea56578
 SettingsCenter.Text.a8a383b6da90c9a23c9c91c0db8c98d125b8c17fefe4df1b520704bd81a5dff1=Sallii f4:n käyttää tallennetun yhteyden salasanaa palvelimelta palvelimelle tehtävän kopioinnin tai siirron toisen hypyn todentamiseen SSH-avainten tai agentin käytön vaatimisen sijaan. Oletuksena pois päältä: tämä paljastaa salasanan toiselle palvelimelle.
 SettingsCenter.TreeRootWholeVolume.Label=Aseta puun juureksi koko taltio
 SettingsCenter.TreeRootWholeVolume.Description=Asettaa hakemistopuun (Ctrl+T) juureksi lähdepaneelin koko nykyisen taltion, kuten far2l. Pois päältä asettaa juureksi lähdepaneelin nykyisen hakemiston.
+SettingsCenter.TreeExplorerMode.Label=Puu kuten Resurssienhallinnassa
+SettingsCenter.TreeExplorerMode.Description=Kun hakemistopuu (Ctrl+T) on auki, sen avannut paneeli näyttää puun kohdistimen alla olevan kansion, ja Enter siirtyy tähän paneeliin sulkematta puuta. Pois päältä puu toimii kuten far2l:ssä: Enter siirtyy kansioon ja sulkee puun.
 SettingsCenter.GlyphStyle.Label=Kehysten ja ohjainten symbolit
 SettingsCenter.GlyphStyle.Description=Miten graafiset ikkunat piirtävät kehykset, valintaruudut ja valintanapit: Classic säilyttää kulmikkaat kulmat ja [x]-ruudut, Pyöristetty piirtää pyöristetyt kulmat ja pyöreät painikkeet. Tekstipäätteisiin tämä ei vaikuta.
 SettingsCenter.Text.0a62cd800f27098e67ad0232c3648442a21795b2038a8e16c9a8f15424ded110=Pyöristetty
