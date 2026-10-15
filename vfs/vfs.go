@@ -422,6 +422,15 @@ type TransferNameProvider interface {
 	TransferName(srcPath string, dst VFS) string
 }
 
+// TransferContentProvider lets a source VFS hand over, for a copy into
+// another file system, the whole content of the one file to create for an
+// item, a directory included: the registry exports a key with all its
+// subkeys as one .reg file (f4#242). ok false copies the item as it is; the
+// name of the file comes from TransferNameProvider.
+type TransferContentProvider interface {
+	TransferContent(ctx context.Context, srcPath string, dst VFS) (content []byte, ok bool, err error)
+}
+
 // ShareRole is the effective access granted by a share link. Providers expose
 // only the roles they can implement for a particular object; callers must not
 // assume that every remote file system supports every role.

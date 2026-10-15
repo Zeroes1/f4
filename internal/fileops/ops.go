@@ -1324,6 +1324,13 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 		return ctx.Err()
 	}
 
+	srcVfs, err := withTransferContent(ctx, srcVfs, srcPath, dstVfs)
+	if err != nil {
+		if state.tolerateRead(srcPath, err) {
+			return nil
+		}
+		return err
+	}
 	stat, err := srcVfs.Stat(ctx, srcPath)
 	if err != nil {
 		if state.tolerateRead(srcPath, err) {
