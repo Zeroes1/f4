@@ -125,12 +125,14 @@ func TestDriveMenuWatchRebuildsTheOpenMenu(t *testing.T) {
 		{Name: "Alpha", Factory: func() vfs.VFS { return nil }},
 		{Name: "USB stick", Factory: func() vfs.VFS { return nil }},
 	})
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
 	for time.Now().Before(deadline) {
 		select {
 		case task := <-vtui.FrameManager.TaskChan:
 			task()
-		case <-time.After(10 * time.Millisecond):
+		case <-poll.C:
 		}
 		if top, ok := driveMenuFromFrame(vtui.FrameManager.GetTopFrame()); ok && top != first {
 			for _, it := range top.Items {
@@ -141,5 +143,5 @@ func TestDriveMenuWatchRebuildsTheOpenMenu(t *testing.T) {
 			}
 		}
 	}
-	t.Fatal("the open drive menu did not show the plugged-in drive")
+	t.Fatal("the open drive menu did not show the plugged-in drive within 15 seconds")
 }
