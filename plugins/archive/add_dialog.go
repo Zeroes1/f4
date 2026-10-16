@@ -1,6 +1,11 @@
 package archive
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/unxed/f4/vfs"
@@ -21,6 +26,9 @@ type addArchiveFormat struct {
 	Level    bool // the engine honours a compression level for this format
 	Solid    bool // the format can be solid
 	Password bool // the format can be encrypted with a password
+	// EngineSplits: the archiver writes volumes itself (SplitSize); the
+	// other formats are cut into volumes after they are written.
+	EngineSplits bool
 }
 
 type addArchiveMethod struct {
@@ -29,13 +37,13 @@ type addArchiveMethod struct {
 }
 
 var addArchiveFormats = []addArchiveFormat{
-	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Methods: []addArchiveMethod{
+	{Label: "Zip", Ext: ".zip", Level: true, Password: true, EngineSplits: true, Methods: []addArchiveMethod{
 		{"Deflate", "deflate"}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
 	}},
 	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true},
-	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
-	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true},
-	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true},
+	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true, EngineSplits: true},
+	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true, EngineSplits: true},
+	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true, EngineSplits: true},
 }
 
 // addArchiveLevels are the compression levels offered, 0 being the engine's
@@ -62,6 +70,54 @@ type addArchiveSettings struct {
 	// Password encrypts the files of the archive (WinZip AES for zip, AES for
 	// 7z); empty for none.
 	Password string
+	// VolumeSize cuts the archive into volumes of that many bytes, named
+	// archive.zip.001, .002 and so on; 0 for one file (f4#2002, part 3).
+	VolumeSize int64
+}
+
+// postSplit reports whether the archive has to be cut into volumes after
+// it is written, because its archiver cannot write volumes itself.
+func (s addArchiveSettings) postSplit() bool {
+	return s.VolumeSize > 0 && !addArchiveFormats[s.Format].EngineSplits
+}
+
+// archiveFiles is the file the archive is written to, or its first volume:
+// what the panel cursor lands on and what an overwrite question is about.
+func (s addArchiveSettings) archiveFile(name string) string {
+	if s.VolumeSize > 0 {
+		return name + ".001"
+	}
+	return name
+}
+
+// addArchiveVolumeSizes are offered in the volume size field; any size can
+// be typed instead.
+var addArchiveVolumeSizes = []string{"10M", "100M", "650M", "700M", "1G", "4092M", "4480M"}
+
+// parseVolumeSize reads a volume size such as 700M, 4G, 1500K or 123456
+// (bytes); K, M and G are powers of 1024.
+func parseVolumeSize(text string) (int64, error) {
+	t := strings.ToUpper(strings.TrimSpace(text))
+	t = strings.TrimSuffix(strings.TrimSuffix(t, "B"), "I")
+	mult := int64(1)
+	if t != "" {
+		switch t[len(t)-1] {
+		case 'K':
+			mult = 1 << 10
+		case 'M':
+			mult = 1 << 20
+		case 'G':
+			mult = 1 << 30
+		}
+		if mult > 1 {
+			t = strings.TrimSpace(t[:len(t)-1])
+		}
+	}
+	n, err := strconv.ParseInt(t, 10, 64)
+	if err != nil || n <= 0 || n > (1<<62)/mult {
+		return 0, fmt.Errorf("%s", vtui.Msg("Archive.Add.VolumeSizeInvalid"))
+	}
+	return n * mult, nil
 }
 
 // options turns the settings into what the archiver takes. Controls the
@@ -82,6 +138,9 @@ func (s addArchiveSettings) options() zipperarchive.Options {
 	}
 	if f.Password {
 		opts.Password = s.Password
+	}
+	if f.EngineSplits {
+		opts.SplitSize = s.VolumeSize
 	}
 	return opts
 }
@@ -120,11 +179,14 @@ type addArchiveDialog struct {
 	// shows it in clear (f4#2002, part 2).
 	password     *vtui.Edit
 	showPassword *vtui.Checkbox
-	create       *vtui.Button
+	// split and volumeSize: cutting the archive into volumes (part 3).
+	split      *vtui.Checkbox
+	volumeSize *vtui.ComboBox
+	create     *vtui.Button
 }
 
 func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *addArchiveDialog {
-	const w, h = 64, 17
+	const w, h = 64, 19
 	d := &addArchiveDialog{}
 	d.dlg = vtui.NewCenteredDialog(w, h, vtui.Msg("Archive.Add.Title"))
 	d.dlg.ShowClose = true
@@ -166,6 +228,14 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *add
 	d.showPassword.OnChange = func(state int) { d.password.PasswordMode = state != 1 }
 	d.dlg.AddItem(d.showPassword)
 
+	d.split = vtui.NewCheckbox(x, y+11, vtui.Msg("Archive.Add.Split"), false)
+	d.volumeSize = vtui.NewComboBox(x+labelW+16, y+11, 12, addArchiveVolumeSizes)
+	d.volumeSize.Edit.SetText("700M")
+	d.volumeSize.SetDisabled(true)
+	d.split.OnChange = func(state int) { d.volumeSize.SetDisabled(state != 1) }
+	d.dlg.AddItem(d.split)
+	d.dlg.AddItem(d.volumeSize)
+
 	d.create = vtui.NewButton(d.dlg.X1+18, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
 	d.create.IsDefault = true
 	cancel := vtui.NewButton(d.dlg.X1+34, d.dlg.Y2-2, vtui.Msg("vtui.Cancel"))
@@ -187,6 +257,14 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *add
 		settings := d.settings()
 		if strings.TrimSpace(settings.Name) == "" {
 			return
+		}
+		if d.split.State == 1 {
+			size, err := parseVolumeSize(d.volumeSize.Edit.GetText())
+			if err != nil {
+				vtui.ShowMessageEx(vtui.Msg("Archive.Add.Title"), err.Error(), []string{vtui.Msg("vtui.Ok")}, vtui.MessageWarn)
+				return
+			}
+			settings.VolumeSize = size
 		}
 		d.dlg.Close()
 		done(settings)
@@ -273,4 +351,55 @@ var showAddArchiveDialog = func(_ vfs.App, initialName string, done func(addArch
 		return
 	}
 	vtui.FrameManager.Push(newAddArchiveDialog(initialName, done).dlg)
+}
+
+// splitIntoVolumes cuts the archive at path into volumes of size bytes,
+// path.001, path.002 and so on, the byte split 7-Zip makes with -v and
+// archive.OpenInput reads back, then removes path. A failure leaves path as
+// it was and removes the volumes already written.
+func splitIntoVolumes(ctx context.Context, path string, size int64) (retErr error) {
+	src, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	var written []string
+	defer func() {
+		_ = src.Close() // Read-only; nothing to flush.
+		if retErr != nil {
+			for _, v := range written {
+				_ = os.Remove(v) // Best effort: the archive itself is kept.
+			}
+		}
+	}()
+	for i := 1; ; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		name := fmt.Sprintf("%s.%03d", path, i)
+		dst, err := os.Create(name)
+		if err != nil {
+			return err
+		}
+		written = append(written, name)
+		n, copyErr := io.CopyN(dst, src, size)
+		closeErr := dst.Close()
+		if copyErr != nil && copyErr != io.EOF {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if copyErr == io.EOF {
+			if n == 0 && i > 1 {
+				// The archive ended exactly on a volume boundary.
+				written = written[:len(written)-1]
+				if err := os.Remove(name); err != nil {
+					return err
+				}
+			}
+			break
+		}
+	}
+	_ = src.Close() // Closed before the remove for Windows; the defer's second close is harmless.
+	return os.Remove(path)
 }

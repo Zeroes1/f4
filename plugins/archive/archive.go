@@ -1082,14 +1082,14 @@ func actionAddArchive(app vfs.App) {
 				waitLock = (res == 0)
 			}
 
-			if _, err := activeVfs.Stat(context.Background(), fullArcPath); err == nil {
+			if _, err := activeVfs.Stat(context.Background(), settings.archiveFile(fullArcPath)); err == nil {
 				msg := "The target archive already exists.\nDo you want to overwrite it?"
 				if app.Message(" Warning ", msg, []string{"&Yes", "&No"}) != 0 {
 					return
 				}
 			}
 
-			app.RunAdvancedProgressTask(" Archiving... ", false, func(ctx context.Context, reporter vfs.TaskReporter) (retErr error) {
+			writeArchive := func(ctx context.Context, reporter vfs.TaskReporter) (retErr error) {
 				if waitLock {
 					reporter.UpdateTransfer("Waiting", "in queue...", -1, "", -1, "")
 					vfs.GlobalArchiveLockManager.Lock(absArcPath)
@@ -1188,12 +1188,24 @@ func actionAddArchive(app vfs.App) {
 				}()
 
 				return a.Archive(ctx, fileMap)
+			}
+			app.RunAdvancedProgressTask(" Archiving... ", false, func(ctx context.Context, reporter vfs.TaskReporter) error {
+				if err := writeArchive(ctx, reporter); err != nil {
+					return err
+				}
+				// A format whose archiver writes no volumes is cut into
+				// them once it is complete (f4#2002, part 3).
+				if settings.postSplit() {
+					reporter.UpdateTransfer("Archiving", "volumes...", -1, "", -1, "")
+					return splitIntoVolumes(ctx, absArcPath, settings.VolumeSize)
+				}
+				return nil
 			}, func(err error) {
 				if err != nil && err != context.Canceled {
 					go app.Message(" Error ", fmt.Sprintf("Archiving failed:\n%v", err), []string{"&Ok"})
 				}
 				if err == nil {
-					app.SetPendingSelection(name)
+					app.SetPendingSelection(settings.archiveFile(name))
 				}
 				app.RefreshAll()
 			})
