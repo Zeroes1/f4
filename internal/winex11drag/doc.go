@@ -21,6 +21,10 @@
 //     the raw socket and file I/O, and github.com/jezek/xgb for the X11
 //     protocol and its authentication handshake.
 //
+// Step C's first piece, backend.go, is a vtui.DragBackend that follows the
+// pointer through a platform-supplied Pointer and feeds it to a Session; the
+// Pointer for Windows and the installation in the win32 backend come next.
+//
 // Everything here is additive and unwired: nothing else in f4 calls into
 // this package yet, and none of it runs unless vfs/hostmode.Posix() is true,
 // which -- by that package's own contract -- is never the case on real
