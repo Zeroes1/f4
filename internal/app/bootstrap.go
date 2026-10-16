@@ -269,7 +269,7 @@ func openStartupFilesIn(pf *panel.PanelsFrame, viewPaths []string, editPath stri
 		openViewFileIn(pf, path)
 	}
 	if editPath != "" {
-		openEditFileIn(pf, editPath)
+		openStartupEditFileIn(pf, editPath)
 	}
 }
 

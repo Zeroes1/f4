@@ -1010,6 +1010,7 @@ func showEditor(pf *panel.PanelsFrame, v vfs.VFS, path string, f vfs.ReadAtClose
 	ev.Mapped = mapped
 	ev.ResizeConsole(pf.LastW, pf.LastH)
 	ev.StartIndexing()
+	ev.OnClose = takeStartupEditorHook(v, path)
 
 	vtui.FrameManager.AddScreen(ev)
 }

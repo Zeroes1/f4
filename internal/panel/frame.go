@@ -4541,6 +4541,18 @@ func QuitConfirmationOpen() bool {
 	return false
 }
 
+// QuitNow ends the session the way a confirmed exit does -- operations
+// cancelled, the workspace saved, the shell stopped -- without asking.
+func (pf *PanelsFrame) QuitNow() {
+	CancelOperationsForShutdown()
+	SaveSession()
+	if pty := pf.takeLocalPTY(); pty != nil {
+		_ = pty.Close()
+	}
+	ShutdownProcessEnvironmentRuntime()
+	vtui.FrameManager.Shutdown()
+}
+
 // HandleCommand intercepts global commands (like CmQuit or appcmd.CmCopy)
 // sent by menus or other views.
 func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
@@ -4569,23 +4581,11 @@ func (pf *PanelsFrame) HandleCommand(cmd int, args any) bool {
 			}
 			dlg.OnResult = func(code int) {
 				if code == 0 {
-					CancelOperationsForShutdown()
-					SaveSession()
-					if pty := pf.takeLocalPTY(); pty != nil {
-						pty.Close()
-					}
-					ShutdownProcessEnvironmentRuntime()
-					vtui.FrameManager.Shutdown()
+					pf.QuitNow()
 				}
 			}
 		} else {
-			CancelOperationsForShutdown()
-			SaveSession()
-			if pty := pf.takeLocalPTY(); pty != nil {
-				pty.Close()
-			}
-			ShutdownProcessEnvironmentRuntime()
-			vtui.FrameManager.Shutdown()
+			pf.QuitNow()
 		}
 		return true
 
