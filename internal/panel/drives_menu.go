@@ -329,41 +329,29 @@ func DriveMenuPlatformRowsText(rows []DriveMenuPlatformRow, options uint32) []st
 		}
 	}
 
-	// A row keeps every column of the list, empty ones as blanks, so the
-	// rules run down the whole list even where a drive's parameters are
-	// hidden (removable, CD, remote) or not known; the rule is the solid line
-	// of Far's drive menu (mitek1977-coder, f4#1148, list of 16.10, points 1
-	// and 2). Without any column in the list a row is the drive name alone.
-	// Columns that are empty in every row are left out from the end.
-	for len(columnWidths) > 0 && columnWidths[len(columnWidths)-1] == 0 {
-		columnWidths = columnWidths[:len(columnWidths)-1]
-	}
 	texts := make([]string, len(rows))
 	for i, row := range rows {
-		if len(columnWidths) == 0 {
+		columns := rowColumns[i]
+		if !driveMenuPlatformRowHasDetails(columns) {
 			texts[i] = row.Base
 			continue
 		}
-		columns := rowColumns[i]
-		if len(columns) > len(columnWidths) {
-			columns = columns[:len(columnWidths)]
-		}
-		for len(columns) < len(columnWidths) {
-			columns = append(columns, driveMenuPlatformColumn{})
-		}
 		last := len(columns) - 1
+		for column := last; column >= 0; column-- {
+			if columns[column].text != "" {
+				last = column
+				break
+			}
+		}
 		parts := make([]string, 1, last+2)
 		parts[0] = row.Base
 		for column := 0; column <= last; column++ {
 			parts = append(parts, driveMenuPadColumn(columns[column], columnWidths[column], column == last))
 		}
-		texts[i] = strings.TrimRight(strings.Join(parts, driveMenuColumnRule), " ")
+		texts[i] = strings.Join(parts, " | ")
 	}
 	return texts
 }
-
-// driveMenuColumnRule separates the columns of a drive row.
-const driveMenuColumnRule = " \u2502 " // │
 
 // driveMenuPlatformItemText is kept for callers and small formatting tests;
 // the live menu uses driveMenuPlatformRowsText so all rows share widths.
