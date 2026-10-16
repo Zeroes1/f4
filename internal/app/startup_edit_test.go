@@ -69,13 +69,17 @@ func (r *startupEditorRig) open(name string) string {
 func TestTakeStartupEditorHook_MatchesThePathOnce(t *testing.T) {
 	t.Cleanup(func() { armStartupEditor("", nil) })
 	called := 0
-	armStartupEditor("/tmp/a.txt", func() { called++ })
+	// Paths of this host: "/tmp/a.txt" is not absolute on Windows, and the
+	// hook is armed with the absolute path openStartupEditFileIn computes.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "a.txt")
+	armStartupEditor(path, func() { called++ })
 
-	v := vfs.NewOSVFS("/tmp")
-	if takeStartupEditorHook(v, "/tmp/other.txt") != nil {
+	v := vfs.NewOSVFS(dir)
+	if takeStartupEditorHook(v, filepath.Join(dir, "other.txt")) != nil {
 		t.Fatal("another file took the -e editor's hook")
 	}
-	hook := takeStartupEditorHook(v, "/tmp/a.txt")
+	hook := takeStartupEditorHook(v, path)
 	if hook == nil {
 		t.Fatal("the -e file did not get its hook")
 	}
@@ -83,7 +87,7 @@ func TestTakeStartupEditorHook_MatchesThePathOnce(t *testing.T) {
 	if called != 1 {
 		t.Fatalf("hook ran %d times, want 1", called)
 	}
-	if takeStartupEditorHook(v, "/tmp/a.txt") != nil {
+	if takeStartupEditorHook(v, path) != nil {
 		t.Error("the hook outlived the editor it was for: opening the file again would end the session")
 	}
 }
