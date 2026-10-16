@@ -190,6 +190,7 @@ func (c *SudoClient) handleAskpassRequest(conn net.Conn) {
 		}
 	} else {
 		vtui.DebugLog("SUDO_CLIENT: Password dialog cancelled by user.")
+		c.markDeclined()
 	}
 }
 

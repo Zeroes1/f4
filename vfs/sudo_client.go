@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -33,6 +34,31 @@ type SudoClient struct {
 	// remember: the user ticked "do not ask again until f4 exits" (f4#1768,
 	// step 6b); the idle timer is off for the rest of the session.
 	remember bool
+	// declinedAt: when the user last cancelled the password dialog. For
+	// ElevationDeclineHold after that, Connect refuses at once instead of
+	// asking again (f4#1998).
+	// Atomic: the askpass handler records a refusal while Connect holds
+	// c.mu waiting for that very handler.
+	declinedAt atomic.Int64 // UnixNano, 0 = never
+}
+
+// ElevationDeclineHold is how long a cancelled password dialog silences
+// further ones. A scan that walks many closed folders (Ctrl+Q over ~/Library,
+// F3 on a big tree) asked again for every folder, and the user could not get
+// out of the dialogs; far2l asks once and goes on without elevation. A var
+// so that tests can shorten it.
+var ElevationDeclineHold = 20 * time.Second
+
+// markDeclined records that the user cancelled the password dialog now.
+func (c *SudoClient) markDeclined() {
+	c.declinedAt.Store(time.Now().UnixNano())
+}
+
+// recentlyDeclined reports whether the password dialog was cancelled within
+// ElevationDeclineHold.
+func (c *SudoClient) recentlyDeclined() bool {
+	at := c.declinedAt.Load()
+	return at != 0 && time.Since(time.Unix(0, at)) < ElevationDeclineHold
 }
 
 var globalSudoClient *SudoClient
@@ -83,6 +109,9 @@ func (c *SudoClient) Connect() error {
 	}
 	if connectsByUAC() {
 		return c.connectElevatedLocked()
+	}
+	if c.recentlyDeclined() {
+		return ErrElevationDeclined
 	}
 
 	vtui.DebugLog("SUDO_CLIENT: Initializing connection... UID=%d GID=%d", os.Getuid(), os.Getgid())
