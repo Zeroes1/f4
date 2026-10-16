@@ -129,6 +129,14 @@ func BuildPlugRingRows(items []plughost.PlugRingItem, installed map[string]plugh
 // runs it, so replacing it is safe while a refresh is in flight.
 var plugRingCatalog = plughost.FetchPlugRingCatalog
 
+// StampFirstPartyPlugins tells PlugRing which f4 build this is, so that a
+// first-party plugin installed by an older build is offered as an update
+// (plughost.SetFirstPartyBuildStamp, unxed/f4#1761).
+func StampFirstPartyPlugins() {
+	titleOnce.Do(initTitleCache)
+	plughost.SetFirstPartyBuildStamp(cachedVersion)
+}
+
 func actionPlugRing(pf *panel.PanelsFrame) {
 	actionPlugRingFocused(pf, "")
 }
@@ -144,6 +152,7 @@ func actionPlugRing(pf *panel.PanelsFrame) {
 // row it now carries, rather than a generic browse-everything dialog the
 // user has to search through themselves.
 func actionPlugRingFocused(pf *panel.PanelsFrame, focusItemID string) {
+	StampFirstPartyPlugins()
 	w, h := 76, 22
 
 	btnInstall := vtui.NewButton(0, 0, i18n.Msg("PlugRing.BtnInstall"))

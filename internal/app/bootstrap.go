@@ -1438,6 +1438,7 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	// Background update check
 	if config.App.UpdateInterval > 0 {
 		go CheckForUpdates(panels, false)
+		StampFirstPartyPlugins()
 		go plughost.CheckForPluginUpdates()
 	}
 }
