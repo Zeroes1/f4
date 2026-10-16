@@ -447,6 +447,7 @@ func Main() {
 			plughost.GlobalPluginManager.CloseAll()
 		}
 		panel.ShutdownProcessEnvironmentRuntime()
+		removeOpenedCopies()
 		if fileops.GlobalFileState != nil {
 			fileops.GlobalFileState.Flush()
 		}

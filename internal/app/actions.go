@@ -762,41 +762,7 @@ func actionEditFileExternal(pf *panel.PanelsFrame, v vfs.VFS, path string, size 
 			}
 			return err
 		}
-		defer func() { _ = src.Close() }()
-
-		dst, err := os.Create(tmpPath)
-		if err != nil {
-			return err
-		}
-		closeDst := fileops.CloseOnce(dst)
-		defer func() { _ = closeDst() }()
-
-		buf := make([]byte, 128*1024)
-		var downloaded int64
-		for {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			n, err := src.Read(ctx, buf)
-			if n > 0 {
-				if _, werr := dst.Write(buf[:n]); werr != nil {
-					return werr
-				}
-				downloaded += int64(n)
-				pct := 0
-				if size > 0 {
-					pct = int((downloaded * 100) / size)
-				}
-				update("Downloading...", pct)
-			}
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-		}
-		return closeDst()
+		return copyVFSFileToLocal(ctx, src, tmpPath, size, update)
 	}, func(err error) {
 		if err != nil && err != context.Canceled {
 			vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to download file:\n%v", err), []string{"&Ok"})
@@ -2198,9 +2164,7 @@ func actionExecute(pf *panel.PanelsFrame, v vfs.VFS, dir, name, path string) {
 			})
 		} else {
 			if _, isLocal := v.(*vfs.OSVFS); !isLocal {
-				ctx.RunOnUI(func() {
-					vtui.ShowMessage(" Error ", "Cannot execute non-runnable files on a remote file system.", []string{"&Ok"})
-				})
+				ctx.RunOnUI(func() { openRemoteWithAssociation(pf, v, path) })
 				return
 			}
 			command, args, ok := panel.AssociatedFileCommand(path)
