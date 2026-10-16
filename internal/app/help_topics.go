@@ -43,7 +43,7 @@ func InitHelpSystem() {
 	// embedded English help remains the baseline, while help/en.hlf can provide
 	// user-specific topics and corrections.
 	if config.App.UseLocalLanguageFiles || (lang != "en" && lang != "eng") {
-		exeDir := filepath.Dir(os.Args[0])
+		exeDir := config.ExecutableDir()
 		candidates := []string{
 			filepath.Join(exeDir, "help", lang+".hlf"),
 			filepath.Join("help", lang+".hlf"), // Fallback for "go run ." development
