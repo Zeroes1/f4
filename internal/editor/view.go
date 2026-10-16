@@ -136,11 +136,15 @@ type EditorView struct {
 	// still owes the cursor (see internal/wheel).
 	wheelCoast wheel.Coast
 
-	pasting     bool
-	Saving      bool
-	edited      bool
-	pasteBuffer []rune
-	AsyncBuf    *AsyncBuffer
+	pasting bool
+	Saving  bool
+	edited  bool
+	// readOnlyConsent is set once the user answered Save to the question
+	// asked before writing over a read-only file (f4#1981); it is not asked
+	// again for this editor.
+	readOnlyConsent bool
+	pasteBuffer     []rune
+	AsyncBuf        *AsyncBuffer
 	// mapped is the file itself, mapped read-only, when the editor could take
 	// that route: the piece table's original buffer is then a window onto it
 	// rather than a copy assembled from chunks. Nil for everything else.
@@ -5627,7 +5631,38 @@ func (ev *EditorView) SaveToFile(afterSave func()) {
 	if rv, ok := ev.Vfs.(interface{ IsReadOnly() bool }); ok && rv.IsReadOnly() {
 		return
 	}
+	if !ev.readOnlyConsent && ev.fileIsReadOnly() {
+		// The save goes through a new file renamed over the old one, which
+		// the file's own permissions do not stop: without the question a
+		// read-only file was rewritten silently (f4#1981), as Far asks first.
+		dlg := vtui.ShowMessageEx(i18n.Msg("Editor.ReadOnlySaveTitle"),
+			fmt.Sprintf(i18n.Msg("Editor.ReadOnlySaveText"), vtui.TruncateMiddle(ev.Vfs.Base(ev.FilePath), 40)),
+			[]string{i18n.Msg("Editor.ReadOnlySaveButton"), i18n.Msg("vtui.Cancel")}, vtui.MessageWarn)
+		dlg.OnResult = func(res int) {
+			if res != 0 {
+				return
+			}
+			ev.readOnlyConsent = true
+			ev.saveToFile(afterSave, false)
+		}
+		return
+	}
 	ev.saveToFile(afterSave, false)
+}
+
+// fileIsReadOnly reports whether the local file being edited has no write
+// permission at all: the read-only attribute on Windows, no w bit on Unix.
+// A new file and a file that cannot be looked at are not read-only here; the
+// save itself reports what goes wrong with them.
+func (ev *EditorView) fileIsReadOnly() bool {
+	if ev.FilePath == "" || ev.CreateNewTarget || !fileops.IsLocalOSVFS(ev.Vfs) {
+		return false
+	}
+	info, err := os.Stat(ev.FilePath)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	return info.Mode().Perm()&0o222 == 0
 }
 
 // saveToFile writes the buffer to ev.FilePath. fullWrite disables the
