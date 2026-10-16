@@ -17,9 +17,10 @@ type addArchiveFormat struct {
 	MethodName string
 	// Methods are the methods the user may choose between, the first one the
 	// default; nil when the format has one method only.
-	Methods []addArchiveMethod
-	Level   bool // the engine honours a compression level for this format
-	Solid   bool // the format can be solid
+	Methods  []addArchiveMethod
+	Level    bool // the engine honours a compression level for this format
+	Solid    bool // the format can be solid
+	Password bool // the format can be encrypted with a password
 }
 
 type addArchiveMethod struct {
@@ -28,10 +29,10 @@ type addArchiveMethod struct {
 }
 
 var addArchiveFormats = []addArchiveFormat{
-	{Label: "Zip", Ext: ".zip", Level: true, Methods: []addArchiveMethod{
+	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Methods: []addArchiveMethod{
 		{"Deflate", "deflate"}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
 	}},
-	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true},
+	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true},
 	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
 	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true},
 	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true},
@@ -58,6 +59,9 @@ type addArchiveSettings struct {
 	Level  int // index in addArchiveLevels
 	Method int // index in the format's Methods
 	Solid  bool
+	// Password encrypts the files of the archive (WinZip AES for zip, AES for
+	// 7z); empty for none.
+	Password string
 }
 
 // options turns the settings into what the archiver takes. Controls the
@@ -75,6 +79,9 @@ func (s addArchiveSettings) options() zipperarchive.Options {
 	if f.Solid {
 		opts.Solid = s.Solid
 		opts.NonSolid = !s.Solid
+	}
+	if f.Password {
+		opts.Password = s.Password
 	}
 	return opts
 }
@@ -109,11 +116,15 @@ type addArchiveDialog struct {
 	level  *vtui.ComboBox
 	method *vtui.ComboBox
 	solid  *vtui.Checkbox
-	create *vtui.Button
+	// password and showPassword: the archive password and the box that
+	// shows it in clear (f4#2002, part 2).
+	password     *vtui.Edit
+	showPassword *vtui.Checkbox
+	create       *vtui.Button
 }
 
 func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *addArchiveDialog {
-	const w, h = 64, 14
+	const w, h = 64, 17
 	d := &addArchiveDialog{}
 	d.dlg = vtui.NewCenteredDialog(w, h, vtui.Msg("Archive.Add.Title"))
 	d.dlg.ShowClose = true
@@ -147,6 +158,13 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *add
 		d.dlg.AddItem(row.combo)
 	}
 	d.dlg.AddItem(d.solid)
+
+	d.password = vtui.NewPasswordEdit(x+labelW, y+8, inner-labelW, "")
+	d.dlg.AddItem(vtui.NewLabel(x, y+8, vtui.Msg("Archive.Add.Password"), d.password))
+	d.dlg.AddItem(d.password)
+	d.showPassword = vtui.NewCheckbox(x+labelW, y+9, vtui.Msg("Archive.Add.ShowPassword"), false)
+	d.showPassword.OnChange = func(state int) { d.password.PasswordMode = state != 1 }
+	d.dlg.AddItem(d.showPassword)
 
 	d.create = vtui.NewButton(d.dlg.X1+18, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
 	d.create.IsDefault = true
@@ -227,15 +245,24 @@ func (d *addArchiveDialog) selectFormat(idx int) {
 		d.solid.State = 0
 	}
 	d.solid.SetDisabled(!f.Solid)
+
+	// A format without encryption takes no password: one typed for another
+	// format is dropped rather than silently ignored at archiving time.
+	if !f.Password {
+		d.password.SetText("")
+	}
+	d.password.SetDisabled(!f.Password)
+	d.showPassword.SetDisabled(!f.Password)
 }
 
 func (d *addArchiveDialog) settings() addArchiveSettings {
 	return addArchiveSettings{
-		Name:   strings.TrimSpace(d.name.GetText()),
-		Format: d.format.Menu.SelectPos,
-		Level:  d.level.Menu.SelectPos,
-		Method: d.method.Menu.SelectPos,
-		Solid:  d.solid.State == 1,
+		Name:     strings.TrimSpace(d.name.GetText()),
+		Format:   d.format.Menu.SelectPos,
+		Level:    d.level.Menu.SelectPos,
+		Method:   d.method.Menu.SelectPos,
+		Solid:    d.solid.State == 1,
+		Password: d.password.GetText(),
 	}
 }
 
