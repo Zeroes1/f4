@@ -40,6 +40,11 @@ type SudoClient struct {
 	// Atomic: the askpass handler records a refusal while Connect holds
 	// c.mu waiting for that very handler.
 	declinedAt atomic.Int64 // UnixNano, 0 = never
+	// withdrawPrompt closes the password dialog that is on screen now, or is
+	// nil when there is none (f4#1993). Its own mutex, not c.mu: Connect
+	// holds c.mu for as long as the dialog is open.
+	promptMu       sync.Mutex
+	withdrawPrompt func()
 }
 
 // ElevationDeclineHold is how long a cancelled password dialog silences
@@ -59,6 +64,33 @@ func (c *SudoClient) markDeclined() {
 func (c *SudoClient) recentlyDeclined() bool {
 	at := c.declinedAt.Load()
 	return at != 0 && time.Since(time.Unix(0, at)) < ElevationDeclineHold
+}
+
+// setPrompt records how to close the password dialog that was just shown;
+// nil when it has gone.
+func (c *SudoClient) setPrompt(withdraw func()) {
+	c.promptMu.Lock()
+	c.withdrawPrompt = withdraw
+	c.promptMu.Unlock()
+}
+
+// WithdrawPrompt closes the password dialog if one is open, for an operation
+// that was cancelled while it waited on that dialog (F3 on a folder, then Esc
+// in "Calculating Size..."). Without it the dialog stayed up, or came back
+// over the editor, long after the user had cancelled the work that asked for
+// it (f4#1993). A withdrawn dialog is not a refusal: it silences nothing.
+// The dialog may have been asked for by another operation; that one is
+// refused and asks again when it is retried.
+func (c *SudoClient) WithdrawPrompt() {
+	if c == nil {
+		return
+	}
+	c.promptMu.Lock()
+	withdraw := c.withdrawPrompt
+	c.promptMu.Unlock()
+	if withdraw != nil {
+		c.RunOnUI(withdraw)
+	}
 }
 
 var globalSudoClient *SudoClient

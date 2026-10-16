@@ -775,6 +775,7 @@ func sudoOpenCancellable(ctx context.Context, path string) (*os.File, error) {
 	case r := <-done:
 		return r.f, r.err
 	case <-ctx.Done():
+		globalSudoClient.WithdrawPrompt()
 		go func() {
 			if r := <-done; r.err == nil && r.f != nil {
 				_ = r.f.Close()
@@ -805,6 +806,7 @@ func sudoReadDirCancellable(ctx context.Context, path string) ([]VFSItem, error)
 	case r := <-done:
 		return r.items, r.err
 	case <-ctx.Done():
+		globalSudoClient.WithdrawPrompt()
 		return nil, ctx.Err()
 	}
 }
