@@ -23,7 +23,7 @@ require (
 	github.com/mholt/archives v0.1.5
 	github.com/pkg/sftp v1.13.6
 	github.com/tetratelabs/wazero v1.12.0
-	github.com/unxed/archives v0.1.3
+	github.com/unxed/archives v0.1.4
 	github.com/unxed/colorer4go v0.1.24
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
@@ -31,7 +31,7 @@ require (
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.7
-	github.com/unxed/sevenzip v0.1.7
+	github.com/unxed/sevenzip v0.1.8
 	github.com/unxed/tar v0.1.141
 	github.com/unxed/vtinput v0.1.11
 	github.com/unxed/vtui v0.1.408
@@ -159,7 +159,7 @@ require (
 	github.com/unxed/par2 v0.1.3 // indirect
 	github.com/unxed/winkeys v0.1.1
 	github.com/unxed/xkb-go v0.1.9 // indirect
-	github.com/unxed/xz v0.1.48
+	github.com/unxed/xz v0.1.49
 	github.com/unxed/zipcharset v0.1.5 // indirect
 	github.com/unxed/zlib4go v0.1.16 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
