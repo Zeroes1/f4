@@ -181,7 +181,10 @@ func (v *OSVFS) ReadDir(ctx context.Context, path string, onChunk func([]VFSItem
 	if err != nil {
 		if os.IsPermission(err) && globalSudoClient.IsAvailable() {
 			vtui.DebugLog("VFS: Permission denied for ReadDir(%q), attempting sudo...", dirPath)
-			items, sudoErr := globalSudoClient.ReadDir(prepareOSPath(dirPath))
+			items, sudoErr := sudoReadDirCancellable(ctx, prepareOSPath(dirPath))
+			if errors.Is(sudoErr, context.Canceled) || errors.Is(sudoErr, context.DeadlineExceeded) {
+				return sudoErr
+			}
 			if sudoErr == nil {
 				vtui.DebugLog("VFS: Sudo ReadDir(%q) SUCCESS, items: %d", dirPath, len(items))
 				if len(items) > 0 && onChunk != nil {
@@ -777,6 +780,31 @@ func sudoOpenCancellable(ctx context.Context, path string) (*os.File, error) {
 				_ = r.f.Close()
 			}
 		}()
+		return nil, ctx.Err()
+	}
+}
+
+// sudoReadDirCancellable is globalSudoClient.ReadDir that gives up when ctx is
+// cancelled. A directory the user cannot read is listed through the elevated
+// dispatcher, whose first request waits on the password dialog; the scan that
+// asked (F3 on a folder, "Calculating Size...") could not be stopped while
+// that dialog was pending, and went on to ask again for the next folder
+// (f4#1993). The caller is released at once; the listing that is still going
+// on is discarded when it ends.
+func sudoReadDirCancellable(ctx context.Context, path string) ([]VFSItem, error) {
+	type result struct {
+		items []VFSItem
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		items, err := globalSudoClient.ReadDir(path)
+		done <- result{items, err}
+	}()
+	select {
+	case r := <-done:
+		return r.items, r.err
+	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
