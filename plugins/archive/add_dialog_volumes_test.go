@@ -202,7 +202,13 @@ func TestVolumesOpenFromTheFirstOne(t *testing.T) {
 			continue
 		}
 		n := 0
-		if err := av.ReadDir(context.Background(), av.GetPath(), func(items []vfs.VFSItem) { n += len(items) }); err != nil || n != 1 {
+		err = av.ReadDir(context.Background(), av.GetPath(), func(items []vfs.VFSItem) { n += len(items) })
+		// Closed before the temporary directory is removed: Windows does not
+		// delete a volume that is still open.
+		if cerr := av.Close(); cerr != nil {
+			t.Errorf("%s: close: %v", s.Name, cerr)
+		}
+		if err != nil || n != 1 {
 			t.Errorf("%s: %d entries, %v", s.Name, n, err)
 		}
 	}
