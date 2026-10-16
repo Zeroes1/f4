@@ -26,8 +26,10 @@ type addArchiveFormat struct {
 	Level    bool // the engine honours a compression level for this format
 	Solid    bool // the format can be solid
 	Password bool // the format can be encrypted with a password
-	// EngineSplits: the archiver writes volumes itself (SplitSize); the
-	// other formats are cut into volumes after they are written.
+	// Split: the archive can be cut into volumes that f4 opens again from
+	// the first one. EngineSplits: the archiver writes them itself
+	// (SplitSize); the other formats are cut after they are written.
+	Split        bool
 	EngineSplits bool
 }
 
@@ -37,13 +39,13 @@ type addArchiveMethod struct {
 }
 
 var addArchiveFormats = []addArchiveFormat{
-	{Label: "Zip", Ext: ".zip", Level: true, Password: true, EngineSplits: true, Methods: []addArchiveMethod{
+	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Split: true, EngineSplits: true, Methods: []addArchiveMethod{
 		{"Deflate", "deflate"}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
 	}},
-	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true},
-	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true, EngineSplits: true},
-	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true, EngineSplits: true},
-	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true, EngineSplits: true},
+	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true, Split: true},
+	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
+	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true},
+	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true},
 }
 
 // addArchiveLevels are the compression levels offered, 0 being the engine's
@@ -78,13 +80,14 @@ type addArchiveSettings struct {
 // postSplit reports whether the archive has to be cut into volumes after
 // it is written, because its archiver cannot write volumes itself.
 func (s addArchiveSettings) postSplit() bool {
-	return s.VolumeSize > 0 && !addArchiveFormats[s.Format].EngineSplits
+	f := addArchiveFormats[s.Format]
+	return s.VolumeSize > 0 && f.Split && !f.EngineSplits
 }
 
 // archiveFiles is the file the archive is written to, or its first volume:
 // what the panel cursor lands on and what an overwrite question is about.
 func (s addArchiveSettings) archiveFile(name string) string {
-	if s.VolumeSize > 0 {
+	if s.VolumeSize > 0 && addArchiveFormats[s.Format].Split {
 		return name + ".001"
 	}
 	return name
@@ -139,7 +142,7 @@ func (s addArchiveSettings) options() zipperarchive.Options {
 	if f.Password {
 		opts.Password = s.Password
 	}
-	if f.EngineSplits {
+	if f.Split && f.EngineSplits {
 		opts.SplitSize = s.VolumeSize
 	}
 	return opts
@@ -331,6 +334,14 @@ func (d *addArchiveDialog) selectFormat(idx int) {
 	}
 	d.password.SetDisabled(!f.Password)
 	d.showPassword.SetDisabled(!f.Password)
+
+	// Volumes of a tar archive are not opened again from the first one
+	// yet, so a tar format is written as one file.
+	if !f.Split {
+		d.split.State = 0
+	}
+	d.split.SetDisabled(!f.Split)
+	d.volumeSize.SetDisabled(!f.Split || d.split.State != 1)
 }
 
 func (d *addArchiveDialog) settings() addArchiveSettings {

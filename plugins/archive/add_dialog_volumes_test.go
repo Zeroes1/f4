@@ -169,3 +169,41 @@ func TestAddArchiveDialogVolumeSize(t *testing.T) {
 		t.Fatalf("Create handed over %+v", got)
 	}
 }
+
+// Volumes are offered only where f4 opens them again from the first one:
+// zip and 7z; a tar format is written as one file.
+func TestVolumesOpenFromTheFirstOne(t *testing.T) {
+	tgz := addArchiveSettings{Format: addArchiveFormatIndex(t, ".tar.gz"), VolumeSize: 4096}
+	if tgz.options().SplitSize != 0 || tgz.postSplit() || tgz.archiveFile("x.tar.gz") != "x.tar.gz" {
+		t.Error("a tar archive must not be cut into volumes")
+	}
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	d := newAddArchiveDialog("docs.tar.gz", func(addArchiveSettings) {})
+	if !d.split.IsDisabled() {
+		t.Error("tar: splitting is not offered")
+	}
+
+	zipIdx := addArchiveFormatIndex(t, ".zip")
+	for _, s := range []addArchiveSettings{
+		{Name: "out.zip", Format: zipIdx, Method: len(addArchiveFormats[zipIdx].Methods) - 1, VolumeSize: 4096},
+		{Name: "out.7z", Format: addArchiveFormatIndex(t, ".7z"), Solid: true, VolumeSize: 4096},
+	} {
+		dir := addArchiveRandomFile(t, s, 20000)
+		parent := vfs.NewOSVFS(dir)
+		first := filepath.Join(dir, s.Name+".001")
+		p := &ArchiveProvider{}
+		if !p.CanOpen(context.Background(), parent, first) {
+			t.Errorf("%s: the first volume is not taken for an archive", s.Name)
+			continue
+		}
+		av, err := p.Open(context.Background(), parent, first)
+		if err != nil {
+			t.Errorf("%s: %v", s.Name, err)
+			continue
+		}
+		n := 0
+		if err := av.ReadDir(context.Background(), av.GetPath(), func(items []vfs.VFSItem) { n += len(items) }); err != nil || n != 1 {
+			t.Errorf("%s: %d entries, %v", s.Name, n, err)
+		}
+	}
+}
