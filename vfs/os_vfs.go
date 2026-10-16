@@ -500,11 +500,9 @@ func (v *OSVFS) SetAttributes(ctx context.Context, path string, item VFSItem) er
 		}
 	}
 
-	// Try native first. A mode the item carries as known is set even when it
-	// is 000: taking 0 for "no mode" kept the last permission of a file
-	// (-r-------- -> ----------) from being removed (f4#1981).
+	// Try native first
 	var errMode error
-	if item.HasMetadata(MetadataPermissions) && !danglingLink {
+	if item.UnixMode != 0 && !danglingLink {
 		errMode = hostfs.Chmod(prepareOSPath(path), os.FileMode(item.UnixMode))
 	}
 
