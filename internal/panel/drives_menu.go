@@ -22,6 +22,7 @@ const (
 	driveMenuKindFixed
 	driveMenuKindRemovable
 	driveMenuKindCD
+	driveMenuKindDVD
 	driveMenuKindRemote
 	driveMenuKindSubstitute
 	driveMenuKindPhysical
@@ -169,6 +170,21 @@ func driveMenuKindFor(name, path string) driveMenuKind {
 	return driveMenuPlatformKind(path)
 }
 
+// fileDeviceDVD is FILE_DEVICE_DVD, the device type an optical drive that
+// reads DVDs reports for IOCTL_STORAGE_GET_MEDIA_TYPES_EX; a CD-only drive
+// reports FILE_DEVICE_CD_ROM.
+const fileDeviceDVD = 0x33
+
+// driveMenuOpticalKind tells a DVD drive from a CD drive by the device type
+// the drive reports, so that the menu says DVD-ROM rather than CD-ROM for it
+// (mitek1977-coder, f4#1148). A drive that does not answer stays a CD.
+func driveMenuOpticalKind(deviceType uint32, known bool) driveMenuKind {
+	if known && deviceType == fileDeviceDVD {
+		return driveMenuKindDVD
+	}
+	return driveMenuKindCD
+}
+
 func driveMenuKindLabel(kind driveMenuKind) string {
 	switch kind {
 	case driveMenuKindFixed:
@@ -177,6 +193,8 @@ func driveMenuKindLabel(kind driveMenuKind) string {
 		return i18n.Msg("Drive.TypeRemovable")
 	case driveMenuKindCD:
 		return i18n.Msg("Drive.TypeCD")
+	case driveMenuKindDVD:
+		return i18n.Msg("Drive.TypeDVD")
 	case driveMenuKindRemote:
 		return i18n.Msg("Drive.TypeRemote")
 	case driveMenuKindPhysical:
@@ -383,7 +401,7 @@ func driveMenuKindShowsParameters(kind driveMenuKind, options uint32) bool {
 	switch kind {
 	case driveMenuKindRemovable:
 		return driveMenuOptionEnabled(options, config.DriveMenuShowRemovable)
-	case driveMenuKindCD:
+	case driveMenuKindCD, driveMenuKindDVD:
 		return driveMenuOptionEnabled(options, config.DriveMenuShowCD)
 	case driveMenuKindRemote:
 		return driveMenuOptionEnabled(options, config.DriveMenuShowRemote)
