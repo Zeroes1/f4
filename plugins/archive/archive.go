@@ -1089,6 +1089,12 @@ func actionAddArchive(app vfs.App) {
 				}
 			}
 
+			// archived is what went into the archive and skipped what could
+			// not be read, for "Delete files after archiving" and "Skip files
+			// that cannot be read" (f4#2002, part 4).
+			var archived map[string]os.FileInfo
+			var walkedDirs []string
+			skipped := 0
 			writeArchive := func(ctx context.Context, reporter vfs.TaskReporter) (retErr error) {
 				if waitLock {
 					reporter.UpdateTransfer("Waiting", "in queue...", -1, "", -1, "")
@@ -1109,8 +1115,24 @@ func actionAddArchive(app vfs.App) {
 					if osvfs, ok := activeVfs.(*vfs.OSVFS); ok {
 						absPath, _ := osvfs.Abs(fullPath)
 						if err := filepath.Walk(absPath, func(p string, fi os.FileInfo, e error) error {
+							if e == nil && settings.SkipUnreadable && fi.Mode().IsRegular() {
+								e = checkReadable(p)
+							}
 							if e != nil {
-								return e
+								if !settings.SkipUnreadable {
+									return e
+								}
+								skipped++
+								if fi != nil && fi.IsDir() && p != absPath {
+									return filepath.SkipDir
+								}
+								return nil
+							}
+							if fi.IsDir() {
+								walkedDirs = append(walkedDirs, p)
+							}
+							if !settings.wants(fi) {
+								return nil
 							}
 							fileMap[p] = fi
 							if !fi.IsDir() {
@@ -1123,6 +1145,7 @@ func actionAddArchive(app vfs.App) {
 					}
 				}
 
+				archived = fileMap
 				a, err := archive.NewArchiver(fullArcPath, activeVfs.GetPath(), opts)
 				if err != nil {
 					return err
@@ -1197,12 +1220,20 @@ func actionAddArchive(app vfs.App) {
 				// them once it is complete (f4#2002, part 3).
 				if settings.postSplit() {
 					reporter.UpdateTransfer("Archiving", "volumes...", -1, "", -1, "")
-					return splitIntoVolumes(ctx, absArcPath, settings.VolumeSize)
+					if err := splitIntoVolumes(ctx, absArcPath, settings.VolumeSize); err != nil {
+						return err
+					}
+				}
+				if settings.DeleteAfter {
+					reporter.UpdateTransfer("Archiving", "deleting...", -1, "", -1, "")
+					return deleteArchived(archived, walkedDirs)
 				}
 				return nil
 			}, func(err error) {
 				if err != nil && err != context.Canceled {
 					go app.Message(" Error ", fmt.Sprintf("Archiving failed:\n%v", err), []string{"&Ok"})
+				} else if err == nil && skipped > 0 {
+					go app.Message(vtui.Msg("Archive.Add.Title"), fmt.Sprintf(vtui.Msg("Archive.Add.Skipped"), skipped), []string{"&Ok"})
 				}
 				if err == nil {
 					app.SetPendingSelection(settings.archiveFile(name))

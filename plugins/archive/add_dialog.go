@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -75,6 +76,57 @@ type addArchiveSettings struct {
 	// VolumeSize cuts the archive into volumes of that many bytes, named
 	// archive.zip.001, .002 and so on; 0 for one file (f4#2002, part 3).
 	VolumeSize int64
+	// DeleteAfter deletes the files that went into the archive once it is
+	// written; SkipUnreadable leaves out files that cannot be read instead
+	// of failing; Filter archives only the files matching that mask
+	// (f4#2002, part 4).
+	DeleteAfter    bool
+	SkipUnreadable bool
+	Filter         string
+}
+
+// wants reports whether an entry found while collecting the files goes
+// into the archive. Under a filter only the matching files do; folders are
+// left to come with their files, so that a filtered archive holds no empty
+// folders.
+func (s addArchiveSettings) wants(fi os.FileInfo) bool {
+	if strings.TrimSpace(s.Filter) == "" {
+		return true
+	}
+	if fi.IsDir() {
+		return false
+	}
+	return vfs.MatchFileMask(fi.Name(), s.Filter, true)
+}
+
+// checkReadable reports why a file cannot be read, or nil.
+func checkReadable(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// deleteArchived deletes what went into the archive: the files first, then
+// the folders that were walked and are empty after that, deepest first. A
+// folder still holding something that was not archived (left out by the
+// filter or unreadable) stays, with its contents.
+func deleteArchived(archived map[string]os.FileInfo, dirs []string) error {
+	for p, fi := range archived {
+		if fi.IsDir() {
+			continue
+		}
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	dirs = append([]string(nil), dirs...)
+	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	for _, d := range dirs {
+		_ = os.Remove(d) // Fails on a folder that is not empty, which stays.
+	}
+	return nil
 }
 
 // postSplit reports whether the archive has to be cut into volumes after
@@ -185,11 +237,15 @@ type addArchiveDialog struct {
 	// split and volumeSize: cutting the archive into volumes (part 3).
 	split      *vtui.Checkbox
 	volumeSize *vtui.ComboBox
-	create     *vtui.Button
+	// deleteAfter, skipErrors and filter: part 4.
+	deleteAfter *vtui.Checkbox
+	skipErrors  *vtui.Checkbox
+	filter      *vtui.Edit
+	create      *vtui.Button
 }
 
 func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *addArchiveDialog {
-	const w, h = 64, 19
+	const w, h = 64, 23
 	d := &addArchiveDialog{}
 	d.dlg = vtui.NewCenteredDialog(w, h, vtui.Msg("Archive.Add.Title"))
 	d.dlg.ShowClose = true
@@ -238,6 +294,14 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *add
 	d.split.OnChange = func(state int) { d.volumeSize.SetDisabled(state != 1) }
 	d.dlg.AddItem(d.split)
 	d.dlg.AddItem(d.volumeSize)
+
+	d.deleteAfter = vtui.NewCheckbox(x, y+13, vtui.Msg("Archive.Add.DeleteAfter"), false)
+	d.skipErrors = vtui.NewCheckbox(x, y+14, vtui.Msg("Archive.Add.SkipErrors"), false)
+	d.filter = vtui.NewEdit(x+labelW, y+16, inner-labelW, "")
+	d.dlg.AddItem(d.deleteAfter)
+	d.dlg.AddItem(d.skipErrors)
+	d.dlg.AddItem(vtui.NewLabel(x, y+16, vtui.Msg("Archive.Add.Filter"), d.filter))
+	d.dlg.AddItem(d.filter)
 
 	d.create = vtui.NewButton(d.dlg.X1+18, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
 	d.create.IsDefault = true
@@ -352,6 +416,10 @@ func (d *addArchiveDialog) settings() addArchiveSettings {
 		Method:   d.method.Menu.SelectPos,
 		Solid:    d.solid.State == 1,
 		Password: d.password.GetText(),
+
+		DeleteAfter:    d.deleteAfter.State == 1,
+		SkipUnreadable: d.skipErrors.State == 1,
+		Filter:         strings.TrimSpace(d.filter.GetText()),
 	}
 }
 
