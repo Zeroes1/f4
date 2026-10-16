@@ -7561,7 +7561,8 @@ func (pf *PanelsFrame) MoveFolderHistory(fsp *FileSystemPanel, direction int) bo
 
 // parseDirChangeCommand recognizes the directory-change commands the command
 // line intercepts itself rather than handing to the shell: "cd <path>",
-// "chdir <path>", "cd /d <path>" (Windows), "cd..", "cd\\", "cd/" and bare
+// "chdir <path>", "cd /d <path>" (Windows), "cd..", "cd\\", "cd/", a bare
+// "cd" (the home directory, outside Windows) and bare
 // drive letters ("C:", "D:\\") on Windows. It returns the target path with
 // surrounding quotes removed. The user menu uses the same test so that a
 // "cd" line inside a multi-command menu item moves the panel exactly like a
@@ -7598,6 +7599,12 @@ func parseDirChangeCommand(trimmedCmd string) (targetPath string, ok bool) {
 	}
 	if lowerCmd == "cd.." || lowerCmd == "cd .." {
 		return "..", true
+	}
+	// A bare "cd" in a Unix shell goes to the home directory, as "cd ~" does
+	// (f4#1980); the panel has to follow it. cmd.exe only prints the current
+	// directory for it, so there it stays the shell's.
+	if lowerCmd == "cd" && !windowsShell {
+		return "~", true
 	}
 	if lowerCmd == "cd/" || (windowsShell && lowerCmd == "cd\\") {
 		return string(os.PathSeparator), true
