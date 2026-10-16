@@ -11,10 +11,8 @@ import (
 // non-linear ETA calculations during I/O operations. DirBytes is the
 // sum of directory-inode Sizes (as reported by Stat) and is tracked
 // separately so ETA calculations for copy/move — which only move
-// file payload — stay unaffected; UI consumers that display the
-// far2l-style "Files size" should sum Bytes + DirBytes (far2l does
-// this too: FileSize += FindData.nFileSize for directory entries,
-// see far2l/src/dirinfo.cpp).
+// file payload — stay unaffected. "Files size" in the quick view and
+// F3 both show Bytes alone, so the two agree on a folder (f4#2005).
 type OpStats struct {
 	Bytes            int64
 	DirBytes         int64
