@@ -276,6 +276,7 @@ FileOp.Summary.Moved=Moved: %d file(s)
 FileOp.Summary.Failed=Failed: %d file(s)
 FileOp.Summary.Skipped=Skipped: %d file(s)
 FileOp.Summary.Cancelled=The operation was cancelled.
+FileOp.MoveToNullDevice=Moving files onto the null device would delete them without keeping a copy.\nUse F5 to check that the files can be read, or F8 to delete them.
 FileOp.Summary.Stopped=The operation stopped: %v
 FileOp.Summary.NoLog=The log could not be written: %v
 FileOp.Summary.ViewLog=&View log

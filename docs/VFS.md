@@ -109,4 +109,8 @@ only — on other systems `nul` stays an ordinary file name. The copy then runs
 against `discardVFS`, which accepts any folder or file below its root and
 stores nothing, so the progress dialog, read errors and the "ignore errors"
 report work as for any other copy. A move onto the null device is not turned
-into a copy: it would delete the sources after "copying" them into nothing.
+into a copy: it would delete the sources after "copying" them into nothing, so
+F6 is refused up front with a message pointing at F5 (check readability) and F8
+(delete). Nothing is asked and nothing is touched: before this, Linux took
+`/dev/null` for an existing file, offered to overwrite it and asked for the root
+password to replace the device node.

@@ -440,8 +440,18 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 	// Taken literally it would instead create a file called "*.1".
 	// The null device takes a copy and keeps nothing (far2l's "copy to nul",
 	// f4#1966). A move would delete the sources after "copying" them into it,
-	// so a move to the null device is left to fail as it always did.
-	toNull := !isMove && IsNullDeviceDest(destInput, runtime.GOOS)
+	// so it is refused before anything is asked or touched: left alone, the
+	// move treated /dev/null as an existing file, offered to overwrite it and
+	// asked for the root password to replace the device node.
+	nullDest := IsNullDeviceDest(destInput, runtime.GOOS)
+	if isMove && nullDest {
+		vtui.ShowMessage(" "+strings.TrimSpace(i18n.Msg("Error.Title"))+" ", i18n.Msg("FileOp.MoveToNullDevice"), []string{i18n.Msg("vtui.Ok")})
+		if onComplete != nil {
+			onComplete()
+		}
+		return
+	}
+	toNull := nullDest
 
 	mask := destMask(destInput)
 	if mask != "" {

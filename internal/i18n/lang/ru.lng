@@ -276,6 +276,7 @@ FileOp.Summary.Moved=Перенесено файлов: %d
 FileOp.Summary.Failed=Неудачно: %d
 FileOp.Summary.Skipped=Пропущено: %d
 FileOp.Summary.Cancelled=Операция отменена.
+FileOp.MoveToNullDevice=Перенос файлов на нулевое устройство удалил бы их, не сохранив копии.\nЧтобы проверить читаемость файлов, используйте F5, чтобы удалить — F8.
 FileOp.Summary.Stopped=Операция прервана: %v
 FileOp.Summary.NoLog=Не удалось записать лог: %v
 FileOp.Summary.ViewLog=&Просмотреть лог

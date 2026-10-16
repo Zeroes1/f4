@@ -189,3 +189,37 @@ func TestExecuteFileOp_CopyToNullDeviceReadsEverythingKeepsNothing(t *testing.T)
 		}
 	}
 }
+
+// F6 onto the null device used to treat /dev/null as an existing file, offer
+// to overwrite it and ask for the root password to replace the device node
+// (f4#1966, Linux report). It is refused up front instead: the sources stay,
+// nothing is asked, and the panels are told the operation is over.
+func TestExecuteFileOp_MoveToNullDeviceIsRefused(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	srcRoot := t.TempDir()
+	srcFile := filepath.Join(srcRoot, "keep.txt")
+	if err := os.WriteFile(srcFile, []byte("payload"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, dest := range []string{"/dev/null", `\\?\nul\`} {
+		completed := false
+		ExecuteFileOpAt(vfs.NewOSVFS(srcRoot), vfs.NewOSVFS(srcRoot), srcRoot, []string{"keep.txt"}, dest, true, 2, func() { completed = true })
+
+		waitForDialog(t, " Error ")
+		vtui.FrameManager.Pop()
+
+		if !completed {
+			t.Errorf("move to %q did not report completion", dest)
+		}
+		if got, err := os.ReadFile(srcFile); err != nil || string(got) != "payload" {
+			t.Errorf("move to %q damaged the source: %q, %v", dest, got, err)
+		}
+		entries, err := os.ReadDir(srcRoot)
+		if err != nil || len(entries) != 1 {
+			t.Errorf("move to %q changed the source folder: %v, %v", dest, entries, err)
+		}
+	}
+}
