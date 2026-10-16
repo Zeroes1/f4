@@ -25,8 +25,15 @@ func TestHelpSearchDirsResolvesExecutableSymlink(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
+	// helpSearchDirs follows symlinks, so the expected folder must be the
+	// real one too: t.TempDir() itself sits behind a symlink on macOS
+	// (/var -> /private/var) and may be a short 8.3 name on Windows.
+	realInstallDir, err := filepath.EvalSymlinks(installDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dirs := helpSearchDirs(link, filepath.Join(root, "profile", "help"))
-	if got, want := dirs[0], filepath.Join(installDir, "help"); got != want {
+	if got, want := dirs[0], filepath.Join(realInstallDir, "help"); got != want {
 		t.Fatalf("executable help directory = %q, want resolved target directory %q", got, want)
 	}
 }
