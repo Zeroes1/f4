@@ -5244,7 +5244,7 @@ func (pf *PanelsFrame) RunProgressTaskAfter(delay time.Duration, title, startMsg
 				vtui.FrameManager.Redraw()
 			})
 		}
-		err := worker(vfs.WithElevationScope(ctx.Context), update)
+		err := worker(ctx.Context, update)
 		close(done)
 		if showTimer != nil {
 			showTimer.Stop()
@@ -5309,7 +5309,7 @@ func (pf *PanelsFrame) RunAdvancedProgressTask(title string, forked bool, worker
 	uiFrames.PostTask(showDialog)
 
 	taskCtx = vtui.RunAsync(func(ctx *vtui.TaskContext) {
-		err := worker(vfs.WithElevationScope(ctx.Context), reporter)
+		err := worker(ctx.Context, reporter)
 		close(done)
 		ctx.RunOnUI(func() {
 			reporter.Stop()
