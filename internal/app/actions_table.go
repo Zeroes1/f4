@@ -2236,7 +2236,16 @@ func init() {
 		DefaultAreas: []string{"Viewer"},
 		MenuPath:     "Options",
 		HideFromMenu: true,
-		Handler:      withPF(func(pf *panel.PanelsFrame) { pf.TogglePanelsVisibility() }),
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if _, editing := vtui.FrameManager.GetTopFrame().(*editor.EditorView); editing {
+				// Ctrl+O from the editor must make the console reachable by
+				// Ctrl+Tab. Toggling the panels behind the editor leaves the
+				// terminal hidden in the same workspace (#1973).
+				panel.ActionWorkspaceNewTerminal()
+				return
+			}
+			pf.TogglePanelsVisibility()
+		}),
 	})
 	registerAction(action.Action{
 		Name:         "Panel.ToggleLeftPanel",

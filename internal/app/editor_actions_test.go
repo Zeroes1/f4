@@ -10,7 +10,10 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/editor"
+	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/piecetable"
+	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -261,4 +264,38 @@ func TestEditorFAR3HotkeysResolve(t *testing.T) {
 			t.Errorf("Editor/%s = %q, want %q", key, got, want)
 		}
 	}
+}
+
+func TestEditorCtrlOOpensSwitchableTerminalWorkspace(t *testing.T) {
+	fm := vtui.FrameManager
+	ev := newActionTestEditor(t, "text")
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShellMode = terminal.ShellModeOwn
+	fm.Push(pf)
+	fm.Push(ev)
+
+	if !RunAction("Panel.ToggleWorkspace") {
+		t.Fatal("Ctrl+O workspace action was not handled from the editor")
+	}
+	if len(fm.Screens) != 2 {
+		t.Fatalf("Ctrl+O created %d workspaces, want a separate terminal workspace", len(fm.Screens))
+	}
+	clone, ok := fm.GetTopFrame().(*panel.PanelsFrame)
+	if !ok || clone == pf {
+		t.Fatalf("active workspace frame = %T, want a forked terminal PanelsFrame", fm.GetTopFrame())
+	}
+	defer clone.Close()
+	if clone.ShowPanels {
+		t.Error("new terminal workspace still shows panels")
+	}
+	if !pf.ShowPanels {
+		t.Error("opening the terminal workspace hid the original panels")
+	}
+	paneltest.WaitForLoad(t, pf.Panels[0].(*panel.FileSystemPanel))
+	paneltest.WaitForLoad(t, pf.Panels[1].(*panel.FileSystemPanel))
+	paneltest.WaitForLoad(t, clone.Panels[0].(*panel.FileSystemPanel))
+	paneltest.WaitForLoad(t, clone.Panels[1].(*panel.FileSystemPanel))
 }
