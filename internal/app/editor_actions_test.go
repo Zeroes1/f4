@@ -6,6 +6,8 @@ package app
 // look into an empty one and pass by finding nothing.
 
 import (
+	"time"
+
 	"github.com/unxed/f4/internal/keymap"
 	"testing"
 
@@ -22,6 +24,7 @@ import (
 // cannot import another's tests.
 func newActionTestEditor(t *testing.T, text string) *editor.EditorView {
 	t.Helper()
+	discardStaleUITasks()
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	ev := editor.NewEditorView(piecetable.New([]byte(text)), nil, "test.txt")
 	t.Cleanup(ev.Close)
@@ -300,6 +303,22 @@ func TestEditorCtrlOOpensSwitchableTerminalWorkspace(t *testing.T) {
 	paneltest.WaitForLoad(t, clone.Panels[1].(*panel.FileSystemPanel))
 }
 
+// discardStaleUITasks drops the UI tasks earlier tests left queued: Init does
+// not empty TaskChan, and a macro test's assign dialog or " Macro " message
+// would otherwise be pushed over this test's editor the first time a helper
+// pumps the queue (f4 train #1995, darwin/arm64). TaskChan is fed by a pump
+// goroutine, so an empty select with default can miss a task that is queued
+// but not offered yet: the queue counts as empty after a short quiet spell.
+func discardStaleUITasks() {
+	for {
+		select {
+		case <-vtui.FrameManager.TaskChan:
+		case <-time.After(20 * time.Millisecond):
+			return
+		}
+	}
+}
+
 // newEditorConsoleWorkspaces is the layout F4 produces: the panels in one
 // workspace and the editor opened from them in a workspace of its own.
 func newEditorConsoleWorkspaces(t *testing.T) (*panel.PanelsFrame, *editor.EditorView) {
@@ -313,6 +332,13 @@ func newEditorConsoleWorkspaces(t *testing.T) (*panel.PanelsFrame, *editor.Edito
 	vtui.FrameManager.AddScreen(ev)
 	paneltest.WaitForLoad(t, pf.Panels[0].(*panel.FileSystemPanel))
 	paneltest.WaitForLoad(t, pf.Panels[1].(*panel.FileSystemPanel))
+	if top := vtui.FrameManager.GetTopFrame(); top != vtui.Frame(ev) {
+		title := ""
+		if top != nil {
+			title = top.GetTitle()
+		}
+		t.Fatalf("setup: top frame %T %q, want the editor", top, title)
+	}
 	if fm := vtui.FrameManager; len(fm.Screens) != 2 || fm.ActiveIdx != 1 {
 		t.Fatalf("setup: %d workspaces, active %d; want the editor in its own workspace, active", len(fm.Screens), fm.ActiveIdx)
 	}
