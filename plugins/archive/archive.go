@@ -1049,10 +1049,11 @@ func actionAddArchive(app vfs.App) {
 	}
 	arcName += ".zip"
 
-	app.InputBox(" Add to archive ", "Archive name:", arcName, func(name string) {
-		if name == "" {
-			return
-		}
+	// The window with the format, level, method and solid (f4#2002) in
+	// place of the plain name prompt.
+	showAddArchiveDialog(app, arcName, func(settings addArchiveSettings) {
+		name := settings.Name
+		opts := settings.options()
 		fullArcPath := activeVfs.Join(activeVfs.GetPath(), name)
 
 		go func() {
@@ -1122,7 +1123,7 @@ func actionAddArchive(app vfs.App) {
 					}
 				}
 
-				a, err := archive.NewArchiver(fullArcPath, activeVfs.GetPath(), archive.Options{Xattrs: false})
+				a, err := archive.NewArchiver(fullArcPath, activeVfs.GetPath(), opts)
 				if err != nil {
 					return err
 				}
