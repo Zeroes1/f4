@@ -1690,11 +1690,67 @@ func tryOpenImageViewer(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 					}
 				}
 			}
+			if v != nil {
+				iv.OnDelete = func(target string, removed func()) {
+					imageViewDelete(pf, v, target, removed)
+				}
+			}
 			iv.ResizeConsole(pf.LastW, pf.LastH)
 			vtui.FrameManager.AddScreen(iv)
 		})
 	})
 	return true
+}
+
+// imageViewDelete is F8 in the picture viewer (f4#1991): the same question
+// and the same Recycle Bin preference as F8 on the panel, for the one file on
+// screen. The panel underneath is read again once the file is gone.
+func imageViewDelete(pf *panel.PanelsFrame, v vfs.VFS, target string, removed func()) {
+	disposition := vfs.DeletePermanently
+	titleKey, confirmKey, buttonKey := "Delete.Title", "Delete.ConfirmPermanent", "Delete.Btn"
+	if config.App.UseTrash {
+		disposition = vfs.DeleteToTrash
+		titleKey, confirmKey, buttonKey = "Trash.Title", "Trash.Confirm", "Trash.Btn"
+	}
+	run := func() {
+		vtui.RunAsync(func(ctx *vtui.TaskContext) {
+			err := fileops.DeletePathWithDisposition(ctx.Context, v, target, disposition)
+			ctx.RunOnUI(func() {
+				if err != nil {
+					if errors.Is(err, vfs.ErrTrashUnsupported) {
+						err = fmt.Errorf("%s", i18n.Msg("Trash.Unsupported"))
+					}
+					vtui.ShowMessageEx(i18n.Msg(titleKey), fmt.Sprintf(i18n.Msg("Delete.OperationFailed"), err),
+						[]string{"&Ok"}, vtui.MessageWarn)
+					return
+				}
+				removed()
+				if pf != nil {
+					pf.RefreshAll()
+				}
+				vtui.FrameManager.Redraw()
+			})
+		})
+	}
+	if !config.App.ConfirmDelete {
+		run()
+		return
+	}
+	kind := vtui.MessageInfo
+	if disposition == vfs.DeletePermanently {
+		kind = vtui.MessageWarn
+	}
+	buttons := []string{i18n.Msg(buttonKey), i18n.Msg("vtui.Cancel")}
+	dlg := vtui.ShowMessageEx(i18n.Msg(titleKey),
+		fmt.Sprintf(i18n.Msg(confirmKey), vtui.TruncateMiddle(v.Base(target), 40)), buttons, kind)
+	if children := dlg.GetChildren(); config.App.DeleteCancelFocused && len(children) > 0 {
+		dlg.SetFocusedItem(children[len(children)-1])
+	}
+	dlg.OnResult = func(res int) {
+		if res == 0 {
+			run()
+		}
+	}
 }
 
 // imageSiblingPaths lists the pictures next to this one, in the order the
