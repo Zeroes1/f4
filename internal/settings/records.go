@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"github.com/unxed/f4/internal/action"
 	"io"
@@ -342,9 +343,13 @@ func newUserMenuSettingsStore(src settingsMenuSource) settingsRecordStore {
 			items, err = panel.LoadFarMenuFileVFS(context.Background(), src.filesystem, src.path)
 		} else {
 			items, err = panel.LoadFarMenuFile(src.path)
-			if os.IsNotExist(err) {
-				err = nil
-			}
+		}
+		// A user menu file that is not there is an empty menu, whichever way it
+		// was looked for: through the panel's file system the error used to
+		// reach the Settings window as "open C:\FarMenu.ini: cannot find the
+		// file" (f4#1976, mitek1977-coder).
+		if src.mode != panel.MenuModeMain && errors.Is(err, os.ErrNotExist) {
+			err = nil
 		}
 		var rows []f4settings.Record
 		var walk func([]panel.UserMenuItem, string)
