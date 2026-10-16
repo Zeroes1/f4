@@ -3780,10 +3780,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// Selection by mask (+, -, *) typed as plain characters on an empty
 	// command line. The gray numpad keys are bound to the corresponding
 	// actions (Panel.SelectGroup / DeselectGroup / InvertSelection);
-	// both paths are suspended while fast find is active.
+	// both paths are suspended while fast find is active. The character
+	// path is only a fallback for terminals that do not say which key was
+	// pressed (maskCharFallbackApplies, f4#1989).
 	if pf.ShowPanels && config.App.NavigationMode != config.NavigationSearchFirst && !alt && !ctrl && pf.CmdLine.IsEmpty() &&
 		pf.focusedPluginPanel() == nil {
-		if e.Char == '+' || e.Char == '-' || e.Char == '*' {
+		if (e.Char == '+' || e.Char == '-' || e.Char == '*') && maskCharFallbackApplies(e) {
 			isFastFind := false
 			if fsp := pf.GetActivePanel(); fsp != nil && fsp.FastFindMode {
 				isFastFind = true
@@ -7776,4 +7778,22 @@ func isDriveMenuMoveKey(e *vtinput.InputEvent) bool {
 	return e.KeyDown && (e.VirtualKeyCode == vtinput.VK_UP || e.VirtualKeyCode == vtinput.VK_DOWN) &&
 		e.ControlKeyState&vtinput.ShiftPressed != 0 &&
 		e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) == 0
+}
+
+// maskCharFallbackApplies reports whether a '+', '-' or '*' character on an
+// empty command line may select by mask by its character alone. Terminals
+// that report the physical key (X11, kitty, win32-input, GUI) send the gray
+// numpad keys as VK_ADD/VK_SUBTRACT/VK_MULTIPLY, which are bound to the
+// actions; the same character from the main keyboard carries another virtual
+// key and belongs to the command line. Only events of the legacy character
+// parser, or without any virtual key, take the character path (f4#1989).
+func maskCharFallbackApplies(e *vtinput.InputEvent) bool {
+	if e.IsLegacy || e.VirtualKeyCode == 0 {
+		return true
+	}
+	switch e.VirtualKeyCode {
+	case vtinput.VK_ADD, vtinput.VK_SUBTRACT, vtinput.VK_MULTIPLY:
+		return true
+	}
+	return false
 }
