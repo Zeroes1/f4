@@ -144,8 +144,13 @@ type VFSItem struct {
 	// too, and writing that back on every attribute change would be noise.
 	SetBTime bool
 	UnixMode uint32 // Raw numeric mode for chmod
-	Uid, Gid int    // Ownership
-	WinAttrs uint32 // Windows file attributes
+	// SetUnixMode asks SetAttributes to write UnixMode even when it is 000.
+	// Without it a zero mode means "leave the mode alone", which the copy
+	// relies on; the attributes dialog sets it, so removing the last
+	// permission of a file (-r-------- to ----------) is applied (f4#1981).
+	SetUnixMode bool
+	Uid, Gid    int    // Ownership
+	WinAttrs    uint32 // Windows file attributes
 	// Nlink is the number of hard links to the file (far3's "LN" panel
 	// column). 1 for an ordinary file with no extra links.
 	Nlink uint64

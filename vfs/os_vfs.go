@@ -502,7 +502,7 @@ func (v *OSVFS) SetAttributes(ctx context.Context, path string, item VFSItem) er
 
 	// Try native first
 	var errMode error
-	if item.UnixMode != 0 && !danglingLink {
+	if (item.UnixMode != 0 || item.SetUnixMode) && !danglingLink {
 		errMode = hostfs.Chmod(prepareOSPath(path), os.FileMode(item.UnixMode))
 	}
 

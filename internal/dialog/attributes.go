@@ -91,6 +91,9 @@ func applyUnixAttributesToOne(ctx context.Context, v vfs.VFS, path string, item 
 		item.BTime, item.SetBTime = edit.btime, true
 	}
 	item.UnixMode = (item.UnixMode & edit.keepMode) | (edit.mode &^ edit.keepMode)
+	// The mode the dialog computed is written even when it is 000 (f4#1981),
+	// where the object's own mode was known to compute it from.
+	item.SetUnixMode = item.HasMetadata(vfs.MetadataPermissions)
 	if err := v.SetAttributes(ctx, path, item); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
