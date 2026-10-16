@@ -2656,6 +2656,22 @@ jobs:
           exit 1
         fi
 
+    # Drag-out acceptance (issue #566): f4's Wine GUI starts a drag, a bare
+    # XDND target on the same Xvfb must receive the file as text/uri-list.
+    # Informational until the panel positioning has proven stable over several
+    # runs; the script's logs (window geometry, per-row attempts, the received
+    # list) land in the wine-logs artifact. The build below overrides the
+    # job-wide GOOS=windows: the target is a Linux X11 client.
+    - name: XDND drag-out to an X11 target (win32 GUI backend)
+      continue-on-error: true
+      run: |
+        set -euo pipefail
+        sudo apt-get install -y -qq --no-install-recommends xdotool
+        GOOS=linux go build -trimpath -o build/xdndtarget ./tools/xdndtarget
+        mkdir -p wine-logs/xdnd
+        xvfb-run --auto-servernum -s "-screen 0 1280x1024x24" -- \
+          bash tools/wine-xdnd-drag.sh "$PWD/build" "$PWD/wine-logs/xdnd"
+
     - uses: actions/upload-artifact@v7
       if: always()
       with:
