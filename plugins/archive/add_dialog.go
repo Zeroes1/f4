@@ -241,11 +241,16 @@ type addArchiveDialog struct {
 	deleteAfter *vtui.Checkbox
 	skipErrors  *vtui.Checkbox
 	filter      *vtui.Edit
-	create      *vtui.Button
+	// profile, saveProfile and deleteProfile: named sets of these options
+	// (part 5).
+	profile       *vtui.ComboBox
+	saveProfile   *vtui.Button
+	deleteProfile *vtui.Button
+	create        *vtui.Button
 }
 
 func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *addArchiveDialog {
-	const w, h = 64, 23
+	const w, h = 64, 25
 	d := &addArchiveDialog{}
 	d.dlg = vtui.NewCenteredDialog(w, h, vtui.Msg("Archive.Add.Title"))
 	d.dlg.ShowClose = true
@@ -302,6 +307,26 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings)) *add
 	d.dlg.AddItem(d.skipErrors)
 	d.dlg.AddItem(vtui.NewLabel(x, y+16, vtui.Msg("Archive.Add.Filter"), d.filter))
 	d.dlg.AddItem(d.filter)
+
+	d.profile = vtui.NewComboBox(x+labelW, y+18, 20, addArchiveProfileNames(loadAddArchiveProfiles()))
+	d.saveProfile = vtui.NewButton(x+labelW+22, y+18, vtui.Msg("Archive.Add.ProfileSave"))
+	d.deleteProfile = vtui.NewButton(x+labelW+36, y+18, vtui.Msg("Archive.Add.ProfileDelete"))
+	d.dlg.AddItem(vtui.NewLabel(x, y+18, vtui.Msg("Archive.Add.Profile"), d.profile))
+	d.dlg.AddItem(d.profile)
+	d.dlg.AddItem(d.saveProfile)
+	d.dlg.AddItem(d.deleteProfile)
+	d.profile.Menu.OnAction = func(idx int) {
+		if idx < 0 || idx >= len(d.profile.Menu.Items) {
+			return
+		}
+		name := d.profile.Menu.Items[idx].Text
+		d.profile.Edit.SetText(name)
+		if p, ok := loadAddArchiveProfiles()[name]; ok {
+			d.applyProfile(p)
+		}
+	}
+	d.saveProfile.OnClick = func() { d.storeProfile() }
+	d.deleteProfile.OnClick = func() { d.dropProfile() }
 
 	d.create = vtui.NewButton(d.dlg.X1+18, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
 	d.create.IsDefault = true
@@ -406,6 +431,111 @@ func (d *addArchiveDialog) selectFormat(idx int) {
 	}
 	d.split.SetDisabled(!f.Split)
 	d.volumeSize.SetDisabled(!f.Split || d.split.State != 1)
+}
+
+// currentProfile is what the window shows, as a profile; the password is
+// left out.
+func (d *addArchiveDialog) currentProfile() addArchiveProfile {
+	s := d.settings()
+	f := addArchiveFormats[s.Format]
+	p := addArchiveProfile{Format: f.Ext, Solid: s.Solid, DeleteAfter: d.deleteAfter.State == 1,
+		SkipUnreadable: d.skipErrors.State == 1, Filter: strings.TrimSpace(d.filter.GetText())}
+	if s.Level >= 0 && s.Level < len(addArchiveLevels) {
+		p.Level = addArchiveLevels[s.Level].Level
+	}
+	if s.Method >= 0 && s.Method < len(f.Methods) {
+		p.Method = f.Methods[s.Method].ID
+	}
+	if d.split.State == 1 {
+		p.VolumeSize = strings.TrimSpace(d.volumeSize.Edit.GetText())
+	}
+	return p
+}
+
+// applyProfile shows the options of p; what p does not know, such as a
+// format no longer offered, stays as it was.
+func (d *addArchiveDialog) applyProfile(p addArchiveProfile) {
+	if format := addArchiveFormatOf("x" + p.Format); format >= 0 && addArchiveFormats[format].Ext == p.Format {
+		d.name.SetText(archiveNameForFormat(d.name.GetText(), format))
+		d.selectFormat(format)
+	}
+	f := addArchiveFormats[d.format.Menu.SelectPos]
+	if f.Level {
+		for i, l := range addArchiveLevels {
+			if l.Level == p.Level {
+				setAddArchiveCombo(d.level, i)
+			}
+		}
+	}
+	for i, m := range f.Methods {
+		if m.ID == p.Method {
+			setAddArchiveCombo(d.method, i)
+		}
+	}
+	if f.Solid {
+		d.solid.State = 0
+		if p.Solid {
+			d.solid.State = 1
+		}
+	}
+	if f.Split {
+		d.split.State = 0
+		if p.VolumeSize != "" {
+			d.split.State = 1
+			d.volumeSize.Edit.SetText(p.VolumeSize)
+		}
+		d.volumeSize.SetDisabled(d.split.State != 1)
+	}
+	d.deleteAfter.State, d.skipErrors.State = 0, 0
+	if p.DeleteAfter {
+		d.deleteAfter.State = 1
+	}
+	if p.SkipUnreadable {
+		d.skipErrors.State = 1
+	}
+	d.filter.SetText(p.Filter)
+}
+
+// storeProfile saves what the window shows under the name in the profile
+// field.
+func (d *addArchiveDialog) storeProfile() {
+	name := strings.TrimSpace(d.profile.Edit.GetText())
+	if name == "" {
+		return
+	}
+	profiles := loadAddArchiveProfiles()
+	profiles[name] = d.currentProfile()
+	if err := saveAddArchiveProfiles(profiles); err != nil {
+		vtui.ShowMessageEx(vtui.Msg("Archive.Add.Title"), err.Error(), []string{vtui.Msg("vtui.Ok")}, vtui.MessageWarn)
+		return
+	}
+	d.refreshProfiles(name)
+}
+
+// dropProfile deletes the profile named in the profile field.
+func (d *addArchiveDialog) dropProfile() {
+	name := strings.TrimSpace(d.profile.Edit.GetText())
+	profiles := loadAddArchiveProfiles()
+	if _, ok := profiles[name]; !ok {
+		return
+	}
+	delete(profiles, name)
+	if err := saveAddArchiveProfiles(profiles); err != nil {
+		vtui.ShowMessageEx(vtui.Msg("Archive.Add.Title"), err.Error(), []string{vtui.Msg("vtui.Ok")}, vtui.MessageWarn)
+		return
+	}
+	d.refreshProfiles("")
+}
+
+func (d *addArchiveDialog) refreshProfiles(selected string) {
+	d.profile.Menu.Items = nil
+	for i, name := range addArchiveProfileNames(loadAddArchiveProfiles()) {
+		d.profile.Menu.AddItem(vtui.MenuItem{Text: name})
+		if name == selected {
+			d.profile.Menu.SetSelectPos(i)
+		}
+	}
+	d.profile.Edit.SetText(selected)
 }
 
 func (d *addArchiveDialog) settings() addArchiveSettings {
