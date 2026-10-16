@@ -322,7 +322,10 @@ type PanelsFrame struct {
 	ReturnToPanels   bool
 	// TerminalOnly marks a workspace opened by Ctrl+Shift+O: a console with no
 	// panels to come back to (issue #128). See PanelsLocked.
-	TerminalOnly          bool
+	TerminalOnly bool
+	// editorReturn is set while Ctrl+O from an editor shows this workspace's
+	// console; the next Ctrl+O goes back to that editor (#1973).
+	editorReturn          *editorConsoleReturn
 	CmdSession            *cmdShellSession // local cmd.exe completion tracking (Windows)
 	workspaceCommandTitle string
 	// managedExecStartedAt/managedExecIdleStreak back the #1603 job-control

@@ -2224,6 +2224,10 @@ func init() {
 		DefaultKeys:  []string{"CtrlO:NoTerminalApp", "CtrlAltZ:NoAltScreenApp", "Esc:EscToggle", "Del:EscToggle", "NumDel:EscToggle"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
+			// The console peek Ctrl+O opened from an editor ends in the editor (#1973).
+			if pf.ReturnToEditorFromConsole() {
+				return
+			}
 			pf.TogglePanelsVisibility()
 		}),
 	})
@@ -2237,11 +2241,15 @@ func init() {
 		MenuPath:     "Options",
 		HideFromMenu: true,
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			if _, editing := vtui.FrameManager.GetTopFrame().(*editor.EditorView); editing {
-				// Ctrl+O from the editor must make the console reachable by
-				// Ctrl+Tab. Toggling the panels behind the editor leaves the
-				// terminal hidden in the same workspace (#1973).
-				panel.ActionWorkspaceNewTerminal()
+			if ed, editing := vtui.FrameManager.GetTopFrame().(*editor.EditorView); editing {
+				// Toggling the panels behind the editor would hide the console
+				// in the editor's own workspace (#1973). Show the console of the
+				// workspace the editor was opened from instead; only an editor
+				// that shares its workspace with the panels gets a terminal
+				// workspace of its own.
+				if !panel.ActionEditorShowConsole(ed) {
+					panel.ActionWorkspaceNewTerminal()
+				}
 				return
 			}
 			pf.TogglePanelsVisibility()
