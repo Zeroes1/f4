@@ -245,8 +245,10 @@ func (s *Session) readEvents(out chan<- xgb.Event) {
 func (s *Session) dispatch(ev xgb.Event) {
 	switch e := ev.(type) {
 	case xproto.ClientMessageEvent:
+		vtui.DebugLog("WINEX11DRAG: session got a client message")
 		s.src.HandleClientMessage(&e)
 	case xproto.SelectionRequestEvent:
+		vtui.DebugLog("WINEX11DRAG: session got a selection request")
 		s.src.HandleSelectionRequest(&e)
 	}
 }

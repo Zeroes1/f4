@@ -110,11 +110,13 @@ func (b *Backend) follow(sess dragSession, stop <-chan struct{}, done chan<- str
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	seen, wasDown := false, false
-	for {
+	for ticks := 0; ; ticks++ {
 		x, y, down := b.Pointer.Position()
 		if !seen || down != wasDown {
 			vtui.DebugLog("WINEX11DRAG: pointer %d,%d, button down: %v", x, y, down)
 			seen, wasDown = true, down
+		} else if ticks%20 == 0 {
+			vtui.DebugLog("WINEX11DRAG: following, tick %d, pointer %d,%d, button down: %v", ticks, x, y, down)
 		}
 		if down {
 			sess.Motion(x, y, xproto.TimeCurrentTime)
