@@ -184,6 +184,7 @@ Panel.Modes.StatusColumnTypes=Типы колонок &строки состоя
 Panel.Modes.StatusColumnWidths=Ширина колонок строки состоя&ния
 Panel.Modes.FullScreen=&Полноэкранный режим
 Panel.Modes.UppercaseDirs=Показывать папки &заглавными буквами
+Panel.Modes.ShowInfoLine=Показывать строку &информации о файле
 Panel.Modes.Reset=С&брос
 Panel.Modes.EditColumns=&Колонки...
 Panel.Modes.EditStatusColumns=Колонки строки состо&яния...

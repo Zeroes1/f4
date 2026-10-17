@@ -184,6 +184,7 @@ Panel.Modes.StatusColumnTypes=&Status line column types (empty: default)
 Panel.Modes.StatusColumnWidths=Status line column w&idths
 Panel.Modes.FullScreen=&Full screen
 Panel.Modes.UppercaseDirs=Show folders in &uppercase
+Panel.Modes.ShowInfoLine=Show file info &status line
 Panel.Modes.Reset=&Reset
 Panel.Modes.EditColumns=Co&lumns...
 Panel.Modes.EditStatusColumns=S&tatus line columns...

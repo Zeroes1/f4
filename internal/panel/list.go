@@ -3392,7 +3392,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 		}
 	}
 
-	if config.App.ShowPanelFileInfo && fp.Y2-fp.Y1+1 > 6 {
+	if panelModeShowsInfoLine(fp.EffectiveViewMode()) && fp.Y2-fp.Y1+1 > 6 {
 		p := vtui.NewPainter(scr)
 		attrBox := vtui.Palette[theme.ColPanelBox]
 		// far2l paints the per-file status line with COL_PANELTEXT;
@@ -3483,7 +3483,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	// separator above the status line, and the panel total stays on the
 	// bottom border underneath it. Only with the status line off do they
 	// share the bottom border, where the selection summary wins (#394).
-	fileInfoShown := config.App.ShowPanelFileInfo && fp.Y2-fp.Y1+1 > 6
+	fileInfoShown := panelModeShowsInfoLine(fp.EffectiveViewMode()) && fp.Y2-fp.Y1+1 > 6
 	availBottom := fp.X2 - fp.X1 - 1
 
 	selStr := ""
@@ -3529,7 +3529,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	// instead, the way the Size column does. When the far2l status line is
 	// switched on it already states all of this right above, so the marker
 	// steps aside.
-	if !config.App.ShowPanelFileInfo && fp.gridColumnCount() > 1 {
+	if !panelModeShowsInfoLine(fp.EffectiveViewMode()) && fp.gridColumnCount() > 1 {
 		if idx := fp.GetCursorIndex(); idx >= 0 && idx < len(fp.Entries) {
 			e := fp.Entries[idx]
 			curStr := entrySizeText(e)
@@ -3759,7 +3759,7 @@ func (fp *FileSystemPanel) SetPosition(x1, y1, x2, y2 int) {
 	fp.ScreenObject.SetPosition(x1, y1, x2, y2)
 	fp.Frame.SetPosition(x1, y1, x2, y2)
 	// Table stays inside the frame, reserving space for status info only when enabled.
-	if config.App.ShowPanelFileInfo && y2-y1+1 > 6 {
+	if panelModeShowsInfoLine(fp.EffectiveViewMode()) && y2-y1+1 > 6 {
 		fp.Table.SetPosition(x1+1, y1+1, x2-1, y2-3)
 	} else {
 		fp.Table.SetPosition(x1+1, y1+1, x2-1, y2-1)
