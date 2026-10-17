@@ -27,6 +27,20 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 		{Name: "Alpha", Factory: func() vfs.VFS { return nil }},
 		{Name: "Beta", Factory: func() vfs.VFS { return nil }},
 	})
+	oldPlatformDrives, oldKind, oldFS := driveMenuPlatformDrives, driveMenuRowKind, driveMenuRowFS
+	t.Cleanup(func() {
+		driveMenuPlatformDrives, driveMenuRowKind, driveMenuRowFS = oldPlatformDrives, oldKind, oldFS
+	})
+	driveMenuPlatformDrives = func() []sysinfo.DriveEntry {
+		return []sysinfo.DriveEntry{
+			{Name: "C:"},
+			{Name: "Windows Registry"},
+		}
+	}
+	driveMenuRowKind = func(_, _ string) driveMenuKind { return driveMenuKindFixed }
+	driveMenuRowFS = func(string) (sysinfo.FSInfo, bool) {
+		return sysinfo.FSInfo{Label: "System", Type: "NTFS", Total: 100, Free: 50}, true
+	}
 
 	pf.ShowDriveMenu(0)
 	menu, ok := driveMenuFromFrame(vtui.FrameManager.GetTopFrame())
@@ -60,8 +74,8 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 		"Physical Disks (/dev)": true, // a tool since f4#1148
 		"Physical Disks":        true,
 	}
-	// A row may carry the drive columns after its name ("Windows Registry │ │"),
-	// so the name is what stands before the first column rule.
+	// A tool row is just its name; platform-drive columns must not follow the
+	// Windows Registry entry after it is moved to the Tools section.
 	rowName := func(text string) string {
 		name, _, _ := strings.Cut(strings.ReplaceAll(text, "&", ""), "│")
 		return strings.TrimSpace(name)
@@ -72,6 +86,11 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 	}
 	if first == tools+1 {
 		t.Fatalf("the built-in tools are not first under the Tools rule: %q", menu.Items[tools+1].Text)
+	}
+	for _, item := range menu.Items {
+		if rowName(item.Text) == "Windows Registry" && strings.Contains(item.Text, "│") {
+			t.Fatalf("Windows Registry tool row includes drive-column separators: %q", item.Text)
+		}
 	}
 	if next := rowName(menu.Items[first].Text); next != "Alpha" {
 		t.Fatalf("the row after the built-in tools is %q, want the first plugin tool", next)

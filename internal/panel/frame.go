@@ -6513,7 +6513,7 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		if strings.EqualFold(driveMenuNameWithoutMarker(drv.Name), "Windows Registry") {
 			// A tool, not a drive: it is listed in the Tools section (f4#1148).
 			registryDrive = &platformDrives[i]
-			registryName = name
+			registryName = driveMenuNameWithoutMarker(drv.Name)
 			continue
 		}
 		if isPhysicalDisksDrive(drv.Name) {
