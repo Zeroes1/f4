@@ -89,6 +89,7 @@ func (b *Backend) StartDrag(payload vtui.DragPayload, allowed vtui.DropAction) (
 
 	stop := make(chan struct{})
 	done := make(chan struct{})
+	go heartbeat(stop)
 	go b.follow(sess, stop, done)
 	action, err := sess.Drag(payload, allowed)
 	close(stop)
@@ -111,7 +112,13 @@ func (b *Backend) follow(sess dragSession, stop <-chan struct{}, done chan<- str
 	defer tick.Stop()
 	seen, wasDown := false, false
 	for ticks := 0; ; ticks++ {
+		if ticks < 4 {
+			vtui.DebugLog("WINEX11DRAG: tick %d, asking the pointer", ticks)
+		}
 		x, y, down := b.Pointer.Position()
+		if ticks < 4 {
+			vtui.DebugLog("WINEX11DRAG: tick %d, pointer answered", ticks)
+		}
 		if !seen || down != wasDown {
 			vtui.DebugLog("WINEX11DRAG: pointer %d,%d, button down: %v", x, y, down)
 			seen, wasDown = true, down
@@ -127,6 +134,22 @@ func (b *Backend) follow(sess dragSession, stop <-chan struct{}, done chan<- str
 		case <-stop:
 			return
 		case <-tick.C:
+		}
+	}
+}
+
+// heartbeat logs every 250 ms until stop is closed. It touches no Win32 or X
+// call, so a gap in these lines means the whole process stood still, and a
+// gap in the follow lines alone means follow is stuck in its own calls.
+func heartbeat(stop <-chan struct{}) {
+	tick := time.NewTicker(250 * time.Millisecond)
+	defer tick.Stop()
+	for n := 1; ; n++ {
+		select {
+		case <-stop:
+			return
+		case <-tick.C:
+			vtui.DebugLog("WINEX11DRAG: alive, %d ms into the gesture", n*250)
 		}
 	}
 }
