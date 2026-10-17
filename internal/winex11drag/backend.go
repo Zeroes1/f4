@@ -72,6 +72,7 @@ func (b *Backend) CanStartDrag() bool { return b.Pointer != nil }
 // When no Session can be opened -- not Wine, no X server, no cookie -- the
 // gesture goes to Inner unchanged, or fails with the cause when there is none.
 func (b *Backend) StartDrag(payload vtui.DragPayload, allowed vtui.DropAction) (vtui.DropAction, error) {
+	vtui.DebugLog("WINEX11DRAG: StartDrag called")
 	if b.Pointer == nil {
 		return vtui.DropNone, vtui.ErrDragUnsupported
 	}

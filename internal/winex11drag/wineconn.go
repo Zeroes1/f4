@@ -10,6 +10,7 @@ import (
 
 	"github.com/jezek/xgb"
 	winescape "github.com/unxed/libwinescape/go"
+	"github.com/unxed/vtui"
 
 	"github.com/unxed/f4/vfs/hostmode"
 )
@@ -50,6 +51,7 @@ func OpenWineX11Connection() (*xgb.Conn, error) {
 	}
 
 	display := winescape.HostGetenv("DISPLAY")
+	vtui.DebugLog("WINEX11DRAG: DISPLAY=%q", display)
 	spec, err := ParseDisplay(display)
 	if err != nil {
 		return nil, fmt.Errorf("winex11drag: %w", err)
@@ -63,12 +65,14 @@ func OpenWineX11Connection() (*xgb.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+	vtui.DebugLog("WINEX11DRAG: Xauthority cookie read, dialing %s", sockPath)
 
 	sock, err := winescape.DialUnix(sockPath)
 	if err != nil {
 		return nil, fmt.Errorf("winex11drag: dialing %s: %w", sockPath, err)
 	}
 
+	vtui.DebugLog("WINEX11DRAG: socket connected, X11 setup handshake")
 	conn, err := xgb.NewConnNetWithCookieHex(wrapWineConn(sock), hex.EncodeToString(cookie))
 	if err != nil {
 		_ = sock.Close()
