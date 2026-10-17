@@ -655,7 +655,12 @@ func (ev *EditorView) SetText(text string) {
 	ev.retireEditSession()
 	ev.codepageRaw = nil
 
-	ev.Pt = piecetable.New([]byte(text))
+	// Keep the original and append-only buffers: save patches interpret
+	// Original pieces as ranges of the opened file, and undo snapshots refer
+	// to these same buffers. A new table would mislabel replacement text as
+	// unchanged disk bytes and invalidate the existing undo history.
+	ev.Pt.Delete(0, ev.Pt.Size())
+	ev.Pt.Insert(0, []byte(text))
 	ev.noteIndexRebuilt(ev.Li.Rebuild(ev.Pt))
 	ev.CursorLine = 0
 	ev.CursorPos = 0
