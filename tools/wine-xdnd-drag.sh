@@ -29,7 +29,16 @@ want="$build/dragdir/dragme.txt"
 cd "$build/dragdir" || exit 2
 "$WINE" "$build/f4.exe" --debug --dump-screen-after 19 --gui=win32 > "$logs/f4.out" 2>&1 &
 f4pid=$!
-trap 'kill "$f4pid" 2>/dev/null || true' EXIT
+# f4's own account of each gesture (the DND:/WINEX11DRAG: lines of its debug
+# log, unxed/f4#566 step C3d): whether the drag started at all, and why not.
+# shellcheck disable=SC2329 # runs from the EXIT trap
+collect() {
+  find "$build" -maxdepth 4 -name debug.log -exec cp -t "$logs" {} + 2>/dev/null || true
+  if [ -f "$logs/debug.log" ]; then
+    grep -E 'DND|WINEX11DRAG|XDND|[Dd]rag' "$logs/debug.log" | tail -n 60 > "$logs/drag-lines.txt" || true
+  fi
+}
+trap 'collect; kill "$f4pid" 2>/dev/null || true' EXIT
 sleep 12
 
 # The f4 window is the largest visible window that is not the whole screen.
@@ -74,6 +83,7 @@ for k in 4 3 5; do
   done
   xdotool sleep 0.3 mouseup 1
   rc=0
+  xdotool getmouselocation > "$logs/mouse-$k.txt" 2>&1 || true
   wait "$tpid" || rc=$?
   if [ "$rc" -eq 0 ]; then
     echo "drop landed from row $k (${sx},${sy})" | tee "$logs/verdict.txt"
