@@ -31,13 +31,18 @@ type MappedFile struct {
 	// the same byte in the file.
 	offset int64
 
-	// gen and readers count the goroutines inside guardMapping, split by the
-	// generation they entered in. retire flips the generation and waits only
-	// for the readers of the old one: a reader that enters after the flip
-	// reads whatever the piece table was given instead of the mapping, so it
-	// has no window onto the mapping to lose and nothing to wait for.
+	// gen and readers count the goroutines inside guardMapping, by the
+	// generation they entered in. retire moves to a new generation and waits
+	// only for the readers of the earlier ones: a reader that enters after
+	// that reads whatever the piece table was given instead of the mapping,
+	// so it has no window onto the mapping to lose and nothing to wait for.
+	//
+	// Every earlier generation, not just the last: a retire that timed out
+	// leaves its straggler counted in its generation, and the save that is
+	// retried next must wait for it too. Two generations told apart by
+	// parity lost it, and unmapped the file under it.
 	gen     atomic.Uint32
-	readers [2]atomic.Int64
+	readers map[uint32]int64 // guarded by mu
 
 	// cancels stops the readers that can be stopped — searches — so that
 	// retire does not wait out a pass over a file of many gigabytes.
@@ -53,25 +58,45 @@ type MappedFile struct {
 // pin records a reader of the mapping and returns the call that ends it.
 // cancel, when not nil, is how retire stops that reader early.
 func (m *MappedFile) pin(cancel func()) func() {
-	g := m.gen.Load() & 1
-	m.readers[g].Add(1)
-	if cancel == nil {
-		return func() { m.readers[g].Add(-1) }
-	}
 	m.mu.Lock()
-	if m.cancels == nil {
-		m.cancels = make(map[uint64]func())
+	defer m.mu.Unlock()
+	g := m.gen.Load()
+	if m.readers == nil {
+		m.readers = make(map[uint32]int64)
 	}
-	id := m.nextID
-	m.nextID++
-	m.cancels[id] = cancel
-	m.mu.Unlock()
+	m.readers[g]++
+	id := uint64(0)
+	if cancel != nil {
+		if m.cancels == nil {
+			m.cancels = make(map[uint64]func())
+		}
+		id = m.nextID
+		m.nextID++
+		m.cancels[id] = cancel
+	}
 	return func() {
 		m.mu.Lock()
-		delete(m.cancels, id)
-		m.mu.Unlock()
-		m.readers[g].Add(-1)
+		defer m.mu.Unlock()
+		if cancel != nil {
+			delete(m.cancels, id)
+		}
+		if m.readers[g]--; m.readers[g] == 0 {
+			delete(m.readers, g)
+		}
 	}
+}
+
+// readersUpTo counts the readers that entered in generation old or before.
+func (m *MappedFile) readersUpTo(old uint32) int64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := int64(0)
+	for g, count := range m.readers {
+		if g <= old {
+			n += count
+		}
+	}
+	return n
 }
 
 // retire waits until every reader that entered before this call has left,
@@ -81,8 +106,8 @@ func (m *MappedFile) pin(cancel func()) func() {
 // can be cancelled are; the rest are waited for, up to timeout, and false
 // means some were still reading when it ran out.
 func (m *MappedFile) retire(held int64, timeout time.Duration) bool {
-	old := m.gen.Add(1) - 1
 	m.mu.Lock()
+	old := m.gen.Add(1) - 1
 	cancels := make([]func(), 0, len(m.cancels))
 	for _, cancel := range m.cancels {
 		cancels = append(cancels, cancel)
@@ -92,7 +117,7 @@ func (m *MappedFile) retire(held int64, timeout time.Duration) bool {
 		cancel()
 	}
 	deadline := time.Now().Add(timeout)
-	for m.readers[old&1].Load() > held {
+	for m.readersUpTo(old) > held {
 		if time.Now().After(deadline) {
 			return false
 		}

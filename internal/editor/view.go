@@ -5996,7 +5996,7 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					// The stage still holds the whole new text; it stays.
 					ctx.RunOnUI(func() {
 						ev.Saving = false
-						ev.adoptRecoveredBacking(release, nil, nil, nil, true)
+						ev.adoptRecoveredBacking(ev.Pt, release, nil, nil, nil, true)
 						vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to write the file in place:\n%v\n\nThe new text is kept in:\n%s", err, tempPath), []string{"&Ok"})
 					})
 					return
@@ -6014,10 +6014,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				if !fileops.OperationMustNotRetry(err) {
 					cleanupEditorStage(ev.Vfs, tempPath)
 				}
-				recFile, recMapped, recBuf, recOK := recoverMapping(ev.Vfs, ev.Pt, release, writePath)
+				recFile, recMapped, recBuf, recOK := recoverMapping(ev.Vfs, release, writePath)
 				ctx.RunOnUI(func() {
 					ev.Saving = false
-					ev.adoptRecoveredBacking(release, recFile, recMapped, recBuf, recOK)
+					ev.adoptRecoveredBacking(ev.Pt, release, recFile, recMapped, recBuf, recOK)
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to finalize save (rename failed):\n%v", err), []string{"&Ok"})
 				})
 				return

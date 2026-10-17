@@ -117,7 +117,12 @@ func (ev *EditorView) onUIAndWait(ctx *vtui.TaskContext, fn func()) bool {
 // It answers nil when there was nothing to release, and an error, with the
 // mapping restored, when it could not be released.
 func (ev *EditorView) releaseMappingForSave(ctx *vtui.TaskContext, Pt *piecetable.PieceTable, m *MappedFile, path string, keepCopy bool) (*mappingRelease, error) {
-	if !releaseMappingBeforeReplace || Pt == nil || m == nil || m.Size() == 0 || !m.describes(path) {
+	// A file that is about to be rewritten in place goes on every system:
+	// rewriting it truncates the pages under the mapping, which a reader of
+	// them then faults on, and a rewrite that fails halfway leaves nothing
+	// to read the old text back from. Unix refuses to map a file with other
+	// names for that reason, but a link can be made after the file is open.
+	if (!releaseMappingBeforeReplace && !keepCopy) || Pt == nil || m == nil || m.Size() == 0 || !m.describes(path) {
 		return nil, nil
 	}
 	data := m.Bytes()
@@ -174,7 +179,10 @@ var errEditorClosed = errors.New("the editor was closed")
 // new mapping of it or, when the file cannot be mapped again, a chunk buffer
 // over it. A file that is no longer the size it was is not the text the table
 // describes; the table is then left with the loadingBuffer, and ok is false.
-func recoverMapping(v vfs.VFS, Pt *piecetable.PieceTable, r *mappingRelease, path string) (f vfs.ReadAtCloser, m *MappedFile, buf *AsyncBuffer, ok bool) {
+// It does not touch the piece table: adoptRecoveredBacking does, on the UI
+// thread, together with the fields that name the backing, for the reason the
+// release swaps it there.
+func recoverMapping(v vfs.VFS, r *mappingRelease, path string) (f vfs.ReadAtCloser, m *MappedFile, buf *AsyncBuffer, ok bool) {
 	if r == nil || r.copied {
 		return nil, nil, nil, true
 	}
@@ -189,12 +197,9 @@ func recoverMapping(v vfs.VFS, Pt *piecetable.PieceTable, r *mappingRelease, pat
 		return nil, nil, nil, false
 	}
 	if m, mapErr := MapEditorFileWithOffset(v, f, r.offset); mapErr == nil {
-		Pt.UpdateOriginalBuffer(piecetable.MemoryBuffer(m.Bytes()))
 		return f, m, nil, true
 	}
-	buf = NewAsyncBufferWithOffset(context.Background(), f, r.offset)
-	Pt.UpdateOriginalBuffer(buf)
-	return f, nil, buf, true
+	return f, nil, NewAsyncBufferWithOffset(context.Background(), f, r.offset), true
 }
 
 // reopenReleasedFile opens a file whose mapping a save released, trying a few
@@ -216,16 +221,22 @@ func reopenReleasedFile(v vfs.VFS, path string) (vfs.ReadAtCloser, error) {
 }
 
 // adoptRecoveredBacking runs on the UI thread after a save that released the
-// mapping failed, and points the editor at what recoverMapping found. A copy
-// needs nothing: the closed mapping stays in ev.Mapped, which keeps the line
-// index on its lazy path, and the piece table reads the copy.
-func (ev *EditorView) adoptRecoveredBacking(r *mappingRelease, f vfs.ReadAtCloser, m *MappedFile, buf *AsyncBuffer, ok bool) {
+// mapping failed, and points the piece table and the editor at what
+// recoverMapping found. A copy needs nothing: the closed mapping stays in
+// ev.Mapped, which keeps the line index on its lazy path, and the piece table
+// reads the copy.
+func (ev *EditorView) adoptRecoveredBacking(Pt *piecetable.PieceTable, r *mappingRelease, f vfs.ReadAtCloser, m *MappedFile, buf *AsyncBuffer, ok bool) {
 	if r == nil || r.copied {
 		return
 	}
 	if !ok {
 		ev.noteTextLost()
 		return
+	}
+	if m != nil {
+		Pt.UpdateOriginalBuffer(piecetable.MemoryBuffer(m.Bytes()))
+	} else {
+		Pt.UpdateOriginalBuffer(buf)
 	}
 	ev.File = f
 	ev.AsyncBuf = buf

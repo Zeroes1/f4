@@ -517,3 +517,86 @@ func TestAsyncBuffer_PrefetchStartsFetchesWithoutCopying(t *testing.T) {
 		t.Errorf("Read after Prefetch = %q, %v", data, err)
 	}
 }
+
+// A retire that gave up leaves its straggler reading, and the mapping in
+// place. The save that is tried again has to wait for that reader as well:
+// telling two generations apart by parity forgot it, and unmapped the file
+// while it was still being read.
+func TestMappedFile_RetryAfterATimeoutStillWaitsForTheStraggler(t *testing.T) {
+	m, _, _, _ := mapTestFile(t, "mapped text")
+	straggler := m.pin(nil)
+
+	if m.retire(0, 20*time.Millisecond) {
+		t.Fatal("precondition: the first retire should have timed out")
+	}
+	// A reader of the mapping that came back after the failed release.
+	again := m.pin(nil)
+	again()
+	if m.retire(0, 20*time.Millisecond) {
+		t.Fatal("the retried retire did not wait for the reader from before the first one")
+	}
+	straggler()
+	if !m.retire(0, 5*time.Second) {
+		t.Fatal("retire still waits with every reader gone")
+	}
+}
+
+// A link made after the file was opened turns the save into a rewrite in
+// place, on any system. Rewriting a mapped file truncates the pages under the
+// mapping, and a rewrite that fails halfway leaves no old text to map again,
+// so the text is copied first even where the mapping would not stop a rename.
+func TestMappedEditor_LinkMadeAfterOpeningIsRewrittenFromACopy(t *testing.T) {
+	previous := releaseMappingBeforeReplace
+	releaseMappingBeforeReplace = false
+	t.Cleanup(func() { releaseMappingBeforeReplace = previous })
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	testutil.DrainPendingTasks()
+
+	dir := t.TempDir()
+	path, other := filepath.Join(dir, "first.txt"), filepath.Join(dir, "second.txt")
+	if err := os.WriteFile(path, []byte("text\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ev := openMappedEditor(t, dir, path)
+	defer ev.Close()
+	m := ev.Mapped
+	if err := os.Link(path, other); err != nil {
+		t.Skipf("no hard links here: %v", err)
+	}
+
+	// The release runs on a task goroutine and swaps on the UI thread, which
+	// is this one.
+	type outcome struct {
+		release *mappingRelease
+		err     error
+	}
+	done := make(chan outcome, 1)
+	vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		r, err := ev.releaseMappingForSave(ctx, ev.Pt, m, path, true)
+		done <- outcome{r, err}
+	})
+	var res outcome
+	deadline := time.After(5 * time.Second)
+wait:
+	for {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case res = <-done:
+			break wait
+		case <-deadline:
+			t.Fatal("the release did not finish")
+		}
+	}
+	testutil.DrainPendingTasks()
+	release, err := res.release, res.err
+	if err != nil {
+		t.Fatal(err)
+	}
+	if release == nil || !release.copied || m.isOriginalOf(ev.Pt) {
+		t.Fatal("the piece table still reads the mapping of a file about to be rewritten")
+	}
+	if got := editorText(t, ev); got != "text\n" {
+		t.Fatalf("the copy reads %q", got)
+	}
+}
