@@ -17,3 +17,8 @@ func unmapFileRegion(data []byte) error {
 	}
 	return unix.Munmap(data)
 }
+
+// releaseMappingBeforeReplace: a Unix mapping does not stop the file from
+// being renamed over or rewritten, so a save can keep it until the reopened
+// file replaces it. A variable so the tests can exercise the Windows path.
+var releaseMappingBeforeReplace = false

@@ -3,8 +3,11 @@ package editor
 import (
 	"context"
 	"errors"
-	"runtime"
+	"os"
 	"runtime/debug"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/unxed/f4/internal/fileops"
 	"github.com/unxed/f4/vfs"
@@ -27,6 +30,75 @@ type MappedFile struct {
 	// reader has to add to a position in this buffer to get the position of
 	// the same byte in the file.
 	offset int64
+
+	// gen and readers count the goroutines inside guardMapping, split by the
+	// generation they entered in. retire flips the generation and waits only
+	// for the readers of the old one: a reader that enters after the flip
+	// reads whatever the piece table was given instead of the mapping, so it
+	// has no window onto the mapping to lose and nothing to wait for.
+	gen     atomic.Uint32
+	readers [2]atomic.Int64
+
+	// cancels stops the readers that can be stopped — searches — so that
+	// retire does not wait out a pass over a file of many gigabytes.
+	mu      sync.Mutex
+	cancels map[uint64]func()
+	nextID  uint64
+
+	// info identifies the mapped file, so a save can tell whether the path
+	// it writes is this file. Nil when the file could not say.
+	info os.FileInfo
+}
+
+// pin records a reader of the mapping and returns the call that ends it.
+// cancel, when not nil, is how retire stops that reader early.
+func (m *MappedFile) pin(cancel func()) func() {
+	g := m.gen.Load() & 1
+	m.readers[g].Add(1)
+	if cancel == nil {
+		return func() { m.readers[g].Add(-1) }
+	}
+	m.mu.Lock()
+	if m.cancels == nil {
+		m.cancels = make(map[uint64]func())
+	}
+	id := m.nextID
+	m.nextID++
+	m.cancels[id] = cancel
+	m.mu.Unlock()
+	return func() {
+		m.mu.Lock()
+		delete(m.cancels, id)
+		m.mu.Unlock()
+		m.readers[g].Add(-1)
+	}
+}
+
+// retire waits until every reader that entered before this call has left,
+// except held of them: the caller's own pin, when it has one. The caller must
+// already have pointed the piece table away from the mapping, so the windows
+// still alive are only the ones those readers took out earlier. Readers that
+// can be cancelled are; the rest are waited for, up to timeout, and false
+// means some were still reading when it ran out.
+func (m *MappedFile) retire(held int64, timeout time.Duration) bool {
+	old := m.gen.Add(1) - 1
+	m.mu.Lock()
+	cancels := make([]func(), 0, len(m.cancels))
+	for _, cancel := range m.cancels {
+		cancels = append(cancels, cancel)
+	}
+	m.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+	deadline := time.Now().Add(timeout)
+	for m.readers[old&1].Load() > held {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return true
 }
 
 // FileOffset reports where in the file the mapped contents begin: zero, or
@@ -82,17 +154,13 @@ type fileDescriptor interface {
 }
 
 // CanMemoryMapFile reports whether a local file is safe to map while it is
-// being edited. Windows cannot reliably replace or rewrite a file while any
-// path to it has an active read-only mapping (including paths reached through
-// SUBST drives). Use the regular asynchronous reader there so saving works
-// regardless of the spelling or aliasing of the file's path. On other systems,
-// avoid mapping multiply-linked files because saving them must preserve the
-// shared file identity with an in-place rewrite.
+// being edited. Multiply-linked files are not: saving them must preserve the
+// shared file identity with an in-place rewrite, which is a write into the
+// very file the mapping describes. Windows also refuses to replace a mapped
+// file at all, through any path to it (f4#912); saveToFile releases the
+// mapping before it replaces the file there, see releaseMappingForSave.
 func CanMemoryMapFile(ctx context.Context, v vfs.VFS, path string) bool {
 	if !fileops.IsLocalOSVFS(v) {
-		return false
-	}
-	if runtime.GOOS == "windows" {
 		return false
 	}
 	item, err := v.Stat(ctx, path)
@@ -137,7 +205,13 @@ func MapEditorFileWithOffset(v vfs.VFS, f vfs.ReadAtCloser, fileOffset int64) (*
 	if err != nil {
 		return nil, err
 	}
-	return &MappedFile{data: data[fileOffset:], Mapped: data, offset: fileOffset}, nil
+	m := &MappedFile{data: data[fileOffset:], Mapped: data, offset: fileOffset}
+	if st, ok := f.(interface{ Stat() (os.FileInfo, error) }); ok {
+		if info, err := st.Stat(); err == nil {
+			m.info = info
+		}
+	}
+	return m, nil
 }
 
 // guardMappedFaults makes a fault on mapped memory recoverable for the calling
@@ -150,9 +224,20 @@ func MapEditorFileWithOffset(v vfs.VFS, f vfs.ReadAtCloser, fileOffset int64) (*
 // The flag is per goroutine and is not inherited, so the returned function must
 // be deferred by the same goroutine that set it.
 func guardMappedFaults(what string, onFault func()) func() {
+	return guardMappedFaultsPinned(what, onFault, nil, nil)
+}
+
+// guardMappedFaultsPinned is guardMappedFaults for a reader of m, which it
+// counts as one for as long as the guard is armed (see MappedFile.retire).
+func guardMappedFaultsPinned(what string, onFault func(), m *MappedFile, cancel func()) func() {
+	unpin := func() {}
+	if m != nil {
+		unpin = m.pin(cancel)
+	}
 	previous := debug.SetPanicOnFault(true)
 	return func() {
 		debug.SetPanicOnFault(previous)
+		unpin()
 		r := recover()
 		if r == nil {
 			return
@@ -172,15 +257,31 @@ func guardMappedFaults(what string, onFault func()) func() {
 // guardMapping arms fault recovery for the calling goroutine, but only for an
 // editor that actually reads through a mapping: everywhere else the zero value
 // is a no-op, so an ordinary buffer keeps crashing honestly on a wild address
-// instead of quietly swallowing it.
+// instead of quietly swallowing it. It also counts the goroutine as a reader
+// of the mapping, which is what lets a save release it safely.
 //
 // Use it as `defer ev.guardMapping("...")()`, which defers the returned
 // function — the one that calls recover.
 func (ev *EditorView) guardMapping(what string) func() {
-	if ev == nil || ev.Mapped == nil {
+	return ev.guardMappingFor(what, nil)
+}
+
+// guardMappingFor is guardMapping for a background pass that can be stopped:
+// a save that has to release the mapping cancels it rather than waiting for
+// it to finish.
+func (ev *EditorView) guardMappingFor(what string, ctx *vtui.TaskContext) func() {
+	if ev == nil {
 		return func() {}
 	}
-	return guardMappedFaults(what, ev.noteMappingFault)
+	m := ev.Mapped
+	if m == nil {
+		return func() {}
+	}
+	var cancel func()
+	if ctx != nil {
+		cancel = ctx.Cancel
+	}
+	return guardMappedFaultsPinned(what, ev.noteMappingFault, m, cancel)
 }
 
 // noteMappingFault tells the user their file went out from under the editor.

@@ -1101,3 +1101,16 @@ func TestConfig_WorkspaceTabModeWhileCtrlRoundTrips_Issue1870(t *testing.T) {
 		t.Fatalf("WorkspaceTabMode after load = %d, want WorkspaceTabsWhileCtrl %d", App.WorkspaceTabMode, vtui.WorkspaceTabsWhileCtrl)
 	}
 }
+
+// The editor maps local files unless the user turns it off. Opening a 1 GB
+// log without it indexes through the chunk buffer, and that was what made
+// the editor crawl on Windows after f4#912 switched mapping off there. Keep
+// the default on, on every platform; a save that cannot replace a mapped file
+// is fixed in the save (internal/editor/save_mapping.go), not here.
+func TestEditorMemoryMapIsOnByDefault(t *testing.T) {
+	var cfg F4Config
+	parseConfigInto(&cfg, ini.New())
+	if !cfg.EditorMemoryMap {
+		t.Fatal("Editor.MemoryMap defaults to off")
+	}
+}
