@@ -5876,26 +5876,61 @@ func actionFileAttributes(pf *panel.PanelsFrame) {
 	})
 }
 
-// actionFileSystemProperties opens the system properties of the item under
-// the cursor, the window the attributes dialog's button opens, straight from
-// the panel (f4#2041). On ".." it is the folder the panel shows.
-func actionFileSystemProperties(pf *panel.PanelsFrame) {
+// cursorOSPath is the path in the operating system of the item under the
+// cursor of a local panel, or of the folder it shows when the cursor is on
+// "..". ok is false for any other panel.
+func cursorOSPath(pf *panel.PanelsFrame) (path string, ok bool) {
 	fsp := pf.GetActivePanel()
 	if fsp == nil || fsp.Vfs == nil || !fileops.IsLocalOSVFS(fsp.Vfs) {
-		return
+		return "", false
 	}
-	path := fsp.Vfs.GetPath()
+	path = fsp.Vfs.GetPath()
 	if name := fsp.GetRawSelectedName(); name != "" && name != ".." {
 		path = fsp.Vfs.Join(path, name)
 	}
 	abs, err := fsp.Vfs.Abs(path)
 	if err != nil {
 		vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
+		return "", false
+	}
+	return abs, true
+}
+
+// actionFileSystemProperties opens the system properties of the item under
+// the cursor, the window the attributes dialog's button opens, straight from
+// the panel (f4#2041). On ".." it is the folder the panel shows.
+func actionFileSystemProperties(pf *panel.PanelsFrame) {
+	path, ok := cursorOSPath(pf)
+	if !ok {
 		return
 	}
-	if err := dialog.DefaultNativePropertiesOpener(abs); err != nil {
+	if err := dialog.DefaultNativePropertiesOpener(path); err != nil {
 		vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
 	}
+}
+
+// explorerMenuShower shows the Explorer context menu; a variable so that a
+// test need not open one.
+var explorerMenuShower = showExplorerMenu
+
+// actionFileExplorerMenu shows the Explorer context menu of the item under
+// the cursor, as the EMenu plugin does in Far 3 (f4#2041). The menu waits on
+// a thread of its own; the panels are reread after it, since its commands
+// can rename, delete or create files.
+func actionFileExplorerMenu(pf *panel.PanelsFrame) {
+	path, ok := cursorOSPath(pf)
+	if !ok {
+		return
+	}
+	go func() {
+		err := explorerMenuShower(path)
+		vtui.FrameManager.PostTask(func() {
+			if err != nil {
+				vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
+			}
+			pf.RefreshAll()
+		})
+	}()
 }
 
 func actionEditSymlink(pf *panel.PanelsFrame) {
