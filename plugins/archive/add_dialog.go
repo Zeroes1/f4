@@ -40,9 +40,12 @@ type addArchiveMethod struct {
 	ID    string // archive.Options.Method
 }
 
+// zipDeflateMethod is the Options.Method of Deflate in a zip archive.
+const zipDeflateMethod = "deflate"
+
 var addArchiveFormats = []addArchiveFormat{
 	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Split: true, EngineSplits: true, Methods: []addArchiveMethod{
-		{"Deflate", "deflate"}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
+		{"Deflate", zipDeflateMethod}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
 	}},
 	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true, Split: true},
 	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
@@ -188,6 +191,13 @@ func (s addArchiveSettings) options() zipperarchive.Options {
 	}
 	if f.Level && s.Level >= 0 && s.Level < len(addArchiveLevels) {
 		opts.Level = addArchiveLevels[s.Level].Level
+	}
+	if opts.Method == zipDeflateMethod && opts.Level == 1 {
+		// At level 1 the zip writer stores text with Huffman codes alone,
+		// no matches: source code came out at two thirds of its size
+		// instead of under a third (f4#2002). Level 2 is as fast and keeps
+		// the matches.
+		opts.Level = 2
 	}
 	if f.Solid {
 		opts.Solid = s.Solid
