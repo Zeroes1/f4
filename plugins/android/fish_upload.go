@@ -19,12 +19,14 @@ const (
 	newUploadMode = 0644
 )
 
-// syncUploadVFS is a FISH+ device view whose file uploads travel over ADB Sync.
+// syncUploadVFS is a FISH+ device view whose file transfers travel over ADB Sync.
 // The FISH+ helper has to push every byte through the device shell, and the
 // portable base64 write path makes that shell read the payload one byte at a
 // time: about 200 KB/s on a real phone (unxed/f4#1761), where SEND, the path
-// `adb push` uses, runs at wire speed. Listing, reading, mutations and
-// commands stay on the FISH+ session; only Create is redirected.
+// `adb push` uses, runs at wire speed. Reading is the same story the other
+// way (1.6 MB/s against 33 MB/s of `adb pull`), so Open uses RECV. Listing,
+// mutations and commands stay on the FISH+ session; only Create and Open are
+// redirected.
 type syncUploadVFS struct {
 	*netfox.FishVFS
 	client syncFS
@@ -51,6 +53,17 @@ func (v *syncUploadVFS) Create(ctx context.Context, p string) (io.WriteCloser, e
 		}
 	}
 	return v.FishVFS.Create(ctx, p)
+}
+
+// Open streams a regular file with Sync RECV, and falls back to the FISH+
+// reader for everything else (see openSyncRead).
+func (v *syncUploadVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error) {
+	if abs, err := v.Abs(p); err == nil {
+		if r := openSyncRead(ctx, v.client, abs); r != nil {
+			return r, nil
+		}
+	}
+	return v.FishVFS.Open(ctx, p)
 }
 
 // Clone keeps the redirect: the embedded Clone would hand back a bare FISH+
@@ -83,4 +96,20 @@ func openSyncUpload(ctx context.Context, client syncFS, target string) io.WriteC
 		return nil
 	}
 	return w
+}
+
+// openSyncRead returns a Sync RECV reader for target, or nil when the FISH+
+// shell must read it: a symlink (the shell follows it, Lstat does not), a
+// directory or anything odd, an unsafe path, and a Sync service that does not
+// answer. The stream starts on the first read, so Open itself is one Lstat.
+func openSyncRead(ctx context.Context, client syncFS, target string) vfs.ReadAtCloser {
+	target, err := mutationPath(target)
+	if err != nil {
+		return nil
+	}
+	entry, err := client.Lstat(ctx, target)
+	if err != nil || entry.Mode&remoteModeType != remoteModeFile {
+		return nil
+	}
+	return &syncReadFile{client: client, path: target, size: syncEntrySize(entry.Size)}
 }

@@ -40,9 +40,12 @@ SEND instead of the shell: the shell reads a base64 payload one byte at a time
 of `adb push`. A
 new file gets mode 0644 like `adb push`; a regular file that is replaced keeps
 its permission bits. A symlink, a directory, an unsafe path, or a Sync service
-that does not answer fall back to the FISH+ writer. Listing, reading and every
-other operation stay on the FISH+ shell, and the panel info shows
-`upload=ADB Sync` next to the backend details.
+that does not answer fall back to the FISH+ writer. Reading a file (F5 off the
+device) goes through ADB Sync RECV for the same reason: the shell helper
+measured 1.6 MB/s against 33 MB/s of `adb pull` (f4#1761). The same cases fall
+back to the FISH+ reader. Listing and every other operation stay on the FISH+
+shell, and the panel info (Ctrl+L) shows `upload=ADB Sync, download=ADB Sync`
+next to the backend details.
 An established FISH+ shell is pooled per ADB serial for the lifetime of the
 plugin. Leaving the device closes the panel view but keeps a parentless anchor;
 entering it again validates the helper with one `noop` and reuses the same

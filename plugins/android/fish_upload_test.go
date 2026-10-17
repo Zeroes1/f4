@@ -157,3 +157,39 @@ func TestHybridOpenerRedirectsFishUploadsToSync(t *testing.T) {
 		t.Fatal("the wrapped view has no attached Android panel-info provider")
 	}
 }
+
+func TestOpenSyncReadStreamsARegularFile(t *testing.T) {
+	stub := newUploadStub(map[string]SyncEntry{"/sdcard/a.bin": {Name: "a.bin", Mode: 0100644, Size: 4}})
+	stub.files["/sdcard/a.bin"] = []byte("data")
+	r := openSyncRead(context.Background(), stub, "/sdcard/a.bin")
+	if r == nil {
+		t.Fatal("a regular file must be read over Sync")
+	}
+	defer func() { _ = r.Close() }()
+	buf := make([]byte, 4)
+	if n, err := r.ReadAt(context.Background(), buf, 0); err != nil || n != 4 || string(buf) != "data" {
+		t.Fatalf("ReadAt = %d, %v, %q", n, err, buf)
+	}
+	if stub.receiveCall != 1 {
+		t.Fatalf("RECV calls = %d, want 1", stub.receiveCall)
+	}
+}
+
+func TestOpenSyncReadLeavesOddPathsToTheShell(t *testing.T) {
+	stub := newUploadStub(map[string]SyncEntry{
+		"/sdcard/dir":  {Name: "dir", Mode: 040755},
+		"/sdcard/link": {Name: "link", Mode: 0120777},
+	})
+	for _, target := range []string{"/sdcard/dir", "/sdcard/link", "/sdcard/missing", "relative", "/sdcard/../etc/hosts"} {
+		if r := openSyncRead(context.Background(), stub, target); r != nil {
+			t.Fatalf("openSyncRead(%q) took the path over Sync", target)
+		}
+	}
+	stub.lstatErr = errors.New("sync service is down")
+	if r := openSyncRead(context.Background(), stub, "/sdcard/a.bin"); r != nil {
+		t.Fatal("a Sync service that does not answer must leave the read to the shell")
+	}
+	if stub.receiveCall != 0 {
+		t.Fatalf("RECV started for a path that was left to the shell: %d", stub.receiveCall)
+	}
+}

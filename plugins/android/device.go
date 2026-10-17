@@ -72,7 +72,7 @@ func (o *hybridDeviceOpener) OpenDevice(ctx context.Context, parent vfs.VFS, dev
 			detail := fishBackendDetail(mounted)
 			if o.uploads != nil {
 				if wrapped := withSyncUploads(mounted, o.uploads(device, features)); wrapped != mounted {
-					mounted, detail = wrapped, detail+", upload=ADB Sync"
+					mounted, detail = wrapped, detail+", upload=ADB Sync, download=ADB Sync"
 				}
 			}
 			return attachAndroidPanelInfo(mounted, o.info.provider(device, "FISH+", detail)), nil
