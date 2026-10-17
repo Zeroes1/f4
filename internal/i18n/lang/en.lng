@@ -2196,6 +2196,7 @@ Archive.Add.LevelNormal=Normal
 Archive.Add.LevelMaximum=Maximum
 Archive.Add.LevelUltra=Ultra
 Archive.Add.MethodStore=Store
+Archive.Add.MethodRare=not every tool opens it
 
 Permissions.Title= Plugin Permissions
 Permissions.BtnRevoke=&Revoke

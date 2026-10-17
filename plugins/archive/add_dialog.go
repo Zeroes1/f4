@@ -38,6 +38,9 @@ type addArchiveFormat struct {
 type addArchiveMethod struct {
 	Label string
 	ID    string // archive.Options.Method
+	// Rare is set on a method many zip tools cannot unpack, such as the
+	// Windows Explorer and PKZIP: the window says so next to it (f4#2002).
+	Rare bool
 }
 
 // zipDeflateMethod is the Options.Method of Deflate in a zip archive.
@@ -45,7 +48,7 @@ const zipDeflateMethod = "deflate"
 
 var addArchiveFormats = []addArchiveFormat{
 	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Split: true, EngineSplits: true, Methods: []addArchiveMethod{
-		{"Deflate", zipDeflateMethod}, {"Zstandard", "zstd"}, {"LZMA", "lzma"}, {"", "store"},
+		{"Deflate", zipDeflateMethod, false}, {"Zstandard", "zstd", true}, {"LZMA", "lzma", true}, {"", "store", false},
 	}},
 	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true, Split: true},
 	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
@@ -244,6 +247,7 @@ type addArchiveDialog struct {
 	format            *vtui.ComboBox
 	level             *vtui.ComboBox
 	method            *vtui.ComboBox
+	methodNote        *vtui.Text
 	solid             *vtui.Checkbox
 	// password and showPassword: the archive password and the box that
 	// shows it in clear (f4#2002, part 2).
@@ -297,6 +301,9 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 	d.format = newAddArchiveCombo(x+labelW, y+3, comboW, formats)
 	d.level = newAddArchiveCombo(x+labelW, y+4, comboW, levels)
 	d.method = newAddArchiveCombo(x+labelW, y+5, comboW, nil)
+	d.methodNote = vtui.NewText(x+labelW+comboW+2, y+5, vtui.Msg("Archive.Add.MethodRare"), vtui.Palette[vtui.ColDialogText])
+	d.methodNote.X2 = x + inner - 1
+	d.method.Menu.OnAction = func(int) { d.showMethodNote() }
 	d.solid = vtui.NewCheckbox(x+labelW, y+6, vtui.Msg("Archive.Add.Solid"), true)
 	for _, row := range []struct {
 		key   string
@@ -306,6 +313,7 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 		d.dlg.AddItem(vtui.NewLabel(x, row.y, vtui.Msg(row.key), row.combo))
 		d.dlg.AddItem(row.combo)
 	}
+	d.dlg.AddItem(d.methodNote)
 	d.dlg.AddItem(d.solid)
 
 	d.password = vtui.NewPasswordEdit(x+labelW, y+8, inner-labelW, "")
@@ -434,6 +442,16 @@ func setAddArchiveCombo(c *vtui.ComboBox, idx int) {
 	}
 }
 
+// showMethodNote shows the note on the method chosen when few tools read it.
+func (d *addArchiveDialog) showMethodNote() {
+	if d.methodNote == nil {
+		return
+	}
+	methods := addArchiveFormats[d.format.Menu.SelectPos].Methods
+	pos := d.method.Menu.SelectPos
+	d.methodNote.SetVisible(pos >= 0 && pos < len(methods) && methods[pos].Rare)
+}
+
 // selectFormat shows format as chosen and offers only the controls it uses.
 func (d *addArchiveDialog) selectFormat(idx int) {
 	f := addArchiveFormats[idx]
@@ -454,6 +472,7 @@ func (d *addArchiveDialog) selectFormat(idx int) {
 	}
 	setAddArchiveCombo(d.method, 0)
 	d.method.SetDisabled(len(f.Methods) == 0)
+	d.showMethodNote()
 
 	level := d.level.Menu.SelectPos
 	if !f.Level || level < 0 {
@@ -532,6 +551,7 @@ func (d *addArchiveDialog) applyProfile(p addArchiveProfile) {
 			setAddArchiveCombo(d.method, i)
 		}
 	}
+	d.showMethodNote()
 	if f.Solid {
 		d.solid.State = 0
 		if p.Solid {
