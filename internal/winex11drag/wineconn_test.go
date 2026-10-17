@@ -1,7 +1,9 @@
 package winex11drag
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -44,5 +46,45 @@ func TestWineConnAddr(t *testing.T) {
 	}
 	if addr.String() == "" {
 		t.Error("wineConnAddr.String() is empty")
+	}
+}
+
+// zeroEOFReader mimics winescape.File.Read: the data, then (0, nil) forever.
+type zeroEOFReader struct{ r *bytes.Reader }
+
+func (z zeroEOFReader) Read(p []byte) (int, error) {
+	n, err := z.r.Read(p)
+	if errors.Is(err, io.EOF) {
+		return 0, nil
+	}
+	return n, err
+}
+
+func TestEOFReaderEndsParseXauthorityOnZeroRead(t *testing.T) {
+	done := make(chan error, 1)
+	go func() {
+		entries, err := ParseXauthority(eofReader{zeroEOFReader{bytes.NewReader(nil)}})
+		if err == nil && len(entries) != 0 {
+			err = errors.New("unexpected entries")
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ParseXauthority over an empty (0, nil) reader: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ParseXauthority hung on a (0, nil) read at end of file")
+	}
+}
+
+func TestEOFReaderKeepsDataAndErrors(t *testing.T) {
+	got, err := io.ReadAll(eofReader{zeroEOFReader{bytes.NewReader([]byte("abc"))}})
+	if err != nil || string(got) != "abc" {
+		t.Fatalf("ReadAll = %q, %v; want abc, nil", got, err)
+	}
+	if n, err := (eofReader{zeroEOFReader{bytes.NewReader([]byte("x"))}}).Read(nil); n != 0 || err != nil {
+		t.Fatalf("Read of an empty buffer = %d, %v; want 0, nil", n, err)
 	}
 }

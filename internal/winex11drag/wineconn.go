@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -102,7 +103,7 @@ func hostXauthCookie(spec DisplaySpec) ([]byte, error) {
 	defer func() { _ = f.Close() }()
 
 	vtui.DebugLog("WINEX11DRAG: Xauthority file open, parsing")
-	entries, err := ParseXauthority(f)
+	entries, err := ParseXauthority(eofReader{f})
 	if err != nil {
 		return nil, fmt.Errorf("winex11drag: parsing %s: %w", path, err)
 	}
@@ -130,6 +131,26 @@ type wineConn struct {
 // and so a future caller of DialUnix elsewhere in this package (e.g. step 4's
 // selection window) can reuse the same wrapper.
 func wrapWineConn(f *winescape.File) net.Conn { return wineConn{File: f} }
+
+// eofReader turns the (0, nil) that winescape.File.Read returns at end of file
+// into io.EOF. winescape reports a raw read(2) count and never io.EOF, and
+// io.ReadFull -- hence binary.Read and ParseXauthority -- retries a (0, nil)
+// read forever, so without this the first read past the last Xauthority record
+// hangs the drag (issue #566, Wine probe: the log stopped after "DISPLAY=").
+type eofReader struct{ r io.Reader }
+
+func (e eofReader) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if n == 0 && err == nil && len(p) > 0 {
+		return 0, io.EOF
+	}
+	return n, err
+}
+
+// Read is the socket read of an X connection: a (0, nil) from read(2) there
+// means the server closed the connection, which xgb must see as io.EOF
+// instead of spinning on an empty read.
+func (c wineConn) Read(p []byte) (int, error) { return eofReader{c.File}.Read(p) }
 
 func (wineConn) LocalAddr() net.Addr              { return wineConnAddr{} }
 func (wineConn) RemoteAddr() net.Addr             { return wineConnAddr{} }
