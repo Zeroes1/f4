@@ -707,7 +707,7 @@ NormalColor = foreground:#0000FF
 	}
 	colors := make(map[string]uint64)
 	for _, tc := range rows {
-		row := treeItem{name: tc.name, vfsItem: tc.item}
+		row := treeItem{name: tc.name, depth: 1, vfsItem: tc.item}
 		got := row.GetCellAttr(0, plain)
 		want := theme.GlobalFileHighlighter.GetColor(&tc.item, plain, false, false)
 		if got != want || got == plain {
@@ -717,5 +717,48 @@ NormalColor = foreground:#0000FF
 	}
 	if colors["symlink"] == colors["junction"] {
 		t.Errorf("symlink and junction colors are indistinguishable: %#x", colors["symlink"])
+	}
+}
+
+// TestTreeRootRowTakesTheFolderColor_Issue1602: the root row (the disk name, or
+// the current directory when the tree is not rooted at the whole volume) is
+// labelled with its full path, which a "*" mask does not match, so it kept the
+// plain text color. It must get the same color as any other folder (part 15).
+func TestTreeRootRowTakesTheFolderColor_Issue1602(t *testing.T) {
+	vtui.SetDefaultPalette()
+	theme.SetDefaultF4Palette()
+	oldRules, oldUser := theme.GlobalFileHighlighter.Rules, theme.GlobalFileHighlighter.UserRules
+	defer func() {
+		theme.GlobalFileHighlighter.Rules = oldRules
+		theme.GlobalFileHighlighter.UserRules = oldUser
+	}()
+	theme.GlobalFileHighlighter.LoadFromIni(ini.Parse(strings.NewReader(`[Highlight_0]
+Name = Directories
+IncludeAttributes = Directory
+NormalColor = foreground:#00FF00
+`)))
+
+	plain := vtui.Palette[theme.ColPanelText]
+	dir := t.TempDir()
+	folder := (&treeItem{name: filepath.Base(dir), path: dir, depth: 1}).GetCellAttr(0, plain)
+	if folder == plain {
+		t.Fatal("a folder row kept the plain panel text color despite the directory rule")
+	}
+	volume := filepath.VolumeName(dir) + string(filepath.Separator)
+	for _, root := range []string{volume, dir, dir + string(filepath.Separator)} {
+		row := treeItem{name: root, path: root, depth: 0, parentIndex: -1}
+		if got := row.GetCellAttr(0, plain); got != folder {
+			t.Errorf("root row %q color = %#x, want the folder color %#x", root, got, folder)
+		}
+	}
+
+	if got, want := (treeItem{path: dir}).ruleName(), filepath.Base(dir); got != want {
+		t.Errorf("ruleName of the root %q = %q, want its last element %q", dir, got, want)
+	}
+	if got, want := (treeItem{path: volume}).ruleName(), strings.TrimRight(filepath.VolumeName(volume), `/\`); got != want {
+		t.Errorf("ruleName of the volume root %q = %q, want the bare drive name %q", volume, got, want)
+	}
+	if got := (treeItem{name: "sub", path: filepath.Join(dir, "sub"), depth: 2}).ruleName(); got != "sub" {
+		t.Errorf("ruleName of a child = %q, want its own name", got)
 	}
 }

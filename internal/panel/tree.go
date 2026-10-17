@@ -169,11 +169,37 @@ func (it treeItem) GetCellAttr(_ int, defaultAttr uint64) uint64 {
 		defaultAttr == vtui.Palette[theme.ColPanelInactiveCursor] ||
 		defaultAttr == vtui.Palette[theme.ColPanelInactiveSelectedCursor]
 	item := it.vfsItem
-	item.Name = it.name
+	item.Name = it.ruleName()
 	item.IsDir = true
-	item.IsHidden = item.IsHidden || (runtime.GOOS != "windows" && strings.HasPrefix(it.name, "."))
+	item.IsHidden = item.IsHidden || (runtime.GOOS != "windows" && strings.HasPrefix(item.Name, "."))
 	return theme.GlobalFileHighlighter.GetColor(&item, defaultAttr, false, isCursor)
 }
+
+// ruleName is the name the highlight rules' masks are matched against. A child
+// row's name is already a bare directory name. The root row is labelled with
+// its whole path ("/", "C:\", "/home/me"), and a mask such as "*" never matches
+// across a path separator, so the root (the disk name) was left uncolored
+// instead of taking the folder color (f4#1602, part 15). The root is matched
+// by its last path element, as the same folder is in a file panel; a volume
+// root has none, so it gets the bare drive name ("C:", "" on POSIX).
+func (it treeItem) ruleName() string {
+	if it.depth > 0 {
+		return it.name
+	}
+	vol := filepath.VolumeName(it.path)
+	if trimmed := trimPathSeparators(it.path[len(vol):]); trimmed != "" {
+		return filepath.Base(trimmed)
+	}
+	name := trimPathSeparators(vol)
+	if i := strings.LastIndexFunc(name, isPathSeparatorRune); i >= 0 {
+		name = name[i+1:]
+	}
+	return name
+}
+
+func isPathSeparatorRune(r rune) bool { return r == '/' || r == os.PathSeparator }
+
+func trimPathSeparators(s string) string { return strings.TrimRightFunc(s, isPathSeparatorRune) }
 
 // TreePanel is far2l/DOS Navigator's directory tree (far2l: Alt+F10; DOS
 // Navigator has an equivalent tree view), bound to Ctrl+T -- see AltPanel's
