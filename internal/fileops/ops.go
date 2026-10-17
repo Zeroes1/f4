@@ -1495,6 +1495,7 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 		}
 		itemToSet := stat
 		itemToSet.Uid, itemToSet.Gid = -1, -1
+		withSourceBirthTime(&itemToSet, srcVfs, srcPath, dstVfs)
 		itemToSet.UnixMode = dirRights
 		if state.AccessRights == AccessRightsInherit {
 			itemToSet.Uid, itemToSet.Gid, _ = inheritedOwner(ctx, state, dstVfs, destPath)
@@ -1910,6 +1911,7 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 	if copySuccess {
 		itemToSet := stat
 		itemToSet.Uid, itemToSet.Gid = -1, -1
+		withSourceBirthTime(&itemToSet, srcVfs, srcPath, dstVfs)
 		itemToSet.UnixMode = destinationRights(ctx, state, dstVfs, destPathForFile, stat.UnixMode, false, destinationExisted)
 		if state.AccessRights == AccessRightsInherit {
 			itemToSet.Uid, itemToSet.Gid, _ = inheritedOwner(ctx, state, dstVfs, destPathForFile)
