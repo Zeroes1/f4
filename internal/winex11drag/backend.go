@@ -91,7 +91,7 @@ func (b *Backend) StartDrag(payload vtui.DragPayload, allowed vtui.DropAction) (
 	done := make(chan struct{})
 	go heartbeat(stop)
 	go b.follow(sess, stop, done)
-	action, err := sess.Drag(payload, allowed)
+	action, err := sess.Drag(unixPayload(payload), allowed)
 	close(stop)
 	<-done
 	vtui.DebugLog("WINEX11DRAG: drag over: action %s, error %v", action, err)
