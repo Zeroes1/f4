@@ -94,17 +94,20 @@ func hostXauthCookie(spec DisplaySpec) ([]byte, error) {
 		path = home + "/.Xauthority"
 	}
 
+	vtui.DebugLog("WINEX11DRAG: opening the Xauthority file %q", path)
 	f, err := winescape.OpenFile(path, winescape.O_RDONLY, 0)
 	if err != nil {
 		return nil, fmt.Errorf("winex11drag: opening %s: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
 
+	vtui.DebugLog("WINEX11DRAG: Xauthority file open, parsing")
 	entries, err := ParseXauthority(f)
 	if err != nil {
 		return nil, fmt.Errorf("winex11drag: parsing %s: %w", path, err)
 	}
 
+	vtui.DebugLog("WINEX11DRAG: Xauthority parsed, %d entries", len(entries))
 	cookie, ok := FindMagicCookie(entries, strconv.Itoa(spec.Display))
 	if !ok {
 		return nil, fmt.Errorf("winex11drag: no MIT-MAGIC-COOKIE-1 entry for display %d in %s", spec.Display, path)
