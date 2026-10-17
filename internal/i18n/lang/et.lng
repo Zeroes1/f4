@@ -735,7 +735,7 @@ PlugRing.BtnClose=&Sulge
 
 Attributes.Title= Atribuudid
 Attributes.BtnSet=Määra
-Attributes.BtnSecurity=Süsteemi &atribuudid
+Attributes.BtnSecurity=&Turvalisus
 Attributes.Read=Loe
 Attributes.Write=Kirjuta
 Attributes.Execute=Käivita

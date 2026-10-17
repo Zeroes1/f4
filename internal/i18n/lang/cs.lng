@@ -738,7 +738,7 @@ PlugRing.BtnClose=&Zavřít
 
 Attributes.Title= Atributy
 Attributes.BtnSet=Nastavit
-Attributes.BtnSecurity=&Vlastnosti systému
+Attributes.BtnSecurity=&Zabezpečení
 Attributes.Read=Čtení
 Attributes.Write=Zápis
 Attributes.Execute=Spuštění
