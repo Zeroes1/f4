@@ -84,6 +84,7 @@ func (b *Backend) StartDrag(payload vtui.DragPayload, allowed vtui.DropAction) (
 		return vtui.DropNone, err
 	}
 	defer sess.Close()
+	vtui.DebugLog("WINEX11DRAG: X session open, following the pointer")
 
 	stop := make(chan struct{})
 	done := make(chan struct{})
@@ -91,6 +92,7 @@ func (b *Backend) StartDrag(payload vtui.DragPayload, allowed vtui.DropAction) (
 	action, err := sess.Drag(payload, allowed)
 	close(stop)
 	<-done
+	vtui.DebugLog("WINEX11DRAG: drag over: action %s, error %v", action, err)
 	return action, err
 }
 
@@ -106,8 +108,13 @@ func (b *Backend) follow(sess dragSession, stop <-chan struct{}, done chan<- str
 	}
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
+	seen, wasDown := false, false
 	for {
 		x, y, down := b.Pointer.Position()
+		if !seen || down != wasDown {
+			vtui.DebugLog("WINEX11DRAG: pointer %d,%d, button down: %v", x, y, down)
+			seen, wasDown = true, down
+		}
 		if down {
 			sess.Motion(x, y, xproto.TimeCurrentTime)
 		} else {
