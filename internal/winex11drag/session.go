@@ -35,6 +35,7 @@ type Session struct {
 	conn      *xgb.Conn
 	src       *vtui.X11DragSource
 	window    xproto.Window
+	root      xproto.Window
 	selection xproto.Atom // XdndSelection
 
 	released chan struct{}
@@ -85,6 +86,7 @@ func NewSession(conn *xgb.Conn) (*Session, error) {
 	s := &Session{
 		conn:      conn,
 		window:    wid,
+		root:      screen.Root,
 		selection: sel.Atom,
 		released:  make(chan struct{}, 1),
 		cmds:      make(chan func(), 64),
@@ -132,7 +134,38 @@ func (s *Session) Drag(payload vtui.DragPayload, allowed vtui.DropAction) (vtui.
 		s.dragging.Store(false)
 		s.post(func() { s.armed = false }, false)
 	}()
+	if skip := ownClientSkip(s.conn, s.root, s.window); skip != nil {
+		s.src.SkipTargets(skip)
+	}
 	return s.src.StartDrag(payload, allowed)
+}
+
+// ownClientSkip returns a predicate that is true for every window of the X
+// client that owns the top-level window under the pointer, or nil when there
+// is none to skip. A drag out of Wine starts with the pointer over the Wine
+// program's own window, and every window of that program comes from the one
+// connection winex11.drv holds, so they share the resource-id base. The
+// source must not offer the gesture to them: the program is blocked in the
+// drag, and the one it would hand the XDND position to is the one waiting for
+// it (issue #566, step C3l). own is the session's window; its client is never
+// skipped.
+func ownClientSkip(conn *xgb.Conn, root, own xproto.Window) func(xproto.Window) bool {
+	ptr, err := xproto.QueryPointer(conn, root).Reply()
+	if err != nil || ptr == nil || ptr.Child == 0 {
+		return nil
+	}
+	return sameClientSkip(xproto.Setup(conn).ResourceIdMask, ptr.Child, own)
+}
+
+// sameClientSkip is true for windows created by the same client as sample,
+// that is, whose ids differ from it only in the bits mask leaves to the
+// client. It is nil when sample is own's client.
+func sameClientSkip(mask uint32, sample, own xproto.Window) func(xproto.Window) bool {
+	base := uint32(sample) &^ mask
+	if base == uint32(own)&^mask {
+		return nil
+	}
+	return func(w xproto.Window) bool { return uint32(w)&^mask == base }
 }
 
 // Motion reports the pointer at root coordinates rootX, rootY. Calls made
