@@ -46,7 +46,13 @@ func TestAddArchiveDialogNotesTheRareZipMethods(t *testing.T) {
 	sevenIdx := addArchiveFormatIndex(t, ".7z")
 	d.format.Menu.SetSelectPos(sevenIdx)
 	d.format.Menu.OnAction(sevenIdx)
+	if !d.methodNote.IsVisible() || d.methodNote.GetText() != vtui.Msg("Archive.Add.Method7zNote") {
+		t.Errorf("7z: note %q (shown %v), want what the engine uses", d.methodNote.GetText(), d.methodNote.IsVisible())
+	}
+
+	d.format.Menu.SetSelectPos(zipIdx)
+	d.format.Menu.OnAction(zipIdx)
 	if d.methodNote.IsVisible() {
-		t.Error("the note stays after switching to 7z")
+		t.Error("the 7z note stays after switching back to zip with Deflate")
 	}
 }

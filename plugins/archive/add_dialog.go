@@ -22,6 +22,9 @@ type addArchiveFormat struct {
 	Method string // the compression of a tar format; "" when the method is chosen
 	// MethodName is shown for a format whose method cannot be chosen.
 	MethodName string
+	// MethodNoteKey, when set, names the text shown next to the method:
+	// what the engine uses, where the window offers no choice (f4#2002).
+	MethodNoteKey string
 	// Methods are the methods the user may choose between, the first one the
 	// default; nil when the format has one method only.
 	Methods  []addArchiveMethod
@@ -50,7 +53,7 @@ var addArchiveFormats = []addArchiveFormat{
 	{Label: "Zip", Ext: ".zip", Level: true, Password: true, Split: true, EngineSplits: true, Methods: []addArchiveMethod{
 		{"Deflate", zipDeflateMethod, false}, {"Zstandard", "zstd", true}, {"LZMA", "lzma", true}, {"", "store", false},
 	}},
-	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", Solid: true, Password: true, Split: true},
+	{Label: "7z", Ext: ".7z", MethodName: "LZMA2", MethodNoteKey: "Archive.Add.Method7zNote", Solid: true, Password: true, Split: true},
 	{Label: "tar + gzip", Ext: ".tar.gz", Method: "gzip", MethodName: "gzip", Level: true},
 	{Label: "tar + bzip2", Ext: ".tar.bz2", Method: "bzip2", MethodName: "bzip2", Level: true},
 	{Label: "tar + xz", Ext: ".tar.xz", Method: "xz", MethodName: "xz", Level: true},
@@ -442,14 +445,24 @@ func setAddArchiveCombo(c *vtui.ComboBox, idx int) {
 	}
 }
 
-// showMethodNote shows the note on the method chosen when few tools read it.
+// showMethodNote shows the note next to the method: what the engine uses
+// when the format offers no choice, or that few tools read the method chosen.
 func (d *addArchiveDialog) showMethodNote() {
 	if d.methodNote == nil {
 		return
 	}
-	methods := addArchiveFormats[d.format.Menu.SelectPos].Methods
+	f := addArchiveFormats[d.format.Menu.SelectPos]
 	pos := d.method.Menu.SelectPos
-	d.methodNote.SetVisible(pos >= 0 && pos < len(methods) && methods[pos].Rare)
+	switch {
+	case f.MethodNoteKey != "":
+		d.methodNote.SetText(vtui.Msg(f.MethodNoteKey))
+	case pos >= 0 && pos < len(f.Methods) && f.Methods[pos].Rare:
+		d.methodNote.SetText(vtui.Msg("Archive.Add.MethodRare"))
+	default:
+		d.methodNote.SetVisible(false)
+		return
+	}
+	d.methodNote.SetVisible(true)
 }
 
 // selectFormat shows format as chosen and offers only the controls it uses.

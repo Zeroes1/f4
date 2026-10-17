@@ -2198,6 +2198,7 @@ Archive.Add.LevelMaximum=Максимальный
 Archive.Add.LevelUltra=Ультра
 Archive.Add.MethodStore=Без сжатия
 Archive.Add.MethodRare=открывают не все программы
+Archive.Add.Method7zNote=словарь до 8 МБ
 
 Permissions.Title= Разрешения плагинов
 Permissions.BtnRevoke=&Отозвать
