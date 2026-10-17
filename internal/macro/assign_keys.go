@@ -10,8 +10,9 @@ import (
 // macroKeyCandidates are the key combinations the assign dialog offers, in the
 // order it lists them (Far's spelling, the one the key field shows): the
 // function keys bare and with Shift, Ctrl and Alt, then Ctrl and Alt with the
-// letters and the digits. They are what a user reaches for first; any other
-// key is still taken by pressing it in the key field (f4#1870).
+// letters and the digits, and last the mouse wheel, which cannot be pressed in
+// the key field. They are what a user reaches for first; any other key is
+// still taken by pressing it in the key field (f4#1870).
 func macroKeyCandidates() []string {
 	var keys []string
 	for _, mod := range []string{"", "Shift", "Ctrl", "Alt"} {
@@ -26,6 +27,9 @@ func macroKeyCandidates() []string {
 		for c := '0'; c <= '9'; c++ {
 			keys = append(keys, mod+string(c))
 		}
+	}
+	for _, mod := range []string{"", "Ctrl", "Alt", "Shift"} {
+		keys = append(keys, mod+"MsWheelUp", mod+"MsWheelDown")
 	}
 	return keys
 }
