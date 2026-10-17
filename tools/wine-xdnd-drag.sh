@@ -77,7 +77,10 @@ for k in 4 3 5; do
   done
   sx=$((wx + 56 * cw))
   sy=$((wy + k * ch + ch / 2))
-  xdotool mousemove "$sx" "$sy" click 1 sleep 0.3 mousedown 1 sleep 0.3
+  # No click before the press: two presses 0.3 s apart are a double click, which
+  # opens the file (rundll32 in f4's debug log, run 38988877156) instead of
+  # arming the drag; the press alone puts the cursor on the row.
+  xdotool mousemove "$sx" "$sy" sleep 0.5 mousedown 1 sleep 0.3
   for step in 1 2 3 4 5 6 7 8 9 10; do
     xdotool mousemove $((sx + (1100 - sx) * step / 10)) $((sy + (800 - sy) * step / 10)) sleep 0.1
   done
