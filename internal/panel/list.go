@@ -3385,8 +3385,10 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	}
 	freeSpaceStr := ""
 	if _, isLocal := fp.Vfs.(*vfs.OSVFS); isLocal {
-		if info, ok := sysinfo.FS(fp.Vfs.GetPath()); ok {
-			freeSpaceStr = formatBytes(info.Free)
+		// Drawn on every frame: FreeBytes skips the /proc/mounts lookup that
+		// FS does for the mount point and type, which this line never shows.
+		if free, ok := sysinfo.FreeBytes(fp.Vfs.GetPath()); ok {
+			freeSpaceStr = formatBytes(free)
 		}
 	}
 
