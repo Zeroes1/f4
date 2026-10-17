@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"time"
 
+	"github.com/unxed/f4/internal/fileops"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/f4/vfs/hostmode"
@@ -37,32 +40,53 @@ var errMappingBusy = errors.New("the file is still being read by a search; wait 
 // search, the one long reader, is cancelled outright.
 const mappingRetireTimeout = 10 * time.Second
 
-// mappingRelease is what releaseMappingForSave did, kept so that a save which
-// then fails can give the piece table its text back.
+// mappingRelease is what releaseMappingForSave or releaseChunksForSave did,
+// kept so that a save which then fails can give the piece table its text back.
 type mappingRelease struct {
-	// copied: the mapped text was copied into memory, so the editor still
-	// has all of it and there is nothing to recover.
+	// copied: the text was copied into memory, so the editor still has all
+	// of it and there is nothing to recover.
 	copied bool
+	// mapped: the text was read through a mapping, so recovery maps the file
+	// again rather than reading it through a chunk buffer.
+	mapped bool
 	offset int64
 	size   int
 }
 
-// describes reports whether path is the file that is mapped, or might be: a
-// file that cannot be compared is assumed to be it, since releasing a mapping
-// that did not need it costs a moment and keeping one that did fails the save.
-// Comparing identities rather than paths is the point (f4#912): a SUBST drive
-// or a symlink reaches the same file by another name.
+// describes reports whether path is the file that is mapped, or might be.
 func (m *MappedFile) describes(path string) bool {
-	// Under a POSIX host the file information comes from the host's own
-	// stat, which os.SameFile cannot compare.
-	if m.info == nil || hostmode.Posix() {
+	return sameFileInfo(m.info, path)
+}
+
+// fileIs reports whether the open file f is the file at path, or might be.
+func fileIs(f vfs.ReadAtCloser, path string) bool {
+	st, ok := f.(interface{ Stat() (os.FileInfo, error) })
+	if !ok {
 		return true
 	}
-	info, err := os.Stat(path)
+	info, err := st.Stat()
 	if err != nil {
 		return true
 	}
-	return os.SameFile(m.info, info)
+	return sameFileInfo(info, path)
+}
+
+// sameFileInfo reports whether path is the file info describes, or might be:
+// a file that cannot be compared is assumed to be it, since releasing a
+// reader that did not need it costs a moment and keeping one that did fails
+// the save. Comparing identities rather than paths is the point (f4#912): a
+// SUBST drive or a symlink reaches the same file by another name.
+func sameFileInfo(info os.FileInfo, path string) bool {
+	// Under a POSIX host the file information comes from the host's own
+	// stat, which os.SameFile cannot compare.
+	if info == nil || hostmode.Posix() {
+		return true
+	}
+	other, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	return os.SameFile(info, other)
 }
 
 // isOriginalOf reports whether the piece table still reads its unchanged text
@@ -161,7 +185,126 @@ func (ev *EditorView) releaseMappingForSave(ctx *vtui.TaskContext, Pt *piecetabl
 	if !swapped {
 		return nil, nil
 	}
-	return &mappingRelease{copied: keepCopy, offset: m.FileOffset(), size: len(data)}, nil
+	return &mappingRelease{copied: keepCopy, mapped: true, offset: m.FileOffset(), size: len(data)}, nil
+}
+
+// releaseForSave lets go of whatever the piece table reads the file at path
+// through, before a save replaces or rewrites that file: the mapping, or the
+// chunk buffer. See releaseMappingForSave and releaseChunksForSave.
+func (ev *EditorView) releaseForSave(ctx *vtui.TaskContext, Pt *piecetable.PieceTable, m *MappedFile, buf *AsyncBuffer, path string, keepCopy bool) (*mappingRelease, error) {
+	if r, err := ev.releaseMappingForSave(ctx, Pt, m, path, keepCopy); r != nil || err != nil {
+		return r, err
+	}
+	return ev.releaseChunksForSave(ctx, Pt, buf, path, keepCopy)
+}
+
+// releaseChunksForSave is releaseMappingForSave for a local file read through
+// a chunk buffer. The buffer keeps only the chunks used last, so the rest of
+// the unchanged text has to be read from the file whenever it is wanted —
+// and the save is about to close the file (Windows will not replace it while
+// it is open) or rewrite it (keepCopy). The piece table is pointed at a copy
+// of the text when the file is rewritten, since nothing could read the old
+// text back then, and at a stand-in otherwise, which recoverMapping replaces
+// if the save fails.
+//
+// Elsewhere, a file that is renamed over stays readable through the open
+// handle, which reads the old file, and nothing is released.
+func (ev *EditorView) releaseChunksForSave(ctx *vtui.TaskContext, Pt *piecetable.PieceTable, buf *AsyncBuffer, path string, keepCopy bool) (*mappingRelease, error) {
+	if Pt == nil || buf == nil || buf.File == nil || buf.Size() == 0 ||
+		(!keepCopy && !releaseMappingBeforeReplace) ||
+		!fileops.IsLocalOSVFS(ev.Vfs) || !fileIs(buf.File, path) {
+		return nil, nil
+	}
+	if Pt.GetOriginalBuffer() != piecetable.Buffer(buf) {
+		// A table given another buffer (a codepage reload, a Replace All)
+		// does not read the file.
+		return nil, nil
+	}
+	var standIn piecetable.Buffer = loadingBuffer(buf.Size())
+	if keepCopy {
+		data := make([]byte, buf.Size())
+		n, err := buf.File.ReadAt(ctx.Context, data, buf.FileOffset())
+		if n < len(data) {
+			if err == nil || err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+			return nil, fmt.Errorf("reading the text before the file is rewritten: %w", err)
+		}
+		standIn = piecetable.MemoryBuffer(data)
+	}
+	swapped := false
+	if !ev.onUIAndWait(ctx, func() {
+		if Pt.GetOriginalBuffer() == piecetable.Buffer(buf) {
+			Pt.UpdateOriginalBuffer(standIn)
+			swapped = true
+		}
+	}) {
+		return nil, errEditorClosed
+	}
+	if !swapped {
+		return nil, nil
+	}
+	return &mappingRelease{copied: keepCopy, offset: buf.FileOffset(), size: buf.Size()}, nil
+}
+
+// saveStep is how much of the text a save writes at a time.
+const saveStep = 4 << 20
+
+// writeTableText writes the text of Pt to w. Unchanged stretches are read out
+// of the file in large pieces when read can (see chunkReader), edited ones
+// through the piece table. The piece table is the slow way for a file read
+// through a chunk buffer: it reads a stretch only once the buffer has fetched
+// it, and has to be waited for, so the buffer is asked to fetch ahead of the
+// writer.
+func writeTableText(ctx context.Context, w io.Writer, Pt *piecetable.PieceTable, read fileChunkReader) error {
+	chunks, _ := Pt.GetOriginalBuffer().(*AsyncBuffer)
+	var scratch []byte
+	logical := 0
+	for _, p := range Pt.GetState().Pieces {
+		pieceEnd := logical + p.Length
+		for curr := logical; curr < pieceEnd; {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			take := min(saveStep, pieceEnd-curr)
+			if p.Buf == piecetable.Original {
+				if scratch == nil {
+					scratch = make([]byte, saveStep)
+				}
+				if n, ok := read(ctx, scratch, curr, take); ok {
+					if _, err := w.Write(scratch[:n]); err != nil {
+						return err
+					}
+					curr += n
+					continue
+				}
+				if chunks != nil {
+					chunks.Prefetch(p.Start+curr-logical, 2*saveStep)
+				}
+			}
+			data, err := Pt.GetRange(curr, take)
+			if err == piecetable.ErrLoading {
+				// A released reader's stand-in never finishes loading.
+				if _, gone := Pt.GetOriginalBuffer().(loadingBuffer); gone {
+					return errTextUnavailable
+				}
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if len(data) == 0 {
+				return io.ErrUnexpectedEOF
+			}
+			if _, err := w.Write(data); err != nil {
+				return err
+			}
+			curr += len(data)
+		}
+		logical = pieceEnd
+	}
+	return nil
 }
 
 // errEditorClosed ends a save whose editor was closed while it waited for the
@@ -197,8 +340,10 @@ func recoverMapping(v vfs.VFS, r *mappingRelease, path string) (f vfs.ReadAtClos
 		_ = f.Close()
 		return nil, nil, nil, false
 	}
-	if m, mapErr := MapEditorFileWithOffset(v, f, r.offset); mapErr == nil {
-		return f, m, nil, true
+	if r.mapped {
+		if m, mapErr := MapEditorFileWithOffset(v, f, r.offset); mapErr == nil {
+			return f, m, nil, true
+		}
 	}
 	return f, nil, NewAsyncBufferWithOffset(context.Background(), f, r.offset), true
 }
