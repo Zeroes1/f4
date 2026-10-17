@@ -5922,9 +5922,10 @@ func actionFileExplorerMenu(pf *panel.PanelsFrame) {
 	if !ok {
 		return
 	}
+	frames := vtui.FrameManager
 	go func() {
 		err := explorerMenuShower(path)
-		vtui.FrameManager.PostTask(func() {
+		frames.PostTask(func() {
 			if err != nil {
 				vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
 			}
