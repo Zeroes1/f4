@@ -1298,8 +1298,13 @@ func (pf *PanelsFrame) runMenuCommandSteps(steps []string) {
 	}
 }
 
+// IsMenuComment reports whether a trimmed menu command line is a comment:
+// "::" and REM (cmd style) or "#" (shell style, as in far2l menus). The
+// lines are joined into one command, so an unskipped "#..." line would turn
+// the rest of the item into a shell comment (f4#2037). A "#!" shebang is
+// handled before this check by userMenuInterpreter.
 func IsMenuComment(line string) bool {
-	if strings.HasPrefix(line, "::") {
+	if strings.HasPrefix(line, "::") || strings.HasPrefix(line, "#") {
 		return true
 	}
 	if len(line) < 3 {
