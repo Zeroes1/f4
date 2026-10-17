@@ -10,26 +10,26 @@ import (
 
 type addArchivePreferences struct {
 	KeepFileExtension *bool `json:"keep_file_extension"`
+	// Defaults are the options the window opens with, kept by its "Save
+	// settings" button (f4#2002); nil until then.
+	Defaults *addArchiveProfile `json:"defaults,omitempty"`
 }
 
 var addArchivePreferencesPath = func() string {
 	return filepath.Join(config.GetF4ConfigDir(), "archive_preferences.json")
 }
 
-func loadKeepArchiveFileExtension() bool {
-	data, err := os.ReadFile(addArchivePreferencesPath())
-	if err != nil {
-		return true
-	}
+func loadAddArchivePreferences() addArchivePreferences {
 	var preferences addArchivePreferences
-	if json.Unmarshal(data, &preferences) != nil || preferences.KeepFileExtension == nil {
-		return true
+	data, err := os.ReadFile(addArchivePreferencesPath())
+	if err != nil || json.Unmarshal(data, &preferences) != nil {
+		return addArchivePreferences{}
 	}
-	return *preferences.KeepFileExtension
+	return preferences
 }
 
-func saveKeepArchiveFileExtension(keep bool) error {
-	data, err := json.Marshal(addArchivePreferences{KeepFileExtension: &keep})
+func saveAddArchivePreferences(preferences addArchivePreferences) error {
+	data, err := json.Marshal(preferences)
 	if err != nil {
 		return err
 	}
@@ -42,4 +42,29 @@ func saveKeepArchiveFileExtension(keep bool) error {
 		return err
 	}
 	return os.Rename(tmp, path)
+}
+
+func loadKeepArchiveFileExtension() bool {
+	preferences := loadAddArchivePreferences()
+	if preferences.KeepFileExtension == nil {
+		return true
+	}
+	return *preferences.KeepFileExtension
+}
+
+// saveKeepArchiveFileExtension keeps the choice and leaves the rest of the
+// preferences as they are.
+func saveKeepArchiveFileExtension(keep bool) error {
+	preferences := loadAddArchivePreferences()
+	preferences.KeepFileExtension = &keep
+	return saveAddArchivePreferences(preferences)
+}
+
+// saveAddArchiveDefaults keeps p and the file extension choice as what the
+// window opens with.
+func saveAddArchiveDefaults(p addArchiveProfile, keepExtension bool) error {
+	preferences := loadAddArchivePreferences()
+	preferences.Defaults = &p
+	preferences.KeepFileExtension = &keepExtension
+	return saveAddArchivePreferences(preferences)
 }

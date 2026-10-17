@@ -9,7 +9,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/unxed/f4/internal/toast"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 	zipperarchive "github.com/unxed/zipper/archive"
@@ -270,6 +272,7 @@ type addArchiveDialog struct {
 	saveProfile   *vtui.Button
 	deleteProfile *vtui.Button
 	create        *vtui.Button
+	saveDefaults  *vtui.Button
 }
 
 func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sourceIsFile ...bool) *addArchiveDialog {
@@ -367,11 +370,18 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 	d.saveProfile.OnClick = func() { d.storeProfile() }
 	d.deleteProfile.OnClick = func() { d.dropProfile() }
 
-	d.create = vtui.NewButton(d.dlg.X1+18, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
+	d.create = vtui.NewButton(0, d.dlg.Y2-2, vtui.Msg("Archive.Add.Create"))
 	d.create.IsDefault = true
-	cancel := vtui.NewButton(d.dlg.X1+34, d.dlg.Y2-2, vtui.Msg("vtui.Cancel"))
-	d.dlg.AddItem(d.create)
-	d.dlg.AddItem(cancel)
+	d.saveDefaults = vtui.NewButton(0, d.dlg.Y2-2, vtui.Msg("Archive.Add.SaveSettings"))
+	cancel := vtui.NewButton(0, d.dlg.Y2-2, vtui.Msg("vtui.Cancel"))
+	buttons := vtui.NewHBoxLayout(d.dlg.X1+1, d.dlg.Y2-2, w-2, 1)
+	buttons.HorizontalAlign = vtui.AlignCenter
+	buttons.Spacing = 2
+	for _, b := range []*vtui.Button{d.create, d.saveDefaults, cancel} {
+		d.dlg.AddItem(b)
+		buttons.Add(b, vtui.Margins{}, vtui.AlignTop)
+	}
+	buttons.Apply()
 
 	format := addArchiveFormatOf(initialName)
 	if format < 0 {
@@ -381,6 +391,9 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 	d.selectFormat(format)
 	d.name.SetText(d.suggestedName(format))
 	d.lastSuggestedName = d.name.GetText()
+	if defaults := loadAddArchivePreferences().Defaults; defaults != nil {
+		d.applyProfile(*defaults)
+	}
 	d.format.Menu.OnAction = func(idx int) {
 		if d.name.GetText() == d.lastSuggestedName {
 			d.name.SetText(d.suggestedName(idx))
@@ -416,6 +429,13 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 		}
 		d.dlg.Close()
 		done(settings)
+	}
+	d.saveDefaults.OnClick = func() {
+		if err := saveAddArchiveDefaults(d.currentProfile(), d.keepExtension.State == 1); err != nil {
+			vtui.ShowMessageEx(vtui.Msg("Archive.Add.Title"), err.Error(), []string{vtui.Msg("vtui.Ok")}, vtui.MessageWarn)
+			return
+		}
+		toast.Show(vtui.Msg("Archive.Add.SettingsSaved"), 2*time.Second)
 	}
 	cancel.OnClick = func() { d.dlg.Close() }
 	d.dlg.SetFocusedItem(d.name)
