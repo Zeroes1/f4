@@ -35,7 +35,10 @@ f4pid=$!
 collect() {
   find "$build" -maxdepth 4 -name debug.log -exec cp -t "$logs" {} + 2>/dev/null || true
   if [ -f "$logs/debug.log" ]; then
-    grep -E 'DND|WINEX11DRAG|XDND|[Dd]rag' "$logs/debug.log" | tail -n 60 > "$logs/drag-lines.txt" || true
+    # The per-motion "over" lines (one per 15 ms) would push the end of the drag
+    # -- drop, leave, finish -- out of the tail and out of a clipped CI log.
+    grep -E 'DND|WINEX11DRAG|XDND|[Dd]rag' "$logs/debug.log" | grep -vE 'DND: over (at|handled)' |
+      tail -n 40 > "$logs/drag-lines.txt" || true
   fi
 }
 trap 'collect; kill "$f4pid" 2>/dev/null || true' EXIT
