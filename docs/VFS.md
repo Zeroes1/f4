@@ -39,6 +39,15 @@ To support features like word wrapping and fast navigation in the Editor, `f4` p
 ## Why this matters for FISH+
 This architecture was specifically chosen to support the **FISH+** protocol (see [FISH+.md](FISH+.md)). By allowing operations to be partial, cancellable, and asynchronous, we can offload heavy computations (like searching or indexing) to the remote server while keeping the local `f4` instance lightweight and fast.
 
+## Editor save patches
+
+For raw UTF-8 files, the editor can save a piece table as original file ranges
+plus new bytes through `InPlacePatcher` or `DeltaWriter`. Original ranges must
+always refer to the opened file, never to replacement text. Whole-buffer edits
+such as Replace All therefore delete and insert into the existing table rather
+than rebasing its original buffer. This also preserves the buffers referenced by
+undo and redo snapshots.
+
 ## Metadata availability and panel grouping
 
 `VFSItem.KnownMetadata` is an additive `MetadataFields` bit mask. Providers should
