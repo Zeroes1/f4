@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/internal/toast"
@@ -210,6 +211,10 @@ type QueueTask struct {
 
 	Preconditions []OpPrecondition
 	ResKeys       []string
+	// Paths are what the task reads or writes. A small task whose paths do
+	// not meet those of the running tasks starts without waiting for its
+	// resource keys (f4#1894); a task with no paths is taken to touch all.
+	Paths []string
 
 	Run         func(ctx context.Context, reporter TaskReporter, anchor vtui.Frame) error
 	OpenDetails func(anchor vtui.Frame)
@@ -224,6 +229,10 @@ type QueueTask struct {
 
 	completionOnce sync.Once
 	finalizeOnce   sync.Once
+
+	// bypass is set, under the manager's mu, on a small task started while
+	// its resource keys were taken: it holds no keys and releases none.
+	bypass bool
 }
 
 func (t *QueueTask) finalize() {
@@ -579,38 +588,128 @@ func (qm *OpQueueManager) workerLoop() {
 		}
 
 		qm.mu.Lock()
-		var toRun *QueueTask
-		for _, t := range qm.tasks {
-			t.mu.Lock()
-			isQueued := t.State == "Queued"
-			t.mu.Unlock()
-
-			if isQueued {
-				canRun := true
-				for _, rk := range t.ResKeys {
-					if qm.activeKeys[rk] {
-						canRun = false
-						break
-					}
-				}
-				if canRun {
-					toRun = t
-					for _, rk := range t.ResKeys {
-						qm.activeKeys[rk] = true
-					}
-					t.mu.Lock()
-					t.State = "Starting"
-					t.mu.Unlock()
-					break
-				}
-			}
-		}
+		toRun := qm.nextRunnable()
 		qm.mu.Unlock()
 
 		if toRun != nil {
 			go qm.executeTask(toRun)
 		}
 	}
+}
+
+// A queued task is small enough to start beside a long one on the same
+// device when it copies, moves or deletes at most this many files, and no
+// folders, of at most this many bytes in all (f4#1894).
+const (
+	queueSmallMaxFiles = 100
+	queueSmallMaxBytes = 16 << 20
+)
+
+// nextRunnable claims the first queued task that may start now and marks it
+// Starting. A task starts when its resource keys are free; a small one also
+// starts while they are taken, unless that is turned off or its paths meet
+// those of a running task. A task that takes its keys still waits for the
+// small tasks started that way whose paths it meets. qm.mu must be held.
+func (qm *OpQueueManager) nextRunnable() *QueueTask {
+	for _, t := range qm.tasks {
+		t.mu.Lock()
+		isQueued := t.State == "Queued"
+		t.mu.Unlock()
+		if !isQueued {
+			continue
+		}
+		keysFree := true
+		for _, rk := range t.ResKeys {
+			if qm.activeKeys[rk] {
+				keysFree = false
+				break
+			}
+		}
+		bypass := false
+		switch {
+		case keysFree:
+			if qm.meetsRunning(t, true) {
+				continue
+			}
+		case config.App.QueueSmallOpsBypass && smallQueueTask(t) && !qm.meetsRunning(t, false):
+			bypass = true
+		default:
+			continue
+		}
+		if !bypass {
+			for _, rk := range t.ResKeys {
+				qm.activeKeys[rk] = true
+			}
+		}
+		t.bypass = bypass
+		t.mu.Lock()
+		t.State = "Starting"
+		t.mu.Unlock()
+		return t
+	}
+	return nil
+}
+
+// meetsRunning reports whether the paths of t meet those of a task already
+// started, or only of those started as small ones. qm.mu must be held.
+func (qm *OpQueueManager) meetsRunning(t *QueueTask, onlyBypass bool) bool {
+	for _, r := range qm.tasks {
+		if r == t || (onlyBypass && !r.bypass) {
+			continue
+		}
+		r.mu.Lock()
+		running := queueTaskActive(r.State) && r.State != "Queued"
+		r.mu.Unlock()
+		if running && queuePathsMeet(t.Paths, r.Paths) {
+			return true
+		}
+	}
+	return false
+}
+
+// smallQueueTask reports whether t is a few files and no folders: the
+// Preconditions are what was selected, as it was when the task was queued.
+func smallQueueTask(t *QueueTask) bool {
+	if len(t.Paths) == 0 || len(t.Preconditions) == 0 || len(t.Preconditions) > queueSmallMaxFiles {
+		return false
+	}
+	var total int64
+	for _, pc := range t.Preconditions {
+		if pc.IsDir {
+			return false
+		}
+		total += pc.Size
+		if total > queueSmallMaxBytes {
+			return false
+		}
+	}
+	return true
+}
+
+// queuePathsMeet reports whether a path of one list is a path of the other
+// or lies under it. An empty list meets everything.
+func queuePathsMeet(a, b []string) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return true
+	}
+	for _, p := range a {
+		for _, q := range b {
+			if queuePathWithin(p, q) || queuePathWithin(q, p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// queuePathWithin reports whether p is dir or lies under it. Case and the
+// kind of separator are ignored: a false match only makes a task wait.
+func queuePathWithin(p, dir string) bool {
+	norm := func(s string) string {
+		return strings.TrimRight(strings.ToLower(strings.ReplaceAll(s, "\\", "/")), "/")
+	}
+	p, dir = norm(p), norm(dir)
+	return p == dir || strings.HasPrefix(p, dir+"/")
 }
 
 func (qm *OpQueueManager) executeTask(t *QueueTask) {
@@ -683,8 +782,10 @@ func (qm *OpQueueManager) executeTask(t *QueueTask) {
 	t.mu.Unlock()
 
 	qm.mu.Lock()
-	for _, rk := range t.ResKeys {
-		qm.activeKeys[rk] = false
+	if !t.bypass {
+		for _, rk := range t.ResKeys {
+			qm.activeKeys[rk] = false
+		}
 	}
 	qm.mu.Unlock()
 	qm.signalWorker()

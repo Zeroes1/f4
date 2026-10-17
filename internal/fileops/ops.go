@@ -323,6 +323,26 @@ func transferItemName(srcVFS vfs.VFS, srcPath string, dstVFS vfs.VFS, fallback s
 	return name
 }
 
+// transferQueuePaths lists what a queued copy or move touches: every source
+// item and the entry it lands as. Under a mask the names are made at run
+// time, so the destination folder stands for them.
+func transferQueuePaths(srcVfs vfs.VFS, srcBasePath string, names []string, dstVfs vfs.VFS, destPath string, isTargetDir bool, mask string) []string {
+	var paths []string
+	for _, name := range names {
+		srcPath := srcVfs.Join(srcBasePath, name)
+		paths = append(paths, srcPath)
+		switch {
+		case !isTargetDir:
+			paths = append(paths, destPath)
+		case mask != "":
+			paths = append(paths, destPath)
+		default:
+			paths = append(paths, dstVfs.Join(destPath, transferItemName(srcVfs, srcPath, dstVfs, name)))
+		}
+	}
+	return paths
+}
+
 // transferItemNameForMask applies a rename mask to the name that far2l would
 // feed to ConvertWildcards. A selected item can be represented by a path (for
 // example in a search or temporary panel), but the mask is applied to its
@@ -812,11 +832,16 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 
 	if mode == 0 { // Queue
 		keys := ResourceKeysFor(srcVfs, dstVfs)
+		var paths []string
+		if len(preconds) == len(names) {
+			paths = transferQueuePaths(srcVfs, srcBasePath, names, dstVfs, destPath, isTargetDir, mask)
+		}
 		task := &QueueTask{
 			Type:          actionDesc,
 			Desc:          desc,
 			Preconditions: preconds,
 			ResKeys:       keys,
+			Paths:         paths,
 			Run:           runFunc,
 			OnComplete:    onComplete,
 		}
@@ -1089,11 +1114,18 @@ func ExecuteDeleteOpWithDispositionAt(activeVfs vfs.VFS, basePath string, names 
 		if toTrash {
 			taskType = "Trash"
 		}
+		var paths []string
+		if len(preconds) == len(names) {
+			for _, pc := range preconds {
+				paths = append(paths, pc.Path)
+			}
+		}
 		task := &QueueTask{
 			Type:          taskType,
 			Desc:          desc,
 			Preconditions: preconds,
 			ResKeys:       keys,
+			Paths:         paths,
 			Run:           runFunc,
 			OnComplete:    onComplete,
 		}

@@ -636,6 +636,7 @@ type F4Config struct {
 	AutoSaveCurrentPanel         bool
 	AutoSaveGUIWindow            bool
 	DefaultFileOpMode            int
+	QueueSmallOpsBypass          bool // small files in the queue need not wait for a long operation (f4#1894)
 	FileOpPathDisplay            int
 	ClipboardImageFormat         string
 	ClipboardImagePNGCompression string
@@ -843,6 +844,7 @@ var App = F4Config{
 	AutoSaveCurrentPanel:            true,
 	AutoSaveGUIWindow:               true,
 	DefaultFileOpMode:               0,
+	QueueSmallOpsBypass:             true,
 	FileOpPathDisplay:               0,
 	ClipboardImageFormat:            "png",
 	ClipboardImagePNGCompression:    "default",
@@ -1063,6 +1065,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 		cfg.ApplyCommandParallelism = runtime.NumCPU()
 	}
 	_, _ = fmt.Sscanf(merged.GetString("Panel", "DefaultFileOpMode", "0"), "%d", &cfg.DefaultFileOpMode)
+	cfg.QueueSmallOpsBypass = merged.GetString("Panel", "QueueSmallOpsBypass", "1") != "0"
 	cfg.ConfirmCopy = merged.GetString("System", "ConfirmCopy", "1") == "1"
 	cfg.ConfirmMove = merged.GetString("System", "ConfirmMove", "1") == "1"
 	cfg.ConfirmDelete = merged.GetString("System", "ConfirmDelete", "1") == "1"
@@ -1413,6 +1416,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "SearchExactOnHit = %d\n", map[bool]int{true: 1, false: 0}[cfg.SearchExactOnHit])
 	fmt.Fprintf(&sb, "ApplyCommandParallelism = %d\n", cfg.ApplyCommandParallelism)
 	fmt.Fprintf(&sb, "DefaultFileOpMode = %d\n", cfg.DefaultFileOpMode)
+	fmt.Fprintf(&sb, "QueueSmallOpsBypass = %d\n", map[bool]int{true: 1, false: 0}[cfg.QueueSmallOpsBypass])
 	fmt.Fprintf(&sb, "FileOpPathDisplay = %d\n", cfg.FileOpPathDisplay)
 	fmt.Fprintf(&sb, "CopyAccessRights = %d\n", cfg.CopyAccessRights)
 
