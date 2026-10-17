@@ -436,8 +436,13 @@ func TestAsyncBuffer_ContextRace(t *testing.T) {
 		buf := NewAsyncBuffer(ctx, f)
 		buf.chunkSize = 5
 
-		// Start fetch
+		// Start fetch. Read consults the global frame manager, so the
+		// goroutine is joined before the test returns: left running, it
+		// raced the next test's manager swap.
+		var reader sync.WaitGroup
+		reader.Add(1)
 		go func() {
+			defer reader.Done()
 			_, _ = buf.Read(0, 5)
 		}()
 
@@ -454,6 +459,7 @@ func TestAsyncBuffer_ContextRace(t *testing.T) {
 				time.Sleep(2 * time.Millisecond)
 			}
 		}
+		reader.Wait()
 		buf.Close()
 	}
 	// If no panic or deadlock occurred, the mutex/PostTask logic is likely sound.
