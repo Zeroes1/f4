@@ -1171,7 +1171,7 @@ func init() {
 		LabelKey:    "Action.Panel.InvertSelection",
 		Description: "Invert file selection",
 		DescKey:     "Action.Panel.InvertSelection.Desc",
-		DefaultKeys: []string{"Multiply", "AltVK_BB"},
+		DefaultKeys: []string{"Multiply", "AltVK_BB", "CtrlShift8"},
 		MenuPath:    "Files",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {

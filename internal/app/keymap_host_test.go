@@ -172,7 +172,7 @@ func TestPanelSelectionDefaultAliases(t *testing.T) {
 		{action: "File.View", keys: []string{"F3", "Num5"}},
 		{action: "Panel.SelectGroup", keys: []string{"Add", "CtrlShiftVK_BB"}},
 		{action: "Panel.DeselectGroup", keys: []string{"Subtract", "CtrlShiftVK_BD"}},
-		{action: "Panel.InvertSelection", keys: []string{"Multiply", "AltVK_BB"}},
+		{action: "Panel.InvertSelection", keys: []string{"Multiply", "AltVK_BB", "CtrlShift8"}},
 		{action: "Panel.SelectCurrentExtension", keys: []string{"CtrlAdd", "CtrlVK_BB"}},
 		{action: "Panel.DeselectCurrentExtension", keys: []string{"CtrlSubtract", "CtrlVK_BD"}},
 	} {
