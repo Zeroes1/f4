@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/vfs"
@@ -27,6 +28,12 @@ const asyncMaxRun = 16
 // gigabyte started thirty thousand of them.
 const asyncMaxFetches = 4
 
+// asyncStaleAsk, a var so the tests can shorten it, is how long a fetch waits for its turn before it is dropped
+// if nobody has asked for its chunks again since. Everything that wants a
+// chunk asks again while it waits — the painter on every redraw, a scan on
+// every step — so a run nobody asks about is a region scrolled past.
+var asyncStaleAsk = 2 * time.Second
+
 // asyncCacheLimit is how much of the file an AsyncBuffer keeps. It used to
 // keep every chunk it ever fetched, so reading a large file through it once
 // — a search, a save — left the whole file on the heap for as long as the
@@ -46,7 +53,7 @@ type AsyncBuffer struct {
 
 	mu        sync.Mutex
 	loaded    map[int][]byte // Chunk index -> Data
-	fetching  map[int]bool   // Chunk index -> is currently being fetched
+	fetching  map[int]bool   // Chunk index -> queued or being fetched
 	chunkSize int
 	// lastUse is when each loaded chunk was last read, in ticks of clock;
 	// the chunk with the smallest is the one evicted.
@@ -55,8 +62,29 @@ type AsyncBuffer struct {
 	loadedBytes int
 	// limit is the most loadedBytes may hold; zero means asyncCacheLimit.
 	limit int
-	// slots holds one token per fetch that is running.
-	slots chan struct{}
+
+	// queue holds the fetches waiting for one of the asyncMaxFetches turns,
+	// running counts the ones that have it, and asked is when a reader last
+	// wanted each chunk that is being fetched. The run asked for last goes
+	// first: holding PgDn through a remote file otherwise downloaded every
+	// page scrolled past before the one on screen.
+	queue   []asyncRun
+	running int
+	asked   map[int]time.Time
+
+	// big is the one read too large for the cache, fetched whole for the
+	// caller that asked for it; see Read.
+	big *asyncBigRead
+}
+
+// asyncRun is count neighbouring chunks from first on, fetched in one read.
+type asyncRun struct{ first, count int }
+
+// asyncBigRead is a range read in one piece, outside the cache.
+type asyncBigRead struct {
+	offset, length int
+	data           []byte
+	done           bool
 }
 
 func NewAsyncBuffer(ctx context.Context, f vfs.ReadAtCloser) *AsyncBuffer {
@@ -149,17 +177,20 @@ func (b *AsyncBuffer) Prefetch(offset, length int) {
 	b.fetchMissingLocked(startChunk, endChunk)
 }
 
-// fetchMissingLocked starts fetches for the chunks of [first, last] that are
+// fetchMissingLocked queues fetches for the chunks of [first, last] that are
 // neither loaded nor on their way, neighbours together in one request, and no
-// more of them than half the cache holds: a caller asking for the whole file
-// at once — a piece table's Bytes — gets the start of it fetched, not every
-// chunk of it fetched and evicted in turn. Loaded chunks in the range count
-// as used.
+// more of them than half the cache holds: a caller asking for a range larger
+// than that is served by Read's big read instead. Loaded chunks in the range
+// count as used, and chunks on their way as asked for again.
 func (b *AsyncBuffer) fetchMissingLocked(first, last int) {
 	// Read the global here, on the goroutine that starts the fetch, rather
 	// than inside it: the fetch outlives this call and would otherwise race
 	// anything that reassigns vtui.FrameManager while it is still in flight.
 	frames := vtui.FrameManager
+	if b.asked == nil {
+		b.asked = make(map[int]time.Time)
+	}
+	now := time.Now()
 	budget := b.cacheLimit() / 2 / b.chunkSize
 	for i := first; i <= last && budget > 0; {
 		if _, ok := b.loaded[i]; ok {
@@ -168,6 +199,7 @@ func (b *AsyncBuffer) fetchMissingLocked(first, last int) {
 			continue
 		}
 		if b.fetching[i] {
+			b.asked[i] = now
 			i++
 			continue
 		}
@@ -177,11 +209,72 @@ func (b *AsyncBuffer) fetchMissingLocked(first, last int) {
 				break
 			}
 			b.fetching[i+run] = true
+			b.asked[i+run] = now
 			run++
 		}
-		go b.fetchRun(i, run, frames)
+		b.queue = append(b.queue, asyncRun{i, run})
 		budget -= run
 		i += run
+	}
+	b.startFetchesLocked(frames)
+}
+
+// startFetchesLocked gives free turns to the queued runs asked for last, and
+// drops the runs nobody has asked about for asyncStaleAsk.
+func (b *AsyncBuffer) startFetchesLocked(frames *vtui.FrameManagerType) {
+	if b.ctx.Err() != nil {
+		for _, r := range b.queue {
+			b.forgetRunLocked(r)
+		}
+		b.queue = nil
+		return
+	}
+	now := time.Now()
+	for b.running < asyncMaxFetches && len(b.queue) > 0 {
+		best := -1
+		var bestAsk time.Time
+		kept := b.queue[:0]
+		for _, r := range b.queue {
+			ask := b.lastAskLocked(r)
+			if now.Sub(ask) > asyncStaleAsk {
+				b.forgetRunLocked(r)
+				continue
+			}
+			kept = append(kept, r)
+			// Strictly later only, so the runs of one request keep their
+			// order.
+			if best < 0 || ask.After(bestAsk) {
+				best, bestAsk = len(kept)-1, ask
+			}
+		}
+		b.queue = kept
+		if best < 0 {
+			return
+		}
+		r := b.queue[best]
+		b.queue = append(b.queue[:best], b.queue[best+1:]...)
+		b.running++
+		go b.fetchRun(r.first, r.count, frames)
+	}
+}
+
+// lastAskLocked is when a reader last wanted any chunk of r.
+func (b *AsyncBuffer) lastAskLocked(r asyncRun) time.Time {
+	var last time.Time
+	for i := r.first; i < r.first+r.count; i++ {
+		if t := b.asked[i]; t.After(last) {
+			last = t
+		}
+	}
+	return last
+}
+
+// forgetRunLocked takes r's chunks off the list of those on their way, so
+// that the next reader to want one fetches it again.
+func (b *AsyncBuffer) forgetRunLocked(r asyncRun) {
+	for i := r.first; i < r.first+r.count; i++ {
+		delete(b.fetching, i)
+		delete(b.asked, i)
 	}
 }
 
@@ -220,17 +313,29 @@ func (b *AsyncBuffer) Read(offset, length int) ([]byte, error) {
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// Every loaded chunk of the range counts as used, the ones before a
+	// missing chunk included: they are what this reader comes back for, and
+	// left with their old stamps they were the next to be evicted while it
+	// waited for the rest.
+	missing := false
 	for i := startChunk; i <= endChunk; i++ {
-		if _, ok := b.loaded[i]; !ok {
-			b.fetchMissingLocked(i, endChunk)
-			return nil, piecetable.ErrLoading
+		if _, ok := b.loaded[i]; ok {
+			b.touchLocked(i)
+		} else {
+			missing = true
 		}
+	}
+	if missing {
+		if length > b.cacheLimit()/2 {
+			return b.readBigLocked(offset, length)
+		}
+		b.fetchMissingLocked(startChunk, endChunk)
+		return nil, piecetable.ErrLoading
 	}
 
 	res := make([]byte, 0, length)
 	for i := startChunk; i <= endChunk; i++ {
 		data := b.loaded[i]
-		b.touchLocked(i)
 		cStart := i * b.chunkSize
 		takeStart := max(offset-cStart, 0)
 		takeEnd := min(offset+length-cStart, len(data))
@@ -239,6 +344,52 @@ func (b *AsyncBuffer) Read(offset, length int) ([]byte, error) {
 		}
 	}
 	return res, nil
+}
+
+// readBigLocked serves a range larger than the cache can hold at once. Its
+// chunks would evict each other before the last of them arrived, so the read
+// would never succeed; it is read in one piece instead, outside the cache, and
+// handed to the reader that comes back for exactly that range. One such read
+// is kept at a time.
+func (b *AsyncBuffer) readBigLocked(offset, length int) ([]byte, error) {
+	if big := b.big; big != nil {
+		if big.offset == offset && big.length == length {
+			if !big.done {
+				return nil, piecetable.ErrLoading
+			}
+			b.big = nil
+			return big.data, nil
+		}
+		if !big.done {
+			// Another range is on its way; this one waits its turn.
+			return nil, piecetable.ErrLoading
+		}
+		// Read for a reader that never came back for it.
+	}
+	big := &asyncBigRead{offset: offset, length: length}
+	b.big = big
+	frames := vtui.FrameManager
+	go func() {
+		defer frames.PostTask(func() {
+			frames.Redraw()
+		})
+		data := make([]byte, length)
+		n, err := b.File.ReadAt(b.ctx, data, b.fileOffset+int64(offset))
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.big != big {
+			return
+		}
+		if b.ctx.Err() != nil || n < length || (err != nil && err != io.EOF) {
+			if err != nil && err != context.Canceled {
+				vtui.DebugLog("AsyncBuffer: failed to read %d bytes at %d: %v", length, offset, err)
+			}
+			b.big = nil
+			return
+		}
+		big.data, big.done = data, true
+	}()
+	return nil, piecetable.ErrLoading
 }
 
 // touchLocked marks a loaded chunk as just used.
@@ -278,41 +429,25 @@ func (b *AsyncBuffer) storeLocked(idx int, data []byte) {
 	}
 }
 
-// fetchRun reads count chunks from first on in one request, once a slot is
-// free, and keeps each as a slice of its own: a chunk sharing its array with
-// its neighbours would keep all of them on the heap after it alone was
-// evicted.
+// fetchRun reads count chunks from first on in one request, and keeps each as
+// a slice of its own: a chunk sharing its array with its neighbours would
+// keep all of them on the heap after it alone was evicted. It holds one of
+// the asyncMaxFetches turns, and hands it on when done.
 func (b *AsyncBuffer) fetchRun(first, count int, frames *vtui.FrameManagerType) {
 	defer frames.PostTask(func() {
 		frames.Redraw()
 	})
 
-	b.mu.Lock()
-	if b.slots == nil {
-		b.slots = make(chan struct{}, asyncMaxFetches)
-	}
-	slots := b.slots
-	b.mu.Unlock()
-
-	var data []byte
-	var err error
-	select {
-	case slots <- struct{}{}:
-		off := int64(first) * int64(b.chunkSize)
-		data = make([]byte, min(int64(count)*int64(b.chunkSize), int64(b.size)-off))
-		var n int
-		n, err = b.File.ReadAt(b.ctx, data, b.fileOffset+off)
-		data = data[:max(n, 0)]
-		<-slots
-	case <-b.ctx.Done():
-		err = b.ctx.Err()
-	}
+	off := int64(first) * int64(b.chunkSize)
+	data := make([]byte, min(int64(count)*int64(b.chunkSize), int64(b.size)-off))
+	n, err := b.File.ReadAt(b.ctx, data, b.fileOffset+off)
+	data = data[:max(n, 0)]
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for i := first; i < first+count; i++ {
-		delete(b.fetching, i)
-	}
+	b.running--
+	b.forgetRunLocked(asyncRun{first, count})
+	defer b.startFetchesLocked(frames)
 	if b.ctx.Err() != nil || (err != nil && err != io.EOF) {
 		if err != nil && err != context.Canceled {
 			// Left unloaded, so the next read asks again.

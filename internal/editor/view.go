@@ -264,6 +264,9 @@ type EditorView struct {
 	// every intermediate codepage makes a cycle lossy (especially UTF-8 ->
 	// ANSI -> OEM -> UTF-8). Keep one source snapshot until the buffer changes.
 	codepageRaw []byte
+	// codepageRead cancels the background read of a chunk-buffered file that
+	// a codepage switch is waiting for; see readTextForCodepage.
+	codepageRead func()
 	// DisplayTitle overrides the temporary filename in frame and top-bar
 	// titles. It is used by internal editor round-trip workflows.
 	DisplayTitle string
@@ -441,6 +444,10 @@ func (ev *EditorView) Close() {
 	}
 	ev.indexWG.Wait()
 	ev.highlightWG.Wait()
+	if ev.codepageRead != nil {
+		ev.codepageRead()
+		ev.codepageRead = nil
+	}
 	if ev.AsyncBuf != nil {
 		ev.AsyncBuf.Close()
 	}
@@ -4657,12 +4664,17 @@ func (ev *EditorView) Replace(pattern, replacement string, caseSensitive, revers
 	// user, or left by a previous Cancel) is prompted as-is: re-searching
 	// from its start could pick a wider match (regex "a+" around a
 	// one-character selection) and silently replace more than was selected.
+	// Only the selection is read: the whole buffer, as this once read, is a
+	// copy of the file, and on a chunk buffer holding part of it the read
+	// failed and a wider match than the selection was prompted instead.
 	if ev.SelActive {
 		selMin, selMax := ev.GetSelectionRange()
-		if data, err := ev.Pt.Bytes(); err == nil && selMax > selMin &&
-			selectionIsMatch(data[selMin:selMax], pattern, caseSensitive, re) {
-			st.promptAt(data, selMin, selMax-selMin)
-			return
+		if selMax > selMin {
+			if sel, err := ev.Pt.GetRange(selMin, selMax-selMin); err == nil &&
+				selectionIsMatch(sel, pattern, caseSensitive, re) {
+				st.promptMatch(sel, selMin)
+				return
+			}
 		}
 	}
 	st.searchFrom = ev.searchSeedOffset(reverse, true)
@@ -5125,6 +5137,48 @@ func (ev *EditorView) ReloadWithCodepage(cpID int) {
 	if ev.Codepage == cpID {
 		return
 	}
+	if ev.codepageRaw == nil {
+		if _, chunked := ev.Pt.GetOriginalBuffer().(*AsyncBuffer); chunked {
+			ev.readTextForCodepage(cpID)
+			return
+		}
+	}
+	ev.reloadWithCodepage(cpID, nil)
+}
+
+// readTextForCodepage reads the whole text of a chunk-buffered file for a
+// codepage switch, and switches once it has. The buffer keeps only the part
+// of the file read last, so Pt.Bytes fails on it, and reading the rest takes
+// as long as the file takes to arrive — the whole download, for a remote
+// one. That is done off the UI thread, and given up on when the text changes,
+// the editor closes or another switch is asked for in the meantime.
+func (ev *EditorView) readTextForCodepage(cpID int) {
+	if ev.codepageRead != nil {
+		ev.codepageRead()
+	}
+	Pt, read, session := ev.Pt, ev.chunkReader(), ev.editSession
+	task := vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		data, err := readSearchSnapshot(ctx, Pt, read)
+		if err != nil && ctx.Err() == nil {
+			vtui.DebugLog("EDITOR: reading the text to switch codepage: %v", err)
+		}
+		ctx.RunOnUI(func() {
+			if err != nil || ctx.Err() != nil || ev.IsDone() || ev.Pt != Pt || ev.editSession != session {
+				return
+			}
+			ev.codepageRead = nil
+			ev.reloadWithCodepage(cpID, data)
+		})
+	})
+	ev.codepageRead = task.Cancel
+}
+
+// reloadWithCodepage is ReloadWithCodepage once the text can be had: text is
+// the whole of it when the caller has read it already, nil otherwise.
+func (ev *EditorView) reloadWithCodepage(cpID int, text []byte) {
+	if ev.Codepage == cpID {
+		return
+	}
 
 	// The piece table contains decoded text, not the original file bytes.
 	// Build the source stream once and reinterpret that same stream on every
@@ -5132,11 +5186,9 @@ func (ev *EditorView) ReloadWithCodepage(cpID int) {
 	// information when the intermediate codepage cannot represent all glyphs.
 	rawData := ev.codepageRaw
 	if rawData == nil {
-		bytes, err := ev.Pt.Bytes()
-		if err == piecetable.ErrLoading {
-			// A chunk buffer keeps only the part of the file read last, so
-			// the text is read in, the file directly where it can be.
-			bytes, err = readSearchSnapshot(nil, ev.Pt, ev.chunkReader())
+		bytes, err := text, error(nil)
+		if bytes == nil {
+			bytes, err = ev.Pt.Bytes()
 		}
 		if err != nil {
 			return

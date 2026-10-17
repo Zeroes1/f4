@@ -196,3 +196,126 @@ func TestAsyncBuffer_AWholeFileReadFetchesOnlyWhatFits(t *testing.T) {
 		t.Errorf("one read started fetches for %d chunks, more than the %d the cache can spare", fetching, most)
 	}
 }
+
+// A range larger than the cache could never be read through it: its chunks
+// evicted each other before the last of them arrived, and every retry failed.
+// It is read in one piece instead, and the cache stays within its limit.
+func TestAsyncBuffer_ARangeLargerThanTheCacheIsReadWhole(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	stop := pumpUITasks()
+	defer stop()
+
+	content := strings.Repeat("0123456789abcdef", 16*1024) // 256 KB
+	buf := smallChunkBuffer(t, content, nil)
+	if len(content) <= buf.cacheLimit() {
+		t.Fatal("precondition: the range has to be larger than the cache")
+	}
+	if got := readWhenLoaded(t, buf, 0, len(content)); string(got) != content {
+		t.Fatal("the whole-file read returned the wrong bytes")
+	}
+	if held := buf.LoadedBytes(); held > buf.cacheLimit() {
+		t.Errorf("the buffer holds %d bytes, over its limit of %d", held, buf.cacheLimit())
+	}
+}
+
+// A read waiting for the rest of its range keeps the part it already has:
+// left with their old stamps, those chunks were the next to be evicted while
+// it waited, and had to be fetched again.
+func TestAsyncBuffer_AWaitingReadKeepsWhatItHas(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	stop := pumpUITasks()
+	defer stop()
+
+	content := strings.Repeat("w", 128*1024) // 128 chunks; the cache holds 32
+	buf := smallChunkBuffer(t, content, nil)
+	k := buf.chunkSize
+	readWhenLoaded(t, buf, 0, 8*k)     // chunks 0..7
+	readWhenLoaded(t, buf, 32*k, 24*k) // 32..55, used after them
+	if _, err := buf.Read(0, 16*k); err != piecetable.ErrLoading {
+		t.Fatalf("precondition: chunks 8..15 should be missing, got %v", err)
+	}
+	readWhenLoaded(t, buf, 8*k, 8*k)  // 8..15 arrive
+	readWhenLoaded(t, buf, 56*k, 8*k) // 56..63 push the cache over its limit
+
+	buf.mu.Lock()
+	_, kept := buf.loaded[0]
+	buf.mu.Unlock()
+	if !kept {
+		t.Error("the start of the range being waited for was evicted")
+	}
+}
+
+// gatedFile holds every ReadAt until it is let through, and reports the
+// offset of each one as it starts.
+type gatedFile struct {
+	vfs.ReadAtCloser
+	started chan int64
+	gate    chan struct{}
+}
+
+func (g *gatedFile) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
+	g.started <- off
+	select {
+	case <-g.gate:
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+	return g.ReadAtCloser.ReadAt(ctx, p, off)
+}
+
+// With every turn taken, the run asked for last goes first, and a run nobody
+// has asked about for a while is dropped: holding PgDn through a remote file
+// downloaded every page scrolled past before the one on screen.
+func TestAsyncBuffer_FetchesWhatWasAskedForLastFirst(t *testing.T) {
+	previous := asyncStaleAsk
+	asyncStaleAsk = 200 * time.Millisecond
+	t.Cleanup(func() { asyncStaleAsk = previous })
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	stop := pumpUITasks()
+	defer stop()
+
+	content := strings.Repeat("v", 512*1024)
+	var file *gatedFile
+	buf := smallChunkBuffer(t, content, func(f vfs.ReadAtCloser) vfs.ReadAtCloser {
+		file = &gatedFile{ReadAtCloser: f, started: make(chan int64, 16), gate: make(chan struct{})}
+		return file
+	})
+	t.Cleanup(buf.Close)
+	k := buf.chunkSize
+	next := func() int64 {
+		t.Helper()
+		select {
+		case off := <-file.started:
+			return off
+		case <-time.After(5 * time.Second):
+			t.Fatal("no fetch started")
+			return -1
+		}
+	}
+
+	for i := 0; i < asyncMaxFetches; i++ { // every turn taken
+		buf.Prefetch(i*100*k, k)
+		next()
+	}
+	buf.Prefetch(400*k, k) // scrolled past
+	time.Sleep(10 * time.Millisecond)
+	buf.Prefetch(450*k, k) // on screen
+	file.gate <- struct{}{}
+	if got := next(); got != int64(450*k) {
+		t.Fatalf("the next fetch read offset %d, want the one asked for last, %d", got, 450*k)
+	}
+
+	time.Sleep(2 * asyncStaleAsk)
+	file.gate <- struct{}{}
+	select {
+	case off := <-file.started:
+		t.Fatalf("a run nobody asked about again was fetched anyway, at %d", off)
+	case <-time.After(100 * time.Millisecond):
+	}
+	buf.mu.Lock()
+	still := buf.fetching[400]
+	buf.mu.Unlock()
+	if still {
+		t.Error("the dropped run's chunk is still marked as on its way")
+	}
+}

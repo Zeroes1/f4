@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/testutil"
@@ -219,9 +220,16 @@ func TestChunkedEditor_SwitchesCodepage(t *testing.T) {
 		t.Fatalf("precondition: want a buffer that is not all loaded, got %v", err)
 	}
 
+	// The text is read in the background; the switch lands on the UI thread.
 	ev.ReloadWithCodepage(866)
-	if ev.Codepage != 866 {
-		t.Fatal("the codepage was not switched")
+	deadline := time.After(10 * time.Second)
+	for ev.Codepage != 866 {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("the codepage was not switched")
+		}
 	}
 	if got := editorText(t, ev); got != original {
 		t.Error("the text changed in an ASCII file")
