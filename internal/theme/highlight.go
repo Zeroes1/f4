@@ -124,6 +124,7 @@ type highlightCacheKey struct {
 	isHidden     bool
 	isExecutable bool
 	isSymlink    bool
+	reparseTag   uint32
 	winAttrs     uint32
 	unixMode     uint32
 	size         int64
@@ -139,6 +140,7 @@ func highlightCacheKeyFor(item *vfs.VFSItem) highlightCacheKey {
 		isHidden:     item.IsHidden,
 		isExecutable: item.IsExecutable,
 		isSymlink:    item.IsSymlink,
+		reparseTag:   item.ReparseTag,
 		winAttrs:     item.WinAttrs,
 		unixMode:     item.UnixMode,
 		size:         item.Size,
