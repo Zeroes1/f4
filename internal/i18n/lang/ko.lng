@@ -344,6 +344,7 @@ Macro.AssignTitle= 매크로 할당
 Macro.AssignPrompt=원하는 키 조합을 눌러주세요
 Macro.AssignCancel=취소하려면 Esc 키를 누르세요
 Macro.AssignEmpty=기록된 것이 없습니다: 누른 키의 매크로가 삭제됩니다.
+Macro.AssignFreeKeys=비어 있는 키
 
 Menu.Language=언어
 Menu.HelpLanguage=도움말 언어

@@ -344,6 +344,7 @@ Macro.AssignTitle= მაკროსის მინიჭება
 Macro.AssignPrompt=დააჭირეთ სასურველ კლავიშთა კომბინაციას
 Macro.AssignCancel=გასაუქმებლად დააჭირეთ Esc-ს
 Macro.AssignEmpty=არაფერი ჩაიწერა: დაჭერილი ღილაკის მაკრო წაიშლება.
+Macro.AssignFreeKeys=თავისუფალი კლავიშები
 
 Menu.Language=ენა (Language)
 Menu.HelpLanguage=დახმარების ენა (Help Language)

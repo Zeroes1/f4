@@ -344,6 +344,7 @@ Macro.AssignTitle= Määra makro
 Macro.AssignPrompt=Vajuta soovitud klahvikombinatsiooni
 Macro.AssignCancel=Vajuta Esc tühistamiseks
 Macro.AssignEmpty=Midagi ei salvestatud: vajutatud klahvi makro eemaldatakse.
+Macro.AssignFreeKeys=Vabad klahvid
 
 Menu.Language=Keel
 Menu.HelpLanguage=Abikeel

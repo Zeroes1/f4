@@ -347,6 +347,7 @@ Macro.AssignTitle= Přiřadit makro
 Macro.AssignPrompt=Stiskněte požadovanou klávesovou kombinaci
 Macro.AssignCancel=Stiskněte Esc pro zrušení
 Macro.AssignEmpty=Nic nebylo nahráno: makro stisknuté klávesy bude odstraněno.
+Macro.AssignFreeKeys=Volné klávesy
 
 Menu.Language=Jazyk
 Menu.HelpLanguage=Jazyk nápovědy

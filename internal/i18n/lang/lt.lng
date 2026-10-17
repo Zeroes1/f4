@@ -344,6 +344,7 @@ Macro.AssignTitle= Priskirti makrosą
 Macro.AssignPrompt=Paspauskite norimą klavišų kombinaciją
 Macro.AssignCancel=Paspauskite Esc, kad atšauktumėte
 Macro.AssignEmpty=Nieko neįrašyta: paspausto klavišo makrokomanda bus pašalinta.
+Macro.AssignFreeKeys=Laisvi klavišai
 
 Menu.Language=Kalba
 Menu.HelpLanguage=Pagalbos kalba

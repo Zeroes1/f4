@@ -344,6 +344,7 @@ Macro.AssignTitle= Makro Ata
 Macro.AssignPrompt=İstediğiniz tuş kombinasyonuna basın
 Macro.AssignCancel=İptal etmek için Esc'ye basın
 Macro.AssignEmpty=Hiçbir şey kaydedilmedi: basılan tuşun makrosu kaldırılacak.
+Macro.AssignFreeKeys=Boş tuşlar
 
 Menu.Language=Dil
 Menu.HelpLanguage=Yardım Dili

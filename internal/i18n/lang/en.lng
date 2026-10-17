@@ -1099,6 +1099,7 @@ Macro.AssignCancel=Press Esc to cancel
 Macro.AssignDescription=Macro &description
 Macro.AssignNoKey=Press a key in the key field first.
 Macro.AssignEmpty=Nothing was recorded: the macro of the key you press will be removed.
+Macro.AssignFreeKeys=Free keys
 Macro.Reloaded=Reloaded %d Lua macro(s)
 Macro.ReloadFailed=Some Lua macro files could not be loaded
 

@@ -1099,6 +1099,7 @@ Macro.AssignCancel=Нажмите Esc для отмены
 Macro.AssignDescription=&Описание макроса
 Macro.AssignNoKey=Сначала нажмите клавишу в поле клавиши.
 Macro.AssignEmpty=Ничего не записано: макрос нажатой клавиши будет удалён.
+Macro.AssignFreeKeys=Свободные клавиши
 Macro.Reloaded=Перезагружено Lua-макросов: %d
 Macro.ReloadFailed=Не все файлы Lua-макросов удалось загрузить
 

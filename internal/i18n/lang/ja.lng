@@ -344,6 +344,7 @@ Macro.AssignTitle= マクロの割り当て
 Macro.AssignPrompt=割り当てたいキーコンビネーションを押してください
 Macro.AssignCancel=キャンセルするには Esc キーを押してください
 Macro.AssignEmpty=何も記録されていません: 押したキーのマクロは削除されます。
+Macro.AssignFreeKeys=空いているキー
 
 Menu.Language=言語
 Menu.HelpLanguage=ヘルプの言語

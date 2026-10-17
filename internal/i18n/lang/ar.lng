@@ -336,6 +336,7 @@ Macro.AssignTitle= تعيين ماكرو
 Macro.AssignPrompt=اضغط على تركيبة المفاتيح المطلوبة
 Macro.AssignCancel=اضغط على Esc للإلغاء
 Macro.AssignEmpty=لم يُسجَّل شيء: سيُزال الماكرو الخاص بالمفتاح الذي تضغطه.
+Macro.AssignFreeKeys=مفاتيح متاحة
 
 Menu.Language=اللغة
 Menu.HelpLanguage=لغة المساعدة

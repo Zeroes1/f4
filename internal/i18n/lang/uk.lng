@@ -347,6 +347,7 @@ Macro.AssignTitle= Призначити макрос
 Macro.AssignPrompt=Натисніть бажану комбінацію клавіш
 Macro.AssignCancel=Натисніть Esc для скасування
 Macro.AssignEmpty=Нічого не записано: макрос натиснутої клавіші буде видалено.
+Macro.AssignFreeKeys=Вільні клавіші
 
 Menu.Language=Мова (Language)
 Menu.HelpLanguage=Мова довідки (Help Language)

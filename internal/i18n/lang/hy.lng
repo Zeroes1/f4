@@ -333,6 +333,7 @@ Macro.AssignTitle= Մակրոսի նշանակում
 Macro.AssignPrompt=Սեղմեք ստեղների ցանկալի համակցությունը
 Macro.AssignCancel=Չեղարկելու համար սեղմեք Esc
 Macro.AssignEmpty=Ոչինչ չի ձայնագրվել. սեղմված ստեղնի մակրոն կհեռացվի։
+Macro.AssignFreeKeys=Ազատ ստեղներ
 
 Menu.Language=Լեզու (Language)
 Menu.HelpLanguage=Օգնության լեզու (Help Language)

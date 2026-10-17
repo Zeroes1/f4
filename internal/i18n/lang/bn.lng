@@ -344,6 +344,7 @@ Macro.AssignTitle= ম্যাক্রো বরাদ্দ
 Macro.AssignPrompt=কাঙ্ক্ষিত কি-বোর্ড শর্টকাট চাপুন
 Macro.AssignCancel=বাতিল করতে Esc চাপুন
 Macro.AssignEmpty=কিছুই রেকর্ড হয়নি: যে কী চাপবেন তার ম্যাক্রো মুছে যাবে।
+Macro.AssignFreeKeys=খালি কী
 
 Menu.Language=ভাষা
 Menu.HelpLanguage=সহায়তা ভাষা

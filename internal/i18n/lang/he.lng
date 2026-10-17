@@ -344,6 +344,7 @@ Macro.AssignTitle= שיוך מאקרו
 Macro.AssignPrompt=לחץ על שילוב המקשים הרצוי
 Macro.AssignCancel=לחץ על Esc לביטול
 Macro.AssignEmpty=לא הוקלט דבר: המאקרו של המקש שתלחץ יוסר.
+Macro.AssignFreeKeys=מקשים פנויים
 
 Menu.Language=שפה
 Menu.HelpLanguage=שפת עזרה

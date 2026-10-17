@@ -347,6 +347,7 @@ Macro.AssignTitle= Asignar Macro
 Macro.AssignPrompt=Presione la combinación de teclas deseada
 Macro.AssignCancel=Presione Esc para cancelar
 Macro.AssignEmpty=No se grabó nada: se eliminará la macro de la tecla que pulse.
+Macro.AssignFreeKeys=Teclas libres
 
 Menu.Language=Idioma
 Menu.HelpLanguage=Idioma de ayuda

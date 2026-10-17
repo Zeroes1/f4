@@ -344,6 +344,7 @@ Macro.AssignTitle= Määritä makro
 Macro.AssignPrompt=Paina haluamaasi näppäinyhdistelmää
 Macro.AssignCancel=Paina Esc peruuttaaksesi
 Macro.AssignEmpty=Mitään ei tallennettu: painetun näppäimen makro poistetaan.
+Macro.AssignFreeKeys=Vapaat näppäimet
 
 Menu.Language=Kieli (Language)
 Menu.HelpLanguage=Sivuston kieli (Help Language)

@@ -336,6 +336,7 @@ Macro.AssignTitle= Makró hozzárendelése
 Macro.AssignPrompt=Nyomja meg a kívánt billentyűkombinációt
 Macro.AssignCancel=Nyomja meg az Esc-t a megszakításhoz
 Macro.AssignEmpty=Nem történt rögzítés: a lenyomott billentyű makrója törlődik.
+Macro.AssignFreeKeys=Szabad billentyűk
 
 Menu.Language=Nyelv
 Menu.HelpLanguage=Súgó nyelve
