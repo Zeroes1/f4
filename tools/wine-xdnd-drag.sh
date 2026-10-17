@@ -6,8 +6,13 @@
 # tools/xdndtarget, a bare XDND drop target on the same display. The target's
 # exit code is the verdict (0: the exact path arrived as text/uri-list).
 #
-# The panel geometry is not known in advance, so the probe tries one row after
-# another below the window's top edge and stops at the first drop that lands.
+# Wine's f4 starts in "/" whatever its working directory or first argument is
+# (run 38986161054), so the probe types `cd <folder>` into f4's command line.
+# The window is a 100x30 cell screen, so a row is a thirtieth of the window height; the list starts on
+# row 3 (screen dump of unxed/f4#566 run 38984108992), the cd lands in the right
+# panel (the click that focuses it is at its middle), where ".." is row 3 and the
+# file row 4. The probe tries row 4, then its neighbours, and stops at the first
+# drop that lands.
 #
 # usage: wine-xdnd-drag.sh <build dir with f4.exe and xdndtarget> <log dir>
 # env:   WINE  the wine loader
@@ -22,7 +27,7 @@ printf 'xdnd\n' > "$build/dragdir/dragme.txt"
 want="$build/dragdir/dragme.txt"
 
 cd "$build/dragdir" || exit 2
-"$WINE" "$build/f4.exe" --debug --dump-screen-after 10 --gui=win32 > "$logs/f4.out" 2>&1 &
+"$WINE" "$build/f4.exe" --debug --dump-screen-after 19 --gui=win32 > "$logs/f4.out" 2>&1 &
 f4pid=$!
 trap 'kill "$f4pid" 2>/dev/null || true' EXIT
 sleep 12
@@ -42,12 +47,18 @@ if [ "$best" -eq 0 ]; then
 fi
 echo "f4 window $wid at ${wx},${wy} size ${ww}x${wh}" | tee "$logs/window.txt"
 
-# The text dump of the screen f4 wrote after 10 s: the row/column layout the
-# probe's guesses below have to hit.
+# Go into the folder through the command line (the screen dump at 19 s shows
+# whether it worked: the row/column layout the guesses below have to hit),
+# then give f4 time to redraw.
+cw=$((ww / 100))
+ch=$((wh / 30))
+xdotool mousemove $((wx + 75 * cw)) $((wy + 12 * ch)) click 1
+xdotool type --delay 40 "cd $build/dragdir"
+xdotool key Return
+sleep 9
 find "$build" -maxdepth 2 -name vtui.screen.log -exec cp -t "$logs" {} + 2>/dev/null || true
 
-rows=25
-for k in 2 3 4 5 6 7 8; do
+for k in 4 3 5; do
   "$build/xdndtarget" -x 1000 -y 700 -w 250 -h 250 -timeout 8s \
     -want-path "$want" -out "$logs/uri-$k.txt" > "$logs/target-$k.out" 2>&1 &
   tpid=$!
@@ -55,8 +66,8 @@ for k in 2 3 4 5 6 7 8; do
     grep -q '^READY' "$logs/target-$k.out" 2>/dev/null && break
     sleep 0.1
   done
-  sx=$((wx + ww / 4))
-  sy=$((wy + (2 * k + 1) * wh / (2 * rows)))
+  sx=$((wx + 56 * cw))
+  sy=$((wy + k * ch + ch / 2))
   xdotool mousemove "$sx" "$sy" click 1 sleep 0.3 mousedown 1 sleep 0.3
   for step in 1 2 3 4 5 6 7 8 9 10; do
     xdotool mousemove $((sx + (1100 - sx) * step / 10)) $((sy + (800 - sy) * step / 10)) sleep 0.1
