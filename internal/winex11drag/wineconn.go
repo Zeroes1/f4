@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -147,10 +148,50 @@ func (e eofReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Read is the socket read of an X connection: a (0, nil) from read(2) there
-// means the server closed the connection, which xgb must see as io.EOF
-// instead of spinning on an empty read.
-func (c wineConn) Read(p []byte) (int, error) { return eofReader{c.File}.Read(p) }
+// wineReadSlice is how long one poll(2) of the X socket may block. A raw
+// libwinescape syscall bypasses the Go runtime's entersyscall/exitsyscall, so a
+// thread parked in read(2) keeps its P: the first stop-the-world (a GC cycle
+// started by the allocations of the gesture) then waits for that P until the X
+// server happens to send something, and the whole process -- the main loop and
+// the heartbeat included -- stands still (issue #566: the Wine freeze snapshot
+// shows one thread in unix_stream_read_generic and every other thread idle). The
+// wait is therefore sliced, and between slices the thread is back in Go code,
+// where the scheduler can stop it.
+const wineReadSlice = 10 * time.Millisecond
+
+// waitReadable returns once fd has data, a hang-up or an error to report,
+// sleeping in poll(2) at most wineReadSlice at a time and yielding between
+// slices. A host where poll is unavailable (winescape.ErrUnavailable) returns
+// nil at once: the caller then does the plain blocking read it always did.
+func waitReadable(fd int, poll func([]winescape.PollFd, time.Duration) (int, error)) error {
+	fds := []winescape.PollFd{{Fd: int32(fd), Events: winescape.POLLIN}} //nolint:gosec // a host file descriptor is far below 2^31
+	for {
+		n, err := poll(fds, wineReadSlice)
+		if errors.Is(err, winescape.ErrUnavailable) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return nil
+		}
+		runtime.Gosched()
+	}
+}
+
+// Read is the socket read of an X connection: it waits for data in short poll
+// slices (see wineReadSlice), then reads. A (0, nil) from read(2) there means
+// the server closed the connection, which xgb must see as io.EOF instead of
+// spinning on an empty read.
+func (c wineConn) Read(p []byte) (int, error) {
+	if len(p) > 0 {
+		if err := waitReadable(c.Fd(), winescape.Poll); err != nil {
+			return 0, err
+		}
+	}
+	return eofReader{c.File}.Read(p)
+}
 
 func (wineConn) LocalAddr() net.Addr              { return wineConnAddr{} }
 func (wineConn) RemoteAddr() net.Addr             { return wineConnAddr{} }
