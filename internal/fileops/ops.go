@@ -811,15 +811,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 	}
 
 	if mode == 0 { // Queue
-		rk1 := GetResourceKey(srcVfs)
-		rk2 := GetResourceKey(dstVfs)
-		var keys []string
-		if rk1 != "" {
-			keys = append(keys, rk1)
-		}
-		if rk2 != "" && rk2 != rk1 {
-			keys = append(keys, rk2)
-		}
+		keys := ResourceKeysFor(srcVfs, dstVfs)
 		task := &QueueTask{
 			Type:          actionDesc,
 			Desc:          desc,
@@ -1092,11 +1084,7 @@ func ExecuteDeleteOpWithDispositionAt(activeVfs vfs.VFS, basePath string, names 
 	}
 
 	if mode == 0 { // Queue
-		rk := GetResourceKey(activeVfs)
-		var keys []string
-		if rk != "" {
-			keys = append(keys, rk)
-		}
+		keys := ResourceKeysFor(activeVfs)
 		taskType := "Delete"
 		if toTrash {
 			taskType = "Trash"

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -368,22 +366,6 @@ func (qm *OpQueueManager) RequestRefresh() {
 		qm.mu.Unlock()
 		qm.RefreshUI()
 	})
-}
-
-func GetResourceKey(v vfs.VFS) string {
-	if v == nil {
-		return ""
-	}
-	if _, ok := v.(*vfs.OSVFS); ok {
-		if runtime.GOOS == "windows" {
-			return filepath.VolumeName(v.GetPath())
-		}
-		return "local_disk"
-	}
-	if parent := v.ParentVFS(); parent != nil {
-		return GetResourceKey(parent)
-	}
-	return fmt.Sprintf("%p", v)
 }
 
 func (qm *OpQueueManager) Enqueue(task *QueueTask) {
