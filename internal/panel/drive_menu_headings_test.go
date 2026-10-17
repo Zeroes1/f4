@@ -60,14 +60,20 @@ func TestDriveMenuCaptionsLiveInTheSeparators(t *testing.T) {
 		"Physical Disks (/dev)": true, // a tool since f4#1148
 		"Physical Disks":        true,
 	}
+	// A row may carry the drive columns after its name ("Windows Registry │ │"),
+	// so the name is what stands before the first column rule.
+	rowName := func(text string) string {
+		name, _, _ := strings.Cut(strings.ReplaceAll(text, "&", ""), "│")
+		return strings.TrimSpace(name)
+	}
 	first := tools + 1
-	for first < len(menu.Items) && builtin[strings.TrimSpace(strings.ReplaceAll(menu.Items[first].Text, "&", ""))] {
+	for first < len(menu.Items) && builtin[rowName(menu.Items[first].Text)] {
 		first++
 	}
 	if first == tools+1 {
 		t.Fatalf("the built-in tools are not first under the Tools rule: %q", menu.Items[tools+1].Text)
 	}
-	if next := strings.TrimSpace(strings.ReplaceAll(menu.Items[first].Text, "&", "")); next != "Alpha" {
+	if next := rowName(menu.Items[first].Text); next != "Alpha" {
 		t.Fatalf("the row after the built-in tools is %q, want the first plugin tool", next)
 	}
 	for _, item := range menu.Items {
