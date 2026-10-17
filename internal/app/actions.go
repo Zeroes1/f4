@@ -5876,6 +5876,28 @@ func actionFileAttributes(pf *panel.PanelsFrame) {
 	})
 }
 
+// actionFileSystemProperties opens the system properties of the item under
+// the cursor, the window the attributes dialog's button opens, straight from
+// the panel (f4#2041). On ".." it is the folder the panel shows.
+func actionFileSystemProperties(pf *panel.PanelsFrame) {
+	fsp := pf.GetActivePanel()
+	if fsp == nil || fsp.Vfs == nil || !fileops.IsLocalOSVFS(fsp.Vfs) {
+		return
+	}
+	path := fsp.Vfs.GetPath()
+	if name := fsp.GetRawSelectedName(); name != "" && name != ".." {
+		path = fsp.Vfs.Join(path, name)
+	}
+	abs, err := fsp.Vfs.Abs(path)
+	if err != nil {
+		vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
+		return
+	}
+	if err := dialog.DefaultNativePropertiesOpener(abs); err != nil {
+		vtui.ShowMessage(" Error ", err.Error(), []string{"&Ok"})
+	}
+}
+
 func actionEditSymlink(pf *panel.PanelsFrame) {
 	fsp := pf.GetActivePanel()
 	if fsp == nil || fsp.Vfs == nil {

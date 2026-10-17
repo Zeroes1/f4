@@ -1019,6 +1019,19 @@ func init() {
 		Handler:             withPF(func(pf *panel.PanelsFrame) { actionFileAttributes(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "File.SystemProperties",
+		Area:        "Shell",
+		Label:       "System properties",
+		LabelKey:    "Action.File.SystemProperties",
+		Description: "Open the system properties of the item under the cursor",
+		DescKey:     "Action.File.SystemProperties.Desc",
+		DefaultKeys: []string{"Apps"},
+		MenuPath:    "Files",
+		Visible:     func() bool { return runtime.GOOS == "windows" },
+		Enabled:     activePanelHasSelectionTarget,
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionFileSystemProperties(pf) }),
+	})
+	registerAction(action.Action{
 		Name:        "File.Share",
 		Area:        "Shell",
 		Label:       "Share...",

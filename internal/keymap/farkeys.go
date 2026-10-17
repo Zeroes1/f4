@@ -141,6 +141,7 @@ var farKeyNames = map[uint16]string{
 	vtinput.VK_NUMPAD5:  "Num5",
 	vtinput.VK_DECIMAL:  "Decimal",
 	vtinput.VK_DIVIDE:   "Divide",
+	vtinput.VK_APPS:     "Apps",
 }
 
 func EventToFarString(e *vtinput.InputEvent) string {
