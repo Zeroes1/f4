@@ -309,7 +309,12 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 	d.method = newAddArchiveCombo(x+labelW, y+5, comboW, nil)
 	d.methodNote = vtui.NewText(x+labelW+comboW+2, y+5, vtui.Msg("Archive.Add.MethodRare"), vtui.Palette[vtui.ColDialogText])
 	d.methodNote.X2 = x + inner - 1
-	d.method.Menu.OnAction = func(int) { d.showMethodNote() }
+	// The combo's own action shows the chosen item in its field; replacing
+	// it without doing the same left the field on the first method (f4#2002).
+	d.method.Menu.OnAction = func(idx int) {
+		setAddArchiveCombo(d.method, idx)
+		d.showMethodNote()
+	}
 	d.solid = vtui.NewCheckbox(x+labelW, y+6, vtui.Msg("Archive.Add.Solid"), true)
 	for _, row := range []struct {
 		key   string
@@ -344,6 +349,9 @@ func newAddArchiveDialog(initialName string, done func(addArchiveSettings), sour
 	if loadKeepArchiveFileExtension() {
 		d.keepExtension.State = 1
 	}
+	// The flag decides the name of an archive made of one file; for a folder
+	// or several files it does nothing, so it is not offered (f4#2002).
+	d.keepExtension.SetDisabled(!d.sourceIsFile)
 	d.dlg.AddItem(d.deleteAfter)
 	d.dlg.AddItem(d.skipErrors)
 	d.dlg.AddItem(d.keepExtension)
@@ -467,6 +475,9 @@ func setAddArchiveCombo(c *vtui.ComboBox, idx int) {
 
 // showMethodNote shows the note next to the method: what the engine uses
 // when the format offers no choice, or that few tools read the method chosen.
+// With nothing to say the text is emptied rather than the label hidden: the
+// window shows every item again on each redraw, so a hidden label came back
+// with its old text (f4#2002).
 func (d *addArchiveDialog) showMethodNote() {
 	if d.methodNote == nil {
 		return
@@ -479,10 +490,8 @@ func (d *addArchiveDialog) showMethodNote() {
 	case pos >= 0 && pos < len(f.Methods) && f.Methods[pos].Rare:
 		d.methodNote.SetText(vtui.Msg("Archive.Add.MethodRare"))
 	default:
-		d.methodNote.SetVisible(false)
-		return
+		d.methodNote.SetText("")
 	}
-	d.methodNote.SetVisible(true)
 }
 
 // selectFormat shows format as chosen and offers only the controls it uses.
