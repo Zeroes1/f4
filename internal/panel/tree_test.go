@@ -866,3 +866,61 @@ func TestTreeKeyDoesNotPullACursorNobodyScrolledOff_Issue1602(t *testing.T) {
 		t.Errorf("Up without scrolling: cursor %d, want %d", tp.Table.SelectPos, before-1)
 	}
 }
+
+// TestTreeScrollBarDragEndsOnRelease_Issue1602 (mitek1977-coder): after the
+// scroll bar of the tree was dragged, every click on the tree scrolled it by
+// the distance from the middle of the panel. The release of the button came
+// to PanelsFrame with no button held, was not routed to the tree, and the bar
+// stayed captured; the gesture is now captured as on a file panel.
+func TestTreeScrollBarDragEndsOnRelease_Issue1602(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	theme.SetDefaultF4Palette()
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShowPanels, pf.ShowLeftPanel, pf.ShowRightPanel = true, true, true
+
+	tp := tallTreeSetup(t)
+	x1, y1, x2, y2 := pf.Panels[0].GetPosition()
+	tp.SetPosition(x1, y1, x2, y2)
+	tp.Table.TopPos = 0
+	pf.AltPanels[0] = tp
+	pf.ActiveIdx = 0
+
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	tp.Show(scr) // the bar takes its place and range when the table is drawn
+	bar := tp.Table.ScrollBar
+	if bar == nil || !tp.Table.ShowScrollBar {
+		t.Fatal("the tree has no scroll bar")
+	}
+	mouse := func(x, y int, button uint32, down bool, flags uint32) {
+		t.Helper()
+		pf.ProcessMouse(&vtinput.InputEvent{Type: vtinput.MouseEventType, KeyDown: down, ButtonState: button,
+			MouseEventFlags: flags, MouseX: testutil.Int16(x), MouseY: testutil.Int16(y)})
+	}
+	barY := bar.Y1 + 2
+	mouse(bar.X1, barY, vtinput.FromLeft1stButtonPressed, true, 0)
+	if !bar.IsMouseCaptured() {
+		t.Fatal("a press on the scroll bar did not start a gesture on it")
+	}
+	mouse(bar.X1, barY+3, vtinput.FromLeft1stButtonPressed, true, vtinput.MouseMoved)
+	mouse(bar.X1, barY+3, 0, false, 0)
+	if bar.IsMouseCaptured() {
+		t.Fatal("the scroll bar is still captured after the button was released")
+	}
+	if pf.PanelMouseCapture != nil {
+		t.Fatalf("the gesture is still captured by %T after the release", pf.PanelMouseCapture)
+	}
+
+	top := tp.Table.TopPos
+	rowY := tp.Table.Y1 + 1
+	mouse(tp.Table.X1+8, rowY, vtinput.FromLeft1stButtonPressed, true, 0)
+	mouse(tp.Table.X1+8, rowY, 0, false, 0)
+	if tp.Table.TopPos != top {
+		t.Errorf("a click on a row after the drag scrolled the tree from %d to %d", top, tp.Table.TopPos)
+	}
+	if want := tp.Table.GetClickIndex(rowY); tp.Table.SelectPos != want {
+		t.Errorf("the click put the cursor on row %d, want the clicked row %d", tp.Table.SelectPos, want)
+	}
+}
