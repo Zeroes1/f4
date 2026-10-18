@@ -2486,6 +2486,7 @@ NetFox.LabelPort=P&ort:
 NetFox.LabelUser=&User:
 NetFox.LabelPassword=Pass&word:
 NetFox.LabelKeyPath=SSH &Key file:
+NetFox.LabelPath=Start &folder:
 NetFox.LabelTimeout=Time&out:
 NetFox.LabelCodepage=Cod&epage:
 NetFox.ErrorEmptyName=Name cannot be empty
@@ -2507,6 +2508,7 @@ NetFox.ProxyModeSystem=System settings
 NetFox.ProxyModeDirect=No proxy
 NetFox.ProxyModeHTTP=HTTP proxy
 NetFox.ProxyModeSOCKS5=SOCKS5 proxy
+NetFox.StartFolderMissing=The start folder %s is not on the server; the connection opened in %s.
 
 Queue.Title=Operations Queue
 Queue.BtnCancel=C&ancel Task

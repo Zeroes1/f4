@@ -2486,6 +2486,7 @@ NetFox.LabelPort=&Порт:
 NetFox.LabelUser=&Пользователь:
 NetFox.LabelPassword=П&ароль:
 NetFox.LabelKeyPath=Файл SSH-&ключа:
+NetFox.LabelPath=&Начальная папка:
 NetFox.LabelTimeout=Т&аймаут:
 NetFox.LabelCodepage=&Кодировка:
 NetFox.ErrorEmptyName=Имя не может быть пустым
@@ -2507,6 +2508,7 @@ NetFox.ProxyModeSystem=Системные настройки
 NetFox.ProxyModeDirect=Без прокси
 NetFox.ProxyModeHTTP=HTTP-прокси
 NetFox.ProxyModeSOCKS5=SOCKS5-прокси
+NetFox.StartFolderMissing=Начальной папки %s на сервере нет, соединение открылось в %s.
 
 Queue.Title=Очередь операций
 Queue.BtnCancel=&Отменить задачу

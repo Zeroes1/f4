@@ -780,10 +780,12 @@ NetFox.LabelPort=&Порт:
 NetFox.LabelUser=&Користувач:
 NetFox.LabelPassword=&Пароль:
 NetFox.LabelKeyPath=Файл SSH-&ключа:
+NetFox.LabelPath=П&очаткова тека:
 NetFox.LabelTimeout=&Таймаут:
 NetFox.LabelCodepage=&Кодування:
 NetFox.ErrorEmptyName=Ім'я не може бути порожнім
 NetFox.ErrorReservedName=Зарезервоване ім'я підключення
+NetFox.StartFolderMissing=Початкової теки %s на сервері немає, з'єднання відкрилося в %s.
 
 Queue.BtnCancel=&Скасувати завдання
 Queue.BtnClear=Очистити &виконані
