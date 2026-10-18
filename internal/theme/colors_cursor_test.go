@@ -107,3 +107,23 @@ Terminal.Cursor = foreground:#00ffff
 		t.Errorf("the frame does not carry %q, got %q", want, out.String())
 	}
 }
+
+func TestCursorColor_TheSettingWinsOverTheTheme(t *testing.T) {
+	cursorColorTestPalette(t)
+	saved := config.App
+	t.Cleanup(func() { config.App = saved })
+
+	config.App.TerminalCursorColor = "#12AB34"
+	InitColors(ini.Parse(strings.NewReader(`[farcolors]
+Terminal.Cursor = foreground:#ff00ff
+`)))
+	if vtui.CursorColor != 0x12AB34 {
+		t.Errorf("cursor color handed to vtui is #%06X, want the setting's #12AB34", vtui.CursorColor)
+	}
+
+	config.App.TerminalCursorColor = ""
+	FinishColors()
+	if vtui.CursorColor != 0xFF00FF {
+		t.Errorf("with the setting empty the cursor is #%06X, want the theme's #FF00FF", vtui.CursorColor)
+	}
+}

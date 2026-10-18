@@ -32,3 +32,27 @@ func TestAnsiColorFieldsAreInTheTerminalCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalColorSettingsAreValidatedAndMayBeEmpty(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if err := setCoreSetting(&cfg, "TerminalSelectionColor", "#a0b0c0"); err != nil || cfg.TerminalSelectionColor != "#A0B0C0" {
+		t.Fatalf("a good color: %q, %v; want #A0B0C0", cfg.TerminalSelectionColor, err)
+	}
+	if err := setCoreSetting(&cfg, "TerminalSelectionColor", "blue"); err == nil || cfg.TerminalSelectionColor != "#A0B0C0" {
+		t.Fatalf("a bad color: %q, %v; want an error and the old value", cfg.TerminalSelectionColor, err)
+	}
+	if err := setCoreSetting(&cfg, "TerminalSelectionColor", " "); err != nil || cfg.TerminalSelectionColor != "" {
+		t.Fatalf("an empty field: %q, %v; want it empty", cfg.TerminalSelectionColor, err)
+	}
+	found := map[string]bool{}
+	for _, f := range (coreSettingsProvider{}).Catalog().Fields {
+		if config.TerminalColorKey(f.ID) {
+			found[f.ID] = f.Category == "terminal" && f.Timing == "live"
+		}
+	}
+	for _, key := range config.TerminalColorKeys {
+		if !found[key] {
+			t.Errorf("%s is not a live Terminal & environment setting", key)
+		}
+	}
+}

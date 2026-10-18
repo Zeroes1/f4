@@ -4229,6 +4229,16 @@ SettingsCenter.AnsiColorBrightCyan.Description=Terminal color 14 (bright cyan), 
 SettingsCenter.AnsiColorBrightCyan.Label=ANSI bright cyan
 SettingsCenter.AnsiColorBrightWhite.Description=Terminal color 15 (bright white), written as #RRGGBB. The embedded terminal draws it and f4 loads it into the host terminal, so programs that print the 16 basic colors show it. Leave the field empty for the default, #FFFFFF.
 SettingsCenter.AnsiColorBrightWhite.Label=ANSI bright white
+SettingsCenter.TerminalForeground.Description=Text color of the embedded terminal, written as #RRGGBB: what programs print in when they do not choose a color. Leave the field empty for the theme's color.
+SettingsCenter.TerminalForeground.Label=Terminal text
+SettingsCenter.TerminalBackground.Description=Background color of the embedded terminal, written as #RRGGBB: the empty area and what programs print on when they do not choose a color. Leave the field empty for the theme's color.
+SettingsCenter.TerminalBackground.Label=Terminal background
+SettingsCenter.TerminalCursorColor.Description=Color of the text cursor, written as #RRGGBB, in the embedded terminal, the command line and the editor. Leave the field empty for the theme's color.
+SettingsCenter.TerminalCursorColor.Label=Cursor color
+SettingsCenter.TerminalSelectionText.Description=Text color of what is selected with the mouse in the embedded terminal, written as #RRGGBB. When both selection fields are empty, the selection swaps the text and background colors.
+SettingsCenter.TerminalSelectionText.Label=Selection text
+SettingsCenter.TerminalSelectionColor.Description=Background color of what is selected with the mouse in the embedded terminal, written as #RRGGBB. When both selection fields are empty, the selection swaps the text and background colors.
+SettingsCenter.TerminalSelectionColor.Label=Selection background
 SettingsCenter.Text.33eda3510e877f36f141cc98c94203e4a3cde63f294d2215bf6d463a4f2be7ae=enter a color as #RRGGBB, or leave the field empty for the default
 
 Group.Menu=Group by…

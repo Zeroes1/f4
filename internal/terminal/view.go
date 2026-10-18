@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/internal/toast"
 	"strings"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/piecetable"
 	"github.com/unxed/f4/internal/terminal/far2ldnd"
 	"github.com/unxed/f4/internal/textlayout"
@@ -1094,9 +1095,12 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 		tv.kittyRecomputeSpans()
 	}
 
+	userColors := config.App.TerminalColors()
 	fillAttr := DefaultTermAttr
 	if tv.DefaultColors {
 		fillAttr = hostDefaultColors(fillAttr)
+	} else {
+		fillAttr = userDefaultColors(fillAttr, userColors)
 	}
 	scr.FillRect(tv.X1, tv.Y1, tv.X1+tv.Width-1, tv.Y1+tv.Height-1, ' ', fillAttr)
 
@@ -1168,9 +1172,11 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 					drawLine[i].Char = ' ' // the picture is drawn over the cell
 				}
 			}
-			if tv.DefaultColors {
-				for i := range drawLine {
+			for i := range drawLine {
+				if tv.DefaultColors {
 					drawLine[i].Attributes = hostDefaultColors(drawLine[i].Attributes)
+				} else {
+					drawLine[i].Attributes = userDefaultColors(drawLine[i].Attributes, userColors)
 				}
 			}
 			viewer.ApplyURLHoverAttr(drawLine, viewer.UrlCellRangesFromCells(line), tv.hoverURL)
@@ -1181,7 +1187,7 @@ func (tv *TerminalView) Show(scr *vtui.ScreenBuf) {
 	tv.kittyDrawPlacements(scr, offset)
 
 	if tv.SelActive {
-		tv.paintSelectionHighlight(scr)
+		tv.paintSelectionHighlight(scr, userColors)
 	}
 
 	if tv.IsVisible() && tv.IsFocused() && tv.CursorVisible {
@@ -1244,11 +1250,11 @@ func (tv *TerminalView) selectionScreenRect() (x1, y1, x2, y2 int, ok bool) {
 	return x1, y1, x2, y2, true
 }
 
-// paintSelectionHighlight inverts fg↔bg for every cell inside the
-// selection area. Stream selections span from the start column on the
+// paintSelectionHighlight draws every cell inside the selection area in the
+// selection colours (see selectedAttr). Stream selections span from the start column on the
 // first row to the end column on the last row, filling middle rows
 // edge-to-edge; block selections are strict rectangles.
-func (tv *TerminalView) paintSelectionHighlight(scr *vtui.ScreenBuf) {
+func (tv *TerminalView) paintSelectionHighlight(scr *vtui.ScreenBuf, colors config.TerminalColors) {
 	x1, y1, x2, y2, ok := tv.selectionScreenRect()
 	if !ok {
 		return
@@ -1287,7 +1293,7 @@ func (tv *TerminalView) paintSelectionHighlight(scr *vtui.ScreenBuf) {
 		}
 		for x := l; x <= r; x++ {
 			ci := scr.GetCell(x, y)
-			ci.Attributes = InvertAttrColors(ci.Attributes)
+			ci.Attributes = selectedAttr(ci.Attributes, colors)
 			scr.Write(x, y, []vtui.CharInfo{ci})
 		}
 	}

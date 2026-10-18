@@ -191,7 +191,7 @@ func configFieldVariants(base config.F4Config, field f4settings.Field) []config.
 		}
 	default:
 		values = []string{current + "x", ""}
-		if config.AnsiColorIndex(field.ID) >= 0 {
+		if config.AnsiColorIndex(field.ID) >= 0 || config.TerminalColorKey(field.ID) {
 			// "x" is not a colour and an empty field is the default one.
 			values = []string{"#010203"}
 		}

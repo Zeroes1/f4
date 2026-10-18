@@ -74,6 +74,16 @@ func setCoreSetting(cfg *config.F4Config, id, value string) error {
 		}
 		return nil
 	}
+	if config.TerminalColorKey(id) {
+		// An empty field leaves the colour to the theme.
+		if strings.TrimSpace(value) != "" {
+			if _, ok := config.ParseAnsiColor(value); !ok {
+				return settingsError("enter a color as #RRGGBB, or leave the field empty for the default")
+			}
+		}
+		settingsConfigField(reflect.ValueOf(cfg).Elem(), id).SetString(config.NormalizeTerminalColor(value))
+		return nil
+	}
 	if index := config.AnsiColorIndex(id); index >= 0 {
 		// An empty field is the default colour.
 		if strings.TrimSpace(value) != "" {
