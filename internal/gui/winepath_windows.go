@@ -106,10 +106,17 @@ func freeProcessHeap(p uintptr) {
 
 // stringFromCString reads a NUL-terminated byte string. Wine returns unix
 // paths in UTF-8, which is what Go strings already hold.
+//
+// The address Wine returned becomes a pointer once, and each step from it
+// is unsafe.Add. Adding to the uintptr and converting the sum, as this used
+// to, is arithmetic on a pointer the runtime cannot see the origin of, and
+// checkptr (on under -race) stops the process when the sum lands in Go
+// memory, which is what the test hands in; vet flags the same form.
 func stringFromCString(p uintptr) string {
+	base := unsafe.Pointer(p)
 	var b []byte
-	for i := uintptr(0); i < 32*1024; i++ {
-		c := *(*byte)(unsafe.Pointer(p + i))
+	for i := 0; i < 32*1024; i++ {
+		c := *(*byte)(unsafe.Add(base, i))
 		if c == 0 {
 			break
 		}
@@ -118,11 +125,13 @@ func stringFromCString(p uintptr) string {
 	return string(b)
 }
 
-// stringFromWideCString reads a NUL-terminated UTF-16 string.
+// stringFromWideCString reads a NUL-terminated UTF-16 string, stepping
+// the way stringFromCString does.
 func stringFromWideCString(p uintptr) string {
+	base := unsafe.Pointer(p)
 	var u []uint16
-	for i := uintptr(0); i < 32*1024; i++ {
-		c := *(*uint16)(unsafe.Pointer(p + i*2))
+	for i := 0; i < 32*1024; i++ {
+		c := *(*uint16)(unsafe.Add(base, i*2))
 		if c == 0 {
 			break
 		}
