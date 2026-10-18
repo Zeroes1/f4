@@ -55,7 +55,7 @@ func osResourceKeys(path string) []string {
 		return []string{localDiskKey}
 	}
 	switch info.Class {
-	case sysinfo.DeviceHDD:
+	case sysinfo.DeviceHDD, sysinfo.DeviceUSB:
 		keys := make([]string, 0, len(info.Keys))
 		for _, k := range info.Keys {
 			keys = append(keys, "disk:"+k)

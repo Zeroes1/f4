@@ -87,10 +87,15 @@ func collectDisks(dir string, disks map[string]DeviceClass, depth int) {
 }
 
 // diskClass reads queue/rotational. Virtual devices (loop, zram, ram) say
-// "non-rotational" regardless of what backs them, so they stay unknown.
+// "non-rotational" regardless of what backs them, so they stay unknown. A disk
+// behind a USB bus is DeviceUSB whatever it claims: flash drives and card
+// readers report themselves as rotating.
 func diskClass(dir string) DeviceClass {
 	if strings.Contains(filepath.ToSlash(dir), "/devices/virtual/") {
 		return DeviceUnknown
+	}
+	if onUSBBus(dir) {
+		return DeviceUSB
 	}
 	b, err := os.ReadFile(filepath.Join(dir, "queue", "rotational"))
 	if err != nil {
@@ -103,4 +108,20 @@ func diskClass(dir string) DeviceClass {
 		return DeviceSSD
 	}
 	return DeviceUnknown
+}
+
+// onUSBBus reports whether the resolved sysfs path of a disk passes through
+// a USB root hub or port (".../usb2/2-1/2-1:1.0/host6/..."): a path component
+// "usb" followed by digits.
+func onUSBBus(dir string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
+		digits, ok := strings.CutPrefix(part, "usb")
+		if !ok || digits == "" {
+			continue
+		}
+		if strings.Trim(digits, "0123456789") == "" {
+			return true
+		}
+	}
+	return false
 }

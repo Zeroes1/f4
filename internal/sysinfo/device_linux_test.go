@@ -83,6 +83,41 @@ func TestBlockDeviceWholeDisks(t *testing.T) {
 	}
 }
 
+// A flash drive or card reader says "rotational" and used to be reported as an
+// HDD; the USB bus in its sysfs path makes it DeviceUSB, a SATA disk keeps the
+// class its queue file gives (f4#1894).
+func TestBlockDeviceOnUSBBusIsUSB(t *testing.T) {
+	f := newFakeSysfs(t)
+	f.disk("devices/pci0/0000:00:14.0/usb2/2-1/2-1:1.0/host6/target6:0:0/6:0:0:0/block/sdb", "8:16", "1")
+	f.disk("devices/pci0/0000:00:14.0/usb2/2-2/2-2:1.0/host7/target7:0:0/7:0:0:0/block/sdc", "8:32", "0")
+	f.disk("devices/pci0/ata1/host0/target0:0:0/0:0:0:0/block/sda", "8:0", "1")
+	for _, c := range []struct {
+		min   uint32
+		class DeviceClass
+		name  string
+	}{{16, DeviceUSB, "sdb"}, {32, DeviceUSB, "sdc"}, {0, DeviceHDD, "sda"}} {
+		got, ok := blockDevice(f.root, 8, c.min)
+		if !ok || got.Class != c.class || got.Name != c.name {
+			t.Errorf("8:%d = %+v ok=%v, want %v %q", c.min, got, ok, c.class, c.name)
+		}
+	}
+}
+
+func TestOnUSBBus(t *testing.T) {
+	for dir, want := range map[string]bool{
+		"/sys/devices/pci0/usb1/1-2/host3/block/sdb": true,
+		"/sys/devices/pci0/usb12/block/sdb":          true,
+		"/sys/devices/pci0/ata1/block/sda":           false,
+		"/sys/devices/pci0/usb/block/sda":            false,
+		"/sys/devices/pci0/usbhid2/block/sda":        false,
+		"":                                           false,
+	} {
+		if got := onUSBBus(dir); got != want {
+			t.Errorf("onUSBBus(%q) = %v, want %v", dir, got, want)
+		}
+	}
+}
+
 func TestBlockDevicePartitionsShareTheDiskKey(t *testing.T) {
 	f := newFakeSysfs(t)
 	d := f.disk("devices/pci0/ata1/sda", "8:0", "1")
@@ -144,10 +179,16 @@ func TestDeviceClassesAndNetworkFS(t *testing.T) {
 	if got := mergeClasses([]DeviceClass{DeviceSSD, DeviceUnknown}); got != DeviceUnknown {
 		t.Errorf("SSD+unknown = %v, want unknown", got)
 	}
+	if got := mergeClasses([]DeviceClass{DeviceSSD, DeviceUSB}); got != DeviceUSB {
+		t.Errorf("SSD+USB = %v, want USB", got)
+	}
+	if got := mergeClasses([]DeviceClass{DeviceUSB, DeviceHDD, DeviceSSD}); got != DeviceHDD {
+		t.Errorf("USB+HDD+SSD = %v, want HDD", got)
+	}
 	for _, c := range []struct {
 		c DeviceClass
 		s string
-	}{{DeviceHDD, "HDD"}, {DeviceSSD, "SSD"}, {DeviceNetwork, "network"}, {DeviceUnknown, "unknown"}} {
+	}{{DeviceHDD, "HDD"}, {DeviceSSD, "SSD"}, {DeviceNetwork, "network"}, {DeviceUSB, "USB"}, {DeviceUnknown, "unknown"}} {
 		if c.c.String() != c.s {
 			t.Errorf("%d.String() = %q, want %q", c.c, c.c.String(), c.s)
 		}
