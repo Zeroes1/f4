@@ -598,7 +598,7 @@ func (ev *EditorView) FindAll(pattern string, caseSensitive, useRegex, wholeWord
 		readFromFile := ev.chunkReader()
 
 		RunSearchWithProgress(pattern, func(ctx *vtui.TaskContext, dlg *vtui.Window) {
-			defer ev.guardMapping("collecting occurrences")()
+			defer ev.guardMappingFor("collecting occurrences", ctx)()
 
 			// One span per matching line, plus the total occurrence count,
 			// come out of the same pass, so that opening the menu stays

@@ -151,7 +151,11 @@ type EditorView struct {
 	Mapped *MappedFile
 	// mapFaulted records that reading through the mapping has already failed
 	// once, so the report goes out once rather than on every repaint.
-	mapFaulted  bool
+	mapFaulted bool
+	// textLost records that a save released the mapping and could not read
+	// the file back, so the unchanged text is gone from the buffer and a save
+	// would write blanks in its place (see noteTextLost).
+	textLost    bool
 	IndexCancel context.CancelFunc
 	// indexWG joins cancelled indexers before Close tears down their buffers.
 	indexWG sync.WaitGroup
@@ -3936,12 +3940,27 @@ type fileChunkReader func(ctx context.Context, dst []byte, offset, length int) (
 // file, so the scan would index one thing's bytes at another thing's offsets
 // and quietly hand back line starts that are in the middle of lines. Hence the
 // identity check — the original buffer has to *be* the mapping.
+//
+// A local file read through the chunk buffer instead (no mapping: the setting
+// is off, or the file could not be mapped) is read the same way, and for more
+// reason: the chunk buffer fetches 32 KB at a time on a goroutine each and
+// keeps all of it, which made indexing a 1 GB log nine times slower and
+// left the whole file on the heap. The same identity check applies, against the buffer.
 func (ev *EditorView) chunkReader() fileChunkReader {
 	decline := func(context.Context, []byte, int, int) (int, bool) { return 0, false }
 
-	Pt, File, Mapped := ev.Pt, ev.File, ev.Mapped
-	if Pt == nil || File == nil || Mapped == nil {
+	Pt, File, Mapped, Async := ev.Pt, ev.File, ev.Mapped, ev.AsyncBuf
+	if Pt == nil || File == nil {
 		return decline
+	}
+	if Mapped == nil {
+		if Async == nil || !fileops.IsLocalOSVFS(ev.Vfs) {
+			return decline
+		}
+		if orig, ok := Pt.GetOriginalBuffer().(*AsyncBuffer); !ok || orig != Async || Async.File != File {
+			return decline
+		}
+		return fileChunkReaderAt(Pt, File, Async.FileOffset())
 	}
 	mapping := Mapped.Bytes()
 	// What the mapping skipped. A file that opens with a UTF-8 byte-order
@@ -3956,7 +3975,12 @@ func (ev *EditorView) chunkReader() fileChunkReader {
 	if !ok || len(mapping) == 0 || len(orig) != len(mapping) || &orig[0] != &mapping[0] {
 		return decline
 	}
+	return fileChunkReaderAt(Pt, File, base)
+}
 
+// fileChunkReaderAt reads the stretches of Pt that are still its original
+// buffer out of File, whose contents that buffer is from base onward.
+func fileChunkReaderAt(Pt *piecetable.PieceTable, File vfs.ReadAtCloser, base int64) fileChunkReader {
 	return func(ctx context.Context, dst []byte, offset, length int) (int, bool) {
 		if dst == nil || length <= 0 || length > len(dst) {
 			return 0, false
@@ -4190,8 +4214,9 @@ func (ev *EditorView) StartIndexing() {
 		// read still reports having reached the end rather than looking as
 		// though it stopped short.
 		scannedTo.Store(int64(absPos))
-		// 256KB chunks to match AsyncBuffer, which is what the piece table
-		// reads through when the file cannot be read directly.
+		// How much one step reads through the piece table when the file
+		// cannot be read directly. The read-ahead below covers sixteen of
+		// them.
 		const fallbackChunk = 256 * 1024
 
 		// A file that can be read directly is read in much larger pieces —
@@ -4224,21 +4249,18 @@ func (ev *EditorView) StartIndexing() {
 			// so the offsets this produces describe the text as edited rather
 			// than the file as it sits on disk. That is what lets a scan
 			// interrupted by an edit resume instead of starting over.
-			if buf != nil {
-				// 16 chunks of 256KB = 4MB read-ahead sliding window.
-				readAhead := 16
-				for i := 0; i < readAhead; i++ {
-					p := absPos + i*fallbackChunk
-					if p < maxSize {
-						_, _ = buf.Read(p, fallbackChunk)
-					}
-				}
-			}
 			var data []byte
 			var err error
 			if n, ok := readFromFile(ctx, *scanBuf, absPos, min(indexReadChunk, maxSize-absPos)); ok {
 				data = (*scanBuf)[:n]
 			} else {
+				if buf != nil {
+					// A 4 MB window ahead of the scan. Prefetch only starts
+					// the fetches; Read would also assemble a copy of each
+					// window just for it to be dropped, sixteen times the
+					// bytes the scan itself reads.
+					buf.Prefetch(absPos, 16*fallbackChunk)
+				}
 				// Reading through the piece table copies what it hands back,
 				// so it asks for a chunk rather than a whole window.
 				take := min(fallbackChunk, maxSize-absPos)
@@ -4574,7 +4596,7 @@ func (ev *EditorView) Replace(pattern, replacement string, caseSensitive, revers
 	if all {
 		session := ev.editSession
 		vtui.RunAsync(func(ctx *vtui.TaskContext) {
-			defer ev.guardMapping("replacing")()
+			defer ev.guardMappingFor("replacing", ctx)()
 			// Dropping this error used to turn a not-yet-loaded buffer into an
 			// empty one, so [ Replace all ] on a large file reported "not
 			// found" and changed nothing.
@@ -5680,6 +5702,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 	if ev.FilePath == "" || ev.Vfs == nil || ev.Saving {
 		return
 	}
+	if ev.textLost {
+		vtui.ShowMessage(" Error ", fmt.Sprintf("Cannot save:\n%v", errTextUnavailable), []string{"&Ok"})
+		return
+	}
 
 	ev.Saving = true
 	ev.edited = true
@@ -5701,6 +5727,9 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		// CancelIndexing only signals the worker. Join it before the save can
 		// replace or close the mapping it may still be reading.
 		ev.WaitForIndexing()
+		// The mapping as the save found it: the one its guard below counts
+		// it a reader of, and the one releaseMappingForSave lets go of.
+		mapped := ev.Mapped
 		// The writer reads the unchanged pieces straight out of the mapping.
 		defer ev.guardMapping("saving")()
 		// To preserve original file ownership, permissions and xattrs (crucial for root-owned files),
@@ -5806,6 +5835,13 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 			}
 		}
 
+		// Writing straight into the destination truncates it first, which
+		// Windows refuses for a mapped file. The destination may be the mapped
+		// file, and it is rewritten either way, so the text is kept in memory.
+		var release *mappingRelease
+		if !saved && !useTemp && err == nil && !CreateNewTarget {
+			release, err = ev.releaseMappingForSave(ctx, ev.Pt, mapped, writePath, true)
+		}
 		if saved {
 			f = nopWriteCloser{}
 		} else if useTemp && err == nil {
@@ -5862,6 +5898,11 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				}
 				data, errRange := ev.Pt.GetRange(curr, take)
 				if errRange == piecetable.ErrLoading {
+					// A released mapping's stand-in never finishes loading.
+					if _, gone := ev.Pt.GetOriginalBuffer().(loadingBuffer); gone {
+						saveErr = errTextUnavailable
+						break
+					}
 					time.Sleep(20 * time.Millisecond)
 					continue
 				}
@@ -5917,6 +5958,24 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		// unretryable after a failed finalization.
 		oldBackingClosed := false
 		if useTemp {
+			// Windows will not rename over, or rewrite, a file that is mapped.
+			// A rename leaves the old file intact when it fails, so it can be
+			// mapped again; an in-place rewrite does not, so that keeps a copy
+			// of the text instead. A new file cannot be the mapped one.
+			if !CreateNewTarget {
+				var releaseErr error
+				release, releaseErr = ev.releaseMappingForSave(ctx, ev.Pt, mapped, writePath, keepLinks)
+				if releaseErr != nil {
+					// Nothing has been replaced and the mapping is back
+					// where it was; the stage is of no further use.
+					cleanupEditorStage(ev.Vfs, tempPath)
+					ctx.RunOnUI(func() {
+						ev.Saving = false
+						vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to save:\n%v", releaseErr), []string{"&Ok"})
+					})
+					return
+				}
+			}
 			// Windows does not allow replacing a local file while our reader handle
 			// is open. A full local save has already read every piece still referenced
 			// by the piece table, so its AsyncBuffer remains a usable recovery snapshot
@@ -5937,6 +5996,7 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					// The stage still holds the whole new text; it stays.
 					ctx.RunOnUI(func() {
 						ev.Saving = false
+						ev.adoptRecoveredBacking(ev.Pt, release, nil, nil, nil, true)
 						vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to write the file in place:\n%v\n\nThe new text is kept in:\n%s", err, tempPath), []string{"&Ok"})
 					})
 					return
@@ -5954,8 +6014,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				if !fileops.OperationMustNotRetry(err) {
 					cleanupEditorStage(ev.Vfs, tempPath)
 				}
+				recFile, recMapped, recBuf, recOK := recoverMapping(ev.Vfs, release, writePath)
 				ctx.RunOnUI(func() {
 					ev.Saving = false
+					ev.adoptRecoveredBacking(ev.Pt, release, recFile, recMapped, recBuf, recOK)
 					vtui.ShowMessage(" Error ", fmt.Sprintf("Failed to finalize save (rename failed):\n%v", err), []string{"&Ok"})
 				})
 				return
@@ -5986,6 +6048,14 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		}
 
 		newFile, err := ev.Vfs.Open(ctx.Context, finalFilePath)
+		// With the mapping released the piece table has nothing to read but
+		// the file it is about to be rebuilt from, so a failed reopen is worth
+		// another try, and not under a context the user may have cancelled.
+		textLost := false
+		if err != nil && release != nil && !release.copied {
+			newFile, err = reopenReleasedFile(ev.Vfs, finalFilePath)
+			textLost = err != nil
+		}
 		var newPt *piecetable.PieceTable
 		var newEngine *textlayout.WrapEngine
 		var newBuf *AsyncBuffer
@@ -5998,7 +6068,7 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				// as mappable as the one that was opened, and dropping to the
 				// chunk buffer here would quietly cost every later search the
 				// copy that mapping avoids.
-				if ev.Mapped != nil && config.App.EditorMemoryMap &&
+				if mapped != nil && config.App.EditorMemoryMap &&
 					CanMemoryMapFile(ctx.Context, ev.Vfs, finalFilePath) {
 					mapOffset := int64(0)
 					if newUTF8BOM {
@@ -6111,6 +6181,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				ev.cleanState = ev.Pt.GetState()
 				ev.codepageRaw = nil
 				ev.edited = false
+				if textLost {
+					ev.noteTextLost()
+					return
+				}
 				vtui.ShowMessage(" Warning ", fmt.Sprintf("File content was saved, but the file could not be reopened:\n%v", err), []string{"&Ok"})
 			}
 		})
@@ -7270,7 +7344,7 @@ func (ev *EditorView) Search(pattern string, caseSensitive, reverse, regexp, who
 		delegate, canDelegate := ev.searchDelegation(regexp, wholeWord)
 
 		RunSearchWithProgress(searchPattern, func(ctx *vtui.TaskContext, dlg *vtui.Window) {
-			defer ev.guardMapping("searching")()
+			defer ev.guardMappingFor("searching", ctx)()
 
 			// A file system that can search its own copy answers without the
 			// file having to travel. Anything it cannot answer for certain
