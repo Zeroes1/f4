@@ -76,8 +76,8 @@ func main() {
 	defer func() { _ = os.RemoveAll(srcRoot) }()
 	defer func() { _ = os.RemoveAll(dstRoot) }()
 
-	fmt.Printf("source: %s (%s)\ndestination: %s (%s)\nengine: goroutine per file (before f4#1894 part 5)\n\n",
-		srcRoot, describe(srcRoot), dstRoot, describe(dstRoot))
+	fmt.Printf("source: %s (%s)\ndestination: %s (%s)\nengine: goroutine per file (before f4#1894 part 5)\n%s\n\n",
+		srcRoot, describe(srcRoot), dstRoot, describe(dstRoot), cacheNote)
 	fmt.Printf("%-16s %7s %8s %9s %8s %9s %9s\n", "set", "threads", "files", "MB", "seconds", "MB/s", "files/s")
 	for _, set := range sets(*scale) {
 		if *only != "" && !strings.HasPrefix(set.name, *only) {
@@ -90,6 +90,9 @@ func main() {
 				fail(err)
 			}
 			if err := os.MkdirAll(out, 0o700); err != nil {
+				fail(err)
+			}
+			if err := dropCache(files); err != nil {
 				fail(err)
 			}
 			start := time.Now()
