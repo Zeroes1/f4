@@ -5,6 +5,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/vtinput"
 	"os"
 	"path/filepath"
 	"sort"
@@ -154,6 +155,25 @@ func driveBookmarkIsValid(bookmark DriveBookmark) bool {
 func DriveBookmarkKeyMatches(bookmark DriveBookmark, eKey string) bool {
 	return driveBookmarkIsValid(bookmark) && strings.TrimSpace(bookmark.Hotkey) != "" &&
 		strings.EqualFold(strings.TrimSpace(bookmark.Hotkey), strings.TrimSpace(eKey))
+}
+
+// DriveBookmarkQuickCall finds the link that RCtrl or Ctrl+Alt plus its
+// hotkey opens from the panels, as with the numbered folder bookmarks
+// (mitek1977-coder, f4#1148): a link with QuickCall on whose hotkey is the key
+// of e without Ctrl and Alt. The first such link in the list wins.
+func DriveBookmarkQuickCall(bookmarks []DriveBookmark, e *vtinput.InputEvent) (DriveBookmark, bool) {
+	bare := *e
+	bare.ControlKeyState &^= vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed
+	key := keymap.EventToHotkeyString(&bare)
+	if key == "" {
+		return DriveBookmark{}, false
+	}
+	for _, bookmark := range bookmarks {
+		if bookmark.QuickCall && DriveBookmarkKeyMatches(bookmark, key) {
+			return bookmark, true
+		}
+	}
+	return DriveBookmark{}, false
 }
 
 func DriveBookmarkMenuText(bookmark DriveBookmark) string {

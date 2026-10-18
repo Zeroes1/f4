@@ -3325,6 +3325,21 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			}
 			return true
 		}
+
+		// The links of the drive menu marked "Use for quick call" answer to
+		// the same [RightCtrl | Ctrl+Alt] with their own hotkey (f4#1148).
+		// The digits above stay the numbered bookmarks'.
+		if isBookmarkGoto {
+			links, err := LoadDriveBookmarks(DriveBookmarksFilePath())
+			if err != nil {
+				vtui.DebugLog("DRIVE BOOKMARKS: load %q failed: %v", DriveBookmarksFilePath(), err)
+			} else if link, ok := DriveBookmarkQuickCall(links, e); ok {
+				if fsp := pf.GetActivePanel(); fsp != nil {
+					pf.NavigateToBookmark(fsp, Bookmark{Path: link.Path})
+				}
+				return true
+			}
+		}
 	}
 
 	if !e.KeyDown {
