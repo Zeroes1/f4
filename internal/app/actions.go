@@ -2281,7 +2281,7 @@ func unknownSizeNote(stats vfs.OpStats) string {
 // dirSizeResult is the line shown once a folder has been sized: its name, its
 // size and how many files and folders were counted in it.
 func dirSizeResult(name string, stats vfs.OpStats) string {
-	return fmt.Sprintf(i18n.Msg("Panel.DirSizeResultFmt"), name, numeric.FormatSize(stats.Bytes), stats.Files, stats.Dirs)
+	return fmt.Sprintf(i18n.Msg("Panel.DirSizeResultFmt"), name, numeric.FormatSize(stats.FilesSize(config.App.DirSizeCountsFolders)), stats.Files, stats.Dirs)
 }
 
 // actionCalcDirSizeAtCursor is Ctrl+Space: it sizes the folder under the
@@ -2326,7 +2326,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 			return vfs.CalculateStats(ctx, fsp.Vfs, targetPath, []string{""}, cb)
 		},
 		func(totalStats vfs.OpStats) {
-			entry.Size = totalStats.Bytes
+			entry.Size = totalStats.FilesSize(config.App.DirSizeCountsFolders)
 			entry.SizeCalculated = true
 			// The size lands in the size column and nothing is said about it: a
 			// message that has to be waited out or dismissed was not wanted
@@ -2390,7 +2390,7 @@ func actionCalcDirSizes(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, entri
 				cursorEntry = fsp.Entries[idx]
 			}
 			for i, entry := range entries {
-				entry.Size = results[i].Bytes
+				entry.Size = results[i].FilesSize(config.App.DirSizeCountsFolders)
 				entry.SizeCalculated = true
 			}
 			if note := unknownSizeNote(total); note != "" {

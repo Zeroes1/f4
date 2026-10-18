@@ -481,6 +481,7 @@ type F4Config struct {
 	InfoPanelCPUGPU          bool   // Ctrl+L info panel: show CPU and GPU sections (off by default)
 	TreeRootWholeVolume      bool   // Ctrl+T tree panel root: true = whole current volume (far2l), false = source panel's current directory
 	TreeExplorerMode         bool   // Ctrl+T tree like Explorer's: the panel that opened it follows the tree's cursor (f4#1602)
+	DirSizeCountsFolders     bool   // folder size (F3, quick view) also counts the size file systems give the folders themselves, as far2l does (f4#2005)
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
 	TerminalCtrlNWorkspace   bool   // reserve Ctrl+N in terminal views for cloning panels to a workspace
 	KeepTerminalCursor       bool
@@ -738,6 +739,7 @@ var App = F4Config{
 	InfoPanelCPUGPU:          false,
 	TreeRootWholeVolume:      true,
 	TreeExplorerMode:         false,
+	DirSizeCountsFolders:     false,
 	EscTogglePanels:          true,
 	TerminalCtrlNWorkspace:   true,
 	KeepTerminalCursor:       false,
@@ -1024,6 +1026,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.InfoPanelCPUGPU = merged.GetString("Panel", "InfoPanelCPUGPU", "0") == "1"
 	cfg.TreeRootWholeVolume = merged.GetString("Panel", "TreeRootWholeVolume", "1") == "1"
 	cfg.TreeExplorerMode = merged.GetString("Panel", "TreeExplorerMode", "0") == "1"
+	cfg.DirSizeCountsFolders = merged.GetString("Panel", "DirSizeCountsFolders", "0") == "1"
 	cfg.EscTogglePanels = merged.GetString("Panel", "EscTogglePanels", "1") == "1"
 	cfg.TerminalCtrlNWorkspace = merged.GetString("Panel", "TerminalCtrlNWorkspace", "1") == "1"
 	cfg.KeepTerminalCursor = merged.GetString("Panel", "KeepTerminalCursor", "0") == "1"
@@ -1389,6 +1392,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "InfoPanelCPUGPU = %d\n", map[bool]int{true: 1, false: 0}[cfg.InfoPanelCPUGPU])
 	fmt.Fprintf(&sb, "TreeRootWholeVolume = %d\n", map[bool]int{true: 1, false: 0}[cfg.TreeRootWholeVolume])
 	fmt.Fprintf(&sb, "TreeExplorerMode = %d\n", map[bool]int{true: 1, false: 0}[cfg.TreeExplorerMode])
+	fmt.Fprintf(&sb, "DirSizeCountsFolders = %d\n", map[bool]int{true: 1, false: 0}[cfg.DirSizeCountsFolders])
 	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[cfg.EscTogglePanels])
 	fmt.Fprintf(&sb, "TerminalCtrlNWorkspace = %d\n", map[bool]int{true: 1, false: 0}[cfg.TerminalCtrlNWorkspace])
 	fmt.Fprintf(&sb, "KeepTerminalCursor = %d\n", map[bool]int{true: 1, false: 0}[cfg.KeepTerminalCursor])
