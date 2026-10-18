@@ -68,6 +68,7 @@ func TestExternalEditorDetachedCTTYHelper(t *testing.T) {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	ConfigureExternalEditorProcess(cmd)
 	if err := cmd.Run(); err != nil {
+		// #nosec G703 -- report is a file inside the test's temporary directory.
 		_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 		os.Exit(3)
 	}
@@ -122,6 +123,7 @@ func TestExternalEditorStartsWithInheritedTTY(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	_ = os.Chmod(dir, 0o777)
 	report := filepath.Join(dir, "report")
+	// #nosec G702 -- invokes only this test binary with a fixed test selector.
 	// #nosec G204 -- invokes only this test binary with a fixed test selector.
 	helper := exec.Command(os.Args[0], "-test.run=^TestExternalEditorDetachedCTTYHelper$")
 	helper.Env = append(os.Environ(), editorCTTYDetachedHelperEnv+"="+report)
