@@ -296,3 +296,65 @@ func TestPanelsFrame_LocalUnixCommandKeepsCdWhenPanelNeedsSudo(t *testing.T) {
 		t.Fatalf("panel recorded the persistent shell as having reached %q, but a plain cd there cannot be confirmed to have succeeded", locked)
 	}
 }
+
+// TestPanelsFrame_SudoOnlyFolderSyncIsSentOnce is the regression test for
+// f4#1255's sixth report: with the active panel in a folder that needs sudo,
+// the terminal filled with "bash: cd: <folder>: Permission denied". The
+// per-frame directory check in Show re-sends the sync whenever LastPtyPath
+// does not match, and a sudo-only folder is by design never recorded there
+// (the unprivileged shell's cd is refused, so the sync cannot be confirmed),
+// so every frame sent the refused cd again.
+func TestPanelsFrame_SudoOnlyFolderSyncIsSentOnce(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix term.PTY command composition")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root is refused nothing, so the folder cannot be made to need sudo")
+	}
+
+	prevSudo := vfs.GetSudoClient()
+	vfs.InitSudoClient("f4", "")
+	t.Cleanup(func() { vfs.SetSudoClientForTest(prevSudo) })
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	pty := pf.Pty.(*paneltest.MockPty)
+
+	locked := filepath.Join(t.TempDir(), "locked")
+	if err := os.Mkdir(locked, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0700) })
+
+	fsp := pf.Panels[pf.ActiveIdx].(*panel.FileSystemPanel)
+	fsp.Vfs = vfs.NewOSVFS(locked)
+
+	syncLine := "cd '" + strings.ReplaceAll(locked, "'", "'\\''") + "' && true f4_sync"
+	scr := vtui.NewSilentScreenBuf()
+	for i := 0; i < 5; i++ {
+		pf.Show(scr)
+	}
+	if got := strings.Count(pty.String(), syncLine); got != 1 {
+		t.Fatalf("directory sync into the sudo-only folder was sent %d times over 5 frames, want 1: %q", got, pty.String())
+	}
+
+	// A command typed now carries its own cd (the sync is unconfirmed) and
+	// must not add one more refused sync line in front of it.
+	pf.CmdLine.Edit.SetText("pwd")
+	pressKey(pf, &vtinput.InputEvent{
+		Type:           vtinput.KeyEventType,
+		KeyDown:        true,
+		VirtualKeyCode: vtinput.VK_RETURN,
+	})
+	written := pty.String()
+	if got := strings.Count(written, syncLine); got != 1 {
+		t.Fatalf("command re-sent the refused directory sync: %d sync lines, want 1: %q", got, written)
+	}
+	wantCd := "cd '" + strings.ReplaceAll(locked, "'", "'\\''") + "'"
+	if !strings.Contains(written, "if "+wantCd+"; then") {
+		t.Fatalf("command lost its own cd guard for %q: %q", locked, written)
+	}
+}
