@@ -439,14 +439,6 @@ type PanelsFrame struct {
 	CommandLineFocused bool
 
 	LastPtyPath string
-	// ptySyncTriedPath/ptySyncTriedVFS remember the last directory sync that
-	// was sent to the shell but could not be confirmed (syncPTYDirectory
-	// returned false: the folder needs sudo, so the unprivileged shell's own
-	// cd is refused). Without it the per-frame check in Show finds
-	// LastPtyPath still unset and re-sends the refused cd on every frame,
-	// flooding the terminal with "cd: Permission denied" (f4#1255).
-	ptySyncTriedPath string
-	ptySyncTriedVFS  vfs.VFS
 	// localShellStartDir is the directory the local shell was started in (f4's
 	// own working directory, which the shell inherits); guarded by PtyMutex.
 	// The first directory sync is skipped when the panel is already there
@@ -1529,7 +1521,6 @@ func (pf *PanelsFrame) restartLocalShell(keepScreen bool) bool {
 	pf.ReturnToPanels = false
 	pf.workspaceCommandTitle = ""
 	pf.LastPtyPath = ""
-	pf.ptySyncTriedPath, pf.ptySyncTriedVFS = "", nil
 	if pf.CmdSession != nil {
 		pf.CmdSession.close()
 		pf.CmdSession = newCmdShellSession(pf)
@@ -2556,7 +2547,13 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 
 	if !isBusy && pf.CmdSession.idle() {
 		if fsp := pf.GetActivePanel(); fsp != nil {
-			pf.syncPTYDirectoryOnce(fsp.Vfs.GetPath(), fsp.Vfs)
+			currentPath := fsp.Vfs.GetPath()
+			if currentPath != pf.LastPtyPath || !fileops.SameVFSInstance(fsp.Vfs, pf.LastPtyVFS) {
+				if pf.syncPTYDirectory(currentPath, fsp.Vfs) {
+					pf.LastPtyPath = currentPath
+					pf.LastPtyVFS = fsp.Vfs
+				}
+			}
 		}
 	}
 
@@ -3550,13 +3547,9 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 						}
 
 						// Sync the background term.PTY synchronously to satisfy tests and provide immediate state
-						confirmed, sent := pf.syncPTYDirectory(fsp.Vfs.GetPath(), fsp.Vfs)
-						if confirmed {
+						if pf.syncPTYDirectory(fsp.Vfs.GetPath(), fsp.Vfs) {
 							pf.LastPtyPath = fsp.Vfs.GetPath()
 							pf.LastPtyVFS = fsp.Vfs
-							pf.ptySyncTriedPath, pf.ptySyncTriedVFS = "", nil
-						} else if sent {
-							pf.ptySyncTriedPath, pf.ptySyncTriedVFS = fsp.Vfs.GetPath(), fsp.Vfs
 						}
 
 						return true
@@ -3650,7 +3643,14 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 				// this one-shot check only covers an Enter arriving before the
 				// next frame refresh.
 				if localShellVFS != nil && !isWindowsShell {
-					synced := pf.syncPTYDirectoryOnce(path, localShellVFS)
+					synced := path == pf.LastPtyPath && fileops.SameVFSInstance(localShellVFS, pf.LastPtyVFS)
+					if !synced {
+						if pf.syncPTYDirectory(path, localShellVFS) {
+							pf.LastPtyPath = path
+							pf.LastPtyVFS = localShellVFS
+							synced = true
+						}
+					}
 					// Only drop the panel path from the command about to be
 					// composed once the shell is confirmed to be there.
 					// syncPTYDirectory reports false when path needs sudo to
@@ -5620,34 +5620,7 @@ func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem,
 	})
 }
 
-// syncPTYDirectoryOnce brings the shell to path on v and reports whether it is
-// confirmed to be there. A path already confirmed is not sent again, and a
-// path whose sync was sent once and could not be confirmed (a folder that
-// needs sudo, see syncPTYDirectory) is not sent again either: the shell
-// refuses that cd every time, so repeating it per frame or per command only
-// prints the refusal over and over (f4#1255). The caller keeps its own cd in
-// the command it composes whenever this reports false.
-func (pf *PanelsFrame) syncPTYDirectoryOnce(path string, v vfs.VFS) bool {
-	if path == pf.LastPtyPath && fileops.SameVFSInstance(v, pf.LastPtyVFS) {
-		return true
-	}
-	if path == pf.ptySyncTriedPath && fileops.SameVFSInstance(v, pf.ptySyncTriedVFS) {
-		return false
-	}
-	confirmed, sent := pf.syncPTYDirectory(path, v)
-	if sent && !confirmed {
-		pf.ptySyncTriedPath, pf.ptySyncTriedVFS = path, v
-	}
-	if !confirmed {
-		return false
-	}
-	pf.LastPtyPath = path
-	pf.LastPtyVFS = v
-	pf.ptySyncTriedPath, pf.ptySyncTriedVFS = "", nil
-	return true
-}
-
-func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) (confirmed, sent bool) {
+func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) bool {
 	isWindowsShell := terminal.WindowsShellSyntax()
 	sync := false
 	// uncertain is set for a local OSVFS path this same unprivileged process
@@ -5673,12 +5646,12 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) (confirmed, sent
 	}
 
 	if !sync {
-		return true, false
+		return true
 	}
 
 	activePty := pf.GetActivePTY()
 	if activePty == nil {
-		return false, false
+		return false
 	}
 
 	// A VFS that knows what its own term.PTY speaks composes the sync line
@@ -5690,11 +5663,11 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) (confirmed, sent
 		if seq := integ.PtyChangeDirCommand(path); len(seq) > 0 {
 			_, _ = pf.WritePTY(activePty, seq)
 		}
-		return true, true
+		return true
 	}
 
 	if isWindowsShell && !uncertain && pf.localShellAlreadyIn(path, v, activePty) {
-		return true, false
+		return true
 	}
 
 	if isWindowsShell {
@@ -5708,7 +5681,7 @@ func (pf *PanelsFrame) syncPTYDirectory(path string, v vfs.VFS) (confirmed, sent
 		// in every POSIX-ish shell including fish.
 		_, _ = pf.WritePTY(activePty, []byte(fmt.Sprintf(" cd '%s' && true f4_sync\r", sqPath)))
 	}
-	return !uncertain, true
+	return !uncertain
 }
 
 // localShellAlreadyIn reports that the very first directory sync of a local
