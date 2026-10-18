@@ -98,6 +98,16 @@ func TestCursorColor_ReachesTheTerminalStream(t *testing.T) {
 	var out strings.Builder
 	scr.Writer = &out
 
+	// vtui remembers the colour it last told the terminal, package-wide:
+	// there is one terminal. A second run of this test in the same process
+	// (-count, -cpu) would find #00FFFF already sent and write nothing, so
+	// hand the colour back first and let that frame go.
+	oldColor := vtui.CursorColor
+	t.Cleanup(func() { vtui.CursorColor = oldColor })
+	vtui.CursorColor = -1
+	renderer.Flush()
+	out.Reset()
+
 	InitColors(ini.Parse(strings.NewReader(`[farcolors]
 Terminal.Cursor = foreground:#00ffff
 `)))
