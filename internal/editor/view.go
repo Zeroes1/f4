@@ -3923,6 +3923,10 @@ var indexScanBuffers sync.Pool
 // ahead of it, small enough that cancelling the scan is still immediate.
 const indexReadChunk = 4 << 20
 
+// indexBatchInterval is how often the scan hands the line offsets it has found
+// to the UI thread.
+const indexBatchInterval = 50 * time.Millisecond
+
 // fileChunkReader fills dst from the file for a stretch of the text, and
 // reports false when that stretch has to be read through the piece table.
 type fileChunkReader func(ctx context.Context, dst []byte, offset, length int) (int, bool)
@@ -4229,19 +4233,20 @@ func (ev *EditorView) StartIndexing() {
 		const fallbackChunk = 256 * 1024
 
 		// A file that can be read directly is read in much larger pieces —
-		// see chunkReader. The buffer it lands in is borrowed for the scan
-		// rather than allocated per scan: a resume fires 400 ms after every
-		// burst of typing, and 4 MB a time adds up.
-		scanBuf, _ := indexScanBuffers.Get().(*[]byte)
-		if scanBuf == nil {
-			b := make([]byte, indexReadChunk)
-			scanBuf = &b
-		}
-		defer indexScanBuffers.Put(scanBuf)
+		// see chunkReader — and a piece ahead of the scan. The buffers they
+		// land in are borrowed for the scan rather than allocated per scan:
+		// a resume fires 400 ms after every burst of typing, and 4 MB a time
+		// adds up.
+		ahead := newIndexReadAhead(ctx, readFromFile)
+		defer ahead.close()
 
 		pendingOffsets := make([]int, 0, 10000)
 		lineLen := 0
 		wrapUnsafe := false
+		// When the offsets were last handed to the UI thread; the zero time
+		// hands the first ones over at once, so the top of a file shows up
+		// as soon as it has been read.
+		var handedOver time.Time
 
 		for absPos < maxSize {
 			select {
@@ -4260,8 +4265,8 @@ func (ev *EditorView) StartIndexing() {
 			// interrupted by an edit resume instead of starting over.
 			var data []byte
 			var err error
-			if n, ok := readFromFile(ctx, *scanBuf, absPos, min(indexReadChunk, maxSize-absPos)); ok {
-				data = (*scanBuf)[:n]
+			if read, ok := ahead.readAt(absPos, min(indexReadChunk, maxSize-absPos), maxSize); ok {
+				data = read
 			} else {
 				if buf != nil {
 					// A 4 MB window ahead of the scan. Prefetch only starts
@@ -4290,24 +4295,28 @@ func (ev *EditorView) StartIndexing() {
 				break
 			}
 			var unsafe bool
-			lineLen, unsafe = scanEditorWrapSafety(data, lineLen)
+			pendingOffsets, lineLen, unsafe = scanLineStarts(pendingOffsets, data, absPos, lineLen)
 			if unsafe && !wrapUnsafe {
 				ev.postUnsafeWordWrap(sessionID, ctx)
 				wrapUnsafe = true
 			}
 
-			pendingOffsets = piecetable.AppendNewlineOffsets(pendingOffsets, data, absPos)
-
 			absPos += len(data)
 			scannedTo.Store(int64(absPos))
 
-			// Update UI in 5000-line batches, or immediately when targetLine is reached, to avoid UI thread congestion
-			if len(pendingOffsets) >= 5000 || absPos >= maxSize || (ev.TargetLine != -1 && Li.LineCount()+len(pendingOffsets) > ev.TargetLine) {
+			// Hand the offsets over at most every indexBatchInterval, and at
+			// once at the end or on reaching the line a reopened file goes
+			// back to. Each hand-over costs the UI thread a frame, and on a
+			// 1 GB log one every 4 MB read was some 250 frames of the Loading
+			// screen before the editor could show that line.
+			if (len(pendingOffsets) >= 5000 && time.Since(handedOver) >= indexBatchInterval) ||
+				absPos >= maxSize || (ev.TargetLine != -1 && Li.LineCount()+len(pendingOffsets) > ev.TargetLine) {
 				currentBatch := pendingOffsets
 				batchEnd := absPos
 				indexed += len(currentBatch)
 				batches++
-				pendingOffsets = make([]int, 0, 10000)
+				handedOver = time.Now()
+				pendingOffsets = make([]int, 0, max(10000, len(currentBatch)))
 
 				uiFrames.PostTask(func() {
 					if ctx.Err() != nil || ev.editSession != sessionID {
