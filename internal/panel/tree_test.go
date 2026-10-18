@@ -397,6 +397,11 @@ func TestTreePanel_EnterNavigatesSourceAndCloses(t *testing.T) {
 	if pf.AltPanels[opp] != nil {
 		t.Errorf("tree should have closed itself, AltPanels[%d] = %v", opp, pf.AltPanels[opp])
 	}
+	// The source panel reads child now. Returning before the read ends lets
+	// it find its TempDir gone and post "Failed to read directory" to the
+	// shared task queue, for whichever test runs tasks next (train
+	// unxed/f4#2063: TestDriveMenuWatchRebuildsTheOpenMenu).
+	waitForLoad(t, src)
 }
 
 // TestTreeCollapse_ForgetsCachedDescendants checks the treeExpandCache side
