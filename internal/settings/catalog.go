@@ -223,9 +223,6 @@ func coreSettingsFields() []f4settings.Field {
 		if f.ID == terminalThemeID {
 			f.Kind = f4settings.ChoiceKind
 			f.Choices = terminalThemeChoices()
-			// Not translated yet: the list names are literal, and so is the text.
-			f.Label = f4settings.Text{English: p[3], Literal: true}
-			f.Description = f4settings.Text{English: p[4], Literal: true}
 		}
 		if f.ID == "ProxyPass" {
 			f.Kind = f4settings.Secret

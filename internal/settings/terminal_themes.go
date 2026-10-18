@@ -23,11 +23,11 @@ const (
 
 // terminalThemeChoices is the content of the list.
 func terminalThemeChoices() []f4settings.Choice {
-	choices := []f4settings.Choice{{Value: terminalThemeDefault, Label: f4settings.Text{English: "Default", Literal: true}}}
+	choices := []f4settings.Choice{{Value: terminalThemeDefault, Label: f4settings.Text{English: "Default"}}}
 	for _, t := range termthemes.All() {
 		choices = append(choices, f4settings.Choice{Value: t.Name, Label: f4settings.Text{English: t.Name, Literal: true}})
 	}
-	return append(choices, f4settings.Choice{Value: terminalThemeCustom, Label: f4settings.Text{English: "Custom", Literal: true}})
+	return append(choices, f4settings.Choice{Value: terminalThemeCustom, Label: f4settings.Text{English: "Custom"}})
 }
 
 // terminalThemeOf names the colour set that get reads for the 21 colour
