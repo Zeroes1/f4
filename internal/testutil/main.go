@@ -8,7 +8,16 @@ import (
 
 	"github.com/unxed/goclip"
 	"github.com/unxed/vtui"
+	"go.uber.org/goleak"
 )
+
+// goleakEnv switches on the goroutine leak check at the end of Main: any
+// goroutine that was not running when the package's tests started and is
+// still running after teardown fails the run. The check is off by default
+// while the suite's existing leaks are being catalogued; set F4_GOLEAK=1 to
+// run it. The task-pump check below stays: it waits for the pumps to exit
+// and names them, which goleak's generic stack dump does not.
+const goleakEnv = "F4_GOLEAK"
 
 var configDir string
 
@@ -17,6 +26,21 @@ var configDir string
 // is gone, so a clean run spends none of it; the margin is for a loaded -race
 // runner, and only a real leak waits it out.
 const taskPumpExitTimeout = 5 * time.Second
+
+// FindGoroutineLeaks is goleak.Find with a longer patience: goleak gives up
+// after about two seconds, which a goroutine on a two-second ticker can miss
+// while it is already on its way out. The wait ends as soon as nothing is
+// left, so a clean run spends none of it.
+func FindGoroutineLeaks(timeout time.Duration, opts ...goleak.Option) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		err := goleak.Find(opts...)
+		if err == nil || !time.Now().Before(deadline) {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
 
 // ConfigDir is the temporary profile directory Main installed for this test
 // binary, or "" when one could not be created. A package whose configuration
@@ -37,6 +61,19 @@ func ConfigDir() string { return configDir }
 // is in place, so it may read ConfigDir. after runs its teardown; returning an
 // error from it fails the run. Either may be nil.
 func Main(m *testing.M, before func(), after func() error) int {
+	// Snapshot before anything below starts a goroutine, so the check at the
+	// end reports only what the tests themselves left behind.
+	var leakOpts []goleak.Option
+	if os.Getenv(goleakEnv) != "" {
+		leakOpts = []goleak.Option{
+			goleak.IgnoreCurrent(),
+			// A toast's timer sleeps out the toast's lifetime and redraws
+			// once; it holds nothing and ends on its own, only later than a
+			// leak check waits.
+			goleak.IgnoreAnyFunction("github.com/unxed/vtui.ShowToastStyled.func1.1"),
+		}
+	}
+
 	baseFrameManager := vtui.FrameManager
 	baseFrameManager.Init(vtui.NewSilentScreenBuf())
 
@@ -100,6 +137,13 @@ func Main(m *testing.M, before func(), after func() error) int {
 			"vtui task-pump goroutine leak: %d startTaskPump goroutine(s) remain %v after test teardown; want 0\n%s",
 			taskPumps, taskPumpExitTimeout, goroutineProfile)
 		result = 1
+	}
+
+	if leakOpts != nil {
+		if leakErr := FindGoroutineLeaks(taskPumpExitTimeout, leakOpts...); leakErr != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "goroutine leak after test teardown (%s): %v\n", goleakEnv, leakErr)
+			result = 1
+		}
 	}
 
 	if tmpErr == nil {
