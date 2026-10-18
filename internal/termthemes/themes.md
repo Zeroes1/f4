@@ -110,27 +110,27 @@
 
 ## Tango Dark
 
-* **primary_foreground**: #f2f2f2
-* **primary_background**: #b3b3b3
-* **cursor_text**: #ffffff
+* **primary_foreground**: #ffffff
+* **primary_background**: #000000
+* **cursor_text**: #000000
 * **cursor**: #ffffff
-* **selection_text**: #ffffff
-* **selection_background**: #414141
+* **selection_text**: #000000
+* **selection_background**: #c1deff
 * **normal_black**: #000000
-* **normal_red**: #d91a01
-* **normal_green**: #5cb226
-* **normal_yellow**: #d0af26
-* **normal_blue**: #4079b0
-* **normal_magenta**: #896488
+* **normal_red**: #d81e00
+* **normal_green**: #5ea702
+* **normal_yellow**: #cfae00
+* **normal_blue**: #427ab3
+* **normal_magenta**: #89658e
 * **normal_cyan**: #00a7aa
-* **normal_white**: #dbe2d8
-* **bright_black**: #666666
-* **bright_red**: #f64037
-* **bright_green**: #98e555
-* **bright_yellow**: #fdec6d
-* **bright_blue**: #83afdf
-* **bright_magenta**: #bd93b5
-* **bright_cyan**: #2ee6e7
+* **normal_white**: #dbded8
+* **bright_black**: #686a66
+* **bright_red**: #f54235
+* **bright_green**: #99e343
+* **bright_yellow**: #fdeb61
+* **bright_blue**: #84b0d8
+* **bright_magenta**: #bc94b7
+* **bright_cyan**: #37e6e8
 * **bright_white**: #f1f1f0
 
 ---

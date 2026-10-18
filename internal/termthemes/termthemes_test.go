@@ -57,6 +57,41 @@ func TestDraculaMapping(t *testing.T) {
 	}
 }
 
+func TestTangoDarkMapping(t *testing.T) {
+	theme, ok := Find("Tango Dark")
+	if !ok {
+		t.Fatal("no Tango Dark")
+	}
+	want := map[string]string{
+		"TerminalForeground":     "#FFFFFF",
+		"TerminalBackground":     "#000000",
+		"TerminalCursorColor":    "#FFFFFF",
+		"TerminalSelectionText":  "#000000",
+		"TerminalSelectionColor": "#C1DEFF",
+		"AnsiColorBlack":         "#000000",
+		"AnsiColorRed":           "#D81E00",
+		"AnsiColorGreen":         "#5EA702",
+		"AnsiColorYellow":        "#CFAE00",
+		"AnsiColorBlue":          "#427AB3",
+		"AnsiColorMagenta":       "#89658E",
+		"AnsiColorCyan":          "#00A7AA",
+		"AnsiColorWhite":         "#DBDED8",
+		"AnsiColorBrightBlack":   "#686A66",
+		"AnsiColorBrightRed":     "#F54235",
+		"AnsiColorBrightGreen":   "#99E343",
+		"AnsiColorBrightYellow":  "#FDEB61",
+		"AnsiColorBrightBlue":    "#84B0D8",
+		"AnsiColorBrightMagenta": "#BC94B7",
+		"AnsiColorBrightCyan":    "#37E6E8",
+		"AnsiColorBrightWhite":   "#F1F1F0",
+	}
+	for key, want := range want {
+		if got := theme.Values[key]; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+}
+
 func TestMatchFindsAThemeByItsColours(t *testing.T) {
 	d, _ := Find("Dracula")
 	values := map[string]string{}
