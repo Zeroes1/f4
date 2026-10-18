@@ -8,6 +8,8 @@ package terminal
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -32,6 +34,11 @@ const kittyPidEnv = "KITTY_PID"
 // know whether it may draw pictures. Tools written before terminals could be
 // asked directly, chafa 1.14 among them, know no other way to find out.
 const kittyTermName = "xterm-kitty"
+
+// defaultTermName is the terminal type given to programs when f4 itself has
+// none to pass on. The built-in terminal is a full xterm-class emulator, and
+// the entry ships with ncurses-base on every distribution that has terminfo.
+const defaultTermName = "xterm-256color"
 
 // terminalGraphicsSeen remembers that the screen f4 draws on can show
 // Images. A shell can be started before the first frame is drawn, and one
@@ -138,12 +145,21 @@ func BuildChildEnv(env []string, graphics, kittyTerm bool) []string {
 		if kittyTerm && strings.HasPrefix(kv, "TERM=") {
 			continue
 		}
+		// f4 started from a desktop launcher inherits no usable TERM; keeping
+		// an empty or "dumb" one would leave `clear` and colored `ls` broken
+		// in the shell (issue #2070). It is replaced below.
+		if !kittyTerm && unusableTerm(kv) {
+			continue
+		}
 		if PrivateEnvEntry(kv) {
 			continue
 		}
 		out = append(out, kv)
 	}
 	out = append(out, "F4_NESTED=1", "TERM_PROGRAM=f4")
+	if !kittyTerm && runtime.GOOS != "windows" && !slices.ContainsFunc(out, isTermEntry) {
+		out = append(out, "TERM="+defaultTermName)
+	}
 
 	if graphics {
 		// The built-in terminal speaks the kitty graphics protocol, so it
@@ -159,6 +175,22 @@ func BuildChildEnv(env []string, graphics, kittyTerm bool) []string {
 		out = append(out, "TERM="+kittyTermName)
 	}
 	return out
+}
+
+// isTermEntry reports whether an environment entry is the TERM variable.
+func isTermEntry(kv string) bool {
+	return strings.HasPrefix(kv, "TERM=")
+}
+
+// unusableTerm reports whether an environment entry is a TERM that tells a
+// program nothing: empty, or the "dumb" of a launcher that has no terminal.
+// Windows keeps whatever it has: its programs do not read TERM.
+func unusableTerm(kv string) bool {
+	if runtime.GOOS == "windows" || !isTermEntry(kv) {
+		return false
+	}
+	v := strings.TrimPrefix(kv, "TERM=")
+	return v == "" || v == "dumb"
 }
 
 // announceKittyTerm decides whether to introduce the built-in terminal as

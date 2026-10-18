@@ -4,6 +4,7 @@ import (
 	"github.com/unxed/f4/internal/terminal"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -248,5 +249,39 @@ func TestChildEnvExportsNestedMarkerExactlyOnce(t *testing.T) {
 	}
 	if !envHas(env, "PATH=/usr/bin") {
 		t.Errorf("the rest of the environment must survive: %v", env)
+	}
+}
+
+// A desktop launcher gives f4 no TERM, and the shell in the built-in terminal
+// then cannot clear the screen or color `ls` (issue #2070).
+func TestChildEnvGivesATerminalTypeWhenThereIsNone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("programs on Windows do not read TERM")
+	}
+	for name, base := range map[string][]string{
+		"missing": {"PATH=/bin"},
+		"empty":   {"PATH=/bin", "TERM="},
+		"dumb":    {"PATH=/bin", "TERM=dumb"},
+	} {
+		env := terminal.BuildChildEnv(base, false, false)
+		if !envHas(env, "TERM=xterm-256color") {
+			t.Errorf("%s: the shell needs a terminal type: %v", name, env)
+		}
+		n := 0
+		for _, kv := range env {
+			if strings.HasPrefix(kv, "TERM=") {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("%s: exactly one TERM expected, got %d in %v", name, n, env)
+		}
+	}
+}
+
+func TestChildEnvKeepsTheUsersTerminalType(t *testing.T) {
+	env := terminal.BuildChildEnv([]string{"PATH=/bin", "TERM=screen-256color"}, false, false)
+	if !envHas(env, "TERM=screen-256color") || envHas(env, "TERM=xterm-256color") {
+		t.Errorf("a TERM that was set must be left alone: %v", env)
 	}
 }
