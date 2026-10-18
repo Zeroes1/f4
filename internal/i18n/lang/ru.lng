@@ -2420,6 +2420,13 @@ CommandPalette.Bookmark.Save.Desc=Сохранить папку активной
 CommandPalette.Bookmark.Home=Перейти в домашнюю папку
 CommandPalette.Bookmark.Home.Desc=Открыть домашнюю папку в активной панели
 
+DragDrop.Title= Перетаскивание 
+DragDrop.AskFolder=Файлы отпущены над папкой\n%s\nСкопировать их в неё или в папку, открытую в панели?\n%s
+DragDrop.IntoFolder=В &папку
+DragDrop.IntoCurrent=В п&анель
+DragDrop.Cancel=Отмена
+DragDrop.Copying=Копирование %d → %s
+DragDrop.Moving=Перемещение %d → %s
 Drive.Title= Диски
 Drive.Links=Links
 Drive.Tools=Инструменты и плагины

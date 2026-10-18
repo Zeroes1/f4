@@ -87,27 +87,33 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		return
 	}
 	vtui.FrameManager.PostTask(func() {
-		dst, dstDir, ok := pf.nestedDropTarget(ev)
+		info, ok := pf.nestedDropTarget(ev)
 		if !ok {
 			vtui.DebugLog("DND: no panel can take the offer")
 			go closeOffer(far2ldnd.CloseRejected)
 			vtui.ShowMessage(" Drag and Drop ", "There is no panel to drop the files into.", []string{"&Ok"})
 			return
 		}
-		vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
-		go fileops.ExecuteFileOpAt(src, dst, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
-			reason := far2ldnd.CloseProcessed
-			if src.Cancelled() {
-				reason = far2ldnd.CloseCancelled
-			}
-			// On the UI goroutine here: the reply of CLOSE is delivered by the
-			// same loop, so it must not be waited for from it.
-			go closeOffer(reason)
-			vtui.FrameManager.PostTask(func() {
-				pf.RefreshAll()
-				vtui.FrameManager.Redraw()
+		// far2l reports where the drop happened, not where the pointer was
+		// on the way, so nothing was highlighted: DropOnFolder decides a
+		// drop over a folder row (#2049).
+		pf.chooseDropDir(info, false, func(dstDir string) {
+			vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
+			announceDrop([]DropSourceGroup{{Names: names}}, dstDir, false)
+			go fileops.ExecuteFileOpAt(src, info.fs, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
+				reason := far2ldnd.CloseProcessed
+				if src.Cancelled() {
+					reason = far2ldnd.CloseCancelled
+				}
+				// On the UI goroutine here: the reply of CLOSE is delivered by the
+				// same loop, so it must not be waited for from it.
+				go closeOffer(reason)
+				vtui.FrameManager.PostTask(func() {
+					pf.RefreshAll()
+					vtui.FrameManager.Redraw()
+				})
 			})
-		})
+		}, func() { go closeOffer(far2ldnd.CloseCancelled) })
 	})
 }
 
@@ -212,16 +218,16 @@ func (pf *PanelsFrame) proxyOfferToTerminal(client *terminal.DNDClient, ev far2l
 // nestedDropTarget picks the destination of an offered drop, on the UI
 // goroutine: the panel under the event's cell when the cell is known and a
 // panel that can be written into is there, otherwise the active panel.
-func (pf *PanelsFrame) nestedDropTarget(ev far2ldnd.Event) (vfs.VFS, string, bool) {
+func (pf *PanelsFrame) nestedDropTarget(ev far2ldnd.Event) (dropTargetInfo, bool) {
 	if ev.PositionKnown() {
 		if info, ok := pf.resolveDropTarget(int(ev.X), int(ev.Y)); ok && VfsAcceptsDrop(info.fs) {
-			return info.fs, info.Dir, true
+			return info, true
 		}
 	}
 	if fsp := pf.GetActivePanel(); fsp != nil && VfsAcceptsDrop(fsp.Vfs) {
-		return fsp.Vfs, fsp.Vfs.GetPath(), true
+		return dropTargetInfo{panelIdx: pf.ActiveIdx, entryIdx: -1, Panel: fsp, fs: fsp.Vfs, Dir: fsp.Vfs.GetPath()}, true
 	}
-	return nil, "", false
+	return dropTargetInfo{}, false
 }
 
 // InstallTerminalOfferHandler makes client hand the offers of its binding to

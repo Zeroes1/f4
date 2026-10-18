@@ -232,10 +232,17 @@ func (pf *PanelsFrame) resolveDropTarget(mx, my int) (dropTargetInfo, bool) {
 }
 
 // HandleDrag implements vtui.DropTarget. It answers what a drop at this cell
-// would do, and on the drop itself starts the transfer.
+// would do, highlights where it would land while the backend follows the
+// drag, and on the drop itself starts the transfer (frame_dragdrop_target.go).
 func (pf *PanelsFrame) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
 	if ev == nil || ev.Phase == vtui.DragLeave {
+		if pf != nil {
+			pf.clearDropHighlight()
+		}
 		return vtui.DropNone
+	}
+	if ev.Phase == vtui.DragDrop {
+		pf.clearDropHighlight()
 	}
 	if !ev.Payload.OffersFiles() {
 		return vtui.DropNone
@@ -246,6 +253,7 @@ func (pf *PanelsFrame) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
 		return vtui.DropNone
 	}
 	if action, handled := pf.terminalDropTarget(ev); handled {
+		pf.clearDropHighlight()
 		return action
 	}
 	info, ok := pf.resolveDropTarget(ev.X, ev.Y)
@@ -253,17 +261,26 @@ func (pf *PanelsFrame) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
 		if ev.Phase != vtui.DragOver {
 			vtui.DebugLog("DND: nothing at cell %d,%d accepts a drop", ev.X, ev.Y)
 		}
+		pf.clearDropHighlight()
 		return vtui.DropNone
 	}
 	action := ChooseDropAction(ev.Allowed, ev.Suggested, ev.Modifiers)
 	if ev.Phase != vtui.DragOver {
-		vtui.DebugLog("DND: a drop at %d,%d would go to %q as %s",
-			ev.X, ev.Y, info.Dir, action)
+		vtui.DebugLog("DND: a drop at %d,%d would go to %q as %s (tracked=%v)",
+			ev.X, ev.Y, info.Dir, action, ev.Tracked)
 	}
-	if action == vtui.DropNone || ev.Phase != vtui.DragDrop {
+	if ev.Phase != vtui.DragDrop {
+		pf.setDropHighlight(info, ev.Tracked && action != vtui.DropNone)
 		return action
 	}
-	pf.dropExternalFiles(info, ev.Payload.Paths, action == vtui.DropMove)
+	if action == vtui.DropNone {
+		return action
+	}
+	paths, isMove := ev.Payload.Paths, action == vtui.DropMove
+	pf.chooseDropDir(info, ev.Tracked, func(dir string) {
+		info.Dir = dir
+		pf.dropExternalFiles(info, paths, isMove)
+	}, nil)
 	return action
 }
 
@@ -295,6 +312,7 @@ func (pf *PanelsFrame) dropExternalFiles(info dropTargetInfo, paths []string, is
 	if len(groups) == 0 {
 		return
 	}
+	announceDrop(groups, dstDir, isMove)
 
 	var run func(i int)
 	run = func(i int) {
@@ -313,13 +331,17 @@ func (pf *PanelsFrame) dropExternalFiles(info dropTargetInfo, paths []string, is
 				fsp.PendingSelection = fsp.GetSuccessorName()
 			}
 		}
-		go fileops.ExecuteFileOp(src, dst, g.Names, dstDir, isMove, config.App.DefaultFileOpMode, func() {
+		go executeDropFileOp(src, dst, g.Names, dstDir, isMove, config.App.DefaultFileOpMode, func() {
 			pf.RefreshAll()
 			run(i + 1)
 		})
 	}
 	run(0)
 }
+
+// executeDropFileOp runs the transfer a drop starts; tests replace it to see
+// where a drop goes without copying anything.
+var executeDropFileOp = fileops.ExecuteFileOp
 
 // reachableDropSources drops every name the source file system cannot stat
 // and returns what is left, along with the full paths that were refused. The

@@ -2420,6 +2420,13 @@ CommandPalette.Bookmark.Save.Desc=Store the active panel folder in this bookmark
 CommandPalette.Bookmark.Home=Go to home folder
 CommandPalette.Bookmark.Home.Desc=Open the home folder in the active panel
 
+DragDrop.Title= Drag and Drop 
+DragDrop.AskFolder=The files were dropped over the folder\n%s\nCopy them into it, or into the folder the panel shows?\n%s
+DragDrop.IntoFolder=Into the &folder
+DragDrop.IntoCurrent=Into the &panel
+DragDrop.Cancel=Cancel
+DragDrop.Copying=Copying %d → %s
+DragDrop.Moving=Moving %d → %s
 Drive.Title= Drive
 Drive.Links=Links
 Drive.Tools=Tools & Plugins
