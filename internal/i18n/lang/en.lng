@@ -2427,6 +2427,7 @@ DragDrop.IntoCurrent=Into the &panel
 DragDrop.Cancel=Cancel
 DragDrop.Copying=Copying %d → %s
 DragDrop.Moving=Moving %d → %s
+
 Drive.Title= Drive
 Drive.Links=Links
 Drive.Tools=Tools & Plugins

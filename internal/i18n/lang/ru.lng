@@ -2427,6 +2427,7 @@ DragDrop.IntoCurrent=В п&анель
 DragDrop.Cancel=Отмена
 DragDrop.Copying=Копирование %d → %s
 DragDrop.Moving=Перемещение %d → %s
+
 Drive.Title= Диски
 Drive.Links=Links
 Drive.Tools=Инструменты и плагины
