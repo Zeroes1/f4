@@ -1864,6 +1864,9 @@ jobs:
       # A goroutine a package's tests leave behind fails the package
       # (testutil.Main, goleak); the variable goes once every OS is clean.
       F4_GOLEAK: "1"
+      # The same for a regular file or socket still open after teardown
+      # (testutil.Main, openFiles); Windows lists nothing and passes.
+      F4_FDLEAK: "1"
     steps:
     - name: Checkout code
       uses: actions/checkout@v7
@@ -2226,7 +2229,11 @@ jobs:
         # separate arguments, and shellcheck is right that a bare $PACKAGES
         # would also glob.
         read -r -a packages <<<"$PACKAGES"
-        go test -race -shuffle=on -timeout 15m -skip '^TestSeedSweep$' "${packages[@]}"
+        # -cpu 1,4 runs every test twice, with GOMAXPROCS 1 and 4: the
+        # scheduler interleaves goroutines differently at each, and a race
+        # that one setting never shows the other can. Measured, a shard is
+        # 1-3 minutes, so doubling its test time stays under the Test cells.
+        go test -race -cpu 1,4 -shuffle=on -timeout 15m -skip '^TestSeedSweep$' "${packages[@]}"
 
   # Keeps flake.nix's vendorHash in sync with go.mod/go.sum.
   #
