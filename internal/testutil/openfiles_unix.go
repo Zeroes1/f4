@@ -42,8 +42,14 @@ func openFiles() []openFile {
 		// still say what it is bound and connected to, and a file is only
 		// its number and kind.
 		path, _ := os.Readlink(fmt.Sprintf("/proc/self/fd/%d", fd))
-		if path == "" && kind == "socket" {
-			path = socketName(fd)
+		if kind == "socket" {
+			name, system := socketName(fd)
+			if system {
+				continue
+			}
+			if path == "" {
+				path = name
+			}
 		}
 		out = append(out, openFile{fd: fd, kind: kind, path: path})
 	}
@@ -51,16 +57,19 @@ func openFiles() []openFile {
 }
 
 // socketName describes a socket by its own address and its peer's, where
-// it has them.
-func socketName(fd int) string {
+// it has them, and reports whether the socket is the system's rather than
+// the tests' (systemSocket, per platform).
+func socketName(fd int) (name string, system bool) {
 	var parts []string
-	if sa, err := unix.Getsockname(fd); err == nil {
-		parts = append(parts, sockaddrString(sa))
+	local, localErr := unix.Getsockname(fd)
+	if localErr == nil {
+		parts = append(parts, sockaddrString(local))
 	}
-	if sa, err := unix.Getpeername(fd); err == nil {
-		parts = append(parts, "-> "+sockaddrString(sa))
+	peer, peerErr := unix.Getpeername(fd)
+	if peerErr == nil {
+		parts = append(parts, "-> "+sockaddrString(peer))
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, " "), systemSocket(local, peer)
 }
 
 func sockaddrString(sa unix.Sockaddr) string {
