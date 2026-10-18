@@ -17,6 +17,7 @@ import (
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
+	"github.com/unxed/f4/internal/netproxy"
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
@@ -160,6 +161,11 @@ func installTestSeams() {
 	// tests that exercise these routes install per-dialog/per-frame recorders.
 	panel.DefaultExternalUICommandRunner = func(string, []string, string) error { return nil }
 	dialog.DefaultNativePropertiesOpener = func(string) error { return nil }
+	// The Explorer context menu waits for a click that never comes on a
+	// headless runner, on a thread of its own, for the rest of the process
+	// (found by goleak on windows/amd64); a test that runs the action
+	// through anything but the recorder it installs itself must not open it.
+	explorerMenuShower = func(string) error { return nil }
 
 	// Frames must not fork the user's shell during unit tests; the few
 	// tests that exercise the term.PTY path construct one explicitly.
@@ -185,5 +191,9 @@ func installTestSeams() {
 }
 
 func unmountTestFilesystems() error {
+	// A test that reached the network left its kept-alive connection in
+	// netproxy's transport, with a goroutine reading it; the leak check
+	// that follows would report that goroutine.
+	netproxy.CloseIdleConnections()
 	return errors.Join(fusefs.UnmountAll()...)
 }

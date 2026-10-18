@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -140,6 +141,13 @@ func Main(m *testing.M, before func(), after func() error) int {
 	}
 
 	if leakOpts != nil {
+		// A test that reached the network leaves its keep-alive connection
+		// in the default transport, with a goroutine reading it, for 90
+		// seconds after the last request. Idle ones are closed here; one
+		// still carrying a request is a leak and is reported.
+		if transport, ok := http.DefaultTransport.(*http.Transport); ok {
+			transport.CloseIdleConnections()
+		}
 		if leakErr := FindGoroutineLeaks(taskPumpExitTimeout, leakOpts...); leakErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "goroutine leak after test teardown (%s): %v\n", goleakEnv, leakErr)
 			result = 1
