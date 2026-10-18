@@ -799,6 +799,7 @@ func (p *sftpProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vf
 	if err != nil {
 		return nil, err
 	}
+	enterStartPath(res, cfg)
 	return res, nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/unxed/f4/internal/netproxy"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtui"
 	"io"
 	"os"
 	"path"
@@ -26,6 +27,10 @@ type NetFoxConfig struct {
 	Timeout  string            `json:"Timeout,omitempty"`
 	Codepage string            `json:"Codepage,omitempty"`
 	Options  map[string]string `json:"Options,omitempty"`
+	// Path is the folder the connection opens in, like the path of a Far
+	// connection (nz256, f4#1894); empty opens where the server puts a new
+	// session, the home folder of the user as a rule.
+	Path string `json:"Path,omitempty"`
 
 	// Proxy overrides f4's app-wide proxy for this site alone. ProxyMode 0
 	// is netproxy.ModeGlobal, so connections saved before this existed —
@@ -47,6 +52,20 @@ func (c NetFoxConfig) Proxy() netproxy.Settings {
 		User: c.ProxyUser,
 		Pass: c.ProxyPass,
 	})
+}
+
+// enterStartPath moves a fresh connection into its saved folder
+// (NetFoxConfig.Path). A folder that is not there, or is not a folder,
+// leaves the connection where it is: it still works, and the panel shows
+// the folder it is in.
+func enterStartPath(v vfs.VFS, cfg NetFoxConfig) {
+	p := strings.TrimSpace(cfg.Path)
+	if p == "" {
+		return
+	}
+	if err := v.SetPath(p); err != nil {
+		vtui.DebugLog("NETFOX: the start folder %q of %s: %v", p, cfg.Host, err)
+	}
 }
 
 type NetFoxVFS struct {
