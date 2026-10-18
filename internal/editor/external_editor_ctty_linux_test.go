@@ -29,7 +29,7 @@ func TestExternalEditorCTTYHelper(t *testing.T) {
 		// Go asks the kernel to *steal* the terminal (TIOCSCTTY, arg 1), which
 		// root may do and a regular user may not. Behave like a regular user.
 		if err := dropToNobody(); err != nil {
-			_ = os.WriteFile(report, []byte(err.Error()), 0o666)
+			_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 			os.Exit(4)
 		}
 	}
@@ -38,7 +38,7 @@ func TestExternalEditorCTTYHelper(t *testing.T) {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	ConfigureExternalEditorProcess(cmd)
 	if err := cmd.Run(); err != nil {
-		_ = os.WriteFile(report, []byte(err.Error()), 0o666)
+		_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 		os.Exit(3)
 	}
 	os.Exit(0)
@@ -56,7 +56,7 @@ func TestExternalEditorDetachedCTTYHelper(t *testing.T) {
 	gui.Running = false
 	if os.Getuid() == 0 {
 		if err := dropToNobody(); err != nil {
-			_ = os.WriteFile(report, []byte(err.Error()), 0o666)
+			_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 			os.Exit(4)
 		}
 	}
@@ -65,7 +65,7 @@ func TestExternalEditorDetachedCTTYHelper(t *testing.T) {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	ConfigureExternalEditorProcess(cmd)
 	if err := cmd.Run(); err != nil {
-		_ = os.WriteFile(report, []byte(err.Error()), 0o666)
+		_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 		os.Exit(3)
 	}
 	os.Exit(0)
@@ -79,7 +79,7 @@ func TestExternalEditorStartsOnOwnControllingTTY(t *testing.T) {
 	if err != nil {
 		t.Skipf("pseudo-terminal unavailable: %v", err)
 	}
-	defer pty.Close()
+	t.Cleanup(func() { _ = pty.Close() })
 
 	// Directly under the world-writable temp dir, so that the helper can reach
 	// it even after it drops to an unprivileged user.
@@ -110,7 +110,7 @@ func TestExternalEditorStartsWithInheritedTTY(t *testing.T) {
 	if err != nil {
 		t.Skipf("pseudo-terminal unavailable: %v", err)
 	}
-	defer pty.Close()
+	t.Cleanup(func() { _ = pty.Close() })
 
 	dir, err := os.MkdirTemp("", "f4-detached-ctty-")
 	if err != nil {
@@ -119,6 +119,7 @@ func TestExternalEditorStartsWithInheritedTTY(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	_ = os.Chmod(dir, 0o777)
 	report := filepath.Join(dir, "report")
+	// #nosec G204 -- invokes only this test binary with a fixed test selector.
 	helper := exec.Command(os.Args[0], "-test.run=^TestExternalEditorDetachedCTTYHelper$")
 	helper.Env = append(os.Environ(), editorCTTYDetachedHelperEnv+"="+report)
 	helper.Stdin, helper.Stdout, helper.Stderr = pty.Slave, pty.Slave, pty.Slave
