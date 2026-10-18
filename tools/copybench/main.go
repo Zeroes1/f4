@@ -95,11 +95,20 @@ func main() {
 			if err := dropCache(files); err != nil {
 				fail(err)
 			}
+			// Asked before the timer starts and printed after the row (f4#1894,
+			// ntfs): the drop above is advice a file system may ignore, and a row
+			// measuring the memory must say so.
+			resident, pages, rerr := cacheResidency(files)
 			start := time.Now()
 			copyAll(files, out, n, *flush)
 			sec := time.Since(start).Seconds()
 			mb := float64(total) / (1 << 20)
 			fmt.Printf("%-16s %7d %8d %9.1f %8.2f %9.1f %9.1f\n", set.name, n, len(files), mb, sec, mb/sec, float64(len(files))/sec)
+			if rerr != nil {
+				fmt.Printf("  note: could not check what the cache drop left in memory: %v\n", rerr)
+			} else if warning := residencyWarning(resident, pages); warning != "" {
+				fmt.Println(warning)
+			}
 		}
 		if err := os.RemoveAll(filepath.Join(srcRoot, "set")); err != nil {
 			fail(err)
