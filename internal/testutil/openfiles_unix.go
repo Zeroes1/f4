@@ -12,19 +12,19 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// openFileLimit is how many descriptor numbers openFiles probes. A test
+// binary holds far fewer; one above this is missed, and the soft limit is
+// not consulted because its type differs between the BSDs and the rest.
+const openFileLimit = 4096
+
 // openFiles lists the regular files and sockets this process has open, by
-// probing every descriptor number up to the soft limit. Only those two kinds
+// probing every descriptor number up to openFileLimit. Only those two kinds
 // count: a pipe, a pseudo-terminal, /dev/urandom or the runtime's kqueue and
 // epoll descriptors are opened once by the runtime or the standard library
 // and kept, so they would make every run look like a leak.
 func openFiles() []openFile {
-	limit := 4096
-	var rl unix.Rlimit
-	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rl); err == nil && rl.Cur < uint64(limit) {
-		limit = int(rl.Cur) // #nosec G115 -- below 4096 by the comparison above
-	}
 	var out []openFile
-	for fd := 0; fd < limit; fd++ {
+	for fd := 0; fd < openFileLimit; fd++ {
 		var st unix.Stat_t
 		if err := unix.Fstat(fd, &st); err != nil {
 			continue
