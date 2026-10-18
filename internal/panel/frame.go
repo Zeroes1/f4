@@ -3711,7 +3711,14 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 						wrapped := terminal.ManagedForegroundCommand(sqCmd)
 						if path != "" {
 							sqPath := strings.ReplaceAll(path, "'", "'\\''")
-							fullWireCmd = fmt.Sprintf(" %s\r", terminal.ManagedForegroundCommandInDirectory("'"+sqPath+"'", sqCmd))
+							inDir := terminal.ManagedForegroundCommandInDirectory
+							// A folder the panel entered through the sudo
+							// helper: run the command there through sudo
+							// instead of failing on the refused cd (f4#1255).
+							if osfs, isOS := localShellVFS.(*vfs.OSVFS); isOS && osfs.NeedsElevationToEnter(path) {
+								inDir = terminal.ManagedForegroundCommandInElevatedDirectory
+							}
+							fullWireCmd = fmt.Sprintf(" %s\r", inDir("'"+sqPath+"'", sqCmd))
 						} else {
 							fullWireCmd = fmt.Sprintf(" %s\r", wrapped)
 						}
