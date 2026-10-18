@@ -2980,6 +2980,48 @@ func TestFileSystemPanel_FastFindStartsAtCurrentItem(t *testing.T) {
 	}
 }
 
+// Typing "proj" must leave a typo-tolerant hit on "Program Files" for the
+// exact hit on "projects", even when the cursor already sits on the former.
+func TestFileSystemPanel_FastFindPrefersExactOverTypo(t *testing.T) {
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	fp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewOSVFS(t.TempDir()))
+	waitForLoad(t, fp)
+	fp.Entries = []*FileEntry{
+		{VFSItem: vfs.VFSItem{Name: "Program Files"}},
+		{VFSItem: vfs.VFSItem{Name: "projects"}},
+	}
+	fp.Refresh()
+	fp.FastFindMode = true
+	fp.SetCursorIndex(0)
+	for _, query := range []string{"p", "pr", "pro"} {
+		fp.FastFindStr = query
+		fp.doFastFind(0)
+		if got := fp.GetSelectedName(); got != "Program Files" {
+			t.Fatalf("%q selected %q, want Program Files", query, got)
+		}
+	}
+	fp.FastFindStr = "proj"
+	fp.doFastFind(0)
+	if got := fp.GetSelectedName(); got != "projects" {
+		t.Fatalf("proj selected %q, want projects", got)
+	}
+}
+
+// A lone "*" matches every name with an empty span; a closed search matches
+// nothing.
+func TestFileSystemPanel_FastFindScoredMatchEdgeCases(t *testing.T) {
+	fp := &FileSystemPanel{}
+	if _, _, _, ok := fp.fastFindScoredMatch("projects"); ok {
+		t.Fatal("closed quick search matched")
+	}
+	fp.FastFindMode = true
+	fp.FastFindStr = "*"
+	start, matched, score, ok := fp.fastFindScoredMatch("projects")
+	if !ok || start != 0 || matched != 0 || score != 0 {
+		t.Fatalf(`"*" = (%d, %d, %d, %v), want (0, 0, 0, true)`, start, matched, score, ok)
+	}
+}
+
 func TestFileSystemPanel_ForkDuplication(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	tmp := t.TempDir()

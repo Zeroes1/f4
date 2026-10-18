@@ -3667,8 +3667,15 @@ func (fp *FileSystemPanel) exactCheckboxAt(x, y int) bool {
 }
 
 func (fp *FileSystemPanel) fastFindMatch(name string) (startRunes, matchedRunes int, ok bool) {
+	startRunes, matchedRunes, _, ok = fp.fastFindScoredMatch(name)
+	return startRunes, matchedRunes, ok
+}
+
+// fastFindScoredMatch is fastFindMatch plus the match's edit distance, so a
+// search can prefer an exact hit over a typo-tolerant one.
+func (fp *FileSystemPanel) fastFindScoredMatch(name string) (startRunes, matchedRunes, score int, ok bool) {
 	if !fp.FastFindMode || fp.FastFindStr == "" {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	queryText := fp.FastFindStr
 	anywhere := strings.HasPrefix(queryText, "*")
@@ -3676,7 +3683,7 @@ func (fp *FileSystemPanel) fastFindMatch(name string) (startRunes, matchedRunes 
 		queryText = strings.TrimPrefix(queryText, "*")
 	}
 	if queryText == "" {
-		return 0, 0, anywhere
+		return 0, 0, 0, anywhere
 	}
 	// Matchers are cached per query text: the needle tables are built once
 	// per keystroke, not once per visible row per redraw. The strict setting
@@ -3714,9 +3721,9 @@ func (fp *FileSystemPanel) fastFindMatch(name string) (startRunes, matchedRunes 
 		}
 	}
 	if bestScore < 0 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
-	return bestStart, bestEnd - bestStart + 1, true
+	return bestStart, bestEnd - bestStart + 1, bestScore, true
 }
 
 func (fp *FileSystemPanel) fastFindHasMatches() bool {
@@ -4677,6 +4684,21 @@ func (fp *FileSystemPanel) doFastFind(dir int) {
 	checkMatch := func(i int) bool {
 		_, _, ok := fp.fastFindMatch(fp.Entries[i].Name)
 		return ok
+	}
+	if dir == 0 {
+		// Typing lands on the closest match, not merely the first one: with
+		// "proj" a typo-tolerant hit on "Program Files" must not hold the
+		// cursor while "projects" matches exactly.
+		best := -1
+		for _, entry := range fp.Entries {
+			if _, _, score, ok := fp.fastFindScoredMatch(entry.Name); ok && (best < 0 || score < best) {
+				best = score
+			}
+		}
+		checkMatch = func(i int) bool {
+			_, _, score, ok := fp.fastFindScoredMatch(fp.Entries[i].Name)
+			return ok && score == best
+		}
 	}
 
 	switch dir {
