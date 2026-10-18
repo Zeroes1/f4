@@ -469,6 +469,9 @@ func FinishColors() {
 	// The caret is drawn by the terminal, so the colour has to be handed over.
 	// Here, because this is the one point every palette layer has passed.
 	cursorFg, _ := GetColorRGBBoth(vtui.Palette[ColTerminalCursor])
+	if c := config.App.TerminalColors(); c.HasCursor {
+		cursorFg = c.Cursor // the user's choice in the settings (f4#2071)
+	}
 	vtui.CursorColor = int(cursorFg)
 	vtui.DebugLog("COLORS: cursor color #%06X", cursorFg)
 

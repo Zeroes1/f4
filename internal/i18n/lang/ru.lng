@@ -4229,6 +4229,16 @@ SettingsCenter.AnsiColorBrightCyan.Description=Цвет терминала 14 (�
 SettingsCenter.AnsiColorBrightCyan.Label=ANSI ярко-голубой
 SettingsCenter.AnsiColorBrightWhite.Description=Цвет терминала 15 (ярко-белый) в виде #RRGGBB. Его рисует встроенный терминал, и f4 загружает его в терминал-хозяин, поэтому он виден в программах, печатающих 16 базовых цветов. Пустое поле возвращает цвет по умолчанию, #FFFFFF.
 SettingsCenter.AnsiColorBrightWhite.Label=ANSI ярко-белый
+SettingsCenter.TerminalForeground.Description=Цвет текста встроенного терминала в виде #RRGGBB: им печатают программы, которые не выбирают цвет сами. Пустое поле оставляет цвет темы.
+SettingsCenter.TerminalForeground.Label=Текст терминала
+SettingsCenter.TerminalBackground.Description=Цвет фона встроенного терминала в виде #RRGGBB: пустое место и фон, на котором печатают программы, не выбирающие цвет сами. Пустое поле оставляет цвет темы.
+SettingsCenter.TerminalBackground.Label=Фон терминала
+SettingsCenter.TerminalCursorColor.Description=Цвет текстового курсора в виде #RRGGBB во встроенном терминале, командной строке и редакторе. Пустое поле оставляет цвет темы.
+SettingsCenter.TerminalCursorColor.Label=Цвет курсора
+SettingsCenter.TerminalSelectionText.Description=Цвет текста, выделенного мышью во встроенном терминале, в виде #RRGGBB. Когда оба поля выделения пусты, выделение меняет местами цвета текста и фона.
+SettingsCenter.TerminalSelectionText.Label=Текст выделения
+SettingsCenter.TerminalSelectionColor.Description=Цвет фона того, что выделено мышью во встроенном терминале, в виде #RRGGBB. Когда оба поля выделения пусты, выделение меняет местами цвета текста и фона.
+SettingsCenter.TerminalSelectionColor.Label=Фон выделения
 SettingsCenter.Text.33eda3510e877f36f141cc98c94203e4a3cde63f294d2215bf6d463a4f2be7ae=введите цвет в виде #RRGGBB или оставьте поле пустым, чтобы вернуть цвет по умолчанию
 
 Group.Menu=Группировать по…

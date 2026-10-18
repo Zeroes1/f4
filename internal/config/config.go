@@ -516,6 +516,11 @@ type F4Config struct {
 	AnsiColorBrightMagenta   string
 	AnsiColorBrightCyan      string
 	AnsiColorBrightWhite     string
+	TerminalForeground       string // this and the next four: the embedded terminal's own colours, #RRGGBB or empty for the theme's (f4#2071)
+	TerminalBackground       string
+	TerminalCursorColor      string
+	TerminalSelectionText    string
+	TerminalSelectionColor   string
 	NavigationMode           PanelNavigationMode
 	PanelAutoFilter          bool // a lone Alt press opens the panel autofilter (hides non-matching rows); Alt+letter stays the quick search
 	PanelStrictAutoFilter    bool // panel quick search/autofilter requires an exact match instead of tolerating one typo
@@ -1061,6 +1066,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
 	cfg.PromptFormat = merged.GetString("Panel", "PromptFormat", "$u@$n:$p$# ")
 	loadAnsiColors(cfg, func(key, def string) string { return merged.GetString("Panel", key, def) })
+	loadTerminalColors(cfg, func(key, def string) string { return merged.GetString("Panel", key, def) })
 	if mode := merged.GetString("Panel", "NavigationMode", ""); mode != "" {
 		cfg.NavigationMode = ParsePanelNavigationMode(mode)
 	} else if merged.GetString("Panel", "VimHotkeys", "0") == "1" {
@@ -1428,6 +1434,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])
 	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
 	writeAnsiColors(&sb, cfg)
+	writeTerminalColors(&sb, cfg)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
 	fmt.Fprintf(&sb, "PanelAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelAutoFilter])
 	fmt.Fprintf(&sb, "PanelStrictAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelStrictAutoFilter])
