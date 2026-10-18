@@ -29,6 +29,7 @@ func TestExternalEditorCTTYHelper(t *testing.T) {
 		// Go asks the kernel to *steal* the terminal (TIOCSCTTY, arg 1), which
 		// root may do and a regular user may not. Behave like a regular user.
 		if err := dropToNobody(); err != nil {
+			// #nosec G703 -- report is a file inside the test's temporary directory.
 			_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 			os.Exit(4)
 		}
@@ -38,6 +39,7 @@ func TestExternalEditorCTTYHelper(t *testing.T) {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	ConfigureExternalEditorProcess(cmd)
 	if err := cmd.Run(); err != nil {
+		// #nosec G703 -- report is a file inside the test's temporary directory.
 		_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 		os.Exit(3)
 	}
@@ -56,6 +58,7 @@ func TestExternalEditorDetachedCTTYHelper(t *testing.T) {
 	gui.Running = false
 	if os.Getuid() == 0 {
 		if err := dropToNobody(); err != nil {
+			// #nosec G703 -- report is a file inside the test's temporary directory.
 			_ = os.WriteFile(report, []byte(err.Error()), 0o600)
 			os.Exit(4)
 		}
