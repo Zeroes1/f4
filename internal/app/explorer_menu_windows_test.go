@@ -33,4 +33,13 @@ func TestBuildExplorerMenuForAFile(t *testing.T) {
 	if n := m.itemCount(); n <= 0 {
 		t.Fatalf("the context menu of %s has %d items", path, n)
 	}
+	// "Send to" and "Open with" are filled while they open, through the
+	// IContextMenu2/3 of the menu; without one they stay empty.
+	if m.drawer == nil {
+		t.Fatal("the menu has neither IContextMenu3 nor IContextMenu2")
+	}
+	t.Logf("IContextMenu3: %v", m.v3)
+	if _, err := registerExplorerMenuClass(); err != nil {
+		t.Fatalf("the window class of the menu: %v", err)
+	}
 }
