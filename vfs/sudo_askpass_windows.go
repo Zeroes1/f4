@@ -4,6 +4,7 @@ package vfs
 
 import (
 	"github.com/unxed/vtui"
+	"net"
 	"os"
 )
 
@@ -12,9 +13,11 @@ func RunSudoAskpass() {
 	os.Exit(1)
 }
 
-func (c *SudoClient) runAskpassServer(path string) {
-	// Not used on Windows
-}
+// listenAskpass and serveAskpass are not used on Windows: Connect goes
+// through UAC there and never reaches them.
+func listenAskpass(string) (net.Listener, error) { return nil, nil }
+
+func (c *SudoClient) serveAskpass(net.Listener) {}
 
 // RunOnUI runs fn on the UI goroutine: the "retry as administrator"
 // question before UAC (f4#1768).
