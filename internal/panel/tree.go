@@ -290,10 +290,19 @@ func NewTreePanel(src *FileSystemPanel) *TreePanel {
 	// never disturbs the cursor revealPath already placed on src's current
 	// directory.
 	t.applyExpandedPaths(treeExpandedSnapshot())
+	// A branch above the cursor that this re-expands pushes the source
+	// directory's row down, and the cursor, an index, would be left on
+	// whatever row took its place; put it back on the directory.
+	t.revealPath(treeRootFor(src))
 	t.syncRows()
 
 	t.SetFocus(false)
 	t.SetPosition(x1, y1, x2, y2)
+	if config.App.TreeExplorerMode {
+		// A tree taller than the panel opens with the folder of the panel in
+		// the middle of it, not at its bottom edge (mitek1977-coder, f4#1602).
+		t.centerCursor()
+	}
 	return t
 }
 
@@ -630,6 +639,7 @@ func (t *TreePanel) GetPosition() (int, int, int, int) { return t.Frame.GetPosit
 // FileSystemPanel.SetFocus (list.go) and ProcList's own panel do for their
 // own vtui.Table.
 func (t *TreePanel) SetFocus(f bool) {
+	gained := f && !t.Focused
 	t.Focused = f
 	if f {
 		t.Frame.ColorTitleIdx = theme.ColPanelSelectedTitle
@@ -641,6 +651,41 @@ func (t *TreePanel) SetFocus(f bool) {
 		t.Table.ColorItemSelectCursorIdx = theme.ColPanelInactiveSelectedCursor
 	}
 	t.Table.SetFocus(f)
+	if gained && config.App.TreeExplorerMode {
+		// Tab over to the tree puts its cursor on the folder the panel shows,
+		// wherever the user went in the panel meanwhile (f4#1602). SetFocus
+		// runs on every frame, so only the moment the focus arrives counts.
+		t.revealSource()
+	}
+}
+
+// revealSource moves the cursor to the folder of the panel that opened the
+// tree, expanding the branches on the way, and puts that row in the middle of
+// the view. A cursor already there is left alone, view and all.
+func (t *TreePanel) revealSource() {
+	path := treeRootFor(t.src)
+	if path == "" || path == t.SelectedPath() {
+		return
+	}
+	idx := t.resolvePath(path)
+	if idx < 0 {
+		return
+	}
+	t.syncRows()
+	t.Table.SelectPos = idx
+	t.centerCursor()
+}
+
+// centerCursor scrolls the view so the cursor row is as near its middle as
+// the length of the tree allows.
+func (t *TreePanel) centerCursor() {
+	vh := t.Table.ViewHeight
+	if vh <= 0 || t.Table.ItemCount <= vh {
+		t.Table.EnsureVisible()
+		return
+	}
+	maxTop := t.Table.ItemCount - vh
+	t.Table.TopPos = min(max(t.Table.SelectPos-vh/2, 0), maxTop)
 }
 
 func (t *TreePanel) IsFocused() bool { return t.Focused }
