@@ -35,6 +35,11 @@ it moved (`vtui.DragEvent.Tracked`, #2049):
   behaviour before #2049), `ask` asks which of the two. A drop anywhere else
   goes into the folder the panel shows.
 
+A tracked drag resting half a second on a workspace tab switches to that
+workspace (vtui, `WorkspaceDragDwell`), so files can be dropped into its
+panels without letting go first. The drag always goes to the workspace on
+screen.
+
 The destination is always the panel's own VFS, so a panel showing an archive
 or a network connection is not a special case: the transfer is handed to
 `ExecuteFileOp`, exactly like F5, with its progress, overwrite and error
