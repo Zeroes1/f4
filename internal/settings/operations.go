@@ -36,6 +36,7 @@ func (settingsOperationsProvider) Catalog() f4settings.Catalog {
 	add("save.geometry", "workspaces", "Manual saving", "Save window geometry", "Capture and save the current graphical window dimensions and position independently of other settings.", false, func(context.Context) error {
 		return host.SaveGeometry()
 	})
+	add(terminalColorDefaultsCommand, "terminal", "Colors", "Default terminal colors", "Put the 16 ANSI colors back to their defaults and empty the fields of the terminal's own colors, so that they take the theme's. Apply keeps the change, Cancel drops it.", false, func(context.Context) error { return nil })
 	add("colors.export", "appearance", "Theme", "Export applied colors", "Write the complete applied palette to farcolors.ini in the current configuration directory.", false, func(context.Context) error { return theme.ExportColors(theme.UserColorOverridesPath()) })
 	add("syntax.reload", "syntax", "Colorer", "Reload schemes", "Load the applied Colorer configuration, report what Colorer finds wrong with it, then drop cached sessions, regions and scheme so subsequent highlighting uses it.", true, func(ctx context.Context) error {
 		check := editor.CheckColorerSource(ctx, editor.CurrentColorerSource(), config.App.EditorColorerScheme, false, nil)

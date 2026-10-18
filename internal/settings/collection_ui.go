@@ -346,6 +346,8 @@ func (c *settingsCenter) addCommands(category string) {
 					c.status = err.Error()
 				} else if cmd.ID == "syntax.reload" {
 					c.refreshSchemeChoices()
+				} else if cmd.ID == terminalColorDefaultsCommand {
+					c.resetTerminalColors()
 				}
 			}
 			button.SetId("settings-command:" + cmd.ID)

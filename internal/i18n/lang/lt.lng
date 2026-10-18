@@ -2308,4 +2308,6 @@ SettingsCenter.TerminalSelectionText.Description=Įtaisytajame terminale pele pa
 SettingsCenter.TerminalSelectionText.Label=Žymėjimo tekstas
 SettingsCenter.TerminalSelectionColor.Description=Įtaisytajame terminale pele pažymėtos srities fono spalva #RRGGBB pavidalu. Kai abu žymėjimo laukai tušti, žymėjimas sukeičia teksto ir fono spalvas.
 SettingsCenter.TerminalSelectionColor.Label=Žymėjimo fonas
+SettingsCenter.Text.68a3a5c37c14fdf7456be5f885c24326c82ad174e2d2bedbc2e170af6c8b5fca=Numatytosios terminalo spalvos
+SettingsCenter.Text.2992700d1e314e8faffef85f0038f19aa57bfa63fa16f768c21d64742288d764=Grąžina 16 ANSI spalvų numatytąsias reikšmes ir išvalo terminalo nuosavų spalvų laukus, kad jie imtų temos spalvas. Apply išsaugo pakeitimą, Cancel jo atsisako.
 SettingsCenter.Text.33eda3510e877f36f141cc98c94203e4a3cde63f294d2215bf6d463a4f2be7ae=įveskite spalvą kaip #RRGGBB arba palikite lauką tuščią numatytajai spalvai

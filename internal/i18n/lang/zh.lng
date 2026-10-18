@@ -2229,4 +2229,6 @@ SettingsCenter.TerminalSelectionText.Description=在内置终端中用鼠标选�
 SettingsCenter.TerminalSelectionText.Label=选区文字
 SettingsCenter.TerminalSelectionColor.Description=在内置终端中用鼠标选中部分的背景颜色，格式为 #RRGGBB。两个选区字段都为空时，选区会互换文字和背景的颜色。
 SettingsCenter.TerminalSelectionColor.Label=选区背景
+SettingsCenter.Text.68a3a5c37c14fdf7456be5f885c24326c82ad174e2d2bedbc2e170af6c8b5fca=终端默认颜色
+SettingsCenter.Text.2992700d1e314e8faffef85f0038f19aa57bfa63fa16f768c21d64742288d764=将 16 种 ANSI 颜色恢复为默认值，并清空终端自身颜色的字段，使其采用主题的颜色。Apply 保留更改，Cancel 放弃更改。
 SettingsCenter.Text.33eda3510e877f36f141cc98c94203e4a3cde63f294d2215bf6d463a4f2be7ae=请以 #RRGGBB 输入颜色，或留空以使用默认颜色
