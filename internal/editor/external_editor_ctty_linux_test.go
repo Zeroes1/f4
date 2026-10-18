@@ -123,8 +123,7 @@ func TestExternalEditorStartsWithInheritedTTY(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	_ = os.Chmod(dir, 0o777)
 	report := filepath.Join(dir, "report")
-	// #nosec G702 -- invokes only this test binary with a fixed test selector.
-	// #nosec G204 -- invokes only this test binary with a fixed test selector.
+	// #nosec G204 G702 -- os.Args[0] is the current test binary and the arguments are fixed.
 	helper := exec.Command(os.Args[0], "-test.run=^TestExternalEditorDetachedCTTYHelper$")
 	helper.Env = append(os.Environ(), editorCTTYDetachedHelperEnv+"="+report)
 	helper.Stdin, helper.Stdout, helper.Stderr = pty.Slave, pty.Slave, pty.Slave
