@@ -5,6 +5,8 @@ package terminal
 import (
 	"context"
 	"os/exec"
+	"regexp"
+	"strings"
 )
 
 // darwinFileClipboardScript lists the files on the general pasteboard as a JSON
@@ -25,6 +27,26 @@ try {
 } catch (e) {}
 JSON.stringify(out);`
 
+// darwinFileClipboardPasteboard names the pasteboard readDarwinFileClipboard
+// reads; empty is the general one, the clipboard of the desktop. A test names
+// one of its own: the general pasteboard is shared by every process of the
+// session, and another test binary writing it between the test's write and
+// read made the reader find one file of two, or none (main c64da8294, train
+// unxed/f4#2065, on the macOS runners).
+var darwinFileClipboardPasteboard = ""
+
+var pasteboardName = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+
+// darwinFileClipboardScriptFor is darwinFileClipboardScript reading the named
+// pasteboard (a name that is not a plain identifier reads the general one).
+func darwinFileClipboardScriptFor(name string) string {
+	if name == "" || !pasteboardName.MatchString(name) {
+		return darwinFileClipboardScript
+	}
+	return strings.Replace(darwinFileClipboardScript, "$.NSPasteboard.generalPasteboard",
+		"$.NSPasteboard.pasteboardWithName($('"+name+"'))", 1)
+}
+
 // readDarwinFileClipboard reads the files Finder (or any other application)
 // copied. Finder has no cut: its move is a paste with Option, so the second
 // result is always false.
@@ -32,7 +54,8 @@ func readDarwinFileClipboard(ctx context.Context) ([]string, bool, error) {
 	if _, err := exec.LookPath("osascript"); err != nil {
 		return nil, false, errFileClipboardUnavailable
 	}
-	out, err := exec.CommandContext(ctx, "osascript", "-l", "JavaScript", "-e", darwinFileClipboardScript).Output() // #nosec G204 -- fixed script, no input is interpolated.
+	script := darwinFileClipboardScriptFor(darwinFileClipboardPasteboard)
+	out, err := exec.CommandContext(ctx, "osascript", "-l", "JavaScript", "-e", script).Output() // #nosec G204 -- fixed script; the only part put in is a pasteboard name checked to be a plain identifier.
 	if err != nil {
 		return nil, false, errFileClipboardUnavailable
 	}

@@ -5,6 +5,7 @@ package terminal
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,35 +35,45 @@ func TestReadDarwinFileClipboardPasteboard(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	set := func(t *testing.T, script string) {
+	// The test reads and writes a pasteboard of its own, not the general one:
+	// that is the clipboard of the whole desktop session, and another test
+	// binary writing it between this test's write and read made the reader
+	// find one file of two, or none (main c64da8294, train unxed/f4#2065).
+	name := fmt.Sprintf("org.f4.test.files.%d", os.Getpid())
+	old := darwinFileClipboardPasteboard
+	darwinFileClipboardPasteboard = name
+	t.Cleanup(func() { darwinFileClipboardPasteboard = old })
+	board := "var pb = $.NSPasteboard.pasteboardWithName($('" + name + "'));\n"
+	run := func(t *testing.T, body string) string {
 		t.Helper()
-		if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil { // #nosec G204 -- fixed test script.
+		script := "ObjC.import('AppKit');\n" + board + body
+		out, err := exec.Command("osascript", "-l", "JavaScript", "-e", script).CombinedOutput() // #nosec G204 -- fixed test script; the paths are JSON-encoded.
+		if err != nil {
 			t.Fatalf("%s: %v: %s", script, err, out)
 		}
+		return string(out)
 	}
-
-	t.Run("files", func(t *testing.T) {
-		// Finder puts every copied file on the pasteboard as an item of its
-		// own; AppleScript's "set the clipboard to {file, file}" does not.
-		names, err := json.Marshal([]string{one, two})
+	t.Cleanup(func() { run(t, "pb.releaseGlobally; ''") })
+	// writeFiles puts each path on the pasteboard as an item of its own, as
+	// Finder does with a copied selection, and reads them back before the
+	// writer exits.
+	writeFiles := func(t *testing.T, paths ...string) {
+		t.Helper()
+		names, err := json.Marshal(paths)
 		if err != nil {
 			t.Fatal(err)
 		}
-		script := `ObjC.import('AppKit');
-var pb = $.NSPasteboard.generalPasteboard;
-pb.clearContents;
+		out := run(t, `pb.clearContents;
 var items = [];
-` + "JSON.parse('" + string(names) + "')" + `.forEach(function (p) { items.push($.NSURL.fileURLWithPath(p)); });
+`+"JSON.parse('"+string(names)+"')"+`.forEach(function (p) { items.push($.NSURL.fileURLWithPath(p)); });
 var wrote = pb.writeObjects($(items));
-// Read the items back before exiting: a writer that quits at once can leave
-// the second item unresolved for the next process.
 var back = pb.readObjectsForClassesOptions($.NSArray.arrayWithObject($.NSURL), $.NSDictionary.dictionaryWithObjectForKey($(true), $.NSPasteboardURLReadingFileURLsOnlyKey));
-'items=' + items.length + ' wrote=' + wrote + ' pasteboard items=' + pb.pasteboardItems.count + ' back=' + back.count;`
-		out, err := exec.Command("osascript", "-l", "JavaScript", "-e", script).CombinedOutput() // #nosec G204 -- fixed test script; the paths are JSON-encoded.
-		if err != nil {
-			t.Fatalf("writing two files to the pasteboard: %v: %s", err, out)
-		}
+'items=' + items.length + ' wrote=' + wrote + ' pasteboard items=' + pb.pasteboardItems.count + ' back=' + back.count;`)
 		t.Logf("pasteboard: %s", out)
+	}
+
+	t.Run("files", func(t *testing.T) {
+		writeFiles(t, one, two)
 		got, cut, err := readFileClipboard(context.Background())
 		if err != nil {
 			t.Fatalf("reading copied files failed: %v", err)
@@ -73,20 +84,24 @@ var back = pb.readObjectsForClassesOptions($.NSArray.arrayWithObject($.NSURL), $
 		}
 	})
 	t.Run("one file", func(t *testing.T) {
-		set(t, `set the clipboard to (POSIX file "`+one+`")`)
+		writeFiles(t, one)
 		got, _, err := readFileClipboard(context.Background())
 		if err != nil || !reflect.DeepEqual(got, []string{one}) {
 			t.Fatalf("files = %q, err = %v, want %q", got, err, []string{one})
 		}
 	})
 	t.Run("text is not a file", func(t *testing.T) {
-		set(t, `set the clipboard to "`+one+`"`)
+		path, err := json.Marshal(one)
+		if err != nil {
+			t.Fatal(err)
+		}
+		run(t, "pb.clearContents; pb.setStringForType($("+string(path)+"), $.NSPasteboardTypeString); ''")
 		if got, _, err := readFileClipboard(context.Background()); err == nil {
 			t.Fatalf("plain text with a path read as files %q", got)
 		}
 	})
 	t.Run("empty", func(t *testing.T) {
-		set(t, `set the clipboard to ""`)
+		run(t, "pb.clearContents; ''")
 		if got, _, err := readFileClipboard(context.Background()); err == nil {
 			t.Fatalf("an empty clipboard read as files %q", got)
 		}
