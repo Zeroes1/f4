@@ -133,8 +133,9 @@ func (ev *EditorView) releaseMappingForSave(ctx *vtui.TaskContext, Pt *piecetabl
 	}
 	swapped := false
 	if !ev.onUIAndWait(ctx, func() {
-		// A table already given another buffer (a codepage reload, a
-		// Replace All) does not read the mapping; it just goes.
+		// Replace All and a codepage reload keep the table and its
+		// original buffer (#2051), so this is normally the mapping. A table
+		// given another buffer in the meantime does not read it; it just goes.
 		if m.isOriginalOf(Pt) {
 			Pt.UpdateOriginalBuffer(standIn)
 			swapped = true
