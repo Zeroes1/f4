@@ -18,7 +18,7 @@ func openFiles() []openFile {
 	limit := 4096
 	var rl unix.Rlimit
 	if err := unix.Getrlimit(unix.RLIMIT_NOFILE, &rl); err == nil && rl.Cur < uint64(limit) {
-		limit = int(rl.Cur)
+		limit = int(rl.Cur) // #nosec G115 -- below 4096 by the comparison above
 	}
 	var out []openFile
 	for fd := 0; fd < limit; fd++ {
