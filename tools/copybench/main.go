@@ -114,6 +114,9 @@ func main() {
 			fail(err)
 		}
 	}
+	if warning := fuseWarning(onFUSE(srcRoot)); warning != "" {
+		fmt.Printf("\n%s\n", warning)
+	}
 }
 
 func makeRoot(dir, pattern string) string {

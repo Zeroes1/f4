@@ -98,3 +98,12 @@ func residentPages(path string) (resident, total int, err error) {
 }
 
 const cacheNote = "source cache: dropped before each run (posix_fadvise DONTNEED), then checked with mincore"
+
+// onFUSE reports whether path is on a FUSE file system (see fuseWarning).
+func onFUSE(path string) bool {
+	var st unix.Statfs_t
+	if err := unix.Statfs(path, &st); err != nil {
+		return false
+	}
+	return st.Type == unix.FUSE_SUPER_MAGIC
+}

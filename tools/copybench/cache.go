@@ -33,3 +33,18 @@ func residencyWarning(resident, total int) string {
 	return fmt.Sprintf("  warning: %.0f%% of the source pages are still in memory after the cache drop "+
 		"(this file system ignores posix_fadvise DONTNEED?); the MB/s above measure memory, not the disk", share*100)
 }
+
+// fuseWarning is the line printed under the table when the source is on a
+// FUSE file system, and "" otherwise. ntfs-3g and the like read the partition
+// through the cache of the block device, under the files: the drop of the
+// file pages does not reach it and mincore sees nothing left, while the data
+// comes from memory (nz256, f4#1894: /media/nz/data1, fuseblk on /dev/sdb3,
+// 3500 small files/s and 1-2.4 GB/s from a hard disk).
+func fuseWarning(onFUSE bool) string {
+	if !onFUSE {
+		return ""
+	}
+	return "warning: the source is on a FUSE file system (ntfs-3g and the like): it reads the disk through a cache " +
+		"the drop above does not reach, so the MB/s above may measure memory, not the disk; to measure the disk, " +
+		"mount it with a kernel driver (for ntfs: -t ntfs3)"
+}

@@ -52,3 +52,12 @@ func TestResidencyWarningIsOneLine(t *testing.T) {
 		t.Errorf("the warning must be one line, got %q", got)
 	}
 }
+
+func TestFUSEWarningOnlyForFUSE(t *testing.T) {
+	if got := fuseWarning(false); got != "" {
+		t.Errorf("not FUSE: %q, want no warning", got)
+	}
+	if got := fuseWarning(true); !strings.Contains(got, "FUSE") || !strings.Contains(got, "ntfs3") {
+		t.Errorf("FUSE: %q, want a warning that names FUSE and the kernel driver", got)
+	}
+}

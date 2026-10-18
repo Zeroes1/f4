@@ -10,4 +10,7 @@ func dropCache([]string) error { return nil }
 // no warning (the cache is not dropped at all, which cacheNote says).
 func cacheResidency([]string) (resident, total int, err error) { return 0, 0, nil }
 
+// onFUSE is not looked at here: the cache is not dropped at all (cacheNote).
+func onFUSE(string) bool { return false }
+
 const cacheNote = "source cache: NOT dropped on this system; the source files may be read from memory, so -src numbers can be far above the disk"

@@ -89,3 +89,14 @@ func TestCacheResidencySumsTheFiles(t *testing.T) {
 		t.Error("a missing file in the list: want an error")
 	}
 }
+
+// A test directory is on a disk or in tmpfs, not on FUSE; a path that does not
+// exist is not on FUSE either.
+func TestOnFUSEIsFalseForAPlainDirectory(t *testing.T) {
+	if onFUSE(t.TempDir()) {
+		t.Error("the test directory is reported to be on FUSE")
+	}
+	if onFUSE(filepath.Join(t.TempDir(), "missing")) {
+		t.Error("a missing path is reported to be on FUSE")
+	}
+}
