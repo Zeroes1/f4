@@ -511,11 +511,11 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 		actionDesc = "Move"
 		actionTitle = "Moving"
 		dialogTitle = " Moving... "
-	} else if srcVfs.ParentVFS() != nil && dstVfs.ParentVFS() == nil {
+	} else if vfs.ShowsArchiveContents(srcVfs) && !vfs.ShowsArchiveContents(dstVfs) {
 		actionDesc = "Extract"
 		actionTitle = "Extracting"
 		dialogTitle = " Extracting... "
-	} else if srcVfs.ParentVFS() == nil && dstVfs.ParentVFS() != nil {
+	} else if !vfs.ShowsArchiveContents(srcVfs) && vfs.ShowsArchiveContents(dstVfs) {
 		actionDesc = "Archive"
 		actionTitle = "Archiving"
 		dialogTitle = " Archiving... "
