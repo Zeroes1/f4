@@ -3,19 +3,16 @@
 package editor
 
 import (
+	"errors"
 	"io"
 	"os"
 
 	"golang.org/x/sys/unix"
 )
 
-// inheritsControllingTTY reports whether stdin is a terminal that is already
-// the controlling terminal of our own session. Such a terminal must be
-// inherited as is: a child that starts a new session and then tries to take
-// it with TIOCSCTTY gets EPERM from the kernel, because the terminal still
-// belongs to our session (f4#1721, "fork/exec /usr/bin/nano: operation not
-// permitted").
-func inheritsControllingTTY(stdin io.Reader) bool {
+// canInheritTTY reports whether stdin is a terminal that the external editor
+// can use without acquiring it as a controlling terminal.
+func canInheritTTY(stdin io.Reader) bool {
 	f, ok := stdin.(*os.File)
 	if !ok {
 		return false
@@ -29,7 +26,15 @@ func inheritsControllingTTY(stdin io.Reader) bool {
 	_ = rc.Control(func(fd uintptr) {
 		sid, err := unix.IoctlGetInt(int(fd), unix.TIOCGSID)
 		if err != nil {
-			return // not a terminal, or one without a session
+			// TIOCGSID reports ENOTTY when this process is detached from the
+			// session that owns stdin's terminal (as the session daemon is).
+			// We cannot safely acquire that terminal with TIOCSCTTY: the kernel
+			// rejects it with EPERM. Keep the terminal descriptors inherited.
+			if errors.Is(err, unix.ENOTTY) {
+				_, termErr := unix.IoctlGetTermios(int(fd), unix.TCGETS)
+				inherits = termErr == nil
+			}
+			return
 		}
 		own, err := unix.Getsid(0)
 		inherits = err == nil && sid == own
