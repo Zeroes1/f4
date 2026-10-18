@@ -34,3 +34,10 @@ func unmapFileRegion(data []byte) error {
 	}
 	return windows.UnmapViewOfFile(uintptr(unsafe.Pointer(&data[0])))
 }
+
+// releaseMappingBeforeReplace: Windows will not replace, rewrite or truncate a
+// file while a view of it is mapped, through whatever path the file is reached
+// (a SUBST drive included, f4#912), so a save has to let go of the mapping
+// first. A variable rather than a constant so the tests can exercise that
+// path on every platform.
+var releaseMappingBeforeReplace = true

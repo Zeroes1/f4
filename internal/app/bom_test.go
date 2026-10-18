@@ -5,7 +5,6 @@ import (
 	"github.com/unxed/f4/internal/panel"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
@@ -56,10 +55,10 @@ func TestShowEditor_UTF8BOMIsNotDisplayedOrLostOnSave(t *testing.T) {
 			if ev.HexMode {
 				t.Fatal("BOM-marked UTF-8 text opened in hex mode")
 			}
-			if memoryMap && runtime.GOOS != "windows" && ev.Mapped == nil {
+			if memoryMap && ev.Mapped == nil {
 				t.Fatal("editor did not use the requested mapping")
 			}
-			if (!memoryMap || runtime.GOOS == "windows") && ev.AsyncBuf == nil {
+			if !memoryMap && ev.AsyncBuf == nil {
 				t.Fatal("editor did not create the expected async chunk buffer")
 			}
 

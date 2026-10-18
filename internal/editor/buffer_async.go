@@ -65,6 +65,43 @@ func (b *AsyncBuffer) Size() int {
 	return b.size
 }
 
+// FileOffset reports where in the file the buffer's contents begin: zero, or
+// the length of a UTF-8 byte-order mark that is not part of the text.
+func (b *AsyncBuffer) FileOffset() int64 {
+	return b.fileOffset
+}
+
+// ChunkSize is the unit the buffer fetches and keeps the file in.
+func (b *AsyncBuffer) ChunkSize() int {
+	return b.chunkSize
+}
+
+// Prefetch starts fetching whatever of [offset, offset+length) is neither
+// loaded nor on its way, and returns at once. It is what a reader asks for to
+// get ahead of itself: Read would do the same and then assemble a copy of the
+// range only to have it thrown away.
+func (b *AsyncBuffer) Prefetch(offset, length int) {
+	if offset < 0 || offset >= b.size || length <= 0 {
+		return
+	}
+	if offset+length > b.size {
+		length = b.size - offset
+	}
+	startChunk := offset / b.chunkSize
+	endChunk := (offset + length - 1) / b.chunkSize
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for i := startChunk; i <= endChunk; i++ {
+		if _, ok := b.loaded[i]; ok || b.fetching[i] {
+			continue
+		}
+		b.fetching[i] = true
+		// See Read for why the global is read here.
+		go b.fetchChunk(i, vtui.FrameManager)
+	}
+}
+
 // Prewarm synchronously loads the first chunk so the first render
 // never sees ErrLoading, avoiding a brief [Loading...] flash.
 func (b *AsyncBuffer) Prewarm() {
