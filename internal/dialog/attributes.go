@@ -754,6 +754,13 @@ var windowsAdvancedFlags = []struct {
 	{0x00400000, "Recall on data access"},
 }
 
+// advancedFlagsListRows is the height of the list of every known flag in the
+// Advanced NTFS Flags box. The list holds sixteen lines, so it scrolls, and
+// vtui draws a scroll bar only for a list taller than two rows: at two rows
+// the display-only flags (Reparse Point, Virtual, Recall ..., Integrity stream,
+// No scrub data) could not be reached or even noticed (f4#1931, part 8).
+const advancedFlagsListRows = 4
+
 // windowsAdvancedFlagsLines lists every known Windows file attribute, including
 // unset ones, so users can distinguish "not set" from "not supported". A
 // mixed selection uses "?", matching the three-state checkboxes above.
@@ -1247,7 +1254,15 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	path := targets[0].Path
 	item := targets[0].Item
 	multiple := len(targets) > 1
-	width, height := 60, 26
+	// The rows of the dialog, top to bottom: the frame, a blank row, the file
+	// name, the Flags box (4), the Advanced NTFS Flags box (4 rows of check
+	// boxes and the 4-row list between its borders, 10), a blank row, Last
+	// write, a blank row, the buttons, a blank row and the frame: 23. Created
+	// and Accessed, shown on Windows for any file that has them, make 25, the
+	// whole of an 80x25 terminal; a link or hard links below add more, and a
+	// dialog taller than the screen scrolls (f4#1931). The boxes follow each
+	// other without a blank row for the sake of those two rows.
+	width, height := 60, 23
 	showCompression := runtime.GOOS == "windows" && fileops.IsLocalOSVFS(v) && !hostmode.Posix()
 	showEncryption := showCompression
 	showSparse := showCompression && allTargetsAreFiles(targets)
@@ -1354,14 +1369,15 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	}
 
 	// The ordinary flags sit in two columns and the advanced ones in two more,
-	// so the many editable NTFS flags fit a 25-line terminal (f4#1931).
-	gbAttr := vtui.NewGroupBox(0, 0, 54, 4, " "+i18n.Msg("Attributes.Flags")+" ")
+	// so the many editable NTFS flags fit a 25-line terminal (f4#1931). Neither
+	// box keeps a spare row: the rows it saves go to the list of flags.
+	gbAttr := vtui.NewGroupBox(0, 0, 54, 3, " "+i18n.Msg("Attributes.Flags")+" ")
 	dlg.AddItem(gbAttr)
-	mainVBox.Add(gbAttr, vtui.Margins{Top: 1}, vtui.AlignFill)
+	mainVBox.Add(gbAttr, vtui.Margins{}, vtui.AlignFill)
 
-	gbAdv := vtui.NewGroupBox(0, 0, 54, 8, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
+	gbAdv := vtui.NewGroupBox(0, 0, 54, 9, " "+i18n.Msg("Attributes.AdvancedFlags")+" ")
 	dlg.AddItem(gbAdv)
-	mainVBox.Add(gbAdv, vtui.Margins{Top: 1}, vtui.AlignFill)
+	mainVBox.Add(gbAdv, vtui.Margins{}, vtui.AlignFill)
 
 	initialMTime := ""
 	if !multiple {
@@ -1508,12 +1524,14 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	gbAdv.AddItem(chkNotContentIndexed)
 	// Left column: Not Content Indexed and the NTFS controls; right column:
 	// Temporary, Offline, Pinned and Unpinned. Four rows of boxes, then the
-	// scrollable list of every known flag.
+	// scrollable list of every known flag. The list has four rows: a scroll
+	// bar needs more than two (vtui draws none for a list of one or two rows,
+	// which hid the display-only flags below the first two, f4#1931).
 	gbAdvVBox := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+1, flagsColumnWidth, 4)
 	gbAdvVBoxRight := vtui.NewVBoxLayout(gbAdv.X1+2+flagsColumnWidth, gbAdv.Y1+1, gbAdv.X2-gbAdv.X1-3-flagsColumnWidth, 4)
-	gbAdvVBoxList := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+5, gbAdv.X2-gbAdv.X1-3, 2)
+	gbAdvVBoxList := vtui.NewVBoxLayout(gbAdv.X1+2, gbAdv.Y1+5, gbAdv.X2-gbAdv.X1-3, advancedFlagsListRows)
 	gbAdvVBox.Add(chkNotContentIndexed, vtui.Margins{}, vtui.AlignLeft)
-	flagsList := vtui.NewListBox(0, 0, 50, 2, windowsAdvancedFlagsLines(targets))
+	flagsList := vtui.NewListBox(0, 0, 50, advancedFlagsListRows, windowsAdvancedFlagsLines(targets))
 	flagsList.ShowScrollBar = true
 	if flagsList.ScrollBar != nil {
 		flagsList.ScrollBar.ColorIdx = vtui.ColDialogBox

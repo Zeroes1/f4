@@ -209,28 +209,32 @@ func TestIsCloudFileItem(t *testing.T) {
 }
 
 // The advanced flags group holds two columns of check boxes, the new ones on
-// the right, then the list of every flag, and the dialog stays within 25 rows.
+// the right, then the list of every flag, four rows tall with a scroll bar (a
+// list of two rows gets none, and the display-only flags below its first two
+// lines could not be seen, f4#1931 part 8). The dialog is 23 rows, and 25 with
+// the Created and Accessed rows (TestAttributesDialog_FitsWithCreatedAndAccessed).
+// The Compressed, Encrypted and Sparse boxes are offered on Windows only, so
+// this dump of the other systems has the left column short.
 //
-// Screen Dump (80x25, the middle 59 columns; the time differs per run):
+// Screen Dump (80x25, the 23 rows of the dialog, the middle 60 columns; the time
+// differs per run):
 //
 //	╔═══════════════════════ Attributes ═══════════════════[×]═╗
 //	║                                                          ║
 //	║  File: a.txt                                             ║
-//	║                                                          ║
 //	║  ┌─────────────────────  Flags  ──────────────────────┐  ║
 //	║  │ [ ] Read only                    [ ] System        │  ║
 //	║  │ [ ] Hidden                       [x] Archive       │  ║
-//	║  │                                                    │  ║
 //	║  └────────────────────────────────────────────────────┘  ║
-//	║                                                          ║
 //	║  ┌──────────────  Advanced NTFS Flags  ───────────────┐  ║
 //	║  │ [ ] Not Content Indexed          [ ] Temporary     │  ║
 //	║  │                                  [ ] Offline       │  ║
 //	║  │                                  [ ] Pinned        │  ║
 //	║  │                                  [ ] Unpinned      │  ║
-//	║  │ Compressed: no                                     │  ║
-//	║  │ Encrypted: no                                      │  ║
-//	║  │                                                    │  ║
+//	║  │ Compressed: no                                   ▲ │  ║
+//	║  │ Encrypted: no                                    ▓ │  ║
+//	║  │ Reparse Point: no                                ░ │  ║
+//	║  │ Sparse: no                                       ▼ │  ║
 //	║  └────────────────────────────────────────────────────┘  ║
 //	║                                                          ║
 //	║  Last write:   15.10.2026 16:44:35                       ║
@@ -275,5 +279,65 @@ func TestAttributesDialog_AdvancedFlagsLayout(t *testing.T) {
 	}
 	if rowOf(i18n.Msg("Attributes.BtnSet")) > 2+24 {
 		t.Errorf("the buttons are below row 25 of the screen:\n%s", dump)
+	}
+
+	// The list: its first four lines in consecutive rows, a scroll bar on the
+	// right of them (an up arrow on the first row, a down arrow on the last).
+	first := rowOf("Compressed: ")
+	last := rowOf("Sparse: ")
+	if last-first != advancedFlagsListRows-1 {
+		t.Errorf("the list shows rows %d..%d, want %d consecutive rows:\n%s", first, last, advancedFlagsListRows, dump)
+	}
+	if got := strings.Count(lines[first], string(testutil.Rune(vtui.ScrollUpArrow))); got != 1 {
+		t.Errorf("the first row of the list has %d up arrows, want 1:\n%s", got, dump)
+	}
+	if got := strings.Count(lines[last], string(testutil.Rune(vtui.ScrollDownArrow))); got != 1 {
+		t.Errorf("the last row of the list has %d down arrows, want 1:\n%s", got, dump)
+	}
+	// The buttons are on the 22nd screen row: a blank row and the frame follow.
+	if got := rowOf(i18n.Msg("Attributes.BtnSet")) - 2; got != 21 {
+		t.Errorf("the buttons are on screen row %d (from 0), want 21:\n%s", got, dump)
+	}
+}
+
+// With the Created and Accessed rows, which Windows shows for any file, the
+// dialog still fits an 80x25 terminal whole: the buttons are on the 23rd row,
+// a blank row and the frame follow, and the list keeps its four rows with the
+// scroll bar (f4#1931 part 8).
+func TestAttributesDialog_FitsWithCreatedAndAccessed(t *testing.T) {
+	t.Cleanup(testutil.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+	theme.SetDefaultF4Palette()
+	now := time.Now()
+	ShowAttributesWindowsForTargets(nil, vfs.NewOSVFS(t.TempDir()), []AttributesTarget{{Path: "a.txt", Item: vfs.VFSItem{
+		Name: "a.txt", WinAttrs: 0x20, MTime: now, BTime: now, ATime: now,
+		KnownMetadata: vfs.MetadataExplicit | vfs.MetadataBTime | vfs.MetadataATime,
+	}}})
+	vtui.FrameManager.GetTopFrame().Show(scr)
+
+	var buf bytes.Buffer
+	scr.Dump(&buf)
+	dump := buf.String()
+	t.Logf("Screen Dump (80x25):\n%s", dump)
+	lines := strings.Split(dump, "\n")
+	rowOf := func(text string) int {
+		for i, line := range lines {
+			if strings.Contains(line, text) {
+				return i - 2
+			}
+		}
+		t.Fatalf("%q is not on the screen:\n%s", text, dump)
+		return -1
+	}
+	if got := rowOf(i18n.Msg("Attributes.BtnSet")); got != 22 {
+		t.Errorf("the buttons are on screen row %d (from 0), want 22:\n%s", got, dump)
+	}
+	if rowOf(i18n.Msg("Attributes.Created")) >= rowOf(i18n.Msg("Attributes.Accessed")) {
+		t.Errorf("Created is not above Accessed:\n%s", dump)
+	}
+	if got := rowOf("Sparse: ") - rowOf("Compressed: "); got != advancedFlagsListRows-1 {
+		t.Errorf("the list rows are %d apart, want %d:\n%s", got, advancedFlagsListRows-1, dump)
 	}
 }
