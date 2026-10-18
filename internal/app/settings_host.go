@@ -28,7 +28,7 @@ func (settingsHost) ApplyRuntime(before config.F4Config, changed []string) {
 	config.ApplyCursorSettings()
 	ApplyGlyphStyle()
 	for _, id := range changed {
-		if id == "ColorStyle" || id == "EnforceColorCorrection" {
+		if id == "ColorStyle" || id == "EnforceColorCorrection" || config.AnsiColorIndex(id) >= 0 {
 			_ = theme.ApplyColorStyle(config.App.ColorStyle)
 		}
 		if strings.HasPrefix(id, "EditorColorer") {

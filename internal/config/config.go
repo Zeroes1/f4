@@ -499,6 +499,23 @@ type F4Config struct {
 	CommandLineAutoComplete  bool
 	UsePromptFormat          bool
 	PromptFormat             string
+	// The 16 basic ANSI colours as #RRGGBB, in palette order (f4#2071).
+	AnsiColorBlack           string
+	AnsiColorRed             string
+	AnsiColorGreen           string
+	AnsiColorYellow          string
+	AnsiColorBlue            string
+	AnsiColorMagenta         string
+	AnsiColorCyan            string
+	AnsiColorWhite           string
+	AnsiColorBrightBlack     string
+	AnsiColorBrightRed       string
+	AnsiColorBrightGreen     string
+	AnsiColorBrightYellow    string
+	AnsiColorBrightBlue      string
+	AnsiColorBrightMagenta   string
+	AnsiColorBrightCyan      string
+	AnsiColorBrightWhite     string
 	NavigationMode           PanelNavigationMode
 	PanelAutoFilter          bool // a lone Alt press opens the panel autofilter (hides non-matching rows); Alt+letter stays the quick search
 	PanelStrictAutoFilter    bool // panel quick search/autofilter requires an exact match instead of tolerating one typo
@@ -1043,6 +1060,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
 	cfg.UsePromptFormat = merged.GetString("Panel", "UsePromptFormat", "0") == "1"
 	cfg.PromptFormat = merged.GetString("Panel", "PromptFormat", "$u@$n:$p$# ")
+	loadAnsiColors(cfg, func(key, def string) string { return merged.GetString("Panel", key, def) })
 	if mode := merged.GetString("Panel", "NavigationMode", ""); mode != "" {
 		cfg.NavigationMode = ParsePanelNavigationMode(mode)
 	} else if merged.GetString("Panel", "VimHotkeys", "0") == "1" {
@@ -1409,6 +1427,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "CommandLineAutoComplete = %d\n", map[bool]int{true: 1, false: 0}[cfg.CommandLineAutoComplete])
 	fmt.Fprintf(&sb, "UsePromptFormat = %d\n", map[bool]int{true: 1, false: 0}[cfg.UsePromptFormat])
 	fmt.Fprintf(&sb, "PromptFormat = %s\n", cfg.PromptFormat)
+	writeAnsiColors(&sb, cfg)
 	fmt.Fprintf(&sb, "NavigationMode = %s\n", cfg.NavigationMode.String())
 	fmt.Fprintf(&sb, "PanelAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelAutoFilter])
 	fmt.Fprintf(&sb, "PanelStrictAutoFilter = %d\n", map[bool]int{true: 1, false: 0}[cfg.PanelStrictAutoFilter])

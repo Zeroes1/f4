@@ -84,6 +84,9 @@ const (
 // SetDefaultF4Palette ensures the palette is large enough and sets f4-specific default colors.
 func SetDefaultF4Palette() {
 	resetColorSources()
+	// The 16 basic colours go back to the built-in ones here; ApplyAnsiPalette
+	// puts the user's choice on top once the theme is complete.
+	copy(vtui.ThemePalette[:16], vtui.XTerm256Palette[:16])
 	// Initialize ThemePalette to match the "Tango/Ubuntu" gray theme from far2l
 	vtui.ThemePalette[0] = 0x2E3436 // Default Background (Dark Gray)
 	vtui.ThemePalette[7] = 0xD3D7CF // Default Text (Light Gray)
@@ -454,6 +457,7 @@ func FinishColors() {
 	// Terminal history uses indexed background color 0 for default and blank cells.
 	// Keep it in sync with the configurable user-screen background.
 	vtui.ThemePalette[0] = vtui.GetRGBBack(vtui.Palette[ColCommandLineUserScreen])
+	ApplyAnsiPalette()
 
 	AdjustContrastLevels()
 	for _, slot := range ColorSlots {
@@ -704,6 +708,19 @@ func AdjustContrastLevels() {
 		nfg := CorrectContrast(fg, bg)
 		if nfg != fg {
 			vtui.Palette[slot.Index] = vtui.SetRGBFore(attr, nfg)
+		}
+	}
+}
+
+// ApplyAnsiPalette puts the 16 basic ANSI colours the user chose (f4#2071)
+// into vtui.ThemePalette, which is what f4 loads into the terminal and what
+// the embedded terminal draws indexed colours with. A colour left at its
+// default is not touched, so a theme that sets its own background for
+// index 0 keeps it. The next frame sends only the entries that changed.
+func ApplyAnsiPalette() {
+	for i, rgb := range config.App.AnsiColors() {
+		if rgb != config.DefaultAnsiColors[i] {
+			vtui.ThemePalette[i] = rgb
 		}
 	}
 }

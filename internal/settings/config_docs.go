@@ -191,6 +191,10 @@ func configFieldVariants(base config.F4Config, field f4settings.Field) []config.
 		}
 	default:
 		values = []string{current + "x", ""}
+		if config.AnsiColorIndex(field.ID) >= 0 {
+			// "x" is not a colour and an empty field is the default one.
+			values = []string{"#010203"}
+		}
 	}
 	var variants []config.F4Config
 	for _, value := range values {
