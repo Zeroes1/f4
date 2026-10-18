@@ -102,6 +102,11 @@ type FileHighlighter struct {
 	// rather than on a timer.
 	matchCache       map[highlightCacheKey][]int
 	hasVolatileRules bool
+	// cacheFor is the rule list matchCache was filled against. Rules can be
+	// replaced without CombineRules (tests swap them and put them back), and
+	// a cache kept across that hands GetColor indices past the end of the
+	// new list (train unxed/f4#2063: an index out of range in ruleAt).
+	cacheFor ruleListID
 }
 
 // highlightCacheMaxEntries bounds matchCache's size. GlobalFileHighlighter
@@ -304,9 +309,31 @@ func (fh *FileHighlighter) matchedRules(item *vfs.VFSItem) []int {
 // front of it, keyed by highlightCacheKeyFor(item). A hit returns the exact
 // slice computed last time without touching a single rule's Match/
 // filepath.Match; nothing here mutates the returned slice afterwards.
+// ruleListID tells one rule list from another: where the two slices start
+// and how long they are.
+type ruleListID struct {
+	rules, overrides   *HighlightRule
+	nRules, nOverrides int
+}
+
+func (fh *FileHighlighter) ruleListID() ruleListID {
+	id := ruleListID{nRules: len(fh.Rules), nOverrides: len(fh.overrides)}
+	if len(fh.Rules) > 0 {
+		id.rules = &fh.Rules[0]
+	}
+	if len(fh.overrides) > 0 {
+		id.overrides = &fh.overrides[0]
+	}
+	return id
+}
+
 func (fh *FileHighlighter) matchedRulesCached(item *vfs.VFSItem) []int {
 	if fh.hasVolatileRules {
 		return fh.matchedRules(item)
+	}
+	if id := fh.ruleListID(); id != fh.cacheFor {
+		fh.matchCache = nil
+		fh.cacheFor = id
 	}
 	key := highlightCacheKeyFor(item)
 	if fh.matchCache != nil {
