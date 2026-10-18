@@ -3007,6 +3007,21 @@ func TestFileSystemPanel_FastFindPrefersExactOverTypo(t *testing.T) {
 	}
 }
 
+// A lone "*" matches every name with an empty span; a closed search matches
+// nothing.
+func TestFileSystemPanel_FastFindScoredMatchEdgeCases(t *testing.T) {
+	fp := &FileSystemPanel{}
+	if _, _, _, ok := fp.fastFindScoredMatch("projects"); ok {
+		t.Fatal("closed quick search matched")
+	}
+	fp.FastFindMode = true
+	fp.FastFindStr = "*"
+	start, matched, score, ok := fp.fastFindScoredMatch("projects")
+	if !ok || start != 0 || matched != 0 || score != 0 {
+		t.Fatalf(`"*" = (%d, %d, %d, %v), want (0, 0, 0, true)`, start, matched, score, ok)
+	}
+}
+
 func TestFileSystemPanel_ForkDuplication(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	tmp := t.TempDir()
