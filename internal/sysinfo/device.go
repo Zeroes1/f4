@@ -12,6 +12,10 @@ const (
 	DeviceHDD
 	DeviceSSD
 	DeviceNetwork
+	// DeviceUSB is a disk attached over USB (flash drive, card reader,
+	// external disk). The kernel reports most of them as rotating, which
+	// would call a memory card an HDD.
+	DeviceUSB
 )
 
 // String returns the language-neutral class name.
@@ -23,6 +27,8 @@ func (c DeviceClass) String() string {
 		return "SSD"
 	case DeviceNetwork:
 		return "network"
+	case DeviceUSB:
+		return "USB"
 	}
 	return "unknown"
 }
@@ -51,7 +57,7 @@ func IsNetworkFS(fsType string) bool {
 }
 
 // mergeClasses combines the classes of the disks behind one volume: the
-// slowest member decides, and a single unknown member makes the whole
+// slowest member decides (USB counts as slow as an HDD), and a single unknown member makes the whole
 // volume unknown.
 func mergeClasses(classes []DeviceClass) DeviceClass {
 	if len(classes) == 0 {
@@ -62,6 +68,10 @@ func mergeClasses(classes []DeviceClass) DeviceClass {
 		switch c {
 		case DeviceHDD:
 			out = DeviceHDD
+		case DeviceUSB:
+			if out != DeviceHDD {
+				out = DeviceUSB
+			}
 		case DeviceSSD:
 		default:
 			return DeviceUnknown

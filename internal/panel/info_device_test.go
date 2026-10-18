@@ -13,6 +13,7 @@ func TestDeviceLabel(t *testing.T) {
 	}{
 		{sysinfo.DeviceInfo{Class: sysinfo.DeviceSSD, Name: "nvme0n1"}, "SSD (nvme0n1)"},
 		{sysinfo.DeviceInfo{Class: sysinfo.DeviceHDD, Name: "sda+sdb"}, "HDD (sda+sdb)"},
+		{sysinfo.DeviceInfo{Class: sysinfo.DeviceUSB, Name: "sdb"}, "USB (sdb)"},
 	}
 	for _, c := range cases {
 		if got := deviceLabel(c.dev); got != c.want {
