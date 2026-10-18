@@ -189,10 +189,24 @@ func (s Settings) proxyFunc() func(*http.Request) (*url.URL, error) {
 	return nil
 }
 
-// HTTPClient builds a client that talks through these settings. Everything in
-// f4 that downloads over HTTP — releases, the plugin catalog, colorer schemes
-// — should get its client here rather than reaching for http.DefaultClient.
-func (s Settings) HTTPClient(timeout time.Duration) *http.Client {
+// transports holds one Transport per Settings. A client used to get a
+// Transport of its own on every call, so no connection was ever reused, and
+// each one idled for 90 seconds with a goroutine reading it after its one
+// request (found by goleak over internal/app's tests). Settings is a value
+// of a few strings, so the map has as many entries as there are proxy
+// configurations in use.
+var (
+	transportsMu sync.Mutex
+	transports   = map[Settings]*http.Transport{}
+)
+
+// transport returns the Transport shared by every client built from s.
+func (s Settings) transport() *http.Transport {
+	transportsMu.Lock()
+	defer transportsMu.Unlock()
+	if tr, ok := transports[s]; ok {
+		return tr
+	}
 	tr := &http.Transport{
 		Proxy:                 s.proxyFunc(),
 		DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -202,7 +216,28 @@ func (s Settings) HTTPClient(timeout time.Duration) *http.Client {
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: time.Second,
 	}
-	return &http.Client{Timeout: timeout, Transport: tr}
+	transports[s] = tr
+	return tr
+}
+
+// HTTPClient builds a client that talks through these settings. Everything in
+// f4 that downloads over HTTP — releases, the plugin catalog, colorer schemes
+// — should get its client here rather than reaching for http.DefaultClient.
+// Clients built from the same Settings share their connections.
+func (s Settings) HTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: s.transport()}
+}
+
+// CloseIdleConnections closes the kept-alive connections of every client
+// built here, and with them the goroutines reading them. A test package
+// whose tests reach the network calls it before its goroutine leak check;
+// a connection still carrying a request is not idle and stays.
+func CloseIdleConnections() {
+	transportsMu.Lock()
+	defer transportsMu.Unlock()
+	for _, tr := range transports {
+		tr.CloseIdleConnections()
+	}
 }
 
 // HTTPClient is the app-wide shorthand for Global().HTTPClient.
