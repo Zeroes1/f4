@@ -239,3 +239,73 @@ func TestIssue2049_HighlightIsDrawn(t *testing.T) {
 	}
 }
 
+// With several workspaces the drag goes to the panels on screen, not to the
+// workspace created last: that one used to answer every drag, so the
+// highlight was set on panels nobody saw and drops were laid out against
+// them (#2049).
+func TestIssue2049_DragGoesToWorkspaceOnScreen(t *testing.T) {
+	t.Cleanup(swapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+	theme.SetDefaultF4Palette()
+	t.Cleanup(func() { vtui.SetDropTarget(nil) })
+
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	open := func() (*PanelsFrame, int) {
+		pf := NewPanelsFrame()
+		t.Cleanup(pf.Close)
+		vtui.FrameManager.AddScreen(pf)
+		pf.ResizeConsole(80, 25)
+		pf.ShowPanels = true
+		fsp := pf.Panels[0].(*FileSystemPanel)
+		fsp.Vfs = vfs.NewOSVFS(dir)
+		fsp.ReadDirectory()
+		waitForDirectoryLoads(t)
+		testutil.DrainUITasks()
+		pf.Show(scr)
+		return pf, vtui.FrameManager.ActiveIdx
+	}
+	first, firstIdx := open()
+	second, _ := open() // created last: it used to be the only target
+
+	var x, y int
+	first.Panels[0].(*FileSystemPanel).visibleNameCells(func(e *FileEntry, ex, ey, _ int) {
+		if e.Name == "sub" {
+			x, y = ex, ey
+		}
+	})
+	target := vtui.CurrentDropTarget()
+	enter := func() {
+		target.HandleDrag(&vtui.DragEvent{Phase: vtui.DragEnter, X: x, Y: y, Tracked: true,
+			Allowed: vtui.DropCopy, Payload: vtui.DragPayload{Paths: []string{filepath.Join(dir, "x")}}})
+	}
+	highlighted := func(pf *PanelsFrame) bool { return pf.Panels[0].(*FileSystemPanel).drop.active }
+
+	vtui.FrameManager.SwitchScreen(firstIdx)
+	enter()
+	if !highlighted(first) || highlighted(second) {
+		t.Fatalf("drag over the first workspace on screen: first=%v second=%v", highlighted(first), highlighted(second))
+	}
+
+	// The user switches workspaces mid-drag: the one left behind lets go.
+	switched := false
+	for i, s := range vtui.FrameManager.Screens {
+		for _, f := range s.Frames {
+			if f == second && !switched {
+				vtui.FrameManager.SwitchScreen(i)
+				switched = true
+			}
+		}
+	}
+	if !switched || FindPanelsFrameAnyScreen() != second {
+		t.Fatal("fixture: could not switch to the second workspace")
+	}
+	enter()
+	if highlighted(first) || !highlighted(second) {
+		t.Fatalf("after switching: first=%v second=%v", highlighted(first), highlighted(second))
+	}
+}

@@ -642,5 +642,29 @@ func installPanelDropTarget(pf *PanelsFrame) {
 	if pf == nil {
 		return
 	}
-	vtui.SetDropTarget(pf)
+	vtui.SetDropTarget(&panelsDropTarget{})
+}
+
+// panelsDropTarget hands a drag to the panels of the workspace on screen.
+// Every workspace (Ctrl+N) has a PanelsFrame of its own, and each used to
+// install itself as the target, so the one created last answered every
+// drag: a drag over the workspace on screen was laid out against another
+// one, dropped into its folders and highlighted its rows, which nobody saw
+// (#2049). The workspace is looked up per step, as hotkeys do (#424); when
+// it changes in the middle of a drag, the one left behind drops its
+// highlight.
+type panelsDropTarget struct {
+	last *PanelsFrame
+}
+
+func (t *panelsDropTarget) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
+	pf := FindPanelsFrameAnyScreen()
+	if t.last != nil && t.last != pf {
+		t.last.clearDropHighlight()
+	}
+	t.last = pf
+	if pf == nil {
+		return vtui.DropNone
+	}
+	return pf.HandleDrag(ev)
 }
