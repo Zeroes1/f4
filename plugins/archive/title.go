@@ -54,7 +54,7 @@ func archiveFormatLabel(name, format, sfxSuffix string) string {
 			return "tar" + ext
 		}
 		return ext[1:]
-	case ".zip", ".7z", ".rar", ".tar", ".tgz", ".txz", ".tbz2", ".tzst":
+	case ".zip", ".7z", ".rar", ".cab", ".tar", ".tgz", ".txz", ".tbz2", ".tzst":
 		return ext[1:]
 	}
 	if format == "zip" || format == "tar" {

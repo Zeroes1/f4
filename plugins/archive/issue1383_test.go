@@ -51,6 +51,7 @@ func TestArchiveFormatLabel(t *testing.T) {
 		{"a.zip", "zip", "", "zip"},
 		{"a.part1.rar", "fallback", "", "rar"},
 		{"a.tar", "tar", "", "tar"},
+		{"setup.CAB", "fallback", "", "cab"},
 		{"a.tar.gz", "tar", "", "tar.gz"},
 		{"backup.tar.2024.xz", "tar", "", "tar.xz"},
 		{"a.TGZ", "tar", "", "tgz"},

@@ -18,7 +18,7 @@ change to the chain.
 | `github.com/unxed/tar` | TAR, compressed or not (.tar.gz, .tar.xz and others) | our own |
 | `github.com/unxed/xz` | XZ, LZMA and LZMA2; used by zip, tar, sevenzip and archives | fork of `ulikunitz/xz` |
 | `github.com/unxed/sevenzip` | 7z | fork of `bodgit/sevenzip` |
-| `github.com/unxed/archives` | RAR and every other format | fork of `mholt/archives` |
+| `github.com/unxed/archives` | RAR, CAB (read-only: stored and MSZIP) and every other format | fork of `mholt/archives` |
 | `github.com/nwaples/rardecode/v2` | RAR decoding, used by archives, zipper and f4 | not forked, see rule 8 |
 | `github.com/unxed/par2` | Recovery records (PAR2), used by zip and tar | our own |
 | `github.com/unxed/zipcharset` | Old non-Unicode file names in ZIP | our own |

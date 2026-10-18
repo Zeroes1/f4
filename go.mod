@@ -23,7 +23,7 @@ require (
 	github.com/mholt/archives v0.1.5
 	github.com/pkg/sftp v1.13.6
 	github.com/tetratelabs/wazero v1.12.0
-	github.com/unxed/archives v0.1.4
+	github.com/unxed/archives v0.1.5-0.20261018104137-4a61433acaad
 	github.com/unxed/colorer4go v0.1.24
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
@@ -79,6 +79,7 @@ require (
 // module imports them any more.
 
 require (
+	github.com/abemedia/go-cabinet v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/cloudsoda/sddl v0.0.0-20250224235906-926454e91efc // indirect
