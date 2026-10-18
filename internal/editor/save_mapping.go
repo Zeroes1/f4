@@ -19,7 +19,9 @@ import (
 // loadingBuffer stands in for a mapping a save has released and not yet
 // replaced. It has the mapping's size, so the piece table's offsets stay
 // valid, and no bytes: every read reports ErrLoading, which the paint path
-// draws as an empty line for the few milliseconds the rename takes.
+// draws as "[ Loading... ]" until the save opens the file again. Saving a
+// mapped file by a rename does not get here (renameOverMapping); saving one
+// read through a chunk buffer does, since the handle it reads with is closed.
 type loadingBuffer int
 
 func (b loadingBuffer) Size() int                     { return int(b) }
@@ -121,8 +123,8 @@ func (ev *EditorView) onUIAndWait(ctx *vtui.TaskContext, fn func()) bool {
 // releaseMappingForSave unmaps the file a save is about to replace, on systems
 // where the mapping would stop the replacement (releaseMappingBeforeReplace),
 // and only when path is that file. It runs on the save goroutine, after the
-// new text has been written out and before the file is renamed over or
-// rewritten.
+// new text has been written out: before the file is rewritten in place, or
+// after a rename over it was refused (renameOverMapping).
 //
 // The piece table still reads its unchanged text out of the mapping, so it is
 // pointed somewhere else first. With keepCopy that is a copy of the mapped
@@ -305,6 +307,33 @@ func writeTableText(ctx context.Context, w io.Writer, Pt *piecetable.PieceTable,
 		logical = pieceEnd
 	}
 	return nil
+}
+
+// renameOverMapping makes the save's rename of the stage over path, the file
+// m maps. Windows refuses to replace a file while a handle to it is open, but
+// NTFS lets a rename replace one that is only mapped: the view keeps the old
+// file's pages, and the editor goes on showing its text. Releasing the mapping
+// before every rename instead put up a Loading screen for as long as the
+// rename, the reopen and a virus scanner looking at the new file took —
+// seconds on a large file.
+//
+// So the mapping is released only for a file system that does refuse the
+// rename, and the rename is then tried once more. The release it made, if
+// any, is returned for recoverMapping when the rename fails after all.
+func (ev *EditorView) renameOverMapping(ctx *vtui.TaskContext, Pt *piecetable.PieceTable, m *MappedFile, path string, rename func() error) (*mappingRelease, error) {
+	err := rename()
+	if err == nil || !releaseMappingBeforeReplace || fileops.OperationMustNotRetry(err) ||
+		m == nil || m.Size() == 0 || !m.describes(path) {
+		return nil, err
+	}
+	release, releaseErr := ev.releaseMappingForSave(ctx, Pt, m, path, false)
+	if releaseErr != nil {
+		// The mapping is back where it was; the rename's own error is the
+		// one worth reporting.
+		vtui.DebugLog("EDITOR_MMAP: releasing the mapping after a refused rename: %v", releaseErr)
+		return nil, err
+	}
+	return release, rename()
 }
 
 // errEditorClosed ends a save whose editor was closed while it waited for the

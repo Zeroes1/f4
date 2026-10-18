@@ -5997,13 +5997,18 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		// unretryable after a failed finalization.
 		oldBackingClosed := false
 		if useTemp {
-			// Windows will not rename over, or rewrite, a file that is mapped.
-			// A rename leaves the old file intact when it fails, so it can be
-			// mapped again; an in-place rewrite does not, so that keeps a copy
-			// of the text instead. A new file cannot be the mapped one.
+			// Windows will not rewrite a file that is mapped, and an in-place
+			// rewrite that fails leaves nothing to read the old text back
+			// from, so that keeps a copy of the text first. A rename keeps the
+			// mapping unless it is refused (renameOverMapping), but not a
+			// chunk buffer: that reads through the handle closed below.
 			if !CreateNewTarget {
 				var releaseErr error
-				release, releaseErr = ev.releaseForSave(ctx, ev.Pt, mapped, oldAsync, writePath, keepLinks)
+				if keepLinks {
+					release, releaseErr = ev.releaseForSave(ctx, ev.Pt, mapped, oldAsync, writePath, true)
+				} else {
+					release, releaseErr = ev.releaseChunksForSave(ctx, ev.Pt, oldAsync, writePath, false)
+				}
 				if releaseErr != nil {
 					// Nothing has been replaced and the mapping is back
 					// where it was; the stage is of no further use.
@@ -6016,9 +6021,10 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 				}
 			}
 			// Windows does not allow replacing a local file while our reader
-			// handle is open. The piece table no longer reads through it:
-			// releaseForSave pointed it at a copy of the text or at a
-			// stand-in that recoverMapping replaces if the save fails. Leaning
+			// handle is open. The piece table no longer reads through it: a
+			// mapping holds the pages it reads without one, and the release
+			// above pointed a chunk buffer's table at a copy of the text or at
+			// a stand-in that recoverMapping replaces if the save fails. Leaning
 			// on the chunk buffer having every piece loaded, as this once did,
 			// stopped being possible when it began to evict. Everywhere else
 			// the handles stay open until the reopen below: a rename leaves
@@ -6047,7 +6053,21 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					return
 				}
 				cleanupEditorStage(ev.Vfs, tempPath)
-			} else if err := ev.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, !CreateNewTarget), tempPath, writePath); err != nil {
+			} else if err := func() (err error) {
+				rename := func() error {
+					return ev.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, !CreateNewTarget), tempPath, writePath)
+				}
+				if CreateNewTarget {
+					return rename()
+				}
+				// A table on a chunk buffer was released above; this one
+				// releases only a mapping, and only if the rename needs it.
+				released, err := ev.renameOverMapping(ctx, ev.Pt, mapped, writePath, rename)
+				if released != nil {
+					release = released
+				}
+				return err
+			}(); err != nil {
 				// Do not remove the staged path after an uncertain/partial rename.
 				// A remote provider may have committed the move and merely lost the
 				// response (or failed while removing its backup). In that state the
