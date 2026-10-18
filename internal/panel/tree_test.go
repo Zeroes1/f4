@@ -892,6 +892,13 @@ func TestTreeScrollBarDragEndsOnRelease_Issue1602(t *testing.T) {
 	pf.AltPanels[0] = tp
 	pf.ActiveIdx = 0
 
+	// Drawing colours the rows through the shared highlighter, which tests
+	// that swap its rules and put them back can leave with a cache that no
+	// longer fits them (train unxed/f4#2063: an index out of range in
+	// GetColor). This test is about the mouse; it draws with none.
+	oldHighlighter := theme.GlobalFileHighlighter
+	theme.GlobalFileHighlighter = &theme.FileHighlighter{}
+	t.Cleanup(func() { theme.GlobalFileHighlighter = oldHighlighter })
 	scr := vtui.NewSilentScreenBuf()
 	scr.AllocBuf(80, 25)
 	tp.Show(scr) // the bar takes its place and range when the table is drawn
