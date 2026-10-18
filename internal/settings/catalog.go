@@ -44,6 +44,7 @@ GuiFontSize|appearance|Font|Font size|Set graphical font size. This does not cha
 GlyphStyle|appearance|Font|Frame and control glyphs|How graphical windows draw frames, checkboxes and radio buttons: Classic keeps square corners and [x] boxes, Rounded draws rounded corners and round buttons. Text terminals are not affected.|classic:Classic;rounded:Rounded|live
 AlwaysShowMenuBar|appearance|Titles and menus|Always show menu bar|Keep the main menu bar visible instead of showing it only when activated.||live
 DialogOuterBorder|appearance|Dialogs|Extra outer border for dialogs|Reserve an empty border around dialogs and the user menu instead of drawing a second frame, far2l/Far3 style.||live
+SettingsMaximized|appearance|Dialogs|Open Settings maximized|Always open this Settings window over the whole screen. The zoom button in its corner still returns it to the ordinary size until it is closed.||next opening
 ConsoleTitleTemplate|appearance|Titles and menus|Window title template|Format the host title with %State, %Ver, %Platform, %Backend, %Host, %User and %Admin.||live
 DisplayFullPathInTitle|appearance|Titles and menus|Full file paths in titles|Show the complete file identity in editor and viewer title bars instead of only the basename.||live
 StartupMode|startup|Launch defaults|Startup mode|Choose how plain f4 launches. Explicit --gui or --tty arguments override this default for that launch.|auto:Automatic;tty:Terminal;gui:Graphical|restart

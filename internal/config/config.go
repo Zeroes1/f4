@@ -460,6 +460,7 @@ type F4Config struct {
 	UseLocalLanguageFiles    bool
 	AlwaysShowMenuBar        bool
 	DialogOuterBorder        bool   // leave an empty border outside dialog/UserMenu borders instead of a second frame (three cells on the sides, one above and below), far2l/Far3 style (default off)
+	SettingsMaximized        bool   // Settings Center always opens maximized (f4#1239, default off)
 	GlyphStyle               string // box, checkbox and radio glyphs of graphical windows: "classic" or "rounded" (f4#285)
 	WorkspaceTabMode         int
 	WorkspaceTabsOverlay     bool
@@ -740,6 +741,7 @@ var App = F4Config{
 	UseLocalLanguageFiles:    false,
 	AlwaysShowMenuBar:        false,
 	DialogOuterBorder:        false,
+	SettingsMaximized:        false,
 	GlyphStyle:               GlyphStyleClassic,
 	WorkspaceTabMode:         int(vtui.WorkspaceTabsAlways),
 	WorkspaceTabsOverlay:     true,
@@ -999,6 +1001,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.DisplayFullPathInTitle = merged.GetString("Interface", "DisplayFullPathInTitle", "0") == "1"
 	cfg.AlwaysShowMenuBar = merged.GetString("Interface", "AlwaysShowMenuBar", "0") == "1"
 	cfg.DialogOuterBorder = merged.GetString("Interface", "DialogOuterBorder", "0") == "1"
+	cfg.SettingsMaximized = merged.GetString("Interface", "SettingsMaximized", "0") == "1"
 	cfg.GlyphStyle = NormalizeGlyphStyle(merged.GetString("Interface", "GlyphStyle", GlyphStyleClassic))
 	switch strings.ToLower(merged.GetString("Interface", "WorkspaceTabMode", "always")) {
 	case "always":
@@ -1375,6 +1378,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "DisplayFullPathInTitle = %d\n", map[bool]int{true: 1, false: 0}[cfg.DisplayFullPathInTitle])
 	fmt.Fprintf(&sb, "AlwaysShowMenuBar = %d\n", map[bool]int{true: 1, false: 0}[cfg.AlwaysShowMenuBar])
 	fmt.Fprintf(&sb, "DialogOuterBorder = %d\n", map[bool]int{true: 1, false: 0}[cfg.DialogOuterBorder])
+	fmt.Fprintf(&sb, "SettingsMaximized = %d\n", map[bool]int{true: 1, false: 0}[cfg.SettingsMaximized])
 	fmt.Fprintf(&sb, "GlyphStyle = %s\n", NormalizeGlyphStyle(cfg.GlyphStyle))
 	workspaceTabMode := "multiple"
 	if cfg.WorkspaceTabMode == int(vtui.WorkspaceTabsAlways) {

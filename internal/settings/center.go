@@ -953,7 +953,11 @@ func (c *settingsCenter) ResizeConsole(w, h int) {
 		dw, dh := min(w, max(72, w/2)), min(h, max(22, h*3/4))
 		c.SetPosition((w-dw)/2, (h-dh)/2, (w+dw)/2-1, (h+dh)/2-1)
 		c.positioned = true
-		c.maximizeForCategory()
+		if config.App.SettingsMaximized {
+			c.maximize() // the user asked for it every time (f4#1239)
+		} else {
+			c.maximizeForCategory()
+		}
 	} else if c.SavedBounds != nil {
 		// Match vtui's BaseWindow.ToggleZoom: the workspace tab strip owns the
 		// rows above and the key bar owns the row below, and both are drawn
@@ -972,6 +976,15 @@ func (c *settingsCenter) ResizeConsole(w, h int) {
 func (c *settingsCenter) maximizeForCategory() {
 	if !c.positioned || c.SavedBounds != nil ||
 		(c.screenW >= c.minSettingsScreenWidth() && c.screenH >= smallSettingsScreenHeight) {
+		return
+	}
+	c.maximize()
+}
+
+// maximize puts the dialog over the whole screen between the workspace tabs
+// and the key bar, keeping its ordinary bounds for the zoom button.
+func (c *settingsCenter) maximize() {
+	if c.SavedBounds != nil {
 		return
 	}
 	c.SavedBounds = &vtui.Rect{X1: c.X1, Y1: c.Y1, X2: c.X2, Y2: c.Y2}
