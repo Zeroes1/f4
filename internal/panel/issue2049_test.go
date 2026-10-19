@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/terminal/far2ldnd"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
@@ -309,3 +310,107 @@ func TestIssue2049_DragGoesToWorkspaceOnScreen(t *testing.T) {
 		t.Fatalf("after switching: first=%v second=%v", highlighted(first), highlighted(second))
 	}
 }
+
+// issue2049Offer records where a terminal's offer went and how it was
+// closed, without copying anything.
+type issue2049Offer struct {
+	copies chan string
+	closed chan uint8
+}
+
+func recordTerminalOffers(t *testing.T) *issue2049Offer {
+	t.Helper()
+	o := &issue2049Offer{copies: make(chan string, 4), closed: make(chan uint8, 4)}
+	old := executeNestedFileOp
+	executeNestedFileOp = func(_, _ vfs.VFS, _ string, _ []string, dstDir string, _ bool, _ int, onComplete func()) {
+		o.copies <- dstDir
+		onComplete()
+	}
+	t.Cleanup(func() { executeNestedFileOp = old })
+	return o
+}
+
+func (o *issue2049Offer) closeOffer(reason uint8) { o.closed <- reason }
+
+func (o *issue2049Offer) wantCopy(t *testing.T, dir string, reason uint8) {
+	t.Helper()
+	select {
+	case got := <-o.copies:
+		if got != dir {
+			t.Fatalf("the offer was copied into %q, want %q", got, dir)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the offer was never copied")
+	}
+	o.wantClosed(t, reason)
+}
+
+func (o *issue2049Offer) wantClosed(t *testing.T, reason uint8) {
+	t.Helper()
+	select {
+	case got := <-o.closed:
+		if got != reason {
+			t.Fatalf("the offer was closed with %d, want %d", got, reason)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the offer was never closed")
+	}
+}
+
+// A drop from far2l carries only where it landed: nothing was highlighted,
+// so a drop over a folder row follows DropOnFolder like any untracked drop,
+// and the offer is closed with what became of the copy (#2049).
+func TestIssue2049_TerminalOfferFollowsDropOnFolder(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	o := recordTerminalOffers(t)
+	src := vfs.NewOSVFS(filepath.Dir(f.source))
+	names := []string{filepath.Base(f.source)}
+	notCancelled := func() bool { return false }
+	overSub := far2ldnd.Event{X: testutil.Int16(f.subX), Y: testutil.Int16(f.subY)}
+
+	config.App.DropOnFolder = ""
+	f.pf.dropTerminalOffer(overSub, src, names, notCancelled, o.closeOffer)
+	o.wantCopy(t, f.dir, far2ldnd.CloseProcessed)
+
+	config.App.DropOnFolder = config.DropOnFolderFolder
+	f.pf.dropTerminalOffer(overSub, src, names, func() bool { return true }, o.closeOffer)
+	o.wantCopy(t, filepath.Join(f.dir, "sub"), far2ldnd.CloseCancelled)
+
+	// Declining the question closes the offer as cancelled, copying nothing.
+	config.App.DropOnFolder = config.DropOnFolderAsk
+	f.pf.dropTerminalOffer(overSub, src, names, notCancelled, o.closeOffer)
+	w, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok || w.OnResult == nil {
+		t.Fatalf("no question on screen, top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	w.OnResult(2)
+	vtui.FrameManager.RemoveFrame(w)
+	o.wantClosed(t, far2ldnd.CloseCancelled)
+	select {
+	case dir := <-o.copies:
+		t.Fatalf("a declined offer was still copied into %q", dir)
+	default:
+	}
+}
+
+// Where the terminal does not know the position, the offer goes to the
+// active panel; with no panel to take it, it is rejected.
+func TestIssue2049_TerminalOfferWithoutPosition(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	o := recordTerminalOffers(t)
+	src := vfs.NewOSVFS(filepath.Dir(f.source))
+	names := []string{filepath.Base(f.source)}
+	unknown := far2ldnd.Event{X: -1, Y: -1}
+
+	f.pf.ActiveIdx = 0
+	f.pf.dropTerminalOffer(unknown, src, names, func() bool { return false }, o.closeOffer)
+	o.wantCopy(t, f.dir, far2ldnd.CloseProcessed)
+
+	f.fsp.Vfs = issue2049ReadOnlyVFS{f.fsp.Vfs}
+	f.pf.dropTerminalOffer(unknown, src, names, func() bool { return false }, o.closeOffer)
+	o.wantClosed(t, far2ldnd.CloseRejected)
+}
+
+type issue2049ReadOnlyVFS struct{ vfs.VFS }
+
+func (issue2049ReadOnlyVFS) IsReadOnly() bool { return true }

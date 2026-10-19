@@ -87,34 +87,45 @@ func (pf *PanelsFrame) ReceiveTerminalOffer(client *terminal.DNDClient, ev far2l
 		return
 	}
 	vtui.FrameManager.PostTask(func() {
-		info, ok := pf.nestedDropTarget(ev)
-		if !ok {
-			vtui.DebugLog("DND: no panel can take the offer")
-			go closeOffer(far2ldnd.CloseRejected)
-			vtui.ShowMessage(" Drag and Drop ", "There is no panel to drop the files into.", []string{"&Ok"})
-			return
-		}
-		// far2l reports where the drop happened, not where the pointer was
-		// on the way, so nothing was highlighted: DropOnFolder decides a
-		// drop over a folder row (#2049).
-		pf.chooseDropDir(info, false, func(dstDir string) {
-			vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
-			announceDrop([]DropSourceGroup{{Names: names}}, dstDir, false)
-			go fileops.ExecuteFileOpAt(src, info.fs, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
-				reason := far2ldnd.CloseProcessed
-				if src.Cancelled() {
-					reason = far2ldnd.CloseCancelled
-				}
-				// On the UI goroutine here: the reply of CLOSE is delivered by the
-				// same loop, so it must not be waited for from it.
-				go closeOffer(reason)
-				vtui.FrameManager.PostTask(func() {
-					pf.RefreshAll()
-					vtui.FrameManager.Redraw()
-				})
-			})
-		}, func() { go closeOffer(far2ldnd.CloseCancelled) })
+		pf.dropTerminalOffer(ev, src, names, src.Cancelled, closeOffer)
 	})
+}
+
+// executeNestedFileOp runs the copy of a terminal's offer; tests replace it
+// to see where the offer goes without copying anything.
+var executeNestedFileOp = fileops.ExecuteFileOpAt
+
+// dropTerminalOffer copies the files of an offer listed from src into the
+// panel the event points at, on the UI goroutine. far2l reports where the
+// drop happened, not where the pointer was on the way, so nothing was
+// highlighted: DropOnFolder decides a drop over a folder row (#2049).
+// closeOffer ends the offer with the outcome: processed, cancelled (by the
+// user or by the copy), or rejected when no panel can take it.
+func (pf *PanelsFrame) dropTerminalOffer(ev far2ldnd.Event, src vfs.VFS, names []string, cancelled func() bool, closeOffer func(uint8)) {
+	info, ok := pf.nestedDropTarget(ev)
+	if !ok {
+		vtui.DebugLog("DND: no panel can take the offer")
+		go closeOffer(far2ldnd.CloseRejected)
+		vtui.ShowMessage(" Drag and Drop ", "There is no panel to drop the files into.", []string{"&Ok"})
+		return
+	}
+	pf.chooseDropDir(info, false, func(dstDir string) {
+		vtui.DebugLog("DND: offer of %d file(s) -> %q", len(names), dstDir)
+		announceDrop([]DropSourceGroup{{Names: names}}, dstDir, false)
+		go executeNestedFileOp(src, info.fs, "/", names, dstDir, false, config.App.DefaultFileOpMode, func() {
+			reason := far2ldnd.CloseProcessed
+			if cancelled() {
+				reason = far2ldnd.CloseCancelled
+			}
+			// On the UI goroutine here: the reply of CLOSE is delivered by the
+			// same loop, so it must not be waited for from it.
+			go closeOffer(reason)
+			vtui.FrameManager.PostTask(func() {
+				pf.RefreshAll()
+				vtui.FrameManager.Redraw()
+			})
+		})
+	}, func() { go closeOffer(far2ldnd.CloseCancelled) })
 }
 
 // offerIsForTerminal reports whether an offer received from the outer terminal
