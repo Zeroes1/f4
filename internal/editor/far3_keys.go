@@ -201,7 +201,11 @@ func (ev *EditorView) MoveSelectionToCursor() {
 }
 
 func (ev *EditorView) transferSelectionToCursor(move bool) {
-	if !ev.SelActive || ev.RectSelActive {
+	if ev.RectSelActive {
+		ev.transferRectSelectionToCursor(move)
+		return
+	}
+	if !ev.SelActive {
 		return
 	}
 	start, end := ev.GetSelectionRange()
@@ -252,6 +256,60 @@ func (ev *EditorView) transferSelectionToCursor(move bool) {
 	ev.CursorVirtualSpaces = 0
 	ev.invalidateStates(ev.Li.GetLineAtOffset(min(start, ev.Pt.Size())))
 	ev.Engine.InvalidateFrom(ev.Li.GetLineAtOffset(min(start, ev.Pt.Size())))
+	ev.updateDesiredVisualCol()
+	ev.EnsureCursorVisible()
+}
+
+func (ev *EditorView) transferRectSelectionToCursor(move bool) {
+	text := ev.rectSelectionText()
+	if text == "" {
+		return
+	}
+	endLine, endCol := ev.rectSelEnd()
+	firstLine, lastLine := ev.rectSelStartLine, endLine
+	if firstLine > lastLine {
+		firstLine, lastLine = lastLine, firstLine
+	}
+	left, right := ev.rectSelStartCol, endCol
+	if left > right {
+		left, right = right, left
+	}
+	destLine := ev.CursorLine
+	destPos := ev.CursorPos
+	destCol := ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+	if destLine >= firstLine && destLine <= lastLine && destCol >= left && destCol < right {
+		return
+	}
+	if move && destLine >= firstLine && destLine <= lastLine {
+		// Moving a rectangle into one of its own rows can overlap the source in
+		// different ways on each line. Leave it untouched rather than guess.
+		return
+	}
+
+	wasInGroup := ev.inGroup
+	if move {
+		// Delete from the bottom up so each logical line retains its identity;
+		// the selected range is visual-column based and excludes LF/CRLF bytes.
+		ev.noteBufferEdit()
+		ev.saveUndo(opOther)
+		ev.inGroup = true
+		ev.DeleteSelection()
+	}
+	ev.CursorLine = min(max(destLine, 0), ev.Li.LineCount()-1)
+	ev.CursorPos = min(destPos, ev.GetLineLength(ev.CursorLine))
+	ev.CursorVirtualSpaces = 0
+	ev.PasteRectangular(text, destCol)
+	ev.inGroup = wasInGroup
+	if move && config.App.EditorPersistentBlocks {
+		rows := strings.Count(text, "\n") + 1
+		ev.RectSelActive = true
+		ev.rectFrozen = true
+		ev.rectSelStartLine = destLine
+		ev.rectSelStartCol = destCol
+		ev.rectEndLine = min(destLine+rows-1, ev.Li.LineCount()-1)
+		ev.rectEndCol = destCol + right - left
+		ev.rectLines = ev.Li.LineCount()
+	}
 	ev.updateDesiredVisualCol()
 	ev.EnsureCursorVisible()
 }
