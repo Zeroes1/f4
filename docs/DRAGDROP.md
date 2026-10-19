@@ -14,10 +14,31 @@ console is not covered.
 
 ## What works now
 
-The panels are a drop target. Files dropped on a panel land in the directory
-under the cursor, or in the panel's current directory when the cursor is not
-on a directory. Shift moves, Ctrl copies, otherwise the source's suggestion
-is followed and copy is the fallback.
+The panels are a drop target. Shift moves, Ctrl copies, otherwise the
+source's suggestion is followed and copy is the fallback. Every drop says
+where it goes in a toast ("Copying 2 → /path"), before the operation's own
+progress and questions.
+
+Where the files go depends on whether the backend followed the drag while
+it moved (`vtui.DragEvent.Tracked`, #2049):
+
+- **Tracked** -- Windows (OLE), X11 (XDND), and gogpu on macOS and Wayland
+  once gogpu reports a drag in progress (`OnDragEnter` / `OnDragMove` /
+  `OnDragLeave`). The target is highlighted as the pointer moves: a folder
+  row under the pointer in the cursor's colours, otherwise the frame of the
+  panel, meaning the folder it shows. The drop goes where the highlight is.
+- **Not tracked** -- gogpu without those callbacks, gogpu on Windows,
+  32-bit Windows (WM_DROPFILES), ebiten, a drop from far2l. Nothing could be
+  highlighted, so the user aimed blind, and a drop over a folder row follows
+  `DropOnFolder` in `[Panel]` (f4:config): `current` (the default) drops into
+  the folder the panel shows, `folder` into the folder under the pointer (the
+  behaviour before #2049), `ask` asks which of the two. A drop anywhere else
+  goes into the folder the panel shows.
+
+A tracked drag resting half a second on a workspace tab switches to that
+workspace (vtui, `WorkspaceDragDwell`), so files can be dropped into its
+panels without letting go first. The drag always goes to the workspace on
+screen.
 
 The destination is always the panel's own VFS, so a panel showing an archive
 or a network connection is not a special case: the transfer is handed to
