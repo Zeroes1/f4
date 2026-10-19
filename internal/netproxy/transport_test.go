@@ -41,7 +41,13 @@ func TestCloseIdleConnectionsEndsTheReadLoops(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	before := readLoopGoroutines()
+	// The count is process-wide, and a connection an earlier test left in
+	// the shared transport may still be on its way out: close those first
+	// and wait for the count to settle, or the one this test opens can be
+	// cancelled out by one that ends at the same moment.
+	CloseIdleConnections()
+	before := settledReadLoops(t)
+
 	resp, err := (Settings{Mode: ModeDirect}).HTTPClient(5 * time.Second).Get(srv.URL)
 	if err != nil {
 		t.Fatal(err)
@@ -61,4 +67,22 @@ func TestCloseIdleConnectionsEndsTheReadLoops(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+}
+
+// settledReadLoops waits until the number of kept-alive readers has not
+// changed for a while, and returns it.
+func settledReadLoops(t *testing.T) int {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	last, since := readLoopGoroutines(), time.Now()
+	for time.Since(since) < 100*time.Millisecond {
+		if !time.Now().Before(deadline) {
+			t.Fatal("kept-alive readers from earlier tests did not settle")
+		}
+		time.Sleep(5 * time.Millisecond)
+		if n := readLoopGoroutines(); n != last {
+			last, since = n, time.Now()
+		}
+	}
+	return last
 }

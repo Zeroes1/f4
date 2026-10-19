@@ -20,6 +20,13 @@ import (
 // and names them, which goleak's generic stack dump does not.
 const goleakEnv = "F4_GOLEAK"
 
+// fdLeakEnv switches on the open-file check at the end of Main: a regular
+// file or socket open after teardown that was not open before the tests
+// fails the run, with the descriptors listed. Off by default for the same
+// reason as the goroutine check; set F4_FDLEAK=1 to run it. Windows lists
+// nothing, so the check passes there.
+const fdLeakEnv = "F4_FDLEAK"
+
 var configDir string
 
 // taskPumpExitTimeout is how long Main lets stopped task pumps finish
@@ -104,6 +111,12 @@ func Main(m *testing.M, before func(), after func() error) int {
 		}
 	}
 
+	var filesBefore []openFile
+	checkFiles := os.Getenv(fdLeakEnv) != ""
+	if checkFiles {
+		filesBefore = openFiles()
+	}
+
 	if before != nil {
 		before()
 	}
@@ -150,6 +163,14 @@ func Main(m *testing.M, before func(), after func() error) int {
 		}
 		if leakErr := FindGoroutineLeaks(taskPumpExitTimeout, leakOpts...); leakErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "goroutine leak after test teardown (%s): %v\n", goleakEnv, leakErr)
+			result = 1
+		}
+	}
+
+	if checkFiles {
+		if leaked := leakedFiles(filesBefore, openFiles()); len(leaked) > 0 {
+			_, _ = fmt.Fprintf(os.Stderr, "open files after test teardown (%s): %d not open before the tests\n%s",
+				fdLeakEnv, len(leaked), describeFiles(leaked))
 			result = 1
 		}
 	}
