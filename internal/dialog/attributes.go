@@ -504,7 +504,7 @@ func setWindowsAttributesForTargets(ctx context.Context, v vfs.VFS, targets []At
 // specific past date/time to anyone who does not know Go's layout
 // convention, not as a pattern to follow (f4#1404) — the error message
 // below uses the localized i18n.Msg("Attributes.MTimeFormatHint") instead.
-const attributesTimeFormat = "02.01.2006 15:04:05"
+const attributesTimeFormat = "02.01.2006 15:04:05.000"
 
 // attributesSelectionSummary names a multiple selection the way far2l's
 // attributes dialog does, "selected 3 items (dirs: 1, files: 2)", so the
@@ -908,7 +908,7 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 			if !multiple {
 				initialCreated = createdText
 			}
-			editCreated = vtui.NewEdit(0, 0, 20, initialCreated)
+			editCreated = vtui.NewEdit(0, 0, 23, initialCreated)
 			lblCreated := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Created")), vtui.Palette[vtui.ColDialogText])
 			rowCreated = vtui.NewHBoxLayout(0, 0, 66, 1)
 			rowCreated.Add(lblCreated, vtui.Margins{Left: 2, Right: 1}, vtui.AlignLeft)
@@ -926,7 +926,7 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 	if !multiple {
 		initialMTime = item.MTime.Format(attributesTimeFormat)
 	}
-	editMTime := vtui.NewEdit(0, 0, 20, initialMTime)
+	editMTime := vtui.NewEdit(0, 0, 23, initialMTime)
 	lblTime := vtui.NewLabel(0, 0, PadLabel(i18n.Msg("Attributes.MTime")), editMTime)
 	rowTime := vtui.NewHBoxLayout(0, 0, 66, 1)
 	rowTime.Add(lblTime, vtui.Margins{Left: 2, Right: 1}, vtui.AlignLeft)
@@ -949,7 +949,7 @@ func ShowAttributesUnixForTargets(refresh func(), v vfs.VFS, targets []Attribute
 		if !multiple {
 			initialAccessed = accessedText
 		}
-		editAccessed = vtui.NewEdit(0, 0, 20, initialAccessed)
+		editAccessed = vtui.NewEdit(0, 0, 23, initialAccessed)
 		lblAccessed := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Accessed")), vtui.Palette[vtui.ColDialogText])
 		rowAccessed = vtui.NewHBoxLayout(0, 0, 66, 1)
 		rowAccessed.Add(lblAccessed, vtui.Margins{Left: 2, Right: 1}, vtui.AlignLeft)
@@ -1383,7 +1383,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 	if !multiple {
 		initialMTime = item.MTime.Format(attributesTimeFormat)
 	}
-	editMTime := vtui.NewEdit(0, 0, 20, initialMTime)
+	editMTime := vtui.NewEdit(0, 0, 23, initialMTime)
 	lblTime := vtui.NewLabel(0, 0, PadLabel(i18n.Msg("Attributes.LastWrite")), editMTime)
 	rowTime := vtui.NewHBoxLayout(0, 0, 54, 1)
 	rowTime.Add(lblTime, vtui.Margins{Right: 1}, vtui.AlignLeft)
@@ -1404,7 +1404,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 			if !multiple {
 				initialCreated = createdText
 			}
-			editCreated = vtui.NewEdit(0, 0, 20, initialCreated)
+			editCreated = vtui.NewEdit(0, 0, 23, initialCreated)
 			lblCreated := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Created")), vtui.Palette[vtui.ColDialogText])
 			rowCreated = vtui.NewHBoxLayout(0, 0, 54, 1)
 			rowCreated.Add(lblCreated, vtui.Margins{Right: 1}, vtui.AlignLeft)
@@ -1424,7 +1424,7 @@ func ShowAttributesWindowsWithPropertiesForTargets(
 		if !multiple {
 			initialAccessed = accessedText
 		}
-		editAccessed = vtui.NewEdit(0, 0, 20, initialAccessed)
+		editAccessed = vtui.NewEdit(0, 0, 23, initialAccessed)
 		lblAccessed := vtui.NewText(0, 0, PadLabel(i18n.Msg("Attributes.Accessed")), vtui.Palette[vtui.ColDialogText])
 		rowAccessed = vtui.NewHBoxLayout(0, 0, 54, 1)
 		rowAccessed.Add(lblAccessed, vtui.Margins{Right: 1}, vtui.AlignLeft)
