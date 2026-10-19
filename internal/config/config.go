@@ -459,7 +459,7 @@ type F4Config struct {
 	HelpLanguage             string
 	UseLocalLanguageFiles    bool
 	AlwaysShowMenuBar        bool
-	DialogOuterBorder        bool   // leave an empty border outside dialog/UserMenu borders instead of a second frame (three cells on the sides, one above and below), far2l/Far3 style (default off)
+	DialogOuterBorder        bool   // leave an empty border outside dialog/UserMenu/drive-menu/plugins-menu borders instead of a second frame: three cells on the sides, one above and below for dialogs, two cells on the sides, one above and below for menus, far2l/Far3 style (default off)
 	SettingsMaximized        bool   // Settings Center always opens maximized (f4#1239, default off)
 	GlyphStyle               string // box, checkbox and radio glyphs of graphical windows: "classic" or "rounded" (f4#285)
 	WorkspaceTabMode         int

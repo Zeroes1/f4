@@ -4,7 +4,12 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/f4/internal/plughost"
+	"github.com/unxed/f4/internal/testutil"
+	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
 
@@ -164,7 +169,8 @@ func TestRenderDialogOuterBorderDefaultOff(t *testing.T) {
 
 // TestRenderDialogOuterBorderUserMenuOnlyNotPlainMenus covers the other half
 // of f4#1399: the empty ring also wraps the user menu, but not an ordinary
-// dropdown/context menu built from the same vtui.VMenu.
+// dropdown/context menu built from the same vtui.VMenu. A menu takes the
+// two-cell ring, never the dialog's wide three-cell side wings.
 func TestRenderDialogOuterBorderUserMenuOnlyNotPlainMenus(t *testing.T) {
 	orig := config.App.DialogOuterBorder
 	t.Cleanup(func() { config.App.DialogOuterBorder = orig })
@@ -172,14 +178,13 @@ func TestRenderDialogOuterBorderUserMenuOnlyNotPlainMenus(t *testing.T) {
 
 	scr := vtui.NewScreenBuf()
 	scr.AllocBuf(40, 20)
+	scr.FillRect(0, 0, 39, 19, '.', vtui.SetRGBBoth(0, 0x00FFFF, 0x0000A0))
 	menu := vtui.NewVMenu("User menu")
 	menu.SetPosition(5, 5, 20, 12)
 	frame := &panel.UserMenuFrame{VMenu: menu}
 	frame.Show(scr)
 	RenderDialogOuterBorder(scr, frame)
-	if cell := scr.GetCell(4, 4); cell.Char != ' ' {
-		t.Fatalf("expected an empty outer ring around the user menu, got %+v", cell)
-	}
+	checkTwoCellOuterRing(t, scr, 5, 5, 20, 12)
 
 	scr2 := vtui.NewScreenBuf()
 	scr2.AllocBuf(40, 20)
@@ -189,5 +194,122 @@ func TestRenderDialogOuterBorderUserMenuOnlyNotPlainMenus(t *testing.T) {
 	RenderDialogOuterBorder(scr2, plain)
 	if cell := scr2.GetCell(4, 4); cell.Char != 0 {
 		t.Fatalf("outer border drawn around an ordinary menu: %+v", cell)
+	}
+}
+
+// TestRenderDialogOuterBorderDriveMenu covers the drive chooser behind
+// Alt+F1/Alt+F2: like the user menu it is a vtui.VMenu reporting TypeMenu, so
+// it takes the two-cell ring through the DriveMenuFrame wrapper f4 pushes it
+// as.
+func TestRenderDialogOuterBorderDriveMenu(t *testing.T) {
+	orig := config.App.DialogOuterBorder
+	t.Cleanup(func() { config.App.DialogOuterBorder = orig })
+	config.App.DialogOuterBorder = true
+
+	scr := vtui.NewScreenBuf()
+	scr.AllocBuf(40, 20)
+	scr.FillRect(0, 0, 39, 19, '.', vtui.SetRGBBoth(0, 0x00FFFF, 0x0000A0))
+	menu := vtui.NewVMenu("Drives")
+	menu.SetPosition(5, 5, 20, 12)
+	frame := &panel.DriveMenuFrame{VMenu: menu}
+	frame.Show(scr)
+	RenderDialogOuterBorder(scr, frame)
+	checkTwoCellOuterRing(t, scr, 5, 5, 20, 12)
+}
+
+// TestRenderDialogOuterBorderPluginMenu covers the F11 plugins menu: it goes
+// through the real ShowPluginMenu path, so the test proves the marker menuCore
+// sets on the wrapper is what makes the ring appear, not a hand-built frame.
+func TestRenderDialogOuterBorderPluginMenu(t *testing.T) {
+	orig := config.App.DialogOuterBorder
+	t.Cleanup(func() { config.App.DialogOuterBorder = orig })
+	config.App.DialogOuterBorder = true
+
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(60, 30)
+	vtui.FrameManager.Init(screen)
+
+	savedItems := plughost.PluginMenuItems
+	t.Cleanup(func() { plughost.PluginMenuItems = savedItems })
+	plughost.PluginMenuItems = []plughost.PluginMenuItem{{
+		ActionName: "test.outerborder.plugin",
+		Label:      "Outer border plugin",
+		Handler:    func(vfs.App) {},
+	}}
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ResizeConsole(60, 30)
+	defer pf.Close()
+	vtui.FrameManager.Push(pf)
+
+	pf.ShowPluginMenu()
+	testutil.DrainUITasks()
+
+	frame := vtui.FrameManager.GetTopFrame()
+	if !panel.IsPluginMenuFrame(frame) {
+		t.Fatalf("top frame after F11 = %T, want the plugins menu", frame)
+	}
+	x1, y1, x2, y2 := frame.GetPosition()
+	if x1 < 3 || y1 < 2 {
+		t.Fatalf("the F11 menu at (%d,%d)-(%d,%d) leaves no room for the ring the test checks", x1, y1, x2, y2)
+	}
+
+	scr := vtui.NewScreenBuf()
+	scr.AllocBuf(60, 30)
+	scr.FillRect(0, 0, 59, 29, '.', vtui.SetRGBBoth(0, 0x00FFFF, 0x0000A0))
+	frame.Show(scr)
+	RenderDialogOuterBorder(scr, frame)
+	checkTwoCellOuterRing(t, scr, x1, y1, x2, y2)
+}
+
+// TestRenderDialogOuterBorderEditorPluginsMenu covers the editor's F11 menu:
+// it is pushed as editor.PluginsMenuFrame, so it takes the same two-cell ring
+// as the panels' menus.
+func TestRenderDialogOuterBorderEditorPluginsMenu(t *testing.T) {
+	orig := config.App.DialogOuterBorder
+	t.Cleanup(func() { config.App.DialogOuterBorder = orig })
+	config.App.DialogOuterBorder = true
+
+	scr := vtui.NewScreenBuf()
+	scr.AllocBuf(40, 20)
+	scr.FillRect(0, 0, 39, 19, '.', vtui.SetRGBBoth(0, 0x00FFFF, 0x0000A0))
+	menu := vtui.NewVMenu("Plugins")
+	menu.SetPosition(5, 5, 20, 12)
+	frame := &editor.PluginsMenuFrame{VMenu: menu}
+	frame.Show(scr)
+	RenderDialogOuterBorder(scr, frame)
+	checkTwoCellOuterRing(t, scr, 5, 5, 20, 12)
+}
+
+// checkTwoCellOuterRing checks the ring a menu takes: blank at two cells out
+// on the sides and one above and below, the frame's own border still standing,
+// and the panel background back at three cells out on the sides -- the wide
+// three-cell side wings are a dialog look only.
+func checkTwoCellOuterRing(t *testing.T, scr *vtui.ScreenBuf, x1, y1, x2, y2 int) {
+	t.Helper()
+	midX, midY := (x1+x2)/2, (y1+y2)/2
+	for _, c := range [][2]int{
+		{x1 - 1, y1 - 1}, {x1 - 2, y1 - 1}, {midX, y1 - 1}, {x2 + 1, y1 - 1}, {x2 + 2, y1 - 1},
+		{x1 - 1, midY}, {x1 - 2, midY}, {x2 + 1, midY}, {x2 + 2, midY},
+		{x1 - 1, y2 + 1}, {x1 - 2, y2 + 1}, {midX, y2 + 1}, {x2 + 1, y2 + 1}, {x2 + 2, y2 + 1},
+	} {
+		if cell := scr.GetCell(c[0], c[1]); cell.Char != ' ' {
+			t.Fatalf("expected the two-cell outer ring at (%d,%d), got %+v", c[0], c[1], cell)
+		}
+	}
+	for _, c := range [][2]int{{x1, y1}, {x2, y1}, {x1, y2}, {x2, y2}} {
+		if cell := scr.GetCell(c[0], c[1]); cell.Char == ' ' || cell.Char == 0 {
+			t.Fatalf("the frame's own border was erased at (%d,%d): %+v", c[0], c[1], cell)
+		}
+	}
+	wantAttr := scr.GetCell(x1, y1).Attributes
+	if got := scr.GetCell(x1-2, y1-1).Attributes; got != wantAttr {
+		t.Fatalf("ring colour = %x, want the frame border colour %x", got, wantAttr)
+	}
+	for _, c := range [][2]int{{x1 - 3, midY}, {x2 + 3, midY}, {midX, y1 - 2}, {midX, y2 + 2}} {
+		if cell := scr.GetCell(c[0], c[1]); cell.Char != '.' {
+			t.Fatalf("outer border painted past its two-cell ring at (%d,%d): %+v", c[0], c[1], cell)
+		}
 	}
 }

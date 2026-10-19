@@ -125,7 +125,7 @@ func (ev *EditorView) ShowPluginsMenu() {
 			ev.ShowSortDialog()
 		}
 	}
-	vtui.FrameManager.Push(menu)
+	vtui.FrameManager.Push(&PluginsMenuFrame{VMenu: menu})
 }
 
 // ShowBase64Menu is kept as a compatibility alias for editor integrations
