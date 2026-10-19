@@ -3,6 +3,7 @@ package editor
 import (
 	"strings"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/vtui"
