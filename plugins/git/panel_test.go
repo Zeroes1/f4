@@ -203,12 +203,15 @@ func TestStatusPanelDeclaresEveryKeyThroughPanelKeys(t *testing.T) {
 	shiftF4 := chord{vtinput.VK_F4, false, true}
 	f8 := chord{vtinput.VK_F8, false, false}
 	for _, want := range []chord{
-		{vtinput.VK_F5, false, false}, {vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false},
+		{vtinput.VK_F1, false, false}, {vtinput.VK_F5, false, false}, {vtinput.VK_RETURN, false, false}, {vtinput.VK_INSERT, false, false},
 		{vtinput.VK_F4, false, false}, shiftF4, f8, {vtinput.VK_K, true, false}, {vtinput.VK_E, true, false}, {vtinput.VK_S, true, false},
 	} {
 		if _, ok := keys[want]; !ok {
 			t.Errorf("missing declared key %+v", want)
 		}
+	}
+	if keys[chord{vtinput.VK_F1, false, false}].Label == "" {
+		t.Error("F1 has no keybar caption")
 	}
 	if keys[chord{vtinput.VK_F5, false, false}].Label == "" {
 		t.Error("F5 has no keybar caption")
