@@ -147,7 +147,7 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	hotkeyRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	hotkeyRow.Spacing = 0
 	hotkeyRow.Add(hotkeyLabel, vtui.Margins{}, vtui.AlignLeft)
-	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Right: 1}, vtui.AlignLeft)
+	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Left: 1, Right: 1}, vtui.AlignLeft)
 	hotkeyRow.Add(dialog.quickCall, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(hotkeyRow, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Add(hotkeyHint, vtui.Margins{}, vtui.AlignLeft)
