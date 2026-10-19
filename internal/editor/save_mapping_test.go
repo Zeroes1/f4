@@ -237,6 +237,134 @@ func TestMappedEditor_FailedRenameMapsTheFileAgain(t *testing.T) {
 	assertNoEditorTempSiblings(t, path)
 }
 
+// renameHookVFS is a local file system that calls before ahead of each rename,
+// with the rename's number, and fails the rename when before does.
+type renameHookVFS struct {
+	*vfs.OSVFS
+	renames atomic.Int32
+	before  func(n int32) error
+}
+
+func (v *renameHookVFS) Rename(ctx context.Context, from, to string) error {
+	if err := v.before(v.renames.Add(1)); err != nil {
+		return err
+	}
+	return v.OSVFS.Rename(ctx, from, to)
+}
+
+func openHookedMappedEditor(t *testing.T, path, text string, before func(*EditorView, int32) error) (*EditorView, *renameHookVFS, *MappedFile) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var ev *EditorView
+	v := &renameHookVFS{OSVFS: vfs.NewOSVFS(filepath.Dir(path))}
+	v.before = func(n int32) error { return before(ev, n) }
+	f, err := v.Open(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := MapEditorFile(v, f)
+	if err != nil {
+		t.Fatalf("MapEditorFile: %v", err)
+	}
+	ev = NewEditorViewIndexedLater(piecetable.New(m.Bytes()), v, path)
+	ev.File = f
+	ev.Mapped = m
+	ev.Codepage = 65001
+	t.Cleanup(func() { ev.Close() })
+	return ev, v, m
+}
+
+// A save renames the new text over a file that is still mapped, so the
+// editor goes on showing the text while it does. Releasing the mapping first
+// showed "Loading" for as long as the rename and the reopen took, seconds on
+// a large file. On Windows this is the real rename over a mapped file.
+func TestMappedEditor_SaveKeepsTheTextReadableThroughTheRename(t *testing.T) {
+	releaseMappingEverywhere(t)
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	testutil.DrainPendingTasks()
+
+	path := filepath.Join(t.TempDir(), "shown.txt")
+	const original = "first line\nsecond line\n"
+	var readable atomic.Bool
+	var m *MappedFile
+	ev, v, m := openHookedMappedEditor(t, path, original, func(ev *EditorView, n int32) error {
+		_, loading := ev.Pt.GetOriginalBuffer().(loadingBuffer)
+		readable.Store(!loading && m.Bytes() != nil)
+		return nil
+	})
+
+	ev.Pt.Insert(0, []byte(">> "))
+	ev.Modified = true
+	ev.SaveToFile(nil)
+	waitEditorSave(t, ev)
+	testutil.DrainPendingTasks()
+
+	if ev.Modified {
+		t.Fatal("the save failed")
+	}
+	if n := v.renames.Load(); n != 1 {
+		t.Fatalf("the save renamed %d times, want once", n)
+	}
+	if !readable.Load() {
+		t.Error("the mapping was released before the rename: the editor showed Loading")
+	}
+	if got := readFileString(t, path); got != ">> "+original {
+		t.Fatalf("the file reads %q", got)
+	}
+	if ev.Mapped == nil || ev.Mapped == m {
+		t.Error("the saved file was not mapped in place of the old one")
+	}
+	assertNoEditorTempSiblings(t, path)
+}
+
+// Where a file system does refuse to rename over a mapped file, the save
+// releases the mapping and renames again.
+func TestMappedEditor_RefusedRenameIsRetriedWithoutTheMapping(t *testing.T) {
+	releaseMappingEverywhere(t)
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	testutil.DrainPendingTasks()
+
+	path := filepath.Join(t.TempDir(), "retried.txt")
+	const original = "first line\nsecond line\n"
+	var releasedForRetry atomic.Bool
+	ev, v, _ := openHookedMappedEditor(t, path, original, func(ev *EditorView, n int32) error {
+		if n == 1 {
+			return errRenameRefused
+		}
+		_, loading := ev.Pt.GetOriginalBuffer().(loadingBuffer)
+		releasedForRetry.Store(loading)
+		return nil
+	})
+
+	ev.Pt.Insert(0, []byte(">> "))
+	ev.Modified = true
+	ev.SaveToFile(nil)
+	waitEditorSave(t, ev)
+	testutil.DrainPendingTasks()
+
+	if ev.Modified {
+		t.Fatal("the save failed")
+	}
+	if n := v.renames.Load(); n != 2 {
+		t.Fatalf("the save renamed %d times, want twice", n)
+	}
+	if !releasedForRetry.Load() {
+		t.Error("the second rename was tried with the mapping still held")
+	}
+	if got := readFileString(t, path); got != ">> "+original {
+		t.Fatalf("the file reads %q", got)
+	}
+	if got := editorText(t, ev); got != ">> "+original {
+		t.Errorf("the editor shows %q", got)
+	}
+	if ev.Mapped == nil {
+		t.Error("the saved file was not mapped again")
+	}
+	assertNoEditorTempSiblings(t, path)
+}
+
 // retire is what makes unmapping safe while other goroutines read: it waits
 // for the readers that may hold a window onto the mapping, and only for them.
 func TestMappedFile_RetireWaitsForEarlierReadersOnly(t *testing.T) {
