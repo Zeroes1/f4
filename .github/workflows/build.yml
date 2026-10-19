@@ -1861,6 +1861,9 @@ jobs:
     env:
       CGO_ENABLED: 0
       TEST_SHUFFLE: ${{ inputs.shuffle || 'on' }}
+      # A goroutine a package's tests leave behind fails the package
+      # (testutil.Main, goleak); the variable goes once every OS is clean.
+      F4_GOLEAK: "1"
     steps:
     - name: Checkout code
       uses: actions/checkout@v7

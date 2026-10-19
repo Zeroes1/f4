@@ -95,6 +95,15 @@ func armDiagnostics(tracePath string, stallLimit time.Duration, crashesDir strin
 			scope = "the whole UI loop"
 		}
 		notice = fmt.Sprintf("stall watchdog armed at %v over %s; writing to %s", stallLimit, scope, logPath)
+		// stop is what a caller has to end the diagnostics with, so it
+		// disarms the watchdog too: before, the watcher goroutine outlived
+		// every caller that stopped the trace (found by goleak over this
+		// package's tests).
+		stopTrace := stop
+		stop = func() {
+			stallwatch.Stop()
+			stopTrace()
+		}
 	}
 	return stop, notice, nil
 }
