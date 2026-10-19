@@ -84,6 +84,26 @@ func TestSettingsCoreRecordProviderAssociationsRoundTrip(t *testing.T) {
 	}
 }
 
+// The AltExec slot has a dispatcher (Ctrl+PgDn over a file, f4#1741) and is
+// editable; AltView and AltEdit stay reserved until their keys are wired.
+func TestSettingsCoreRecordProviderAssociationsAltSlots(t *testing.T) {
+	store := settingsRecordStoreByID(t, newCoreRecordSettingsProvider(), "associations")
+	unavailable := map[string]string{}
+	for _, f := range store.collection.Fields {
+		unavailable[f.ID] = f.Unavailable
+	}
+	for _, id := range []string{"assoc.AltExec", "assoc.AltExecEnabled", "assoc.Execute", "assoc.View", "assoc.Edit"} {
+		if reason, ok := unavailable[id]; !ok || reason != "" {
+			t.Errorf("%s: present=%v unavailable=%q, want an editable field", id, ok, reason)
+		}
+	}
+	for _, id := range []string{"assoc.AltView", "assoc.AltViewEnabled", "assoc.AltEdit", "assoc.AltEditEnabled"} {
+		if unavailable[id] == "" {
+			t.Errorf("%s must stay reserved: no dispatcher consumes it", id)
+		}
+	}
+}
+
 // The bookmarks store enforces exactly ten slots on save (it backs a fixed
 // BookmarkSet array) and otherwise round-trips each slot's path.
 func TestSettingsCoreRecordProviderBookmarksRoundTrip(t *testing.T) {

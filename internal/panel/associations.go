@@ -22,7 +22,7 @@ type AssocKind int
 
 const (
 	AssocExecute AssocKind = 0 // Enter
-	AssocAltExec AssocKind = 1 // Ctrl+PgDn (reserved; not wired yet)
+	AssocAltExec AssocKind = 1 // Ctrl+PgDn
 	AssocView    AssocKind = 2 // F3
 	AssocAltView AssocKind = 3 // Alt+F3 (reserved; not wired yet)
 	AssocEdit    AssocKind = 4 // F4

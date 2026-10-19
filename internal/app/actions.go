@@ -2047,6 +2047,35 @@ func tryPlayInPlayerPanel(pf *panel.PanelsFrame, v vfs.VFS, path string) bool {
 	return true
 }
 
+// actionEnterDirectory is Ctrl+PgDn: the AltExec command of a matching file
+// association when the cursor is on a file that has one (far2l: the second
+// way to run a file, e.g. Enter runs the program and Ctrl+PgDn compiles it,
+// f4#1741); otherwise it enters the directory or archive under the cursor.
+// A file without an AltExec association keeps what Ctrl+PgDn did before.
+func actionEnterDirectory(pf *panel.PanelsFrame) {
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return
+	}
+	idx := fsp.GetCursorIndex()
+	if idx < 0 || idx >= len(fsp.Entries) {
+		return
+	}
+	selected := fsp.Entries[idx]
+	isDir := selected.IsDir
+	isArchive := false
+	if !isDir {
+		if panel.TryFileAssociation(pf, panel.AssocAltExec) {
+			return
+		}
+		fullPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), selected.Name)
+		isArchive = vfs.FindProvider(context.Background(), fsp.Vfs, fullPath) != nil
+	}
+	if isDir || isArchive {
+		fsp.EnterSelectedFromAction()
+	}
+}
+
 func actionExecute(pf *panel.PanelsFrame, v vfs.VFS, dir, name, path string) {
 	// User-defined file associations for Enter (mirrors far2l F9 →
 	// Commands → File associations). A matching association intercepts

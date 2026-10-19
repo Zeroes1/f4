@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -2762,26 +2761,7 @@ func init() {
 		Description: "Enter the directory or archive under the cursor",
 		DescKey:     "Action.Panel.EnterDirectory.Desc",
 		DefaultKeys: []string{"CtrlPgDn", "CtrlShiftPgDn"},
-		Handler: withPF(func(pf *panel.PanelsFrame) {
-			fsp := pf.GetActivePanel()
-			if fsp == nil {
-				return
-			}
-			idx := fsp.GetCursorIndex()
-			if idx < 0 || idx >= len(fsp.Entries) {
-				return
-			}
-			selected := fsp.Entries[idx]
-			isDir := selected.IsDir
-			isArchive := false
-			if !isDir {
-				fullPath := fsp.Vfs.Join(fsp.Vfs.GetPath(), selected.Name)
-				isArchive = vfs.FindProvider(context.Background(), fsp.Vfs, fullPath) != nil
-			}
-			if isDir || isArchive {
-				fsp.EnterSelectedFromAction()
-			}
-		}),
+		Handler:     withPF(actionEnterDirectory),
 	})
 	registerAction(action.Action{
 		Name:        "Panel.InsertFileName",

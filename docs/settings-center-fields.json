@@ -1457,7 +1457,7 @@
     "kind": "boolean",
     "label": "Enable AltExec",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "associations",
@@ -1467,7 +1467,7 @@
     "kind": "multiline",
     "label": "AltExec command",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "associations",

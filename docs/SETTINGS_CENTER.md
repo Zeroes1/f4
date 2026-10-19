@@ -171,7 +171,7 @@ Every listed field is independently described in its provider catalog. Ordered s
 
 | Canonical collection / fields | Original menu → dialog → subdialog | New category | Store and consuming implementation |
 |---|---|---|---|
-| `associations`: mask, description; Enter/AltEnter/F3/AltF3/F4/AltF4 commands and enable flags | Files → File associations → Edit association | associations | `settings/associations.ini`; `file_associations.go`, `file_associations_ui.go`. Alternate slots remain stored and unavailable because current dispatch has no consumer. |
+| `associations`: mask, description; Enter/AltEnter/F3/AltF3/F4/AltF4 commands and enable flags | Files → File associations → Edit association | associations | `settings/associations.ini`; `file_associations.go`, `file_associations_ui.go`. The AltExec slot runs on Ctrl+PgDn over a file (f4#1741; a file without a matching AltExec association keeps entering the archive or opening the plugin view); AltView and AltEdit remain stored and unavailable because current dispatch has no consumer. |
 | `bookmarks`: ten paths; retained plugin/file/data metadata | Drive chooser → bookmarks; numbered folder shortcuts | drives | Existing bookmark file; `bookmarks.go`. Reordering changes digit slots. |
 | `drive-links`: name, path, hotkey | Drive chooser → named links → edit | drives | Existing links file; `drive_bookmarks.go`. |
 | `usermenu.*`: label, activation key, submenu flag, parent, multiline commands | User menu → F4 / Insert → item/submenu editor | menus | Global INI, executable-scoped and ancestor-local FarMenu files remain separate sources and separate drafts; `user_menu_ui.go`. |
