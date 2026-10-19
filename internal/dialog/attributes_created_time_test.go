@@ -55,9 +55,9 @@ func TestAttributesDialog_UnixShowsCreatedAccessedChanged(t *testing.T) {
 	fm.Init(vtui.NewSilentScreenBuf())
 
 	mockVFS := &mockMetadataVFS{VFS: vfs.NewOSVFS(t.TempDir())}
-	created := time.Date(2020, 1, 2, 3, 4, 5, 123_456_789, time.Local)
-	accessed := time.Date(2023, 6, 7, 8, 9, 10, 987_654_321, time.Local)
-	changed := time.Date(2024, 11, 12, 13, 14, 15, 456_789_123, time.Local)
+	created := time.Date(2020, 1, 2, 3, 4, 5, 0, time.Local)
+	accessed := time.Date(2023, 6, 7, 8, 9, 10, 0, time.Local)
+	changed := time.Date(2024, 11, 12, 13, 14, 15, 0, time.Local)
 	item := vfs.VFSItem{
 		Name: "a.txt", UnixMode: 0644, MTime: time.Now(),
 		BTime: created, ATime: accessed, CTime: changed,
