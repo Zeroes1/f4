@@ -61,6 +61,13 @@ func TestPersistentBlockStaysWhileTheCursorMoves_Issue1729(t *testing.T) {
 	if got, want := ev.GetText(), "Yhello world\nhelloseconXd line\n"; got != want {
 		t.Fatalf("Ctrl+P gave %q, want %q", got, want)
 	}
+	if got := selectedText(t, ev); got != "hello" {
+		t.Fatalf("Ctrl+P cleared the persistent block: got %q", got)
+	}
+	ev.MoveSelectionToCursor()
+	if got := selectedText(t, ev); got != "hello" {
+		t.Fatalf("Ctrl+M cleared the persistent block: got %q", got)
+	}
 
 	ev.ClearSelection()
 	if ev.SelActive {

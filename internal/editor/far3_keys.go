@@ -230,8 +230,21 @@ func (ev *EditorView) transferSelectionToCursor(move bool) {
 	}
 	ev.Pt.Insert(dest, data)
 	ev.Li.UpdateAfterInsert(dest, data)
+	keepBlock := config.App.EditorPersistentBlocks && ev.selFrozen
+	if keepBlock {
+		if move {
+			// A move transfers the persistent mark along with the text.
+			ev.SelAnchorOffset = dest
+			ev.selEndOffset = dest + len(data)
+		} else if dest <= start {
+			// A copy before the marked text shifts the mark, but does not
+			// replace it with the newly inserted copy.
+			ev.SelAnchorOffset += len(data)
+			ev.selEndOffset += len(data)
+		}
+	}
 	dest += len(data)
-	ev.SelActive = false
+	ev.SelActive = keepBlock
 	ev.RectSelActive = false
 	ev.CursorLine = ev.Li.GetLineAtOffset(dest)
 	ev.CursorPos = dest - ev.Li.GetLineOffset(ev.CursorLine)
