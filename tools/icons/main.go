@@ -82,7 +82,9 @@ func main() {
 	check(err)
 	check(writeFile(filepath.Join(outDir, "f4-xp.ico"), xp))
 	check(writeFile(filepath.Join(outDir, "f4.icns"), makeICNS(macPNGs)))
-	check(makeWindowsResources(root, filepath.Join(outDir, "f4.ico")))
+	icon := filepath.Join(outDir, "f4.ico")
+	check(makeWindowsResources(filepath.Join(root, "cmd", "f4"), "f4.exe", icon))
+	check(makeWindowsResources(filepath.Join(root, "cmd", "f4-gui-launcher"), "f4-gui.exe", icon))
 	fmt.Println("generated platform icon resources")
 }
 
@@ -307,7 +309,7 @@ func makeICNS(images map[int][]byte) []byte {
 	return out.Bytes()
 }
 
-func makeWindowsResources(root, icon string) error {
+func makeWindowsResources(packageDir, originalFilename, icon string) error {
 	args := []string{
 		"run", "github.com/tc-hib/go-winres@" + winresVersion,
 		"simply",
@@ -316,12 +318,12 @@ func makeWindowsResources(root, icon string) error {
 		"--manifest", "gui",
 		"--product-name", "f4",
 		"--file-description", "f4 file manager",
-		"--original-filename", "f4.exe",
+		"--original-filename", originalFilename,
 		"--icon", icon,
 	}
 	cmd := exec.Command("go", args...)
 	// rsrc_windows_*.syso must sit in the main package directory to be linked.
-	cmd.Dir = filepath.Join(root, "cmd", "f4")
+	cmd.Dir = packageDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

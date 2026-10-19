@@ -153,10 +153,14 @@ jobs:
           exit 1
         }
         go generate ./cmd/f4
+        test -s cmd/f4-gui-launcher/rsrc_windows_amd64.syso
+        test -s cmd/f4-gui-launcher/rsrc_windows_arm64.syso
         git diff --exit-code -- \
           internal/gui/assets/icon/generated \
           cmd/f4/rsrc_windows_amd64.syso \
-          cmd/f4/rsrc_windows_arm64.syso
+          cmd/f4/rsrc_windows_arm64.syso \
+          cmd/f4-gui-launcher/rsrc_windows_amd64.syso \
+          cmd/f4-gui-launcher/rsrc_windows_arm64.syso
 
     - name: Build binaries
       if: steps.affected.outputs.build == 'yes'
