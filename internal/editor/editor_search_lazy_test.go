@@ -141,7 +141,7 @@ func TestReadSearchSnapshot_WaitsForLazilyLoadedChunks(t *testing.T) {
 	defer cancel()
 	ctx := &vtui.TaskContext{Context: c, Cancel: cancel}
 
-	data, err := readSearchSnapshot(ctx, Pt)
+	data, err := readSearchSnapshot(ctx, Pt, nil)
 	if err != nil {
 		t.Fatalf("readSearchSnapshot: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestFindAllMatchSpans_OverLazyBuffer(t *testing.T) {
 	defer cancel()
 	ctx := &vtui.TaskContext{Context: c, Cancel: cancel}
 
-	data, err := readSearchSnapshot(ctx, Pt)
+	data, err := readSearchSnapshot(ctx, Pt, nil)
 	if err != nil {
 		t.Fatalf("readSearchSnapshot: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestReadSearchSnapshot_StopsOnCancel(t *testing.T) {
 	}()
 
 	start := time.Now()
-	if _, err := readSearchSnapshot(ctx, Pt); err != context.Canceled {
+	if _, err := readSearchSnapshot(ctx, Pt, nil); err != context.Canceled {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
@@ -236,7 +236,7 @@ func TestReadSearchSnapshot_StopsOnCancel(t *testing.T) {
 func TestReadSearchSnapshot_FullyResidentBuffer(t *testing.T) {
 	Pt := piecetable.New([]byte("hello\nworld\n"))
 
-	data, err := readSearchSnapshot(nil, Pt)
+	data, err := readSearchSnapshot(nil, Pt, nil)
 	if err != nil {
 		t.Fatalf("readSearchSnapshot: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestReadSearchSnapshot_FullyResidentBuffer(t *testing.T) {
 	// An edited buffer mixes Original and Add pieces; the assembler walks
 	// logical offsets, so the splice has to come back in order.
 	Pt.Insert(5, []byte(" there"))
-	data, err = readSearchSnapshot(nil, Pt)
+	data, err = readSearchSnapshot(nil, Pt, nil)
 	if err != nil {
 		t.Fatalf("readSearchSnapshot after insert: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestReadSearchSnapshot_FullyResidentBuffer(t *testing.T) {
 
 // TestReadSearchSnapshot_EmptyBuffer covers the new-file case.
 func TestReadSearchSnapshot_EmptyBuffer(t *testing.T) {
-	data, err := readSearchSnapshot(nil, piecetable.New(nil))
+	data, err := readSearchSnapshot(nil, piecetable.New(nil), nil)
 	if err != nil {
 		t.Fatalf("readSearchSnapshot: %v", err)
 	}

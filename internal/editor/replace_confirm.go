@@ -162,9 +162,15 @@ func (st *replaceLoop) findNext() {
 // for it. Runs on the UI thread; the dialog is modal, so the buffer cannot
 // change between the prompt and the button handler.
 func (st *replaceLoop) promptAt(data []byte, off, mLen int) {
+	st.promptMatch(data[off:off+mLen], off)
+}
+
+// promptMatch is promptAt given the matched text itself, found at off.
+func (st *replaceLoop) promptMatch(found []byte, off int) {
 	ev := st.ev
 	st.found = true
-	match := append([]byte(nil), data[off:off+mLen]...)
+	match := append([]byte(nil), found...)
+	mLen := len(match)
 	rendered := st.renderReplacement(match)
 
 	ev.selectFoundPattern(off, mLen)

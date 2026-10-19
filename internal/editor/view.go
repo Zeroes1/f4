@@ -264,6 +264,9 @@ type EditorView struct {
 	// every intermediate codepage makes a cycle lossy (especially UTF-8 ->
 	// ANSI -> OEM -> UTF-8). Keep one source snapshot until the buffer changes.
 	codepageRaw []byte
+	// codepageRead cancels the background read of a chunk-buffered file that
+	// a codepage switch is waiting for; see readTextForCodepage.
+	codepageRead func()
 	// DisplayTitle overrides the temporary filename in frame and top-bar
 	// titles. It is used by internal editor round-trip workflows.
 	DisplayTitle string
@@ -441,6 +444,10 @@ func (ev *EditorView) Close() {
 	}
 	ev.indexWG.Wait()
 	ev.highlightWG.Wait()
+	if ev.codepageRead != nil {
+		ev.codepageRead()
+		ev.codepageRead = nil
+	}
 	if ev.AsyncBuf != nil {
 		ev.AsyncBuf.Close()
 	}
@@ -3916,6 +3923,10 @@ var indexScanBuffers sync.Pool
 // ahead of it, small enough that cancelling the scan is still immediate.
 const indexReadChunk = 4 << 20
 
+// indexBatchInterval is how often the scan hands the line offsets it has found
+// to the UI thread.
+const indexBatchInterval = 50 * time.Millisecond
+
 // fileChunkReader fills dst from the file for a stretch of the text, and
 // reports false when that stretch has to be read through the piece table.
 type fileChunkReader func(ctx context.Context, dst []byte, offset, length int) (int, bool)
@@ -3943,9 +3954,11 @@ type fileChunkReader func(ctx context.Context, dst []byte, offset, length int) (
 //
 // A local file read through the chunk buffer instead (no mapping: the setting
 // is off, or the file could not be mapped) is read the same way, and for more
-// reason: the chunk buffer fetches 32 KB at a time on a goroutine each and
-// keeps all of it, which made indexing a 1 GB log nine times slower and
-// left the whole file on the heap. The same identity check applies, against the buffer.
+// reason: the chunk buffer then fetched 32 KB at a time on a goroutine each
+// and kept all of it, which made indexing a 1 GB log nine times slower and
+// left the whole file on the heap. It fetches in larger runs and keeps a
+// bounded cache now, but a read of the file is still a copy fewer than a read
+// through it. The same identity check applies, against the buffer.
 func (ev *EditorView) chunkReader() fileChunkReader {
 	decline := func(context.Context, []byte, int, int) (int, bool) { return 0, false }
 
@@ -4220,19 +4233,20 @@ func (ev *EditorView) StartIndexing() {
 		const fallbackChunk = 256 * 1024
 
 		// A file that can be read directly is read in much larger pieces —
-		// see chunkReader. The buffer it lands in is borrowed for the scan
-		// rather than allocated per scan: a resume fires 400 ms after every
-		// burst of typing, and 4 MB a time adds up.
-		scanBuf, _ := indexScanBuffers.Get().(*[]byte)
-		if scanBuf == nil {
-			b := make([]byte, indexReadChunk)
-			scanBuf = &b
-		}
-		defer indexScanBuffers.Put(scanBuf)
+		// see chunkReader — and a piece ahead of the scan. The buffers they
+		// land in are borrowed for the scan rather than allocated per scan:
+		// a resume fires 400 ms after every burst of typing, and 4 MB a time
+		// adds up.
+		ahead := newIndexReadAhead(ctx, readFromFile)
+		defer ahead.close()
 
 		pendingOffsets := make([]int, 0, 10000)
 		lineLen := 0
 		wrapUnsafe := false
+		// When the offsets were last handed to the UI thread; the zero time
+		// hands the first ones over at once, so the top of a file shows up
+		// as soon as it has been read.
+		var handedOver time.Time
 
 		for absPos < maxSize {
 			select {
@@ -4251,8 +4265,8 @@ func (ev *EditorView) StartIndexing() {
 			// interrupted by an edit resume instead of starting over.
 			var data []byte
 			var err error
-			if n, ok := readFromFile(ctx, *scanBuf, absPos, min(indexReadChunk, maxSize-absPos)); ok {
-				data = (*scanBuf)[:n]
+			if read, ok := ahead.readAt(absPos, min(indexReadChunk, maxSize-absPos), maxSize); ok {
+				data = read
 			} else {
 				if buf != nil {
 					// A 4 MB window ahead of the scan. Prefetch only starts
@@ -4281,24 +4295,28 @@ func (ev *EditorView) StartIndexing() {
 				break
 			}
 			var unsafe bool
-			lineLen, unsafe = scanEditorWrapSafety(data, lineLen)
+			pendingOffsets, lineLen, unsafe = scanLineStarts(pendingOffsets, data, absPos, lineLen)
 			if unsafe && !wrapUnsafe {
 				ev.postUnsafeWordWrap(sessionID, ctx)
 				wrapUnsafe = true
 			}
 
-			pendingOffsets = piecetable.AppendNewlineOffsets(pendingOffsets, data, absPos)
-
 			absPos += len(data)
 			scannedTo.Store(int64(absPos))
 
-			// Update UI in 5000-line batches, or immediately when targetLine is reached, to avoid UI thread congestion
-			if len(pendingOffsets) >= 5000 || absPos >= maxSize || (ev.TargetLine != -1 && Li.LineCount()+len(pendingOffsets) > ev.TargetLine) {
+			// Hand the offsets over at most every indexBatchInterval, and at
+			// once at the end or on reaching the line a reopened file goes
+			// back to. Each hand-over costs the UI thread a frame, and on a
+			// 1 GB log one every 4 MB read was some 250 frames of the Loading
+			// screen before the editor could show that line.
+			if (len(pendingOffsets) >= 5000 && time.Since(handedOver) >= indexBatchInterval) ||
+				absPos >= maxSize || (ev.TargetLine != -1 && Li.LineCount()+len(pendingOffsets) > ev.TargetLine) {
 				currentBatch := pendingOffsets
 				batchEnd := absPos
 				indexed += len(currentBatch)
 				batches++
-				pendingOffsets = make([]int, 0, 10000)
+				handedOver = time.Now()
+				pendingOffsets = make([]int, 0, max(10000, len(currentBatch)))
 
 				uiFrames.PostTask(func() {
 					if ctx.Err() != nil || ev.editSession != sessionID {
@@ -4655,12 +4673,17 @@ func (ev *EditorView) Replace(pattern, replacement string, caseSensitive, revers
 	// user, or left by a previous Cancel) is prompted as-is: re-searching
 	// from its start could pick a wider match (regex "a+" around a
 	// one-character selection) and silently replace more than was selected.
+	// Only the selection is read: the whole buffer, as this once read, is a
+	// copy of the file, and on a chunk buffer holding part of it the read
+	// failed and a wider match than the selection was prompted instead.
 	if ev.SelActive {
 		selMin, selMax := ev.GetSelectionRange()
-		if data, err := ev.Pt.Bytes(); err == nil && selMax > selMin &&
-			selectionIsMatch(data[selMin:selMax], pattern, caseSensitive, re) {
-			st.promptAt(data, selMin, selMax-selMin)
-			return
+		if selMax > selMin {
+			if sel, err := ev.Pt.GetRange(selMin, selMax-selMin); err == nil &&
+				selectionIsMatch(sel, pattern, caseSensitive, re) {
+				st.promptMatch(sel, selMin)
+				return
+			}
 		}
 	}
 	st.searchFrom = ev.searchSeedOffset(reverse, true)
@@ -5123,6 +5146,48 @@ func (ev *EditorView) ReloadWithCodepage(cpID int) {
 	if ev.Codepage == cpID {
 		return
 	}
+	if ev.codepageRaw == nil {
+		if _, chunked := ev.Pt.GetOriginalBuffer().(*AsyncBuffer); chunked {
+			ev.readTextForCodepage(cpID)
+			return
+		}
+	}
+	ev.reloadWithCodepage(cpID, nil)
+}
+
+// readTextForCodepage reads the whole text of a chunk-buffered file for a
+// codepage switch, and switches once it has. The buffer keeps only the part
+// of the file read last, so Pt.Bytes fails on it, and reading the rest takes
+// as long as the file takes to arrive — the whole download, for a remote
+// one. That is done off the UI thread, and given up on when the text changes,
+// the editor closes or another switch is asked for in the meantime.
+func (ev *EditorView) readTextForCodepage(cpID int) {
+	if ev.codepageRead != nil {
+		ev.codepageRead()
+	}
+	Pt, read, session := ev.Pt, ev.chunkReader(), ev.editSession
+	task := vtui.RunAsync(func(ctx *vtui.TaskContext) {
+		data, err := readSearchSnapshot(ctx, Pt, read)
+		if err != nil && ctx.Err() == nil {
+			vtui.DebugLog("EDITOR: reading the text to switch codepage: %v", err)
+		}
+		ctx.RunOnUI(func() {
+			if err != nil || ctx.Err() != nil || ev.IsDone() || ev.Pt != Pt || ev.editSession != session {
+				return
+			}
+			ev.codepageRead = nil
+			ev.reloadWithCodepage(cpID, data)
+		})
+	})
+	ev.codepageRead = task.Cancel
+}
+
+// reloadWithCodepage is ReloadWithCodepage once the text can be had: text is
+// the whole of it when the caller has read it already, nil otherwise.
+func (ev *EditorView) reloadWithCodepage(cpID int, text []byte) {
+	if ev.Codepage == cpID {
+		return
+	}
 
 	// The piece table contains decoded text, not the original file bytes.
 	// Build the source stream once and reinterpret that same stream on every
@@ -5130,7 +5195,10 @@ func (ev *EditorView) ReloadWithCodepage(cpID int) {
 	// information when the intermediate codepage cannot represent all glyphs.
 	rawData := ev.codepageRaw
 	if rawData == nil {
-		bytes, err := ev.Pt.Bytes()
+		bytes, err := text, error(nil)
+		if bytes == nil {
+			bytes, err = ev.Pt.Bytes()
+		}
 		if err != nil {
 			return
 		}
@@ -5722,6 +5790,9 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 	visStart := ev.Engine.VisualToLogical(ev.ScrollTopRow, 0)
 	CreateNewTarget := ev.CreateNewTarget
 	FilePath := ev.FilePath
+	// Captured here, on the UI thread, like every scan's: the save writes the
+	// unchanged text by reading it out of the file in large pieces.
+	readFromFile := ev.chunkReader()
 
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
 		// CancelIndexing only signals the worker. Join it before the save can
@@ -5840,7 +5911,12 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		// file, and it is rewritten either way, so the text is kept in memory.
 		var release *mappingRelease
 		if !saved && !useTemp && err == nil && !CreateNewTarget {
-			release, err = ev.releaseMappingForSave(ctx, ev.Pt, mapped, writePath, true)
+			release, err = ev.releaseForSave(ctx, ev.Pt, mapped, oldAsync, writePath, true)
+		}
+		if !useTemp {
+			// The file is the destination, and is rewritten from its start:
+			// what it holds at an offset is soon no longer the text.
+			readFromFile = func(context.Context, []byte, int, int) (int, bool) { return 0, false }
 		}
 		if saved {
 			f = nopWriteCloser{}
@@ -5885,36 +5961,8 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					saveErr = errWrite
 				}
 			}
-			curr := 0
-			total := ev.Pt.Size()
-			for curr < total && saveErr == nil {
-				if ctx.Err() != nil {
-					saveErr = ctx.Err()
-					break
-				}
-				take := 256 * 1024
-				if curr+take > total {
-					take = total - curr
-				}
-				data, errRange := ev.Pt.GetRange(curr, take)
-				if errRange == piecetable.ErrLoading {
-					// A released mapping's stand-in never finishes loading.
-					if _, gone := ev.Pt.GetOriginalBuffer().(loadingBuffer); gone {
-						saveErr = errTextUnavailable
-						break
-					}
-					time.Sleep(20 * time.Millisecond)
-					continue
-				}
-				if errRange != nil {
-					saveErr = errRange
-					break
-				}
-				if _, errWrite := f.Write(data); errWrite != nil {
-					saveErr = errWrite
-					break
-				}
-				curr += len(data)
+			if saveErr == nil {
+				saveErr = writeTableText(ctx.Context, f, ev.Pt, readFromFile)
 			}
 		} else {
 			bytes, errBytes := ev.Pt.Bytes()
@@ -5958,13 +6006,18 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 		// unretryable after a failed finalization.
 		oldBackingClosed := false
 		if useTemp {
-			// Windows will not rename over, or rewrite, a file that is mapped.
-			// A rename leaves the old file intact when it fails, so it can be
-			// mapped again; an in-place rewrite does not, so that keeps a copy
-			// of the text instead. A new file cannot be the mapped one.
+			// Windows will not rewrite a file that is mapped, and an in-place
+			// rewrite that fails leaves nothing to read the old text back
+			// from, so that keeps a copy of the text first. A rename keeps the
+			// mapping unless it is refused (renameOverMapping), but not a
+			// chunk buffer: that reads through the handle closed below.
 			if !CreateNewTarget {
 				var releaseErr error
-				release, releaseErr = ev.releaseMappingForSave(ctx, ev.Pt, mapped, writePath, keepLinks)
+				if keepLinks {
+					release, releaseErr = ev.releaseForSave(ctx, ev.Pt, mapped, oldAsync, writePath, true)
+				} else {
+					release, releaseErr = ev.releaseChunksForSave(ctx, ev.Pt, oldAsync, writePath, false)
+				}
 				if releaseErr != nil {
 					// Nothing has been replaced and the mapping is back
 					// where it was; the stage is of no further use.
@@ -5976,13 +6029,20 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					return
 				}
 			}
-			// Windows does not allow replacing a local file while our reader handle
-			// is open. A full local save has already read every piece still referenced
-			// by the piece table, so its AsyncBuffer remains a usable recovery snapshot
-			// after cancellation. Remote VFS handles stay open: their Rename can have
-			// an unknown/partial outcome and closing a lazy source there would strand
-			// the editor precisely when recovery matters most.
-			if fileops.IsLocalOSVFS(ev.Vfs) {
+			// Windows does not allow replacing a local file while our reader
+			// handle is open. The piece table no longer reads through it: a
+			// mapping holds the pages it reads without one, and the release
+			// above pointed a chunk buffer's table at a copy of the text or at
+			// a stand-in that recoverMapping replaces if the save fails. Leaning
+			// on the chunk buffer having every piece loaded, as this once did,
+			// stopped being possible when it began to evict. Everywhere else
+			// the handles stay open until the reopen below: a rename leaves
+			// them reading the old file, which is what a failed save goes back
+			// to. Remote VFS handles stay open too: their Rename can have an
+			// unknown/partial outcome and closing a lazy source there would
+			// strand the editor precisely when recovery matters most.
+			if releaseMappingBeforeReplace && fileops.IsLocalOSVFS(ev.Vfs) &&
+				(oldFile == nil || fileIs(oldFile, writePath)) {
 				if oldAsync != nil {
 					oldAsync.Close()
 				}
@@ -6002,7 +6062,21 @@ func (ev *EditorView) saveToFile(afterSave func(), fullWrite bool) {
 					return
 				}
 				cleanupEditorStage(ev.Vfs, tempPath)
-			} else if err := ev.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, !CreateNewTarget), tempPath, writePath); err != nil {
+			} else if err := func() (err error) {
+				rename := func() error {
+					return ev.Vfs.Rename(vfs.WithDestinationOverwrite(ctx.Context, !CreateNewTarget), tempPath, writePath)
+				}
+				if CreateNewTarget {
+					return rename()
+				}
+				// A table on a chunk buffer was released above; this one
+				// releases only a mapping, and only if the rename needs it.
+				released, err := ev.renameOverMapping(ctx, ev.Pt, mapped, writePath, rename)
+				if released != nil {
+					release = released
+				}
+				return err
+			}(); err != nil {
 				// Do not remove the staged path after an uncertain/partial rename.
 				// A remote provider may have committed the move and merely lost the
 				// response (or failed while removing its backup). In that state the
@@ -7139,10 +7213,13 @@ const searchSnapshotReadAhead = 8
 // buffer". Reading forward in bounded steps and retrying on ErrLoading lets
 // the reads themselves pull the file in, the way StartIndexing does.
 //
-// This blocks, and the chunks it waits for are stored by tasks posted to the
-// UI thread, so it must only be called from a background goroutine: on the UI
-// thread it would be waiting for work that only the UI thread can do.
-func readSearchSnapshot(ctx *vtui.TaskContext, Pt *piecetable.PieceTable) ([]byte, error) {
+// read, when not nil, is a chunkReader: the stretches of the original it can
+// read come straight out of the file, a window at a time.
+//
+// This blocks until the data has arrived. The chunk buffer's fetches store
+// what they read themselves, so it may be called on the UI thread, which it
+// then holds for as long as reading the file takes.
+func readSearchSnapshot(ctx *vtui.TaskContext, Pt *piecetable.PieceTable, read fileChunkReader) ([]byte, error) {
 	size := Pt.Size()
 	if size == 0 {
 		return nil, nil
@@ -7158,12 +7235,24 @@ func readSearchSnapshot(ctx *vtui.TaskContext, Pt *piecetable.PieceTable) ([]byt
 
 	res := make([]byte, 0, size)
 	lastProgress := time.Now()
+	readCtx := context.Background()
+	if ctx != nil {
+		readCtx = ctx
+	}
 
 	for len(res) < size {
 		if ctx != nil && ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
+		if read != nil {
+			want := min(size-len(res), indexReadChunk)
+			if n, ok := read(readCtx, res[len(res):len(res)+want], len(res), want); ok {
+				res = res[:len(res)+n]
+				lastProgress = time.Now()
+				continue
+			}
+		}
 		take := min(size-len(res), searchSnapshotChunk)
 		// GetRange reports a partly loaded range as one failure and keeps no
 		// partial result, so a retry re-reads this step from its start.
@@ -7225,7 +7314,7 @@ func (ev *EditorView) searchBuffer(ctx *vtui.TaskContext, session int) ([]byte, 
 	}
 	ev.searchSnapMu.Unlock()
 
-	data, err := readSearchSnapshot(ctx, ev.Pt)
+	data, err := readSearchSnapshot(ctx, ev.Pt, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -7342,6 +7431,12 @@ func (ev *EditorView) Search(pattern string, caseSensitive, reverse, regexp, who
 		startOff := ev.searchSeedOffset(reverse, false)
 		session := ev.editSession
 		delegate, canDelegate := ev.searchDelegation(regexp, wholeWord)
+		// A literal pattern on a buffer that cannot be scanned in place is
+		// searched a window at a time rather than copied whole first; regex
+		// patterns have no bounded length, so those still need the copy.
+		Pt := ev.Pt
+		windowed := !regexp && !wholeWord && !scansInPlace(Pt)
+		readFromFile := ev.chunkReader()
 
 		RunSearchWithProgress(searchPattern, func(ctx *vtui.TaskContext, dlg *vtui.Window) {
 			defer ev.guardMappingFor("searching", ctx)()
@@ -7367,7 +7462,17 @@ func (ev *EditorView) Search(pattern string, caseSensitive, reverse, regexp, who
 				}
 			}
 
-			bytes, errBytes := ev.searchBuffer(ctx, session)
+			var foundOffset, matchLen int
+			var err, errBytes error
+			if windowed {
+				foundOffset, matchLen, errBytes = ev.findLiteralWindowed(ctx, readFromFile, Pt,
+					pattern, caseSensitive, reverse, next, startOff)
+			} else {
+				var bytes []byte
+				if bytes, errBytes = ev.searchBuffer(ctx, session); errBytes == nil {
+					foundOffset, matchLen, err = textsearch.FindMatch(bytes, pattern, caseSensitive, reverse, regexp, wholeWord, next, startOff)
+				}
+			}
 			if errBytes != nil {
 				if ctx.Err() != nil {
 					return // canceled; the dialog is already closing
@@ -7378,8 +7483,6 @@ func (ev *EditorView) Search(pattern string, caseSensitive, reverse, regexp, who
 				})
 				return
 			}
-
-			foundOffset, matchLen, err := textsearch.FindMatch(bytes, pattern, caseSensitive, reverse, regexp, wholeWord, next, startOff)
 			if err != nil {
 				ctx.RunOnUI(func() {
 					dlg.Close()
