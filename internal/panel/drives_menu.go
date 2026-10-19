@@ -468,7 +468,10 @@ func (pf *PanelsFrame) watchDriveList(panelIdx int, menu *vtui.VMenu, signature 
 		ticker := time.NewTicker(every)
 		defer ticker.Stop()
 		for range ticker.C {
-			if stopped.Load() {
+			// The task that ends the watch runs on the frame manager; one
+			// that was shut down runs no more tasks, so it would never come
+			// and the ticker would read the drives forever.
+			if stopped.Load() || fm.IsShutdown() {
 				return
 			}
 			current := driveListSignature(list())
