@@ -159,6 +159,13 @@ func SubstFileName(cmd string, ctx *SubstContext) SubstResult {
 		}
 		// !\!  →  current directory
 		if strings.HasPrefix(rest, "!\\!") {
+			// The closing '!' can also open the next token: in `!\\!.!`,
+			// it starts the `!.!` filename token rather than closing `!\\!`.
+			if strings.HasPrefix(rest[2:], "!.!") {
+				out.WriteString(panel.CurDir)
+				i += 2
+				continue
+			}
 			out.WriteString(panel.CurDir)
 			i += 3
 			continue

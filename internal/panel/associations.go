@@ -24,7 +24,7 @@ const (
 	AssocExecute AssocKind = 0 // Enter
 	AssocAltExec AssocKind = 1 // Ctrl+PgDn
 	AssocView    AssocKind = 2 // F3
-	AssocAltView AssocKind = 3 // Alt+F3 (reserved; not wired yet)
+	AssocAltView AssocKind = 3 // Alt+F3
 	AssocEdit    AssocKind = 4 // F4
 	AssocAltEdit AssocKind = 5 // Alt+F4 (reserved; not wired yet)
 )

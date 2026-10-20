@@ -1497,7 +1497,7 @@
     "kind": "boolean",
     "label": "Enable AltView",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "associations",
@@ -1507,7 +1507,7 @@
     "kind": "multiline",
     "label": "AltView command",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "associations",
