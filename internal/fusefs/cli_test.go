@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -261,12 +260,9 @@ func TestRegistryReplacesRecordForSameMountPoint(t *testing.T) {
 func TestRegistryPrunesDeadOwners(t *testing.T) {
 	useTempRegistry(t)
 
-	// A PID that is certainly gone: run something and reap it.
-	cmd := exec.Command("sh", "-c", "exit 0")
-	if err := cmd.Run(); err != nil {
-		t.Skipf("cannot produce a dead pid here: %v", err)
-	}
-	dead := cmd.Process.Pid
+	// A PID that is certainly gone, and stays the dead process's for the
+	// rest of the test (deadpid_*_test.go).
+	dead := deadPID(t)
 
 	rec := Record{ID: recordID("/mnt/ghost"), Source: "ghost", MountPoint: "/mnt/ghost", PID: dead, Started: time.Now()}
 	blob, _ := json.Marshal(rec)
