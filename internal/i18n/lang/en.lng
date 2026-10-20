@@ -2918,6 +2918,7 @@ SettingsCenter.DriveMenuOptions.10.Description=Include optical drives.
 SettingsCenter.DriveMenuOptions.11.Description=Include mapped and network drives.
 SettingsCenter.DriveMenuOptions.12.Description=This stored compatibility flag has no consumer. SUBST detection runs independently.
 SettingsCenter.DriveMenuOptions.13.Description=Include saved bookmarks and links.
+SettingsCenter.DriveMenuOptions.14.Description=Include named links in the drive menu.
 SettingsCenter.DriveMenuOptions.2.Description=This stored compatibility flag currently has no consumer.
 SettingsCenter.DriveMenuOptions.3.Description=Display filesystem type.
 SettingsCenter.DriveMenuOptions.4.Description=Display total and free capacity columns.
