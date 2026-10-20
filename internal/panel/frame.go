@@ -6787,10 +6787,8 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// while this list is the DiskMenuEditor-style, unbounded drive-menu list.
 	// The two visibility switches are independent (f4#1148).
 	driveBookmarkRows := map[int]int{} // menu row -> named bookmark index
-	var driveBookmarks []DriveBookmark
 	if driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuShowLinks) {
-		var err error
-		driveBookmarks, err = LoadDriveBookmarks(DriveBookmarksFilePath())
+		driveBookmarks, err := LoadDriveBookmarks(DriveBookmarksFilePath())
 		if err != nil {
 			vtui.DebugLog("DRIVE BOOKMARKS: load %q failed: %v", DriveBookmarksFilePath(), err)
 			driveBookmarks = nil
