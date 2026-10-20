@@ -88,6 +88,13 @@ func waitForLocalConPTYPrompt(t *testing.T, pf *panel.PanelsFrame, previous term
 	for !pf.ShellPromptReady {
 		drainFrameTasks()
 		if time.Now().After(promptDeadline) {
+			// The prompt settles only once cmd.exe has no console child; say
+			// which ones it has, so a red run shows what held it.
+			if inspector, ok := pf.GetActivePTY().(interface {
+				ChildProcesses() []terminal.ChildProcess
+			}); ok {
+				t.Logf("children of the shell at the deadline: %+v", inspector.ChildProcesses())
+			}
 			t.Fatal("local ConPTY startup prompt did not arrive")
 		}
 		time.Sleep(10 * time.Millisecond)
