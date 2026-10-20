@@ -4,7 +4,6 @@ package fusefs
 
 import (
 	"errors"
-	"os"
 	"syscall"
 )
 
@@ -16,11 +15,4 @@ func detachAttr() *syscall.SysProcAttr { return nil }
 // with no mounts in it has nothing to unmount.
 func systemUnmount(mountPoint string) error {
 	return errors.New("unmounting is not supported on this platform")
-}
-
-// processExists relies on FindProcess, which really does look the process up
-// on the platforms this file covers.
-func processExists(pid int) bool {
-	p, err := os.FindProcess(pid)
-	return err == nil && p != nil
 }
