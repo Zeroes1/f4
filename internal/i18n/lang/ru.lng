@@ -2918,7 +2918,6 @@ SettingsCenter.DriveMenuOptions.10.Description=Включает оптическ
 SettingsCenter.DriveMenuOptions.11.Description=Включает подключённые и сетевые диски.
 SettingsCenter.DriveMenuOptions.12.Description=Этот сохранённый флаг совместимости сейчас нигде не используется. Определение SUBST выполняется независимо.
 SettingsCenter.DriveMenuOptions.13.Description=Включает сохранённые закладки и ссылки.
-SettingsCenter.DriveMenuOptions.14.Description=Включает именованные ссылки в меню дисков.
 SettingsCenter.DriveMenuOptions.2.Description=Этот сохранённый флаг совместимости сейчас нигде не используется.
 SettingsCenter.DriveMenuOptions.3.Description=Показывает тип файловой системы.
 SettingsCenter.DriveMenuOptions.4.Description=Показывает столбцы общей и свободной ёмкости.
