@@ -42,6 +42,9 @@ type SFTPVFS struct {
 	title     string
 	decoder   *encoding.Decoder
 	closeOnce sync.Once
+	// bookmarkBase is the address the session was opened from, see
+	// bookmark_path.go; "" for a session opened some other way.
+	bookmarkBase string
 }
 
 type sftpConnectionRefs struct {
@@ -154,6 +157,13 @@ func (v *SFTPVFS) SessionKey() any  { return v.client }
 // its raw remote path (e.g. /root/foo) being recorded as if it were local.
 func (v *SFTPVFS) HistoryEntry() (display, ref string, ok bool) { return netfoxHistoryEntry(v) }
 func (v *SFTPVFS) NavigateHistoryEntry(ref string) bool         { return netfoxNavigateHistoryEntry(v, ref) }
+
+// BookmarkPath implements vfs.BookmarkPathProvider: the folder on the server
+// under the address the session was opened from (bookmark_path.go).
+func (v *SFTPVFS) BookmarkPath(string) (string, bool) {
+	return netfoxBookmarkPath(v.bookmarkBase, v.GetPath())
+}
+func (v *SFTPVFS) setBookmarkBase(base string) { v.bookmarkBase = base }
 
 func (v *SFTPVFS) IsAtRoot() bool {
 	p := v.GetPath()
@@ -469,6 +479,7 @@ func (v *SFTPVFS) Clone() vfs.VFS {
 	return &SFTPVFS{
 		parent: v.parent, client: v.client, ssh: v.ssh, shared: v.shared,
 		codepage: v.codepage, path: v.GetPath(), title: v.title, decoder: decoder,
+		bookmarkBase: v.bookmarkBase,
 	}
 }
 
@@ -800,6 +811,7 @@ func (p *sftpProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vf
 		return nil, err
 	}
 	enterStartPath(res, cfg)
+	openedFromConnection(res, w.Base(pth))
 	return res, nil
 }
 

@@ -234,6 +234,8 @@ func (d *driveBookmarkEditDialog) ProcessKey(e *vtinput.InputEvent) bool {
 	return d.Window.ProcessKey(e)
 }
 
+// driveBookmarkDefaultPath is the path a new link offers: the address of the
+// panel's location, as a folder bookmark would store it (bookmarkPathOf).
 func (pf *PanelsFrame) driveBookmarkDefaultPath(panelIdx int) string {
 	if panelIdx < 0 || panelIdx >= len(pf.Panels) {
 		return ""
@@ -242,7 +244,7 @@ func (pf *PanelsFrame) driveBookmarkDefaultPath(panelIdx int) string {
 	if !ok || fsp.Vfs == nil {
 		return ""
 	}
-	return fsp.Vfs.GetPath()
+	return bookmarkPathOf(fsp)
 }
 
 func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, bookmarks []DriveBookmark, index int, reopen func()) {

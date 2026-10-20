@@ -116,6 +116,7 @@ func (p *wslProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vfs
 	if err != nil {
 		return nil, err
 	}
+	openedFromConnection(res, parent.Base(pth))
 	return res, nil
 }
 
