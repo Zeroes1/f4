@@ -2518,6 +2518,7 @@ NetFox.ProxyModeDirect=No proxy
 NetFox.ProxyModeHTTP=HTTP proxy
 NetFox.ProxyModeSOCKS5=SOCKS5 proxy
 NetFox.StartFolderMissing=The start folder %s is not on the server; the connection opened in %s.
+NetFox.BookmarkFolderMissing=The bookmarked folder %s is not on the server; the connection opened in %s.
 
 Queue.Title=Operations Queue
 Queue.BtnCancel=C&ancel Task

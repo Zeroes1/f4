@@ -180,14 +180,13 @@ func (p *NetFoxPlugin) Init(api vfs.HostAPI) error {
 	if err := registerOptionalURIProviders(api); err != nil {
 		return rollback(err)
 	}
-	api.RegisterDrive("NetFox", func() vfs.VFS {
-		cfgDir := vfs.CustomConfigDir
-		if cfgDir == "" {
-			sysDir, _ := os.UserConfigDir()
-			cfgDir = filepath.Join(sysDir, "f4")
-		}
-		return &netFoxVFSWrapper{NewNetFoxVFS(filepath.Join(cfgDir, "NetFox.json"))}
-	})
+	// net://<name>/<folder>, the address of a saved connection, for the
+	// folder bookmarks and the drive-menu links (net_uri.go). It is in
+	// every build: the connection manager is.
+	if err := api.RegisterURIProvider(&netURIProvider{manager: newConnectionManager}); err != nil {
+		return rollback(fmt.Errorf("NetFox: register net URI provider: %w", err))
+	}
+	api.RegisterDrive("NetFox", newConnectionManager)
 	if host, ok := api.(vfs.SettingsContributionHost); ok {
 		reg, err := host.RegisterSettingsProvider(newSettingsProvider())
 		if err != nil {
@@ -197,6 +196,18 @@ func (p *NetFoxPlugin) Init(api vfs.HostAPI) error {
 	}
 	p.registrations = append(p.registrations, registrations...)
 	return nil
+}
+
+// newConnectionManager opens the connection manager over the connections file
+// of the profile: what the NetFox drive of the drive menu shows, and what a
+// net:// address starts from.
+func newConnectionManager() vfs.VFS {
+	cfgDir := vfs.CustomConfigDir
+	if cfgDir == "" {
+		sysDir, _ := os.UserConfigDir()
+		cfgDir = filepath.Join(sysDir, "f4")
+	}
+	return &netFoxVFSWrapper{NewNetFoxVFS(filepath.Join(cfgDir, "NetFox.json"))}
 }
 
 func (p *NetFoxPlugin) Close() error {
