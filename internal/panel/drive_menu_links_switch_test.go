@@ -62,3 +62,40 @@ func TestDriveMenuShowBookmarksOffKeepsTheLinks(t *testing.T) {
 		t.Fatalf("Show bookmarks off hid the Links too (caption %v, link %v)", links, link)
 	}
 }
+
+func TestDriveMenuShowLinksOffHidesNamedLinks(t *testing.T) {
+	cfg := t.TempDir()
+	oldUserConfigDir := config.UserConfigDir
+	config.UserConfigDir = func() (string, error) { return cfg, nil }
+	t.Cleanup(func() { config.UserConfigDir = oldUserConfigDir })
+	if err := os.MkdirAll(filepath.Join(cfg, "f4", "settings"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	place := t.TempDir()
+	if err := SaveDriveBookmarks(DriveBookmarksFilePath(), []DriveBookmark{{Name: "Projects", Path: place}}); err != nil {
+		t.Fatal(err)
+	}
+	oldOptions := config.App.DriveMenuOptions
+	t.Cleanup(func() { config.App.DriveMenuOptions = oldOptions })
+	config.App.DriveMenuOptions &^= config.DriveMenuShowLinks
+
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	pf.ShowDriveMenu(0)
+	menu, ok := driveMenuFromFrame(vtui.FrameManager.GetTopFrame())
+	if !ok {
+		t.Fatal("no drive menu on top")
+	}
+	defer menu.Close()
+
+	for _, item := range menu.Items {
+		if item.Separator && item.Text == i18n.Msg("Drive.Links") {
+			t.Error("Links section is shown with Show links off")
+		}
+		if strings.Contains(item.Text, "Projects") {
+			t.Errorf("named link is shown with Show links off: %q", item.Text)
+		}
+	}
+}

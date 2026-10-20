@@ -2453,6 +2453,7 @@ Drive.ShowCD=Показывать оптические диски
 Drive.ShowRemote=Показывать сетевые диски
 Drive.DetectVirtual=Определять виртуальные диски
 Drive.ShowBookmarks=Показывать закладки
+Drive.ShowLinks=Показывать ссылки
 Drive.TypeFixed=фиксированный
 Drive.TypeRemovable=сменный
 Drive.TypeCD=CD-ROM

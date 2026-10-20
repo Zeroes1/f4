@@ -292,6 +292,10 @@ const (
 	DriveMenuShowRemote
 	DriveMenuDetectVirtual
 	DriveMenuShowBookmarks
+	DriveMenuShowLinks
+	// Marks the new links visibility preference as explicitly set. Older
+	// settings files have no such preference and always displayed named links.
+	DriveMenuShowLinksSet uint32 = 1 << 15
 )
 
 const DefaultDriveMenuOptions = DriveMenuShowType |
@@ -304,7 +308,9 @@ const DefaultDriveMenuOptions = DriveMenuShowType |
 	DriveMenuShowCD |
 	DriveMenuShowRemote |
 	DriveMenuDetectVirtual |
-	DriveMenuShowBookmarks
+	DriveMenuShowBookmarks |
+	DriveMenuShowLinks |
+	DriveMenuShowLinksSet
 
 func ParseDriveMenuOptions(value string) uint32 {
 	if strings.TrimSpace(value) == "" {
@@ -313,6 +319,12 @@ func ParseDriveMenuOptions(value string) uint32 {
 	var options uint32
 	if _, err := fmt.Sscanf(value, "%d", &options); err != nil {
 		return DefaultDriveMenuOptions
+	}
+	// Before Show links existed, named links were always visible. Preserve that
+	// behavior for saved masks from older versions; the marker lets an explicit
+	// off choice survive subsequent loads.
+	if options&DriveMenuShowLinksSet == 0 {
+		options |= DriveMenuShowLinks | DriveMenuShowLinksSet
 	}
 	return options
 }
