@@ -772,7 +772,7 @@ func init() {
 		Area:        "Shell",
 		Label:       "View in Hex",
 		LabelKey:    "Action.File.ViewHex",
-		Description: "Open the selected file in the hex viewer",
+		Description: "Open the selected file with its AltView association, or in the hex viewer",
 		DescKey:     "Action.File.ViewHex.Desc",
 		DefaultKeys: []string{"AltF3"},
 		Enabled:     cursorEntryEnabled,

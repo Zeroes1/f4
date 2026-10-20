@@ -77,7 +77,7 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 	for i, name := range panel.AssocKeyName {
 		enabled := recordField("assoc."+name+"Enabled", "Enable "+name, "Enable this association command slot. An empty command is skipped.", f4settings.Boolean)
 		command := recordField("assoc."+name, name+" command", "Command dispatched for this slot, using the existing user-menu substitution machinery.", f4settings.Multiline)
-		if panel.AssocKind(i) == panel.AssocAltView || panel.AssocKind(i) == panel.AssocAltEdit {
+		if panel.AssocKind(i) == panel.AssocAltEdit {
 			enabled.Unavailable = "Reserved compatibility slot; no current dispatcher."
 			command.Unavailable = enabled.Unavailable
 		}

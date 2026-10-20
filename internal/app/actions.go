@@ -2287,7 +2287,13 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 		}
 		// A matching View association intercepts before the built-in
 		// viewer, so users can wire F3 to feh, less, or anything else.
-		if !forceHex && panel.TryFileAssociation(pf, panel.AssocView) {
+		// Alt+F3 (forceHex) is the second way to view a file: the AltView
+		// association when one matches, the hex viewer otherwise (f4#1741).
+		kind := panel.AssocView
+		if forceHex {
+			kind = panel.AssocAltView
+		}
+		if panel.TryFileAssociation(pf, kind) {
 			return
 		}
 		name := fsp.GetSelectedName()
