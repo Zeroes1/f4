@@ -36,6 +36,7 @@ var sfxSignatures = []sfxSignature{
 	{magic: []byte("7z\xBC\xAF\x27\x1C"), format: "fallback", suffix: ".7z", accept: sevenZipStartHeaderValid},
 	{magic: []byte("Rar!\x1A\x07\x00"), format: "fallback", suffix: ".rar"},
 	{magic: []byte("Rar!\x1A\x07\x01\x00"), format: "fallback", suffix: ".rar"},
+	{magic: []byte("MSCF"), format: "cab", suffix: ".cab"},
 }
 
 // sevenZipStartHeaderSize is the fixed 7z start header: the 6-byte signature,
