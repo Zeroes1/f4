@@ -106,6 +106,7 @@ func FetchCatalog(ctx context.Context) ([]PlugRingItem, error) {
 // FetchPlugRingCatalog is what the PlugRing dialog actually shows: the
 // community catalog from FetchCatalog, plus f4's own first-party native
 // plugins (plugring_firstparty.go), merged by MergeFirstPartyPlugRingItems.
+// Plugins bundled in the current build are omitted from the install list.
 //
 // This stays a separate function rather than folding the merge into
 // FetchCatalog itself so that FetchCatalog keeps meaning exactly what its own
@@ -116,7 +117,14 @@ func FetchPlugRingCatalog(ctx context.Context) ([]PlugRingItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	return MergeFirstPartyPlugRingItems(items), nil
+	merged := MergeFirstPartyPlugRingItems(items)
+	available := merged[:0]
+	for _, item := range merged {
+		if !BuiltinPlugRingItem(item.ID) {
+			available = append(available, item)
+		}
+	}
+	return available, nil
 }
 
 // ResolveAssetURL replaces platform-specific placeholders in the download URL.

@@ -4,9 +4,36 @@
 
 One protocol, several transports. The same plugin can run in its own process, communicating over `stdin`/`stdout`, or inside `f4` on an embedded interpreter. Nothing above the transport changes, so a plugin moves between them without being rewritten.
 
+The full build includes Android, iOS and CloudFox in-process. They appear directly
+in the drive menu and do not require downloading a plugin. Lite builds install
+them on demand from the drive menu or PlugRing and run them as subprocess plugins.
+A full build ignores installed subprocess copies of these bundled plugins.
+Device prerequisites still apply: Android uses ADB; iOS uses usbmuxd or Apple
+Mobile Device Support. Cloud connections require the provider's credentials.
+
+In lite, CloudFox's **Add cloud connection**, **Edit cloud connection** and
+**Unlock cloud vault** commands are available in F11 and Ctrl+Shift+P. Settings
+are entered through cancellable prompts; password, token and vault fields are
+masked and excluded from input history. S3 and WebDAV setup is supported, while
+Google Drive and Yandex Disk accept existing OAuth tokens. Browser/device-code
+authorization and the advanced profile dialog remain available in the full build.
+
+Windows plugin archives contain `.exe` files. The loader also repairs older
+archives containing extensionless PE executables. Installation reports success
+only after `Plugin.Init` succeeds; a download followed by a launch failure reports
+the actual error instead.
+
 ## 1. The Transports
 
 **Subprocess.** `f4` launches an executable and talks to it over pipes. Write the plugin in Go, Python, Rust, C++, Node.js or LuaJIT; anything that can read and write MessagePack on stdio works. The plugin is a native OS process with unrestricted access to the network, native libraries and the filesystem.
+
+For credential entry, the Go SDK's `Host.Prompt(PromptRequest)` returns
+`PromptResponse{Text, Accepted}` and a transport error. `Password: true` creates a
+masked edit with no initial secret or history; cancellation returns
+`Accepted: false`. The existing `Host.InputBox` wire format remains supported.
+`Host.Profile()` calls `Host.GetProfile` to obtain the host's resolved profile
+directory and portable flag; plugins storing configuration must use that value
+instead of deriving a profile from their own executable's location.
 
 **Embedded Lua.** `f4` runs a `.lua` plugin on a built-in interpreter, with no system Lua and no rocks to install. The plugin is a single file. `require('f4rpc')` resolves to a preloaded module, so a script written for the subprocess transport runs here unmodified.
 

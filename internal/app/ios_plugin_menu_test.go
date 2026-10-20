@@ -25,17 +25,10 @@ func registeredIOSPluginMenuDriveFactory() func() vfs.VFS {
 	return nil
 }
 
-// TestIOSPluginMenuDriveRegisteredUnconditionally pins the property that
-// makes this file different from internal/app/cloud_storage_lite.go:
-// ios_plugin_menu.go's init has no liteBuild guard, so the "iOS" entry must
-// already be in the drive registry from this package's ordinary package
-// init -- in every build go test itself ever compiles, liteBuild included --
-// without any test having to call registerIOSPluginMenuDrive itself first.
-// TestCloudStorageLiteDriveAbsentOutsideLiteBuild pins the opposite property
-// for cloudfox, which is deliberately lite-only.
-func TestIOSPluginMenuDriveRegisteredUnconditionally(t *testing.T) {
-	if registeredIOSPluginMenuDriveFactory() == nil {
-		t.Fatal("the \"iOS\" drive is not registered; ios_plugin_menu.go's init must run unconditionally in every build, not just a lite one")
+// The full build registers real drives during plugin startup, not installers.
+func TestIOSInstallDriveOnlyRegisteredInLite(t *testing.T) {
+	if got := registeredIOSPluginMenuDriveFactory() != nil; got != liteBuild {
+		t.Fatalf("iOS install placeholder registered = %v, lite = %v", got, liteBuild)
 	}
 }
 

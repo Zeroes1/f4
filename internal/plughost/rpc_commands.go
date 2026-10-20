@@ -190,10 +190,8 @@ func RegisterRPCPluginCommands(
 			Visible: func(app vfs.App) bool {
 				return rpcPluginCommandVisible(activeDrives, app)
 			},
-			Run: func(vfs.App) {
-				if err := back.Call("Plugin.RunCommand", PluginRunCommandRequest{ID: commandID}, nil); err != nil {
-					vtui.DebugLog("PLUGIN COMMAND [%s/%s]: %v", pluginName, commandID, err)
-				}
+			Run: func(app vfs.App) {
+				startRPCCommand(back, pluginName, commandID, app)
 			},
 		})
 		if err != nil {
@@ -204,4 +202,29 @@ func RegisterRPCPluginCommands(
 		}
 	}
 	return nil
+}
+
+// RPC commands can ask the host for dialogs. Keep the UI event loop available
+// while the command waits for their answers; filesystem callbacks stay guarded.
+func startRPCCommand(back PluginTransport, pluginName, commandID string, app vfs.App) {
+	fm := vtui.FrameManager
+	go func() {
+		err := back.Call("Plugin.RunCommand", PluginRunCommandRequest{ID: commandID}, nil)
+		if err != nil {
+			vtui.DebugLog("PLUGIN COMMAND [%s/%s]: %v", pluginName, commandID, err)
+		}
+		if app == nil || fm == nil {
+			return
+		}
+		fm.PostTask(func() {
+			if App != nil && App.IsStale(app) {
+				return
+			}
+			if err != nil {
+				vtui.ShowMessage(pluginName, err.Error(), []string{vtui.Msg("vtui.Ok")})
+				return
+			}
+			app.RefreshAll()
+		})
+	}()
 }

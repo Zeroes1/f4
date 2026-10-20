@@ -167,8 +167,16 @@ func (p *RPCPlugin) Init(api vfs.HostAPI) error {
 	// Fix Go exec.Command trap: if binary path is relative, resolve it against p.dir
 	if p.dir != "" && !filepath.IsAbs(bin) {
 		localBin := filepath.Join(p.dir, bin)
+		var err error
+		localBin, err = prepareRPCExecutable(localBin)
+		if err != nil {
+			return fmt.Errorf("prepare plugin executable: %w", err)
+		}
 		if _, err := os.Stat(localBin); err == nil {
-			bin = localBin
+			bin, err = filepath.Abs(localBin)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

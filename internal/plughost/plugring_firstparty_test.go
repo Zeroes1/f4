@@ -1,7 +1,10 @@
 package plughost
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -327,5 +330,34 @@ func TestFirstPartyVersionReachesTheMergedCatalog(t *testing.T) {
 	}
 	if !seen {
 		t.Fatal("android is not in the merged catalog")
+	}
+}
+
+func TestFetchPlugRingCatalogExcludesBundledPlugins(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("- id: hello\n  name: Hello\n  entrypoint: hello.lua\n  url: https://example.com/hello.lua\n"))
+	}))
+	defer server.Close()
+	previousURL := PlugRingCatalogURL
+	PlugRingCatalogURL = server.URL
+	t.Cleanup(func() { PlugRingCatalogURL = previousURL })
+	items, err := FetchPlugRingCatalog(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make(map[string]bool)
+	for _, item := range items {
+		seen[item.ID] = true
+	}
+	if !seen["hello"] {
+		t.Error("community plugin is missing")
+	}
+	for _, id := range []string{"android", "ios", "cloudfox"} {
+		if seen[id] == BuiltinPlugRingItem(id) {
+			t.Errorf("catalog contains %s = %v, built in = %v", id, seen[id], BuiltinPlugRingItem(id))
+		}
+	}
+	if BuiltinPlugRingItem("hello") {
+		t.Error("community plugin is classified as built in")
 	}
 }

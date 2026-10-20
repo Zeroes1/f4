@@ -77,9 +77,13 @@ plugring/        # community catalogue of installable plugins: data, not a
 plugins/         # one package per plugin: archive, cloudfox, netfox, mediainfo,
                  # envman, ios, android, sqlite, visren, id3editor, chroma
                  # dummy_internal / dummy_rpc / dummy_lua are transport fixtures
+                 # Android/iOS/CloudFox are built into full; their nested modules
+                 # also build standalone RPC plugins for lite's on-demand installs
 sdk/             # plugin API: f4plugin, f4rpc, lua, extui
-tools/           # developer tooling, incl. the ttytest terminal harness and
-                 # releasecheck, the release gate (docs/UPDATER.md)
+tools/           # developer tooling, incl. the ttytest terminal harness,
+                 # plugincheck RPC startup smoke, and releasecheck, the release
+                 # gate (docs/UPDATER.md)
+                 # plugincheck smoke-tests packaged plugins through Plugin.Init
 docs/            # 56 subsystem documents — read the relevant one before editing
 packaging/       # distribution packaging and the Nix Home Manager module
 artifacts/       # build artifacts

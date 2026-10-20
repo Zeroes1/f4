@@ -162,7 +162,9 @@ reach `libxkbcommon`, so it is available on the amd64 build, which is
 universal like the regular one; the static arm and mipsle builds draw with
 X11. There is no Colorer (Chroma-based syntax highlighting only), no
 Wine-specific code or `libwinescape` dependency, no MP3 player, no
-FUSE-based VFS mounting, and no cloud VFS provider. Archives come back
+FUSE-based VFS mounting, and no built-in Android, iOS or cloud VFS provider.
+Those three plugins can be installed on demand from the drive menu or PlugRing;
+the regular full build includes them without a separate download. Archives come back
 through `plugins/multiarc`, which wraps whichever of `tar`, `unzip`/`zip`,
 `7z`/`7za`/`7zr` and `gzip` the host already has on `PATH` instead of linking
 the regular build's native archive libraries (f4#1178, part 2). Like far2l's

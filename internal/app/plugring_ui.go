@@ -455,10 +455,11 @@ func actionInstallPlugRingItem(pf *panel.PanelsFrame, parent *vtui.Window, item 
 
 // loadPlugRingItem starts a just-installed plugin. It is a variable so a test
 // can stand in for a plugin that takes its time.
-var loadPlugRingItem = func(item plughost.PlugRingItem) {
+var loadPlugRingItem = func(item plughost.PlugRingItem) error {
 	if plughost.GlobalPluginManager != nil {
-		plughost.GlobalPluginManager.LoadSinglePlugRingItem(item)
+		return plughost.GlobalPluginManager.LoadSinglePlugRingItem(item)
 	}
+	return fmt.Errorf("plugin manager is unavailable")
 }
 
 // finishPlugRingInstall loads the installed plugin and reports the result.
@@ -472,9 +473,13 @@ var loadPlugRingItem = func(item plughost.PlugRingItem) {
 // to the UI goroutine afterwards.
 func finishPlugRingInstall(parent *vtui.Window, item plughost.PlugRingItem, refresh func()) {
 	vtui.RunAsync(func(ctx *vtui.TaskContext) {
-		loadPlugRingItem(item)
+		err := loadPlugRingItem(item)
 		ctx.RunOnUI(func() {
-			vtui.ShowMessageOn(parent, " Success ", "Plugin installed and loaded successfully!", []string{"&Ok"})
+			if err != nil {
+				vtui.ShowMessageOn(parent, " Error ", fmt.Sprintf("Plugin downloaded, but failed to load:\n%v", err), []string{"&Ok"})
+			} else {
+				vtui.ShowMessageOn(parent, " Success ", "Plugin installed and loaded successfully!", []string{"&Ok"})
+			}
 			refresh()
 		})
 	})
