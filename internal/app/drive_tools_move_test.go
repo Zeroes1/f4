@@ -61,22 +61,37 @@ func TestDriveMenuShiftUpDownMovesTheToolRow(t *testing.T) {
 		t.Fatalf("no row %q", name)
 		return -1
 	}
-	pump := func() {
+	pump := func(oldMenu *vtui.VMenu) {
+		t.Helper()
+		// PostTask passes through the frame manager's task-pump goroutine. Wait
+		// for that task and the replacement menu instead of treating a short
+		// quiet interval as proof that the queue is empty (the race runner can
+		// schedule the pump later than 100 ms).
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
 		for {
 			select {
 			case task := <-vtui.FrameManager.TaskChan:
 				task()
-			case <-time.After(100 * time.Millisecond):
-				return
+				if top := vtui.FrameManager.GetTopFrame(); top != oldMenu {
+					if _, ok := paneltest.DriveMenuFromFrame(top); ok {
+						return
+					}
+				}
+			case <-timer.C:
+				t.Fatalf("drive menu was not reopened; top frame: %T", vtui.FrameManager.GetTopFrame())
 			}
 		}
 	}
 	press := func(vk uint16) bool {
-		handled := menu.ProcessKey(&vtinput.InputEvent{
+		oldMenu := menu
+		handled := oldMenu.ProcessKey(&vtinput.InputEvent{
 			Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk,
 			ControlKeyState: vtinput.ShiftPressed,
 		})
-		pump() // the menu is closed and opened again in the new order
+		if handled {
+			pump(oldMenu) // wait for the queued close-and-reopen task
+		}
 		return handled
 	}
 	stored := func() []string {
