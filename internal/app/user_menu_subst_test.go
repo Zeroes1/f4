@@ -96,6 +96,16 @@ func TestSubst_CurDir(t *testing.T) {
 	}
 }
 
+func TestSubst_CurDirFollowedByFileName(t *testing.T) {
+	ctx := baseCtx()
+	ctx.Active.CurDir = "/home/me/work/"
+	ctx.Passive.CurDir = "/tmp/"
+	r := subst(t, `cp !\!.! !#!\!.!`, ctx)
+	if r.Command != "cp /home/me/work/main.go /tmp/report.txt" {
+		t.Fatalf("got %q", r.Command)
+	}
+}
+
 func TestSubst_MarkedSpaceJoined(t *testing.T) {
 	r := subst(t, "tar czf out.tar.gz !&", baseCtx())
 	if r.Command != "tar czf out.tar.gz main.go util.go" {
