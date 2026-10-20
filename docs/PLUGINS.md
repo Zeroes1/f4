@@ -107,6 +107,16 @@ bookmark's `PluginData` and handed back after the panel reopens; state it does
 not recognise must be ignored. A provider that is not registered on the
 machine leaves the directory open and shows a message.
 
+A VFS whose `GetPath()` is not an address the host can reopen (a remote
+session's, which is the folder on the server) implements
+`vfs.BookmarkPathProvider`: `BookmarkPath(cursor)` returns the address a
+folder bookmark or a drive-menu link made on it stores, typically a URI the
+plugin's own URI provider opens (NetFox: `net://<connection>/<folder>`,
+[NETFOX.md](NETFOX.md)). `cursor` is the entry under the panel cursor, so a
+list of connections can give the address of the one the cursor is on. The host
+asks when a bookmark or a link is made and nowhere else; folder history has
+`vfs.HistoryPathProvider` for its own rules.
+
 `vfs.DispatchPanelKey` is the host's dispatcher, exported so a controller can
 route the same declarations from its own `ProcessKey`.
 

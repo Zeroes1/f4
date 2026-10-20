@@ -6420,61 +6420,7 @@ func (ev *EditorView) DeleteSpacersForward() {
 func (ev *EditorView) CopySelection() {
 	if ev.RectSelActive {
 		GlobalLastClipboardWasRectangular = true
-		endLine, endCol := ev.rectSelEnd()
-		minY, maxY := ev.rectSelStartLine, endLine
-		if minY > maxY {
-			minY, maxY = maxY, minY
-		}
-		minX, maxX := ev.rectSelStartCol, endCol
-		if minX > maxX {
-			minX, maxX = maxX, minX
-		}
-
-		var lines []string
-		for y := minY; y <= maxY; y++ {
-			lineStart := ev.Li.GetLineOffset(y)
-			lineLen := ev.GetLineLength(y)
-			lineData, _ := ev.Pt.GetRange(lineStart, lineLen)
-
-			var piece []rune
-			visualCol := 0
-			clusters := editorGraphemes(lineData)
-			tabSize := ev.TabSize
-			if tabSize <= 0 {
-				tabSize = 8
-			}
-
-			for _, cluster := range clusters {
-				rw := cluster.width
-				if cluster.text == "\t" {
-					rw = tabSize - (visualCol % tabSize)
-				}
-
-				if visualCol >= minX && visualCol < maxX {
-					piece = append(piece, []rune(cluster.text)...)
-				} else if visualCol < minX && visualCol+rw > minX {
-					piece = append(piece, ' ')
-				}
-
-				visualCol += rw
-				if visualCol >= maxX {
-					break
-				}
-			}
-
-			if visualCol < maxX {
-				needed := maxX - visualCol
-				if visualCol < minX {
-					needed = maxX - minX
-				}
-				piece = append(piece, []rune(strings.Repeat(" ", needed))...)
-			}
-
-			lines = append(lines, string(piece))
-		}
-
-		text := strings.Join(lines, "\n")
-		terminal.SetF4Clipboard(text)
+		terminal.SetF4Clipboard(ev.rectSelectionText())
 		return
 	}
 
@@ -6488,6 +6434,62 @@ func (ev *EditorView) CopySelection() {
 			vtui.DebugLog("EDITOR: Copied %d bytes to clipboard", max-min)
 		}
 	}
+}
+
+// rectSelectionText extracts the selected visual columns from each logical
+// line. Line terminators are deliberately outside the rectangle, whether the
+// file uses LF or CRLF.
+func (ev *EditorView) rectSelectionText() string {
+	endLine, endCol := ev.rectSelEnd()
+	minY, maxY := ev.rectSelStartLine, endLine
+	if minY > maxY {
+		minY, maxY = maxY, minY
+	}
+	minX, maxX := ev.rectSelStartCol, endCol
+	if minX > maxX {
+		minX, maxX = maxX, minX
+	}
+	if minY < 0 || maxY >= ev.Li.LineCount() || minX == maxX {
+		return ""
+	}
+
+	lines := make([]string, 0, maxY-minY+1)
+	for y := minY; y <= maxY; y++ {
+		lineStart := ev.Li.GetLineOffset(y)
+		lineLen := ev.GetLineLength(y)
+		lineData, _ := ev.Pt.GetRange(lineStart, lineLen)
+
+		var piece []rune
+		visualCol := 0
+		tabSize := ev.TabSize
+		if tabSize <= 0 {
+			tabSize = 8
+		}
+		for _, cluster := range editorGraphemes(lineData) {
+			rw := cluster.width
+			if cluster.text == "\t" {
+				rw = tabSize - (visualCol % tabSize)
+			}
+			if visualCol >= minX && visualCol < maxX {
+				piece = append(piece, []rune(cluster.text)...)
+			} else if visualCol < minX && visualCol+rw > minX {
+				piece = append(piece, ' ')
+			}
+			visualCol += rw
+			if visualCol >= maxX {
+				break
+			}
+		}
+		if visualCol < maxX {
+			needed := maxX - visualCol
+			if visualCol < minX {
+				needed = maxX - minX
+			}
+			piece = append(piece, []rune(strings.Repeat(" ", needed))...)
+		}
+		lines = append(lines, string(piece))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (ev *EditorView) PasteRectangular(text string, targetCol int) {
@@ -6516,10 +6518,11 @@ func (ev *EditorView) PasteRectangular(text string, targetCol int) {
 	ev.saveUndo(opOther)
 	ev.Modified = true
 
+	lineEnding := ev.preferredLineEnding(ev.Li.LineCount() - 1)
 	for ev.Li.LineCount() < neededLines {
 		offset := ev.Pt.Size()
-		ev.Pt.Insert(offset, []byte("\n"))
-		ev.Li.UpdateAfterInsert(offset, []byte("\n"))
+		ev.Pt.Insert(offset, lineEnding)
+		ev.Li.UpdateAfterInsert(offset, lineEnding)
 	}
 	ev.Engine.InvalidateFrom(ev.CursorLine)
 

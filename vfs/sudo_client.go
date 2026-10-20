@@ -20,6 +20,9 @@ type SudoClient struct {
 	mu       sync.Mutex
 	conn     *net.UnixConn
 	sockPath string
+	// askpass is the server the helper sudo runs connects back to for the
+	// password; nil while there is no dispatcher connection.
+	askpass  net.Listener
 	appPath  string
 	askPass  string // Command to run for asking password
 	attempts int
@@ -103,6 +106,16 @@ func (c *SudoClient) IsAvailable() bool {
 	return res
 }
 
+// closeAskpassLocked ends the askpass server together with the dispatcher
+// connection it served. c.mu is held.
+func (c *SudoClient) closeAskpassLocked() {
+	if c.askpass == nil {
+		return
+	}
+	_ = c.askpass.Close() // Closing also removes the socket file; nothing is left to report.
+	c.askpass = nil
+}
+
 // Connect attempts to start the elevated dispatcher via sudo and connect to its socket.
 func (c *SudoClient) Connect() error {
 	c.mu.Lock()
@@ -119,13 +132,23 @@ func (c *SudoClient) Connect() error {
 	c.sockPath = filepath.Join(os.TempDir(), fmt.Sprintf("f4-sudo-%d.sock", os.Getpid()))
 	_ = os.Remove(c.sockPath) // The root dispatcher retries removal before its authoritative bind.
 
-	// Start internal askpass server to handle dialog requests from the helper process
-	askPassSock := getAskpassSocketPath(os.Getpid())
-	if err := os.Remove(askPassSock); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("cannot remove stale askpass socket %q; remove it and retry: %w", askPassSock, err)
+	// The askpass server answers the helper that sudo runs for the password.
+	// Its listener lives as long as the dispatcher connection it serves: a
+	// Connect that fails closes it on the way out, or every failed attempt
+	// would leave one more goroutine blocked in Accept on a socket nothing
+	// will ever connect to (found by goleak over internal/app's tests).
+	askpass, listenErr := listenAskpass(getAskpassSocketPath(os.Getpid()))
+	if listenErr != nil {
+		return listenErr
 	}
-	go c.runAskpassServer(askPassSock)
-	// We don't remove askPassSock here, it will be removed by the server goroutine or on exit
+	c.askpass = askpass
+	go c.serveAskpass(askpass)
+	connected := false
+	defer func() {
+		if !connected {
+			c.closeAskpassLocked()
+		}
+	}()
 
 	cmd := exec.Command("sudo", "-A", c.appPath, "--sudo-dispatcher", c.sockPath)
 
@@ -187,6 +210,7 @@ func (c *SudoClient) Connect() error {
 				c.conn, err = net.DialUnix("unix", nil, addr)
 				if err == nil {
 					vtui.DebugLog("SUDO_CLIENT: Successfully connected to dispatcher.")
+					connected = true
 					return nil
 				}
 				vtui.DebugLog("SUDO_CLIENT: DialUnix(%q) attempt %d failed: %v", c.sockPath, i, err)
@@ -313,6 +337,7 @@ func (c *SudoClient) SendRequest(req SudoRequest) (SudoResponse, *os.File, error
 	if err := sendMsg(c.conn, req, -1); err != nil {
 		_ = c.conn.Close() // Preserve the protocol error that forced disconnect.
 		c.conn = nil
+		c.closeAskpassLocked()
 		return SudoResponse{}, nil, err
 	}
 
@@ -321,6 +346,7 @@ func (c *SudoClient) SendRequest(req SudoRequest) (SudoResponse, *os.File, error
 	if err != nil {
 		_ = c.conn.Close() // Preserve the protocol error that forced disconnect.
 		c.conn = nil
+		c.closeAskpassLocked()
 		return SudoResponse{}, nil, err
 	}
 	c.armIdleLocked()

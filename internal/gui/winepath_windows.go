@@ -106,10 +106,20 @@ func freeProcessHeap(p uintptr) {
 
 // stringFromCString reads a NUL-terminated byte string. Wine returns unix
 // paths in UTF-8, which is what Go strings already hold.
+//
+// The address Wine returned becomes a pointer once, and each step from it
+// is unsafe.Add. checkptr, which -race turns on, has no origin for a
+// pointer made from a uintptr and stops the process when a step from it
+// lands in Go memory, which is what the test hands in; the memory this
+// reads is Wine's, so the two readers are exempted the way the FFI
+// libraries exempt their own foreign-pointer helpers.
+//
+//go:nocheckptr
 func stringFromCString(p uintptr) string {
+	base := unsafe.Pointer(p)
 	var b []byte
-	for i := uintptr(0); i < 32*1024; i++ {
-		c := *(*byte)(unsafe.Pointer(p + i))
+	for i := 0; i < 32*1024; i++ {
+		c := *(*byte)(unsafe.Add(base, i))
 		if c == 0 {
 			break
 		}
@@ -118,11 +128,15 @@ func stringFromCString(p uintptr) string {
 	return string(b)
 }
 
-// stringFromWideCString reads a NUL-terminated UTF-16 string.
+// stringFromWideCString reads a NUL-terminated UTF-16 string, stepping
+// the way stringFromCString does and exempted for the same reason.
+//
+//go:nocheckptr
 func stringFromWideCString(p uintptr) string {
+	base := unsafe.Pointer(p)
 	var u []uint16
-	for i := uintptr(0); i < 32*1024; i++ {
-		c := *(*uint16)(unsafe.Pointer(p + i*2))
+	for i := 0; i < 32*1024; i++ {
+		c := *(*uint16)(unsafe.Add(base, i*2))
 		if c == 0 {
 			break
 		}

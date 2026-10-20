@@ -3,6 +3,7 @@ package editor
 import (
 	"strings"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/vtui"
@@ -191,6 +192,22 @@ func (ev *EditorView) AppendSelectionToClipboard() {
 	terminal.SetF4Clipboard(old + part)
 }
 
+// CopyCurrentLine selects the current logical line as a persistent block and
+// copies its text to the clipboard (FAR's Ctrl+C/Ctrl+Ins with no selection).
+func (ev *EditorView) CopyCurrentLine() {
+	lineStart := ev.Li.GetLineOffset(ev.CursorLine)
+	lineEnd := lineStart + ev.GetLineLength(ev.CursorLine)
+	ev.StartSelection(lineStart)
+	ev.selFrozen = true
+	ev.selEndOffset = lineEnd
+	if lineEnd == lineStart {
+		GlobalLastClipboardWasRectangular = false
+		terminal.SetF4Clipboard("")
+		return
+	}
+	ev.CopySelection()
+}
+
 func (ev *EditorView) CopySelectionToCursor() {
 	ev.transferSelectionToCursor(false)
 }
@@ -200,7 +217,11 @@ func (ev *EditorView) MoveSelectionToCursor() {
 }
 
 func (ev *EditorView) transferSelectionToCursor(move bool) {
-	if !ev.SelActive || ev.RectSelActive {
+	if ev.RectSelActive {
+		ev.transferRectSelectionToCursor(move)
+		return
+	}
+	if !ev.SelActive {
 		return
 	}
 	start, end := ev.GetSelectionRange()
@@ -230,14 +251,81 @@ func (ev *EditorView) transferSelectionToCursor(move bool) {
 	}
 	ev.Pt.Insert(dest, data)
 	ev.Li.UpdateAfterInsert(dest, data)
+	keepBlock := config.App.EditorPersistentBlocks && ev.selFrozen
+	if keepBlock {
+		if move {
+			// A move transfers the persistent mark along with the text.
+			ev.SelAnchorOffset = dest
+			ev.selEndOffset = dest + len(data)
+		} else if dest <= start {
+			// A copy before the marked text shifts the mark, but does not
+			// replace it with the newly inserted copy.
+			ev.SelAnchorOffset += len(data)
+			ev.selEndOffset += len(data)
+		}
+	}
 	dest += len(data)
-	ev.SelActive = false
+	ev.SelActive = keepBlock
 	ev.RectSelActive = false
 	ev.CursorLine = ev.Li.GetLineAtOffset(dest)
 	ev.CursorPos = dest - ev.Li.GetLineOffset(ev.CursorLine)
 	ev.CursorVirtualSpaces = 0
 	ev.invalidateStates(ev.Li.GetLineAtOffset(min(start, ev.Pt.Size())))
 	ev.Engine.InvalidateFrom(ev.Li.GetLineAtOffset(min(start, ev.Pt.Size())))
+	ev.updateDesiredVisualCol()
+	ev.EnsureCursorVisible()
+}
+
+func (ev *EditorView) transferRectSelectionToCursor(move bool) {
+	text := ev.rectSelectionText()
+	if text == "" {
+		return
+	}
+	endLine, endCol := ev.rectSelEnd()
+	firstLine, lastLine := ev.rectSelStartLine, endLine
+	if firstLine > lastLine {
+		firstLine, lastLine = lastLine, firstLine
+	}
+	left, right := ev.rectSelStartCol, endCol
+	if left > right {
+		left, right = right, left
+	}
+	destLine := ev.CursorLine
+	destPos := ev.CursorPos
+	destCol := ev.getVisualColOf(ev.CursorLine, ev.CursorPos)
+	if destLine >= firstLine && destLine <= lastLine && destCol >= left && destCol < right {
+		return
+	}
+	if move && destLine >= firstLine && destLine <= lastLine {
+		// Moving a rectangle into one of its own rows can overlap the source in
+		// different ways on each line. Leave it untouched rather than guess.
+		return
+	}
+
+	wasInGroup := ev.inGroup
+	if move {
+		// Delete from the bottom up so each logical line retains its identity;
+		// the selected range is visual-column based and excludes LF/CRLF bytes.
+		ev.noteBufferEdit()
+		ev.saveUndo(opOther)
+		ev.inGroup = true
+		ev.DeleteSelection()
+	}
+	ev.CursorLine = min(max(destLine, 0), ev.Li.LineCount()-1)
+	ev.CursorPos = min(destPos, ev.GetLineLength(ev.CursorLine))
+	ev.CursorVirtualSpaces = 0
+	ev.PasteRectangular(text, destCol)
+	ev.inGroup = wasInGroup
+	if move && config.App.EditorPersistentBlocks {
+		rows := strings.Count(text, "\n") + 1
+		ev.RectSelActive = true
+		ev.rectFrozen = true
+		ev.rectSelStartLine = destLine
+		ev.rectSelStartCol = destCol
+		ev.rectEndLine = min(destLine+rows-1, ev.Li.LineCount()-1)
+		ev.rectEndCol = destCol + right - left
+		ev.rectLines = ev.Li.LineCount()
+	}
 	ev.updateDesiredVisualCol()
 	ev.EnsureCursorVisible()
 }

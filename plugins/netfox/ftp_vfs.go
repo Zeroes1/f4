@@ -39,6 +39,9 @@ type FTPVFS struct {
 	decoder   *encoding.Decoder
 	encoder   *encoding.Encoder
 	closeOnce sync.Once
+	// bookmarkBase is the address the session was opened from, see
+	// bookmark_path.go; "" for a session opened some other way.
+	bookmarkBase string
 }
 
 // ftpSession owns one control connection shared by independent VFS views.
@@ -175,6 +178,18 @@ func (v *FTPVFS) GetTitle() string { return v.title }
 // its raw remote path (e.g. /root/foo) being recorded as if it were local.
 func (v *FTPVFS) HistoryEntry() (display, ref string, ok bool) { return netfoxHistoryEntry(v) }
 func (v *FTPVFS) NavigateHistoryEntry(ref string) bool         { return netfoxNavigateHistoryEntry(v, ref) }
+
+// BookmarkPath implements vfs.BookmarkPathProvider: the folder on the server
+// under the address the session was opened from (bookmark_path.go).
+func (v *FTPVFS) BookmarkPath(string) (string, bool) {
+	return netfoxBookmarkPath(v.bookmarkBase, v.GetPath())
+}
+func (v *FTPVFS) setBookmarkBase(base string) { v.bookmarkBase = base }
+
+var (
+	_ vfs.BookmarkPathProvider = (*FTPVFS)(nil)
+	_ bookmarkBaseSetter       = (*FTPVFS)(nil)
+)
 
 func (v *FTPVFS) SessionKey() any {
 	v.mu.Lock()
@@ -457,6 +472,7 @@ func (v *FTPVFS) Clone() vfs.VFS {
 	return &FTPVFS{
 		parent: v.parent, conn: v.conn, session: session, cwd: v.cwd,
 		title: v.title, decoder: v.decoder, encoder: v.encoder,
+		bookmarkBase: v.bookmarkBase,
 	}
 }
 
@@ -510,6 +526,7 @@ func (p *ftpProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vfs
 		return nil, err
 	}
 	enterStartPath(res, cfg)
+	openedFromConnection(res, w.Base(pth))
 	return res, nil
 }
 

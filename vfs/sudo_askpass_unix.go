@@ -82,31 +82,32 @@ func RunSudoAskpass() {
 	os.Exit(0)
 }
 
-func (c *SudoClient) runAskpassServer(path string) {
+// listenAskpass opens the socket the askpass helper connects back to. The
+// listener is the caller's to close, and closing it is what ends
+// serveAskpass; a closed Unix listener also removes its socket file.
+func listenAskpass(path string) (net.Listener, error) {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		vtui.DebugLog("SUDO_CLIENT: remove stale askpass socket %q: %v", path, err)
-		return
+		return nil, fmt.Errorf("cannot remove stale askpass socket %q; remove it and retry: %w", path, err)
 	}
 	l, err := net.Listen("unix", path)
 	if err != nil {
-		vtui.DebugLog("SUDO_CLIENT: runAskpassServer Listen failed for %q: %v", path, err)
-		return
+		return nil, fmt.Errorf("cannot listen on askpass socket %q: %w", path, err)
 	}
-	defer func() {
-		_ = l.Close() // Listener cleanup cannot affect a completed request.
-	}()
 	if err := os.Chmod(path, 0600); err != nil {
-		vtui.DebugLog("SUDO_CLIENT: secure askpass socket %q: %v", path, err)
-		return
+		_ = l.Close() // The chmod error is the one worth reporting.
+		return nil, fmt.Errorf("cannot secure askpass socket %q: %w", path, err)
 	}
+	return l, nil
+}
 
+// serveAskpass answers password requests on l, one per connection, until l
+// is closed.
+func (c *SudoClient) serveAskpass(l net.Listener) {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			return
 		}
-
-		// Each connection is one password request
 		c.handleAskpassRequest(conn)
 	}
 }

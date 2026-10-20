@@ -84,10 +84,14 @@ func TestRunSudoAskpassRejectsMissingParent(t *testing.T) {
 	}
 }
 
-func TestAskpassServerReturnsWhenSocketCannotBeCreated(t *testing.T) {
+func TestAskpassServerReportsWhenSocketCannotBeCreated(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing", "askpass.sock")
 
-	(&SudoClient{}).runAskpassServer(path)
+	l, err := listenAskpass(path)
+	if err == nil {
+		_ = l.Close()
+		t.Fatal("a socket in a directory that does not exist was created")
+	}
 }
 
 func TestHandleAskpassRequestStopsAfterThreeAttempts(t *testing.T) {

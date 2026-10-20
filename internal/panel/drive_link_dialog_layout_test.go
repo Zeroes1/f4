@@ -51,8 +51,8 @@ func TestDriveLinkDialogRows(t *testing.T) {
 	if quickY != hotkeyY || quickX != hotkeyX2+2 {
 		t.Errorf("quick-call checkbox at (%d,%d), hotkey at (%d,%d) width %d: want same row, one cell after field", quickX, quickY, hotkeyX, hotkeyY, hotkeyX2-hotkeyX+1)
 	}
-	if hotkeyX != d.X1+2+vtui.StringWidth(i18n.Msg("DriveLink.Hotkey")) {
-		t.Errorf("hotkey field x = %d: want label immediately followed by field after shifting it left one cell", hotkeyX)
+	if hotkeyX != d.X1+2+vtui.StringWidth(i18n.Msg("DriveLink.Hotkey"))+1 {
+		t.Errorf("hotkey field x = %d: want one blank cell after its label", hotkeyX)
 	}
 	d.HotkeyEdit.SetText("Ctrl+Alt+anything")
 	if got := d.HotkeyEdit.GetText(); got != "Ctrl+Alt+anything" {

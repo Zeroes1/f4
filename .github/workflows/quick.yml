@@ -64,6 +64,9 @@ jobs:
     timeout-minutes: 15
     env:
       CGO_ENABLED: 0
+      # Same goroutine and open-file leak checks as build.yml's test job.
+      F4_GOLEAK: "1"
+      F4_FDLEAK: "1"
     steps:
       - uses: actions/checkout@v7
         with:

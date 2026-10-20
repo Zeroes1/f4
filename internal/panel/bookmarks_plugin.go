@@ -32,14 +32,15 @@ func bookmarkPanelProviderID(b Bookmark) (string, bool) {
 	return id, id != ""
 }
 
-// BookmarkForPanel describes the location fsp shows right now: its VFS path
-// and, when a panel plugin covers it (Git status, process list, ...), that
+// BookmarkForPanel describes the location fsp shows right now: its address
+// (bookmarkPathOf: the VFS path, or the address a remote session gives for
+// it) and, when a panel plugin covers it (Git status, process list, ...), that
 // plugin's provider identity.
 func (pf *PanelsFrame) BookmarkForPanel(fsp *FileSystemPanel) Bookmark {
 	if fsp == nil || fsp.Vfs == nil {
 		return Bookmark{}
 	}
-	b := Bookmark{Path: fsp.Vfs.GetPath()}
+	b := Bookmark{Path: bookmarkPathOf(fsp)}
 	if pf == nil {
 		return b
 	}

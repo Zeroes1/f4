@@ -34,13 +34,14 @@ require (
 	github.com/unxed/sevenzip v0.1.8
 	github.com/unxed/tar v0.1.141
 	github.com/unxed/vtinput v0.1.11
-	github.com/unxed/vtui v0.1.411
+	github.com/unxed/vtui v0.1.413-0.20261018150540-704075b8667d
 	github.com/unxed/zip v0.1.146
 	github.com/unxed/zipper v0.1.178
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/woozymasta/png v1.2.0
 	github.com/yuin/gopher-lua v1.1.1
 	github.com/zzl/go-win32api/v2 v2.1.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/arch v0.30.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.45.0

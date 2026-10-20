@@ -113,6 +113,66 @@ func TestFAR3BlockTransferAndIndent(t *testing.T) {
 	if indent.CursorPos != 2 {
 		t.Fatalf("cursor after indent = %d, want 2", indent.CursorPos)
 	}
+
+	unindent := newFAR3Editor(t, "\tone")
+	unindent.CursorPos = 2
+	unindent.ShiftCurrentOrSelectedLines(true)
+	if got, want := unindent.GetText(), "one"; got != want {
+		t.Fatalf("unindented line = %q, want %q", got, want)
+	}
+
+	selected := newFAR3Editor(t, "one\ntwo\nthree")
+	selected.SelActive = true
+	selected.SelAnchorOffset = 0
+	selected.CursorLine = 1
+	selected.CursorPos = 3
+	selected.ShiftCurrentOrSelectedLines(false)
+	if got, want := selected.GetText(), "\tone\n\ttwo\nthree"; got != want {
+		t.Fatalf("indented selected lines = %q, want %q", got, want)
+	}
+	selected.ShiftCurrentOrSelectedLines(true)
+	if got, want := selected.GetText(), "one\ntwo\nthree"; got != want {
+		t.Fatalf("unindented selected lines = %q, want %q", got, want)
+	}
+}
+
+func TestFAR3CopyWithoutSelectionMarksAndCopiesCurrentLine_Issue1729(t *testing.T) {
+	ev := newFAR3Editor(t, "first line\nsecond line\n")
+	ev.CursorLine, ev.CursorPos = 1, 4
+	vtui.SetClipboard("old clipboard")
+	ev.CopyCurrentLine()
+	if got, want := vtui.GetClipboard(), "second line"; got != want {
+		t.Fatalf("clipboard = %q, want %q", got, want)
+	}
+	if got := selectedText(t, ev); got != "second line" {
+		t.Fatalf("selected block = %q, want current line", got)
+	}
+	if ev.CursorLine != 1 || ev.CursorPos != 4 {
+		t.Fatalf("copy moved cursor to %d:%d, want 1:4", ev.CursorLine, ev.CursorPos)
+	}
+}
+
+func TestFAR3CopyWithoutSelectionHandlesCRLFAndEmptyLine_Issue1729(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, want string
+		line, pos        int
+	}{
+		{"CRLF", "first\r\nsecond\r\n", "second", 1, 2},
+		{"empty line", "first\n\nlast", "", 1, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ev := newFAR3Editor(t, tc.text)
+			ev.CursorLine, ev.CursorPos = tc.line, tc.pos
+			vtui.SetClipboard("old clipboard")
+			ev.CopyCurrentLine()
+			if got := vtui.GetClipboard(); got != tc.want {
+				t.Fatalf("clipboard = %q, want %q", got, tc.want)
+			}
+			if !ev.SelActive || !ev.selFrozen {
+				t.Fatal("current line was not kept as a marked block")
+			}
+		})
+	}
 }
 
 func TestFAR3Bookmarks(t *testing.T) {

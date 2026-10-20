@@ -698,17 +698,53 @@ func (p *PTY) ChildProcesses() []ChildProcess {
 	if err := windows.Process32First(Snapshot, &pe32); err != nil {
 		return nil
 	}
+	shellCreated, shellKnown := processCreationTime(proc.Process)
 	var children []ChildProcess
 	for {
 		if pe32.ParentProcessID == proc.ProcessId {
-			name := windows.UTF16ToString(pe32.ExeFile[:])
-			children = append(children, ChildProcess{Name: name, GUI: processIsGUI(pe32.ProcessID)})
+			childCreated, childKnown := openProcessCreationTime(pe32.ProcessID)
+			if childOfShell(shellCreated, shellKnown, childCreated, childKnown) {
+				name := windows.UTF16ToString(pe32.ExeFile[:])
+				children = append(children, ChildProcess{Name: name, GUI: processIsGUI(pe32.ProcessID)})
+			}
 		}
 		if err := windows.Process32Next(Snapshot, &pe32); err != nil {
 			break
 		}
 	}
 	return children
+}
+
+// childOfShell decides whether a process that names the shell's PID as its
+// parent really is the shell's child. A process records its parent's PID at
+// creation and keeps it after that parent dies, and Windows hands the PID out
+// again soon: a process left behind by an earlier owner of the PID would look
+// like a child of this shell, and the prompt it holds would never settle
+// (startup prompt did not arrive, f4 CI). A child cannot be older than its
+// parent, so one created before the shell is not its child. When either
+// time cannot be read the process is counted: waiting for it is the safe
+// error, as in processIsGUI.
+func childOfShell(shellCreated int64, shellKnown bool, childCreated int64, childKnown bool) bool {
+	return !shellKnown || !childKnown || childCreated >= shellCreated
+}
+
+// processCreationTime is when the process behind h was created, in
+// nanoseconds since the Unix epoch.
+func processCreationTime(h windows.Handle) (int64, bool) {
+	var created, exited, kernel, user windows.Filetime
+	if h == 0 || windows.GetProcessTimes(h, &created, &exited, &kernel, &user) != nil {
+		return 0, false
+	}
+	return created.Nanoseconds(), true
+}
+
+func openProcessCreationTime(pid uint32) (int64, bool) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return 0, false
+	}
+	defer func() { _ = windows.CloseHandle(h) }()
+	return processCreationTime(h)
 }
 
 // processIsGUI reads the subsystem of the process's image. Anything that

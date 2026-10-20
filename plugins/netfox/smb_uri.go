@@ -44,6 +44,7 @@ func (p *smbURIProvider) OpenURI(ctx context.Context, current vfs.VFS, raw strin
 		return nil, err
 	}
 	v := newSMBVFS(nil, client, host)
+	openedFromURI(v, u)
 	if target := strings.TrimSpace(u.Path); target != "" && target != "/" {
 		if err := v.SetPath(target); err != nil {
 			_ = v.Close() // Preserve the invalid-path error.

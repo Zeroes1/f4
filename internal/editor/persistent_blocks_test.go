@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
@@ -60,6 +61,13 @@ func TestPersistentBlockStaysWhileTheCursorMoves_Issue1729(t *testing.T) {
 	ev.CopySelectionToCursor()
 	if got, want := ev.GetText(), "Yhello world\nhelloseconXd line\n"; got != want {
 		t.Fatalf("Ctrl+P gave %q, want %q", got, want)
+	}
+	if got := selectedText(t, ev); got != "hello" {
+		t.Fatalf("Ctrl+P cleared the persistent block: got %q", got)
+	}
+	ev.MoveSelectionToCursor()
+	if got := selectedText(t, ev); got != "hello" {
+		t.Fatalf("Ctrl+M cleared the persistent block: got %q", got)
 	}
 
 	ev.ClearSelection()
@@ -163,5 +171,52 @@ func TestPersistentVerticalBlock_Issue1729(t *testing.T) {
 	}
 	if got := block(); got != want {
 		t.Fatalf("after a click the block copies %q, want %q", got, want)
+	}
+}
+
+func TestPersistentVerticalBlockTransferAndLineEndings_Issue1729(t *testing.T) {
+	old := config.App.EditorPersistentBlocks
+	t.Cleanup(func() { config.App.EditorPersistentBlocks = old })
+	config.App.EditorPersistentBlocks = true
+
+	for _, tc := range []struct {
+		name, eol string
+	}{
+		{name: "LF", eol: "\n"},
+		{name: "CRLF", eol: "\r\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			original := strings.Join([]string{"abcdef", "ghijkl", "mnopqr"}, tc.eol)
+			for _, move := range []bool{false, true} {
+				ev := newFAR3Editor(t, original)
+				ev.StartRectSelection(0, 1)
+				ev.CursorLine, ev.CursorPos = 1, 3
+				ev.rectFrozen = true
+				ev.rectEndLine, ev.rectEndCol = 1, 3
+				ev.rectLines = ev.Li.LineCount()
+				ev.CursorLine, ev.CursorPos = 2, 1
+				if move {
+					ev.MoveSelectionToCursor()
+				} else {
+					ev.CopySelectionToCursor()
+				}
+
+				if !ev.RectSelActive {
+					t.Fatal("vertical block was cleared by transfer")
+				}
+				vtui.SetClipboard("")
+				ev.CopySelection()
+				if got := vtui.GetClipboard(); got != "bc\nhi" {
+					t.Fatalf("selected rectangle after transfer = %q, want %q", got, "bc\nhi")
+				}
+				want := "abcdef" + tc.eol + "ghijkl" + tc.eol + "mbcnopqr" + tc.eol + " hi"
+				if move {
+					want = "adef" + tc.eol + "gjkl" + tc.eol + "mbcnopqr" + tc.eol + " hi"
+				}
+				if got := ev.GetText(); got != want {
+					t.Fatalf("transferred text = %q, want %q", got, want)
+				}
+			}
+		})
 	}
 }

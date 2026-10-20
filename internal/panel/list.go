@@ -506,6 +506,10 @@ type dirCacheKey struct {
 type FileSystemPanel struct {
 	selMemo selectionMemo
 
+	// drop is where a drag in progress over the panel would land, shown
+	// while files are dragged in from another application (#2049).
+	drop dropHighlight
+
 	// folderEventPath is the folder the FolderChanged macro event was last
 	// raised for, so a refresh of the same folder does not raise it again.
 	folderEventPath        string
@@ -3360,6 +3364,7 @@ func (fp *FileSystemPanel) Show(scr *vtui.ScreenBuf) {
 	fp.Table.Show(scr)
 	fp.drawGroupHeadings(scr)
 	fp.drawFastFindMatches(scr)
+	fp.drawDropHighlight(scr)
 	fp.drawCursorSeparators(scr)
 	fp.drawNameScrollBrackets(scr)
 	fp.drawScrollBar(scr)

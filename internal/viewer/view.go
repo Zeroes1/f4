@@ -255,6 +255,12 @@ func (vv *ViewerView) startTailWatch() {
 			case <-stop:
 				return
 			case <-ticker.C:
+				// A frame manager that was shut down runs no task, so a
+				// viewer left open on it would be polled until the process
+				// ends (found by goleak over internal/app's tests).
+				if frames.IsShutdown() {
+					return
+				}
 				frames.PostTask(func() {
 					// The viewer may have closed between the tick and this
 					// task reaching the UI thread.

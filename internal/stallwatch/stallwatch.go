@@ -137,6 +137,11 @@ func Start(dir string, limit time.Duration) string {
 // Enabled reports whether the watchdog is armed.
 func Enabled() bool { return enabled.Load() }
 
+// Stop disarms the watchdog. The watcher goroutine sees it at its next tick,
+// within a quarter of the limit, and returns; Frame marks nothing from now
+// on. A watchdog that was never armed is left alone.
+func Stop() { enabled.Store(false) }
+
 // Frame marks one unit of work the UI thread is about to do and returns the
 // function that marks its end. It is meant to be deferred:
 //

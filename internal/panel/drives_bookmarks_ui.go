@@ -147,7 +147,7 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	hotkeyRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	hotkeyRow.Spacing = 0
 	hotkeyRow.Add(hotkeyLabel, vtui.Margins{}, vtui.AlignLeft)
-	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Right: 1}, vtui.AlignLeft)
+	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Left: 1, Right: 1}, vtui.AlignLeft)
 	hotkeyRow.Add(dialog.quickCall, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(hotkeyRow, vtui.Margins{Top: 1}, vtui.AlignFill)
 	vbox.Add(hotkeyHint, vtui.Margins{}, vtui.AlignLeft)
@@ -234,6 +234,8 @@ func (d *driveBookmarkEditDialog) ProcessKey(e *vtinput.InputEvent) bool {
 	return d.Window.ProcessKey(e)
 }
 
+// driveBookmarkDefaultPath is the path a new link offers: the address of the
+// panel's location, as a folder bookmark would store it (bookmarkPathOf).
 func (pf *PanelsFrame) driveBookmarkDefaultPath(panelIdx int) string {
 	if panelIdx < 0 || panelIdx >= len(pf.Panels) {
 		return ""
@@ -242,7 +244,7 @@ func (pf *PanelsFrame) driveBookmarkDefaultPath(panelIdx int) string {
 	if !ok || fsp.Vfs == nil {
 		return ""
 	}
-	return fsp.Vfs.GetPath()
+	return bookmarkPathOf(fsp)
 }
 
 func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, bookmarks []DriveBookmark, index int, reopen func()) {

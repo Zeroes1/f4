@@ -87,6 +87,9 @@ var configOptionExtraDocs = map[string]string{
 		"Empty, the default, starts a drag whenever the left button is dragged from a file, as before.",
 	"Panel.DragOutHoldMs": "Without DragOutModifier: how many milliseconds the left button must stay down on a file before moving the mouse starts dragging it out of the panel (the pointer changes at once). " +
 		"A quick drag keeps moving the cursor, as before, and still starts a drag once it leaves the panel's rows. 0 starts a drag on the first move; -1 only after leaving the rows. The default is 250.",
+	"Panel.DropOnFolder": "Where files dragged in from another application go when they are dropped over a folder and f4 could not highlight that folder while they were dragged " +
+		"(macOS and Wayland until gogpu reports a drag in progress, gogpu on Windows, 32-bit Windows, far2l). current, the default: into the folder the panel shows; " +
+		"folder: into the folder under the pointer; ask: ask which of the two. Where f4 can follow the drag (Windows, X11), the highlighted folder is where the files go.",
 	"Panel.VimHotkeys": "Kept for older f4 versions and shared settings files: 1 while NavigationMode is vim. " +
 		"f4 reads it only when NavigationMode is missing.",
 	"System.AutoSaveSettings": "The older switch for automatic saving. f4 keeps it on while any of the four automatic saving options is on, " +

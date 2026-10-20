@@ -326,14 +326,18 @@ func TestConnectDialerUpstreamUnreachableGivesBadGateway(t *testing.T) {
 	// fakeConnectProxy dials target itself; an address nothing listens on
 	// makes it answer with a 502, which DialContext must surface as an
 	// explicit "refused CONNECT" error rather than hanging or panicking.
+	//
+	// The target's port stays bound until the proxy has its own: closed
+	// first, the port was free for the proxy's Listen to be handed, and a
+	// proxy listening on the target dials itself, gets through and answers
+	// 200 - the nil error a race run on Linux reported.
 	unreachable, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	target := unreachable.Addr().String()
-	_ = unreachable.Close()
-
 	ln := fakeConnectProxy(t, "", target)
+	_ = unreachable.Close()
 	d := &connectDialer{addr: ln.Addr().String(), forward: directDialer()}
 
 	_, err = d.DialContext(context.Background(), "tcp", target)

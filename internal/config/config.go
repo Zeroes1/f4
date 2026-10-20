@@ -493,6 +493,7 @@ type F4Config struct {
 	PluginDefaultHotkeysOff  string // semicolon-separated hotkeys (e.g. "ShiftF1;ShiftF2") whose plugin defaults the user removed with F4/Del in the plugin menu (f4:config)
 	DragOutModifier          string // "" | "ctrl" | "alt" | "shift": a drag out of a panel starts only while this key is held (default "", f4:config)
 	DragOutHoldMs            int    // without DragOutModifier: how long (ms) a left button is held on a file before a move starts a drag out instead of moving the cursor; 0 starts at once, -1 only outside the rows (default 250, f4:config)
+	DropOnFolder             string // "current" | "folder" | "ask": where files dropped over a folder row go when the backend could not show the target during the drag (default "current", f4:config, #2049)
 	ConsoleOverlayUI         bool   // Show f4 command line and keybar overlay on top of host console (default false)
 	HostConsoleDefaultColors bool   // Host modes: draw the console mirror shown beside a hidden panel in the terminal's own default colours (default false, f4:config)
 	UseWinescape             bool   // Windows only: let the file layer use libwinescape where it is available (default true)
@@ -775,6 +776,7 @@ var App = F4Config{
 	PluginDefaultHotkeysOff:  "",
 	DragOutModifier:          "",
 	DragOutHoldMs:            DefaultDragOutHoldMs,
+	DropOnFolder:             DropOnFolderCurrent,
 	HostConsoleDefaultColors: false,
 	UseWinescape:             true,
 	AnnounceKittyTerm:        true,
@@ -1063,6 +1065,7 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.PluginDefaultHotkeysOff = strings.TrimSpace(merged.GetString("Panel", "PluginDefaultHotkeysOff", ""))
 	cfg.DragOutModifier = NormalizeDragOutModifier(merged.GetString("Panel", "DragOutModifier", ""))
 	cfg.DragOutHoldMs = NormalizeDragOutHoldMs(merged.GetString("Panel", "DragOutHoldMs", ""))
+	cfg.DropOnFolder = NormalizeDropOnFolder(merged.GetString("Panel", "DropOnFolder", ""))
 	cfg.HostConsoleDefaultColors = merged.GetString("Panel", "HostConsoleDefaultColors", "0") == "1"
 	cfg.UseWinescape = merged.GetString("Panel", "UseWinescape", "1") != "0"
 	cfg.CommandLineAutoComplete = merged.GetString("Panel", "CommandLineAutoComplete", "1") == "1"
@@ -1431,6 +1434,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "PluginDefaultHotkeysOff = %s\n", strings.TrimSpace(cfg.PluginDefaultHotkeysOff))
 	fmt.Fprintf(&sb, "DragOutModifier = %s\n", NormalizeDragOutModifier(cfg.DragOutModifier))
 	fmt.Fprintf(&sb, "DragOutHoldMs = %d\n", clampDragOutHoldMs(cfg.DragOutHoldMs))
+	fmt.Fprintf(&sb, "DropOnFolder = %s\n", NormalizeDropOnFolder(cfg.DropOnFolder))
 	fmt.Fprintf(&sb, "ConsoleOverlayUI = %d\n", map[bool]int{true: 1, false: 0}[cfg.ConsoleOverlayUI])
 	fmt.Fprintf(&sb, "HostConsoleDefaultColors = %d\n", map[bool]int{true: 1, false: 0}[cfg.HostConsoleDefaultColors])
 	fmt.Fprintf(&sb, "UseWinescape = %d\n", map[bool]int{true: 1, false: 0}[cfg.UseWinescape])
@@ -2061,6 +2065,24 @@ func NormalizeDragOutModifier(v string) string {
 		return v
 	}
 	return ""
+}
+
+// DropOnFolder values: where files dropped over a folder row go when the
+// backend could not show the target while the files were dragged (#2049).
+const (
+	DropOnFolderCurrent = "current" // into the folder the panel shows
+	DropOnFolderFolder  = "folder"  // into the folder under the pointer
+	DropOnFolderAsk     = "ask"     // ask which of the two
+)
+
+// NormalizeDropOnFolder maps a settings value to one of the DropOnFolder
+// values; anything else is the default, the folder the panel shows.
+func NormalizeDropOnFolder(v string) string {
+	switch v = strings.ToLower(strings.TrimSpace(v)); v {
+	case DropOnFolderFolder, DropOnFolderAsk:
+		return v
+	}
+	return DropOnFolderCurrent
 }
 
 // DefaultDragOutHoldMs is how long the left button must stay down on a file
