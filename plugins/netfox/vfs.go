@@ -226,10 +226,34 @@ func (v *NetFoxVFS) SaveConfig(name string, cfg NetFoxConfig) error {
 	})
 }
 
-func (v *NetFoxVFS) IsAtRoot() bool         { return true }
-func (v *NetFoxVFS) GetPath() string        { return "net://" }
-func (v *NetFoxVFS) IsAbs(p string) bool    { return strings.HasPrefix(p, "net://") }
-func (v *NetFoxVFS) SetPath(p string) error { return nil }
+func (v *NetFoxVFS) IsAtRoot() bool      { return true }
+func (v *NetFoxVFS) GetPath() string     { return netURIPrefix }
+func (v *NetFoxVFS) IsAbs(p string) bool { return strings.HasPrefix(p, netURIPrefix) }
+
+// SetPath accepts the spellings of the manager's own root and nothing else.
+// The list has no folders, and a net://<name> address (net_uri.go) must reach
+// the URI provider rather than be swallowed here as a folder the manager is
+// "already in": the panel tries the current file system first.
+func (v *NetFoxVFS) SetPath(p string) error {
+	switch strings.TrimRight(p, "/") {
+	case "", ".", "net:":
+		return nil
+	}
+	return fmt.Errorf("netfox: the connection list has no folder %q: %w", p, os.ErrNotExist)
+}
+
+// BookmarkPath implements vfs.BookmarkPathProvider for the connection
+// manager: a bookmark made with the cursor on a saved connection is the
+// address of that connection, so a connection is bookmarked without being
+// opened; anywhere else in the list it is the manager itself.
+func (v *NetFoxVFS) BookmarkPath(cursor string) (string, bool) {
+	if cursor != "" && cursor != ".." && cursor != "<Add connection>" {
+		if _, ok := v.getConfigs()[cursor]; ok {
+			return netConnectionAddress(cursor), true
+		}
+	}
+	return netURIPrefix, true
+}
 
 // HistoryEntry implements vfs.HistoryPathProvider. The root screen is a list
 // of saved connections, not a folder, so it never has anything worth

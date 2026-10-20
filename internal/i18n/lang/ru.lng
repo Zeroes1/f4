@@ -2518,6 +2518,7 @@ NetFox.ProxyModeDirect=Без прокси
 NetFox.ProxyModeHTTP=HTTP-прокси
 NetFox.ProxyModeSOCKS5=SOCKS5-прокси
 NetFox.StartFolderMissing=Начальной папки %s на сервере нет, соединение открылось в %s.
+NetFox.BookmarkFolderMissing=Папки %s из закладки на сервере нет, соединение открылось в %s.
 
 Queue.Title=Очередь операций
 Queue.BtnCancel=&Отменить задачу

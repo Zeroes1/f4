@@ -30,7 +30,12 @@ func (p *smbProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vfs
 	if !ok {
 		return nil, os.ErrInvalid
 	}
-	return openSMBConfig(ctx, parent, cfg)
+	v, err := openSMBConfig(ctx, parent, cfg)
+	if err != nil {
+		return nil, err
+	}
+	openedFromConnection(v, parent.Base(pth))
+	return v, nil
 }
 
 // openSMBConfig connects for a saved connection.

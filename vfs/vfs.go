@@ -1051,6 +1051,24 @@ type HistoryPathProvider interface {
 	NavigateHistoryEntry(ref string) bool
 }
 
+// BookmarkPathProvider lets a VFS name the address a folder bookmark or a
+// drive-menu link made on it stores, when GetPath() is not an address the
+// host can reopen. A NetFox session's GetPath() is the directory on the
+// server, which a bookmark stored raw would later take for a local one; the
+// address of the saved connection and that directory (net://<name>/<dir>) is
+// what brings the panel back. The panel asks before it stores a bookmark
+// (Ctrl+Shift+<digit>, Ins in the bookmarks dialog) or a link (Ins in the
+// drive menu), and nowhere else: saved sessions and folder history keep their
+// own rules, so a start of f4 never opens a connection on its own.
+type BookmarkPathProvider interface {
+	// BookmarkPath returns the address to store for the panel's current
+	// location. cursor is the name of the entry under the panel cursor, or
+	// "" when there is none: a list of connections uses it to make the
+	// bookmark of the connection the cursor is on without opening it. ok is
+	// false when GetPath() is the address to store after all.
+	BookmarkPath(cursor string) (address string, ok bool)
+}
+
 type ReadAtCloser interface {
 	ReadAt(ctx context.Context, p []byte, off int64) (n int, err error)
 	Read(ctx context.Context, p []byte) (n int, err error)

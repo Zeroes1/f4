@@ -88,7 +88,22 @@ type smbVFS struct {
 	cwd     string
 	title   string
 	closed  sync.Once
+	// bookmarkBase is the address the session was opened from, see
+	// bookmark_path.go; "" for a session opened some other way.
+	bookmarkBase string
 }
+
+// BookmarkPath implements vfs.BookmarkPathProvider: the share and folder on
+// the server under the address the session was opened from (bookmark_path.go).
+func (v *smbVFS) BookmarkPath(string) (string, bool) {
+	return netfoxBookmarkPath(v.bookmarkBase, v.GetPath())
+}
+func (v *smbVFS) setBookmarkBase(base string) { v.bookmarkBase = base }
+
+var (
+	_ vfs.BookmarkPathProvider = (*smbVFS)(nil)
+	_ bookmarkBaseSetter       = (*smbVFS)(nil)
+)
 
 func newSMBVFS(parent vfs.VFS, backend smbBackend, title string) *smbVFS {
 	return &smbVFS{parent: parent, session: &smbSession{backend: backend, refs: 1}, cwd: "/", title: title}
@@ -328,5 +343,5 @@ func (v *smbVFS) Clone() vfs.VFS {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	v.session.retain()
-	return &smbVFS{parent: v.parent, session: v.session, cwd: v.cwd, title: v.title}
+	return &smbVFS{parent: v.parent, session: v.session, cwd: v.cwd, title: v.title, bookmarkBase: v.bookmarkBase}
 }

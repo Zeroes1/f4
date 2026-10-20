@@ -38,6 +38,9 @@ type FishVFS struct {
 	host                string
 	port                string
 	user                string
+	// bookmarkBase is the address the session was opened from, see
+	// bookmark_path.go; "" for a session opened some other way.
+	bookmarkBase string
 
 	panelInfoMu sync.RWMutex
 	panelInfo   vfs.PanelInfoProvider
@@ -552,6 +555,13 @@ func (v *FishVFS) GetTitle() string { return v.title }
 // its raw remote path (e.g. /root/foo) being recorded as if it were local.
 func (v *FishVFS) HistoryEntry() (display, ref string, ok bool) { return netfoxHistoryEntry(v) }
 func (v *FishVFS) NavigateHistoryEntry(ref string) bool         { return netfoxNavigateHistoryEntry(v, ref) }
+
+// BookmarkPath implements vfs.BookmarkPathProvider: the folder on the server
+// under the address the session was opened from (bookmark_path.go).
+func (v *FishVFS) BookmarkPath(string) (string, bool) {
+	return netfoxBookmarkPath(v.bookmarkBase, v.GetPath())
+}
+func (v *FishVFS) setBookmarkBase(base string) { v.bookmarkBase = base }
 
 // SetPanelTitleFormatter customizes only the path rendered in the panel
 // border. The canonical POSIX path and the session title remain untouched.
@@ -1195,6 +1205,7 @@ func (v *FishVFS) CloneForParent(parent vfs.VFS) *FishVFS {
 		host:                v.host,
 		port:                v.port,
 		user:                v.user,
+		bookmarkBase:        v.bookmarkBase,
 	}
 }
 
@@ -1340,6 +1351,7 @@ func (p *fishProvider) Open(ctx context.Context, parent vfs.VFS, pth string) (vf
 		return nil, err
 	}
 	enterStartPath(res, cfg)
+	openedFromConnection(res, parent.Base(pth))
 	return res, nil
 }
 
