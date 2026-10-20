@@ -16,7 +16,10 @@ import (
 //   - dirScope tells the walker's folders when every file under them is done,
 //     so a folder's attributes are set last, as in the single-threaded copy;
 //   - questionGate lets only one question be on the screen at a time and lets
-//     an "all" answer settle the questions that waited behind it.
+//     an "all" answer settle the questions that waited behind it;
+//   - FileOpState.acquireWorker gives a job a view of the operation's state
+//     with a buffer and a progress lane of its own, sharing the answers,
+//     counters, log and caches under the operation's lock (see FileOpState).
 //
 // copyThreadsFor decides whether an operation uses them at all. With one
 // thread, which is the default, recursiveCopy keeps its single-file path and

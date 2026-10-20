@@ -124,14 +124,21 @@ func inheritedOwner(ctx context.Context, state *FileOpState, dstVfs vfs.VFS, des
 	return parentOwner(ctx, state, dstVfs, dstVfs.Dir(destPath))
 }
 
-// parentOwner reads the folder's owner once per folder. One operation copies
-// sequentially in a single goroutine, so the cache needs no lock; it exists
+// parentOwner reads the folder's owner once per folder. The cache exists
 // because a remote destination would otherwise be asked for the same folder
-// again for every file that goes into it. A folder that cannot be stat'ed, or
-// whose VFS never reports an owner, is cached as unknown.
+// again for every file that goes into it. It belongs to the operation, and
+// the workers of a multi-threaded copy share it under the operation's lock;
+// the Stat itself runs outside the lock, so two workers that miss the same
+// folder at once may both ask, and the first answer stored is the one kept. A
+// folder that cannot be stat'ed, or whose VFS never reports an owner, is
+// cached as unknown.
 func parentOwner(ctx context.Context, state *FileOpState, dstVfs vfs.VFS, parent string) (uid, gid int, known bool) {
 	if state != nil {
-		if info, ok := state.parentOwners[parent]; ok {
+		r := state.shared()
+		r.mu.Lock()
+		info, ok := r.parentOwners[parent]
+		r.mu.Unlock()
+		if ok {
 			return info.uid, info.gid, info.known
 		}
 	}
@@ -140,22 +147,30 @@ func parentOwner(ctx context.Context, state *FileOpState, dstVfs vfs.VFS, parent
 		uid, gid, known = st.Uid, st.Gid, true
 	}
 	if state != nil {
-		if state.parentOwners == nil {
-			state.parentOwners = make(map[string]parentOwnerInfo)
+		r := state.shared()
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.parentOwners == nil {
+			r.parentOwners = make(map[string]parentOwnerInfo)
 		}
-		state.parentOwners[parent] = parentOwnerInfo{uid, gid, known}
+		if info, ok := r.parentOwners[parent]; ok {
+			return info.uid, info.gid, info.known
+		}
+		r.parentOwners[parent] = parentOwnerInfo{uid, gid, known}
 	}
 	return uid, gid, known
 }
 
-// parentRights reads the folder's permissions once per folder. One operation
-// copies sequentially in a single goroutine, so the cache needs no lock; it
-// exists because a remote destination would otherwise be asked for the same
-// folder again for every file that goes into it. A folder that cannot be
-// stat'ed is cached as zero and answered from the fallback.
+// parentRights reads the folder's permissions once per folder, cached the
+// way parentOwner caches its owner. A folder that cannot be stat'ed is
+// cached as zero and answered from the fallback.
 func parentRights(ctx context.Context, state *FileOpState, dstVfs vfs.VFS, parent string) uint32 {
 	if state != nil {
-		if mode, ok := state.parentRights[parent]; ok {
+		r := state.shared()
+		r.mu.Lock()
+		mode, ok := r.parentRights[parent]
+		r.mu.Unlock()
+		if ok {
 			return mode
 		}
 	}
@@ -164,10 +179,16 @@ func parentRights(ctx context.Context, state *FileOpState, dstVfs vfs.VFS, paren
 		mode = st.UnixMode
 	}
 	if state != nil {
-		if state.parentRights == nil {
-			state.parentRights = make(map[string]uint32)
+		r := state.shared()
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.parentRights == nil {
+			r.parentRights = make(map[string]uint32)
 		}
-		state.parentRights[parent] = mode
+		if cached, ok := r.parentRights[parent]; ok {
+			return cached
+		}
+		r.parentRights[parent] = mode
 	}
 	return mode
 }

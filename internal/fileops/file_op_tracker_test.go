@@ -1,8 +1,12 @@
 package fileops
 
 import (
-	"github.com/unxed/f4/vfs"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/unxed/f4/vfs"
 )
 
 func TestFileOpTracker_SingleFile(t *testing.T) {
@@ -289,5 +293,170 @@ func TestGlobalAwareReporterClampsRetriesButResetsDistinctTransferPhase(t *testi
 	_, totalPct, _ := tracker.GetProgress()
 	if totalPct != 72 {
 		t.Fatalf("logical total regressed during second phase: %d", totalPct)
+	}
+}
+
+// A lane has its own file in work (f4#1894, part 5): two workers' files are
+// counted side by side, finishing one leaves the other's progress alone, and
+// the dialog shows the file that has been in work longest.
+func TestFileOpTracker_LanesKeepTheirOwnFiles(t *testing.T) {
+	tracker := NewFileOpTracker(vfs.OpStats{Files: 3, Bytes: 600})
+	a := tracker.Lane()
+	b := tracker.Lane()
+
+	a.StartFile("a.bin", 100)
+	b.StartFile("b.bin", 300)
+	a.UpdateBytes(50)
+	b.UpdateBytes(150)
+
+	filePct, totalPct, name := tracker.GetProgress()
+	if name != "a.bin" || filePct != 50 || totalPct != 33 {
+		t.Fatalf("two files in work: name=%q file=%d%% total=%d%%, want a.bin 50%% 33%%", name, filePct, totalPct)
+	}
+	if processed, _ := b.GetStats(); processed.Bytes != 200 || processed.Files != 0 {
+		t.Fatalf("a lane's GetStats = %+v, want the tracker's 200 bytes and no file done", processed)
+	}
+
+	b.UpdateBytes(150)
+	b.FileDone()
+	filePct, totalPct, name = a.GetProgress()
+	if name != "a.bin" || filePct != 50 || totalPct != 58 {
+		t.Fatalf("after b.bin is done: name=%q file=%d%% total=%d%%, want a.bin 50%% 58%%", name, filePct, totalPct)
+	}
+
+	a.UpdateBytes(50)
+	a.FileDone()
+	tracker.StartFile("c.bin", 200)
+	tracker.UpdateBytes(200)
+	tracker.FileDone()
+	processed, _ := tracker.GetStats()
+	if processed.Files != 3 || processed.Bytes != 600 {
+		t.Fatalf("all done: %+v, want 3 files and 600 bytes", processed)
+	}
+	if _, totalPct, name = tracker.GetProgress(); totalPct != 100 || name != "" {
+		t.Fatalf("all done: total=%d%% name=%q, want 100%% and no file", totalPct, name)
+	}
+}
+
+// Of several files in work the oldest is shown, and a lane of a lane is one
+// more lane of the same tracker.
+func TestFileOpTracker_LaneShowsTheOldestFileInWork(t *testing.T) {
+	tracker := NewFileOpTracker(vfs.OpStats{Files: 2, Dirs: 0})
+	first := tracker.Lane()
+	second := first.Lane()
+	second.StartFile("late", 10)
+	first.StartFile("later", 10)
+	if _, _, name := tracker.GetProgress(); name != "late" {
+		t.Fatalf("shown %q, want the file started first", name)
+	}
+	second.FileSkipped()
+	if _, _, name := tracker.GetProgress(); name != "later" {
+		t.Fatalf("shown %q after the first was skipped, want the other file in work", name)
+	}
+	if processed, _ := tracker.GetStats(); processed.Files != 1 {
+		t.Fatalf("a skip on a lane of a lane counted %d files on the tracker, want 1", processed.Files)
+	}
+}
+
+// forgetFile drops a lane's file without counting it: a worker giving its
+// lane back after a failure must not leave a file showing that nobody copies.
+func TestFileOpTracker_ForgetFile(t *testing.T) {
+	tracker := NewFileOpTracker(vfs.OpStats{Files: 1, Bytes: 100})
+	lane := tracker.Lane()
+	lane.StartFile("broken", 100)
+	lane.UpdateBytes(40)
+	lane.forgetFile()
+	processed, _ := tracker.GetStats()
+	_, totalPct, name := tracker.GetProgress()
+	if name != "" || processed.Bytes != 0 || processed.Files != 0 || totalPct != 0 {
+		t.Fatalf("forgotten file still counted: name=%q stats=%+v total=%d%%", name, processed, totalPct)
+	}
+}
+
+// Workers copying files at once through their lanes add up to exactly the
+// work done, and what the dialog reads meanwhile never moves backwards. Run
+// under -race this is also the check that the lanes share nothing unlocked.
+func TestFileOpTracker_LanesUnderConcurrentWorkers(t *testing.T) {
+	const workers, files, size, chunk = 8, 50, 1000, 100
+	tracker := NewFileOpTracker(vfs.OpStats{Files: workers * files, Bytes: workers * files * size})
+
+	stop := make(chan struct{})
+	readerDone := make(chan error, 1)
+	go func() {
+		var last int64
+		lastPct := 0
+		for {
+			select {
+			case <-stop:
+				readerDone <- nil
+				return
+			default:
+			}
+			_, totalPct, _ := tracker.GetProgress()
+			processed, _ := tracker.GetStats()
+			if processed.Bytes < last || totalPct < lastPct {
+				readerDone <- fmt.Errorf("progress went back: bytes %d -> %d, total %d%% -> %d%%", last, processed.Bytes, lastPct, totalPct)
+				return
+			}
+			last, lastPct = processed.Bytes, totalPct
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for w := range workers {
+		lane := tracker.Lane()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for f := range files {
+				lane.StartFile(fmt.Sprintf("w%d-f%d", w, f), size)
+				for range size / chunk {
+					lane.UpdateBytes(chunk)
+				}
+				lane.FileDone()
+			}
+		}()
+	}
+	wg.Wait()
+	close(stop)
+	if err := <-readerDone; err != nil {
+		t.Fatal(err)
+	}
+	processed, _ := tracker.GetStats()
+	if processed.Files != workers*files || processed.Bytes != workers*files*size {
+		t.Fatalf("processed %+v, want %d files and %d bytes", processed, workers*files, workers*files*size)
+	}
+	if _, totalPct, _ := tracker.GetProgress(); totalPct != 100 {
+		t.Fatalf("total %d%% after every file is done, want 100%%", totalPct)
+	}
+}
+
+// The speed is the bytes of every worker over the time since the last sample,
+// as it was for one.
+func TestSpeedMeterAddsEveryWorker(t *testing.T) {
+	start := time.Unix(1000, 0)
+	meter := newSpeedMeter(start)
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				meter.add(10)
+			}
+		}()
+	}
+	wg.Wait()
+	meter.sample(start.Add(500 * time.Millisecond))
+	if got := meter.current(); got != 0 {
+		t.Fatalf("rate %v before a second passed, want no sample yet", got)
+	}
+	meter.sample(start.Add(2 * time.Second))
+	if got := meter.current(); got != 4000 {
+		t.Fatalf("rate %v, want 8000 bytes over 2 s = 4000", got)
+	}
+	meter.sample(start.Add(4 * time.Second))
+	if got := meter.current(); got != 0 {
+		t.Fatalf("rate %v after two idle seconds, want 0", got)
 	}
 }
