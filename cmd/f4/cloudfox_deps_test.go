@@ -33,11 +33,10 @@ func TestCloudPluginBuildProfiles(t *testing.T) {
 		{name: "lite", tags: "lite,vtui_noebiten,vtui_nogogpu"},
 	} {
 		t.Run(profile.name, func(t *testing.T) {
-			args := []string{"list", "-deps"}
+			command := exec.Command("go", "list", "-deps", "./cmd/f4")
 			if profile.tags != "" {
-				args = append(args, "-tags", profile.tags)
+				command = exec.Command("go", "list", "-deps", "-tags", "lite,vtui_noebiten,vtui_nogogpu", "./cmd/f4")
 			}
-			command := exec.Command("go", append(args, "./cmd/f4")...)
 			command.Dir = testutil.ModuleRootDir(t)
 			out, err := command.CombinedOutput()
 			if err != nil {
