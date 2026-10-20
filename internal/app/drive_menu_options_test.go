@@ -82,18 +82,6 @@ func TestDriveMenuOptions_DefaultsAndFormatting(t *testing.T) {
 	}
 }
 
-func TestDriveMenuOptionsShowLinksLegacyAndExplicit(t *testing.T) {
-	if got := config.ParseDriveMenuOptions("0"); got&config.DriveMenuShowLinks == 0 {
-		t.Fatal("legacy saved options hid named links, want the old always-visible behavior")
-	}
-	if got := config.ParseDriveMenuOptions("32768"); got&config.DriveMenuShowLinks != 0 {
-		t.Fatal("explicitly hidden named links became visible after parsing")
-	}
-	if got := config.ParseDriveMenuOptions("49152"); got&config.DriveMenuShowLinks == 0 {
-		t.Fatal("explicitly shown named links became hidden after parsing")
-	}
-}
-
 func TestPanelsFrame_DriveMenu_F9OpensOptions(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	// With no tools registered there is nothing for the tools window to list

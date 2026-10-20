@@ -6785,27 +6785,26 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 	// 5. Named folder links. These are deliberately separate from
 	// bookmarks.ini: the latter is far2l's ten-slot RCtrl bookmark table,
 	// while this list is the DiskMenuEditor-style, unbounded drive-menu list.
-	// The two visibility switches are independent (f4#1148).
+	// They are shown whatever "Show bookmarks" says: that switch is for the
+	// slots above only (f4#1148, list of 16.10, point 4).
 	driveBookmarkRows := map[int]int{} // menu row -> named bookmark index
-	if driveMenuOptionEnabled(driveMenuOptions, config.DriveMenuShowLinks) {
-		driveBookmarks, err := LoadDriveBookmarks(DriveBookmarksFilePath())
-		if err != nil {
-			vtui.DebugLog("DRIVE BOOKMARKS: load %q failed: %v", DriveBookmarksFilePath(), err)
-			driveBookmarks = nil
-		}
-		// The caption sits in the rule itself, as the menu title does, and
-		// takes no row of its own (#1148).
-		menu.AddItem(vtui.MenuItem{Separator: true, Text: i18n.Msg("Drive.Links")})
-		for index, bookmark := range driveBookmarks {
-			bookmark := bookmark
-			driveBookmarkRows[menu.GetItemCount()] = index
-			menu.AddItem(vtui.MenuItem{
-				Text: DriveBookmarkMenuText(bookmark),
-				UserData: func(fsp *FileSystemPanel) {
-					pf.NavigateToBookmark(fsp, Bookmark{Path: bookmark.Path})
-				},
-			})
-		}
+	driveBookmarks, err := LoadDriveBookmarks(DriveBookmarksFilePath())
+	if err != nil {
+		vtui.DebugLog("DRIVE BOOKMARKS: load %q failed: %v", DriveBookmarksFilePath(), err)
+		driveBookmarks = nil
+	}
+	// The caption sits in the rule itself, as the menu title does, and
+	// takes no row of its own (#1148).
+	menu.AddItem(vtui.MenuItem{Separator: true, Text: i18n.Msg("Drive.Links")})
+	for index, bookmark := range driveBookmarks {
+		bookmark := bookmark
+		driveBookmarkRows[menu.GetItemCount()] = index
+		menu.AddItem(vtui.MenuItem{
+			Text: DriveBookmarkMenuText(bookmark),
+			UserData: func(fsp *FileSystemPanel) {
+				pf.NavigateToBookmark(fsp, Bookmark{Path: bookmark.Path})
+			},
+		})
 	}
 
 	// A moved row reopens the menu: the old menu is closed in the same task

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/sysinfo"
@@ -751,78 +750,5 @@ func TestDriveBookmarksPageShowBookmarksSwitch(t *testing.T) {
 	check.OnChange(0)
 	if got := box.session.draft.Values[id]; got != "false" {
 		t.Errorf("draft value after unchecking = %q, want false", got)
-	}
-}
-
-// f4#1148: the Drive chooser's Links page has its own visibility switch,
-// immediately above the named-links box.
-func TestDriveLinksPageShowLinksSwitch(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
-	if !OpenCategoryOnly("drives") {
-		t.Fatal("the window did not open")
-	}
-	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
-	if !ok {
-		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
-	}
-	defer vtui.FrameManager.Pop()
-	c.SetPosition(0, 0, 129, 44)
-	id := driveMenuOptionFieldID("Drive.ShowLinks")
-
-	c.selectCategory(driveOptionsPage)
-	for _, row := range c.page.rows {
-		if row.field.ID == id {
-			t.Fatal("Show links is still on the Drive options page")
-		}
-	}
-
-	c.selectCategory(driveLinksPage)
-	var box, list *settingsRow
-	for _, row := range c.page.rows {
-		switch {
-		case row.field.ID == id:
-			box = row
-		case row.control != nil && row.control.GetId() == "collection:drive-links":
-			list = row
-		}
-	}
-	if box == nil || list == nil {
-		t.Fatalf("Links page: Show links %v, links list %v", box != nil, list != nil)
-	}
-	check, ok := box.control.(*settingsCheckbox)
-	if !ok {
-		t.Fatalf("Show links is a %T, want a check box", box.control)
-	}
-	if got := strings.TrimSpace(check.lines[0]); got != "Show links" {
-		t.Errorf("check box label = %q, want %q", got, "Show links")
-	}
-	if box.y >= list.y {
-		t.Fatalf("Show links (line %d) is not above the list (line %d)", box.y, list.y)
-	}
-	if gap := list.y - (box.y + box.height); gap != 1 {
-		t.Errorf("%d blank lines between Show links and the list, want 1", gap)
-	}
-
-	check.OnChange(0)
-	if got := box.session.draft.Values[id]; got != "false" {
-		t.Errorf("draft value after unchecking = %q, want false", got)
-	}
-}
-
-func TestDriveMenuShowLinksChoicePersistsExplicitly(t *testing.T) {
-	cfg := config.F4Config{DriveMenuOptions: config.DefaultDriveMenuOptions}
-	id := driveMenuOptionFieldID("Drive.ShowLinks")
-	if err := setCoreSetting(&cfg, id, "false"); err != nil {
-		t.Fatal(err)
-	}
-	if cfg.DriveMenuOptions&config.DriveMenuShowLinks != 0 || cfg.DriveMenuOptions&config.DriveMenuShowLinksSet == 0 {
-		t.Fatalf("hidden links preference was not explicitly recorded: %#x", cfg.DriveMenuOptions)
-	}
-	if got := coreSettingValue(cfg, id); got != "false" {
-		t.Errorf("saved links preference = %q, want false", got)
-	}
-	if got := config.ParseDriveMenuOptions(fmt.Sprint(cfg.DriveMenuOptions)); got&config.DriveMenuShowLinks != 0 {
-		t.Errorf("hidden links preference became visible after reload: %#x", got)
 	}
 }

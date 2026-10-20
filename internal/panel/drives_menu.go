@@ -48,7 +48,6 @@ var DriveMenuOptionSpecs = []driveMenuOptionSpec{
 	{config.DriveMenuShowRemote, "Drive.ShowRemote"},
 	{config.DriveMenuDetectVirtual, "Drive.DetectVirtual"},
 	{config.DriveMenuShowBookmarks, "Drive.ShowBookmarks"},
-	{config.DriveMenuShowLinks, "Drive.ShowLinks"},
 }
 
 func driveMenuOptionEnabled(options, flag uint32) bool { return options&flag != 0 }

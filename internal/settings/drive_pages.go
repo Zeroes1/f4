@@ -86,11 +86,6 @@ func splitDriveChooser(sessions []*settingsSession) {
 					f.Category = driveBookmarksPage
 					f.Group = driveBookmarksGroup
 				}
-				if f.ID == driveMenuOptionFieldID("Drive.ShowLinks") {
-					// Keep the visibility switch with the links list, above its box.
-					f.Category = driveLinksPage
-					f.Group = driveLinksGroup
-				}
 				// "Takes effect: next drive menu" is no news under the menu
 				// itself, which Apply redraws (mitek1977-coder, f4#1148).
 				if strings.HasPrefix(f.ID, "DriveMenuOptions.") {
@@ -143,8 +138,6 @@ func driveLinkPageFields(fields []f4settings.Field) []f4settings.Field {
 // driveBookmarksGroup is the box of the Bookmarks page: the list's own group,
 // so that "Show Bookmarks" stands in it above the list.
 const driveBookmarksGroup = "Folder bookmark slots"
-
-const driveLinksGroup = "Drive links"
 
 // driveChooserLeavesOut is true for the drive menu options the F9 window does
 // not show (mitek1977-coder, f4#1148): the Tools page already says which tools

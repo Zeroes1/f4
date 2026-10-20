@@ -148,7 +148,7 @@ The original-dialog column links to the original implementation and its backing 
 |---|---|---|---|---|
 | `Wheel{Panel,Editor,Viewer,Menu,Table}{Up,Down}` (10 independent controls) | Options → Mouse wheel → context/direction | keyboard | settings.ini; `applyWheelSettings` | Rows per wheel notch; zero follows the system value. |
 | `HistoryShowTimes.0`, `.1`, `.2` | Command / folder / viewer-editor history → timestamp format | history | settings.ini; `history_dialog.go`, `actions.go` | Independent date/time, date-only or hidden timestamps for each history. |
-| `DriveMenuOptions.0`–`.14` | Drive chooser → options → each checkbox | drives | settings.ini bit mask; `drive_menu_options.go` | See the per-bit mapping below; all other bits are retained. |
+| `DriveMenuOptions.0`–`.13` | Drive chooser → options → each checkbox | drives | settings.ini bit mask; `drive_menu_options.go` | See the per-bit mapping below; all other bits are retained. |
 
 | Bit | Canonical meaning | Availability |
 |---|---|---|
@@ -165,8 +165,7 @@ The original-dialog column links to the original implementation and its backing 
 | 10 | Optical drives | Editable; applied to the next drive menu. |
 | 11 | Network drives | Editable; applied to the next drive menu. |
 | 12 | Detect virtual drives | Unavailable compatibility field; no effective consumer. |
-| 13 | Numbered bookmarks | Editable; applied to the next drive menu. |
-| 14 | Named links | Editable; applied to the next drive menu. |
+| 13 | Bookmarks and links | Editable; applied to the next drive menu. |
 
 ## Collections and record fields
 

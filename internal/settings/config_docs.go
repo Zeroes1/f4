@@ -78,7 +78,7 @@ var configOptionExtraDocs = map[string]string{
 		"Ctrl+PgDn still opens them. A far2l file mask: \"|\" starts the exceptions to it. Empty by default.",
 	"Panel.QueueSmallOpsBypass": "1 lets an operation in the queue on at most 100 files and no folders, of at most 16 MB in all, start while a long one holds the same device, " +
 		"when none of its paths is or lies under a path of a running operation. 0 makes it wait its turn.",
-	"Panel.DriveMenuOptions": "The drive menu options as a bit mask, one bit per option of Settings Center, Drive chooser (bit 15 records the explicit Show links choice; older files had no such setting and showed links). Bits:",
+	"Panel.DriveMenuOptions": "The drive menu options as a bit mask, one bit per option of Settings Center, Drive chooser. Bits:",
 	"Panel.ConsoleOverlayUI": "The older form of the console style, read only while ConsoleMode is \"host\": 1 is the host console with f4's overlay, 0 without it. " +
 		"ConsoleMode now names the style itself: own, far or mc.",
 	"Panel.PluginDefaultHotkeysOff": "Hotkeys a plugin brings with it (Shift+F1 for Add to archive, say) that were removed with F4 and Del in the plugin menu, as a semicolon-separated list such as ShiftF1;ShiftF2. " +
