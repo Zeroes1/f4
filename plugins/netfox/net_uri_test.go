@@ -135,22 +135,26 @@ func (*bookmarkTestProvider) Open(ctx context.Context, parent vfs.VFS, pth strin
 	if !ok {
 		return nil, os.ErrInvalid
 	}
-	v := &bookmarkTestVFS{NullVFS: vfs.NewNullVFS(0), parent: parent, missing: cfg.Options["Missing"]}
+	v := &bookmarkTestVFS{NullVFS: vfs.NewNullVFS(0), parent: parent, cwd: "/", missing: cfg.Options["Missing"]}
 	enterStartPath(v, cfg)
 	openedFromConnection(v, parent.Base(pth))
 	return v, nil
 }
 
 // bookmarkTestVFS is the session such a connection opens: every folder is
-// there but the one the connection says is missing.
+// there but the one the connection says is missing. It keeps its own folder,
+// spelled with slashes as a server does: NullVFS reports the host's
+// separator, backslashes on Windows.
 type bookmarkTestVFS struct {
 	*vfs.NullVFS
 	parent       vfs.VFS
+	cwd          string
 	bookmarkBase string
 	missing      string
 }
 
 func (v *bookmarkTestVFS) ParentVFS() vfs.VFS          { return v.parent }
+func (v *bookmarkTestVFS) GetPath() string             { return v.cwd }
 func (v *bookmarkTestVFS) setBookmarkBase(base string) { v.bookmarkBase = base }
 func (v *bookmarkTestVFS) BookmarkPath(string) (string, bool) {
 	return netfoxBookmarkPath(v.bookmarkBase, v.GetPath())
@@ -159,7 +163,8 @@ func (v *bookmarkTestVFS) SetPath(p string) error {
 	if p == v.missing {
 		return os.ErrNotExist
 	}
-	return v.NullVFS.SetPath(p)
+	v.cwd = p
+	return nil
 }
 
 func TestNetURIProviderFollowsABookmarkToItsFolder(t *testing.T) {

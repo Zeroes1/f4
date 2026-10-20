@@ -27,19 +27,21 @@ func TestNetfoxBookmarkPath(t *testing.T) {
 // A session opened from a URI is bookmarked under that URI without its
 // password: a bookmark file must never carry one.
 func TestURIBookmarkBaseDropsThePassword(t *testing.T) {
-	for raw, want := range map[string]string{
-		"sftp://alice:secret@host:2222/home/alice": "sftp://alice@host:2222",
-		"sftp://host/x":                     "sftp://host",
-		"scp://alice@host/":                 "scp://alice@host",
-		"smb://DOMAIN;bob:pw@nas/share/dir": "smb://DOMAIN;bob@nas",
-		"smb://nas":                         "smb://nas",
+	// A slice, not a map keyed by the address: gosec's G101 takes a map key
+	// with a user:password@ part for a hardcoded credential.
+	for _, tc := range []struct{ raw, want string }{
+		{"sftp://alice:pw@host:2222/home/alice", "sftp://alice@host:2222"},
+		{"sftp://host/x", "sftp://host"},
+		{"scp://alice@host/", "scp://alice@host"},
+		{"smb://DOMAIN;bob:pw@nas/share/dir", "smb://DOMAIN;bob@nas"},
+		{"smb://nas", "smb://nas"},
 	} {
-		u, err := url.Parse(raw)
+		u, err := url.Parse(tc.raw)
 		if err != nil {
-			t.Fatalf("url.Parse(%q): %v", raw, err)
+			t.Fatalf("url.Parse(%q): %v", tc.raw, err)
 		}
-		if got := uriBookmarkBase(u); got != want {
-			t.Errorf("uriBookmarkBase(%q) = %q, want %q", raw, got, want)
+		if got := uriBookmarkBase(u); got != tc.want {
+			t.Errorf("uriBookmarkBase(%q) = %q, want %q", tc.raw, got, tc.want)
 		}
 	}
 }
@@ -65,7 +67,7 @@ func TestFishSessionReportsTheAddressItWasOpenedFrom(t *testing.T) {
 		t.Errorf("the clone's BookmarkPath() = %q, %v; want net://work/var/log", got, ok)
 	}
 
-	u, err := url.Parse("sftp://alice:secret@host:2222/home/alice")
+	u, err := url.Parse("sftp://alice:pw@host:2222/home/alice")
 	if err != nil {
 		t.Fatal(err)
 	}
