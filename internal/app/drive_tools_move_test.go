@@ -73,8 +73,11 @@ func TestDriveMenuShiftUpDownMovesTheToolRow(t *testing.T) {
 			select {
 			case task := <-vtui.FrameManager.TaskChan:
 				task()
-				if top := vtui.FrameManager.GetTopFrame(); top != oldMenu {
-					if _, ok := paneltest.DriveMenuFromFrame(top); ok {
+				// Other asynchronous UI tasks can put a window above the drive
+				// menu. Find the replacement anywhere on the frame stack.
+				frames := vtui.FrameManager.Screens[vtui.FrameManager.ActiveIdx].Frames
+				for i := len(frames) - 1; i >= 0; i-- {
+					if replacement, ok := paneltest.DriveMenuFromFrame(frames[i]); ok && replacement != oldMenu {
 						return
 					}
 				}
@@ -123,10 +126,7 @@ func TestDriveMenuShiftUpDownMovesTheToolRow(t *testing.T) {
 
 	// The menu is rebuilt in that order, and a built-in row moves down past a
 	// plugin's the same way (f4#1148: every row of Tools can be moved).
-	menu, ok = paneltest.DriveMenuFromFrame(vtui.FrameManager.GetTopFrame())
-	if !ok {
-		t.Fatalf("the menu did not come back: %T", vtui.FrameManager.GetTopFrame())
-	}
+	menu = paneltest.FindDriveMenu(t)
 	if row("Beta tool") > row("Alpha tool") {
 		t.Fatalf("the menu does not show Beta above Alpha after the move")
 	}
@@ -148,10 +148,7 @@ func TestDriveMenuShiftUpDownMovesTheToolRow(t *testing.T) {
 	// than another, the Windows registry for one).
 	for i := 0; i < 8 && index(stored(), "@other-panel") < index(stored(), "Beta tool"); i++ {
 		press(vtinput.VK_DOWN)
-		menu, ok = paneltest.DriveMenuFromFrame(vtui.FrameManager.GetTopFrame())
-		if !ok {
-			t.Fatalf("the menu did not come back: %T", vtui.FrameManager.GetTopFrame())
-		}
+		menu = paneltest.FindDriveMenu(t)
 		if j := findOther(); j >= 0 {
 			menu.SetSelectPos(j)
 		}
