@@ -24,6 +24,13 @@ func withTransferContent(ctx context.Context, srcVFS vfs.VFS, srcPath string, ds
 	return exportedItemVFS{VFS: srcVFS, path: srcPath, content: content}, nil
 }
 
+// ContentVFS shows the path of src as a file holding content, for the viewer
+// of a folder that src hands over as one file (vfs.TransferContentProvider);
+// every other path is src's own.
+func ContentVFS(src vfs.VFS, path string, content []byte) vfs.VFS {
+	return exportedItemVFS{VFS: src, path: path, content: content}
+}
+
 // exportedItemVFS shows one path of a source as a file with the content the
 // source handed over for it; every other call goes to the source.
 type exportedItemVFS struct {

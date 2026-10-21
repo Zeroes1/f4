@@ -2275,6 +2275,11 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 			return
 		}
 		if fsp.Entries[idx].IsDir {
+			// A folder its file system hands over as one file -- a registry
+			// key as its .reg export (f4#242) -- is viewed as that file.
+			if !forceHex && viewDirectoryAsFile(pf, fsp, idx) {
+				return
+			}
 			// With folders marked, F3 sizes the marked ones and leaves the one
 			// under the cursor alone unless it is marked too, as Far does
 			// (f4#1795).
@@ -2300,6 +2305,29 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 		path := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
 		actionOpenViewerMode(pf, fsp.Vfs, path, forceHex)
 	}
+}
+
+// viewDirectoryAsFile opens the viewer on the file that the panel's file
+// system makes of the folder at idx for a copy out of it
+// (vfs.TransferContentProvider): the registry exports a key with all its
+// subkeys as a .reg file, and F3 on the key shows that file (f4#242). It
+// reports false when the file system has no such file for the folder.
+func viewDirectoryAsFile(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx int) bool {
+	provider, ok := fsp.Vfs.(vfs.TransferContentProvider)
+	if !ok || fsp.Entries[idx].Name == ".." {
+		return false
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.Entries[idx].Name)
+	content, ok, err := provider.TransferContent(context.Background(), path, nil)
+	if err != nil {
+		vtui.ShowMessage(i18n.Msg("Error.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+		return true
+	}
+	if !ok {
+		return false
+	}
+	actionOpenViewer(pf, fileops.ContentVFS(fsp.Vfs, path, content), path)
+	return true
 }
 
 // unknownSizeNote says so when the scanned folder held files whose size the

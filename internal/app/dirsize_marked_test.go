@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
+	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtui"
 )
@@ -98,4 +100,48 @@ func TestViewIsEnabledOnTheParentRow(t *testing.T) {
 	if viewKeyBarLabel() == "" {
 		t.Error("the F3 label on \"..\" is not Size")
 	}
+}
+
+// exportingVFS hands over folder b as one file, as the registry hands over a
+// key as its .reg export (f4#242).
+type exportingVFS struct {
+	*vfs.OSVFS
+}
+
+func (v exportingVFS) TransferContent(_ context.Context, p string, _ vfs.VFS) ([]byte, bool, error) {
+	if v.Base(p) != "b" {
+		return nil, false, nil
+	}
+	return []byte("exported b\n"), true, nil
+}
+
+// F3 on a folder its file system hands over as one file opens the viewer on
+// that file instead of sizing the folder (f4#242: a registry key as .reg).
+func TestViewOnADirectoryShowsItsExportedFile(t *testing.T) {
+	pf, fsp, e := dirSizeFixture(t)
+	fsp.Vfs = exportingVFS{fsp.Vfs.(*vfs.OSVFS)}
+	fsp.SetCursorIndex(2) // b
+	actionViewFile(pf)
+	deadline := time.After(5 * time.Second)
+	for {
+		if _, ok := vtui.FrameManager.GetTopFrame().(*viewer.ViewerView); ok {
+			break
+		}
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("F3 on the exported folder opened no viewer")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if e["b"].SizeCalculated {
+		t.Error("the exported folder was sized instead of viewed")
+	}
+
+	// A folder the file system does not hand over is still sized.
+	vtui.FrameManager.Pop()
+	fsp.SetCursorIndex(1) // a
+	actionViewFile(pf)
+	pumpSizeTasksUntil(t, func() bool { return e["a"].SizeCalculated })
 }
