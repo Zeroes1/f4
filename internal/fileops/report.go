@@ -121,26 +121,45 @@ func showOpSummary(isMove bool, r *opReport, opErr error) {
 }
 
 // note writes a line to the log of an operation that keeps one.
+//
+// The log, its tallies and the skipped and failed counters belong to the
+// operation, and the workers of a multi-threaded copy write them under the
+// operation's lock (see FileOpState). Each line is written whole under it, so
+// lines of two workers never interleave. The progress of the file, which is
+// the worker's own, is moved outside the lock.
 func (s *FileOpState) note(format string, args ...any) {
-	if s != nil {
-		s.Report.printf(format, args...)
+	if s == nil {
+		return
 	}
+	r := s.shared()
+	r.mu.Lock()
+	r.Report.printf(format, args...)
+	r.mu.Unlock()
 }
 
 func (s *FileOpState) fileCopied(src, dst string) {
-	if s == nil || s.Report == nil {
+	if s == nil {
 		return
 	}
-	s.Report.copied++
-	s.Report.printf("OK       %s -> %s", src, dst)
+	r := s.shared()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.Report == nil {
+		return
+	}
+	r.Report.copied++
+	r.Report.printf("OK       %s -> %s", src, dst)
 }
 
 func (s *FileOpState) skipItem(src, dst string) {
-	s.SkippedCount++
-	if s.Report != nil {
-		s.Report.skipped++
-		s.Report.printf("SKIPPED  %s -> %s", src, dst)
+	r := s.shared()
+	r.mu.Lock()
+	r.SkippedCount++
+	if r.Report != nil {
+		r.Report.skipped++
+		r.Report.printf("SKIPPED  %s -> %s", src, dst)
 	}
+	r.mu.Unlock()
 	if s.Tracker != nil {
 		s.Tracker.FileSkipped()
 		if s.UpdateUI != nil {
@@ -158,11 +177,14 @@ func (s *FileOpState) tolerate(ignore bool, side, path string, err error) bool {
 	if s == nil || !ignore || err == nil || OperationMustNotRetry(err) {
 		return false
 	}
-	s.FailedCount++
-	if s.Report != nil {
-		s.Report.failed++
-		s.Report.printf("FAILED   %s: %s error: %v", path, side, err)
+	r := s.shared()
+	r.mu.Lock()
+	r.FailedCount++
+	if r.Report != nil {
+		r.Report.failed++
+		r.Report.printf("FAILED   %s: %s error: %v", path, side, err)
 	}
+	r.mu.Unlock()
 	vtui.DebugLog("FILEOP: %s error on %q ignored: %v", side, path, err)
 	if s.Tracker != nil {
 		s.Tracker.FileSkipped()

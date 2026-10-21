@@ -111,7 +111,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Compute build impact
@@ -446,7 +446,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Build binaries
@@ -697,7 +697,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Build lite and control binaries
@@ -863,7 +863,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: plugins/cloudfox/go.sum
 
     # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
@@ -996,7 +996,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: plugins/android/go.sum
 
     # go.sum entries don't affect the compiled binary -- that's controlled
@@ -1125,7 +1125,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: plugins/ios/go.sum
 
     # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
@@ -1237,7 +1237,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Compute build impact
@@ -1369,7 +1369,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Compute build impact
@@ -1486,7 +1486,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Compute build impact
@@ -1681,7 +1681,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Run go vet
@@ -1723,7 +1723,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Restore Go build cache (quality)
@@ -1794,7 +1794,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Compile standalone ConPTY probe
@@ -1931,7 +1931,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         # The salt file is part of the key on purpose: the cache stores
         # absolute paths, so a cache saved before a GOCACHE/GOMODCACHE move
         # above would restore to the old location -- and with the key
@@ -2229,7 +2229,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache: false
 
     - name: Compute affected packages
@@ -2302,7 +2302,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Run race detector
@@ -2611,7 +2611,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Install Wine
@@ -2815,7 +2815,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Check the release against installed updaters
@@ -2980,7 +2980,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v7
       with:
-        go-version: '1.26.9'
+        go-version: '1.26.10'
         cache-dependency-path: go.sum
 
     - name: Check the release against installed updaters

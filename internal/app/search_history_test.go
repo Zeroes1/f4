@@ -290,7 +290,7 @@ func TestAssocEditor_SharesMaskHistory(t *testing.T) {
 	}
 }
 
-func TestMkDirDialog_DoesNotPreFillOrAutoCompleteFromHistory(t *testing.T) {
+func TestMkDirDialog_OpensOnLastFolderSelectedWithoutAutoComplete(t *testing.T) {
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	theme.SetDefaultF4Palette()
 	store := useStubHistory(t)
@@ -307,10 +307,10 @@ func TestMkDirDialog_DoesNotPreFillOrAutoCompleteFromHistory(t *testing.T) {
 	defer vtui.FrameManager.Pop()
 
 	edit := findHistoryEdit(t, dlg, history.NewFolderHistoryID)
-	// F7 must not create a folder from a stale history entry when the user
-	// starts typing a new name.
-	if got := edit.GetText(); got != "" {
-		t.Errorf("folder name field is %q, want empty", got)
+	// F7 opens on the last folder created, selected (#2124); typing a new name
+	// must still replace it rather than complete to it (#1133).
+	if got := edit.GetText(); got != "build" {
+		t.Errorf("folder name field is %q, want the last folder %q", got, "build")
 	}
 
 	if !edit.NoAutoComplete {

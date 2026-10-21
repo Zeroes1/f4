@@ -2244,9 +2244,9 @@ func actionNewFile(pf *panel.PanelsFrame) {
 			actionOpenEditor(pf, activeVfs, path)
 		})
 		history.InputBoxEdit(dlg.Window).PathHintsEnabled = true
-		// Plain DIF_HISTORY, as in far2l's dlgOpenEditor: the prompt opens
-		// empty rather than on the last file that was created this way.
-		nameEdit = history.AttachHistory(history.InputBoxEdit(dlg.Window), history.NewEditHistoryID)
+		// The prompt opens on the last name entered here, selected, as Far
+		// does: the first character typed replaces it (#2124).
+		nameEdit = history.AttachHistoryUseLast(history.InputBoxEdit(dlg.Window), history.NewEditHistoryID)
 	}
 }
 
@@ -2275,6 +2275,11 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 			return
 		}
 		if fsp.Entries[idx].IsDir {
+			// A folder its file system hands over as one file -- a registry
+			// key as its .reg export (f4#242) -- is viewed as that file.
+			if !forceHex && viewDirectoryAsFile(pf, fsp, idx) {
+				return
+			}
 			// With folders marked, F3 sizes the marked ones and leaves the one
 			// under the cursor alone unless it is marked too, as Far does
 			// (f4#1795).
@@ -2287,13 +2292,65 @@ func actionViewFileMode(pf *panel.PanelsFrame, forceHex bool) {
 		}
 		// A matching View association intercepts before the built-in
 		// viewer, so users can wire F3 to feh, less, or anything else.
-		if !forceHex && panel.TryFileAssociation(pf, panel.AssocView) {
+		// Alt+F3 (forceHex) is the second way to view a file: the AltView
+		// association when one matches, the hex viewer otherwise (f4#1741).
+		kind := panel.AssocView
+		if forceHex {
+			kind = panel.AssocAltView
+		}
+		if panel.TryFileAssociation(pf, kind) {
 			return
 		}
 		name := fsp.GetSelectedName()
 		path := fsp.Vfs.Join(fsp.Vfs.GetPath(), name)
 		actionOpenViewerMode(pf, fsp.Vfs, path, forceHex)
 	}
+}
+
+// viewDirectoryAsFile opens the viewer on the file that the panel's file
+// system makes of the folder at idx for a copy out of it
+// (vfs.TransferContentProvider): the registry exports a key with all its
+// subkeys as a .reg file, and F3 on the key shows that file (f4#242). It
+// reports false when the file system has no such file for the folder.
+func viewDirectoryAsFile(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx int) bool {
+	provider, ok := fsp.Vfs.(vfs.TransferContentProvider)
+	if !ok || fsp.Entries[idx].Name == ".." {
+		return false
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.Entries[idx].Name)
+	content, ok, err := provider.TransferContent(context.Background(), path, nil)
+	if err != nil {
+		vtui.ShowMessage(i18n.Msg("Error.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+		return true
+	}
+	if !ok {
+		return false
+	}
+	actionOpenViewer(pf, fileops.ContentVFS(fsp.Vfs, path, content), path)
+	return true
+}
+
+// editDirectoryAsFile opens the built-in editor on the file that the panel's
+// file system makes of the folder at idx, when it also takes that file back
+// (vfs.TransferContentImporter): F4 on a registry key edits the key as its
+// .reg export, and saving imports the edited text (f4#242).
+func editDirectoryAsFile(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx int) bool {
+	provider, ok := fsp.Vfs.(vfs.TransferContentProvider)
+	importer, canImport := fsp.Vfs.(vfs.TransferContentImporter)
+	if !ok || !canImport || fsp.Entries[idx].Name == ".." {
+		return false
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.Entries[idx].Name)
+	content, ok, err := provider.TransferContent(context.Background(), path, nil)
+	if err != nil {
+		vtui.ShowMessage(i18n.Msg("Error.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+		return true
+	}
+	if !ok {
+		return false
+	}
+	actionOpenEditor(pf, fileops.EditableContentVFS(fsp.Vfs, path, content, importer), path)
+	return true
 }
 
 // unknownSizeNote says so when the scanned folder held files whose size the
@@ -2528,6 +2585,11 @@ func actionEditFile(pf *panel.PanelsFrame) {
 			return
 		}
 		if fsp.Entries[idx].IsDir {
+			// A folder its file system hands over as one file and takes
+			// back -- a registry key as .reg (f4#242) -- is edited as that file.
+			if editDirectoryAsFile(pf, fsp, idx) {
+				return
+			}
 			actionFileAttributes(pf)
 			return
 		}
@@ -2546,6 +2608,30 @@ func actionEditFile(pf *panel.PanelsFrame) {
 
 		actionOpenEditor(pf, fsp.Vfs, path)
 	}
+}
+
+// actionAltEditFile is Alt+F4 over a file: the AltEdit command of the matching
+// association, else the editor that F4 does not use -- the external one when
+// F4 opens the built-in editor, the built-in one when UseExternalEditor is on
+// (Far and far2l: the second way to edit a file, f4#1741).
+func actionAltEditFile(pf *panel.PanelsFrame) {
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return
+	}
+	idx := fsp.GetCursorIndex()
+	if idx < 0 || idx >= len(fsp.Entries) || fsp.Entries[idx].IsDir {
+		return
+	}
+	if panel.TryFileAssociation(pf, panel.AssocAltEdit) {
+		return
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.GetSelectedName())
+	if config.App.UseExternalEditor {
+		actionOpenEditor(pf, fsp.Vfs, path)
+		return
+	}
+	actionEditFileExternal(pf, fsp.Vfs, path, fsp.Entries[idx].Size)
 }
 
 // rightsComboWidth is the natural width of the access-rights field of the
@@ -3813,7 +3899,9 @@ func actionMkDir(pf *panel.PanelsFrame) {
 	// Keep history available through its explicit menu and navigation keys, but
 	// do not let a matching old name intercept Enter while typing a new one.
 	editName.NoAutoComplete = true
-	history.AttachHistory(editName, history.NewFolderHistoryID)
+	// The field opens on the last folder created, selected, as in Far: Enter
+	// takes it again, the first character typed replaces it (#2124).
+	history.AttachHistoryUseLast(editName, history.NewFolderHistoryID)
 	lblPrompt := vtui.NewLabel(0, 0, i18n.Msg("MakeFolder.Prompt"), editName)
 	dlg.AddItem(lblPrompt)
 	dlg.AddItem(editName)

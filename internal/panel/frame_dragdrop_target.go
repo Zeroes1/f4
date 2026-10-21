@@ -22,12 +22,26 @@ import (
 // highlight is. Where the backend learns of nothing but the drop, nothing was
 // highlighted, and a drop over a folder row goes where DropOnFolder says:
 // into the folder the panel shows by default, into the row's folder, or
-// after asking.
+// after asking. A drop on the command line puts the paths there instead
+// (frame_dragdrop_cmdline.go).
 
 // setDropHighlight shows where a drop at the current point would land, and
-// clears it from every other panel. ok false clears it everywhere.
+// clears it from every other panel and the command line. ok false clears it
+// everywhere.
 func (pf *PanelsFrame) setDropHighlight(info dropTargetInfo, ok bool) {
-	changed := false
+	pf.showDropHighlight(info, ok, false)
+}
+
+func (pf *PanelsFrame) clearDropHighlight() {
+	pf.showDropHighlight(dropTargetInfo{}, false, false)
+}
+
+// showDropHighlight puts the drop highlight on the folder info resolved to
+// (ok) or on the command line (cmdLine, frame_dragdrop_cmdline.go), and
+// clears it from everywhere else.
+func (pf *PanelsFrame) showDropHighlight(info dropTargetInfo, ok, cmdLine bool) {
+	changed := pf.cmdLineDrop != cmdLine
+	pf.cmdLineDrop = cmdLine
 	for i, p := range pf.Panels {
 		fsp, isFS := p.(*FileSystemPanel)
 		if !isFS || fsp == nil {
@@ -45,10 +59,6 @@ func (pf *PanelsFrame) setDropHighlight(info dropTargetInfo, ok bool) {
 	if changed && vtui.FrameManager != nil {
 		vtui.FrameManager.Redraw()
 	}
-}
-
-func (pf *PanelsFrame) clearDropHighlight() {
-	pf.setDropHighlight(dropTargetInfo{}, false)
 }
 
 // chooseDropDir decides which folder a drop resolved to info goes into, on

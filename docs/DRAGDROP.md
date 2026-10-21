@@ -40,6 +40,13 @@ workspace (vtui, `WorkspaceDragDwell`), so files can be dropped into its
 panels without letting go first. The drag always goes to the workspace on
 screen.
 
+A drop on the command line copies nothing: the dropped paths are typed into
+it at the cursor, each quoted as Ctrl+F quotes the current file, separated
+by spaces, and with search-first navigation the command line takes the
+focus. A tracked drag over it highlights the whole line in the cursor's
+colours. The source is told copy (link if it offers no copy), never move,
+which would have it delete the originals.
+
 The destination is always the panel's own VFS, so a panel showing an archive
 or a network connection is not a special case: the transfer is handed to
 `ExecuteFileOp`, exactly like F5, with its progress, overwrite and error

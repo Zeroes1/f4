@@ -84,22 +84,17 @@ func TestSettingsCoreRecordProviderAssociationsRoundTrip(t *testing.T) {
 	}
 }
 
-// The AltExec slot has a dispatcher (Ctrl+PgDn over a file, f4#1741) and is
-// editable; AltView and AltEdit stay reserved until their keys are wired.
+// Every association slot has a dispatcher now (the Alt slots: Ctrl+PgDn,
+// Alt+F3 and Alt+F4 over a file, f4#1741), so all of them are editable.
 func TestSettingsCoreRecordProviderAssociationsAltSlots(t *testing.T) {
 	store := settingsRecordStoreByID(t, newCoreRecordSettingsProvider(), "associations")
 	unavailable := map[string]string{}
 	for _, f := range store.collection.Fields {
 		unavailable[f.ID] = f.Unavailable
 	}
-	for _, id := range []string{"assoc.AltExec", "assoc.AltExecEnabled", "assoc.Execute", "assoc.View", "assoc.Edit"} {
+	for _, id := range []string{"assoc.AltExec", "assoc.AltExecEnabled", "assoc.AltView", "assoc.AltViewEnabled", "assoc.AltEdit", "assoc.AltEditEnabled", "assoc.Execute", "assoc.View", "assoc.Edit"} {
 		if reason, ok := unavailable[id]; !ok || reason != "" {
 			t.Errorf("%s: present=%v unavailable=%q, want an editable field", id, ok, reason)
-		}
-	}
-	for _, id := range []string{"assoc.AltView", "assoc.AltViewEnabled", "assoc.AltEdit", "assoc.AltEditEnabled"} {
-		if unavailable[id] == "" {
-			t.Errorf("%s must stay reserved: no dispatcher consumes it", id)
 		}
 	}
 }

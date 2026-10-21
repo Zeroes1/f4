@@ -231,6 +231,35 @@ func (w *GlobalAwareReporter) UpdateTransfer(action, filename string, currentPct
 	w.original.UpdateTransfer(action, displayFileName, currentPct, gTotalText, gTotalPct, gTimeSpeedText)
 }
 
+// lane returns a reporter for one worker of a multi-threaded copy: it reports
+// to the same dialog and the same speed as w, and its current file is a lane
+// of w's tracker of its own, as are the phases of that file.
+func (w *GlobalAwareReporter) lane() *GlobalAwareReporter {
+	l := &GlobalAwareReporter{original: w.original, getGlobal: w.getGlobal, onBytes: w.onBytes}
+	if w.tracker != nil {
+		l.tracker = w.tracker.Lane()
+	}
+	return l
+}
+
+// FileOpState is what one copy or move carries from file to file: the
+// choices it was started with, the answers given while it runs, its counters
+// and its progress callbacks.
+//
+// Sharing between goroutines (f4#1894, part 5). A multi-threaded copy runs
+// its files on several workers, each through its own view of the state
+// (acquireWorker). The answers, counters and caches belong to the operation,
+// not to a worker: OverwriteAll, SkipAll, SkippedCount, FailedCount, S2SDir,
+// S2SUsePassword, the Report's tallies and log, parentRights and parentOwners
+// live in the operation's own state, and while the operation runs they are
+// read and written only through its methods (existingFilesChoice,
+// rememberOverwriteAll, skipItem, tolerate, s2sState, ...), which take mu of
+// that state. Before the operation starts its owner may set them directly,
+// and after it has ended read them. The other fields are either the same for
+// the whole operation and not written once it runs (AccessRights, the
+// ignore-errors choices, IsMove, Anchor, UpdateUI, which locks itself), or
+// a worker's own (Buffer, Tracker and the StartFile/SetFileSize/OnBytes
+// callbacks of its view).
 type FileOpState struct {
 	OverwriteAll bool
 	SkipAll      bool
@@ -253,7 +282,7 @@ type FileOpState struct {
 	// AccessRights is the F5/F6 "Access rights" choice for this operation.
 	AccessRights AccessRightsMode
 	// parentRights caches destination folder permissions for the inherit
-	// mode. See parentRights() for why it needs no lock.
+	// mode. See parentRights() for why it exists.
 	parentRights map[string]uint32
 	// parentOwners caches destination folder ownership for the inherit
 	// mode (f4#1503), the same way parentRights caches its permission bits.
@@ -272,6 +301,167 @@ type FileOpState struct {
 	// Report is the log and the tallies of an operation that ignores errors,
 	// and nil for any other.
 	Report *opReport
+
+	// mu guards the shared fields listed above, on the operation's own state.
+	mu sync.Mutex
+	// root is the operation's own state on a worker's view, nil on that
+	// state itself.
+	root *FileOpState
+	// reporter is the progress wrapper a worker's view takes a lane of; nil
+	// leaves a view on the tracker lane alone (see newWorker).
+	reporter *GlobalAwareReporter
+	// idle are the views of workers that have given theirs back.
+	idle []*FileOpState
+}
+
+// shared returns the state that holds what all the workers of the
+// operation share.
+func (s *FileOpState) shared() *FileOpState {
+	if s.root != nil {
+		return s.root
+	}
+	return s
+}
+
+// existingFilesChoice reports the answer that settles every existing file of
+// the operation: "overwrite all" or "skip all", given at the start or
+// remembered from a question. A worker that waited for another's question
+// asks it again before asking its own.
+func (s *FileOpState) existingFilesChoice() (overwriteAll, skipAll bool) {
+	r := s.shared()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.OverwriteAll, r.SkipAll
+}
+
+func (s *FileOpState) rememberOverwriteAll() {
+	r := s.shared()
+	r.mu.Lock()
+	r.OverwriteAll = true
+	r.mu.Unlock()
+}
+
+func (s *FileOpState) rememberSkipAll() {
+	r := s.shared()
+	r.mu.Lock()
+	r.SkipAll = true
+	r.mu.Unlock()
+}
+
+// leftBehind counts the items so far skipped or failed under an ignored
+// error. A move compares it before and after an item to tell whether the
+// item arrived whole.
+func (s *FileOpState) leftBehind() int {
+	r := s.shared()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.SkippedCount + r.FailedCount
+}
+
+// s2sState reports which server-to-server direction the operation has
+// settled on (S2SDir) and whether it needs the saved password.
+func (s *FileOpState) s2sState() (dir int, usePassword bool) {
+	r := s.shared()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.S2SDir, r.S2SUsePassword
+}
+
+// noteS2S records a server-to-server transfer that worked in direction dir,
+// and with the saved password when withPassword is set. Once a password was
+// needed it stays needed for the operation.
+func (s *FileOpState) noteS2S(dir int, withPassword bool) {
+	r := s.shared()
+	r.mu.Lock()
+	r.S2SDir = dir
+	if withPassword {
+		r.S2SUsePassword = true
+	}
+	r.mu.Unlock()
+}
+
+// disableS2SIfUnprobed turns server-to-server copying off for the operation
+// after a file found no way to do it, unless a direction has been found
+// meanwhile.
+func (s *FileOpState) disableS2SIfUnprobed() {
+	r := s.shared()
+	r.mu.Lock()
+	if r.S2SDir == 0 {
+		r.S2SDir = 3
+	}
+	r.mu.Unlock()
+}
+
+// acquireWorker gives a worker of a multi-threaded copy a view of the
+// operation's state for one file: the view shares the operation's answers,
+// counters, log and caches, and has a buffer, a tracker lane and progress
+// callbacks of its own. Views are reused: give it back with releaseWorker
+// when the file is done, and use it from one goroutine at a time.
+func (s *FileOpState) acquireWorker() *FileOpState {
+	r := s.shared()
+	r.mu.Lock()
+	if n := len(r.idle); n > 0 {
+		v := r.idle[n-1]
+		r.idle = r.idle[:n-1]
+		r.mu.Unlock()
+		return v
+	}
+	r.mu.Unlock()
+	return r.newWorker()
+}
+
+// releaseWorker takes back a view from acquireWorker. A file its worker left
+// half done (the copy failed or was cancelled) stops showing in the progress.
+func (s *FileOpState) releaseWorker(v *FileOpState) {
+	if v == nil || v.root == nil {
+		return
+	}
+	if v.Tracker != nil {
+		v.Tracker.forgetFile()
+	}
+	r := s.shared()
+	r.mu.Lock()
+	r.idle = append(r.idle, v)
+	r.mu.Unlock()
+}
+
+// newWorker makes a worker's view of the operation's own state r.
+// With the progress wrapper known the view reports through a lane of it, so
+// its file's phases, size and bytes are its own. Without it (a state built
+// by hand, as in tests) the view takes a lane of the tracker and keeps r's
+// OnBytes, which must then be safe to call from several goroutines.
+func (s *FileOpState) newWorker() *FileOpState {
+	r := s.shared()
+	bufSize := len(r.Buffer)
+	if bufSize == 0 {
+		bufSize = 128 * 1024
+	}
+	v := &FileOpState{
+		root:                r,
+		UpdateUI:            r.UpdateUI,
+		Anchor:              r.Anchor,
+		Buffer:              make([]byte, bufSize),
+		IsMove:              r.IsMove,
+		AccessRights:        r.AccessRights,
+		CopySymlinksAsLinks: r.CopySymlinksAsLinks,
+		IgnoreReadErrors:    r.IgnoreReadErrors,
+		IgnoreWriteErrors:   r.IgnoreWriteErrors,
+		ReadAttempts:        r.ReadAttempts,
+	}
+	if r.reporter != nil {
+		lane := r.reporter.lane()
+		v.reporter = lane
+		v.Tracker = lane.tracker
+		v.StartFile = lane.StartFileKnown
+		v.SetFileSize = lane.SetCurrentSize
+		v.OnBytes = lane.UpdateBytes
+		return v
+	}
+	if r.Tracker != nil {
+		v.Tracker = r.Tracker.Lane()
+	}
+	v.OnBytes = r.OnBytes
+	return v
 }
 
 // FormatIntWithSpaces converts an int64 to string with spaces as thousands separators.
@@ -581,11 +771,15 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 		}
 
 		tracker := NewFileOpTracker(totalStats)
+		speed := newSpeedMeter(startTime)
+		// progressMu owns lastUpdate, lastLoggedTime and lastLoggedPct. The
+		// workers of a multi-threaded copy all report progress (f4#1894,
+		// part 5); with the lock one of them at a time decides whether the
+		// dialog is due for an update and sends it, so updates leave in the
+		// order they were taken. The reporters only record the update and
+		// return, so holding the lock over them costs nothing.
+		var progressMu sync.Mutex
 		lastUpdate := startTime
-		lastSpeedUpdate := startTime
-		bytesSinceLastSpeedUpdate := int64(0)
-		currentSpeed := float64(0)
-
 		lastLoggedTime := startTime
 		lastLoggedPct := -1
 
@@ -634,7 +828,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 			}
 
 			speedStr := ""
-			if currentSpeed > 0 {
+			if currentSpeed := speed.current(); currentSpeed > 0 {
 				speedStr = numeric.FormatSize(int64(currentSpeed)) + "/s"
 			}
 
@@ -648,7 +842,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 			getGlobal: getGlobalStats,
 			tracker:   tracker,
 			onBytes: func(n int) {
-				bytesSinceLastSpeedUpdate += int64(n)
+				speed.add(n)
 				if updateUI != nil {
 					updateUI(false)
 				}
@@ -657,14 +851,11 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 		ctx = context.WithValue(ctx, vfs.ReporterKey, wrapRep)
 
 		updateUI = func(force bool) {
+			progressMu.Lock()
+			defer progressMu.Unlock()
 			now := time.Now()
 			if force || now.Sub(lastUpdate) >= 100*time.Millisecond {
-				speedDur := now.Sub(lastSpeedUpdate).Seconds()
-				if speedDur >= 1.0 {
-					currentSpeed = float64(bytesSinceLastSpeedUpdate) / speedDur
-					lastSpeedUpdate = now
-					bytesSinceLastSpeedUpdate = 0
-				}
+				speed.sample(now)
 				lastUpdate = now
 
 				filePct, _, currName := tracker.GetProgress()
@@ -709,6 +900,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 			Buffer:      make([]byte, 128*1024),
 			IsMove:      isMove,
 			Report:      report,
+			reporter:    wrapRep,
 		}
 		opts.applyTo(state, isMove)
 
@@ -792,7 +984,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 				}
 			}
 
-			leftBehind := state.SkippedCount + state.FailedCount
+			leftBehind := state.leftBehind()
 			err := recursiveCopy(ctx, srcVfs, srcPath, dstVfs, targetItemPath, state, 0)
 			if err != nil {
 				vtui.DebugLog("FILEOP: copy %q -> %q failed: %v", srcPath, targetItemPath, err)
@@ -802,7 +994,7 @@ func ExecuteFileOpAtWithOptions(srcVfs, dstVfs vfs.VFS, srcBasePath string, name
 			// Only what this item left behind keeps its source. The counters run
 			// for the whole operation, and a file skipped in an earlier item is
 			// no reason to keep the source of a later one that arrived whole.
-			if isMove && state.SkippedCount+state.FailedCount == leftBehind {
+			if isMove && state.leftBehind() == leftBehind {
 				if err := srcVfs.Remove(ctx, srcPath); err != nil {
 					return &vfs.PartialOperationError{
 						Operation: "move source cleanup",
@@ -1578,24 +1770,25 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 			}
 			return err
 		}
-		if state.SkipAll {
+		overwriteAll, skipAll := state.existingFilesChoice()
+		if skipAll {
 			skipFile()
 			return nil
 		}
-		if state.OverwriteAll {
+		if overwriteAll {
 			break
 		}
 
 		choice, remember := AskOverwrite(ctx, destPathForFile, stat, dstStat, state.Anchor)
 		if choice == 1 { // Overwrite
 			if remember {
-				state.OverwriteAll = true
+				state.rememberOverwriteAll()
 				vtui.DebugLog("FILEOP: User chose OVERWRITE ALL")
 			}
 			break
 		} else if choice == 2 { // Skip
 			if remember {
-				state.SkipAll = true
+				state.rememberSkipAll()
 				vtui.DebugLog("FILEOP: User chose SKIP ALL")
 			}
 			skipFile()
@@ -1649,11 +1842,14 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 
 	// Optimize using server-to-server direct copy if they are on different hosts,
 	// but we can run commands on one of them and have connection info for the other.
-	if state.S2SDir != 3 { // Not disabled
+	// The direction and the password choice are the operation's, read once
+	// here: another worker may settle them while this file probes.
+	s2sDir, s2sUsePassword := state.s2sState()
+	if s2sDir != 3 { // Not disabled
 		pushed, pulled := false, false
 
-		tryPush := state.S2SDir == 0 || state.S2SDir == 1
-		tryPull := state.S2SDir == 0 || state.S2SDir == 2
+		tryPush := s2sDir == 0 || s2sDir == 1
+		tryPull := s2sDir == 0 || s2sDir == 2
 
 		if tryPush {
 			if rner, ok1 := srcVfs.(vfs.CommandRunner); ok1 {
@@ -1669,12 +1865,12 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 						scpCmd := fmt.Sprintf("scp -o ConnectTimeout=10 -P %s -o StrictHostKeyChecking=no -p %q %s",
 							port, srcPath, scpDst)
 
-						if !state.S2SUsePassword {
+						if !s2sUsePassword {
 							vtui.DebugLog("FILEOP: Attempting server-to-server push: %s", scpCmd)
 							codePush, errPush := rner.RunCommand(ctx, srcVfs.Dir(srcPath), scpCmd, nil)
 							if errPush == nil && codePush == 0 {
 								pushed = true
-								state.S2SDir = 1
+								state.noteS2S(1, false)
 							} else {
 								vtui.DebugLog("FILEOP: Server-to-server push failed (code: %d): %v", codePush, errPush)
 							}
@@ -1685,8 +1881,7 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 							if attempted {
 								if errPush == nil && codePush == 0 {
 									pushed = true
-									state.S2SDir = 1
-									state.S2SUsePassword = true
+									state.noteS2S(1, true)
 									vtui.DebugLog("FILEOP: Server-to-server push succeeded using a saved password for the second hop")
 								} else {
 									vtui.DebugLog("FILEOP: Server-to-server push with saved password failed (code: %d): %v", codePush, errPush)
@@ -1712,12 +1907,12 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 						scpCmd := fmt.Sprintf("scp -o ConnectTimeout=10 -P %s -o StrictHostKeyChecking=no -p %s %q",
 							port, scpSrc, destPathForFile)
 
-						if !state.S2SUsePassword {
+						if !s2sUsePassword {
 							vtui.DebugLog("FILEOP: Attempting server-to-server pull: %s", scpCmd)
 							codePull, errPull := rner.RunCommand(ctx, dstVfs.Dir(destPathForFile), scpCmd, nil)
 							if errPull == nil && codePull == 0 {
 								pulled = true
-								state.S2SDir = 2
+								state.noteS2S(2, false)
 							} else {
 								vtui.DebugLog("FILEOP: Server-to-server pull failed (code: %d): %v", codePull, errPull)
 							}
@@ -1728,8 +1923,7 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 							if attempted {
 								if errPull == nil && codePull == 0 {
 									pulled = true
-									state.S2SDir = 2
-									state.S2SUsePassword = true
+									state.noteS2S(2, true)
 									vtui.DebugLog("FILEOP: Server-to-server pull succeeded using a saved password for the second hop")
 								} else {
 									vtui.DebugLog("FILEOP: Server-to-server pull with saved password failed (code: %d): %v", codePull, errPull)
@@ -1753,9 +1947,9 @@ func recursiveCopy(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstVfs v
 				}
 			}
 			return nil
-		} else if state.S2SDir == 0 {
+		} else if s2sDir == 0 {
 			// If both probed and failed (or couldn't even probe), disable S2S for this operation
-			state.S2SDir = 3
+			state.disableS2SIfUnprobed()
 			vtui.DebugLog("FILEOP: Server-to-server copy disabled after probing failed or unavailable")
 		}
 	}
