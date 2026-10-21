@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -308,6 +309,148 @@ func TestIssue2049_DragGoesToWorkspaceOnScreen(t *testing.T) {
 	enter()
 	if highlighted(first) || !highlighted(second) {
 		t.Fatalf("after switching: first=%v second=%v", highlighted(first), highlighted(second))
+	}
+}
+
+// cmdLineCell is a cell of the command line, away from its prompt.
+func (f *issue2049Fixture) cmdLineCell(t *testing.T) (int, int) {
+	t.Helper()
+	x1, y1, x2, _ := f.pf.CmdLine.GetPosition()
+	if !f.pf.CmdLine.IsVisible() || x2 <= x1 {
+		t.Fatalf("fixture: the command line is not on screen (%d..%d, visible=%v)", x1, x2, f.pf.CmdLine.IsVisible())
+	}
+	return (x1 + x2) / 2, y1
+}
+
+// typedAsCtrlF is what Ctrl+F would have put after text for each path: the
+// command line a drop of those paths must leave.
+func (f *issue2049Fixture) typedAsCtrlF(text string, paths ...string) string {
+	f.pf.CmdLine.Edit.SetText(text)
+	for _, p := range paths {
+		f.pf.InsertPathToCmdLine(NormalizeExternalDropPath(p))
+	}
+	want := f.pf.CmdLine.Edit.GetText()
+	f.pf.CmdLine.Edit.SetText(text)
+	return want
+}
+
+// A file dragged onto the command line puts its path there, quoted as
+// Ctrl+F quotes the current file, rather than copying it anywhere. Where the
+// backend follows the drag the command line is highlighted, and only it.
+func TestIssue2049_DropOnCommandLineInsertsPaths(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	x, y := f.cmdLineCell(t)
+	spaced := filepath.Join(t.TempDir(), "with space.txt")
+	paths := []string{f.source, spaced}
+	want := f.typedAsCtrlF("ls", paths...)
+	ev := func(phase vtui.DragPhase, x, y int, tracked bool) *vtui.DragEvent {
+		return &vtui.DragEvent{
+			Phase: phase, X: x, Y: y, Tracked: tracked,
+			Allowed: vtui.DropCopy | vtui.DropMove, Suggested: vtui.DropMove,
+			Payload: vtui.DragPayload{Paths: paths},
+		}
+	}
+
+	if got := f.pf.HandleDrag(ev(vtui.DragEnter, x, y, true)); got != vtui.DropCopy {
+		t.Fatalf("over the command line the source is told %s, want copy", got)
+	}
+	if !f.pf.cmdLineDrop || f.fsp.drop.active {
+		t.Fatalf("over the command line: command line highlighted=%v, panel %+v", f.pf.cmdLineDrop, f.fsp.drop)
+	}
+	f.pf.HandleDrag(ev(vtui.DragOver, f.subX, f.subY, true))
+	if f.pf.cmdLineDrop || f.fsp.drop != (dropHighlight{active: true, entry: f.subIndex}) {
+		t.Fatalf("over the folder row: command line highlighted=%v, panel %+v", f.pf.cmdLineDrop, f.fsp.drop)
+	}
+	f.pf.HandleDrag(ev(vtui.DragOver, x, y, true))
+	if got := f.pf.HandleDrag(ev(vtui.DragDrop, x, y, true)); got != vtui.DropCopy {
+		t.Fatalf("a drop on the command line is reported as %s, want copy", got)
+	}
+	if got := f.pf.CmdLine.Edit.GetText(); got != want {
+		t.Fatalf("command line after the drop is %q, want %q", got, want)
+	}
+	if f.pf.cmdLineDrop {
+		t.Fatal("the drop must clear the command line highlight")
+	}
+	select {
+	case dir := <-f.drops:
+		t.Fatalf("a drop on the command line started a transfer into %q", dir)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Where only the drop is reported, nothing was highlighted, and the
+	// paths go in all the same.
+	f.pf.CmdLine.Edit.SetText("")
+	want = f.typedAsCtrlF("", paths...)
+	f.pf.HandleDrag(ev(vtui.DragEnter, x, y, false))
+	if f.pf.cmdLineDrop {
+		t.Fatal("an untracked gesture must not highlight the command line")
+	}
+	f.pf.HandleDrag(ev(vtui.DragDrop, x, y, false))
+	if got := f.pf.CmdLine.Edit.GetText(); got != want {
+		t.Fatalf("command line after an untracked drop is %q, want %q", got, want)
+	}
+}
+
+// Nothing dropped on the command line is moved: Shift does not make it a
+// move, and a source that offers nothing but a move is refused.
+func TestIssue2049_DropOnCommandLineNeverMoves(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	x, y := f.cmdLineCell(t)
+	f.pf.CmdLine.Edit.SetText("")
+
+	shifted := &vtui.DragEvent{Phase: vtui.DragDrop, X: x, Y: y, Tracked: true,
+		Allowed: vtui.DropCopy | vtui.DropMove, Suggested: vtui.DropMove,
+		Modifiers: vtinput.ShiftPressed, Payload: vtui.DragPayload{Paths: []string{f.source}}}
+	if got := f.pf.HandleDrag(shifted); got != vtui.DropCopy {
+		t.Fatalf("Shift+drop on the command line is reported as %s, want copy", got)
+	}
+
+	f.pf.CmdLine.Edit.SetText("")
+	moveOnly := &vtui.DragEvent{Phase: vtui.DragDrop, X: x, Y: y, Tracked: true,
+		Allowed: vtui.DropMove, Suggested: vtui.DropMove,
+		Payload: vtui.DragPayload{Paths: []string{f.source}}}
+	if got := f.pf.HandleDrag(moveOnly); got != vtui.DropNone {
+		t.Fatalf("a move-only drop on the command line is reported as %s, want none", got)
+	}
+	if got := f.pf.CmdLine.Edit.GetText(); got != "" {
+		t.Fatalf("a refused drop still typed %q", got)
+	}
+}
+
+// With search-first navigation the panels hold the keys, so a drop on the
+// command line hands it the focus: what is typed next goes after the paths.
+func TestIssue2049_DropOnCommandLineFocusesIt(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	oldMode := config.App.NavigationMode
+	t.Cleanup(func() { config.App.NavigationMode = oldMode })
+	config.App.NavigationMode = config.NavigationSearchFirst
+	f.pf.ApplyNavigationMode()
+	x, y := f.cmdLineCell(t)
+
+	f.pf.HandleDrag(&vtui.DragEvent{Phase: vtui.DragDrop, X: x, Y: y,
+		Allowed: vtui.DropCopy, Payload: vtui.DragPayload{Paths: []string{f.source}}})
+	if !f.pf.CommandLineFocused {
+		t.Fatal("a drop on the command line must focus it in search-first navigation")
+	}
+}
+
+// The command line highlight is drawn in the cursor's colours, as a folder
+// row is.
+func TestIssue2049_CommandLineHighlightIsDrawn(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	cursor := vtui.Palette[theme.ColPanelCursor]
+	x, y := f.cmdLineCell(t)
+
+	f.pf.Show(scr)
+	if got := scr.GetCell(x, y).Attributes; got == cursor {
+		t.Fatalf("fixture: the command line is drawn in the cursor's %#x without a drag", cursor)
+	}
+	f.pf.cmdLineDrop = true
+	f.pf.Show(scr)
+	if got := scr.GetCell(x, y).Attributes; got != cursor {
+		t.Fatalf("highlighted command line attr %#x, want the cursor's %#x", got, cursor)
 	}
 }
 
