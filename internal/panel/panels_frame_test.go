@@ -4442,7 +4442,7 @@ func TestPanelsFrame_SyncPassivePanel(t *testing.T) {
 	}
 }
 
-func TestMiddleClickKeyKeepsShift(t *testing.T) {
+func TestMiddleClickKeyKeepsShiftAndCtrl(t *testing.T) {
 	plain := middleClickKey(&vtinput.InputEvent{
 		Type: vtinput.MouseEventType, KeyDown: true,
 		ButtonState: vtinput.FromLeft2ndButtonPressed,
@@ -4460,14 +4460,22 @@ func TestMiddleClickKeyKeepsShift(t *testing.T) {
 		t.Fatalf("Shift + wheel click = %+v, want Shift+Enter", shift)
 	}
 
-	// Only Shift carries over: Ctrl or Alt with the wheel click stay a plain
-	// Enter rather than some other Enter chord.
 	ctrl := middleClickKey(&vtinput.InputEvent{
 		Type: vtinput.MouseEventType, KeyDown: true,
 		ButtonState:     vtinput.FromLeft2ndButtonPressed,
-		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed,
+		ControlKeyState: vtinput.RightCtrlPressed,
 	})
-	if ctrl.ControlKeyState != 0 {
-		t.Fatalf("Ctrl+Alt + wheel click = %+v, want a plain Enter", ctrl)
+	if ctrl.VirtualKeyCode != vtinput.VK_RETURN || ctrl.ControlKeyState != vtinput.RightCtrlPressed {
+		t.Fatalf("Ctrl + wheel click = %+v, want Ctrl+Enter", ctrl)
+	}
+
+	// Alt does not carry over: Alt + wheel click is a plain Enter.
+	alt := middleClickKey(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		ButtonState:     vtinput.FromLeft2ndButtonPressed,
+		ControlKeyState: vtinput.LeftAltPressed,
+	})
+	if alt.ControlKeyState != 0 {
+		t.Fatalf("Alt + wheel click = %+v, want a plain Enter", alt)
 	}
 }
