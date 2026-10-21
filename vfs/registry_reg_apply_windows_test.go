@@ -103,3 +103,51 @@ func TestApplyRegFileRefusesAHive_Issue242(t *testing.T) {
 		}
 	}
 }
+
+// F4 on a key saves the edited .reg through ImportContent: what is below the
+// key is applied, a section outside it is refused before anything is written.
+func TestRegistryVFSImportContentStaysInsideTheKey_Issue242(t *testing.T) {
+	_, keyPath, keyURI := newRegistryVFSTestKey(t)
+	v := NewRegistryVFS()
+	root := `HKEY_CURRENT_USER\` + keyPath
+	ctx := context.Background()
+
+	outside := "Windows Registry Editor Version 5.00\r\n\r\n" +
+		"[" + root + "]\r\n\"a\"=dword:00000001\r\n\r\n" +
+		"[HKEY_CURRENT_USER\\Software\\f4-elsewhere]\r\n\"b\"=dword:00000002\r\n"
+	if err := v.ImportContent(ctx, keyURI, []byte(outside)); err == nil {
+		t.Fatal("a section outside the edited key was accepted")
+	}
+	key, err := registry.OpenKey(registry.CURRENT_USER, keyPath, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := key.GetIntegerValue("a"); !errors.Is(err, registry.ErrNotExist) {
+		t.Errorf("a refused file still wrote a value: %v", err)
+	}
+	_ = key.Close()
+
+	inside := "Windows Registry Editor Version 5.00\r\n\r\n" +
+		"[" + root + "]\r\n\"a\"=dword:00000007\r\n\r\n" +
+		"[" + root + "\\Child]\r\n@=\"c\"\r\n"
+	if err := v.ImportContent(ctx, keyURI, []byte(inside)); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	t.Cleanup(func() { _ = deleteRegistryTree(registry.CURRENT_USER, keyPath) })
+	key, err = registry.OpenKey(registry.CURRENT_USER, keyPath, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, _, err := key.GetIntegerValue("a"); err != nil || n != 7 {
+		t.Errorf("a = %d, %v; want 7", n, err)
+	}
+	_ = key.Close()
+	child, err := registry.OpenKey(registry.CURRENT_USER, keyPath+`\Child`, registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("Child was not created: %v", err)
+	}
+	if s, _, err := child.GetStringValue(""); err != nil || s != "c" {
+		t.Errorf("Child default = %q, %v", s, err)
+	}
+	_ = child.Close()
+}

@@ -126,3 +126,41 @@ func setRawRegistryValue(key registry.Key, name string, valueType uint32, data [
 	}
 	return nil
 }
+
+var _ TransferContentImporter = (*RegistryVFS)(nil)
+
+// ImportContent applies the .reg text a key was edited as (F4 on the key,
+// f4#242), as a regedit import does. Every key of the text must be the
+// edited key or below it: a section that names another branch is refused
+// before anything is written.
+func (v *RegistryVFS) ImportContent(ctx context.Context, p string, content []byte) error {
+	segments, err := registryPathSegments(p)
+	if err != nil {
+		return err
+	}
+	if len(segments) < 2 {
+		return fmt.Errorf("registry: a whole hive cannot be edited as .reg")
+	}
+	hive, ok := registryHiveByName(segments[0])
+	if !ok {
+		return os.ErrNotExist
+	}
+	root := strings.Join(append([]string{hive.name}, segments[1:]...), `\`)
+	keys, err := decodeRegFile(content)
+	if err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if !regPathWithin(k.Path, root) {
+			return fmt.Errorf(".reg: [%s] is outside the edited key %s", k.Path, root)
+		}
+	}
+	return applyRegFile(ctx, keys)
+}
+
+// regPathWithin reports whether path is root or a key below it; registry
+// names compare without regard to case.
+func regPathWithin(path, root string) bool {
+	path, root = strings.ToLower(strings.Trim(path, `\`)), strings.ToLower(root)
+	return path == root || strings.HasPrefix(path, root+`\`)
+}
