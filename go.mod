@@ -37,7 +37,7 @@ require (
 	github.com/unxed/sevenzip v0.1.8
 	github.com/unxed/tar v0.1.141
 	github.com/unxed/vtinput v0.1.11
-	github.com/unxed/vtui v0.1.417-0.20261021153038-34e1d23b5d91
+	github.com/unxed/vtui v0.1.418
 	github.com/unxed/zip v0.1.146
 	github.com/unxed/zipper v0.1.178
 	github.com/vmihailenco/msgpack/v5 v5.4.1
