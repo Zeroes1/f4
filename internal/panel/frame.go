@@ -4148,6 +4148,19 @@ func (pf *PanelsFrame) processMiddleMouseGesture(e *vtinput.InputEvent) (handled
 	return false, false
 }
 
+// middleClickKey is the key a wheel click in the panels stands for: Enter
+// with the Shift and Ctrl the click was made with, so Shift + wheel click opens
+// the system file manager and Ctrl + wheel click puts the file name into the
+// command line, as Shift+Enter and Ctrl+Enter do (#2123). Alt is left out.
+func middleClickKey(e *vtinput.InputEvent) *vtinput.InputEvent {
+	return &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_RETURN,
+		ControlKeyState: e.ControlKeyState & (vtinput.ShiftPressed | vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed),
+	}
+}
+
 // terminalWantsMouseEvent applies the DEC mouse-tracking mode selected by
 // the terminal application. SGR (1006) chooses the wire format; it does not
 // itself request mouse events. In normal tracking mode (1000), applications
@@ -4354,11 +4367,7 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 	// the gesture state above.
 	if handled, trigger := pf.processMiddleMouseGesture(e); handled {
 		if trigger {
-			pf.ProcessKey(&vtinput.InputEvent{
-				Type:           vtinput.KeyEventType,
-				KeyDown:        true,
-				VirtualKeyCode: vtinput.VK_RETURN,
-			})
+			pf.ProcessKey(middleClickKey(e))
 		}
 		return true
 	}
