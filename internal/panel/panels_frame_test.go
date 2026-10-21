@@ -4441,3 +4441,33 @@ func TestPanelsFrame_SyncPassivePanel(t *testing.T) {
 		t.Fatal("syncPassivePanel should be a no-op when both panels show the same directory")
 	}
 }
+
+func TestMiddleClickKeyKeepsShift(t *testing.T) {
+	plain := middleClickKey(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		ButtonState: vtinput.FromLeft2ndButtonPressed,
+	})
+	if plain.Type != vtinput.KeyEventType || !plain.KeyDown || plain.VirtualKeyCode != vtinput.VK_RETURN || plain.ControlKeyState != 0 {
+		t.Fatalf("wheel click = %+v, want a plain Enter", plain)
+	}
+
+	shift := middleClickKey(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		ButtonState:     vtinput.FromLeft2ndButtonPressed,
+		ControlKeyState: vtinput.ShiftPressed | vtinput.NumLockOn,
+	})
+	if shift.VirtualKeyCode != vtinput.VK_RETURN || shift.ControlKeyState != vtinput.ShiftPressed {
+		t.Fatalf("Shift + wheel click = %+v, want Shift+Enter", shift)
+	}
+
+	// Only Shift carries over: Ctrl or Alt with the wheel click stay a plain
+	// Enter rather than some other Enter chord.
+	ctrl := middleClickKey(&vtinput.InputEvent{
+		Type: vtinput.MouseEventType, KeyDown: true,
+		ButtonState:     vtinput.FromLeft2ndButtonPressed,
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed,
+	})
+	if ctrl.ControlKeyState != 0 {
+		t.Fatalf("Ctrl+Alt + wheel click = %+v, want a plain Enter", ctrl)
+	}
+}
