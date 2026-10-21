@@ -2038,10 +2038,31 @@ func (v *ArchiveVFS) Remove(ctx context.Context, path string) error {
 	if fsPath == "." {
 		return fmt.Errorf("cannot remove archive root")
 	}
+	// Removing a directory removes everything under it, as on a local disk:
+	// the delete operation calls Remove once for the whole tree. The updater
+	// removes one entry by its exact name, so every entry below the directory
+	// goes too (#2107). ZIP stores directory entries with a trailing slash,
+	// while the VFS path selected in the panel does not include it; a
+	// directory only the names of other entries imply has no entry at all.
+	targets := []string{fsPath}
 	if info, statErr := fs.Stat(v.fsys, fsPath); statErr == nil && info.IsDir() {
-		// ZIP stores explicit directory entries with a trailing slash, while
-		// the VFS path selected in the panel does not include it.
-		fsPath += "/"
+		targets[0] = fsPath + "/"
+		walkErr := fs.WalkDir(v.fsys, fsPath, func(name string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if name == fsPath {
+				return nil
+			}
+			if d.IsDir() {
+				name += "/"
+			}
+			targets = append(targets, name)
+			return nil
+		})
+		if walkErr != nil {
+			return walkErr
+		}
 	}
 
 	upd, err := archive.NewUpdater(v.activePath(), archive.Options{})
@@ -2049,8 +2070,23 @@ func (v *ArchiveVFS) Remove(ctx context.Context, path string) error {
 		return err
 	}
 
-	err = joinArchiveCloseError(upd.Remove(fsPath), upd.Close())
-	if err != nil {
+	removed := 0
+	var removeErr error
+	for _, name := range targets {
+		err := upd.Remove(name)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			removeErr = err
+			break
+		}
+		removed++
+	}
+	if removeErr == nil && removed == 0 {
+		removeErr = os.ErrNotExist
+	}
+	if err := joinArchiveCloseError(removeErr, upd.Close()); err != nil {
 		return err
 	}
 	return v.reloadFS()

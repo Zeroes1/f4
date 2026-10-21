@@ -20,6 +20,7 @@ File.ViewHex
 File.AssemblyInfo
 File.PDFText
 File.Edit
+File.AltEdit
 File.New
 File.ApplyCommand
 File.Copy

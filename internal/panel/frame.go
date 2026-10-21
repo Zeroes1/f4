@@ -340,6 +340,10 @@ type PanelsFrame struct {
 	CmdLine *cmdline.CommandLine
 	KeyBar  *vtui.KeyBar
 
+	// cmdLineDrop is set while a drag in progress would drop on the command
+	// line (frame_dragdrop_cmdline.go).
+	cmdLineDrop bool
+
 	// menuItemsCache* remember the last BuildMenuItems result and the state it
 	// was built from. vtui's render loop asks the top frame for its menu bar
 	// every frame (stepWithSize -> GetActiveMenuBar -> GetMenuBar), so without
@@ -2697,6 +2701,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		pf.CmdLine.SetRichPrompt(pf.BuildPrompt())
 		pf.CmdLine.SetPosition(0, cmdLineY, pf.LastW-1, cmdLineY)
 		pf.CmdLine.Show(scr)
+		pf.drawCmdLineDropHighlight(scr)
 	}
 
 	// KeyBar is at the bottom. It should only be hidden if a child process
@@ -4143,6 +4148,19 @@ func (pf *PanelsFrame) processMiddleMouseGesture(e *vtinput.InputEvent) (handled
 	return false, false
 }
 
+// middleClickKey is the key a wheel click in the panels stands for: Enter
+// with the Shift and Ctrl the click was made with, so Shift + wheel click opens
+// the system file manager and Ctrl + wheel click puts the file name into the
+// command line, as Shift+Enter and Ctrl+Enter do (#2123). Alt is left out.
+func middleClickKey(e *vtinput.InputEvent) *vtinput.InputEvent {
+	return &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		VirtualKeyCode:  vtinput.VK_RETURN,
+		ControlKeyState: e.ControlKeyState & (vtinput.ShiftPressed | vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed),
+	}
+}
+
 // terminalWantsMouseEvent applies the DEC mouse-tracking mode selected by
 // the terminal application. SGR (1006) chooses the wire format; it does not
 // itself request mouse events. In normal tracking mode (1000), applications
@@ -4349,11 +4367,7 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 	// the gesture state above.
 	if handled, trigger := pf.processMiddleMouseGesture(e); handled {
 		if trigger {
-			pf.ProcessKey(&vtinput.InputEvent{
-				Type:           vtinput.KeyEventType,
-				KeyDown:        true,
-				VirtualKeyCode: vtinput.VK_RETURN,
-			})
+			pf.ProcessKey(middleClickKey(e))
 		}
 		return true
 	}

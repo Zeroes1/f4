@@ -47,20 +47,21 @@ func copySymlinkAsLink(ctx context.Context, srcVfs vfs.VFS, srcPath string, dstV
 			}
 			return true, err
 		}
-		if state.SkipAll {
+		overwriteAll, skipAll := state.existingFilesChoice()
+		if skipAll {
 			state.skipItem(srcPath, destPath)
 			return true, nil
 		}
-		if !state.OverwriteAll {
+		if !overwriteAll {
 			choice, remember := AskOverwrite(ctx, destPath, stat, existing, state.Anchor)
 			switch choice {
 			case 1: // Overwrite
 				if remember {
-					state.OverwriteAll = true
+					state.rememberOverwriteAll()
 				}
 			case 2: // Skip
 				if remember {
-					state.SkipAll = true
+					state.rememberSkipAll()
 				}
 				state.skipItem(srcPath, destPath)
 				return true, nil

@@ -446,6 +446,45 @@ func TestListingAgainstLocalShell(t *testing.T) {
 	}
 }
 
+// TestListingDirectoryWithNewlineAgainstLocalShell lists a directory whose
+// own name holds a newline in every backend the host provides. The stat
+// backends used to print the full path of each entry, so the newline of the
+// directory split every line of the answer and the listing came back empty
+// (unxed/f4#2117; seen on FreeBSD, where the helper takes statbsd).
+func TestListingDirectoryWithNewlineAgainstLocalShell(t *testing.T) {
+	c := newLocalShellClient(t)
+	ctx := context.Background()
+
+	dir := filepath.Join(t.TempDir(), "new\nline")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Skipf("a name with a newline is not supported here: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "x"), []byte("q"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tried := 0
+	for _, mode := range ListingModes {
+		if err := c.SetListingMode(ctx, mode); err != nil {
+			t.Logf("listing mode %q unavailable here: %v", mode, err)
+			continue
+		}
+		tried++
+		t.Run(mode, func(t *testing.T) {
+			entries, err := c.Enum(ctx, dir)
+			if err != nil {
+				t.Fatalf("enum: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Name != "x" || entries[0].Size != 1 {
+				t.Fatalf("entries = %+v, want the one file x of 1 byte", entries)
+			}
+		})
+	}
+	if tried == 0 {
+		t.Fatal("no listing mode works against the local shell")
+	}
+}
+
 func TestTargetDirsAgainstLocalShell(t *testing.T) {
 	c := newLocalShellClient(t)
 	dir := t.TempDir()

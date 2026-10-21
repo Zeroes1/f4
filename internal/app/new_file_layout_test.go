@@ -32,8 +32,14 @@ func TestNewFileDialogHistoryAndPathHints(t *testing.T) {
 	dlg := vtui.FrameManager.GetTopFrame().(vtui.Container)
 	defer vtui.FrameManager.Pop()
 	edit := findHistoryEdit(t, dlg, history.NewEditHistoryID)
-	if edit.GetText() != "" || !edit.PathHintsEnabled || !edit.ShowHistoryButton {
-		t.Fatal("empty initial input, path hints and history button must be preserved")
+	// The prompt opens on the last name entered, selected (#2124).
+	if edit.GetText() != "previous.txt" || !edit.PathHintsEnabled || !edit.ShowHistoryButton {
+		t.Fatalf("initial input %q, want the last name; path hints and history button must be preserved", edit.GetText())
+	}
+	edit.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
+		Char: 'n', VirtualKeyCode: vtinput.VK_N})
+	if edit.GetText() != "n" {
+		t.Fatalf("typing over the last name gave %q, want %q", edit.GetText(), "n")
 	}
 	edit.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true,
 		VirtualKeyCode: vtinput.VK_E, ControlKeyState: vtinput.LeftCtrlPressed})

@@ -252,6 +252,9 @@ func (pf *PanelsFrame) HandleDrag(ev *vtui.DragEvent) vtui.DropAction {
 	if ev.Phase == vtui.DragDrop && !ev.Payload.HasFiles() {
 		return vtui.DropNone
 	}
+	if action, handled := pf.cmdLineDropTarget(ev); handled {
+		return action
+	}
 	if action, handled := pf.terminalDropTarget(ev); handled {
 		pf.clearDropHighlight()
 		return action

@@ -374,11 +374,14 @@ f4_mode_line() {
  fi
 }
 
+# The stat backends print the name they were handed, so they run inside the
+# directory: a newline in the path of the directory would split every line of
+# the answer (f4#2117). The client keeps only the last component either way.
 f4_list() {
  case $F4MODE in
   find ) find -H "$F4PATH" -mindepth 1 -maxdepth 1 -printf "$F4FMT_FIND" 2>/dev/null ;;
-  stat ) stat -c "$F4FMT_STAT" -- "$F4PATH"/* "$F4PATH"/.* 2>/dev/null ;;
-  statbsd ) stat -f "$F4FMT_BSD" -- "$F4PATH"/* "$F4PATH"/.* 2>/dev/null ;;
+  stat ) ( CDPATH= cd -- "$F4PATH" 2>/dev/null && stat -c "$F4FMT_STAT" -- * .* 2>/dev/null ) ;;
+  statbsd ) ( CDPATH= cd -- "$F4PATH" 2>/dev/null && stat -f "$F4FMT_BSD" -- * .* 2>/dev/null ) ;;
   ls ) f4_ls -A -- "$F4PATH" ;;
  esac
 }

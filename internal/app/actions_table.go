@@ -772,7 +772,7 @@ func init() {
 		Area:        "Shell",
 		Label:       "View in Hex",
 		LabelKey:    "Action.File.ViewHex",
-		Description: "Open the selected file in the hex viewer",
+		Description: "Open the selected file with its AltView association, or in the hex viewer",
 		DescKey:     "Action.File.ViewHex.Desc",
 		DefaultKeys: []string{"AltF3"},
 		Enabled:     cursorEntryEnabled,
@@ -822,6 +822,17 @@ func init() {
 		Enabled:     cursorEntryEnabled,
 		KeyBarLabel: editKeyBarLabel,
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditFile(pf) }),
+	})
+	registerAction(action.Action{
+		Name:        "File.AltEdit",
+		Area:        "Shell",
+		Label:       "Edit with the other editor",
+		LabelKey:    "Action.File.AltEdit",
+		Description: "Open the selected file with its AltEdit association, or in the editor F4 does not use",
+		DescKey:     "Action.File.AltEdit.Desc",
+		DefaultKeys: []string{"AltF4"},
+		Enabled:     cursorEntryEnabled,
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionAltEditFile(pf) }),
 	})
 	registerAction(action.Action{
 		Name:         "File.New",

@@ -74,13 +74,9 @@ func (s settingsRecordStore) fileRevision(ctx context.Context) (string, error) {
 func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 	p := coreRecordSettingsProvider{}
 	assoc := recordCollection("associations", "associations", "File associations", "Ordered filename-mask rules. Changes are staged until Apply.", "assoc.Description", []f4settings.Field{recordField("assoc.Mask", "Filename mask", "Select filenames for which this association is considered.", f4settings.String), recordField("assoc.Description", "Description", "Name shown when several associations match.", f4settings.String)})
-	for i, name := range panel.AssocKeyName {
+	for _, name := range panel.AssocKeyName {
 		enabled := recordField("assoc."+name+"Enabled", "Enable "+name, "Enable this association command slot. An empty command is skipped.", f4settings.Boolean)
 		command := recordField("assoc."+name, name+" command", "Command dispatched for this slot, using the existing user-menu substitution machinery.", f4settings.Multiline)
-		if panel.AssocKind(i) == panel.AssocAltView || panel.AssocKind(i) == panel.AssocAltEdit {
-			enabled.Unavailable = "Reserved compatibility slot; no current dispatcher."
-			command.Unavailable = enabled.Unavailable
-		}
 		assoc.Fields = append(assoc.Fields, enabled, command)
 	}
 	path := panel.AssociationsFilePath()

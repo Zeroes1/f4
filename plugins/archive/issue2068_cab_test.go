@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"path/filepath"
 	"testing"
+
+	"github.com/unxed/f4/vfs"
 )
 
 // A Microsoft Cabinet (.cab) opens in the archive plugin like any other
@@ -16,6 +18,11 @@ import (
 // go-cabinet, one stored and one MSZIP folder (testdata/*.NOTICE).
 func TestIssue2068CabinetOpensAsArchive(t *testing.T) {
 	cabPath := filepath.Join("testdata", "mixed_compression.cab")
+	provider := &ArchiveProvider{}
+	parent := vfs.NewOSVFS(".")
+	if !provider.CanOpen(context.Background(), parent, cabPath) {
+		t.Fatal("archive provider does not claim the cabinet")
+	}
 
 	format, err := identifyArchiveFormat(context.Background(), cabPath, "mixed_compression.cab")
 	if err != nil {
