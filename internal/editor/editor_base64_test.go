@@ -91,10 +91,12 @@ func TestEditorSortLinesMenu(t *testing.T) {
 	ev.SetPosition(0, 0, 79, 24)
 
 	ev.ShowPluginsMenu()
-	menu, ok := vtui.FrameManager.GetTopFrame().(*vtui.VMenu)
+	top := vtui.FrameManager.GetTopFrame()
+	wrapper, ok := top.(*PluginsMenuFrame)
 	if !ok {
-		t.Fatalf("top frame = %T, want *vtui.VMenu", vtui.FrameManager.GetTopFrame())
+		t.Fatalf("top frame = %T, want *PluginsMenuFrame", top)
 	}
+	menu := wrapper.VMenu
 	defer menu.Close()
 	if got, want := menu.GetTitle(), "Plugins"; got != want {
 		t.Fatalf("menu title = %q, want %q", got, want)

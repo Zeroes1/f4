@@ -5489,6 +5489,11 @@ func (pf *PanelsFrame) InputBox(title, prompt, defaultText string, callback func
 type menuKeyLabelsFrame struct {
 	*vtui.VMenu
 	keyLabels *vtui.KeySet
+	// pluginMenu marks the F11 plugins menu. The other key-labelled menus
+	// are ordinary dropdown/context menus, which never take the extra outer
+	// border the DialogOuterBorder setting paints, so the wrapper needs to
+	// say which of the two it is (see IsPluginMenuFrame).
+	pluginMenu bool
 }
 
 func (f *menuKeyLabelsFrame) GetKeyLabels() *vtui.KeySet { return f.keyLabels }
@@ -5503,6 +5508,15 @@ func (f *menuKeyLabelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		return true
 	}
 	return handled
+}
+
+// IsPluginMenuFrame reports whether frame is the F11 plugins menu. The menu
+// itself is a vtui.VMenu under the hood and shares its GetType with every
+// other menu, so menuCore flags the wrapper it pushes it as, and callers
+// outside the menu construction path ask here.
+func IsPluginMenuFrame(frame vtui.Frame) bool {
+	f, ok := frame.(*menuKeyLabelsFrame)
+	return ok && f.pluginMenu
 }
 
 func (pf *PanelsFrame) Menu(title string, items []string, callback func(int)) {
@@ -5634,7 +5648,11 @@ func (pf *PanelsFrame) menuCore(title, bottomHint string, items []vtui.MenuItem,
 			defer watch()
 		}
 		if keyLabels != nil {
-			vtui.FrameManager.PushToFrameScreen(pf, &menuKeyLabelsFrame{VMenu: menu, keyLabels: keyLabels})
+			vtui.FrameManager.PushToFrameScreen(pf, &menuKeyLabelsFrame{
+				VMenu:      menu,
+				keyLabels:  keyLabels,
+				pluginMenu: bottomHint == pluginMenuBottomHint,
+			})
 		} else {
 			vtui.FrameManager.PushToFrameScreen(pf, menu)
 		}
