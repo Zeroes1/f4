@@ -27,14 +27,10 @@
 package main
 
 import (
-	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/plugins/cloudfox"
 	"github.com/unxed/f4/sdk/f4plugin"
 )
 
 func main() {
-	f4plugin.Run(cloudfox.NewRPCPlugin(cloudfox.Options{
-		ConfigDir: config.GetF4ConfigDir(),
-		Portable:  config.IsPortableProfile(),
-	}))
+	f4plugin.Run(cloudfox.NewRPCPlugin())
 }

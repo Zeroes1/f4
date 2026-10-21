@@ -2,23 +2,9 @@ module github.com/unxed/f4/plugins/cloudfox
 
 go 1.26.6
 
-// f4#1178 part 1 of 4 (plan: https://github.com/unxed/f4/issues/1178#issuecomment-5851218447).
-//
-// CloudFox is its own module so its cloud SDKs (aws-sdk-go-v2,
-// google.golang.org/api, golang.org/x/oauth2, golang.org/x/net/webdav,
-// github.com/zalando/go-keyring, ~30 MB together) never enter the main
-// github.com/unxed/f4 module's build list. It still uses the main module's
-// vfs and sdk/f4plugin packages (a plain in-repo path, not a separate
-// checkout), hence the replace below.
-//
-// This go.mod is intentionally not hand-tidied: per this repo's own policy
-// (no local `go build`/`go mod tidy` -- see the build-cloudfox-plugin CI
-// job in .github/workflows/build.yml), the require block below was written
-// by reading plugins/cloudfox's imports rather than by running the Go
-// toolchain. That CI job runs `go mod tidy` before building, which is the
-// actual source of truth for the resulting go.mod/go.sum; committing its
-// output back (or correcting anything it changes here) is expected
-// follow-up, not a sign this file is wrong on arrival.
+// This module builds the downloadable plugin used by lite f4 builds.
+// Full f4 builds import this module in-process through a local replace.
+// The plugin uses the checkout's shared SDK and VFS through the replace below.
 require (
 	github.com/aws/aws-sdk-go-v2 v1.43.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.38
@@ -29,20 +15,20 @@ require (
 	github.com/aws/smithy-go v1.27.8
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/unxed/f4 v0.0.0
-	github.com/unxed/vtinput v0.1.8
-	github.com/unxed/vtui v0.1.370
+	github.com/unxed/vtinput v0.1.11
+	github.com/unxed/vtui v0.1.413-0.20261018150540-704075b8667d
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.56.0
-	golang.org/x/net v0.58.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.264.0
 )
 
-require golang.org/x/sys v0.47.0
+require golang.org/x/sys v0.48.0
 
 require (
-	cloud.google.com/go/auth v0.18.1 // indirect
+	cloud.google.com/go/auth v0.18.2 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/abadojack/whatlanggo v1.0.1 // indirect
@@ -84,39 +70,40 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
-	github.com/googleapis/gax-go/v2 v2.16.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
 	github.com/hajimehoshi/ebiten/v2 v2.10.0-alpha.13.0.20260811162617-464c2ddfc34c // indirect
 	github.com/jezek/xgb v1.3.1 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/neurlang/wayland v0.4.4 // indirect
+	github.com/neurlang/wayland v0.4.5-0.20261007184820-37f4fac9bad0 // indirect
 	github.com/neurlang/winc v0.1.2 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/unxed/goclip v0.1.2 // indirect
-	github.com/unxed/keytrans v0.1.33 // indirect
+	github.com/unxed/keytrans v0.1.35 // indirect
 	github.com/unxed/kiwi-go v0.1.0 // indirect
 	github.com/unxed/libwinescape v0.2.1 // indirect
-	github.com/unxed/localecp v0.1.6 // indirect
+	github.com/unxed/localecp v0.1.7 // indirect
 	github.com/unxed/winkeys v0.1.1 // indirect
-	github.com/unxed/xkb-go v0.1.8 // indirect
+	github.com/unxed/xkb-go v0.1.9 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yalue/native_endian v1.0.2 // indirect
+	github.com/yuin/goldmark v1.8.6 // indirect
 	github.com/zzl/go-win32api/v2 v2.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
-	go.opentelemetry.io/otel v1.39.0 // indirect
-	go.opentelemetry.io/otel/metric v1.39.0 // indirect
-	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	golang.design/x/clipboard v0.7.0 // indirect
 	golang.org/x/exp/shiny v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/mobile v0.0.0-20260611195102-4dd8f1dbf5d2 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260122232226-8e98ce8d340d // indirect
-	google.golang.org/grpc v1.78.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/grpc v1.83.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 

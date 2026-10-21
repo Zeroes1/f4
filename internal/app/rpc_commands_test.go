@@ -4,10 +4,12 @@ import (
 	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtui"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -47,9 +49,11 @@ func TestPluginInitResponseAcceptsLegacyAndExtendedWireFormats(t *testing.T) {
 type rpcCommandTestTransport struct {
 	methods  []string
 	requests []plughost.PluginRunCommandRequest
+	done     chan struct{}
 }
 
 func (transport *rpcCommandTestTransport) Call(method string, params any, _ any) error {
+	defer close(transport.done)
 	transport.methods = append(transport.methods, method)
 	if request, ok := params.(plughost.PluginRunCommandRequest); ok {
 		transport.requests = append(transport.requests, request)
@@ -88,7 +92,12 @@ func TestRPCPluginCommandsRegisterLocalizeExecuteAndUnregister(t *testing.T) {
 	config.App.Language = "ru"
 	t.Cleanup(func() { config.App.Language = oldLanguage })
 
-	transport := &rpcCommandTestTransport{}
+	oldManager := vtui.FrameManager
+	fm := vtui.NewFrameManager()
+	fm.Init(vtui.NewSilentScreenBuf())
+	vtui.FrameManager = fm
+	t.Cleanup(func() { fm.Shutdown(); vtui.FrameManager = oldManager })
+	transport := &rpcCommandTestTransport{done: make(chan struct{})}
 	registrations := &plughost.PluginSessionRegistrations{}
 	descriptor := plughost.PluginCommandDescriptor{
 		ID:          commandID,
@@ -136,6 +145,17 @@ func TestRPCPluginCommandsRegisterLocalizeExecuteAndUnregister(t *testing.T) {
 	}
 	if !plughost.ExecutePluginCommand(vfs.PluginCommandPanel, commandID, app) {
 		t.Fatal("live RPC command was not executed")
+	}
+	select {
+	case <-transport.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC command did not complete")
+	}
+	select {
+	case task := <-fm.TaskChan:
+		task()
+	case <-time.After(5 * time.Second):
+		t.Fatal("RPC command did not post panel refresh")
 	}
 	if !reflect.DeepEqual(transport.methods, []string{"Plugin.RunCommand"}) ||
 		!reflect.DeepEqual(transport.requests, []plughost.PluginRunCommandRequest{{ID: commandID}}) {

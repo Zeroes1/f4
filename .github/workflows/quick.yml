@@ -379,13 +379,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Do go.mod or go.sum differ from main?
+      - name: Do vendored dependency inputs differ from main?
         id: relevant
         run: |
           set -euo pipefail
           git fetch --quiet --depth=1 origin main
-          if git diff --quiet FETCH_HEAD HEAD -- go.mod go.sum; then
-            echo "go.mod and go.sum are the same as main's; nothing to check"
+          if git diff --quiet FETCH_HEAD HEAD -- go.mod go.sum plugins/android plugins/ios plugins/cloudfox; then
+            echo "vendored dependency inputs are the same as main's; nothing to check"
             echo "relevant=no" >> "$GITHUB_OUTPUT"
           else
             echo "relevant=yes" >> "$GITHUB_OUTPUT"

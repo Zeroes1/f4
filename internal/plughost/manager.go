@@ -1,6 +1,7 @@
 package plughost
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -107,6 +108,10 @@ func (pm *PluginManager) loadPlugRing() {
 	installed := GetInstalledPlugRingItems()
 	plugringDir := filepath.Join(config.GetF4ConfigDir(), "plugring")
 	for id, item := range installed {
+		if BuiltinPlugRingItem(id) {
+			vtui.DebugLog("PLUGRING: using built-in %s instead of its installed external copy", id)
+			continue
+		}
 		if item.Entrypoint != "" {
 			// We build a pseudo-path that NewRPCPlugin will handle specifically later if needed,
 			// but since NewRPCPlugin uses exec.Command directly, we pass the command.
@@ -122,9 +127,12 @@ func (pm *PluginManager) loadPlugRing() {
 		}
 	}
 }
-func (pm *PluginManager) LoadSinglePlugRingItem(item PlugRingItem) {
+func (pm *PluginManager) LoadSinglePlugRingItem(item PlugRingItem) error {
+	if BuiltinPlugRingItem(item.ID) {
+		return fmt.Errorf("plugin %q is already built into this version of f4", item.ID)
+	}
 	if item.Entrypoint == "" {
-		return
+		return fmt.Errorf("plugin %q has no entrypoint", item.ID)
 	}
 	plugringDir := filepath.Join(config.GetF4ConfigDir(), "plugring")
 	pluginDir := filepath.Join(plugringDir, item.ID)
@@ -133,33 +141,20 @@ func (pm *PluginManager) LoadSinglePlugRingItem(item PlugRingItem) {
 	if err := p.Init(pm.api); err == nil {
 		if pm.keepPlugin(p) {
 			vtui.DebugLog("Hot-loaded PlugRing RPC plugin: %s", p.GetName())
+			return nil
 		}
+		return fmt.Errorf("plugin manager closed while loading %q", item.ID)
 	} else {
 		vtui.DebugLog("Failed to hot-load PlugRing RPC plugin %s: %v", item.ID, err)
+		return fmt.Errorf("loading plugin %q: %w", item.ID, err)
 	}
 }
 
 func (pm *PluginManager) loadInternal() {
 	plugins := internalPlugins()
-	// cloudfox (cloud services), android (ADB device browsing) and iOS
-	// (Apple mobile devices over usbmuxd) stay excluded from both builds
-	// entirely, in either build. All three moved out to their own module
-	// and their own subprocess RPC plugin binary
-	// (plugins/cloudfox/cmd/cloudfox-plugin,
-	// plugins/android/cmd/android-plugin, plugins/ios/cmd/ios-plugin), per
-	// the owner's decision to give every plugin that is not part of f4's
-	// baseline feature set the same "download on demand" treatment
-	// (f4#1178, https://github.com/unxed/f4/issues/1178#issuecomment-5851392645)
-	// -- for android that is an architectural unification, not a binary-size
-	// win the way cloudfox's ~30 MB of cloud SDKs or iOS's go-ios/gvisor/
-	// quic-go userspace networking stack was; see
-	// plugins/android/rpc_plugin.go's package comment. Archive support comes
-	// back as plugins/multiarc, a CLI-archiver wrapper, in place of the
-	// native-library one (f4#1178, part 2), and netfox comes back cut down
-	// to FISH+ over a subprocess ssh dialer, in place of the full build's
-	// FTP/SFTP/FISH+ trio (part 3) -- no ftp/sftp/scp VFS provider. See
-	// plugins_lite.go/plugins_full.go, the single point of truth for which
-	// build tag gets which set, for the full accounting.
+	// Full builds link the complete VFS plugin set. Lite builds keep the
+	// smaller CLI-backed providers and install Android, iOS and CloudFox
+	// on demand. The build-tag files own that distinction.
 	plugins = append(plugins, optionalVFSPlugins()...)
 
 	// observerplugin registers after archive/multiarc (f4#1563's own design

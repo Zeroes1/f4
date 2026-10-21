@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 72
+const commandPaletteF4Surfaces = 73
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -115,6 +115,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"editor.(*EditorView).ProcessKey": {
 		class: paletteAuditActionArea, rationale: "editor commands are registered actions; raw text and cursor editing remain local primitives",
+	},
+	"editor.(*PluginsMenuFrame).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the editor plugins-menu wrapper only forwards menu navigation and local Esc/F10 cancellation handling; the menu's Base64 and line-sort entries are audited under editor.(*EditorView).ShowPluginsMenu",
 	},
 	"findfile.(*SearchResultsWindow).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "find results are a modal result picker whose F3/F4/F6 buttons route to existing view/edit/temporary-panel operations",

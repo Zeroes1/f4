@@ -57,7 +57,7 @@ func TestHostDialogsRefusedWhileUIWaitsForPlugin(t *testing.T) {
 	methods := newHostMethods(newLuaTestHostAPI(), g, "test", nil)
 
 	tr.during = func() {
-		for _, m := range []string{"Host.InputBox", "Host.Menu"} {
+		for _, m := range []string{"Host.InputBox", "Host.Menu", "Host.Prompt"} {
 			if _, err := methods[m](nil); !errors.Is(err, errUIBlocked) {
 				t.Errorf("%s while the UI goroutine waits: err = %v, want errUIBlocked", m, err)
 			}
