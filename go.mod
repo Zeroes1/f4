@@ -27,7 +27,7 @@ require (
 	github.com/unxed/colorer4go v0.1.24
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
-	github.com/unxed/goclip v0.1.2
+	github.com/unxed/goclip v0.1.3-0.20261020202204-ff732bd92518
 	github.com/unxed/id3-go v0.1.2
 	github.com/unxed/libwinescape v0.2.1
 	github.com/unxed/localecp v0.1.7
@@ -178,5 +178,3 @@ replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.21
 replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
-
-replace github.com/unxed/goclip => github.com/Zoinen/goclip v0.1.3-clipboard.1
