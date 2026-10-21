@@ -95,7 +95,15 @@ func TestFetchPlugRingCatalogMergesTheFirstPartyPlugins(t *testing.T) {
 	if !ids["remote-lua"] {
 		t.Errorf("the community entry is missing from %v", ids)
 	}
+	// A first-party plugin this build links in is not offered for download
+	// (#2110): the installed copy would be ignored anyway.
 	for _, own := range FirstPartyPlugRingItems() {
+		if BuiltinPlugRingItem(own.ID) {
+			if ids[own.ID] {
+				t.Errorf("first-party plugin %q is built in, yet the merged catalog %v offers it", own.ID, ids)
+			}
+			continue
+		}
 		if !ids[own.ID] {
 			t.Errorf("first-party plugin %q is missing from the merged catalog %v", own.ID, ids)
 		}

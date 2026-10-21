@@ -9,6 +9,11 @@ process, but hard module boundaries drawn along Go package lines. A module is a 
 package; its public API is its exported identifiers; nobody reaches into another
 module's internals.
 
+Full builds link Android, iOS and CloudFox in process. Their nested Go modules
+also produce standalone RPC executables for lite's downloadable plugins. Build-tag
+files in `internal/plughost` select this boundary; an installed external copy must
+not replace the same built-in provider in a full build.
+
 The tree follows that pattern throughout. `vfs/`, `sdk/` and `plugins/*` are the
 public contract; the application is 40 packages under `internal/`, in four
 layers, with an acyclic dependency graph and no upward edges. `cmd/f4` is the

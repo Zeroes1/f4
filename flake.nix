@@ -44,10 +44,11 @@
           env.CGO_ENABLED = "0";
           dontPatchELF = true;
 
-          # Must track go.mod/go.sum: after a dependency change nix build
+          # Must track go.mod/go.sum and the locally replaced Android, iOS and
+          # CloudFox modules: after a dependency change nix build
           # fails with "hash mismatch in fixed-output derivation ... got:
           # sha256-...", and that got: value is the new vendorHash.
-          vendorHash = "sha256-a05O3f3kznSXzfpatUQ+qFYyOSx0xQj/j57hxx/yfSk=";
+          vendorHash = "sha256-f02+JYeyNZK1uj+qX6gislzusbZ7U05gPDcJO7Jbruw=";
 
           subPackages = [ "cmd/f4" ];
           tags = lib.optionals ttyOnly [ "tty_only" "vtui_noebiten" "vtui_nogogpu" ];

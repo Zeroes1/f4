@@ -25,25 +25,10 @@ func registeredAndroidDriveFactory() func() vfs.VFS {
 	return nil
 }
 
-// TestAndroidDriveRegisteredInEveryBuild is the one place this file's test
-// suite differs in shape from cloud_storage_lite_test.go's own
-// TestCloudStorageLiteDriveAbsentOutsideLiteBuild: cloud_storage_lite.go
-// only registers its fallback drive when liteBuild is true, because CloudFox
-// was already excluded from the full build before f4#1178. plugins/android
-// had no such asymmetry -- internal/plughost/manager.go registered it
-// unconditionally in loadInternal, in both builds -- so
-// android_plugin_menu.go's own init() calls registerAndroidDrive()
-// unconditionally too, with no liteBuild guard at all.
-//
-// This checks that registration directly from package init, without calling
-// registerAndroidDrive itself first: go test always compiles this package
-// without -tags lite (see cmd/f4/lite_deps_test.go's comment on why the lite
-// tag is instead checked mechanically), so if the "Android" entry is present
-// here, init ran registerAndroidDrive unconditionally rather than behind a
-// liteBuild check that would leave it absent in exactly this build.
-func TestAndroidDriveRegisteredInEveryBuild(t *testing.T) {
-	if registeredAndroidDriveFactory() == nil {
-		t.Fatal("android_plugin_menu.go's init did not register the Android entry in the drive registry (drive menu / command palette); it must run unconditionally, not behind a liteBuild guard")
+// The full build registers real drives during plugin startup, not installers.
+func TestAndroidInstallDriveOnlyRegisteredInLite(t *testing.T) {
+	if got := registeredAndroidDriveFactory() != nil; got != liteBuild {
+		t.Fatalf("Android install placeholder registered = %v, lite = %v", got, liteBuild)
 	}
 }
 

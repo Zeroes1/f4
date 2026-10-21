@@ -42,7 +42,7 @@ func TestPlugRingInstallLoadsPluginOffUIGoroutine(t *testing.T) {
 	t.Cleanup(func() { loadPlugRingItem = previousLoad })
 	uiAnswered := make(chan bool, 1)
 	loaded := make(chan struct{})
-	loadPlugRingItem = func(plughost.PlugRingItem) {
+	loadPlugRingItem = func(plughost.PlugRingItem) error {
 		defer close(loaded)
 		ran := make(chan struct{})
 		vtui.FrameManager.PostTask(func() { close(ran) })
@@ -52,6 +52,7 @@ func TestPlugRingInstallLoadsPluginOffUIGoroutine(t *testing.T) {
 		case <-time.After(2 * time.Second):
 			uiAnswered <- false
 		}
+		return nil
 	}
 
 	item := plughost.PlugRingItem{
@@ -109,5 +110,31 @@ Loop:
 	}
 	if ok := <-uiAnswered; !ok {
 		t.Fatal("the plugin load blocked the UI goroutine: a task posted to it did not run while the load waited (f4#1710)")
+	}
+}
+
+func TestPlugRingInstallDoesNotReportSuccessWithoutManager(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	previous := plughost.GlobalPluginManager
+	plughost.GlobalPluginManager = nil
+	t.Cleanup(func() { plughost.GlobalPluginManager = previous })
+	finishPlugRingInstall(nil, plughost.PlugRingItem{ID: "android"}, func() {})
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+			if top, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window); ok {
+				if strings.Contains(top.GetTitle(), "Success") {
+					t.Fatal("installation reported success although no plugin manager could load the plugin")
+				}
+				if strings.Contains(top.GetTitle(), "Error") {
+					return
+				}
+			}
+		case <-deadline:
+			t.Fatal("installation did not report a load error")
+		}
 	}
 }

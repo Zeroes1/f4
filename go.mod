@@ -25,6 +25,9 @@ require (
 	github.com/tetratelabs/wazero v1.12.0
 	github.com/unxed/archives v0.1.5-0.20261018104137-4a61433acaad
 	github.com/unxed/colorer4go v0.1.24
+	github.com/unxed/f4/plugins/android v0.0.0
+	github.com/unxed/f4/plugins/cloudfox v0.0.0
+	github.com/unxed/f4/plugins/ios v0.0.0
 	github.com/unxed/ffibridge v0.1.5
 	github.com/unxed/go2xp v0.0.0-20260918000857-00a22a520369
 	github.com/unxed/goclip v0.1.3-0.20261020202204-ff732bd92518
@@ -52,33 +55,75 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-// f4#1178 part 1: aws-sdk-go-v2 (+ its config/credentials/feature/service
-// submodules), aws/smithy-go, zalando/go-keyring, google.golang.org/api and
-// golang.org/x/oauth2 were direct requires only for plugins/cloudfox, which
-// is now its own module (plugins/cloudfox/go.mod) and no longer part of
-// this build. The indirect require block below still lists some of their
-// own transitive dependencies (cloud.google.com/go/auth, the
-// go.opentelemetry.io/* set, google.golang.org/grpc, ...); nothing in this
-// module imports them any more, so they compile into nothing, but a
-// `go mod tidy` pass (in CI, not locally -- see build-cloudfox-plugin in
-// .github/workflows/build.yml) is expected follow-up to prune the now-stale
-// entries rather than something this PR hand-edited blind.
+require (
+	cloud.google.com/go/auth v0.18.2 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
+	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/Masterminds/semver v1.5.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.43.7 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.18 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.32.38 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.37 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.38 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.42 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.15 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.38 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.38 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.39 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.31 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.38 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.39 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.5.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.33.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.45.7 // indirect
+	github.com/aws/smithy-go v1.27.8 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
+	github.com/danielpaulus/go-ios v1.2.2-0.20260805152531-ebec9a0b076c // indirect
+	github.com/felixge/httpsnoop v1.0.4 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
+	github.com/google/btree v1.1.2 // indirect
+	github.com/google/s2a-go v0.1.9 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect
+	github.com/googleapis/gax-go/v2 v2.17.0 // indirect
+	github.com/grandcat/zeroconf v1.0.0 // indirect
+	github.com/miekg/dns v1.1.57 // indirect
+	github.com/quic-go/quic-go v0.59.1 // indirect
+	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8 // indirect
+	github.com/tadglines/go-pkgs v0.0.0-20210623144937-b983b20f54f9 // indirect
+	github.com/vishvananda/netlink v1.3.1 // indirect
+	github.com/vishvananda/netns v0.0.5 // indirect
+	github.com/zalando/go-keyring v0.2.8 // indirect
+	go.mozilla.org/pkcs7 v0.9.0 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	golang.org/x/exp v0.0.0-20230725093048-515e97ebf090 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/tools v0.49.0 // indirect
+	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
+	google.golang.org/api v0.264.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/grpc v1.83.1 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
+	gvisor.dev/gvisor v0.0.0-20240405191320-0878b34101b5 // indirect
+	howett.net/plist v1.0.1 // indirect
+	software.sslmate.com/src/go-pkcs12 v0.7.2 // indirect
+)
 
-// f4#1178 iOS plugin, part 1 of 4: github.com/danielpaulus/go-ios,
-// github.com/Masterminds/semver (a go-ios dependency) and github.com/google/uuid
-// (used by plugins/ios/internal/corefileservice) were direct requires only
-// for plugins/ios, which is now its own module (plugins/ios/go.mod) and no
-// longer part of this build, in either the full or the lite build. go-ios's
-// own, fully separate dependency chain -- gvisor.dev/gvisor, quic-go,
-// vishvananda/netlink+netns, songgao/water, miekg/dns, grandcat/zeroconf,
-// howett.net/plist, go.mozilla.org/pkcs7, software.sslmate.com/src/go-pkcs12,
-// golang.zx2c4.com/wintun -- is still listed below as (now stale) indirect
-// version pins for the same reason the cloudfox-era entries above are: a
-// `go mod tidy` pass (in CI, not locally -- see build-ios-plugin in
-// .github/workflows/build.yml) is expected follow-up to prune them, and
-// cmd/f4/ios_deps_test.go is the mechanical proof that nothing in this
-// module imports them any more.
-
+// The full build links the first-party plugins from their local modules.
+// Lite excludes their packages through internal/plughost build tags.
 require (
 	github.com/abemedia/go-cabinet v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
@@ -100,11 +145,9 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/jfreymuth/pulse v0.1.2 // indirect
 	github.com/jfreymuth/vorbis v1.0.2 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mewkiz/pkg v0.0.0-20250417130911-3f050ff8c56d // indirect
 	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
-	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/soniakeys/quant v1.0.0 // indirect
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
@@ -114,7 +157,6 @@ require (
 	github.com/unxed/kiwi-go v0.1.0 // indirect
 	github.com/yuin/goldmark v1.8.6 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
 require (
@@ -178,3 +220,9 @@ replace github.com/ebitengine/purego => github.com/unxed/pureffi v0.1.21
 replace github.com/ebitengine/hideconsole => ./internal/hideconsole
 
 replace github.com/go-webgpu/goffi => github.com/unxed/goffi v0.1.11
+
+replace github.com/unxed/f4/plugins/android => ./plugins/android
+
+replace github.com/unxed/f4/plugins/ios => ./plugins/ios
+
+replace github.com/unxed/f4/plugins/cloudfox => ./plugins/cloudfox

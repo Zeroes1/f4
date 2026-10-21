@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
@@ -60,6 +61,34 @@ type failingPluginTransport struct {
 func (f *failingPluginTransport) Call(method string, params, result any) error {
 	f.calls = append(f.calls, method)
 	return errors.New("plugin is gone")
+}
+
+// runNotifyingTransport reports every call it forwards on done. A command's
+// Run hands Plugin.RunCommand to its own goroutine (startRPCCommand), so the
+// UI stays free for the host prompts the command may ask for; a test reads
+// what the inner transport recorded only after done says the call is over.
+type runNotifyingTransport struct {
+	inner PluginTransport
+	done  chan string
+}
+
+func (n *runNotifyingTransport) Call(method string, params, result any) error {
+	err := n.inner.Call(method, params, result)
+	n.done <- method
+	return err
+}
+
+func newRunNotifyingTransport(inner PluginTransport) *runNotifyingTransport {
+	return &runNotifyingTransport{inner: inner, done: make(chan string, 1)}
+}
+
+func (n *runNotifyingTransport) wait(t *testing.T) {
+	t.Helper()
+	select {
+	case <-n.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the command never reached the plugin transport")
+	}
 }
 
 // activeVFSApp is a vfs.App whose only live part is the active panel's VFS.
@@ -241,9 +270,10 @@ func TestRegisterRPCPluginCommandsRejectsBadDeclarations(t *testing.T) {
 func TestRegisterRPCPluginCommandsRegistersAndRunsThroughTheTransport(t *testing.T) {
 	host := &contributionHostFake{luaTestHostAPI: newLuaTestHostAPI()}
 	back := &recordingPluginTransport{}
+	transport := newRunNotifyingTransport(back)
 	registrations := &PluginSessionRegistrations{}
 
-	err := RegisterRPCPluginCommands(host, back, "p", []PluginCommandDescriptor{
+	err := RegisterRPCPluginCommands(host, transport, "p", []PluginCommandDescriptor{
 		{ID: " run ", Label: "Run", Description: "d", ActiveDrives: []string{"Notes"}},
 		{ID: "localized", LocalizedLabels: map[string]string{"ru": "Запуск", "en": "Run EN"}, Location: uint8(vfs.PluginCommandConfig)},
 	}, registrations)
@@ -271,6 +301,7 @@ func TestRegisterRPCPluginCommandsRegistersAndRunsThroughTheTransport(t *testing
 	}
 
 	first.Run(nil)
+	transport.wait(t)
 	if len(back.calls) != 1 || back.calls[0] != "Plugin.RunCommand" {
 		t.Fatalf("running the command called %v, want Plugin.RunCommand", back.calls)
 	}
@@ -287,11 +318,13 @@ func TestRegisterRPCPluginCommandsRegistersAndRunsThroughTheTransport(t *testing
 func TestRegisterRPCPluginCommandsRunSurvivesAFailingPlugin(t *testing.T) {
 	host := &contributionHostFake{luaTestHostAPI: newLuaTestHostAPI()}
 	back := &failingPluginTransport{}
-	err := RegisterRPCPluginCommands(host, back, "p", []PluginCommandDescriptor{{ID: "boom", Label: "Boom"}}, &PluginSessionRegistrations{})
+	transport := newRunNotifyingTransport(back)
+	err := RegisterRPCPluginCommands(host, transport, "p", []PluginCommandDescriptor{{ID: "boom", Label: "Boom"}}, &PluginSessionRegistrations{})
 	if err != nil {
 		t.Fatalf("RegisterRPCPluginCommands: %v", err)
 	}
 	host.commands[0].Run(nil) // the failure is logged, not raised into the UI
+	transport.wait(t)
 	if len(back.calls) != 1 {
 		t.Fatalf("the failing transport was called %d times, want once", len(back.calls))
 	}

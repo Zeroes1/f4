@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/sdk/f4plugin"
 	"github.com/unxed/f4/sdk/f4rpc"
 	"github.com/unxed/f4/vfs"
 	"github.com/unxed/ffibridge"
@@ -218,6 +220,11 @@ func newHostMethods(api vfs.HostAPI, back PluginTransport, name string, bridge *
 		}
 		return App.AskError(ctx, req.Op, fmt.Errorf("%s", req.Err), taskAnchor), nil
 	}
+
+	methods["Host.GetProfile"] = func(msgpack.RawMessage) (any, error) {
+		return f4plugin.ProfileInfo{Dir: config.GetF4ConfigDir(), Portable: config.IsPortableProfile()}, nil
+	}
+	methods["Host.Prompt"] = func(data msgpack.RawMessage) (any, error) { return rpcPrompt(back, data) }
 
 	methods["Host.InputBox"] = func(data msgpack.RawMessage) (any, error) {
 		var req InputBoxReq

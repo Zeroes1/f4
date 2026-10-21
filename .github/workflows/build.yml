@@ -883,7 +883,10 @@ jobs:
         exit 1
 
     - name: Build cloudfox-plugin
-      run: go build -trimpath -o cloudfox-plugin ./cmd/cloudfox-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        CGO_ENABLED=0 go build -trimpath -o "cloudfox-plugin$EXT" ./cmd/cloudfox-plugin
 
     - name: Run go vet (host GOOS/GOARCH only)
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
@@ -903,7 +906,18 @@ jobs:
     # cloudfox-plugin-linux-amd64.tar.gz would be installed in place of
     # f4-linux-amd64.tar.gz. The PlugRing installer reads both extensions.
     - name: Package cloudfox-plugin
-      run: tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tgz" cloudfox-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tgz" "cloudfox-plugin$EXT"
+
+    - name: Smoke packaged cloudfox-plugin (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: |
+        mkdir smoke
+        tar -xzf "cloudfox-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        cd ../..
+        CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/cloudfox/smoke/cloudfox-plugin"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
@@ -1007,7 +1021,10 @@ jobs:
         exit 1
 
     - name: Build android-plugin
-      run: go build -trimpath -tags lite -o android-plugin ./cmd/android-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        CGO_ENABLED=0 go build -trimpath -tags lite -o "android-plugin$EXT" ./cmd/android-plugin
 
     - name: Run go vet (host GOOS/GOARCH only)
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
@@ -1024,7 +1041,18 @@ jobs:
     # .tgz, not .tar.gz, so that no updater already released takes it for
     # f4's own archive: see the cloudfox-plugin package step (#1656).
     - name: Package android-plugin
-      run: tar -czvf "android-plugin-$GOOS-$GOARCH.tgz" android-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        tar -czvf "android-plugin-$GOOS-$GOARCH.tgz" "android-plugin$EXT"
+
+    - name: Smoke packaged android-plugin (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: |
+        mkdir smoke
+        tar -xzf "android-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        cd ../..
+        CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/android/smoke/android-plugin"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
@@ -1117,7 +1145,10 @@ jobs:
         exit 1
 
     - name: Build ios-plugin
-      run: go build -trimpath -o ios-plugin ./cmd/ios-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        CGO_ENABLED=0 go build -trimpath -o "ios-plugin$EXT" ./cmd/ios-plugin
 
     - name: Run go vet (host GOOS/GOARCH only)
       if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
@@ -1133,7 +1164,18 @@ jobs:
     # .tgz, not .tar.gz, so that no updater already released takes it for
     # f4's own archive: see the cloudfox-plugin package step (#1656).
     - name: Package ios-plugin
-      run: tar -czvf "ios-plugin-$GOOS-$GOARCH.tgz" ios-plugin
+      run: |
+        EXT=""
+        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+        tar -czvf "ios-plugin-$GOOS-$GOARCH.tgz" "ios-plugin$EXT"
+
+    - name: Smoke packaged ios-plugin (host GOOS/GOARCH only)
+      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+      run: |
+        mkdir smoke
+        tar -xzf "ios-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        cd ../..
+        CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/ios/smoke/ios-plugin"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
@@ -2271,7 +2313,8 @@ jobs:
           ./internal/terminal ./internal/wincon ./internal/sysinfo ./internal/gui \
           ./internal/cmdline ./internal/update ./vfs ./vfs/hostmode
 
-  # Keeps flake.nix's vendorHash in sync with go.mod/go.sum.
+  # Keeps flake.nix's vendorHash in sync with dependency files and locally
+  # replaced plugin sources.
   #
   # buildGoModule fetches the module set into a fixed-output derivation whose
   # hash is pinned in flake.nix as vendorHash. Every dependency change
@@ -2324,7 +2367,7 @@ jobs:
 
         is_watched() {
           case "$1" in
-            go.mod|go.sum|flake.nix|.github/workflows/build.yml) return 0 ;;
+            go.mod|go.sum|flake.nix|.github/workflows/build.yml|plugins/android/*|plugins/ios/*|plugins/cloudfox/*) return 0 ;;
             *) return 1 ;;
           esac
         }

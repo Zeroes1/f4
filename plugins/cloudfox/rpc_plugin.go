@@ -31,19 +31,15 @@ import (
 // root folder); anything with a second segment ("/GDrive/Documents/x.txt")
 // delegates into that connection's lazily opened, cached CloudVFS session.
 //
-// Known gap (f4#1178, flagged in the plan at
-// https://github.com/unxed/f4/issues/1178#issuecomment-5851218447): adding a
-// *new* connection, or editing one's stored credentials, still needs the
-// in-process dialogs (dialog.go, settings_center.go, the provider-specific
-// OAuth/device-code prompts), which talk to vfs.App/vfs.HostAPI directly
-// and have no equivalent yet on the RPC Host.* surface -- InputBox/Menu are
-// too thin for a multi-field credentials form. A connection configured by a
-// full (non-lite) build, or by hand in CloudFox.json/CloudFox.vault, is
-// fully browsable, readable and writable through this plugin; deleting or
-// renaming an existing connection already works (see above). Porting the
-// add/edit UI to the RPC surface is follow-up work, not part 1 of the plan.
+// Add/edit and vault unlock are available through the F11 menu and command
+// palette, using cancellable host prompts with masked credential entry.
+// OAuth profiles accept tokens; browser/device-code authorization and advanced
+// provider settings remain available through the full build's profile dialog.
 type RPCPlugin struct {
-	plugin *Plugin
+	plugin      *Plugin
+	prompter    rpcPrompter
+	options     Options
+	hostProfile bool
 
 	mu      sync.Mutex
 	conns   map[string]vfs.VFS
@@ -55,16 +51,48 @@ type RPCPlugin struct {
 // NewRPCPlugin builds the RPC-facing adapter around a fresh CloudFox Plugin.
 // It accepts the same Options as NewPlugin (zero or one value).
 func NewRPCPlugin(values ...Options) *RPCPlugin {
-	return &RPCPlugin{
+	p := &RPCPlugin{
 		plugin:  NewPlugin(values...),
 		conns:   make(map[string]vfs.VFS),
 		readers: make(map[uint32]vfs.ReadAtCloser),
 		writers: make(map[uint32]io.WriteCloser),
 	}
+	p.hostProfile = len(values) == 0 || values[0].ConfigDir == ""
+	if len(values) != 0 {
+		p.options = values[0]
+	}
+	if p.plugin.vault != nil && (len(values) == 0 || values[0].PasswordPrompt == nil) {
+		p.plugin.vault.prompt = rpcMasterPasswordPrompter{plugin: p}
+	}
+	return p
 }
 
-func (p *RPCPlugin) Init(*f4plugin.Host) ([]string, error) {
+func (p *RPCPlugin) Init(host *f4plugin.Host) ([]string, error) {
+	p.prompter = host
+	if p.hostProfile {
+		profile, err := host.Profile()
+		if err != nil {
+			return nil, fmt.Errorf("cloudfox: resolve host profile: %w", err)
+		}
+		if err := p.useProfile(profile); err != nil {
+			return nil, err
+		}
+	}
 	return []string{DriveName}, nil
+}
+
+func (p *RPCPlugin) useProfile(profile f4plugin.ProfileInfo) error {
+	if profile.Dir == "" {
+		return fmt.Errorf("cloudfox: host profile directory is empty")
+	}
+	options := p.options
+	options.ConfigDir = profile.Dir
+	options.Portable = profile.Portable
+	p.plugin = NewPlugin(options)
+	if p.plugin.vault != nil && options.PasswordPrompt == nil {
+		p.plugin.vault.prompt = rpcMasterPasswordPrompter{plugin: p}
+	}
+	return nil
 }
 
 // splitConnPath separates the leading path segment (the connection name,
@@ -185,10 +213,8 @@ func (p *RPCPlugin) ReadDir(drive, path string) ([]f4plugin.VFSItem, error) {
 	err = target.ReadDir(ctx, rest, func(chunk []vfs.VFSItem) {
 		for _, entry := range chunk {
 			if isManager && !entry.IsDir {
-				// The synthetic "<Add connection>" row: opening it used to
-				// invoke the in-process add-connection dialog, which has no
-				// RPC equivalent yet (see the type doc). Hide it rather than
-				// offer something that will only fail if opened.
+				// The built-in add row is an in-process semantic action.
+				// RPC exposes it as an F11/command-palette command instead.
 				continue
 			}
 			items = append(items, convertItem(entry))

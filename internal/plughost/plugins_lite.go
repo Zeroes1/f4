@@ -36,3 +36,7 @@ import (
 func optionalVFSPlugins() []Plugin {
 	return []Plugin{&multiarc.Plugin{}, &netfox.NetFoxPlugin{}}
 }
+
+// BuiltinPlugRingItem reports whether a downloadable first-party plugin is
+// already included in this build. Lite builds download these on demand.
+func BuiltinPlugRingItem(id string) bool { return false }
