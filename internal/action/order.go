@@ -39,6 +39,7 @@ var actionMenuOrder = []string{
 	"File.AssemblyInfo",
 	"File.PDFText",
 	"File.Edit",
+	"File.AltEdit",
 	"File.New",
 	"File.ApplyCommand",
 	"File.Copy",

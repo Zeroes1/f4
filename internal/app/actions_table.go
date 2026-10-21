@@ -824,6 +824,17 @@ func init() {
 		Handler:     withPF(func(pf *panel.PanelsFrame) { actionEditFile(pf) }),
 	})
 	registerAction(action.Action{
+		Name:        "File.AltEdit",
+		Area:        "Shell",
+		Label:       "Edit with the other editor",
+		LabelKey:    "Action.File.AltEdit",
+		Description: "Open the selected file with its AltEdit association, or in the editor F4 does not use",
+		DescKey:     "Action.File.AltEdit.Desc",
+		DefaultKeys: []string{"AltF4"},
+		Enabled:     cursorEntryEnabled,
+		Handler:     withPF(func(pf *panel.PanelsFrame) { actionAltEditFile(pf) }),
+	})
+	registerAction(action.Action{
 		Name:         "File.New",
 		Area:         "Shell",
 		Label:        "New File",

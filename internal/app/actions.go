@@ -2554,6 +2554,30 @@ func actionEditFile(pf *panel.PanelsFrame) {
 	}
 }
 
+// actionAltEditFile is Alt+F4 over a file: the AltEdit command of the matching
+// association, else the editor that F4 does not use -- the external one when
+// F4 opens the built-in editor, the built-in one when UseExternalEditor is on
+// (Far and far2l: the second way to edit a file, f4#1741).
+func actionAltEditFile(pf *panel.PanelsFrame) {
+	fsp := pf.GetActivePanel()
+	if fsp == nil {
+		return
+	}
+	idx := fsp.GetCursorIndex()
+	if idx < 0 || idx >= len(fsp.Entries) || fsp.Entries[idx].IsDir {
+		return
+	}
+	if panel.TryFileAssociation(pf, panel.AssocAltEdit) {
+		return
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.GetSelectedName())
+	if config.App.UseExternalEditor {
+		actionOpenEditor(pf, fsp.Vfs, path)
+		return
+	}
+	actionEditFileExternal(pf, fsp.Vfs, path, fsp.Entries[idx].Size)
+}
+
 // rightsComboWidth is the natural width of the access-rights field of the
 // copy/move dialog, the same as the operation-mode field below it.
 const rightsComboWidth = 32

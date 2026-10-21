@@ -1537,7 +1537,7 @@
     "kind": "boolean",
     "label": "Enable AltEdit",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "associations",
@@ -1547,7 +1547,7 @@
     "kind": "multiline",
     "label": "AltEdit command",
     "timing": "Apply",
-    "unavailable": "Reserved compatibility slot; no current dispatcher."
+    "unavailable": ""
   },
   {
     "category": "drives",
