@@ -340,6 +340,10 @@ type PanelsFrame struct {
 	CmdLine *cmdline.CommandLine
 	KeyBar  *vtui.KeyBar
 
+	// cmdLineDrop is set while a drag in progress would drop on the command
+	// line (frame_dragdrop_cmdline.go).
+	cmdLineDrop bool
+
 	// menuItemsCache* remember the last BuildMenuItems result and the state it
 	// was built from. vtui's render loop asks the top frame for its menu bar
 	// every frame (stepWithSize -> GetActiveMenuBar -> GetMenuBar), so without
@@ -2697,6 +2701,7 @@ func (pf *PanelsFrame) Show(scr *vtui.ScreenBuf) {
 		pf.CmdLine.SetRichPrompt(pf.BuildPrompt())
 		pf.CmdLine.SetPosition(0, cmdLineY, pf.LastW-1, cmdLineY)
 		pf.CmdLine.Show(scr)
+		pf.drawCmdLineDropHighlight(scr)
 	}
 
 	// KeyBar is at the bottom. It should only be hidden if a child process
