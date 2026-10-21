@@ -2244,9 +2244,9 @@ func actionNewFile(pf *panel.PanelsFrame) {
 			actionOpenEditor(pf, activeVfs, path)
 		})
 		history.InputBoxEdit(dlg.Window).PathHintsEnabled = true
-		// Plain DIF_HISTORY, as in far2l's dlgOpenEditor: the prompt opens
-		// empty rather than on the last file that was created this way.
-		nameEdit = history.AttachHistory(history.InputBoxEdit(dlg.Window), history.NewEditHistoryID)
+		// The prompt opens on the last name entered here, selected, as Far
+		// does: the first character typed replaces it (#2124).
+		nameEdit = history.AttachHistoryUseLast(history.InputBoxEdit(dlg.Window), history.NewEditHistoryID)
 	}
 }
 
@@ -3843,7 +3843,9 @@ func actionMkDir(pf *panel.PanelsFrame) {
 	// Keep history available through its explicit menu and navigation keys, but
 	// do not let a matching old name intercept Enter while typing a new one.
 	editName.NoAutoComplete = true
-	history.AttachHistory(editName, history.NewFolderHistoryID)
+	// The field opens on the last folder created, selected, as in Far: Enter
+	// takes it again, the first character typed replaces it (#2124).
+	history.AttachHistoryUseLast(editName, history.NewFolderHistoryID)
 	lblPrompt := vtui.NewLabel(0, 0, i18n.Msg("MakeFolder.Prompt"), editName)
 	dlg.AddItem(lblPrompt)
 	dlg.AddItem(editName)
