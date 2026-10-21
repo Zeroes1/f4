@@ -58,6 +58,64 @@ func (v exportedItemVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, 
 	return &contentReader{data: v.content}, nil
 }
 
+// EditableContentVFS is ContentVFS whose file can also be saved: the text
+// written to the path goes back to the importer when the file is closed, for
+// the editor of a folder that src hands over as one file (f4#242: a registry
+// key edited as .reg).
+func EditableContentVFS(src vfs.VFS, path string, content []byte, importer vfs.TransferContentImporter) vfs.VFS {
+	return &editedItemVFS{exportedItemVFS: exportedItemVFS{VFS: src, path: path, content: content}, importer: importer}
+}
+
+type editedItemVFS struct {
+	exportedItemVFS
+	importer vfs.TransferContentImporter
+}
+
+// GetCapabilities says the file is written in place: the editor then saves
+// straight through Create instead of a temporary file renamed over it.
+func (v *editedItemVFS) GetCapabilities() vfs.VFSCapabilities {
+	caps := v.VFS.GetCapabilities()
+	caps.HasWrite = true
+	caps.HasIdentityPreservingWrite = true
+	return caps
+}
+
+func (v *editedItemVFS) Stat(ctx context.Context, p string) (vfs.VFSItem, error) {
+	return v.exportedItemVFS.Stat(ctx, p)
+}
+
+func (v *editedItemVFS) Open(ctx context.Context, p string) (vfs.ReadAtCloser, error) {
+	return v.exportedItemVFS.Open(ctx, p)
+}
+
+func (v *editedItemVFS) Create(ctx context.Context, p string) (io.WriteCloser, error) {
+	if p != v.path {
+		return v.VFS.Create(ctx, p)
+	}
+	return &importWriter{ctx: ctx, v: v}, nil
+}
+
+// importWriter collects the saved text and imports it on Close; once the
+// import succeeds the file reads as the saved text.
+type importWriter struct {
+	ctx context.Context
+	v   *editedItemVFS
+	buf []byte
+}
+
+func (w *importWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	return len(p), nil
+}
+
+func (w *importWriter) Close() error {
+	if err := w.v.importer.ImportContent(w.ctx, w.v.path, w.buf); err != nil {
+		return err
+	}
+	w.v.content = w.buf
+	return nil
+}
+
 // contentReader reads a file that is held in memory, from the start or at
 // an offset.
 type contentReader struct {

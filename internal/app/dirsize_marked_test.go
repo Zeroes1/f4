@@ -7,10 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/unxed/f4/internal/editor"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/f4/internal/viewer"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
 
@@ -144,4 +146,58 @@ func TestViewOnADirectoryShowsItsExportedFile(t *testing.T) {
 	fsp.SetCursorIndex(1) // a
 	actionViewFile(pf)
 	pumpSizeTasksUntil(t, func() bool { return e["a"].SizeCalculated })
+}
+
+// importingVFS also takes folder b back after it was edited as one file.
+type importingVFS struct {
+	exportingVFS
+	imported *[]byte
+}
+
+func (v importingVFS) ImportContent(_ context.Context, p string, content []byte) error {
+	if v.Base(p) != "b" {
+		return os.ErrInvalid
+	}
+	*v.imported = append([]byte(nil), content...)
+	return nil
+}
+
+// F4 on a folder its file system hands over and takes back opens the editor
+// on that file, and saving imports the edited text (f4#242: a registry key
+// edited as .reg). Without the importer F4 keeps its old meaning.
+func TestEditOnADirectoryEditsItsExportedFile(t *testing.T) {
+	pf, fsp, _ := dirSizeFixture(t)
+	var imported []byte
+	fsp.Vfs = importingVFS{exportingVFS{fsp.Vfs.(*vfs.OSVFS)}, &imported}
+	fsp.SetCursorIndex(2) // b
+	actionEditFile(pf)
+	deadline := time.After(5 * time.Second)
+	var ev *editor.EditorView
+	for ev == nil {
+		if top, ok := vtui.FrameManager.GetTopFrame().(*editor.EditorView); ok {
+			ev = top
+			break
+		}
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("F4 on the exported folder opened no editor")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	defer vtui.FrameManager.Pop()
+	ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: '!'})
+	ev.SaveToFile(nil)
+	for ev.Saving {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-deadline:
+			t.Fatal("the save did not finish")
+		}
+	}
+	if string(imported) != "!exported b\n" {
+		t.Fatalf("imported %q, want the edited text %q", imported, "!exported b\n")
+	}
 }

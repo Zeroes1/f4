@@ -2330,6 +2330,29 @@ func viewDirectoryAsFile(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx 
 	return true
 }
 
+// editDirectoryAsFile opens the built-in editor on the file that the panel's
+// file system makes of the folder at idx, when it also takes that file back
+// (vfs.TransferContentImporter): F4 on a registry key edits the key as its
+// .reg export, and saving imports the edited text (f4#242).
+func editDirectoryAsFile(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx int) bool {
+	provider, ok := fsp.Vfs.(vfs.TransferContentProvider)
+	importer, canImport := fsp.Vfs.(vfs.TransferContentImporter)
+	if !ok || !canImport || fsp.Entries[idx].Name == ".." {
+		return false
+	}
+	path := fsp.Vfs.Join(fsp.Vfs.GetPath(), fsp.Entries[idx].Name)
+	content, ok, err := provider.TransferContent(context.Background(), path, nil)
+	if err != nil {
+		vtui.ShowMessage(i18n.Msg("Error.Title"), err.Error(), []string{i18n.Msg("vtui.Ok")})
+		return true
+	}
+	if !ok {
+		return false
+	}
+	actionOpenEditor(pf, fileops.EditableContentVFS(fsp.Vfs, path, content, importer), path)
+	return true
+}
+
 // unknownSizeNote says so when the scanned folder held files whose size the
 // VFS could not tell (a stream-compressed archive entry without a size in its
 // header, say): their bytes are missing from the total, so the number shown is
@@ -2562,6 +2585,11 @@ func actionEditFile(pf *panel.PanelsFrame) {
 			return
 		}
 		if fsp.Entries[idx].IsDir {
+			// A folder its file system hands over as one file and takes
+			// back -- a registry key as .reg (f4#242) -- is edited as that file.
+			if editDirectoryAsFile(pf, fsp, idx) {
+				return
+			}
 			actionFileAttributes(pf)
 			return
 		}

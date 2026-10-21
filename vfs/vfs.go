@@ -453,6 +453,14 @@ type TransferContentProvider interface {
 	TransferContent(ctx context.Context, srcPath string, dst VFS) (content []byte, ok bool, err error)
 }
 
+// TransferContentImporter takes back, for an item whose content a
+// TransferContentProvider handed over as one file, that file after it was
+// edited, and applies it to the item: F4 on a registry key edits the key as
+// its .reg export and saving imports the edited text (f4#242).
+type TransferContentImporter interface {
+	ImportContent(ctx context.Context, srcPath string, content []byte) error
+}
+
 // ShareRole is the effective access granted by a share link. Providers expose
 // only the roles they can implement for a particular object; callers must not
 // assume that every remote file system supports every role.
