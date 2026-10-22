@@ -399,7 +399,7 @@ jobs:
           SEVENZIP=$(command -v 7z || command -v 7zz || command -v 7za || true)
           if [ -z "$SEVENZIP" ]; then
             bash scripts/apt_get.sh 60 update -qq
-            bash scripts/apt_get.sh 300 install -y -qq 7zip
+            bash scripts/apt_get.sh 120 install -y -q 7zip
             SEVENZIP=$(command -v 7zz || command -v 7z)
           fi
           (cd package && "$SEVENZIP" a -t7z -mx=9 -mf=off -bd "../$ASSET.7z" f4 </dev/null)
@@ -2139,7 +2139,7 @@ jobs:
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
       run: |
         bash scripts/apt_get.sh 60 update -qq
-        bash scripts/apt_get.sh 300 install -y -qq genisoimage
+        bash scripts/apt_get.sh 120 install -y -q genisoimage
 
     - name: Build plugins/observer isoimg test fixture (wasm)
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
@@ -2808,7 +2808,9 @@ jobs:
       run: |
         set -euo pipefail
         bash scripts/apt_get.sh 60 update -qq
-        bash scripts/apt_get.sh 600 install -y -qq --no-install-recommends wine64 xvfb
+        # 180 seconds an attempt, three attempts: the install normally takes
+        # under a minute, and all three still fit the job's 20 minutes.
+        bash scripts/apt_get.sh 180 install -y -q --no-install-recommends wine64 xvfb
         # On Ubuntu the 64-bit loader lives under /usr/lib/wine and is not
         # always on PATH under the name a script would guess.
         W=$(command -v wine || command -v wine64 || echo /usr/lib/wine/wine64)
@@ -2949,7 +2951,7 @@ jobs:
       continue-on-error: true
       run: |
         set -euo pipefail
-        bash scripts/apt_get.sh 300 install -y -qq --no-install-recommends xdotool
+        bash scripts/apt_get.sh 120 install -y -q --no-install-recommends xdotool
         GOOS=linux go build -trimpath -o build/xdndtarget ./tools/xdndtarget
         mkdir -p wine-logs/xdnd
         xvfb-run --auto-servernum -s "-screen 0 1280x1024x24" -- \

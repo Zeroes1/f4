@@ -128,7 +128,7 @@ jobs:
       - name: Install genisoimage
         run: |
           bash scripts/apt_get.sh 60 update -qq
-          bash scripts/apt_get.sh 300 install -y -qq genisoimage
+          bash scripts/apt_get.sh 120 install -y -q genisoimage
 
       - name: Build plugins/observer isoimg test fixture (wasm)
         run: WASI_SDK_PATH=/opt/wasi-sdk ./scripts/build_isoimg_test_wasm.sh
