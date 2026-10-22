@@ -4822,6 +4822,18 @@ func (fp *FileSystemPanel) InvertSelection() {
 	vtui.FrameManager.Redraw()
 }
 
+// InvertFileSelection implements Far's Gray * behavior for files only.
+func (fp *FileSystemPanel) InvertFileSelection() {
+	fp.SaveSelection()
+	for i, e := range fp.Entries {
+		if e.Name != ".." && !e.IsDir {
+			fp.SetItemSelected(i, !e.Selected)
+		}
+	}
+	fp.resortSelectedFirst()
+	vtui.FrameManager.Redraw()
+}
+
 func (fp *FileSystemPanel) ApplyMaskSelection(mask string, state bool) {
 	if mask == "" {
 		return

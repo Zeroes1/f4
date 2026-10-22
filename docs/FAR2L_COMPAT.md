@@ -146,7 +146,7 @@ apart.
 | -- | ---- | ------ | --- | ----- |
 | K-30 | `Ins`; `Shift+Up`, `Shift+Down`, `Shift+PgUp`, `Shift+PgDn`, `Shift+Home`, `Shift+End` | Select or deselect the file under the cursor and move down; select a range. | MUST | [help][hlp-panel], [code][fl-ins], [code][fl-shiftdown] |
 | K-31 | `Gray +`, `Gray -` with an empty command line | Select, deselect files by a mask (dialog; `*.txt` selects `a.txt`, `b.txt`, `text.txt`). | MUST | [code][fl-add], [code][fl-sub] |
-| K-32 | `Gray *` with an empty command line | Invert the selection of files. | MUST | [code][fl-mul] |
+| K-32 | `Gray *` with an empty command line | Invert the selection of files; leave folders unchanged. | MUST | [code][fl-mul] |
 | K-33 | `Shift+Gray +`, `Shift+Gray -` | Select all files; deselect all. | MUST | [code][fl-shiftadd] |
 | K-34 | `Ctrl+Gray +`, `Ctrl+Gray -` ⌨ | Select, deselect the files with the extension of the current file. | SHOULD | [code][fl-ctrladd], [code][fl-ctrlsub] |
 | K-35 | `Alt+Gray +`, `Alt+Gray -` ⌨ | Select, deselect the files with the name of the current file. | SHOULD | [code][fl-altadd] |

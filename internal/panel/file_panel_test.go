@@ -3269,6 +3269,27 @@ func TestFileSystemPanel_MaskSelection(t *testing.T) {
 	}
 }
 
+func TestFileSystemPanel_InvertFileSelectionLeavesFoldersAlone(t *testing.T) {
+	fp := &FileSystemPanel{
+		Table: vtui.NewTable(0, 0, 10, 10, nil),
+		Entries: []*FileEntry{
+			{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+			{VFSItem: vfs.VFSItem{Name: "folder", IsDir: true}},
+			{VFSItem: vfs.VFSItem{Name: "selected.txt"}, Selected: true},
+			{VFSItem: vfs.VFSItem{Name: "plain.txt"}},
+		},
+	}
+
+	fp.InvertFileSelection()
+
+	if fp.Entries[0].Selected || fp.Entries[1].Selected {
+		t.Fatal("inverting file selection must leave parent and folder selection unchanged")
+	}
+	if fp.Entries[2].Selected || !fp.Entries[3].Selected {
+		t.Fatal("inverting file selection must toggle files")
+	}
+}
+
 func TestFileSystemPanel_TempPanelMaskSelectionUsesBasename(t *testing.T) {
 	fp := &FileSystemPanel{
 		Vfs:   new(TempPanelVFS),

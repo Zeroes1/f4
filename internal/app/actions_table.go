@@ -1210,7 +1210,7 @@ func init() {
 		MenuPath:    "Files",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
-				fsp.InvertSelection()
+				fsp.InvertFileSelection()
 			}
 		}),
 	})
