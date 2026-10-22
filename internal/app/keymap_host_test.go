@@ -310,3 +310,19 @@ func TestTreeOpensOnAltF10_Issue1602(t *testing.T) {
 		t.Errorf("menu key for Panel.Tree = %q, want CtrlT", got)
 	}
 }
+
+// K-76 and K-78 of docs/FAR2L_COMPAT.md (unxed/f4#2141).
+func TestPanelPathInsertDefaultKeys(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	for key, action := range map[string]string{
+		"CtrlVK_BA":      "Panel.InsertPassivePath",
+		"CtrlShiftVK_DB": "Panel.InsertActiveDirPath",
+		"CtrlShiftVK_DD": "Panel.InsertPassiveDirPath",
+		"CtrlVK_DB":      "Panel.InsertLeftPath",
+		"CtrlVK_DD":      "Panel.InsertRightPath",
+	} {
+		if got := hm.GetAction("Shell", key); got != action {
+			t.Errorf("%s = %q, want %q", key, got, action)
+		}
+	}
+}

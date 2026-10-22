@@ -2852,6 +2852,30 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.InsertPassivePath",
+		Area:        "Shell",
+		Label:       "Insert Passive Panel File Path",
+		Description: "Insert the full name of the file under the cursor of the passive panel into the command line",
+		DefaultKeys: []string{"CtrlVK_BA"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.InsertPassivePath() }),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.InsertActiveDirPath",
+		Area:        "Shell",
+		Label:       "Insert Active Panel Path",
+		Description: "Insert the folder of the active panel into the command line",
+		DefaultKeys: []string{"CtrlShiftVK_DB"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.InsertActiveDirPath() }),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.InsertPassiveDirPath",
+		Area:        "Shell",
+		Label:       "Insert Passive Panel Path",
+		Description: "Insert the folder of the passive panel into the command line",
+		DefaultKeys: []string{"CtrlShiftVK_DD"},
+		Handler:     withPF(func(pf *panel.PanelsFrame) { pf.InsertPassiveDirPath() }),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.InsertLeftPath",
 		Area:        "Shell",
 		Label:       "Insert Left Path",

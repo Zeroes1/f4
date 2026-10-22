@@ -342,6 +342,9 @@ AI.AttachAPSpec
 AI.ListModels
 Panel.CalcDirSize
 Panel.InsertPassiveFileName
+Panel.InsertPassivePath
+Panel.InsertActiveDirPath
+Panel.InsertPassiveDirPath
 Settings.Category.navigation
 Settings.Open
 Settings.Category.appearance

@@ -57,3 +57,32 @@ func TestCtrlShiftEnterInsertsThePassiveNameAndRunsNothing(t *testing.T) {
 		t.Fatalf("command line after Ctrl+Shift+Enter: %q, want the name of the passive file", got)
 	}
 }
+
+// K-76 and K-78 (unxed/f4#2141): the full name of the file of the passive
+// panel, and the paths of the active and of the passive panel.
+func TestInsertPassiveAndPanelPaths(t *testing.T) {
+	f := namesFixture(t)
+	passive := f.pf.Panels[1].(*FileSystemPanel)
+	passiveDir := t.TempDir()
+	passive.Vfs = vfs.NewOSVFS(passiveDir)
+
+	f.pf.CmdLine.Edit.SetText("")
+	if !f.pf.InsertPassivePath() {
+		t.Fatal("the full name of the passive file was not inserted")
+	}
+	if got := f.pf.CmdLine.Edit.GetText(); !strings.Contains(got, passiveDir) || !strings.Contains(got, "passive.txt") {
+		t.Fatalf("passive full name: %q, want the folder %q and passive.txt", got, passiveDir)
+	}
+
+	f.pf.CmdLine.Edit.SetText("")
+	f.pf.InsertActiveDirPath()
+	if got := f.pf.CmdLine.Edit.GetText(); !strings.Contains(got, f.fsp.Vfs.GetPath()) {
+		t.Fatalf("path of the active panel: %q, want it to hold %q", got, f.fsp.Vfs.GetPath())
+	}
+
+	f.pf.CmdLine.Edit.SetText("")
+	f.pf.InsertPassiveDirPath()
+	if got := f.pf.CmdLine.Edit.GetText(); !strings.Contains(got, passiveDir) {
+		t.Fatalf("path of the passive panel: %q, want it to hold %q", got, passiveDir)
+	}
+}

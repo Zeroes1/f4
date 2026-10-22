@@ -667,6 +667,47 @@ func (pf *PanelsFrame) InsertPassiveFileName() bool {
 	return pf.insertFileNameOf(fsp)
 }
 
+// InsertPassivePath is Ctrl+;: the full name of the file under the cursor of
+// the passive panel goes into the command line (K-76).
+func (pf *PanelsFrame) InsertPassivePath() bool {
+	fsp := pf.passiveFSP()
+	if fsp == nil {
+		return false
+	}
+	path := CurrentPanelEntryPath(fsp)
+	if path == "" {
+		return false
+	}
+	pf.InsertPathToCmdLine(path)
+	return true
+}
+
+// InsertActiveDirPath and InsertPassiveDirPath are Ctrl+Shift+[ and
+// Ctrl+Shift+]: the folder of the active and of the passive panel (K-78).
+func (pf *PanelsFrame) InsertActiveDirPath() bool {
+	return pf.insertDirOf(pf.GetActivePanel())
+}
+
+func (pf *PanelsFrame) InsertPassiveDirPath() bool {
+	return pf.insertDirOf(pf.passiveFSP())
+}
+
+func (pf *PanelsFrame) insertDirOf(fsp *FileSystemPanel) bool {
+	if fsp == nil || fsp.Vfs == nil {
+		return false
+	}
+	pf.InsertDirPathToCmdLine(fsp.Vfs.GetPath())
+	return true
+}
+
+func (pf *PanelsFrame) passiveFSP() *FileSystemPanel {
+	if pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+		return nil
+	}
+	fsp, _ := pf.Panels[1-pf.ActiveIdx].(*FileSystemPanel)
+	return fsp
+}
+
 func (pf *PanelsFrame) insertFileNameOf(fsp *FileSystemPanel) bool {
 	if fsp == nil {
 		return false
