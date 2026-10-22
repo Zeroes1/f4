@@ -28,7 +28,7 @@ func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
 	oldPath := primaryOldPath
 
 	err := os.Remove(oldPath)
-	if err != nil && os.IsPermission(err) && vfs.GetSudoClient().IsAvailable() {
+	if err != nil && os.IsPermission(err) && sudoAvailable() {
 		_ = vfs.GetSudoClient().Remove(oldPath)
 	}
 
@@ -36,7 +36,7 @@ func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
 		for i := 1; i < 1000; i++ {
 			cand := fmt.Sprintf("%s.%d", primaryOldPath, i)
 			err := os.Remove(cand)
-			if err != nil && os.IsPermission(err) && vfs.GetSudoClient().IsAvailable() {
+			if err != nil && os.IsPermission(err) && sudoAvailable() {
 				_ = vfs.GetSudoClient().Remove(cand)
 			}
 			if _, err := os.Stat(cand); os.IsNotExist(err) {
@@ -48,7 +48,7 @@ func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
 
 	if _, err := os.Stat(targetPath); err == nil {
 		errRename := os.Rename(targetPath, oldPath)
-		if errRename != nil && os.IsPermission(errRename) && vfs.GetSudoClient().IsAvailable() {
+		if errRename != nil && os.IsPermission(errRename) && sudoAvailable() {
 			_ = vfs.GetSudoClient().Rename(targetPath, oldPath)
 		}
 	}
@@ -56,13 +56,13 @@ func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
 	dir := filepath.Dir(targetPath)
 	// #nosec G301 -- updater targets may be shared/system installations whose directories must remain searchable by other users.
 	errMkdir := os.MkdirAll(dir, 0755)
-	if errMkdir != nil && os.IsPermission(errMkdir) && vfs.GetSudoClient().IsAvailable() {
+	if errMkdir != nil && os.IsPermission(errMkdir) && sudoAvailable() {
 		_ = vfs.GetSudoClient().MkDir(dir, 0755)
 	}
 
 	var f io.WriteCloser
 	f, err = os.OpenFile(targetPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode)
-	if err != nil && os.IsPermission(err) && vfs.GetSudoClient().IsAvailable() {
+	if err != nil && os.IsPermission(err) && sudoAvailable() {
 		vtui.DebugLog("UPDATER: Permission denied for %q, attempting elevated write...", targetPath)
 		// CreateFile, not Open: on Windows no descriptor crosses from the
 		// elevated dispatcher, the contents go by requests (f4#1768).
@@ -82,7 +82,7 @@ func writeFileSafe(targetPath string, r io.Reader, mode os.FileMode) error {
 	}
 
 	errRemove := os.Remove(primaryOldPath)
-	if errRemove != nil && os.IsPermission(errRemove) && vfs.GetSudoClient().IsAvailable() {
+	if errRemove != nil && os.IsPermission(errRemove) && sudoAvailable() {
 		_ = vfs.GetSudoClient().Remove(primaryOldPath)
 	}
 
@@ -221,7 +221,7 @@ func extractEntryWithPrefix(e archiveEntry, destDir, prefix string) error {
 	if e.isDir {
 		// #nosec G301 -- release archive directories may belong to a shared installation and must remain searchable by other users.
 		errMkdir := os.MkdirAll(targetPath, 0755)
-		if errMkdir != nil && os.IsPermission(errMkdir) && vfs.GetSudoClient().IsAvailable() {
+		if errMkdir != nil && os.IsPermission(errMkdir) && sudoAvailable() {
 			_ = vfs.GetSudoClient().MkDir(targetPath, 0755)
 		}
 		return nil
