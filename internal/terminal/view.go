@@ -88,10 +88,14 @@ type TerminalView struct {
 	// back when it ends (OSC 133;D). See HandleOSC133.
 	kittyBeforeCommand  atomic.Int32
 	kittyCommandRunning atomic.Bool
-	AutoWrap            bool
-	SixelDisplayMode    bool
-	MouseTrackingMode   int
-	MouseSGRMode        bool
+	// shellModes: the input modes the shell had when it started a command (OSC 133;C),
+	// put back when the command ends (OSC 133;D). Only the parser goroutine touches it.
+	shellModes        shellInputModes
+	shellModesPending bool
+	AutoWrap          bool
+	SixelDisplayMode  bool
+	MouseTrackingMode int
+	MouseSGRMode      bool
 
 	clipboardChunks []byte
 	// clipOpen: the program has a clipboard session -- CLIP_OPEN was answered with
@@ -2101,6 +2105,7 @@ func (tv *TerminalView) HandleOSC133(payload string) {
 		tv.OnShellMark(mark, tv.PromptSnapshot())
 	}
 	if payload == "C" {
+		tv.saveShellModes()
 		// The flags now in force are the shell's own (f4 seeds them for a fresh
 		// local shell, KittyEnableDisambiguateSeq). A command the shell starts
 		// does not speak the protocol, so Ctrl+C must reach it as 0x03, not as
@@ -2119,6 +2124,7 @@ func (tv *TerminalView) HandleOSC133(payload string) {
 		if tv.kittyCommandRunning.Swap(false) {
 			tv.KittyFlags.Store(tv.kittyBeforeCommand.Load())
 		}
+		tv.restoreShellModes()
 		tv.EnsureFreshPromptLine()
 		if tv.OnBusyChange != nil {
 			tv.OnBusyChange(false)
