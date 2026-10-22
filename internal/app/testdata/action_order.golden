@@ -39,6 +39,8 @@ File.Share
 Panel.SystemExplorer
 Panel.SelectGroup
 Panel.DeselectGroup
+Panel.SelectAllFiles
+Panel.DeselectAllFiles
 Panel.SelectCurrentExtension
 Panel.DeselectCurrentExtension
 Panel.InvertSelection
@@ -72,6 +74,7 @@ History.ImportShell
 Settings.ImportFar2l
 Panel.GoParent
 Panel.GoRoot
+Panel.GoHome
 Panel.HistoryBack
 Panel.HistoryForward
 Panel.ScrollNamesLeft
@@ -338,6 +341,7 @@ AI.Help
 AI.AttachAPSpec
 AI.ListModels
 Panel.CalcDirSize
+Panel.InsertPassiveFileName
 Settings.Category.navigation
 Settings.Open
 Settings.Category.appearance

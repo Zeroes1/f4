@@ -1165,6 +1165,36 @@ func init() {
 			}
 		}),
 	})
+	registerAction(action.Action{
+		Name:        "Panel.SelectAllFiles",
+		Area:        "Shell",
+		Label:       "Select all files",
+		LabelKey:    "Action.Panel.SelectAllFiles",
+		Description: "Select every file in the panel",
+		DescKey:     "Action.Panel.SelectAllFiles.Desc",
+		DefaultKeys: []string{"ShiftAdd"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.SetAllFilesSelected(true)
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.DeselectAllFiles",
+		Area:        "Shell",
+		Label:       "Deselect all files",
+		LabelKey:    "Action.Panel.DeselectAllFiles",
+		Description: "Deselect every file in the panel",
+		DescKey:     "Action.Panel.DeselectAllFiles.Desc",
+		DefaultKeys: []string{"ShiftSubtract"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.SetAllFilesSelected(false)
+			}
+		}),
+	})
 	// Ctrl+Gray +/- is standard Far Manager extension selection, documented in
 	// FarEng.hlf's PanelCmd/SelectFiles topics. Keep Ctrl+=/- as aliases so this
 	// operation remains available on laptops and keyboards without a numpad.
@@ -1210,7 +1240,7 @@ func init() {
 		MenuPath:    "Files",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			if fsp := pf.GetActivePanel(); fsp != nil {
-				fsp.InvertSelection()
+				fsp.InvertFileSelection()
 			}
 		}),
 	})
@@ -1602,6 +1632,25 @@ func init() {
 					}
 				}
 				pf.NavigateToPath(fsp, rootPath)
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.GoHome",
+		Area:        "Shell",
+		Label:       "Home Folder",
+		LabelKey:    "Action.Panel.GoHome",
+		Description: "Go to the user's home folder",
+		DescKey:     "Action.Panel.GoHome.Desc",
+		DefaultKeys: []string{"CtrlVK_C0"},
+		MenuPath:    "Commands",
+		MenuSubPath: "Navigation",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			home, err := hostmode.UserHomeDir()
+			if err == nil && home != "" {
+				if fsp := pf.GetActivePanel(); fsp != nil {
+					pf.NavigateToPath(fsp, home)
+				}
 			}
 		}),
 	})
@@ -2785,10 +2834,21 @@ func init() {
 		// file name into it, as in far2l. NoTerminalApp keeps the key out
 		// of the way of a running child process, which owns Ctrl+Enter and
 		// leaves the command line hidden anyway.
-		DefaultKeys:  []string{"CtrlEnter:NoTerminalApp"},
+		DefaultKeys:  []string{"CtrlEnter:NoTerminalApp", "CtrlJ:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.InsertSelectedFileName()
+		}),
+	})
+	registerAction(action.Action{
+		Name:         "Panel.InsertPassiveFileName",
+		Area:         "Shell",
+		Label:        "Insert Passive File Name",
+		Description:  "Insert the name of the file under the cursor of the passive panel into the command line",
+		DefaultKeys:  []string{"CtrlShiftEnter:NoTerminalApp"},
+		DefaultAreas: []string{"Terminal"},
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			pf.InsertPassiveFileName()
 		}),
 	})
 	registerAction(action.Action{

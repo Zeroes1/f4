@@ -172,6 +172,8 @@ func TestPanelSelectionDefaultAliases(t *testing.T) {
 		{action: "File.View", keys: []string{"F3", "Num5"}},
 		{action: "Panel.SelectGroup", keys: []string{"Add", "CtrlShiftVK_BB"}},
 		{action: "Panel.DeselectGroup", keys: []string{"Subtract", "CtrlShiftVK_BD"}},
+		{action: "Panel.SelectAllFiles", keys: []string{"ShiftAdd"}},
+		{action: "Panel.DeselectAllFiles", keys: []string{"ShiftSubtract"}},
 		{action: "Panel.InvertSelection", keys: []string{"Multiply", "AltVK_BB", "CtrlShift8"}},
 		{action: "Panel.SelectCurrentExtension", keys: []string{"CtrlAdd", "CtrlVK_BB"}},
 		{action: "Panel.DeselectCurrentExtension", keys: []string{"CtrlSubtract", "CtrlVK_BD"}},
@@ -184,10 +186,20 @@ func TestPanelSelectionDefaultAliases(t *testing.T) {
 		if got := hm.GetKeyForAction("Shell", tc.action); got != tc.keys[0] {
 			t.Errorf("primary %s key = %s, want %s", tc.action, got, tc.keys[0])
 		}
+		if len(tc.keys) < 2 {
+			continue // one key only: nothing to fall back to
+		}
 		hm.Bind("Shell", tc.keys[0], "None")
 		if got := hm.GetKeyForAction("Shell", tc.action); got != tc.keys[1] {
 			t.Errorf("fallback %s key = %s, want %s", tc.action, got, tc.keys[1])
 		}
+	}
+}
+
+func TestPanelGoHomeDefaultKey(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	if got := hm.GetAction("Shell", "CtrlVK_C0"); got != "Panel.GoHome" {
+		t.Fatalf("Ctrl+grave action = %q, want Panel.GoHome", got)
 	}
 }
 

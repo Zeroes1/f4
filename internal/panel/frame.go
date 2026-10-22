@@ -653,7 +653,21 @@ func (pf *PanelsFrame) SetCommandLineFocus(focused bool) {
 // the operation here prevents a modified Enter from ever degrading into plain
 // directory activation.
 func (pf *PanelsFrame) InsertSelectedFileName() bool {
-	fsp := pf.GetActivePanel()
+	return pf.insertFileNameOf(pf.GetActivePanel())
+}
+
+// InsertPassiveFileName is Ctrl+Shift+Enter: the name of the file under the
+// cursor of the passive panel goes into the command line (docs/FAR2L_COMPAT.md,
+// K-75).
+func (pf *PanelsFrame) InsertPassiveFileName() bool {
+	if pf.ActiveIdx < 0 || pf.ActiveIdx > 1 {
+		return false
+	}
+	fsp, _ := pf.Panels[1-pf.ActiveIdx].(*FileSystemPanel)
+	return pf.insertFileNameOf(fsp)
+}
+
+func (pf *PanelsFrame) insertFileNameOf(fsp *FileSystemPanel) bool {
 	if fsp == nil {
 		return false
 	}
@@ -673,7 +687,7 @@ func (pf *PanelsFrame) InsertSelectedFileName() bool {
 	}
 	// Keep the separator outside shell quoting so the next argument can follow.
 	pf.CmdLine.InsertString(name + " ")
-	vtui.DebugLog("[FIX:ctrl-enter] inserted selected filename with trailing space")
+	vtui.DebugLog("[FIX:ctrl-enter] inserted file name with trailing space")
 	return true
 }
 
@@ -3464,6 +3478,12 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		}
 	}
 
+	// Ctrl+J, the line feed a terminal driver shows for Ctrl+Enter-like input (K-74)
+	if e.VirtualKeyCode == vtinput.VK_J && ctrl && !alt && !shift && e.KeyDown {
+		pf.InsertSelectedFileName()
+		return true
+	}
+
 	// Enter handling
 	if e.VirtualKeyCode == vtinput.VK_RETURN {
 		// The hotkey filter normally handles Ctrl+Enter and Shift+Enter.
@@ -3476,6 +3496,10 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 		// itself owns the keyboard and the panel cursor is still live.
 		if ctrl && !alt && !shift {
 			pf.InsertSelectedFileName()
+			return true
+		}
+		if ctrl && shift && !alt {
+			pf.InsertPassiveFileName()
 			return true
 		}
 		if shift && !ctrl && !alt {
