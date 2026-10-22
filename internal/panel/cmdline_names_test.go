@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,7 +41,11 @@ func TestCtrlJInsertsTheNameOfTheFileUnderTheCursor(t *testing.T) {
 	f := namesFixture(t)
 	f.pf.CmdLine.Edit.SetText("ls ")
 	pressKey(f.pf, ctrlKey(vtinput.VK_J, false))
-	if got := f.pf.CmdLine.Edit.GetText(); got != "ls 'active one.txt' " {
+	wantName := "'active one.txt'"
+	if runtime.GOOS == "windows" {
+		wantName = `"active one.txt"`
+	}
+	if got := f.pf.CmdLine.Edit.GetText(); got != "ls "+wantName+" " {
 		t.Fatalf("command line after Ctrl+J: %q, want the quoted name of the active file and a space", got)
 	}
 }
