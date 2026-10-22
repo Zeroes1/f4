@@ -28,14 +28,18 @@ func TestPriorityIndexFallsBackToNormalForAnUnknownClass(t *testing.T) {
 
 // startSleepHelper starts a short-lived, otherwise idle child process for
 // killProcess/changePriority to act on -- something this test can safely
-// terminate without touching the test binary's own process. timeout.exe
-// ships with every supported Windows version, including GitHub's runner
-// image.
+// terminate without touching the test binary's own process. ping.exe to the
+// loopback address waits about a second between its 31 echoes and ships
+// with every supported Windows version, including GitHub's runner image.
+// It is not timeout.exe: a child started by exec.Command gets NUL for stdin,
+// and timeout.exe refuses redirected input and exits at once, so a test
+// that kills it could not tell the kill from the helper's own early exit,
+// and one that checks a process was left alone failed (f4#2130).
 func startSleepHelper(t *testing.T) *exec.Cmd {
 	t.Helper()
-	cmd := exec.Command("timeout.exe", "/T", "30", "/NOBREAK")
+	cmd := exec.Command("ping.exe", "-n", "31", "127.0.0.1")
 	if err := cmd.Start(); err != nil {
-		t.Skipf("cannot start the \"timeout.exe\" helper process: %v", err)
+		t.Skipf("cannot start the \"ping.exe\" helper process: %v", err)
 	}
 	return cmd
 }
