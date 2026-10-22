@@ -2808,8 +2808,9 @@ jobs:
       run: |
         set -euo pipefail
         bash scripts/apt_get.sh 60 update -qq
-        # 180 seconds an attempt, three attempts: the install normally takes
-        # under a minute, and all three still fit the job's 20 minutes.
+        # 180 seconds an attempt: the install normally takes under a minute,
+        # and three timed attempts still fit the job's 20 minutes. A stall
+        # that outlasts them gets the unlimited wait this step always had.
         bash scripts/apt_get.sh 180 install -y -q --no-install-recommends wine64 xvfb
         # On Ubuntu the 64-bit loader lives under /usr/lib/wine and is not
         # always on PATH under the name a script would guess.

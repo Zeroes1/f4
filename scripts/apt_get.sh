@@ -16,36 +16,54 @@
 # apt's default, and apt retries that file itself. `download` writes into the
 # current directory as the calling user, which is what `apt-get download`
 # wants; every other command runs under sudo. Between attempts dpkg finishes
-# whatever a killed install left half-configured. When every `update` attempt
-# fails, the script carries on with the indexes the image shipped, as an
-# install after a failed update always could; any other command that fails
-# three times fails the step.
+# whatever a killed install left half-configured.
+#
+# The limit is there to cut a stall short, never to fail a step that would
+# have got there by waiting: a stall can outlast all three attempts (one
+# runner could not download qemu-user-static's 15 MB for six minutes running).
+# So after three timed-out attempts an install or download gets one more with
+# no limit, exactly what the workflows ran before this script, and fails only
+# if that fails. An update that fails three times is given up instead: the
+# step goes on with the indexes the image shipped, as an install after a
+# failed update always could.
 set -euo pipefail
 
 limit=$1
 shift
 command=$1
 
+# run limited|unlimited <apt-get arguments>...
 run() {
+  local mode=$1
+  shift
+  local as_root=sudo
   if [ "$command" = download ]; then
-    timeout --kill-after=15 "$limit" apt-get -o Acquire::http::Timeout=30 "$@" </dev/null
+    as_root=
+  fi
+  if [ "$mode" = limited ]; then
+    $as_root timeout --kill-after=15 "$limit" apt-get -o Acquire::http::Timeout=30 "$@" </dev/null
   else
-    sudo timeout --kill-after=15 "$limit" apt-get -o Acquire::http::Timeout=30 "$@" </dev/null
+    $as_root apt-get -o Acquire::http::Timeout=30 "$@" </dev/null
+  fi
+}
+
+finish_install() {
+  if [ "$command" = install ]; then
+    sudo dpkg --configure -a </dev/null || true
   fi
 }
 
 for attempt in 1 2 3; do
-  if run "$@"; then
+  if run limited "$@"; then
     exit 0
   fi
   echo "::warning::apt-get $command failed or ran past ${limit}s (attempt $attempt of 3)"
-  if [ "$command" = install ]; then
-    sudo dpkg --configure -a </dev/null || true
-  fi
+  finish_install
 done
 
 if [ "$command" = update ]; then
   echo "::warning::apt-get update failed three times; going on with the package indexes the image has"
   exit 0
 fi
-exit 1
+echo "::warning::apt-get $command: one more attempt, with no time limit"
+run unlimited "$@"
