@@ -298,6 +298,8 @@ type PanelsFrame struct {
 	// (frame_paste_cmdline.go); cmdlinePasteBreak: the last thing in it was a line break.
 	cmdlinePasting    bool
 	cmdlinePasteBreak bool
+	cmdlinePasteText  strings.Builder // text of the paste not yet put into the line
+	menuRefresh       menuRefresh     // when the bar was last set (menu_refresh.go)
 	vtui.BaseFrame
 	Panels [2]Panel
 	// dirWatch keeps each side's listing fresh while the directory changes
@@ -1047,9 +1049,10 @@ func (pf *PanelsFrame) BuildMenuItems() []vtui.MenuBarItem {
 	return items
 }
 
-// GetMenuBar returns the main menu bar. Checkmarks and shortcuts are
-// refreshed on every call, so they always follow the active bindings and the
-// current panel state; the items themselves come from BuildMenuItems, which
+// GetMenuBar returns the main menu bar. The dimmed rows are refreshed on every
+// call; checkmarks and shortcuts while the bar is up and otherwise at most every
+// quarter of a second (menu_refresh.go), so they follow the active bindings and
+// the current panel state; the items themselves come from BuildMenuItems, which
 // only rebuilds them when something they depend on actually changed.
 //
 // A frame that was not built by NewPanelsFrame may have no bar, and then
@@ -1066,6 +1069,16 @@ func (pf *PanelsFrame) GetMenuBar() *vtui.MenuBar {
 	// of that moment; those follow the cursor and the selection, which the
 	// cache key does not cover.
 	RefreshMenuRowStates(pf.MenuBar.Items)
+	now := time.Now()
+	// Items built anew come without checkmarks, so they are always set.
+	rebuilt := len(pf.MenuBar.Items) == 0 || &pf.MenuBar.Items[0] != pf.menuRefresh.first
+	if !rebuilt && !pf.menuRefresh.due(pf.MenuBar.Active, now) {
+		return pf.MenuBar
+	}
+	pf.menuRefresh.set(now)
+	if len(pf.MenuBar.Items) > 0 {
+		pf.menuRefresh.first = &pf.MenuBar.Items[0]
+	}
 	pf.UpdateMenuCheckmarks()
 	// After the checkmarks: they set the text of the left and right side
 	// menus' rows again (indices 0 and 4 — see UpdateMenuCheckmarks), which is

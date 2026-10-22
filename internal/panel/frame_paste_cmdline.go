@@ -17,6 +17,7 @@ func (pf *PanelsFrame) cmdlinePasteKey(e *vtinput.InputEvent) bool {
 		return false
 	}
 	if e.Type == vtinput.PasteEventType {
+		pf.flushCmdlinePaste()
 		// Only a paste that lands in the command line: with the panels shown
 		// and no fast find running; a paste for a program in the terminal is
 		// forwarded elsewhere.
@@ -31,17 +32,38 @@ func (pf *PanelsFrame) cmdlinePasteKey(e *vtinput.InputEvent) bool {
 	if isPasteLineBreak(e) {
 		if e.KeyDown && !pf.cmdlinePasteBreak {
 			pf.cmdlinePasteBreak = true
-			pf.CmdLine.ProcessKey(&vtinput.InputEvent{
-				Type: vtinput.KeyEventType, KeyDown: true, Char: ' ', VirtualKeyCode: vtinput.VK_SPACE,
-			})
+			pf.cmdlinePasteText.WriteByte(' ')
 		}
 		return true
 	}
 	if e.KeyDown {
 		pf.cmdlinePasteBreak = false
 	}
+	// Text is collected and put into the line once, at the end of the paste:
+	// the edit line is measured and drawn for every key it takes, so typing
+	// a hundred kilobytes into it key by key took minutes (unxed/f4#2157).
+	mods := e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed)
+	if e.Char != 0 && mods == 0 {
+		if e.KeyDown {
+			pf.cmdlinePasteText.WriteRune(e.Char)
+		}
+		return true
+	}
+	pf.flushCmdlinePaste()
 	pf.CmdLine.ProcessKey(e)
 	return true
+}
+
+// flushCmdlinePaste puts the text collected from a paste into the command line.
+func (pf *PanelsFrame) flushCmdlinePaste() {
+	if pf.cmdlinePasteText.Len() == 0 {
+		return
+	}
+	text := pf.cmdlinePasteText.String()
+	pf.cmdlinePasteText.Reset()
+	if pf.CmdLine != nil {
+		pf.CmdLine.PasteText(text)
+	}
 }
 
 // isPasteLineBreak: the Enter key, a CR or LF character, or the Ctrl+J a
