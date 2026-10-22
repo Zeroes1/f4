@@ -183,7 +183,7 @@ section depends on P-08.
 | ID | Keys | Action | Req | far2l |
 | -- | ---- | ------ | --- | ----- |
 | K-60 | `Alt+<character>`, `Alt+Shift+<character>` | Open the fast find box with that character and put the cursor on the first name that starts with it (`Alt+b` puts it on `b.txt`). | MUST | [help][hlp-fastfind], [code][fl-fastfind], [code][pn-fastfind] |
-| K-61 | more characters, with or without `Alt` | Extend the search; a character that matches nothing is not added. | MUST | [code][pn-fastfind] |
+| K-61 | more characters, with or without `Alt` | Extend the search using the current fuzzy/strict mode; a character that leaves no match is not added. | MUST | [code][pn-fastfind] |
 | K-62 | `Ctrl+Enter`; `Ctrl+Shift+Enter` | The next match; the previous match. | MUST for `Ctrl+Enter`, SHOULD for `Ctrl+Shift+Enter` | [help][hlp-fastfind], [code][pn-ctrlshiftenter] |
 | K-63 | `*`, `?` in the box | Wildcards (`Alt+*`, `l`, `o` finds `c.log`). | SHOULD | [help][hlp-fastfind] |
 | K-64 | `Ctrl+V`, `Shift+Ins`, or the terminal's paste | Pasted text goes into the box, as far as it matches. | SHOULD | [help][hlp-fastfind], [code][pn-paste] |

@@ -4,6 +4,9 @@ import (
 	"testing"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/vfs"
+	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
 
 // f4 #1405: PanelStrictAutoFilter opts fastFindMatch out of the fuzzy
@@ -58,5 +61,59 @@ func TestFastFindMatch_StrictDoesNotTranscodeLayout(t *testing.T) {
 	}
 	if _, _, ok := fp.fastFindMatch("сфыв"); !ok {
 		t.Error("strict matcher rejected the exact substring \"сфы\"")
+	}
+}
+
+func TestFastFindRejectsCharacterWithoutMatch(t *testing.T) {
+	oldCfg := config.App
+	defer func() { config.App = oldCfg }()
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+
+	for _, strict := range []bool{false, true} {
+		config.App.PanelStrictAutoFilter = strict
+		fp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewOSVFS(t.TempDir()))
+		waitForLoad(t, fp)
+		fp.Entries = []*FileEntry{
+			{VFSItem: vfs.VFSItem{Name: "test"}},
+			{VFSItem: vfs.VFSItem{Name: "destroy"}},
+		}
+		fp.Refresh()
+		fp.FastFindMode = true
+		fp.FastFindStr = "tes"
+		selected := "test"
+		if !strict {
+			selected = "destroy"
+		}
+		for i, entry := range fp.Entries {
+			if entry.Name == selected {
+				fp.SetCursorIndex(i)
+				break
+			}
+		}
+
+		var rejected rune
+		for candidate := 'a'; candidate <= 'z'; candidate++ {
+			fp.FastFindStr = "tes" + string(candidate)
+			if !fp.fastFindHasMatches() {
+				rejected = candidate
+				break
+			}
+		}
+		if rejected == 0 {
+			t.Fatalf("strict=%t test setup found no unmatched character", strict)
+		}
+
+		fp.FastFindStr = "tes"
+		fp.ProcessKey(&vtinput.InputEvent{
+			Type:    vtinput.KeyEventType,
+			KeyDown: true,
+			Char:    rejected,
+		})
+		if fp.FastFindStr != "tes" {
+			t.Errorf("strict=%t search string = %q, want prior string tes", strict, fp.FastFindStr)
+		}
+		if got := fp.GetSelectedName(); got != selected {
+			t.Errorf("strict=%t selection = %q, want prior selection %q", strict, got, selected)
+		}
 	}
 }

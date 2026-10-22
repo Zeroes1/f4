@@ -3736,7 +3736,7 @@ func (fp *FileSystemPanel) fastFindScoredMatch(name string) (startRunes, matched
 }
 
 func (fp *FileSystemPanel) fastFindHasMatches() bool {
-	for _, entry := range fp.Entries {
+	for _, entry := range fp.AllEntries() {
 		if _, _, ok := fp.fastFindMatch(entry.Name); ok {
 			return true
 		}
@@ -3981,7 +3981,12 @@ func (fp *FileSystemPanel) processKey(e *vtinput.InputEvent, allowProviderPanelE
 			vtui.FrameManager.Redraw()
 			// Проваливаемся ниже, чтобы обработать Enter как вход в файл/директорию
 		} else if e.Char != 0 && !ctrl {
+			previous := fp.FastFindStr
 			fp.FastFindStr += string(unicode.ToLower(e.Char))
+			if !fp.fastFindHasMatches() {
+				fp.FastFindStr = previous
+				return true
+			}
 			fp.applyFastFind()
 			vtui.FrameManager.Redraw()
 			return true
