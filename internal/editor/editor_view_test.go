@@ -6037,3 +6037,43 @@ func TestWrapMarkNeedsOverlay(t *testing.T) {
 		})
 	}
 }
+
+// A paste keeps its line breaks whatever the terminal sent for them: CR (the
+// Enter key), LF (as a character, or as the Ctrl+J of the driver) and CRLF are
+// each one break (docs/FAR2L_COMPAT.md, B-06; unxed/f4#2156).
+func TestEditorView_PasteLineBreaks(t *testing.T) {
+	cr := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: '\r', VirtualKeyCode: vtinput.VK_RETURN}
+	lfChar := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: '\n'}
+	lfCtrlJ := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_J, ControlKeyState: vtinput.LeftCtrlPressed}
+	key := func(r rune) *vtinput.InputEvent {
+		return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: r}
+	}
+	cases := []struct {
+		name string
+		keys []*vtinput.InputEvent
+		want string
+	}{
+		{"CR", []*vtinput.InputEvent{key('a'), cr, key('b'), cr, key('c')}, "a\nb\nc"},
+		{"LF as a character", []*vtinput.InputEvent{key('a'), lfChar, key('b')}, "a\nb"},
+		{"LF as Ctrl+J", []*vtinput.InputEvent{key('a'), lfCtrlJ, key('b'), lfCtrlJ, key('c')}, "a\nb\nc"},
+		{"CRLF", []*vtinput.InputEvent{key('a'), cr, lfCtrlJ, key('b'), cr, lfChar, key('c')}, "a\nb\nc"},
+		{"empty lines survive", []*vtinput.InputEvent{key('a'), lfCtrlJ, lfCtrlJ, key('b')}, "a\n\nb"},
+		{"indentation is kept", []*vtinput.InputEvent{key('a'), lfCtrlJ, key(' '), key(' '), key('b'), lfCtrlJ, key(' '), key(' '), key(' '), key(' '), key('c')}, "a\n  b\n    c"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			Pt := piecetable.New(nil)
+			ev := NewEditorView(Pt, nil, "")
+			defer ev.Close()
+			ev.SetPosition(0, 0, 79, 24)
+			ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.PasteEventType, PasteStart: true})
+			for _, k := range c.keys {
+				ev.ProcessKey(k)
+			}
+			ev.ProcessKey(&vtinput.InputEvent{Type: vtinput.PasteEventType, PasteStart: false})
+			if got := Pt.String(); got != c.want {
+				t.Fatalf("paste of %s: the text is %q, want %q", c.name, got, c.want)
+			}
+		})
+	}
+}

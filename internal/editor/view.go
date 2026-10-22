@@ -144,6 +144,7 @@ type EditorView struct {
 	// again for this editor.
 	readOnlyConsent bool
 	pasteBuffer     []rune
+	pasteAfterCR    bool // the last break of the paste was a CR: a LF right after it is the same break
 	AsyncBuf        *AsyncBuffer
 	// mapped is the file itself, mapped read-only, when the editor could take
 	// that route: the piece table's original buffer is then a window onto it
@@ -2130,6 +2131,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 		if e.PasteStart {
 			ev.pasting = true
 			ev.pasteBuffer = nil
+			ev.pasteAfterCR = false
 		} else {
 			ev.pasting = false
 			if len(ev.pasteBuffer) > 0 {
@@ -2163,19 +2165,7 @@ func (ev *EditorView) processKeyInner(e *vtinput.InputEvent) bool {
 	// 2. Accumulating characters in paste mode
 	if ev.pasting {
 		if e.Type == vtinput.KeyEventType && e.KeyDown {
-			if e.Char != 0 {
-				// Handle system line breaks inside the paste
-				switch e.Char {
-				case '\r':
-					// Ignore \r to prevent double line breaks
-				case '\n':
-					ev.pasteBuffer = append(ev.pasteBuffer, '\n')
-				default:
-					ev.pasteBuffer = append(ev.pasteBuffer, e.Char)
-				}
-			} else if e.VirtualKeyCode == vtinput.VK_RETURN {
-				ev.pasteBuffer = append(ev.pasteBuffer, '\n')
-			}
+			ev.collectPasteKey(e)
 		}
 		return true
 	}
