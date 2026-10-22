@@ -1,6 +1,8 @@
 package cmdline
 
 import (
+	"strings"
+
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/vtinput"
@@ -156,7 +158,7 @@ func (cl *CommandLine) InsertString(text string) {
 // PasteText inserts a captured clipboard value and leaves history browsing,
 // matching the editing semantics of the native paste shortcuts.
 func (cl *CommandLine) PasteText(text string) {
-	cl.Edit.InsertString(text)
+	cl.Edit.InsertString(singleLine(text))
 	cl.Edit.HistoryPos = -1
 }
 
@@ -167,4 +169,15 @@ func isCtrlY(e *vtinput.InputEvent) bool {
 	}
 	mods := e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed)
 	return mods == vtinput.LeftCtrlPressed || mods == vtinput.RightCtrlPressed
+}
+
+// singleLine turns every line break of a pasted text (CR, LF, CRLF) into one
+// space: the command line is one line, and a raw line feed in it would run the
+// parts of the text as separate commands (docs/FAR2L_COMPAT.md, B-03, B-08).
+func singleLine(text string) string {
+	if !strings.ContainsAny(text, "\r\n") {
+		return text
+	}
+	text = strings.ReplaceAll(text, "\r\n", " ")
+	return strings.NewReplacer("\r", " ", "\n", " ").Replace(text)
 }
