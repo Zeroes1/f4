@@ -1,0 +1,75 @@
+name: Restore the Go cache
+description: >-
+  Restore the entry actions/setup-go keeps -- the same key and the same paths,
+  so the very entry setup-go saved -- without ever saving one. setup-go has no
+  read-only mode: its post step saves on every miss, in the scope of whatever
+  ref the run has. Pull requests, lunobot/staging and tags saved their own
+  copies on top of main's, the repository went past its 10 GB of cache, and
+  the overflow evicted main's entries several times a day; every eviction cost
+  the next run a cold compile, up to four times slower on the test cells. So
+  only a push to main lets setup-go cache (CACHE_WRITE in build.yml), and
+  every other run turns setup-go's cache off and reads main's through this
+  action. A pull request sees its base branch's entries; any branch sees the
+  default branch's.
+inputs:
+  dependency-hash:
+    description: >-
+      hashFiles() over the files the job would give setup-go as
+      cache-dependency-path, in the same order. The caller computes it, because
+      hashFiles() takes its patterns as separate arguments and an input is one
+      string.
+    required: true
+outputs:
+  cache-hit:
+    description: Whether the exact key was found
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      env:
+        DEPENDENCY_HASH: ${{ inputs.dependency-hash }}
+      run: |
+        set -euo pipefail
+
+        # setup-go's primary key, built the way its src/cache-restore.ts builds
+        # it:
+        #
+        #   setup-go-<RUNNER_OS>-<process.arch>-<ImageOS>-go-<version>-<hash>
+        #
+        # process.arch is RUNNER_ARCH in lower case (x64, arm64); the ImageOS
+        # part is there on Linux only, and hosted runners always set it;
+        # <version> is setup-go's go-version input, which in these workflows
+        # is always an exact release and so the version `go env GOVERSION`
+        # reports.
+        arch=$(tr '[:upper:]' '[:lower:]' <<<"$RUNNER_ARCH")
+        image=""
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          image="${ImageOS:?the runner did not set ImageOS, which setup-go puts in its key}-"
+        fi
+        version=$(go env GOVERSION)
+        prefix="setup-go-$RUNNER_OS-$arch-${image}go-${version#go}-"
+
+        # The paths go in setup-go's order, GOMODCACHE before GOCACHE. They are
+        # hashed into the entry's version, so another list -- or this one in
+        # another order -- would never match an entry setup-go saved.
+        {
+          echo "key=$prefix$DEPENDENCY_HASH"
+          echo "prefix=$prefix"
+          echo "paths<<EOF"
+          go env GOMODCACHE
+          go env GOCACHE
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.key.outputs.paths }}
+        key: ${{ steps.key.outputs.key }}
+        # A pull request that changes go.sum misses the exact key. The newest
+        # entry for the same runner and toolchain still holds nearly every
+        # module it needs, and a stale GOCACHE entry is a miss, never a wrong
+        # object: Go keys each one by a hash of all of its inputs.
+        restore-keys: ${{ steps.key.outputs.prefix }}

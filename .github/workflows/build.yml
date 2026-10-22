@@ -39,6 +39,17 @@ concurrency:
 # scripts/check_release_version.sh on the binaries they start.
 env:
   VERSION_SYMBOL: github.com/unxed/f4/internal/app.buildVersion
+  # Only a push to main writes caches; every other run reads main's. Each run
+  # saves into the scope of its own ref, and a pull request's entries serve
+  # nobody but that pull request's reruns -- yet they count against the same
+  # 10 GB as main's. Copies from pull requests, lunobot/staging and tags pushed
+  # the repository past that limit, and the overflow evicted main's entries
+  # several times a day: the test cells then compiled cold, up to four times
+  # slower. setup-go caches only where this is true; elsewhere its cache is
+  # off and .github/actions/go-cache-restore reads the same entry without
+  # saving one. Every actions/cache step is a restore, plus a save behind this
+  # flag. tools/cicheck holds every workflow to that.
+  CACHE_WRITE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
 jobs:
   # Lunobot bots never open their own pull requests for routine work: it
@@ -113,6 +124,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Compute build impact
       id: affected
@@ -448,6 +466,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Build binaries
       run: |
@@ -699,6 +724,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Build lite and control binaries
       run: |
@@ -865,6 +897,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: plugins/cloudfox/go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('plugins/cloudfox/go.sum') }}
 
     # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
     # plugin, and a transient answer from either ("stream error ... INTERNAL_ERROR
@@ -998,6 +1037,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: plugins/android/go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('plugins/android/go.sum') }}
 
     # go.sum entries don't affect the compiled binary -- that's controlled
     # by `-tags lite` on the actual build step below -- so a plain tidy
@@ -1127,6 +1173,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: plugins/ios/go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('plugins/ios/go.sum') }}
 
     # go mod tidy asks sum.golang.org and proxy.golang.org for every module of a
     # plugin, and a transient answer from either ("stream error ... INTERNAL_ERROR
@@ -1239,6 +1292,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Compute build impact
       id: affected
@@ -1371,6 +1431,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Compute build impact
       id: affected
@@ -1488,6 +1555,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Compute build impact
       id: affected
@@ -1683,6 +1757,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Run go vet
       run: |
@@ -1725,9 +1806,17 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Restore Go build cache (quality)
-      uses: actions/cache@v4
+      id: quality-cache
+      uses: actions/cache/restore@v4
       with:
         path: ~/.cache/go-build
         key: quality-go-${{ hashFiles('go.sum') }}
@@ -1768,6 +1857,14 @@ jobs:
     - name: Run govulncheck
       run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
 
+    # Last, so it saves when the job succeeds, as actions/cache's post step did.
+    - name: Save Go build cache (quality)
+      if: env.CACHE_WRITE == 'true' && steps.quality-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/go-build
+        key: ${{ steps.quality-cache.outputs.cache-primary-key }}
+
   lint:
     name: Lint (${{ matrix.shard }})
     needs: [should-run-full]
@@ -1796,6 +1893,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Compile standalone ConPTY probe
       if: matrix.shard == 'rest'
@@ -1805,7 +1909,8 @@ jobs:
         GOOS=windows GOARCH=amd64 go test -c -run '^$' -o /tmp/conptyreconcile-windows.test.exe ./...
 
     - name: Restore Go build cache (lint shard)
-      uses: actions/cache@v4
+      id: lint-cache
+      uses: actions/cache/restore@v4
       with:
         path: ~/.cache/go-build
         key: lint-${{ matrix.cache-key }}-go-${{ hashFiles('go.sum') }}
@@ -1853,6 +1958,7 @@ jobs:
       with:
         version: v2.13.1
         args: --new-from-rev=origin/main ${{ steps.lint-packages.outputs.args }}
+        skip-save-cache: ${{ env.CACHE_WRITE != 'true' }}
 
     # The step above only reports findings on lines a pull request touched, so
     # everything the linters have to say about existing code stays invisible —
@@ -1870,6 +1976,15 @@ jobs:
       with:
         version: v2.13.1
         args: --config .golangci-strict.yml
+        skip-save-cache: ${{ env.CACHE_WRITE != 'true' }}
+
+    # Last, so it saves when the job succeeds, as actions/cache's post step did.
+    - name: Save Go build cache (lint shard)
+      if: env.CACHE_WRITE == 'true' && steps.lint-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/go-build
+        key: ${{ steps.lint-cache.outputs.cache-primary-key }}
 
   # Эта джоба создает постоянные релизы при пуше тэгов v*.*.*
   test:
@@ -1941,6 +2056,15 @@ jobs:
         cache-dependency-path: |
           go.sum
           .github/workflows/go-cache-salt
+        cache: ${{ env.CACHE_WRITE }}
+
+    # The arguments in the order cache-dependency-path lists them: the hash is
+    # taken over the files in that order, and either order alone is a miss.
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum', '.github/workflows/go-cache-salt') }}
 
     - name: Compute affected packages
       id: affected
@@ -1952,10 +2076,10 @@ jobs:
     # worth installing once, not on all nine cells -- everywhere else the
     # tests skip themselves for lack of the fixture (see
     # scripts/build_observer_test_wasm.sh and plugins/observer/observer_test.go).
-    - name: Cache wasi-sdk
+    - name: Restore wasi-sdk
       id: cache-wasi-sdk
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: /opt/wasi-sdk
         key: wasi-sdk-34-x86_64-linux
@@ -1967,6 +2091,15 @@ jobs:
           https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz
         sudo mkdir -p /opt/wasi-sdk
         sudo tar -xzf /tmp/wasi-sdk.tar.gz --strip-components=1 -C /opt/wasi-sdk
+
+    # Right after the install rather than at the end of the job: the download
+    # is the same whether or not the tests below pass.
+    - name: Save wasi-sdk
+      if: env.CACHE_WRITE == 'true' && runner.os == 'Linux' && matrix.target == 'linux/amd64' && steps.cache-wasi-sdk.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /opt/wasi-sdk
+        key: wasi-sdk-34-x86_64-linux
 
     - name: Build plugins/observer test fixture
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
@@ -1994,10 +2127,10 @@ jobs:
     # Confirms isoimg_test.wasm is spec-valid wasm and reports what
     # wasm-opt -Oz would shrink it to (f4#1563, part 2 open question 2),
     # using Binaryen's own prebuilt release, never built from source here.
-    - name: Cache Binaryen
+    - name: Restore Binaryen
       id: cache-binaryen
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: /opt/binaryen
         key: binaryen-133-x86_64-linux
@@ -2009,6 +2142,13 @@ jobs:
           https://github.com/WebAssembly/binaryen/releases/download/version_133/binaryen-version_133-x86_64-linux.tar.gz
         sudo mkdir -p /opt/binaryen
         sudo tar -xzf /tmp/binaryen.tar.gz --strip-components=1 -C /opt/binaryen
+
+    - name: Save Binaryen
+      if: env.CACHE_WRITE == 'true' && runner.os == 'Linux' && matrix.target == 'linux/amd64' && steps.cache-binaryen.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /opt/binaryen
+        key: binaryen-133-x86_64-linux
 
     - name: Check isoimg wasm fixture with Binaryen
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
@@ -2217,7 +2357,8 @@ jobs:
       # shard: they compile overlapping dependency sets, so whichever saves
       # first serves the rest. Which packages land in which shard is computed
       # at job time and would make a per-shard key rotate on every move.
-      uses: actions/cache@v4
+      id: race-cache
+      uses: actions/cache/restore@v4
       with:
         path: |
           ~/.cache/go-build
@@ -2277,6 +2418,16 @@ jobs:
         # 1-3 minutes, so doubling its test time stays under the Test cells.
         go test -race -cpu 1,4 -shuffle=on -timeout 15m -skip '^TestSeedSweep$' "${packages[@]}"
 
+    # Last, so it saves when the job succeeds, as actions/cache's post step did.
+    - name: Save Go caches (race-instrumented)
+      if: env.CACHE_WRITE == 'true' && steps.race-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ steps.race-cache.outputs.cache-primary-key }}
+
   # The race shards above run on Linux, so the code behind *_windows.go --
   # ConPTY, the console, the Win32 clipboard, drives -- was never under the
   # detector. This cell runs it on Windows, for the packages that carry the
@@ -2304,6 +2455,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Run race detector
       shell: bash
@@ -2613,6 +2771,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Install Wine
       run: |
@@ -2817,6 +2982,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Check the release against installed updaters
       run: go run ./tools/releasecheck dist
@@ -2982,6 +3154,13 @@ jobs:
       with:
         go-version: '1.26.10'
         cache-dependency-path: go.sum
+        cache: ${{ env.CACHE_WRITE }}
+
+    - name: Restore Go cache (read-only)
+      if: env.CACHE_WRITE != 'true'
+      uses: ./.github/actions/go-cache-restore
+      with:
+        dependency-hash: ${{ hashFiles('go.sum') }}
 
     - name: Check the release against installed updaters
       run: go run ./tools/releasecheck dist
