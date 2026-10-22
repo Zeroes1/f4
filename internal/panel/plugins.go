@@ -323,6 +323,8 @@ func (pf *PanelsFrame) PluginPanelFocused() bool { return pf.focusedPluginPanel(
 var filePanelSelectionActions = map[string]bool{
 	"panel.selectgroup":              true,
 	"panel.deselectgroup":            true,
+	"panel.selectallfiles":           true,
+	"panel.deselectallfiles":         true,
 	"panel.selectcurrentextension":   true,
 	"panel.deselectcurrentextension": true,
 	"panel.invertselection":          true,

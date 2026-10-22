@@ -3282,11 +3282,42 @@ func TestFileSystemPanel_InvertFileSelectionLeavesFoldersAlone(t *testing.T) {
 
 	fp.InvertFileSelection()
 
-	if fp.Entries[0].Selected || fp.Entries[1].Selected {
+	selectedByName := make(map[string]bool, len(fp.Entries))
+	for _, entry := range fp.Entries {
+		selectedByName[entry.Name] = entry.Selected
+	}
+	if selectedByName[".."] || selectedByName["folder"] {
 		t.Fatal("inverting file selection must leave parent and folder selection unchanged")
 	}
-	if fp.Entries[2].Selected || !fp.Entries[3].Selected {
+	if selectedByName["selected.txt"] || !selectedByName["plain.txt"] {
 		t.Fatal("inverting file selection must toggle files")
+	}
+}
+
+func TestFileSystemPanel_SetAllFilesSelectedLeavesFoldersAlone(t *testing.T) {
+	for _, selected := range []bool{true, false} {
+		fp := &FileSystemPanel{
+			Table: vtui.NewTable(0, 0, 10, 10, nil),
+			Entries: []*FileEntry{
+				{VFSItem: vfs.VFSItem{Name: "..", IsDir: true}},
+				{VFSItem: vfs.VFSItem{Name: "folder", IsDir: true}, Selected: true},
+				{VFSItem: vfs.VFSItem{Name: "selected.txt"}, Selected: !selected},
+				{VFSItem: vfs.VFSItem{Name: "plain.txt"}},
+			},
+		}
+
+		fp.SetAllFilesSelected(selected)
+
+		selectedByName := make(map[string]bool, len(fp.Entries))
+		for _, entry := range fp.Entries {
+			selectedByName[entry.Name] = entry.Selected
+		}
+		if !selectedByName["folder"] {
+			t.Fatalf("selected=%t changed folder selection", selected)
+		}
+		if selectedByName["selected.txt"] != selected || selectedByName["plain.txt"] != selected {
+			t.Fatalf("selected=%t did not apply to all files", selected)
+		}
 	}
 }
 

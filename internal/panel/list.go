@@ -4834,6 +4834,18 @@ func (fp *FileSystemPanel) InvertFileSelection() {
 	vtui.FrameManager.Redraw()
 }
 
+// SetAllFilesSelected selects or deselects every file without changing folders.
+func (fp *FileSystemPanel) SetAllFilesSelected(selected bool) {
+	fp.SaveSelection()
+	for i, e := range fp.Entries {
+		if e.Name != ".." && !e.IsDir {
+			fp.SetItemSelected(i, selected)
+		}
+	}
+	fp.resortSelectedFirst()
+	vtui.FrameManager.Redraw()
+}
+
 func (fp *FileSystemPanel) ApplyMaskSelection(mask string, state bool) {
 	if mask == "" {
 		return

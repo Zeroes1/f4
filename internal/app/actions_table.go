@@ -1165,6 +1165,36 @@ func init() {
 			}
 		}),
 	})
+	registerAction(action.Action{
+		Name:        "Panel.SelectAllFiles",
+		Area:        "Shell",
+		Label:       "Select all files",
+		LabelKey:    "Action.Panel.SelectAllFiles",
+		Description: "Select every file in the panel",
+		DescKey:     "Action.Panel.SelectAllFiles.Desc",
+		DefaultKeys: []string{"ShiftAdd"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.SetAllFilesSelected(true)
+			}
+		}),
+	})
+	registerAction(action.Action{
+		Name:        "Panel.DeselectAllFiles",
+		Area:        "Shell",
+		Label:       "Deselect all files",
+		LabelKey:    "Action.Panel.DeselectAllFiles",
+		Description: "Deselect every file in the panel",
+		DescKey:     "Action.Panel.DeselectAllFiles.Desc",
+		DefaultKeys: []string{"ShiftSubtract"},
+		MenuPath:    "Files",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			if fsp := pf.GetActivePanel(); fsp != nil {
+				fsp.SetAllFilesSelected(false)
+			}
+		}),
+	})
 	// Ctrl+Gray +/- is standard Far Manager extension selection, documented in
 	// FarEng.hlf's PanelCmd/SelectFiles topics. Keep Ctrl+=/- as aliases so this
 	// operation remains available on laptops and keyboards without a numpad.

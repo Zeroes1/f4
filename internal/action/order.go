@@ -58,6 +58,8 @@ var actionMenuOrder = []string{
 	"Panel.SystemExplorer",
 	"Panel.SelectGroup",
 	"Panel.DeselectGroup",
+	"Panel.SelectAllFiles",
+	"Panel.DeselectAllFiles",
 	"Panel.SelectCurrentExtension",
 	"Panel.DeselectCurrentExtension",
 	"Panel.InvertSelection",
