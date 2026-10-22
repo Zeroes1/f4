@@ -196,11 +196,15 @@ func (ev *EditorView) AppendSelectionToClipboard() {
 // copies its text to the clipboard (FAR's Ctrl+C/Ctrl+Ins with no selection).
 func (ev *EditorView) CopyCurrentLine() {
 	lineStart := ev.Li.GetLineOffset(ev.CursorLine)
-	lineEnd := lineStart + ev.GetLineLength(ev.CursorLine)
+	lineTextLength := ev.GetLineLength(ev.CursorLine)
+	lineEnd := ev.Pt.Size()
+	if ev.CursorLine+1 < ev.Li.LineCount() {
+		lineEnd = ev.Li.GetLineOffset(ev.CursorLine + 1)
+	}
 	ev.StartSelection(lineStart)
 	ev.selFrozen = true
 	ev.selEndOffset = lineEnd
-	if lineEnd == lineStart {
+	if lineTextLength == 0 {
 		GlobalLastClipboardWasRectangular = false
 		terminal.SetF4Clipboard("")
 		return

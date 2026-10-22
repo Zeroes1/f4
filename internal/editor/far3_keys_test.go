@@ -141,10 +141,10 @@ func TestFAR3CopyWithoutSelectionMarksAndCopiesCurrentLine_Issue1729(t *testing.
 	ev.CursorLine, ev.CursorPos = 1, 4
 	vtui.SetClipboard("old clipboard")
 	ev.CopyCurrentLine()
-	if got, want := vtui.GetClipboard(), "second line"; got != want {
+	if got, want := vtui.GetClipboard(), "second line\n"; got != want {
 		t.Fatalf("clipboard = %q, want %q", got, want)
 	}
-	if got := selectedText(t, ev); got != "second line" {
+	if got := selectedText(t, ev); got != "second line\n" {
 		t.Fatalf("selected block = %q, want current line", got)
 	}
 	if ev.CursorLine != 1 || ev.CursorPos != 4 {
@@ -154,19 +154,25 @@ func TestFAR3CopyWithoutSelectionMarksAndCopiesCurrentLine_Issue1729(t *testing.
 
 func TestFAR3CopyWithoutSelectionHandlesCRLFAndEmptyLine_Issue1729(t *testing.T) {
 	for _, tc := range []struct {
-		name, text, want string
-		line, pos        int
+		name, text, clipboard, block string
+		line, pos                    int
 	}{
-		{"CRLF", "first\r\nsecond\r\n", "second", 1, 2},
-		{"empty line", "first\n\nlast", "", 1, 0},
+		{"LF", "first\nsecond\nlast", "second\n", "second\n", 1, 2},
+		{"CRLF", "first\r\nsecond\r\nlast", "second\r\n", "second\r\n", 1, 2},
+		{"unterminated final line", "first\nsecond", "second", "second", 1, 2},
+		{"empty LF line", "first\n\nlast", "", "\n", 1, 0},
+		{"empty CRLF line", "first\r\n\r\nlast", "", "\r\n", 1, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ev := newFAR3Editor(t, tc.text)
 			ev.CursorLine, ev.CursorPos = tc.line, tc.pos
 			vtui.SetClipboard("old clipboard")
 			ev.CopyCurrentLine()
-			if got := vtui.GetClipboard(); got != tc.want {
-				t.Fatalf("clipboard = %q, want %q", got, tc.want)
+			if got := vtui.GetClipboard(); got != tc.clipboard {
+				t.Fatalf("clipboard = %q, want %q", got, tc.clipboard)
+			}
+			if got := selectedText(t, ev); got != tc.block {
+				t.Fatalf("selected block = %q, want %q", got, tc.block)
 			}
 			if !ev.SelActive || !ev.selFrozen {
 				t.Fatal("current line was not kept as a marked block")
