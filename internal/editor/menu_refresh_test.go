@@ -65,3 +65,32 @@ func TestEditorView_GetMenuBarRebuildsWhileTheBarIsUpAndWhenOld(t *testing.T) {
 		t.Fatalf("an old menu was built %d times, want 1", builds-before)
 	}
 }
+
+// The key bar captions are asked for before every frame; resolving them for
+// each of the frames of a long paste made it take half a minute (unxed/f4#2157).
+func TestEditorView_GetKeyLabelsDoesNotResolveTheCaptionsForEveryCall(t *testing.T) {
+	resolved := 0
+	old := KeyBarLabels
+	KeyBarLabels = func(area string, fallbacks *vtui.KeySet) *vtui.KeySet {
+		resolved++
+		return fallbacks
+	}
+	t.Cleanup(func() { KeyBarLabels = old })
+
+	ev := NewEditorView(piecetable.New([]byte("x\n")), nil, "t.txt")
+	t.Cleanup(ev.Close)
+	resolved = 0
+	for i := 0; i < 500; i++ {
+		if ev.GetKeyLabels() == nil {
+			t.Fatal("no key labels")
+		}
+	}
+	if resolved > 2 {
+		t.Fatalf("the captions were resolved %d times for 500 calls, want once", resolved)
+	}
+	first := ev.GetKeyLabels()
+	first.Normal[0] = "changed by the caller"
+	if ev.GetKeyLabels().Normal[0] == "changed by the caller" {
+		t.Fatal("the kept captions were handed out, a caller changed them")
+	}
+}
