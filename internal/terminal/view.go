@@ -94,6 +94,11 @@ type TerminalView struct {
 	MouseSGRMode        bool
 
 	clipboardChunks []byte
+	// clipOpen: the program has a clipboard session -- CLIP_OPEN was answered with
+	// success (the user let the client in, or chose the local clipboard) and
+	// CLIP_CLOSE has not come yet. Every other clipboard request is refused
+	// without it (unxed/f4#2158).
+	clipOpen        bool
 	ClipboardReader func() string
 	ClipboardWriter func(string)
 	Pty             PtyBackend
@@ -185,6 +190,15 @@ func NewTerminalView(w, h int) *TerminalView {
 	}
 	tv.ResetBuffer(w, h)
 	return tv
+}
+
+// clipboardSession reports whether the program has a far2l clipboard session:
+// CLIP_OPEN succeeded and CLIP_CLOSE has not come. The clipboard is the user's;
+// only a client the user let in (or answered locally) may read or change it.
+func (tv *TerminalView) clipboardSession() bool {
+	tv.mu.Lock()
+	defer tv.mu.Unlock()
+	return tv.clipOpen
 }
 
 func (tv *TerminalView) ReadClipboard() string {
@@ -2185,14 +2199,22 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 			if auth == -1 {
 				respAuth = 1 // Tell child success, we'll handle it locally
 			}
+			tv.mu.Lock()
+			tv.clipOpen = respAuth == 1
+			tv.mu.Unlock()
 			reply.PushU64(2) // FARTTY_FEATCLIP_CHUNKED_SET
 			reply.PushU8(uint8(respAuth))
 		case 'c':
 			tv.mu.Lock()
 			tv.clipboardChunks = nil
+			tv.clipOpen = false
 			tv.mu.Unlock()
 			reply.PushU8(1)
 		case 'e':
+			if !tv.clipboardSession() {
+				reply.PushU8(0)
+				break
+			}
 			if tv.ClipboardWriter != nil {
 				tv.ClipboardWriter("")
 			} else {
@@ -2204,9 +2226,16 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 			reply.PushU8(1)
 		case 'a':
 			_ = stk.PopU32() // fmt
-			reply.PushU8(1)
+			if tv.clipboardSession() {
+				reply.PushU8(1)
+			} else {
+				reply.PushU8(0)
+			}
 		case 'S':
 			size := stk.PopU16()
+			if !tv.clipboardSession() {
+				break // no reply to a chunk; nothing is kept for a client that is not let in
+			}
 			tv.mu.Lock()
 			if size == 0 {
 				tv.clipboardChunks = nil
@@ -2217,6 +2246,10 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 			tv.mu.Unlock()
 		case 's':
 			_ = stk.PopU32() // fmt
+			if !tv.clipboardSession() {
+				reply.PushU8(0)
+				break
+			}
 			len := stk.PopU32()
 			textBytes := stk.PopBytes(int(len))
 			tv.mu.Lock()
@@ -2229,6 +2262,10 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 			reply.PushU8(1)
 		case 'g':
 			_ = stk.PopU32() // fmt
+			if !tv.clipboardSession() {
+				reply.PushU32(0xFFFFFFFF) // far2l's answer when there is no open clipboard
+				break
+			}
 			clipData := tv.ReadClipboard()
 			if len(clipData) > 64*1024 {
 				clipData = clipData[:64*1024]
@@ -2240,7 +2277,7 @@ func (tv *TerminalView) ProcessFar2lInteract(data []byte) {
 			reply.PushU32(uint32(len(clipData)))
 		case 'i':
 			_ = stk.PopU32()
-			reply.PushU64(0)
+			reply.PushU64(0) // the same answer for a closed clipboard and for no data id
 		case 'r':
 			_ = stk.PopString()
 			reply.PushU32(0xC000)

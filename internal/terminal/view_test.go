@@ -100,6 +100,9 @@ func TestTerminalView_ProcessFar2lInteract_Clipboard(t *testing.T) {
 	tv.ClipboardWriter = func(text string) { clipboard = text }
 	Pty := &mockPty{}
 	tv.Pty = Pty
+	oldAuth := vtui.GlobalClipboardAccessManager
+	vtui.GlobalClipboardAccessManager = &mockAuth{val: 1}
+	defer func() { vtui.GlobalClipboardAccessManager = oldAuth }()
 
 	// 1. Test Clipboard Open (Handshake)
 	stk := vtinput.Far2lStack{}
@@ -1049,6 +1052,7 @@ func TestTerminalView_ProcessFar2lInteract_ClipboardProxy(t *testing.T) {
 	defer tv.Close()
 	Pty := &mockPty{}
 	tv.Pty = Pty
+	openFar2lClipboardForTest(tv) // these tests are about the data, not about the permission
 
 	// Simulate clipboard data set on the true host side
 	testData := "proxy_secret_data"
@@ -1084,6 +1088,7 @@ func TestIssue117_F4Host_ClipboardProtocolTypes(t *testing.T) {
 	tv := NewTerminalView(80, 24)
 	Pty := &mockPtyForTerminal{}
 	tv.Pty = Pty
+	openFar2lClipboardForTest(tv) // these tests are about the data, not about the permission
 
 	// 1. Test Clipboard SetData ('s')
 	stkSet := vtinput.Far2lStack{}
@@ -1226,6 +1231,7 @@ func TestIssue117_F4Host_ChunkedClipboardSet(t *testing.T) {
 	tv := NewTerminalView(80, 24)
 	Pty := &mockPtyForTerminal{}
 	tv.Pty = Pty
+	openFar2lClipboardForTest(tv) // these tests are about the data, not about the permission
 
 	// 1. Send chunk 1 ('S')
 	stk1 := vtinput.Far2lStack{}
@@ -1275,6 +1281,7 @@ func TestIssue117_F4Host_ClipboardEmpty(t *testing.T) {
 	tv := NewTerminalView(80, 24)
 	Pty := &mockPtyForTerminal{}
 	tv.Pty = Pty
+	openFar2lClipboardForTest(tv) // these tests are about the data, not about the permission
 
 	vtui.SetClipboard("pre_existing_data")
 
