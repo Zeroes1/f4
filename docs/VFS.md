@@ -107,6 +107,14 @@ makes the empty file through the dispatcher first (`SudoWriteExclusive`), so a
 taken name fails at `Create` and the editor's temp-then-rename save works
 elevated. Still to come: checks on Windows 10/11 and Server 2019.
 
+The unpacker (`internal/unpack`, the updater's and the plugin catalogue's)
+hands nothing to this dispatcher on Windows (`sudoAvailable`): the updater
+elevates the whole archive through its own UAC helper when a step is refused,
+and the refusal every update meets, deleting `f4.exe.old` while that program
+runs the update, is one no administrator can lift. Asking there held
+`f4 --update` for two minutes, waiting for an answer to a question no window
+showed (#2172).
+
 On Unix, cancelling an operation while it waits for the sudo password withdraws
 the prompt. This also applies to elevated mutations such as delete and rename,
 not only directory reads and file opens; withdrawal is not recorded as a
