@@ -126,7 +126,9 @@ jobs:
       # scripts/build_isoimg_test_iso.sh and
       # plugins/observer/testdata/isoimg/compat/.
       - name: Install genisoimage
-        run: sudo apt-get update && sudo apt-get install -y genisoimage
+        run: |
+          bash scripts/apt_get.sh 60 update -qq
+          bash scripts/apt_get.sh 300 install -y -qq genisoimage
 
       - name: Build plugins/observer isoimg test fixture (wasm)
         run: WASI_SDK_PATH=/opt/wasi-sdk ./scripts/build_isoimg_test_wasm.sh

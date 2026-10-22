@@ -67,14 +67,20 @@ runs:
         set -euo pipefail
         deb=$(find "$DEB_DIR" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null || true)
 
+        # Every apt-get call goes through scripts/apt_get.sh, which gives a
+        # stalled mirror a time limit and two more attempts.
+        apt_get() {
+          bash "$GITHUB_WORKSPACE/scripts/apt_get.sh" "$@"
+        }
+
         if [ -z "$deb" ] || { [ "$REFRESH" = "true" ] && [ "$EXACT" != "true" ]; }; then
           # What the workflow did before this action, plus keeping the file.
           rm -rf "$DEB_DIR"
           mkdir -p "$DEB_DIR"
-          sudo apt-get update -qq </dev/null
-          (cd "$DEB_DIR" && apt-get download -qq "$PACKAGE" </dev/null)
+          apt_get 60 update -qq
+          (cd "$DEB_DIR" && apt_get 120 download -qq "$PACKAGE")
           deb=$(find "$DEB_DIR" -maxdepth 1 -name '*.deb' -print -quit)
-          sudo apt-get install -y -qq "$deb" </dev/null
+          apt_get 300 install -y -qq "$deb"
           echo "downloaded=true" >> "$GITHUB_OUTPUT"
         elif ! sudo dpkg -i "$deb" </dev/null; then
           # A newer image may lack a dependency the cached .deb needs; dpkg
@@ -82,9 +88,9 @@ runs:
           # as the workflow always did: -f repairs what dpkg left, and the
           # install by name covers a .deb dpkg could not unpack at all.
           echo "::warning::dpkg could not install the cached $(basename "$deb"); completing with apt-get"
-          sudo apt-get update -qq </dev/null
-          sudo apt-get install -y -qq -f </dev/null
-          sudo apt-get install -y -qq "$PACKAGE" </dev/null
+          apt_get 60 update -qq
+          apt_get 300 install -y -qq -f
+          apt_get 300 install -y -qq "$PACKAGE"
         fi
 
         dpkg-query -W -f='Installed ${Package} ${Version}\n' "$PACKAGE"

@@ -3208,6 +3208,7 @@ Every file tracked in the repository. Regenerate with
     │   └── index.yaml
     ├── README.md
     ├── scripts
+    │   ├── apt_get.sh
     │   ├── build_ipk.sh
     │   ├── build_isoimg_test_iso.sh
     │   ├── build_isoimg_test_wasm.sh
