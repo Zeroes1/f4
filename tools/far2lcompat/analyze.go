@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // The sequences the kit looks for in what a manager writes to its terminal:
@@ -14,6 +17,32 @@ var sequenceRE = regexp.MustCompile(
 		`|\x1b_far2l[01]\x1b\\` + // far2l extensions on and off
 		`|\x1b\[5n|\x1b\[6n|\x1b\[c` + // status reports the terminal has to answer
 		`|\x1b\]52;[^\x07\x1b]*(?:\x07|\x1b\\)`) // OSC 52
+
+// exitLimit is how long a manager may take to exit after the quit keys: the
+// 5 seconds of P-06.
+var exitLimit = 5 * time.Second
+
+// settleQuiet and settleLimit: the quit keys are sent when the program has written
+// nothing for settleQuiet, and in any case after settleLimit more.
+const (
+	settleQuiet = 700 * time.Millisecond
+	settleLimit = 20 * time.Second
+)
+
+// Options say how the kit plays the terminal.
+type Options struct {
+	Far2l     bool // acknowledge ESC _ far2l1 with ESC _ far2lok, as far2l does
+	MinOutput int  // the quit keys wait until the program has written this many bytes (a drawn screen)
+	SilentExt bool // acknowledge it and answer nothing else; checks P-06 (implies Far2l)
+}
+
+// Recording is what Record returns.
+type Recording struct {
+	Data     []byte
+	Mark     int           // length of Data when the quit keys were sent
+	ExitTook time.Duration // from the quit keys to the end of the program
+	Killed   bool          // the program was still running after exitLimit
+}
 
 // Sequence is one control sequence found in the recording.
 type Sequence struct {
@@ -99,6 +128,45 @@ func Check(seqs []Sequence) []Result {
 	add("P-05", has(seqs, "\x1b_far2l1\x1b\\", false) && has(seqs, "\x1b_far2l0\x1b\\", true),
 		"far2l1 at the start, far2l0 at the exit (the events are not checked)", "no far2l1 at the start or no far2l0 at the exit")
 	return out
+}
+
+// far2lKey is a key event of the far2l extensions, ESC _ f2l<base64> BEL
+// (docs/FAR2L_COMPAT.md, P-05): the fields of the stack in the order far2l
+// pushes them, little endian, the command ('K' down, 'k' up) last.
+func far2lKey(vk, scan uint16, char uint32, down bool) string {
+	var b []byte
+	b = binary.LittleEndian.AppendUint16(b, 1) // repeat count
+	b = binary.LittleEndian.AppendUint16(b, vk)
+	b = binary.LittleEndian.AppendUint16(b, scan)
+	b = binary.LittleEndian.AppendUint32(b, 0) // modifiers
+	b = binary.LittleEndian.AppendUint32(b, char)
+	if down {
+		b = append(b, 'K')
+	} else {
+		b = append(b, 'k')
+	}
+	return "\x1b_f2l" + base64.StdEncoding.EncodeToString(b) + "\a"
+}
+
+// quitKeys are F10 and, after a pause so that the confirmation can open, Enter:
+// plain sequences, or events of the extensions when they are on, because a
+// manager that has them on may read keys from the events only.
+func quitKeys(far2l bool) (f10, enter string) {
+	if !far2l {
+		return "\x1b[21~", "\r"
+	}
+	return far2lKey(0x79, 0x44, 0, true) + far2lKey(0x79, 0x44, 0, false),
+		far2lKey(0x0D, 0x1c, '\r', true) + far2lKey(0x0D, 0x1c, '\r', false)
+}
+
+// CheckExit gives the verdict on P-06 for a recording made with SilentExt:
+// the terminal acknowledged the extensions and answered nothing else, and the
+// manager still has to quit on F10 within the limit.
+func CheckExit(rec Recording) Result {
+	if rec.Killed || rec.ExitTook > 5*time.Second {
+		return Result{"P-06", "fail", "the manager did not quit within 5 s of F10 after the extensions were acknowledged and nothing else was answered"}
+	}
+	return Result{"P-06", "pass", fmt.Sprintf("quit %.1f s after F10 with a silent far2l terminal", rec.ExitTook.Seconds())}
 }
 
 // Format prints the results as rows of the report of section 9.

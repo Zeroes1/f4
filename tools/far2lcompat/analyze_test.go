@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 )
@@ -41,5 +42,14 @@ func TestCheckLeftovers(t *testing.T) {
 	}
 	if resultOf(rs, "P-02") != "fail" || !strings.Contains(note, "?2004h") || !strings.Contains(note, "?1006h") || strings.Contains(note, "?1000h") {
 		t.Errorf("P-02 = %q", note)
+	}
+}
+
+func TestFar2lKeyIsWhatTheParserOfTheHostReads(t *testing.T) {
+	got := far2lKey(0x79, 0x44, 0, true)
+	// repeat 1, vk 0x79, scan 0x44, modifiers 0, char 0, 'K'
+	want := "\x1b_f2l" + base64.StdEncoding.EncodeToString([]byte{1, 0, 0x79, 0, 0x44, 0, 0, 0, 0, 0, 0, 0, 0, 0, 'K'}) + "\a"
+	if got != want {
+		t.Errorf("far2lKey = %q, want %q", got, want)
 	}
 }
