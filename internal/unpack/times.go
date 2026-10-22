@@ -23,7 +23,7 @@ func applyArchiveTimes(path string, mtime time.Time) {
 	}
 	now := time.Now()
 	err := os.Chtimes(path, now, mtime)
-	if err != nil && os.IsPermission(err) && vfs.GetSudoClient().IsAvailable() {
+	if err != nil && os.IsPermission(err) && sudoAvailable() {
 		err = vfs.GetSudoClient().SetAttributes(path, vfs.VFSItem{MTime: mtime, ATime: now, Uid: -1, Gid: -1})
 	}
 	if err != nil {
