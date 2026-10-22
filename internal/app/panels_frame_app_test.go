@@ -23,6 +23,7 @@ import (
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
+	"github.com/unxed/f4/vfs/hostmode"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -2155,6 +2156,45 @@ func TestPanelsFrame_CtrlBackslash_GoesToRoot(t *testing.T) {
 	}
 	if filepath.Clean(fsp.Vfs.GetPath()) != filepath.Clean(expectedRoot) {
 		t.Errorf("Ctrl+\\ failed to go to root: expected %q, got %q", expectedRoot, fsp.Vfs.GetPath())
+	}
+}
+
+func TestPanelsFrame_CtrlGrave_GoesToHome(t *testing.T) {
+	vtui.SetDefaultPalette()
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(80, 25)
+	vtui.FrameManager.Init(scr)
+
+	pf := panel.NewPanelsFrame()
+	defer pf.Close()
+	pf.ResizeConsole(80, 25)
+	vtui.FrameManager.Push(pf)
+
+	fsp := pf.Panels[pf.ActiveIdx].(*panel.FileSystemPanel)
+	home, err := hostmode.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("user home directory is unavailable")
+	}
+	sub := filepath.Join(t.TempDir(), "a", "b")
+	if err := os.MkdirAll(sub, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := fsp.Vfs.SetPath(sub); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := &vtinput.InputEvent{
+		Type:            vtinput.KeyEventType,
+		KeyDown:         true,
+		Char:            '`',
+		VirtualKeyCode:  vtinput.VK_OEM_3,
+		ControlKeyState: vtinput.LeftCtrlPressed,
+	}
+	if !pressKey(pf, ev) {
+		t.Fatal("Ctrl+grave was not handled")
+	}
+	if filepath.Clean(fsp.Vfs.GetPath()) != filepath.Clean(home) {
+		t.Fatalf("Ctrl+grave navigated to %q, want home %q", fsp.Vfs.GetPath(), home)
 	}
 }
 

@@ -93,6 +93,7 @@ var actionMenuOrder = []string{
 	"Settings.ImportFar2l",
 	"Panel.GoParent",
 	"Panel.GoRoot",
+	"Panel.GoHome",
 	"Panel.HistoryBack",
 	"Panel.HistoryForward",
 	"Panel.ScrollNamesLeft",

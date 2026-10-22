@@ -1636,6 +1636,25 @@ func init() {
 		}),
 	})
 	registerAction(action.Action{
+		Name:        "Panel.GoHome",
+		Area:        "Shell",
+		Label:       "Home Folder",
+		LabelKey:    "Action.Panel.GoHome",
+		Description: "Go to the user's home folder",
+		DescKey:     "Action.Panel.GoHome.Desc",
+		DefaultKeys: []string{"CtrlVK_C0"},
+		MenuPath:    "Commands",
+		MenuSubPath: "Navigation",
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			home, err := hostmode.UserHomeDir()
+			if err == nil && home != "" {
+				if fsp := pf.GetActivePanel(); fsp != nil {
+					pf.NavigateToPath(fsp, home)
+				}
+			}
+		}),
+	})
+	registerAction(action.Action{
 		Name:        "Panel.HistoryBack",
 		Area:        "Shell",
 		Label:       "History Back",

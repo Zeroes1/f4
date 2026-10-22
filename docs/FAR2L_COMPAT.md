@@ -128,7 +128,7 @@ second column; that column is for information and does not count for any level.
 | K-21 | `Shift+Enter` | Run in a separate window, or open the folder in the system file browser. | SHOULD | [help][hlp-func], [code][fl-shiftenter] |
 | K-22 | `Ctrl+PgUp` | Go to the parent folder, the cursor on the folder that was left. | MUST | [help][hlp-func], [code][fl-ctrlpgup] |
 | K-23 | `Ctrl+PgDn` | Enter the folder or the archive under the cursor. | MUST | [help][hlp-func], [code][fl-ctrlpgdn] |
-| K-24 | ``Ctrl+\``, ``Ctrl+` `` | Go to the root folder, to the home folder. | SHOULD | [help][hlp-func], [code][fl-ctrlbs] |
+| K-24 | `Ctrl+\`; `Ctrl+grave` | Go to the root folder; go to the home folder in the active panel. | SHOULD | [help][hlp-func], [code][fl-ctrlbs] |
 | K-25 | `Alt+F1`, `Alt+F2` | The location (drive) menu for the left, the right panel. | MUST | [help][hlp-func], [code][fp-altf1], [code][fp-altf2] |
 | K-26 | `Ctrl+Shift+0` … `Ctrl+Shift+9` (either Ctrl); `RightCtrl+0` … `RightCtrl+9` and `Ctrl+Alt+0` … `Ctrl+Alt+9` ⌨ | Remember the current folder as a bookmark; go to a bookmark. `Ctrl+Alt` is the way for a terminal that does not tell the right Ctrl from the left one. | SHOULD | [help][hlp-panel], [code][fl-bookmarks] |
 | K-27 | `F12` | The list of screens (panels, viewers, editors, background commands). | SHOULD | [code][mg-f12] |

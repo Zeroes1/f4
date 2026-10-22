@@ -193,6 +193,13 @@ func TestPanelSelectionDefaultAliases(t *testing.T) {
 	}
 }
 
+func TestPanelGoHomeDefaultKey(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	if got := hm.GetAction("Shell", "CtrlVK_C0"); got != "Panel.GoHome" {
+		t.Fatalf("Ctrl+grave action = %q, want Panel.GoHome", got)
+	}
+}
+
 func TestHotkeyManager_ShellDefaults_Issue289(t *testing.T) {
 	hm := keymap.NewHotkeyManager("")
 	hm.InitDefaults()
