@@ -17,9 +17,9 @@ inputs:
   refresh:
     description: >-
       'true' to fetch the current .deb from the archive whenever this image
-      has none of its own yet. Pass ${{ env.CACHE_WRITE }}: the run that may
-      save the cache is the one that should refresh it, and every other run
-      installs the newest .deb an earlier image left.
+      has none of its own yet. Pass the workflow's CACHE_WRITE: the run that
+      may save the cache is the one that should refresh it, and every other
+      run installs the newest .deb an earlier image left.
     required: true
 outputs:
   path:

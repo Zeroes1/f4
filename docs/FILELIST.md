@@ -3242,6 +3242,7 @@ Every file tracked in the repository. Regenerate with
     ├── skills-lock.json
     ├── tools
     │   ├── cicheck
+    │   │   ├── action_test.go
     │   │   ├── cache_test.go
     │   │   └── doc.go
     │   ├── conpty_probe_child.py
