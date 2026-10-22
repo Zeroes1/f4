@@ -255,6 +255,11 @@ func runAttachedSession() {
 		defer restore()
 	}
 
+	defer installLocalJobControl(vtui.Suspend, func() {
+		_ = vtui.Resume()
+		vtui.FrameManager.PostTask(vtui.FrameManager.HardRefresh)
+	})()
+
 	ProbeHostTextArea()
 	PreferCompatibleGraphicsProtocol(scr)
 	App.InstallImageOverlay()
@@ -435,6 +440,9 @@ func runClient(sockPath string, serverPID int, fresh bool) {
 				syscall.Kill(serverPID, syscall.SIGWINCH)
 			}
 		}()
+		// A SIGTSTP of this client is the daemon's to answer: it owns the terminal
+		// (job_control_unix.go).
+		defer forwardJobControlToDaemon(serverPID)()
 	}
 
 	clntPath := filepath.Join(sessionDir(), fmt.Sprintf("c-%d-%x.ipc", os.Getpid(), time.Now().UnixNano()&0xFFFFFFFF))
@@ -655,6 +663,8 @@ func RunServer(sockPath string) {
 
 	scr := App.InitCore()
 
+	defer watchDaemonJobControl(daemonClientRunning.Load, func() { vtui.FrameManager.Stop() })()
+
 	addr, _ := net.ResolveUnixAddr("unixgram", sockPath)
 	conn, err := net.ListenUnixgram("unixgram", addr)
 	if err != nil {
@@ -855,7 +865,9 @@ func RunServer(sockPath string) {
 		ttyxKeys := keymap.StartTTYXKeyboard(SharedTTYXSession())
 
 		vtui.DebugLog("SERVER: Entering fm.Run()...")
+		daemonClientRunning.Store(true)
 		vtui.FrameManager.Run(reader)
+		daemonClientRunning.Store(false)
 		vtui.DebugLog("SERVER: fm.Run() EXITED.")
 		ttyxKeys.Close()
 
