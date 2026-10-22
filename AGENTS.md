@@ -84,6 +84,8 @@ tools/           # developer tooling, incl. the ttytest terminal harness,
                  # plugincheck RPC startup smoke, and releasecheck, the release
                  # gate (docs/UPDATER.md)
                  # plugincheck smoke-tests packaged plugins through Plugin.Init
+                 # cicheck tests rules the .github workflows must keep, such
+                 # as saving caches only from a push to main
 docs/            # 56 subsystem documents — read the relevant one before editing
 packaging/       # distribution packaging and the Nix Home Manager module
 artifacts/       # build artifacts
