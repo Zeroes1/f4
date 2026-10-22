@@ -2815,10 +2815,21 @@ func init() {
 		// file name into it, as in far2l. NoTerminalApp keeps the key out
 		// of the way of a running child process, which owns Ctrl+Enter and
 		// leaves the command line hidden anyway.
-		DefaultKeys:  []string{"CtrlEnter:NoTerminalApp"},
+		DefaultKeys:  []string{"CtrlEnter:NoTerminalApp", "CtrlJ:NoTerminalApp"},
 		DefaultAreas: []string{"Terminal"},
 		Handler: withPF(func(pf *panel.PanelsFrame) {
 			pf.InsertSelectedFileName()
+		}),
+	})
+	registerAction(action.Action{
+		Name:         "Panel.InsertPassiveFileName",
+		Area:         "Shell",
+		Label:        "Insert Passive File Name",
+		Description:  "Insert the name of the file under the cursor of the passive panel into the command line",
+		DefaultKeys:  []string{"CtrlShiftEnter:NoTerminalApp"},
+		DefaultAreas: []string{"Terminal"},
+		Handler: withPF(func(pf *panel.PanelsFrame) {
+			pf.InsertPassiveFileName()
 		}),
 	})
 	registerAction(action.Action{
