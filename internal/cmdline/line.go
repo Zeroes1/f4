@@ -94,6 +94,12 @@ func (cl *CommandLine) DisplayObject(scr *vtui.ScreenBuf) {
 }
 
 func (cl *CommandLine) ProcessKey(e *vtinput.InputEvent) bool {
+	if isCtrlY(e) {
+		// Far: Ctrl+Y clears the command line (docs/FAR2L_COMPAT.md, K-72).
+		cl.Clear()
+		cl.Edit.HistoryPos = -1
+		return true
+	}
 	handled := cl.Edit.ProcessKey(e)
 	if handled && cl.Edit.HistoryPos != -1 {
 		// If a key was handled by the edit control, it means the text was modified.
@@ -152,4 +158,13 @@ func (cl *CommandLine) InsertString(text string) {
 func (cl *CommandLine) PasteText(text string) {
 	cl.Edit.InsertString(text)
 	cl.Edit.HistoryPos = -1
+}
+
+// isCtrlY: Ctrl+Y alone, no Alt and no Shift.
+func isCtrlY(e *vtinput.InputEvent) bool {
+	if e.Type != vtinput.KeyEventType || !e.KeyDown || e.VirtualKeyCode != vtinput.VK_Y {
+		return false
+	}
+	mods := e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed | vtinput.ShiftPressed)
+	return mods == vtinput.LeftCtrlPressed || mods == vtinput.RightCtrlPressed
 }
