@@ -56,11 +56,12 @@ var GlobalLastClipboardWasRectangular bool
 // EditorView is a text editor component.
 type EditorView struct {
 	vtui.BaseFrame
-	topBar  *viewer.TopBar
-	menuBar *vtui.MenuBar
-	Pt      *piecetable.PieceTable
-	Li      *piecetable.LineIndex
-	Engine  *textlayout.WrapEngine
+	topBar      *viewer.TopBar
+	menuBar     *vtui.MenuBar
+	menuRefresh menuRefresh // when the items of menuBar were built (menu_refresh.go)
+	Pt          *piecetable.PieceTable
+	Li          *piecetable.LineIndex
+	Engine      *textlayout.WrapEngine
 
 	ScrollTopRow int // Индекс первой видимой ВИЗУАЛЬНОЙ строки
 	ScrollLeft   int // Горизонтальный скролл (когда WordWrap=false)
@@ -3872,7 +3873,10 @@ func (ev *EditorView) menuBarPinned() bool {
 // the action registry on every call, so shortcuts and toggle states are
 // always current.
 func (ev *EditorView) GetMenuBar() *vtui.MenuBar {
-	ev.menuBar.Items = MenuBarItems("Editor")
+	if now := time.Now(); ev.menuRefresh.due(ev.menuBar.Active, now) {
+		ev.menuBar.Items = MenuBarItems("Editor")
+		ev.menuRefresh.built(now)
+	}
 	if !ev.menuBar.Active {
 		// far2l builds the editor's menu afresh for every F9 with File
 		// selected (EditorShellOptions). F9 reaches vtui's native fallback,
