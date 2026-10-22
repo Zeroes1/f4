@@ -427,6 +427,8 @@ Every file tracked in the repository. Regenerate with
     │   ├── actions
     │   │   ├── affected-packages
     │   │   │   └── action.yml
+    │   │   ├── cached-deb
+    │   │   │   └── action.yml
     │   │   ├── go-cache-restore
     │   │   │   └── action.yml
     │   │   └── shard-packages

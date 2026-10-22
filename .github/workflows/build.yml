@@ -556,11 +556,26 @@ jobs:
           )
         done < <(jq -c '.[]' <<<"$CELLS")
 
+    # Only the Linux cells run under qemu below; a batch of BSDs needs none.
+    - name: Install qemu-user-static
+      id: qemu
+      if: contains(matrix.name, 'linux/')
+      uses: ./.github/actions/cached-deb
+      with:
+        package: qemu-user-static
+        refresh: ${{ env.CACHE_WRITE }}
+
+    - name: Save qemu-user-static
+      if: env.CACHE_WRITE == 'true' && steps.qemu.outputs.downloaded == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.qemu.outputs.path }}
+        key: ${{ steps.qemu.outputs.key }}
+
     - name: Smoke test the binaries
       run: |
         set -euo pipefail
         BATCH_ROOT="$PWD/batch-output"
-        QEMU_READY=no
 
         while IFS= read -r cell; do
           GOOS=$(jq -r '.goos' <<<"$cell")
@@ -588,11 +603,6 @@ jobs:
             exit 1
           fi
 
-          if [ "$QEMU_READY" != "yes" ]; then
-            sudo apt-get update -qq </dev/null
-            sudo apt-get install -y -qq qemu-user-static </dev/null
-            QEMU_READY=yes
-          fi
           bash scripts/check_release_version.sh "qemu-$QEMU-static" "$BUILD_DIR/f4" --version </dev/null
         done < <(jq -c '.[]' <<<"$CELLS")
 
@@ -787,6 +797,21 @@ jobs:
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
 
+    - name: Install qemu-user-static
+      id: qemu
+      if: matrix.goos == 'linux' && matrix.goarch != 'amd64'
+      uses: ./.github/actions/cached-deb
+      with:
+        package: qemu-user-static
+        refresh: ${{ env.CACHE_WRITE }}
+
+    - name: Save qemu-user-static
+      if: env.CACHE_WRITE == 'true' && steps.qemu.outputs.downloaded == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.qemu.outputs.path }}
+        key: ${{ steps.qemu.outputs.key }}
+
     - name: Smoke test the binary
       # Same mechanism as build-batch above: qemu-user-static's binaries run a
       # foreign-architecture static executable directly, no container needed.
@@ -803,8 +828,6 @@ jobs:
           mipsle) QEMU=mipsel ;;
           *)      QEMU="${{ matrix.goarch }}" ;;
         esac
-        sudo apt-get update -qq </dev/null
-        sudo apt-get install -y -qq qemu-user-static </dev/null
         bash scripts/check_release_version.sh "qemu-$QEMU-static" ./build/f4 --version </dev/null
 
     # Every lite archive is a .tar.gz, the Windows one included (#1656). A
