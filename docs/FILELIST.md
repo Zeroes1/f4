@@ -427,6 +427,8 @@ Every file tracked in the repository. Regenerate with
     │   ├── actions
     │   │   ├── affected-packages
     │   │   │   └── action.yml
+    │   │   ├── go-cache-restore
+    │   │   │   └── action.yml
     │   │   └── shard-packages
     │   │       └── action.yml
     │   ├── assets
@@ -3237,6 +3239,9 @@ Every file tracked in the repository. Regenerate with
     │       └── f4rpc.lua
     ├── skills-lock.json
     ├── tools
+    │   ├── cicheck
+    │   │   ├── cache_test.go
+    │   │   └── doc.go
     │   ├── conpty_probe_child.py
     │   ├── conpty_probe.py
     │   ├── conptyreconcile
