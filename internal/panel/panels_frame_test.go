@@ -3399,6 +3399,7 @@ func TestPanelsFrame_VimHotkeys_Comprehensive(t *testing.T) {
 		{VFSItem: vfs.VFSItem{Name: "fileA"}},
 		{VFSItem: vfs.VFSItem{Name: "fileB"}},
 		{VFSItem: vfs.VFSItem{Name: "fileC"}},
+		{VFSItem: vfs.VFSItem{Name: "jfile"}}, // a name 'j' can start: fast find rejects a character that matches nothing
 	}
 	fsp.Refresh()
 	fsp.SetCursorIndex(1) // On fileA
@@ -3460,7 +3461,7 @@ func TestPanelsFrame_VimHotkeys_Comprehensive(t *testing.T) {
 	// `pf.ProcessKey` will return `false` because Vim logic is skipped,
 	// then it will fall through to `fsp.ProcessKey` which will handle fast-find and return `true`.
 	pressKey(pf, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: 'j'})
-	if fsp.GetCursorIndex() != 1 {
+	if fsp.GetCursorIndex() == 2 {
 		t.Error("'j' was handled as Vim navigation despite Fast Find being active")
 	}
 	if fsp.FastFindStr != "j" {

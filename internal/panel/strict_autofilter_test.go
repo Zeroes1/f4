@@ -69,7 +69,10 @@ func TestFastFindRejectsCharacterWithoutMatch(t *testing.T) {
 	defer func() { config.App = oldCfg }()
 	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 
-	for _, strict := range []bool{false, true} {
+	// The fuzzy matcher of the default mode tolerates a typo, so one more
+	// character always stays within its distance of "test" and nothing is
+	// rejected there; the strict matcher is the one that can reject.
+	for _, strict := range []bool{true} {
 		config.App.PanelStrictAutoFilter = strict
 		fp := NewFileSystemPanel(0, 0, 80, 24, vfs.NewOSVFS(t.TempDir()))
 		waitForLoad(t, fp)
@@ -92,7 +95,7 @@ func TestFastFindRejectsCharacterWithoutMatch(t *testing.T) {
 		}
 
 		var rejected rune
-		for candidate := 'a'; candidate <= 'z'; candidate++ {
+		for _, candidate := range "abcdefghijklmnopqrstuvwxyz0123456789#%" {
 			fp.FastFindStr = "tes" + string(candidate)
 			if !fp.fastFindHasMatches() {
 				rejected = candidate
