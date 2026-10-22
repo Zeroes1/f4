@@ -294,6 +294,10 @@ type Panel interface {
 
 // PanelsFrame is the main frame of the f4 manager, containing left and right panels.
 type PanelsFrame struct {
+	// cmdlinePasting: a bracketed paste into the command line is going on
+	// (frame_paste_cmdline.go); cmdlinePasteBreak: the last thing in it was a line break.
+	cmdlinePasting    bool
+	cmdlinePasteBreak bool
 	vtui.BaseFrame
 	Panels [2]Panel
 	// dirWatch keeps each side's listing fresh while the directory changes
@@ -3000,6 +3004,9 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	pf.updateConsoleOverlayModifiers(e)
 	if pf.consumeHostConsoleReply(e) {
+		return true
+	}
+	if pf.cmdlinePasteKey(e) {
 		return true
 	}
 	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
