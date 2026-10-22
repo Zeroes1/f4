@@ -186,6 +186,9 @@ func TestPanelSelectionDefaultAliases(t *testing.T) {
 		if got := hm.GetKeyForAction("Shell", tc.action); got != tc.keys[0] {
 			t.Errorf("primary %s key = %s, want %s", tc.action, got, tc.keys[0])
 		}
+		if len(tc.keys) < 2 {
+			continue // one key only: nothing to fall back to
+		}
 		hm.Bind("Shell", tc.keys[0], "None")
 		if got := hm.GetKeyForAction("Shell", tc.action); got != tc.keys[1] {
 			t.Errorf("fallback %s key = %s, want %s", tc.action, got, tc.keys[1])
