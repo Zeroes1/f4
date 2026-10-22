@@ -4,14 +4,12 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 // answers are what a real terminal sends back for the status reports.
@@ -19,6 +17,29 @@ var answers = []struct{ ask, reply string }{
 	{"\x1b[5n", "\x1b[0n"},
 	{"\x1b[6n", "\x1b[1;1R"},
 	{"\x1b[c", "\x1b[?62;c"},
+}
+
+// answerChunk writes the replies to the requests that end in chunk; tail is the
+// end of the previous chunk, because a request may be cut in two. It returns the
+// tail for the next call.
+func answerChunk(w io.Writer, tail, chunk []byte, asks []struct{ ask, reply string }) []byte {
+	window := append(append([]byte(nil), tail...), chunk...)
+	for _, a := range asks {
+		for from := 0; ; {
+			i := bytes.Index(window[from:], []byte(a.ask))
+			if i < 0 {
+				break
+			}
+			if from+i+len(a.ask) > len(tail) { // ends in the new bytes
+				_, _ = w.Write([]byte(a.reply))
+			}
+			from += i + len(a.ask)
+		}
+	}
+	if len(window) > 7 {
+		return window[len(window)-7:]
+	}
+	return window
 }
 
 // far2lAck is what a terminal with the far2l extensions answers to the
@@ -33,29 +54,12 @@ func Record(argv []string, wait time.Duration, opt Options) (Recording, error) {
 	if opt.Far2l {
 		asks = append([]struct{ ask, reply string }{far2lAck}, answers...)
 	}
-	mfd, err := unix.Open("/dev/ptmx", unix.O_RDWR|unix.O_NOCTTY|unix.O_CLOEXEC, 0)
+	master, slave, err := openPTY(25, 80)
 	if err != nil {
 		return Recording{}, err
 	}
-	master := os.NewFile(uintptr(mfd), "/dev/ptmx")
 	defer func() { _ = master.Close() }()
-	var n uint32
-	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, uintptr(mfd), unix.TIOCGPTN, uintptr(unsafe.Pointer(&n))); e != 0 {
-		return Recording{}, e
-	}
-	var zero int32
-	if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, uintptr(mfd), unix.TIOCSPTLCK, uintptr(unsafe.Pointer(&zero))); e != 0 {
-		return Recording{}, e
-	}
-	slave, err := os.OpenFile("/dev/pts/"+itoa(int(n)), os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		return Recording{}, err
-	}
 	defer func() { _ = slave.Close() }()
-	ws := &unix.Winsize{Row: 25, Col: 80}
-	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, ws); err != nil {
-		return Recording{}, err
-	}
 	cmd := exec.Command(argv[0], argv[1:]...) //nolint:gosec // running the command given on the command line is the point of the tool
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLUMNS=80", "LINES=25")
@@ -81,24 +85,7 @@ func Record(argv []string, wait time.Duration, opt Options) (Recording, error) {
 				mu.Lock()
 				rec.Write(buf[:k])
 				lastOut = time.Now()
-				window := append(append([]byte(nil), tail...), buf[:k]...)
-				for _, a := range asks {
-					for from := 0; ; {
-						i := bytes.Index(window[from:], []byte(a.ask))
-						if i < 0 {
-							break
-						}
-						if from+i+len(a.ask) > len(tail) { // ends in the new bytes
-							_, _ = master.Write([]byte(a.reply))
-						}
-						from += i + len(a.ask)
-					}
-				}
-				if len(window) > 7 {
-					tail = window[len(window)-7:]
-				} else {
-					tail = window
-				}
+				tail = answerChunk(master, tail, buf[:k], asks)
 				mu.Unlock()
 			}
 			if err != nil {
@@ -157,15 +144,4 @@ func Record(argv []string, wait time.Duration, opt Options) (Recording, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	return Recording{Data: append([]byte(nil), rec.Bytes()...), Mark: mark, ExitTook: took, Killed: killed}, nil
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for ; n > 0; n /= 10 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-	}
-	return string(b)
 }
