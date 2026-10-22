@@ -11,6 +11,7 @@ f4 — efficient and cozy file manager in go
 ~Visual File Renamer (VisRen)~VisRen@
 ~Special commands~SpecCmd@
 ~Command line~CmdLine@
+~Pasting over SSH~ClipboardOverSSH@
 ~View README.md~README@
 
   ~Group by~@PanelGrouping@
@@ -951,6 +952,22 @@ $ #Group by#
  Folders separately keeps a first Folders group. Turn it off to include folders
  in ordinary groups, before files. Reverse group order affects ordinary groups
  only: the parent row, separate folders and No data keep their positions.
+
+@ClipboardOverSSH
+$Pasting over SSH
+  Ctrl+V and Shift+Insert paste what f4 can read from the clipboard. Over SSH
+  without the far2l extensions f4 has no access to the clipboard of your own
+  computer, and these keys paste only what was copied inside f4.
+
+  To paste text from your computer, use the paste key of your terminal
+  emulator (for example Ctrl+Shift+V in kitty, Alacritty, WezTerm, GNOME
+  Terminal and Konsole, or the right mouse button or Shift+Insert in xterm).
+  The terminal sends the text as one paste, so it goes into the command line
+  or the editor in one piece and nothing in it runs as a command.
+
+  To copy to your own clipboard, use a terminal with the far2l extensions, or
+  one that accepts OSC 52 (kitty, WezTerm, Alacritty, foot and others; some need
+  a setting that allows it).
 
 @ClipboardImages
 $Clipboard images

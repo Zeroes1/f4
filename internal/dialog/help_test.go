@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -227,5 +228,24 @@ func TestHelpPanelModesTopic(t *testing.T) {
 				t.Error("Contents does not link to PanelModes")
 			}
 		})
+	}
+}
+
+// The help names the paste key of the terminal for a session without a system
+// clipboard (docs/FAR2L_COMPAT.md, C-02; unxed/f4#2152).
+func TestHelpPastingOverSSHTopic(t *testing.T) {
+	for lang, want := range map[string][]string{
+		"en": {"@ClipboardOverSSH", "Ctrl+Shift+V", "OSC 52", "~Pasting over SSH~ClipboardOverSSH@"},
+		"ru": {"@ClipboardOverSSH", "Ctrl+Shift+V", "OSC 52", "~Вставка по SSH~ClipboardOverSSH@"},
+	} {
+		data, err := os.ReadFile(filepath.Join("help", lang+".hlf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, w := range want {
+			if !strings.Contains(string(data), w) {
+				t.Errorf("%s.hlf lacks %q", lang, w)
+			}
+		}
 	}
 }

@@ -227,6 +227,16 @@ image/text choice; text-only clipboard data goes to the command line. See
 [Clipboard images](SETTINGS_CENTER.md#clipboard-images) for encoding and naming
 preferences. Editor and dialog clipboard shortcuts keep their existing actions.
 
+### Pasting over SSH
+
+`Panel.Paste` (Ctrl+V, Shift+Insert) pastes what f4 can read from the clipboard.
+Over SSH without the far2l extensions that is only what was copied inside f4, so
+text from the user's own computer comes with the paste key of the terminal
+emulator (for example `Ctrl+Shift+V` in kitty, the right mouse button in xterm).
+The terminal sends it as one bracketed paste, which f4 takes as text and never as
+keys. Copying to the user's clipboard needs the far2l extensions or OSC 52. The
+help topic is "Pasting over SSH" (`internal/dialog/help/en.hlf`).
+
 ### Panel file clipboard (f4#1767)
 
 `Panel.SelectFromClipboard` (Ctrl+S) replaces the active panel's marks with items
