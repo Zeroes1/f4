@@ -36,11 +36,12 @@ type ViewerView struct {
 	highlightKey   uint64
 
 	vtui.BaseFrame
-	TopBar  *TopBar
-	menuBar *vtui.MenuBar
-	Backend *ViewerBackend
-	VFS     vfs.VFS
-	Path    string
+	TopBar      *TopBar
+	menuBar     *vtui.MenuBar
+	menuRefresh menuRefresh // when the items of menuBar were built (menu_refresh.go)
+	Backend     *ViewerBackend
+	VFS         vfs.VFS
+	Path        string
 
 	HexMode bool
 	// HexAuto records that hex mode came from the binary check rather than
@@ -435,8 +436,9 @@ func (vv *ViewerView) SetPosition(x1, y1, x2, y2 int) {
 // the action registry on every call, so shortcuts and toggle states are
 // always current.
 func (vv *ViewerView) GetMenuBar() *vtui.MenuBar {
-	if App != nil {
+	if now := time.Now(); App != nil && vv.menuRefresh.due(vv.menuBar.Active, now) {
 		vv.menuBar.Items = App.MenuBarItems("Viewer")
+		vv.menuRefresh.built(now)
 	}
 	if !vv.menuBar.Active {
 		// As in the editor: far2l's ViewerShellOptions opens File on every
