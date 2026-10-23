@@ -3358,36 +3358,16 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 
 		if e.VirtualKeyCode >= vtinput.VK_0 && e.VirtualKeyCode <= vtinput.VK_9 && (isBookmarkGoto || isBookmarkSave) {
 			slot := int(e.VirtualKeyCode - vtinput.VK_0)
-			File := BookmarksFilePath()
-			// Always read fresh: another f4 or far2l instance may have
-			// rewritten the file since we last looked at it.
-			set, err := LoadBookmarks(File)
-			if err != nil {
-				vtui.DebugLog("BOOKMARKS: load %q failed: %v", File, err)
-				return true
-			}
 			if isBookmarkSave {
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					set[slot] = pf.BookmarkForPanel(fsp)
-					if err := SaveBookmarks(File, set); err != nil {
-						vtui.DebugLog("BOOKMARKS: save %q failed: %v", File, err)
-					}
-				}
-			} else if !set[slot].IsEmpty() {
-				// An unset slot is a silent no-op, as in far2l.
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					pf.NavigateToBookmark(fsp, set[slot])
-				}
+				pf.SaveBookmarkSlot(slot)
+			} else {
+				pf.GoToBookmarkSlot(slot)
 			}
 			return true
 		}
 
 		if e.VirtualKeyCode == vtinput.VK_OEM_3 && isBookmarkGoto {
-			if home, _ := hostmode.UserHomeDir(); home != "" {
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					pf.NavigateToPath(fsp, home)
-				}
-			}
+			pf.GoToHomeFolder()
 			return true
 		}
 
