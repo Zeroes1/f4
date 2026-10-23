@@ -43,7 +43,7 @@ func TestIssue1239KeyAndAreaKeepTheirWidthInAPane(t *testing.T) {
 	const pane = 80
 	columns := hotkeyTableColumns(rows, pane)
 
-	for _, col := range []int{1, 2} {
+	for _, col := range []int{hotkeyColKey, hotkeyColArea} {
 		want := vtui.StringWidth(rows[0].GetCellText(col))
 		if got := columns[col].Width; got < want {
 			t.Errorf("column %q is %d wide, want all %d cells of its longest value", columns[col].Title, got, want)
@@ -76,7 +76,7 @@ func TestIssue1239NarrowPaneStillFits(t *testing.T) {
 	if room < vtui.StringWidth(columns[len(columns)-1].Title) {
 		t.Errorf("columns overflow the %d-wide pane: description has %d cells left", pane, room)
 	}
-	if got := columns[1].Width; got < 12 {
+	if got := columns[hotkeyColKey].Width; got < 12 {
 		t.Errorf("key column is %d wide, want at least 12", got)
 	}
 }

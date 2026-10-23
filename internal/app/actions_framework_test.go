@@ -99,13 +99,25 @@ func TestFrameworkActionsKeepNativeShortcutsOutOfHotkeyDefaults(t *testing.T) {
 		}
 	}
 
-	// No hotkey at all: the dump is a palette command. CtrlAltP was tried
+	// No binding at all: the dump is a palette command. CtrlAltP was tried
 	// here for Wine's tty and did not work there either (WINE.md §15.2),
 	// while holding it kept App.CommandPalette's own legacy fallback on the
-	// same chord from ever firing (issue #980).
+	// same chord from ever firing (issue #980). What it does declare is
+	// vtui's own dump key, which the key inventory requires to be known; a
+	// declared key is never installed into the hotkey table, and it is not
+	// Ctrl+Alt+P.
 	dump, ok := GetAction("Debug.ScreenDump")
-	if !ok || len(dump.DefaultKeys) != 0 || len(dump.NativeKeys) != 0 {
-		t.Fatalf("screen dump registration = %+v; want no hotkey of its own", dump)
+	if !ok || len(dump.DefaultKeys) != 0 {
+		t.Fatalf("screen dump registration = %+v; want no binding of its own", dump)
+	}
+	for _, declared := range append(append([]string(nil), dump.NativeKeys...), dump.NativeKeyAliases...) {
+		key, _, _ := strings.Cut(declared, ":")
+		if strings.EqualFold(key, "CtrlAltP") {
+			t.Errorf("Debug.ScreenDump declares %s, App.CommandPalette's fallback", key)
+		}
+		if got := manager.GetAction("Common", key); strings.EqualFold(got, "Debug.ScreenDump") {
+			t.Errorf("%s was installed into HotkeyManager for the dump", key)
+		}
 	}
 }
 
@@ -582,5 +594,28 @@ func TestDumpScreenToWritesCurrentBuffer(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "palette-screen-dump") {
 		t.Fatalf("screen dump does not contain rendered text: %q", data)
+	}
+}
+
+// Menus and the command palette advertise a native key, not its aliases: the
+// variants vtui also accepts with more modifiers held are listed only by the
+// Hotkey Configurator.
+func TestNativeKeyAliasesStayOutOfMenus(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	// Ctrl+N forks the panels, so it is only advertised with panels about.
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	vtui.FrameManager.Push(pf)
+	act, ok := GetAction("Workspace.New")
+	if !ok {
+		t.Fatal("Workspace.New is not registered")
+	}
+	shortcuts := keymap.NativeShortcutsForAction("Common", act)
+	if strings.Join(shortcuts, ",") != "Ctrl+N" {
+		t.Errorf("Workspace.New advertises %v, want only Ctrl+N", shortcuts)
 	}
 }

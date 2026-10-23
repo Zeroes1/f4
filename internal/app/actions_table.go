@@ -635,8 +635,13 @@ func init() {
 		Description: "Open the main menu for the current screen",
 		DescKey:     "Action.App.MainMenu.Desc",
 		NativeKeys:  []string{"F9:FrameworkNoTerminalApp"},
-		Visible:     mainMenuActionAvailable,
-		Handler:     actionActivateMainMenu,
+		// The panels raise the bar on F9 whatever Ctrl or Shift is held, and
+		// vtui does on any F9 the frame on top leaves alone; Shift+F9 and
+		// Alt+F9 are bindings of their own, which win (key inventory).
+		NativeKeyAliases: []string{"CtrlF9:FrameworkNoTerminalApp", "CtrlShiftF9:FrameworkNoTerminalApp",
+			"CtrlAltF9:FrameworkNoTerminalApp", "AltShiftF9:FrameworkNoTerminalApp", "CtrlAltShiftF9:FrameworkNoTerminalApp"},
+		Visible: mainMenuActionAvailable,
+		Handler: actionActivateMainMenu,
 	})
 	registerAction(action.Action{
 		Name:        "App.LastMenuItem",
@@ -657,7 +662,10 @@ func init() {
 		Description: "Clone the current panels into a new workspace",
 		DescKey:     "Action.Workspace.New.Desc",
 		NativeKeys:  []string{"CtrlN:TerminalCtrlNWorkspace"},
-		Handler:     actionWorkspaceNew,
+		// vtui forks on N with Ctrl held, whatever else is (key inventory).
+		NativeKeyAliases: []string{"CtrlShiftN:TerminalCtrlNWorkspace", "CtrlAltN:TerminalCtrlNWorkspace",
+			"CtrlAltShiftN:TerminalCtrlNWorkspace"},
+		Handler: actionWorkspaceNew,
 	})
 	registerAction(action.Action{
 		Name:        "Workspace.Fork",
@@ -689,7 +697,10 @@ func init() {
 		Description: "Close the active workspace",
 		DescKey:     "Action.Workspace.Close.Desc",
 		NativeKeys:  []string{"CtrlW:FrameworkNoTerminalApp"},
-		Handler:     actionWorkspaceClose,
+		// vtui closes on W with Ctrl held, whatever else is (key inventory).
+		NativeKeyAliases: []string{"CtrlShiftW:FrameworkNoTerminalApp", "CtrlAltW:FrameworkNoTerminalApp",
+			"CtrlAltShiftW:FrameworkNoTerminalApp"},
+		Handler: actionWorkspaceClose,
 	})
 	registerAction(action.Action{
 		Name:        "Workspace.Next",
@@ -700,20 +711,23 @@ func init() {
 		Description: "Switch to the next workspace",
 		DescKey:     "Action.Workspace.Next.Desc",
 		NativeKeys:  []string{"CtrlTab"},
-		Visible:     multipleWorkspacesAvailable,
-		Handler:     actionWorkspaceNext,
+		// vtui cycles on Tab with Ctrl held; Alt does not change that.
+		NativeKeyAliases: []string{"CtrlAltTab"},
+		Visible:          multipleWorkspacesAvailable,
+		Handler:          actionWorkspaceNext,
 	})
 	registerAction(action.Action{
-		Name:        "Workspace.Previous",
-		Area:        "Common",
-		Label:       "Previous Workspace",
-		LabelKey:    "Action.Workspace.Previous",
-		SearchKeys:  []string{"AppearanceSettings.WorkspaceTabs"},
-		Description: "Switch to the previous workspace",
-		DescKey:     "Action.Workspace.Previous.Desc",
-		NativeKeys:  []string{"CtrlShiftTab"},
-		Visible:     multipleWorkspacesAvailable,
-		Handler:     actionWorkspacePrevious,
+		Name:             "Workspace.Previous",
+		Area:             "Common",
+		Label:            "Previous Workspace",
+		LabelKey:         "Action.Workspace.Previous",
+		SearchKeys:       []string{"AppearanceSettings.WorkspaceTabs"},
+		Description:      "Switch to the previous workspace",
+		DescKey:          "Action.Workspace.Previous.Desc",
+		NativeKeys:       []string{"CtrlShiftTab"},
+		NativeKeyAliases: []string{"CtrlAltShiftTab"},
+		Visible:          multipleWorkspacesAvailable,
+		Handler:          actionWorkspacePrevious,
 	})
 	registerAction(action.Action{
 		Name:        "Workspace.List",
@@ -749,7 +763,13 @@ func init() {
 		// stands down for any bound action and NativeShortcutsForAction hides
 		// a native key another action holds, so the fallback neither fired
 		// nor was shown anywhere (issue #980).
-		Handler: actionScreenDump,
+		//
+		// vtui itself writes the same dump on Ctrl+Shift+P that nothing else
+		// took: Ctrl+Shift+P is the command palette's, so in practice that is
+		// Ctrl+Alt+Shift+P (key inventory).
+		NativeKeys:       []string{"CtrlAltShiftP"},
+		NativeKeyAliases: []string{"CtrlShiftP"},
+		Handler:          actionScreenDump,
 	})
 
 	// --- Shell (panels) actions ---
@@ -1643,6 +1663,9 @@ func init() {
 		Description: "Go to the user's home folder",
 		DescKey:     "Action.Panel.GoHome.Desc",
 		DefaultKeys: []string{"CtrlVK_C0"},
+		// far2l's bookmark keys go home with the grave key too
+		// (PanelsFrame.GoToHomeFolder).
+		NativeKeys:  []string{"RCtrlVK_C0", "CtrlAltVK_C0"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Navigation",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -2445,9 +2468,12 @@ func init() {
 		Area:        "Shell",
 		Label:       "Seek Back 5 Seconds",
 		LabelKey:    "Action.Panel.Player.SeekBack",
+		SearchKeys:  []string{"CommandPalette.QueryPlayer"}, // the palette's prefix in the player
 		Description: "Seek backward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekBack.Desc",
 		DefaultKeys: []string{"CtrlAltLeft"},
+		// The focused player seeks on the plain arrows (PlayerPanel.controlKey).
+		NativeKeys:  []string{"Left:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -2464,9 +2490,11 @@ func init() {
 		Area:        "Shell",
 		Label:       "Seek Forward 5 Seconds",
 		LabelKey:    "Action.Panel.Player.SeekForward",
+		SearchKeys:  []string{"CommandPalette.QueryPlayer"},
 		Description: "Seek forward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekForward.Desc",
 		DefaultKeys: []string{"CtrlAltRight"},
+		NativeKeys:  []string{"Right:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
 		Handler: withPF(func(pf *panel.PanelsFrame) {

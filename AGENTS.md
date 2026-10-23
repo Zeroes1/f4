@@ -183,6 +183,17 @@ artifacts/       # build artifacts
   exemption there, the architecture document is what changes first, not the test.
 - The full rules, with the reasoning, are in `.ai-factory/ARCHITECTURE.md`.
 
+### Keys
+
+- Every key f4 reacts to is declared in the action registry: a configurable
+  one in `DefaultKeys`, one a frame handles itself in `NativeKeys` (variants in
+  `NativeKeyAliases`). The Hotkey Configurator lists both.
+- `cmd/f4/key_inventory_test.go` audits every function that compares a key
+  event against a key. A new key in code needs an audit entry and a
+  declaration; `tools/key_inventory_baseline.txt` holds the functions not
+  audited yet and may only shrink. The rules are in `docs/UX_GUIDELINES.md`,
+  "Keys a Frame Handles Itself".
+
 ### Archive libraries
 
 - Before changing a `go.mod` line for zipper, zip, tar, xz, sevenzip, archives,

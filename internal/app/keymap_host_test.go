@@ -128,6 +128,11 @@ func TestFormatKeyForUI(t *testing.T) {
 		{"CtrlVK_C", "Ctrl+C"},
 		{"CtrlVK_DB", "Ctrl+["},
 		{"VK_C0", "`"},
+		// The Right Ctrl spelling of EventToHotkeyString reads as the other
+		// modifiers do (the numbered bookmark keys, the key inventory).
+		{"RCtrl3", "RCtrl+3"},
+		{"RCtrlAltShiftF11", "RCtrl+Alt+Shift+F11"},
+		{"RCtrl", "RCtrl"},
 		{"", ""},
 	}
 	for _, tc := range tests {

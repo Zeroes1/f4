@@ -219,6 +219,33 @@ rather than to a command.
 And reach for neither when you only need the command once: `Ctrl+Shift+P`
 runs it by name.
 
+## Keys that cannot be rebound
+
+Some keys are handled by the panels, the drive menu or vtui themselves rather
+than through `hotkeys.ini`: Enter and Tab in the panels, the command line's
+`Ctrl+E`, `Ctrl+X` and `Ctrl+Y`, the numbered bookmarks on Right Ctrl or
+`Ctrl+Alt` with a digit, the keys of the focused quick view and of the player,
+the quick search's `Ctrl+Enter`, the drive menu's `Ins`, `F4` and `Del`,
+vtui's `Ctrl+Tab`, `Ctrl+N` and `Alt+1`..`Alt+9`. The Hotkey Configurator lists
+each of them as a built-in row: dimmed, marked `•` in the narrow first column,
+with the state it works in under *When*, so it shows every key f4 reacts to.
+In the Hotkeys tab of the settings, `F3` on such a row says it is built in. The
+*Built-in keys (•)* checkbox under the table hides them and shows them again;
+to find one, type its name into the table (`ctrl y`, `rctrl3`, `enter`). The
+command behind such a row can still be given a key of its own with *Assign*,
+and it runs from the command palette and from macros like any other.
+
+The commands of the focused quick view and of the focused player are offered
+by the command palette only while they have the focus. Opened then, the palette
+starts with *Quick view:* or *Player:* typed in, so the list opens on them;
+erase it to see every command.
+
+vtui does not look at every modifier: it opens a workspace on N with Ctrl
+held whatever else is held, so `Ctrl+Alt+N` does it too. Those variants have
+read-only rows as well; menus and the palette show only the plain key. The
+rule that keeps the list complete is in
+[UX_GUIDELINES.md](UX_GUIDELINES.md#02-keys-a-frame-handles-itself).
+
 ### Panel clipboard paste
 
 `Panel.Paste` defaults to Ctrl+V and Shift+Insert and can be remapped through the

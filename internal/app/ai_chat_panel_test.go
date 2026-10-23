@@ -214,3 +214,34 @@ func TestAIChatPanel_BarKindExcludesApSpec(t *testing.T) {
 		t.Errorf("Expected aiBarFiles when a user file is attached, got %v", k)
 	}
 }
+
+// The focused AI chat takes its keys ahead of the hotkey table
+// (panel.PanelsFrame.VetoActionKey): Right Ctrl+C would copy files, F3 on
+// the patch bar would view the file under the file panel's cursor.
+func TestAIChatOwnsItsKeys(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	pf := paneltest.SetupMockPanelsFrame(t)
+	defer pf.Close()
+	chat := NewAIChatPanel(pf.GetActivePanel())
+	key := func(vk uint16, char rune, mods vtinput.ControlKeyState) *vtinput.InputEvent {
+		return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, Char: char, ControlKeyState: mods}
+	}
+	for _, tc := range []struct {
+		name string
+		e    *vtinput.InputEvent
+		want bool
+	}{
+		{"Right Ctrl+C", key(vtinput.VK_C, 0, vtinput.RightCtrlPressed), true},
+		{"Left Ctrl+C", key(vtinput.VK_C, 0, vtinput.LeftCtrlPressed), false},
+		{"Ctrl+Z", key(vtinput.VK_Z, 0, vtinput.LeftCtrlPressed), true},
+		{"F3 off the patch bar", key(vtinput.VK_F3, 0, 0), false},
+		{"a letter", key('A', 'a', 0), true},
+		{"Enter", key(vtinput.VK_RETURN, '\r', 0), true},
+		{"F5", key(vtinput.VK_F5, 0, 0), false},
+	} {
+		if got := chat.OwnsKey(tc.e); got != tc.want {
+			t.Errorf("%s: owned %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

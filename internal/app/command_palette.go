@@ -121,6 +121,9 @@ func ShowCommandPalette() bool {
 		})
 	})
 	dialog.rebuild = func() []commandPaletteEntry { return buildCommandPaletteEntries(area, pf) }
+	if query := commandPaletteContextQuery(); query != "" {
+		dialog.setQuery(query)
+	}
 	vtui.FrameManager.Push(dialog)
 	// Pushing any ordinary overlay cancels Fast Find on focus loss. The command
 	// palette is the exception: it has just indexed the transient F2 command and
@@ -132,6 +135,23 @@ func ShowCommandPalette() bool {
 		fastFindPanel.FastFindStr = fastFindText
 	}
 	return true
+}
+
+// commandPaletteContextQuery is the text the palette opens with while the
+// focus is in the quick view or in the player. Their own commands, which the
+// palette offers only then, carry it at the start of their labels (or in their
+// SearchKeys), so the list opens on them; erasing it shows every command.
+func commandPaletteContextQuery() string {
+	var key string
+	switch {
+	case keymap.ConditionTrue("QuickViewFocused"):
+		key = "CommandPalette.QueryQuickView"
+	case keymap.ConditionTrue("PlayerFocused"):
+		key = "CommandPalette.QueryPlayer"
+	default:
+		return ""
+	}
+	return i18n.Msg(key) + " "
 }
 
 func commandPaletteAreaAllowed(area string) bool {

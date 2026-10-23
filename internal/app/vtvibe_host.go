@@ -209,6 +209,8 @@ func init() {
 		LabelKey:    "Action.AI.UndoPatch",
 		Description: "Put back the files the last applied ap patch changed",
 		DescKey:     "Action.AI.UndoPatch.Desc",
+		// The AI chat takes Ctrl+Z for it (AIChatPanel.ProcessKey).
+		NativeKeys:  []string{"CtrlZ:AIChatFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "AI",
 		Visible:     func() bool { return aiTopUndo() != nil },
