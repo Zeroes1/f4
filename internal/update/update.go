@@ -193,7 +193,7 @@ func Check(ctx context.Context, cfg Settings, b Build) (Candidate, error) {
 	if cfg.Channel == ChannelNightly {
 		cand.UpdateKey = assetUpdated
 		cand.DisplayVersion = nightlyDisplayVersion(release, assetUpdated)
-		cand.NeedsUpdate = cfg.LastVersion != cand.UpdateKey || runningOlderThanNightly(release, b)
+		cand.NeedsUpdate = nightlyNeedsUpdate(release, b, cfg.LastVersion, cand.UpdateKey)
 		return cand, nil
 	}
 
@@ -225,17 +225,53 @@ func leavingNightly(cfg Settings, b Build) bool {
 	return err == nil
 }
 
-// runningOlderThanNightly compares the running build with the commit the
-// nightly release was built from. LastVersion alone only says that an install
-// of this nightly once finished; when the binary that runs is still an older
-// one, "already up to date" would be false. See #1218.
-func runningOlderThanNightly(release Release, b Build) bool {
-	if b.IsRelease {
+// nightlyNeedsUpdate says whether the nightly is newer than the build that
+// runs. The binary answers for itself where it can: it knows its commit and
+// that commit's time (`f4 -v`), and the release notes name the nightly's. The
+// same commit is up to date, an older one is not, and a newer local build is
+// not sent back.
+//
+// lastVersion, the asset time stored after the updater's own last install,
+// decides only when one side is silent: a release build, whose Version is its
+// tag, a build without VCS data, notes from before #343. It knows nothing of
+// a build put in place another way. An f4 unpacked by hand from the nightly
+// archive was told to download that same nightly again (#2172), and an
+// install that left the older binary running heard "already up to date"
+// (#1218).
+func nightlyNeedsUpdate(release Release, b Build, lastVersion, key string) bool {
+	if !b.IsRelease {
+		commit, builtOn := commitInfoFromReleaseBody(release.Body)
+		if sameCommit(commit, b.Version) {
+			return false
+		}
+		nightly, running := parseBuildTime(builtOn), parseBuildTime(b.TimeText)
+		if !nightly.IsZero() && !running.IsZero() {
+			return nightly.After(running)
+		}
+	}
+	return lastVersion != key
+}
+
+// sameCommit says whether two abbreviated hashes name one commit. The binary
+// keeps seven digits of vcs.revision, while `git rev-parse --short` in the
+// nightly job prints more when seven are ambiguous.
+func sameCommit(a, b string) bool {
+	if len(a) < 7 || len(b) < 7 || !isHex(a) || !isHex(b) {
 		return false
 	}
-	_, builtOn := commitInfoFromReleaseBody(release.Body)
-	nightly, running := parseBuildTime(builtOn), parseBuildTime(b.TimeText)
-	return !nightly.IsZero() && !running.IsZero() && nightly.After(running)
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	return strings.HasPrefix(strings.ToLower(b), strings.ToLower(a))
+}
+
+func isHex(s string) bool {
+	for _, r := range s {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
 }
 
 // nightlyDisplayVersion names a nightly build the way F1 > Help Index names it
