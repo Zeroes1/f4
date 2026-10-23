@@ -243,10 +243,11 @@ func TestRunCLIFailsOnDownload(t *testing.T) {
 }
 
 func TestRunCLICancelsDownload(t *testing.T) {
-	oldAPI, oldOS, oldArch, oldProxy, oldExecutable := APIURL, CurrentOS, CurrentArch, netproxy.Global(), Executable
+	oldAPI, oldOS, oldArch, oldProxy, oldExecutable, oldInterruptContext := APIURL, CurrentOS, CurrentArch, netproxy.Global(), Executable, interruptContext
 	t.Cleanup(func() {
 		APIURL, CurrentOS, CurrentArch, Executable = oldAPI, oldOS, oldArch, oldExecutable
 		netproxy.SetGlobal(oldProxy)
+		interruptContext = oldInterruptContext
 	})
 	CurrentOS, CurrentArch = "linux", "amd64"
 	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
@@ -275,14 +276,15 @@ func TestRunCLICancelsDownload(t *testing.T) {
 	APIURL = server.URL
 
 	ctx, cancel := context.WithCancel(context.Background())
+	interruptContext = func() (context.Context, context.CancelFunc) { return ctx, cancel }
 	done := make(chan int, 1)
 	go func() {
-		done <- runCLI(ctx, "stable", Settings{Channel: ChannelStable}, Build{Version: "v1.0.0", IsRelease: true}, func(Settings) {})
+		done <- RunCLI("stable", Settings{Channel: ChannelStable}, Build{Version: "v1.0.0", IsRelease: true}, func(Settings) {})
 	}()
 	<-started
 	cancel()
-	if got := <-done; got != 1 {
-		t.Fatalf("runCLI(canceled download) = %d, want 1", got)
+	if got := <-done; got != exitInterrupted {
+		t.Fatalf("RunCLI(canceled download) = %d, want %d", got, exitInterrupted)
 	}
 	if got, _ := os.ReadFile(exe); string(got) != "binary" {
 		t.Errorf("binary after canceled download = %q, want unchanged", got)
