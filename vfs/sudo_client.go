@@ -376,6 +376,15 @@ type sudoRemoteError struct {
 	errno syscall.Errno
 }
 
+// stripExtendedPrefixInMessage removes the \\?\ long-path prefix that the
+// elevated side embeds in error text (e.g. "unlinkat \\?\C:\...") so the
+// user never sees it in dialogs or result summaries.
+func stripExtendedPrefixInMessage(msg string) string {
+	msg = strings.ReplaceAll(msg, `\\?\UNC\`, `\\`)
+	msg = strings.ReplaceAll(msg, `\\?\`, ``)
+	return msg
+}
+
 func (e *sudoRemoteError) Error() string { return e.msg }
 func (e *sudoRemoteError) Unwrap() error { return e.errno }
 
@@ -388,6 +397,7 @@ var sudoErrnoByName = map[string]syscall.Errno{
 // newSudoRemoteErrorCode is newSudoRemoteError for an answer that names its
 // kind: the name decides, whatever language or platform the text is in.
 func newSudoRemoteErrorCode(msg, code string) error {
+	msg = stripExtendedPrefixInMessage(msg)
 	if code == "EEXIST_DEST" {
 		return ErrDestinationExists
 	}
@@ -398,6 +408,7 @@ func newSudoRemoteErrorCode(msg, code string) error {
 }
 
 func newSudoRemoteError(msg string) error {
+	msg = stripExtendedPrefixInMessage(msg)
 	if strings.HasSuffix(msg, ErrDestinationExists.Error()) {
 		return ErrDestinationExists
 	}
