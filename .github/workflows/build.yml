@@ -122,9 +122,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 6 cells; capped so this one job doesn't claim every runner the
-      # free-tier pool has (see the concurrency comment above the jobs).
-      max-parallel: 3
+      # 6 cells, not capped. These are short jobs and queue after the long
+      # ones (long-jobs-first), so they run at the end of a run, as runners
+      # come free; a cap of three made them two waves there, and the second
+      # was what the run waited for.
       matrix: { include: [{ goos: linux, goarch: amd64 }, { goos: linux, goarch: arm64 }, { goos: windows, goarch: amd64 }, { goos: windows, goarch: arm64 }, { goos: darwin, goarch: amd64 }, { goos: darwin, goarch: arm64 }] }
     env:
       CGO_ENABLED: 0
@@ -2016,9 +2017,7 @@ jobs:
       # the longest there, started three to five minutes late behind the
       # cap, and on pushes darwin/amd64, the longest of all, five minutes
       # late. The plugin builds, one job per plugin instead of four, give
-      # back more runners than these cells now take at once. build stays
-      # capped: its cells finish well inside the critical path even in two
-      # waves.
+      # back more runners than these cells now take at once.
       # One hosted runner per native os/arch cell, except that the slow
       # darwin/arm64 and windows/amd64 cells split their tests by name.
       # Pull requests skip the second-arch twin of the two
