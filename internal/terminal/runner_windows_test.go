@@ -73,9 +73,16 @@ func TestLocalCommandRunnerWindowsCancellationKillsProcessTree(t *testing.T) {
 		done <- err
 	}()
 
+	// Starting cmd.exe and ping.exe and reading ping's first line is not what
+	// this test measures, and on a busy runner under the race detector, at
+	// GOMAXPROCS 1, it ran past the 3 seconds this wait used to allow: the
+	// race-windows job failed on "ping child did not start" (unxed/f4#2193's
+	// first run). The wait ends at ping's first line, so a passing run is no
+	// slower. The wait below is the measurement and stays short: a cancel
+	// that left the tree running would take ping's whole half minute.
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		cancel()
 		<-done
 		t.Fatal("ping child did not start")
