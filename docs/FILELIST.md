@@ -2131,6 +2131,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── backup_test.go
     │   │   ├── channel_switch_test.go
     │   │   ├── cli.go
+    │   │   ├── cli_interrupt_test.go
     │   │   ├── cli_test.go
     │   │   ├── coverage_test.go
     │   │   ├── edition.go
@@ -2144,6 +2145,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── libc_musl.go
     │   │   ├── libc_musl_test.go
     │   │   ├── nightly_notes_test.go
+    │   │   ├── nightly_running_test.go
     │   │   ├── release_audit.go
     │   │   ├── release_audit_test.go
     │   │   ├── release_os_default.go

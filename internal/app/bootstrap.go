@@ -375,7 +375,6 @@ func Main() {
 		}
 		return
 	}
-	installConsoleCtrlHandler()
 	var sudoDispatcher string
 
 	// Initialize SudoClient immediately for all process types
@@ -794,6 +793,13 @@ see in vtinput project: https://github.com/unxed/vtinput
 			return
 		}
 	}
+
+	// From here on this process is the file manager or one of its daemons,
+	// which Ctrl+Break must not end. The commands that returned above keep
+	// the console's default: Ctrl+C and Ctrl+Break stop them or reach their
+	// own signal.Notify. Installed before them, the handler swallowed both,
+	// and `f4 --update` could not be stopped mid-download (#2172).
+	installConsoleCtrlHandler()
 
 	// Before the daemon and client branches below, so that a daemon started
 	// with these switches measures itself (#884).
