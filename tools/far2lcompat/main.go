@@ -13,8 +13,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 3 && os.Args[1] == "host" {
+		hostMain(os.Args[2:])
+		return
+	}
 	if len(os.Args) < 3 || os.Args[1] != "record" {
 		fmt.Fprintln(os.Stderr, "usage: far2lcompat record [--wait 2s] [--far2l] [--silent-ext] -- <command> [args...]")
+		fmt.Fprintln(os.Stderr, "       far2lcompat host [--term-key ctrl+o] -- <manager command> [args...]")
 		os.Exit(2)
 	}
 	args := os.Args[2:]
@@ -92,4 +97,51 @@ func main() {
 		results = append(results, CheckExit(rec))
 	}
 	fmt.Print(Format(results))
+}
+
+// hostMain runs the host probes against the manager given after "--".
+func hostMain(args []string) {
+	opt := HostOptions{} // f4 shows its terminal by itself while a command runs; --term-key presses a key to show it
+	for len(args) > 0 && args[0] != "--" {
+		switch args[0] {
+		case "--term-key":
+			if len(args) < 2 {
+				fmt.Fprintln(os.Stderr, "far2lcompat: --term-key needs a key")
+				os.Exit(2)
+			}
+			if strings.EqualFold(args[1], "none") { // the terminal is already shown while a command runs
+				opt.TermKey, args = "", args[1:]
+				break
+			}
+			key, ok := termKeys[strings.ToLower(args[1])]
+			if !ok {
+				fmt.Fprintln(os.Stderr, "far2lcompat: unknown key", args[1], "(ctrl+o, ctrl+t are known)")
+				os.Exit(2)
+			}
+			opt.TermKey, args = key, args[1:]
+		default:
+			fmt.Fprintln(os.Stderr, "far2lcompat: unknown option", args[0])
+			os.Exit(2)
+		}
+		args = args[1:]
+	}
+	if len(args) > 0 {
+		args = args[1:]
+	}
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "far2lcompat: no command")
+		os.Exit(2)
+	}
+	rs, err := HostProbes(args, opt)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "far2lcompat:", err)
+		os.Exit(1)
+	}
+	printHost(rs)
+}
+
+// termKeys are the keys that can show the built-in terminal, as the terminal sends them.
+var termKeys = map[string]string{
+	"ctrl+o": "\x0f",
+	"ctrl+t": "\x14",
 }
