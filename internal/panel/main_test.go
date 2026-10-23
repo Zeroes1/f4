@@ -3,13 +3,31 @@ package panel
 import (
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/fusefs"
 	"github.com/unxed/f4/internal/terminal"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 )
+
+// The F11 menu's visibility file is found through config.UserConfigDir, which
+// on darwin ignores the XDG_CONFIG_HOME that testutil.Main points at the
+// suite's own profile. Without the seam installTestSeams sets, this package
+// and internal/settings -- separate processes under `go test ./...` -- wrote
+// the developer's real file, and each other's.
+func TestTheSuiteKeepsToItsOwnProfile(t *testing.T) {
+	dir := testutil.ConfigDir()
+	if dir == "" {
+		t.Skip("testutil.Main made no profile directory")
+	}
+	if path := PluginMenuVisibilityFilePath(); !strings.HasPrefix(path, dir+string(filepath.Separator)) {
+		t.Fatalf("the F11 menu visibility file is %s, outside the suite's own profile %s", path, dir)
+	}
+}
 
 // TestMain sets up what every panel test needs before any of them draws.
 func TestMain(m *testing.M) {
@@ -30,6 +48,13 @@ func installTestSeams() {
 
 	// Copying files to the clipboard must not write the runner's real one.
 	terminal.DisableSystemFileClipboard()
+
+	// os.UserConfigDir ignores XDG_CONFIG_HOME on darwin, so the seam is what
+	// keeps the suite off the developer's real profile there.
+	if dir := testutil.ConfigDir(); dir != "" {
+		config.UserConfigDir = func() (string, error) { return dir, nil }
+		config.ResetConfigDirForTest()
+	}
 }
 
 func unmountTestFilesystems() error {
