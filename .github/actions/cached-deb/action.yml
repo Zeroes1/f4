@@ -1,0 +1,99 @@
+name: Install a cached .deb
+description: >-
+  Install one Ubuntu package from a .deb kept in the Actions cache, so the run
+  does not wait on `apt-get update`. That call fetches every package index of
+  the runner's sources and usually takes seconds, but its tail is long: it
+  held the mips64 batch's smoke test for 217 of its 223 seconds, on the
+  critical path of a push to main. The .deb is the package the archive had
+  when this runner image was current: the key carries ImageVersion, so it
+  follows the archive one image release behind at most, the way a plain
+  `apt-get install` on that image would. This action only restores; the
+  caller saves the file it downloaded, behind CACHE_WRITE, as every workflow
+  here must (tools/cicheck).
+inputs:
+  package:
+    description: The package to install, by name
+    required: true
+  refresh:
+    description: >-
+      'true' to fetch the current .deb from the archive whenever this image
+      has none of its own yet. Pass the workflow's CACHE_WRITE: the run that
+      may save the cache is the one that should refresh it, and every other
+      run installs the newest .deb an earlier image left.
+    required: true
+outputs:
+  path:
+    description: The directory holding the .deb, for the caller's save step
+    value: ${{ steps.key.outputs.path }}
+  key:
+    description: The cache key for the caller's save step
+    value: ${{ steps.key.outputs.key }}
+  downloaded:
+    description: "'true' when the .deb came from the archive in this run and so is worth saving"
+    value: ${{ steps.install.outputs.downloaded }}
+runs:
+  using: composite
+  steps:
+    - id: key
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+      run: |
+        set -euo pipefail
+        prefix="deb-$PACKAGE-${ImageOS:?the runner did not set ImageOS}-$(tr '[:upper:]' '[:lower:]' <<<"$RUNNER_ARCH")-"
+        {
+          echo "path=$HOME/.cache/cached-deb/$PACKAGE"
+          echo "prefix=$prefix"
+          echo "key=$prefix${ImageVersion:?the runner did not set ImageVersion}"
+        } >> "$GITHUB_OUTPUT"
+
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.key.outputs.path }}
+        key: ${{ steps.key.outputs.key }}
+        # An earlier image's .deb: what every run but the refreshing one
+        # installs until main has saved this image's.
+        restore-keys: ${{ steps.key.outputs.prefix }}
+
+    - id: install
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+        REFRESH: ${{ inputs.refresh }}
+        DEB_DIR: ${{ steps.key.outputs.path }}
+        EXACT: ${{ steps.restore.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        deb=$(find "$DEB_DIR" -maxdepth 1 -name '*.deb' -print -quit 2>/dev/null || true)
+
+        # Every apt-get call goes through scripts/apt_get.sh, which gives a
+        # stalled mirror a time limit and two more attempts.
+        apt_get() {
+          bash "$GITHUB_WORKSPACE/scripts/apt_get.sh" "$@"
+        }
+
+        if [ -z "$deb" ] || { [ "$REFRESH" = "true" ] && [ "$EXACT" != "true" ]; }; then
+          rm -rf "$DEB_DIR"
+          mkdir -p "$DEB_DIR"
+          apt_get 60 update -qq
+          (cd "$DEB_DIR" && apt_get 120 download -q "$PACKAGE")
+          deb=$(find "$DEB_DIR" -maxdepth 1 -name '*.deb' -print -quit)
+          echo "downloaded=true" >> "$GITHUB_OUTPUT"
+        fi
+
+        # dpkg, whether the file came from the cache or was just downloaded:
+        # `apt-get install ./file.deb` fetched the same version from the
+        # mirror all over again, so a slow mirror cost a downloaded .deb twice.
+        if ! sudo dpkg -i "$deb" </dev/null; then
+          # A newer image may lack a dependency the .deb needs; dpkg then
+          # leaves it unconfigured. apt finishes the job the slow way, as the
+          # workflow always did: -f repairs what dpkg left, and the install by
+          # name covers a .deb dpkg could not unpack at all.
+          echo "::warning::dpkg could not install $(basename "$deb"); completing with apt-get"
+          apt_get 60 update -qq
+          apt_get 120 install -y -q -f
+          apt_get 120 install -y -q "$PACKAGE"
+        fi
+
+        dpkg-query -W -f='Installed ${Package} ${Version}\n' "$PACKAGE"

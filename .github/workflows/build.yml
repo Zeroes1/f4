@@ -398,8 +398,8 @@ jobs:
           (cd package && zip -r "../$ASSET.zip" f4)
           SEVENZIP=$(command -v 7z || command -v 7zz || command -v 7za || true)
           if [ -z "$SEVENZIP" ]; then
-            sudo apt-get update -qq </dev/null
-            sudo apt-get install -y -qq 7zip </dev/null
+            bash scripts/apt_get.sh 60 update -qq
+            bash scripts/apt_get.sh 120 install -y -q 7zip
             SEVENZIP=$(command -v 7zz || command -v 7z)
           fi
           (cd package && "$SEVENZIP" a -t7z -mx=9 -mf=off -bd "../$ASSET.7z" f4 </dev/null)
@@ -556,11 +556,26 @@ jobs:
           )
         done < <(jq -c '.[]' <<<"$CELLS")
 
+    # Only the Linux cells run under qemu below; a batch of BSDs needs none.
+    - name: Install qemu-user-static
+      id: qemu
+      if: contains(matrix.name, 'linux/')
+      uses: ./.github/actions/cached-deb
+      with:
+        package: qemu-user-static
+        refresh: ${{ env.CACHE_WRITE }}
+
+    - name: Save qemu-user-static
+      if: env.CACHE_WRITE == 'true' && steps.qemu.outputs.downloaded == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.qemu.outputs.path }}
+        key: ${{ steps.qemu.outputs.key }}
+
     - name: Smoke test the binaries
       run: |
         set -euo pipefail
         BATCH_ROOT="$PWD/batch-output"
-        QEMU_READY=no
 
         while IFS= read -r cell; do
           GOOS=$(jq -r '.goos' <<<"$cell")
@@ -588,11 +603,6 @@ jobs:
             exit 1
           fi
 
-          if [ "$QEMU_READY" != "yes" ]; then
-            sudo apt-get update -qq </dev/null
-            sudo apt-get install -y -qq qemu-user-static </dev/null
-            QEMU_READY=yes
-          fi
           bash scripts/check_release_version.sh "qemu-$QEMU-static" "$BUILD_DIR/f4" --version </dev/null
         done < <(jq -c '.[]' <<<"$CELLS")
 
@@ -787,6 +797,21 @@ jobs:
         mkdir -p build/licenses
         cp plugins/visren/LICENSE.upstream build/licenses/VisRen-BSD-3-Clause.txt
 
+    - name: Install qemu-user-static
+      id: qemu
+      if: matrix.goos == 'linux' && matrix.goarch != 'amd64'
+      uses: ./.github/actions/cached-deb
+      with:
+        package: qemu-user-static
+        refresh: ${{ env.CACHE_WRITE }}
+
+    - name: Save qemu-user-static
+      if: env.CACHE_WRITE == 'true' && steps.qemu.outputs.downloaded == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ steps.qemu.outputs.path }}
+        key: ${{ steps.qemu.outputs.key }}
+
     - name: Smoke test the binary
       # Same mechanism as build-batch above: qemu-user-static's binaries run a
       # foreign-architecture static executable directly, no container needed.
@@ -803,8 +828,6 @@ jobs:
           mipsle) QEMU=mipsel ;;
           *)      QEMU="${{ matrix.goarch }}" ;;
         esac
-        sudo apt-get update -qq </dev/null
-        sudo apt-get install -y -qq qemu-user-static </dev/null
         bash scripts/check_release_version.sh "qemu-$QEMU-static" ./build/f4 --version </dev/null
 
     # Every lite archive is a .tar.gz, the Windows one included (#1656). A
@@ -2114,7 +2137,9 @@ jobs:
     # plugins/observer/testdata/isoimg/compat/.
     - name: Install genisoimage
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
-      run: sudo apt-get update && sudo apt-get install -y genisoimage
+      run: |
+        bash scripts/apt_get.sh 60 update -qq
+        bash scripts/apt_get.sh 120 install -y -q genisoimage
 
     - name: Build plugins/observer isoimg test fixture (wasm)
       if: runner.os == 'Linux' && matrix.target == 'linux/amd64'
@@ -2782,8 +2807,11 @@ jobs:
     - name: Install Wine
       run: |
         set -euo pipefail
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq --no-install-recommends wine64 xvfb
+        bash scripts/apt_get.sh 60 update -qq
+        # 180 seconds an attempt: the install normally takes under a minute,
+        # and three timed attempts still fit the job's 20 minutes. A stall
+        # that outlasts them gets the unlimited wait this step always had.
+        bash scripts/apt_get.sh 180 install -y -q --no-install-recommends wine64 xvfb
         # On Ubuntu the 64-bit loader lives under /usr/lib/wine and is not
         # always on PATH under the name a script would guess.
         W=$(command -v wine || command -v wine64 || echo /usr/lib/wine/wine64)
@@ -2924,7 +2952,7 @@ jobs:
       continue-on-error: true
       run: |
         set -euo pipefail
-        sudo apt-get install -y -qq --no-install-recommends xdotool
+        bash scripts/apt_get.sh 120 install -y -q --no-install-recommends xdotool
         GOOS=linux go build -trimpath -o build/xdndtarget ./tools/xdndtarget
         mkdir -p wine-logs/xdnd
         xvfb-run --auto-servernum -s "-screen 0 1280x1024x24" -- \
@@ -3202,10 +3230,19 @@ jobs:
         # directories and fails the otherwise successful main CI run. The
         # GitHub CLI uploads the same files sequentially, which is reliable
         # for the nightly's ~30 architecture assets.
+        #
+        # "Built on" is the commit's time, not this job's: every installed
+        # updater reads it with a regex anchored on the date and compares it
+        # with the vcs.time of the binary that runs (internal/update), so both
+        # must be the same clock. What follows the date is for people: the
+        # page shows the release's own time in the reader's zone ("an hour
+        # ago"), and next to it an unlabelled commit time read as a stale
+        # build date. TestNightlyNotesParse ties this line to the parser.
+        PUBLISHED=$(date -u +'%Y-%m-%d %H:%M')
         gh release create nightly dist/* \
           --repo "$GITHUB_REPOSITORY" \
           --title "Continuous Build (Nightly)" \
-          --notes "Automated pre-release build of the latest main branch. Commit: $SHORT_SHA. Built on: $BUILD_TIME" \
+          --notes "Automated pre-release build of the latest main branch. Commit: $SHORT_SHA. Built on: $BUILD_TIME UTC, the time of that commit. Published: $PUBLISHED UTC." \
           --prerelease
 
     # The check before publishing replays installed builds over the names
