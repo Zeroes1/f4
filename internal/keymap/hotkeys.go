@@ -233,13 +233,18 @@ func formatKeyTokenForUI(key string) string {
 	return key
 }
 
-// FormatKeyForUI converts a raw key string (like CtrlShiftF5) into a pretty UI string (Ctrl+Shift+F5).
+// FormatKeyForUI converts a raw key string (like CtrlShiftF5) into a pretty UI
+// string (Ctrl+Shift+F5). The Right Ctrl spelling of EventToHotkeyString
+// (RCtrl3, a numbered bookmark key) reads RCtrl+3.
 func FormatKeyForUI(key string) string {
 	if key == "" {
 		return ""
 	}
 	var parts []string
-	if strings.HasPrefix(key, "Ctrl") {
+	if strings.HasPrefix(key, "RCtrl") && len(key) > len("RCtrl") {
+		parts = append(parts, "RCtrl")
+		key = key[len("RCtrl"):]
+	} else if strings.HasPrefix(key, "Ctrl") {
 		parts = append(parts, "Ctrl")
 		key = key[4:]
 	}
