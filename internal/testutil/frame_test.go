@@ -103,6 +103,34 @@ func TestDrainUITasksReturnsOnceTheManagerShutsDown(t *testing.T) {
 	}
 }
 
+// A panels-frame test throws away the UI work it leaves queued, so that none
+// of it runs in the next test. None of it may run on the way out either, and
+// none of it may still be in the pump when the discard returns.
+func TestDiscardUITasksEmptiesTheQueueWithoutRunningIt(t *testing.T) {
+	t.Cleanup(SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	ran := 0
+	for i := 0; i < 3; i++ {
+		vtui.FrameManager.PostTask(func() { ran++ })
+	}
+
+	DiscardUITasks()
+	if ran != 0 {
+		t.Fatalf("DiscardUITasks ran %d of the queued tasks", ran)
+	}
+	next := false
+	vtui.FrameManager.PostTask(func() { next = true })
+	select {
+	case task := <-vtui.FrameManager.TaskChan:
+		task()
+	case <-time.After(5 * time.Second):
+		t.Fatal("a task posted after DiscardUITasks never came out of the queue")
+	}
+	if ran != 0 || !next {
+		t.Fatalf("a task posted before DiscardUITasks was still queued after it (ran %d)", ran)
+	}
+}
+
 // Main's leak check used to judge the task pumps from one profile taken right
 // after Shutdown, and failed a -race run over a pump whose deferred
 // WaitGroup.Done had already let Shutdown return but which was still inside

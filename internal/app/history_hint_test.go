@@ -181,6 +181,17 @@ func TestActionFoldersHistoryInsertPersistsLock(t *testing.T) {
 	}
 }
 
+// The two tests in the order a shuffled run once put them in: Show's
+// auto-refresh check in the sudo-folder test queued a panel reload it never
+// ran, the next test ran it while its own folder history was installed, and
+// the reload put the sudo test's folder at the top of that history -- where
+// Insert then put the lock. Both failed passes of race shard 0 (-cpu 1,4) on
+// main's run for #2195 were this.
+func TestFolderHistoryLockAfterTheSudoFolderTest(t *testing.T) {
+	t.Run("sudo-only folder", TestPanelsFrame_SudoOnlyFolderSyncIsSentOnce)
+	t.Run("folder history lock", TestActionFoldersHistoryInsertPersistsLock)
+}
+
 type stubHistoryProvider map[string][]string
 
 func (s stubHistoryProvider) LoadHistory(name string) []string { return s[name] }
