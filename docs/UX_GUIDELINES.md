@@ -52,11 +52,59 @@ The built-in help pages for key bindings are generated from the same registry, s
    reading. Search the frame stack instead.
 5. **Do not add a hardcoded key handler** in any `ProcessKey`. If the
    key must lose to a modal input state (fast find, autocomplete),
-   extend that frame's `VetoActionKey` instead.
+   extend that frame's `VetoActionKey` instead. When a frame really has
+   to handle a key itself (Enter in the panels, F3 in the focused quick
+   view, a vtui fallback), declare the key as `NativeKeys` of the action
+   that does the same thing, `NativeKeyAliases` for the variants with
+   extra modifiers, and `NativeKeysFirst` when the frame takes the key
+   before the hotkey table. See "Keys a frame handles itself" below.
 6. **Tests**: drive keys through the `pressKey` test helper (filter →
    ProcessKey), never through a bare `ProcessKey` call for action keys.
    Menus, KeyBar labels and the generated help topics pick the new
    action up for free — assert them instead of duplicating key tables.
+
+### 0.2. Keys a Frame Handles Itself
+
+Every key f4 reacts to is known to the Hotkey Configurator. A configurable
+key is a binding there; a key some frame handles in its own code is a
+read-only row, taken from the `NativeKeys` and `NativeKeyAliases` of the
+action that does the same thing. That is what lets the user see every key,
+even one no binding can move, and what lets a feature that picks a key of its
+own (a drive-menu link's global hot key, f4#2171) know the key is taken.
+
+* **`NativeKeys`** are the keys menus, the KeyBar and the command palette
+  advertise. A condition after a colon says when the key works
+  (`F3:QuickViewFocused`); the conditions live in
+  `internal/panel/hotkey_conditions.go`.
+* **`NativeKeyAliases`** are variants the frame accepts because it does not
+  look at every modifier: vtui forks a workspace on N with Ctrl held whatever
+  else is held. The configurator lists them; menus and the palette do not.
+* **`NativeKeysFirst`** says the frame takes the keys before the hotkey
+  table, in their state, so a binding on the same key does not replace them
+  and both rows are shown. Without it a binding wins, as it does over vtui's
+  fallbacks and over the numbered bookmark keys.
+* The action's handler does what the key does. For a key of the panels it
+  presses the key (`PanelsFrame.PressNativeKey`): the key is the definition
+  of the action.
+* A focused alternative panel (quick view, player, AI chat) names the keys it
+  takes ahead of the hotkey table with `OwnsKey`; `PanelsFrame.VetoActionKey`
+  asks it.
+
+`cmd/f4/key_inventory_test.go` enforces this. It takes an AST inventory of the
+keys every production function compares a key event against (a
+`vtinput.VK_` constant, a character or number compared with `VirtualKeyCode`,
+a character compared with `Char`), and every function needs an audit entry:
+the chords it handles, each declared by an action of its area, and the keys it
+only uses as widget navigation. A key added to or removed from a function
+fails the test until the audit says what it does. vtui's frame manager and
+its input line, which f4's command line is, are audited from the vtui module
+itself, so a vtui update that adds a shortcut fails too.
+
+The functions not audited yet are frozen in `tools/key_inventory_baseline.txt`,
+which may only shrink: a function there may lose keys or disappear, never
+gain a key, and a new function must be audited. After cleaning one up,
+regenerate it with
+`F4_UPDATE_KEY_INVENTORY_BASELINE=1 go test -run TestKeyInventory ./cmd/f4`.
 
 ### 1. The Four Tiers of Navigation
 
