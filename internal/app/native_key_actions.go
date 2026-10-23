@@ -28,6 +28,9 @@ type nativeKeyAction struct {
 	// aliases are keys that do the same without being worth a mention in
 	// menus and the palette (action.Action.NativeKeyAliases).
 	aliases []string
+	// searchKeys are message keys the palette also finds the action by
+	// (action.Action.SearchKeys).
+	searchKeys []string
 	// condition gates the action when its keys only work in some state
 	// (keymap.ConditionTrue): the palette offers it only then, and it does
 	// nothing otherwise. Empty for keys that always work.
@@ -52,6 +55,7 @@ func registerNativeKeyAction(spec nativeKeyAction) {
 		LabelKey:         "Action." + spec.name,
 		Description:      spec.desc,
 		DescKey:          "Action." + spec.name + ".Desc",
+		SearchKeys:       spec.searchKeys,
 		NativeKeys:       spec.keys,
 		NativeKeyAliases: spec.aliases,
 		NativeKeysFirst:  !spec.bindingWins,
@@ -194,7 +198,8 @@ func nativeKeyActions() []nativeKeyAction {
 		// The info panel and the quick view (Ctrl+L, Ctrl+Q).
 		{name: "Panel.AltPanelCopy", area: "Shell", label: "Copy Line",
 			desc: "Copy the marked lines of the info panel or the quick view, or the line under the cursor",
-			keys: []string{"C:AltPanelFocused"}, condition: "AltPanelFocused"},
+			keys: []string{"C:AltPanelFocused"}, condition: "AltPanelFocused",
+			searchKeys: []string{"CommandPalette.QueryQuickView"}},
 		{name: "QuickView.Wrap", area: "Shell", label: "Quick View: Wrap Lines",
 			desc: "Wrap the long lines of the quick view, or stop wrapping them",
 			keys: []string{"F2:QuickViewFocused"}, condition: "QuickViewFocused"},

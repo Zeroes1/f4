@@ -2468,6 +2468,7 @@ func init() {
 		Area:        "Shell",
 		Label:       "Seek Back 5 Seconds",
 		LabelKey:    "Action.Panel.Player.SeekBack",
+		SearchKeys:  []string{"CommandPalette.QueryPlayer"}, // the palette's prefix in the player
 		Description: "Seek backward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekBack.Desc",
 		DefaultKeys: []string{"CtrlAltLeft"},
@@ -2489,6 +2490,7 @@ func init() {
 		Area:        "Shell",
 		Label:       "Seek Forward 5 Seconds",
 		LabelKey:    "Action.Panel.Player.SeekForward",
+		SearchKeys:  []string{"CommandPalette.QueryPlayer"},
 		Description: "Seek forward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekForward.Desc",
 		DefaultKeys: []string{"CtrlAltRight"},

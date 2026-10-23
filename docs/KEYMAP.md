@@ -235,6 +235,11 @@ to find one, type its name into the table (`ctrl y`, `rctrl3`, `enter`). The
 command behind such a row can still be given a key of its own with *Assign*,
 and it runs from the command palette and from macros like any other.
 
+The commands of the focused quick view and of the focused player are offered
+by the command palette only while they have the focus. Opened then, the palette
+starts with *Quick view:* or *Player:* typed in, so the list opens on them;
+erase it to see every command.
+
 vtui does not look at every modifier: it opens a workspace on N with Ctrl
 held whatever else is held, so `Ctrl+Alt+N` does it too. Those variants have
 read-only rows as well; menus and the palette show only the plain key. The
