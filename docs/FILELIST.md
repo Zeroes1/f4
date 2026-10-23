@@ -427,6 +427,8 @@ Every file tracked in the repository. Regenerate with
     │   ├── actions
     │   │   ├── affected-packages
     │   │   │   └── action.yml
+    │   │   ├── cached-deb
+    │   │   │   └── action.yml
     │   │   ├── go-cache-restore
     │   │   │   └── action.yml
     │   │   └── shard-packages
@@ -2141,6 +2143,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── libc_default_test.go
     │   │   ├── libc_musl.go
     │   │   ├── libc_musl_test.go
+    │   │   ├── nightly_notes_test.go
     │   │   ├── release_audit.go
     │   │   ├── release_audit_test.go
     │   │   ├── release_os_default.go
@@ -3206,6 +3209,7 @@ Every file tracked in the repository. Regenerate with
     │   └── index.yaml
     ├── README.md
     ├── scripts
+    │   ├── apt_get.sh
     │   ├── build_ipk.sh
     │   ├── build_isoimg_test_iso.sh
     │   ├── build_isoimg_test_wasm.sh
@@ -3240,6 +3244,7 @@ Every file tracked in the repository. Regenerate with
     ├── skills-lock.json
     ├── tools
     │   ├── cicheck
+    │   │   ├── action_test.go
     │   │   ├── cache_test.go
     │   │   └── doc.go
     │   ├── conpty_probe_child.py
