@@ -585,6 +585,31 @@ func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	return handled
 }
 
+// OwnsKey: while the player has the focus it keeps (altPanelKeyOwner) the
+// characters -- WinAmp's Z X C V B, + and - for the volume -- which must not
+// go to the command line, Enter and Del, the file keys it swallows so they do
+// not act on the file panel behind it (#380, #902), and Ctrl with the arrows
+// and Home, which move playlist items (docs/PLAYER.md) instead of the split
+// between the panels.
+func (pp *PlayerPanel) OwnsKey(e *vtinput.InputEvent) bool {
+	if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
+		return true
+	}
+	ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
+	alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
+	shift := e.ControlKeyState&vtinput.ShiftPressed != 0
+	if !ctrl && !alt && isFilePanelOnlyKey(e.VirtualKeyCode) {
+		return true
+	}
+	if ctrl && !alt && !shift {
+		switch e.VirtualKeyCode {
+		case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_HOME:
+			return true
+		}
+	}
+	return false
+}
+
 // isFilePanelOnlyKey lists the plain keys that only make sense with a
 // file under the cursor, so the player refuses to pass them on.
 func isFilePanelOnlyKey(vk uint16) bool {

@@ -3001,35 +3001,17 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 	}
 	if fsp == nil || !fsp.FastFindMode {
 		// The global hotkey dispatcher runs after this veto but before the
-		// normal PanelsFrame.ProcessKey path. Keep file-panel-only keys with
-		// a focused player, otherwise F3/F4/F5/F8 can act on the stale file
-		// cursor underneath the player (#380, #902).
-		ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
-		alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
-		if !ctrl && !alt && isFilePanelOnlyKey(e.VirtualKeyCode) &&
-			pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "player" {
-				return true
-			}
-		}
-		// A focused alt panel gets its own keys first: e.g. F2 toggles
-		// wrap in quick view and must not fire Panel.UserMenu.
-		if e.VirtualKeyCode == vtinput.VK_F2 && pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() {
-				return true
-			}
-		}
+		// normal PanelsFrame.ProcessKey path. A focused alt panel gets its
+		// own keys first: F2 toggles wrap in quick view and must not fire
+		// Panel.UserMenu, and every panel names the rest of its keys
+		// (altPanelKeyOwner). Without that the quick view's F8 deleted the
+		// file behind it, and the player's Ctrl+Up moved the split.
 		if pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "ai_chat" {
-				if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_BACK || e.VirtualKeyCode == vtinput.VK_DELETE {
+			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() {
+				if e.VirtualKeyCode == vtinput.VK_F2 {
 					return true
 				}
-			}
-			// The player takes WinAmp's letter keys (Z X C V B) and +/-
-			// for volume, so plain characters must not go to the
-			// command line while it has the cursor.
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "player" {
-				if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
+				if owner, ok := a.(altPanelKeyOwner); ok && owner.OwnsKey(e) {
 					return true
 				}
 			}

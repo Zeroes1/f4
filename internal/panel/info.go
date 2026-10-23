@@ -34,6 +34,14 @@ type AltPanel interface {
 	Kind() string
 }
 
+// altPanelKeyOwner is an alternative panel (quick view, player, AI chat) that
+// takes some keys ahead of the hotkey table while it has the focus: a binding
+// on the same key would otherwise run instead, and act on the file panel
+// behind it (PanelsFrame.VetoActionKey).
+type altPanelKeyOwner interface {
+	OwnsKey(e *vtinput.InputEvent) bool
+}
+
 // InfoPanel is far2l's Ctrl+L information panel. It shows the
 // active file panel's location and system context — computer/user,
 // current directory, disk space, memory and (when enabled) CPU/GPU.
