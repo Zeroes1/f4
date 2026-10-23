@@ -283,7 +283,9 @@ func NativeShortcutsForAction(area string, action action.Action) []string {
 		if NativeShortcutOwnedByCurrentContext(action.Name, key) {
 			continue
 		}
-		if GlobalHotkeysMgr != nil {
+		// A key the frame takes before the hotkey table is not replaced by
+		// a binding on it (action.Action.NativeKeysFirst).
+		if GlobalHotkeysMgr != nil && !action.NativeKeysFirst {
 			bound := GlobalHotkeysMgr.GetAction(area, key)
 			if bound != "" && !strings.EqualFold(bound, action.Name) {
 				continue

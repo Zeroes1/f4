@@ -43,6 +43,13 @@ type Action struct {
 	// Configurator lists them, so every key f4 reacts to has a row there,
 	// but menus and the command palette advertise NativeKeys only.
 	NativeKeyAliases []string
+	// NativeKeysFirst says the frame takes the NativeKeys before the hotkey
+	// table, in the state their condition names: the focused quick view's
+	// F3, the quick search's Ctrl+Enter. A binding on the same key then
+	// does not replace the native key, and both are shown. Without it a
+	// binding wins, as it does over vtui's fallbacks, and the native key is
+	// not advertised while one exists.
+	NativeKeysFirst bool
 	// DefaultAreas lists extra areas (besides Area) that get the default
 	// bindings too (e.g. Panel.Toggle works in both Shell and Terminal).
 	DefaultAreas []string

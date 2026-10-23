@@ -62,6 +62,7 @@ func TestAllDialogs_LayoutValidation(t *testing.T) {
 	// Actions that are destructive, async, or mutate global state without a dialog.
 	skipActions := map[string]bool{
 		"app.quit":                         true,
+		"debug.crash":                      true, // panics on purpose (Ctrl+Alt+C)
 		"panel.systemexplorer":             true,
 		"app.togglewindowsize":             true,
 		"settings.checkupdates":            true, // network check, no dialog of its own

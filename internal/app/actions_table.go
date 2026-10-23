@@ -1663,6 +1663,9 @@ func init() {
 		Description: "Go to the user's home folder",
 		DescKey:     "Action.Panel.GoHome.Desc",
 		DefaultKeys: []string{"CtrlVK_C0"},
+		// far2l's bookmark keys go home with the grave key too
+		// (PanelsFrame.GoToHomeFolder).
+		NativeKeys:  []string{"RCtrlVK_C0", "CtrlAltVK_C0"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Navigation",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -2468,6 +2471,8 @@ func init() {
 		Description: "Seek backward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekBack.Desc",
 		DefaultKeys: []string{"CtrlAltLeft"},
+		// The focused player seeks on the plain arrows (PlayerPanel.controlKey).
+		NativeKeys:  []string{"Left:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
@@ -2487,6 +2492,7 @@ func init() {
 		Description: "Seek forward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekForward.Desc",
 		DefaultKeys: []string{"CtrlAltRight"},
+		NativeKeys:  []string{"Right:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
 		Handler: withPF(func(pf *panel.PanelsFrame) {

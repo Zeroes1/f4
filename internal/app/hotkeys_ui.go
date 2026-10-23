@@ -387,7 +387,7 @@ func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
 			if key == "" || seenNative[displayKey] {
 				continue
 			}
-			if draft.GetAction(act.Area, key) != "" {
+			if !act.NativeKeysFirst && draft.GetAction(act.Area, key) != "" {
 				continue
 			}
 			seenNative[displayKey] = true
