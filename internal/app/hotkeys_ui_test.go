@@ -6,12 +6,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/panel"
+	"github.com/unxed/f4/internal/plughost"
 
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
+	"github.com/unxed/f4/vfs"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -759,4 +763,152 @@ func TestHotkeyDetailsExplainABuiltinKey(t *testing.T) {
 	if strings.Contains(bound, i18n.Msg("Hotkeys.BuiltinNote")) {
 		t.Errorf("the details of a binding call it built-in:\n%s", bound)
 	}
+}
+
+// registerDeclaredKeyPlugin registers a plugin command declaring Shift+key,
+// as the archiver does for Add to archive, and, when global, the global
+// hotkey that runs it; the returned counter counts the runs.
+func registerDeclaredKeyPlugin(t *testing.T, id string, vk uint16, shortcut string, global bool) *int {
+	t.Helper()
+	t.Cleanup(plughost.SnapshotPluginRegistries())
+	oldOff := config.App.PluginDefaultHotkeysOff
+	t.Cleanup(func() { config.App.PluginDefaultHotkeysOff = oldOff })
+	config.App.PluginDefaultHotkeysOff = ""
+
+	runs := new(int)
+	run := func(vfs.App) { *runs++ }
+	registration, err := plughost.RegisterPluginCommand(vfs.PluginCommand{
+		ID:       id,
+		Location: vfs.PluginCommandPanel,
+		Label:    "Declared key " + id,
+		Shortcut: shortcut,
+		Run:      run,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(registration.Unregister)
+	if global {
+		plughost.RegisterGlobalHotkey(vk, vtinput.ShiftPressed, run)
+	}
+	return runs
+}
+
+// openHotkeyConfiguratorOn opens the Hotkey Configurator over pf with the row
+// of actionName selected.
+func openHotkeyConfiguratorOn(t *testing.T, pf *panel.PanelsFrame, actionName string) (*vtui.Window, hotkeyRow, *vtui.Button, *vtui.Button) {
+	t.Helper()
+	actionHotkeyConfig(pf)
+	dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok {
+		t.Fatalf("top frame = %T, want the hotkey dialog", vtui.FrameManager.GetTopFrame())
+	}
+	var table *vtui.Table
+	var unbind, cancel *vtui.Button
+	for _, child := range dlg.GetChildren() {
+		switch c := child.(type) {
+		case *vtui.Table:
+			table = c
+		case *vtui.Button:
+			switch testutil.GetCleanText(c) {
+			case "Unbind":
+				unbind = c
+			case "Cancel":
+				cancel = c
+			}
+		}
+	}
+	if table == nil || unbind == nil || cancel == nil {
+		t.Fatal("hotkey dialog controls missing")
+	}
+	for i, row := range table.Rows {
+		if r := row.(hotkeyRow); r.Action == actionName {
+			table.SelectPos = i
+			return dlg, r, unbind, cancel
+		}
+	}
+	t.Fatalf("no row for %s", actionName)
+	return nil, hotkeyRow{}, nil, nil
+}
+
+// Unbind on the key a plugin declares for its command (Shift+F1 for Add to
+// archive) switched nothing off: the key is not in hotkeys.ini, which is all
+// Unbind removed. It now switches it off as Del in the plugin menu does, and
+// the key no longer runs the command.
+func TestHotkeyConfiguratorUnbindsAPluginsDeclaredKey(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	runs := registerDeclaredKeyPlugin(t, "test.declared.global", vtinput.VK_F1, "Shift+F1", true)
+	actionName := keymap.PluginCommandActionName("test.declared.global")
+
+	pf := newDirectPalettePanelsFrame(&panel.FileSystemPanel{Vfs: vfs.NewNullVFS(0)}, &panel.FileSystemPanel{Vfs: vfs.NewNullVFS(0)})
+	setDirectPaletteTopFrame(t, pf)
+	shiftF1 := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F1, ControlKeyState: vtinput.ShiftPressed}
+	if !pressKey(pf, shiftF1) || *runs != 1 {
+		t.Fatalf("Shift+F1 before Unbind ran the command %d times, want 1", *runs)
+	}
+
+	dlg, row, unbind, cancel := openHotkeyConfiguratorOn(t, pf, actionName)
+	if row.Key != "Shift+F1" || row.Declared != "ShiftF1" || row.when() != "" {
+		t.Fatalf("declared row = key %q, declared %q, when %q; want Shift+F1 in every panel", row.Key, row.Declared, row.when())
+	}
+	unbind.OnClick()
+	confirmation, ok := vtui.FrameManager.GetTopFrame().(vtui.Container)
+	if !ok || confirmation == vtui.Container(dlg) {
+		t.Fatalf("Unbind asked nothing: top frame = %T", vtui.FrameManager.GetTopFrame())
+	}
+	testutil.ClickDialogButton(t, confirmation, "Ok")
+	if !panel.PluginDefaultKeyOff("ShiftF1") {
+		t.Fatalf("PluginDefaultHotkeysOff = %q, want ShiftF1", config.App.PluginDefaultHotkeysOff)
+	}
+	dlg.Close()
+	vtui.FrameManager.PopFramesAbove(pf)
+	_, row, _, cancel = openHotkeyConfiguratorOn(t, pf, actionName)
+	if row.Key != "" || row.Declared != "" {
+		t.Fatalf("after Unbind the row shows key %q, declared %q; want none", row.Key, row.Declared)
+	}
+	cancel.OnClick()
+	// A closed frame stays on the stack until the main loop sweeps it.
+	vtui.FrameManager.PopFramesAbove(pf)
+	if top := vtui.FrameManager.GetTopFrame(); top != pf {
+		t.Fatalf("top frame = %T, want the panels", top)
+	}
+
+	if pressKey(pf, shiftF1); *runs != 1 {
+		t.Fatalf("Shift+F1 after Unbind ran the command again (%d runs)", *runs)
+	}
+
+	// Assign gives the command its key back, as a binding of its own.
+	keymap.GlobalHotkeysMgr.Bind("Shell", "ShiftF1", actionName)
+	if !pressKey(pf, shiftF1) || *runs != 2 {
+		t.Fatalf("Shift+F1 assigned again ran the command %d times in all, want 2", *runs)
+	}
+}
+
+// A key a plugin handles in its own panel only (Shift+F4 for Add connection
+// in NetFox) says so in the When column, and Unbind tells why it cannot remove
+// it rather than doing nothing without a word.
+func TestHotkeyConfiguratorShowsAPluginPanelKey(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	registerDeclaredKeyPlugin(t, "test.declared.panel", vtinput.VK_F4, "Shift+F4", false)
+
+	pf := newDirectPalettePanelsFrame(&panel.FileSystemPanel{Vfs: vfs.NewNullVFS(0)}, &panel.FileSystemPanel{Vfs: vfs.NewNullVFS(0)})
+	setDirectPaletteTopFrame(t, pf)
+	dlg, row, unbind, cancel := openHotkeyConfiguratorOn(t, pf, keymap.PluginCommandActionName("test.declared.panel"))
+	if row.Key != "Shift+F4" || !row.PanelOnly || row.GetCellText(hotkeyColWhen) != i18n.Msg("Hotkeys.WhenPluginPanel") {
+		t.Fatalf("panel row = key %q, panel only %v, when %q", row.Key, row.PanelOnly, row.GetCellText(hotkeyColWhen))
+	}
+	unbind.OnClick()
+	note, ok := vtui.FrameManager.GetTopFrame().(vtui.Container)
+	if !ok || note == vtui.Container(dlg) {
+		t.Fatalf("Unbind said nothing: top frame = %T", vtui.FrameManager.GetTopFrame())
+	}
+	testutil.ClickDialogButton(t, note, "Ok")
+	if config.App.PluginDefaultHotkeysOff != "" {
+		t.Fatalf("PluginDefaultHotkeysOff = %q, want it untouched", config.App.PluginDefaultHotkeysOff)
+	}
+	cancel.OnClick()
 }
