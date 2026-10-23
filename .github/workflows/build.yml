@@ -1728,10 +1728,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # Up to 4 cells on pushes/tags (1 on pull requests already); capped
-      # so this job doesn't claim every runner the free-tier pool has (see
-      # the concurrency comment above the jobs).
-      max-parallel: 2
+      # Up to 4 cells on pushes/tags (1 on pull requests), not capped, for
+      # the reason given at the test job. vet gates no other job, but a run
+      # is green only when it is done: in a dispatched run of the full
+      # matrix, two at a time left the last cell starting at minute 12 and
+      # finishing the run at minute 16, four minutes after everything else.
       # One long line on purpose: actionlint chews minutes on a folded variant.
       matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"name":"linux/arm","cells":[{"target":"linux/arm","tags":"goffi_static"}]}]}') || fromJSON('{"include":[{"name":"windows/amd64, linux/arm, linux/amd64","cells":[{"target":"windows/amd64"},{"target":"linux/arm","tags":"goffi_static"},{"target":"linux/amd64","tags":"goffi_universal"}]},{"name":"darwin/arm64, freebsd/amd64, dragonfly/amd64","cells":[{"target":"darwin/arm64"},{"target":"freebsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"},{"target":"dragonfly/amd64"}]},{"name":"openbsd/amd64, netbsd/amd64","cells":[{"target":"openbsd/amd64"},{"target":"netbsd/amd64","gcflags":"-gcflags=github.com/go-webgpu/goffi/internal/fakecgo=-std"}]},{"name":"illumos/amd64, solaris/amd64","cells":[{"target":"illumos/amd64"},{"target":"solaris/amd64"}]}]}') }}
     env:
@@ -1995,8 +1996,9 @@ jobs:
       # the longest there, started three to five minutes late behind the
       # cap, and on pushes darwin/amd64, the longest of all, five minutes
       # late. The plugin builds, one job per plugin instead of four, give
-      # back more runners than these cells now take at once. build and vet
-      # stay capped: their cells finish well inside the critical path.
+      # back more runners than these cells now take at once. build stays
+      # capped: its cells finish well inside the critical path even in two
+      # waves.
       # One hosted runner per native os/arch cell, except that the slow
       # darwin/arm64 and windows/amd64 cells split their tests by name.
       # Pull requests skip the second-arch twin of the two
