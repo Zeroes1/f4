@@ -869,11 +869,11 @@ jobs:
   #
   # f4#1178 part 2 of 4: the release job below now publishes these builds as
   # GitHub Release assets, at the path plugring-manifest.json's URL template
-  # expects. NOTE: this matrix only has 4 cells (windows/arm64 and
+  # expects. NOTE: TARGETS only has 4 entries (windows/arm64 and
   # darwin/arm64 are missing) while the main `build` job above targets 6; a
   # user on either missing platform gets a 404 from the manifest URL today.
-  # Widening this matrix is left to a later part -- it changes CI job budget
-  # (see LUNOBOT.md), which this part deliberately did not touch.
+  # Adding one is left to a later part; since the targets share one job, it
+  # costs that job another build of about a minute, not another runner.
   #
   # f4#1178 part 3 of 4: "not distributed through the community PlugRing
   # catalog" above is still true of plugring/index.yaml specifically -- that
@@ -883,30 +883,19 @@ jobs:
   # through a separate, explicitly first-party PlugRing entry that the
   # community distribution policy does not apply to (same repository, same
   # review, same CI -- not a third party's unreviewable binary).
+  #
+  # One runner builds all four targets, one after the other. They used to be
+  # four matrix cells, each paying for its own checkout, Go setup, cache
+  # restore and `go mod tidy` to compile for a minute -- and each holding one
+  # of the 20 runners the critical-path jobs wait for. In one job the builds
+  # take about three minutes, well inside the run's critical path.
   build-cloudfox-plugin:
-    name: Build cloudfox-plugin (${{ matrix.name }})
+    name: Build cloudfox-plugin
     needs: [should-run-full]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux/amd64
-            goos: linux
-            goarch: amd64
-          - name: linux/arm64
-            goos: linux
-            goarch: arm64
-          - name: windows/amd64
-            goos: windows
-            goarch: amd64
-          - name: darwin/amd64
-            goos: darwin
-            goarch: amd64
     env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
+      TARGETS: linux/amd64 linux/arm64 windows/amd64 darwin/amd64
     defaults:
       run:
         working-directory: plugins/cloudfox
@@ -944,20 +933,10 @@ jobs:
         done
         exit 1
 
-    - name: Build cloudfox-plugin
-      run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        CGO_ENABLED=0 go build -trimpath -o "cloudfox-plugin$EXT" ./cmd/cloudfox-plugin
-
-    - name: Run go vet (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: go vet ./...
-
     # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
     # plugring-manifest.json's URL template expects, for two reasons. First,
     # the `release` job below downloads every artifact from this run with
-    # `merge-multiple: true`; four matrix cells all producing a file literally
+    # `merge-multiple: true`; four targets all producing a file literally
     # named `cloudfox-plugin` would collide into one arbitrary binary instead
     # of publishing four platform assets. Second, the release asset name has
     # to be predictable for the manifest URL to resolve at all.
@@ -967,25 +946,39 @@ jobs:
     # "-<os>-<arch>.tar.gz", and GitHub lists assets by name, so
     # cloudfox-plugin-linux-amd64.tar.gz would be installed in place of
     # f4-linux-amd64.tar.gz. The PlugRing installer reads both extensions.
-    - name: Package cloudfox-plugin
+    - name: Build and package cloudfox-plugin
       run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tgz" "cloudfox-plugin$EXT"
+        set -euo pipefail
+        for target in $TARGETS; do
+          echo "::group::$target"
+          GOOS=${target%/*}
+          GOARCH=${target#*/}
+          EXT=""
+          if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+          GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -trimpath -o "cloudfox-plugin$EXT" ./cmd/cloudfox-plugin
+          tar -czvf "cloudfox-plugin-$GOOS-$GOARCH.tgz" "cloudfox-plugin$EXT"
+          rm "cloudfox-plugin$EXT"
+          echo "::endgroup::"
+        done
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      run: go vet ./...
 
     - name: Smoke packaged cloudfox-plugin (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
         mkdir smoke
-        tar -xzf "cloudfox-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        tar -xzf cloudfox-plugin-linux-amd64.tgz -C smoke
         cd ../..
         CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/cloudfox/smoke/cloudfox-plugin"
 
+    # One artifact with every target's archive: the release and nightly jobs
+    # take all artifacts with merge-multiple, so only the file names count.
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
-        name: cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/cloudfox/cloudfox-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
+        name: cloudfox-plugin
+        path: plugins/cloudfox/cloudfox-plugin-*.tgz
+        if-no-files-found: error
         retention-days: 7
 
   # f4#1178 Android plugin, part 1 of 4 (mirrors build-cloudfox-plugin above,
@@ -1016,37 +1009,22 @@ jobs:
   # f4#1178 part 2 of 4: the release job below now publishes these builds as
   # GitHub Release assets too, at the path plugring-manifest.json's URL
   # template expects (mirrors build-cloudfox-plugin's own part 2). Same
-  # caveat as that job: this matrix only has 4 of the 6 desktop cells (no
+  # caveat as that job: TARGETS only has 4 of the 6 desktop targets (no
   # windows/arm64, darwin/arm64), so those two platforms still 404 on the
-  # manifest URL; widening it is left to a later part, same reasoning as
-  # cloudfox's own part 2 (CI job budget, see LUNOBOT.md).
+  # manifest URL; adding them is left to a later part, as for cloudfox.
   #
   # An install path through PlugRing (part 3) and a lite/full-build menu
   # entry (part 4) are still follow-up, exactly as they were for CloudFox.
+  #
+  # One runner builds all four targets, for the reason given above
+  # build-cloudfox-plugin.
   build-android-plugin:
-    name: Build android-plugin (${{ matrix.name }})
+    name: Build android-plugin
     needs: [should-run-full]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux/amd64
-            goos: linux
-            goarch: amd64
-          - name: linux/arm64
-            goos: linux
-            goarch: arm64
-          - name: windows/amd64
-            goos: windows
-            goarch: amd64
-          - name: darwin/amd64
-            goos: darwin
-            goarch: amd64
     env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
+      TARGETS: linux/amd64 linux/arm64 windows/amd64 darwin/amd64
     defaults:
       run:
         working-directory: plugins/android
@@ -1089,45 +1067,48 @@ jobs:
         done
         exit 1
 
-    - name: Build android-plugin
-      run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        CGO_ENABLED=0 go build -trimpath -tags lite -o "android-plugin$EXT" ./cmd/android-plugin
-
-    - name: Run go vet (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: go vet -tags lite ./...
-
     # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
     # plugring-manifest.json's URL template expects, for the same two reasons
-    # as build-cloudfox-plugin's own Package step: the `release`/`nightly`
+    # as build-cloudfox-plugin's own package step: the `release`/`nightly`
     # jobs below sweep every workflow artifact into one directory with
-    # `merge-multiple: true`, so four matrix cells all producing a file
-    # literally named `android-plugin` would collide into one arbitrary
-    # binary instead of publishing four platform assets; and the release
-    # asset name has to be predictable for the manifest URL to resolve.
+    # `merge-multiple: true`, so four targets all producing a file literally
+    # named `android-plugin` would collide into one arbitrary binary instead
+    # of publishing four platform assets; and the release asset name has to
+    # be predictable for the manifest URL to resolve.
     # .tgz, not .tar.gz, so that no updater already released takes it for
     # f4's own archive: see the cloudfox-plugin package step (#1656).
-    - name: Package android-plugin
+    - name: Build and package android-plugin
       run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        tar -czvf "android-plugin-$GOOS-$GOARCH.tgz" "android-plugin$EXT"
+        set -euo pipefail
+        for target in $TARGETS; do
+          echo "::group::$target"
+          GOOS=${target%/*}
+          GOARCH=${target#*/}
+          EXT=""
+          if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+          GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -trimpath -tags lite -o "android-plugin$EXT" ./cmd/android-plugin
+          tar -czvf "android-plugin-$GOOS-$GOARCH.tgz" "android-plugin$EXT"
+          rm "android-plugin$EXT"
+          echo "::endgroup::"
+        done
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      run: go vet -tags lite ./...
 
     - name: Smoke packaged android-plugin (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
         mkdir smoke
-        tar -xzf "android-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        tar -xzf android-plugin-linux-amd64.tgz -C smoke
         cd ../..
         CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/android/smoke/android-plugin"
 
+    # One artifact with every target's archive, as for cloudfox-plugin.
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
-        name: android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/android/android-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
+        name: android-plugin
+        path: plugins/android/android-plugin-*.tgz
+        if-no-files-found: error
         retention-days: 7
 
   # f4#1178 iOS plugin, part 1 of 4 (plan: issuecomment-5851326218 on #1178,
@@ -1152,37 +1133,22 @@ jobs:
   #
   # f4#1178 part 2 of 4: the release job below now publishes these builds as
   # GitHub Release assets, at the path plugring-manifest.json's URL template
-  # expects. NOTE: this matrix only has 4 cells (windows/arm64 and
+  # expects. NOTE: TARGETS only has 4 entries (windows/arm64 and
   # darwin/arm64 are missing) while the main `build` job above targets 6; a
   # user on either missing platform gets a 404 from the manifest URL today.
-  # Widening this matrix is left to a later part -- it changes CI job budget
-  # (see LUNOBOT.md), which this part deliberately did not touch. This
-  # mirrors build-cloudfox-plugin's own part 2 change exactly, including its
-  # 4-cell gap.
+  # Adding one is left to a later part, as for cloudfox. This mirrors
+  # build-cloudfox-plugin's own part 2 change exactly, including its
+  # 4-target gap.
+  #
+  # One runner builds all four targets, for the reason given above
+  # build-cloudfox-plugin.
   build-ios-plugin:
-    name: Build ios-plugin (${{ matrix.name }})
+    name: Build ios-plugin
     needs: [should-run-full]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: linux/amd64
-            goos: linux
-            goarch: amd64
-          - name: linux/arm64
-            goos: linux
-            goarch: arm64
-          - name: windows/amd64
-            goos: windows
-            goarch: amd64
-          - name: darwin/amd64
-            goos: darwin
-            goarch: amd64
     env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
+      TARGETS: linux/amd64 linux/arm64 windows/amd64 darwin/amd64
     defaults:
       run:
         working-directory: plugins/ios
@@ -1220,44 +1186,47 @@ jobs:
         done
         exit 1
 
-    - name: Build ios-plugin
-      run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        CGO_ENABLED=0 go build -trimpath -o "ios-plugin$EXT" ./cmd/ios-plugin
-
-    - name: Run go vet (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
-      run: go vet ./...
-
     # f4#1178 part 2 of 4: package into the same {os}-{arch} archive name
     # plugring-manifest.json's URL template expects, for two reasons. First,
     # the `release` job below downloads every artifact from this run with
-    # `merge-multiple: true`; four matrix cells all producing a file literally
+    # `merge-multiple: true`; four targets all producing a file literally
     # named `ios-plugin` would collide into one arbitrary binary instead of
     # publishing four platform assets. Second, the release asset name has to
     # be predictable for the manifest URL to resolve at all.
     # .tgz, not .tar.gz, so that no updater already released takes it for
     # f4's own archive: see the cloudfox-plugin package step (#1656).
-    - name: Package ios-plugin
+    - name: Build and package ios-plugin
       run: |
-        EXT=""
-        if [ "$GOOS" = windows ]; then EXT=".exe"; fi
-        tar -czvf "ios-plugin-$GOOS-$GOARCH.tgz" "ios-plugin$EXT"
+        set -euo pipefail
+        for target in $TARGETS; do
+          echo "::group::$target"
+          GOOS=${target%/*}
+          GOARCH=${target#*/}
+          EXT=""
+          if [ "$GOOS" = windows ]; then EXT=".exe"; fi
+          GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 go build -trimpath -o "ios-plugin$EXT" ./cmd/ios-plugin
+          tar -czvf "ios-plugin-$GOOS-$GOARCH.tgz" "ios-plugin$EXT"
+          rm "ios-plugin$EXT"
+          echo "::endgroup::"
+        done
+
+    - name: Run go vet (host GOOS/GOARCH only)
+      run: go vet ./...
 
     - name: Smoke packaged ios-plugin (host GOOS/GOARCH only)
-      if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
       run: |
         mkdir smoke
-        tar -xzf "ios-plugin-$GOOS-$GOARCH.tgz" -C smoke
+        tar -xzf ios-plugin-linux-amd64.tgz -C smoke
         cd ../..
         CGO_ENABLED=0 go run ./tools/plugincheck "./plugins/ios/smoke/ios-plugin"
 
+    # One artifact with every target's archive, as for cloudfox-plugin.
     - name: Upload Artifact
       uses: actions/upload-artifact@v7
       with:
-        name: ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: plugins/ios/ios-plugin-${{ matrix.goos }}-${{ matrix.goarch }}.tgz
+        name: ios-plugin
+        path: plugins/ios/ios-plugin-*.tgz
+        if-no-files-found: error
         retention-days: 7
 
   # Android for f4 means Termux (#882). A plain CGO_ENABLED=0 cross-build
