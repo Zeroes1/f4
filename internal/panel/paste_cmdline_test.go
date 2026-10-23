@@ -78,3 +78,32 @@ func TestPasteIntoCommandLineEndsWithTheMarker(t *testing.T) {
 		t.Fatalf("typing after a paste: %q, want %q", got, "xy")
 	}
 }
+
+// The edit line is measured and drawn for every key it takes, so a long paste
+// typed into it key by key took minutes; the text is put in at the end of the
+// paste (unxed/f4#2157).
+func TestPasteIntoCommandLineLongTextArrivesWhole(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	var keys []*vtinput.InputEvent
+	want := ""
+	for i := 0; i < 3000; i++ {
+		keys = append(keys, pasteKey('x', vtinput.VK_X, false))
+		want += "x"
+	}
+	if got := pasteInto(t, f, keys...); got != want {
+		t.Fatalf("command line holds %d characters after a paste of %d", len(got), len(want))
+	}
+}
+
+func TestPasteIntoCommandLineKeepsTheOrderWithOtherKeys(t *testing.T) {
+	f := newIssue2049Fixture(t)
+	got := pasteInto(t, f,
+		pasteKey('a', vtinput.VK_A, false),
+		pasteKey('b', vtinput.VK_B, false),
+		pasteKey(0, vtinput.VK_LEFT, false),
+		pasteKey('c', vtinput.VK_C, false),
+	)
+	if got != "acb" {
+		t.Fatalf("command line after a, b, Left, c: %q, want %q", got, "acb")
+	}
+}

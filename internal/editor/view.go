@@ -58,7 +58,8 @@ type EditorView struct {
 	vtui.BaseFrame
 	topBar      *viewer.TopBar
 	menuBar     *vtui.MenuBar
-	menuRefresh menuRefresh // when the items of menuBar were built (menu_refresh.go)
+	menuRefresh menuRefresh    // when the items of menuBar were built (menu_refresh.go)
+	keyLabels   keyLabelsCache // the last key bar captions (menu_refresh.go)
 	Pt          *piecetable.PieceTable
 	Li          *piecetable.LineIndex
 	Engine      *textlayout.WrapEngine
@@ -4401,7 +4402,23 @@ func (ev *EditorView) TryClose() *vtui.Window {
 	return dlg
 }
 
+// GetKeyLabels returns the key bar captions. The frame manager asks for them
+// before every frame, and resolving all 96 of them takes long enough to make
+// a paste of a megabyte take half a minute (unxed/f4#2157), so they are
+// resolved again only when they are old or what they are made of changed.
 func (ev *EditorView) GetKeyLabels() *vtui.KeySet {
+	now := time.Now()
+	if ev.keyLabels.fresh(ev.Codepage, now) {
+		cp := *ev.keyLabels.set
+		return &cp
+	}
+	set := ev.buildKeyLabels()
+	ev.keyLabels.store(set, ev.Codepage, now)
+	cp := *set
+	return &cp
+}
+
+func (ev *EditorView) buildKeyLabels() *vtui.KeySet {
 	nextCp := vfs.GetNextFastSwitchCodepage(ev.Codepage)
 	nextCpName := vfs.DisplayCodepageName(nextCp)
 

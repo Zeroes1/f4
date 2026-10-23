@@ -6,6 +6,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/vtui"
 )
 
 // menuRefreshAge is how long the items of a menu bar that nobody is using
@@ -50,4 +51,21 @@ func hotkeysGeneration() uint64 {
 		return 0
 	}
 	return keymap.GlobalHotkeysMgr.Generation()
+}
+
+// keyLabelsCache keeps the last key bar captions and what they were made of.
+type keyLabelsCache struct {
+	set      *vtui.KeySet
+	codepage int
+	state    menuRefresh
+}
+
+// fresh reports whether the kept captions can be used again.
+func (c *keyLabelsCache) fresh(codepage int, now time.Time) bool {
+	return c.set != nil && c.codepage == codepage && !c.state.due(false, now)
+}
+
+func (c *keyLabelsCache) store(set *vtui.KeySet, codepage int, now time.Time) {
+	c.set, c.codepage = set, codepage
+	c.state.built(now)
 }
