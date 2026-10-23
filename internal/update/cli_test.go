@@ -242,6 +242,53 @@ func TestRunCLIFailsOnDownload(t *testing.T) {
 	}
 }
 
+func TestRunCLICancelsDownload(t *testing.T) {
+	oldAPI, oldOS, oldArch, oldProxy, oldExecutable := APIURL, CurrentOS, CurrentArch, netproxy.Global(), Executable
+	t.Cleanup(func() {
+		APIURL, CurrentOS, CurrentArch, Executable = oldAPI, oldOS, oldArch, oldExecutable
+		netproxy.SetGlobal(oldProxy)
+	})
+	CurrentOS, CurrentArch = "linux", "amd64"
+	netproxy.SetGlobal(netproxy.Settings{Mode: netproxy.ModeDirect})
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "f4")
+	if err := os.WriteFile(exe, []byte("binary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	Executable = func() (string, error) { return exe, nil }
+
+	started := make(chan struct{})
+	archiveURL := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/archive" {
+			_ = json.NewEncoder(w).Encode(Release{
+				TagName: "v2.0.0",
+				Assets:  []Asset{{Name: "f4-linux-amd64.tar.gz", BrowserDownloadURL: archiveURL}},
+			})
+			return
+		}
+		close(started)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	archiveURL = server.URL + "/archive"
+	APIURL = server.URL
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() {
+		done <- runCLI(ctx, "stable", Settings{Channel: ChannelStable}, Build{Version: "v1.0.0", IsRelease: true}, func(Settings) {})
+	}()
+	<-started
+	cancel()
+	if got := <-done; got != 1 {
+		t.Fatalf("runCLI(canceled download) = %d, want 1", got)
+	}
+	if got, _ := os.ReadFile(exe); string(got) != "binary" {
+		t.Errorf("binary after canceled download = %q, want unchanged", got)
+	}
+}
+
 func TestRunCLIFailsOnInstall(t *testing.T) {
 	oldAPI, oldOS, oldArch, oldProxy, oldExecutable := APIURL, CurrentOS, CurrentArch, netproxy.Global(), Executable
 	t.Cleanup(func() {

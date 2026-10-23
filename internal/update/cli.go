@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -39,6 +40,12 @@ func ParseChannelArg(arg string, configured int) (channel int, explicit bool, er
 // Everything goes to stdout, because vtui.SetupStderrLog has already sent
 // stderr to the log file where the user would never see it.
 func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	return runCLI(ctx, channelArg, cfg, b, save)
+}
+
+func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, save func(Settings)) int {
 	channel, explicit, err := ParseChannelArg(channelArg, cfg.Channel)
 	if err != nil {
 		fmt.Printf("f4: %v\n", err)
@@ -56,7 +63,7 @@ func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
 
 	// A nightly archive takes minutes over a slow link, so this timeout is far
 	// wider than the ten seconds an API query gets.
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 30*time.Minute)
 	defer cancel()
 
 	fmt.Printf("Checking the %s channel...\n", ChannelName(channel))
