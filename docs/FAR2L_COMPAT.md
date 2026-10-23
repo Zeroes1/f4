@@ -1,6 +1,6 @@
 # far2l compatibility for two-panel file managers
 
-Version: **0.3** (22 October 2026). Plan of work: [unxed/f4#2115](https://github.com/unxed/f4/issues/2115).
+Version: **0.4** (23 October 2026). Plan of work: [unxed/f4#2115](https://github.com/unxed/f4/issues/2115).
 
 This document is a checklist that any two-panel (orthodox) file manager can be
 measured against. It answers two questions:
@@ -326,12 +326,12 @@ by itself, because some modes also encode `Ctrl+C`.
 | ID | Requirement | Req | Check | Sources |
 | -- | ----------- | --- | ----- | ------- |
 | T-01 | **Status reports.** `CSI 5 n` is answered by `CSI 0 n`, `CSI 6 n` by `CSI <row> ; <col> R`, `CSI c` by a primary device attributes reply `CSI ? … c`. The far2l probe and the kitty probe end on these answers. | MUST | `printf '\e[5n'; IFS= read -rs -t1 -dn r; printf '%q\n' "$r"` prints `$'\E[0'`; with `\e[6n` and `-dR`: `$'\E[<row>;<col>'`; with `\e[c` and `-dc`: `$'\E[?…'`. | [far2l DSR][f2-vt-dsr], [far2l DA][f2-vt-da] |
-| T-02 | **Bracketed paste.** The host follows `CSI ? 2004 h/l` of the program. While it is on, a paste into the terminal (the paste key of the manager, `Shift+Ins`, a dropped text) is sent wrapped in `CSI 200 ~` … `CSI 201 ~`, with line breaks sent as `CR`; while it is off, the plain text is sent. | MUST | `printf '\e[?2004h'; timeout 5 cat -v`, paste the two lines `x`, `y`: `^[[200~x^My^[[201~`. Then `printf '\e[?2004l'; timeout 5 cat -v`, paste again: `x`, `y` without markers. | [far2l mode][f2-vt-2004], [far2l paste][f2-vt-paste] |
-| T-03 | **kitty keyboard protocol.** The host keeps the flags of the program: `CSI = flags ; mode u` (mode 1 set, 2 or, 3 and-not), `CSI > flags u` push and `CSI < n u` pop (a stack of at least 8 entries), `CSI ? u` answered by `CSI ? flags u`, and encodes keys by those flags, including key releases with flag 2. | MUST | `printf '\e[>1u\e[?u'; IFS= read -rs -t1 -du r; printf '%q\n' "$r"` prints `$'\E[?1'`. `printf '\e[>1u'; timeout 5 cat -v; printf '\e[<u'`, press `Ctrl+Shift+A`: `^[[97;6u`. | [kitty spec][kitty-kb], [far2l flags][f2-vt-kitty], [far2l encode][f2-vt-kittyenc] |
-| T-04 | **win32-input-mode.** The host follows `CSI ? 9001 h/l` and, while it is on, sends every key down and up as `CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _`. It SHOULD answer the mode query `CSI ? 9001 $ p` (and the same for 2004) with `CSI ? 9001 ; 1 $ y` or `; 2 $ y`. | MUST | `printf '\e[?9001h'; timeout 5 cat -v; printf '\e[?9001l'`, press `a`: `^[[65;30;97;1;0;1_^[[65;30;97;0;0;1_`. | [Microsoft spec][w32-spec], [far2l mode][f2-vt-9001], [far2l encode][f2-vt-w32enc], [far2l DECRQM][f2-vt-decrqm] |
+| T-02 | **Bracketed paste.** The host follows `CSI ? 2004 h/l` of the program. While it is on, a paste into the terminal (the paste key of the manager, `Shift+Ins`, a dropped text) is sent wrapped in `CSI 200 ~` … `CSI 201 ~`, with line breaks sent as `CR`; while it is off, the plain text is sent. | MUST | `stty raw -echo; printf '\e[?2004h'; timeout 5 cat -v`, paste the two lines `x`, `y`: `^[[200~x^My^[[201~`. Then `printf '\e[?2004l'; timeout 5 cat -v`, paste again: `x^My` without markers. Finish with `stty sane`. (In the default mode of the terminal driver the driver turns `CR` into `LF` and hands the input over only at a line end.) | [far2l mode][f2-vt-2004], [far2l paste][f2-vt-paste] |
+| T-03 | **kitty keyboard protocol.** The host keeps the flags of the program: `CSI = flags ; mode u` (mode 1 set, 2 or, 3 and-not), `CSI > flags u` push and `CSI < n u` pop (a stack of at least 8 entries), `CSI ? u` answered by `CSI ? flags u`, and encodes keys by those flags, including key releases with flag 2. | MUST | `printf '\e[>1u\e[?u'; IFS= read -rs -t1 -du r; printf '%q\n' "$r"` prints `$'\E[?1'`. `stty raw -echo; printf '\e[>1u'; timeout 5 cat -v; printf '\e[<u'; stty sane`, press `Ctrl+Shift+A`: `^[[97;6u`. | [kitty spec][kitty-kb], [far2l flags][f2-vt-kitty], [far2l encode][f2-vt-kittyenc] |
+| T-04 | **win32-input-mode.** The host follows `CSI ? 9001 h/l` and, while it is on, sends every key down and up as `CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _`. It SHOULD answer the mode query `CSI ? 9001 $ p` (and the same for 2004) with `CSI ? 9001 ; 1 $ y` or `; 2 $ y`. | MUST | `stty raw -echo; printf '\e[?9001h'; timeout 5 cat -v; printf '\e[?9001l'; stty sane`, press `a`: `^[[65;30;97;1;0;1_^[[65;30;97;0;0;1_`. | [Microsoft spec][w32-spec], [far2l mode][f2-vt-9001], [far2l encode][f2-vt-w32enc], [far2l DECRQM][f2-vt-decrqm] |
 | T-05 | **far2l terminal extensions.** (a) `ESC _ far2l1` is answered by `ESC _ far2lok BEL` before the answer to a following DSR; (b) every request with a non-zero ID gets a reply, the ID alone for what the host does not implement; (c) while the extensions are on, keys and mouse go to the program as events `ESC _ f2l<base64> BEL`, with key-up, the compact forms only if the program asked for them; (d) the clipboard requests either work with the protections of far2l (the user allows a client once or always) or `CLIP_OPEN` is answered `-1` ("use your own clipboard"), and no request of the clipboard is served outside `CLIP_OPEN` … `CLIP_CLOSE` of an allowed client; SHOULD: a read is answered only within 5 seconds of the user's paste key or middle click (the paste gesture, as in far2l); (e) `ESC _ far2l0` and the end of the program switch the extensions off. | MUST | `printf '\e_far2l1\e\\\e[5n'; IFS= read -rs -t2 -dn r; printf '%q\n' "$r"` prints `$'\E_far2lok\a\E[0'`. The rest is checked by T-08 and by the self-check kit (section 10). | [VTExts 4.4][vtx-4-4], [VTExts 5.7][vtx-5-7], [VTExts 8.3][vtx-8-3], [VTExts 8.4][vtx-8-4], [far2l host][f2-vt-apc], [far2l events][f2-ext-key] |
 | T-06 | **far2l extensions, the rest.** The host answers `w` (maximum window size), `p` (colour depth), `f` (F-key titles: shows them in its key bar or answers `false`), `n` (shows a desktop notification), and MAY send `S` terminal size events after `x` asked for them, with the argument order of VTExts. | SHOULD | Self-check kit (section 10); far2l `--tty` inside: its F-key titles appear in the host's key bar, if the host shows them. | [VTExts 5][vtx-5], [far2l][f2-ext-interact] |
-| T-07 | **Modes end with the program.** When the program that set them exits, the host drops bracketed paste, the kitty flags, win32-input-mode, the mouse modes, focus reports, the far2l extensions and an OSC 52 permission given "for this command". | MUST | Run the command `printf '\e[?2004h\e[?9001h\e[>1u\e[?1000h'` and let it end; then `timeout 5 cat -v`, press `a`, `Ctrl+Shift+A`, paste `x`: `a^Ax`. | [far2l][f2-vt-reset] |
+| T-07 | **Modes end with the program.** When the program that set them exits, the host drops bracketed paste, the kitty flags, win32-input-mode, the mouse modes, focus reports, the far2l extensions and an OSC 52 permission given "for this command". | MUST | Run the command `printf '\e[?2004h\e[?9001h\e[>1u\e[?1000h'` and let it end; then `stty raw -echo; timeout 5 cat -v; stty sane`, press `a`, `Ctrl+Shift+A`, paste `x`: `a^Ax`. | [far2l][f2-vt-reset] |
 | T-08 | **far2l inside the manager.** `far2l --tty` started in the built-in terminal gets every key: `RightCtrl+0` and `Ctrl+0` differ, holding `Ctrl+Alt+Shift` hides its panels, `Ctrl+1` changes its view mode. Copying text in that far2l (select in its command line, `Ctrl+Ins`) puts the text on the clipboard of the manager's side, and `Shift+Ins` in that far2l pastes the manager's clipboard (after the clipboard question if the host asks). | MUST | E6 with far2l 2.6 or later installed: the steps of the requirement. | [far2l help][hlp-terminal], [VTExts 3][vtx-3] |
 | T-09 | **OSC 52 writing.** `OSC 52 ; <selection> ; <base64>` from the program sets the manager's clipboard. The host SHOULD ask the user first (allow once, allow for this command, block), as far2l does. | MUST | `printf '\e]52;c;%s\a' "$(printf hello | base64)"`, allow if asked; paste in the manager's command line: `hello`. | [far2l][f2-vt-osc52] |
 | T-10 | **No clipboard reading behind the user's back.** `OSC 52 ; c ; ?` is not answered with the clipboard contents unless the user allowed it for this request or by an explicit setting; the far2l `CLIP_GETDATA` follows T-05 (d). | MUST | Put a secret on the clipboard; `printf '\e]52;c;?\a'; IFS= read -rs -t2 -d $'\a' r; printf '%q\n' "$r"`: empty, or the host asked first and the answer was "deny". | [far2l][f2-vt-osc52], [VTExts 5.7.2][vtx-5-7-2] |
@@ -413,11 +413,45 @@ name, level, version of this document, date, and the link.
 
 ## 10. Self-check kit
 
-Planned (step 8 of [unxed/f4#2115](https://github.com/unxed/f4/issues/2115)):
-a script that runs the automatic part of the checklist against any manager
-(the probes of section 6, the recordings of section 4, and the paste checks
-that can be driven through a PTY). Until it exists, the manual procedures of
-this document are the reference.
+`tools/far2lcompat` in the repository of f4 (Go, Linux) runs the automatic part
+of the checklist against any manager. It plays the terminal: it starts the
+manager in a pseudo-terminal, answers `CSI 5 n`, `CSI 6 n` and `CSI c`, and
+prints a table in the report format of section 9 (`| ID | Result | Env | Note |`).
+Build it with `go build -o far2lcompat ./tools/far2lcompat`.
+
+**`far2lcompat record [--wait 2s] [--far2l] [--silent-ext] [--exit-limit 5s] -- <manager>`**
+records what the manager writes. After the manager has drawn its screen and
+been quiet for a moment, the kit sends `F10` and, after a pause, `Enter` (the
+confirmation), then lists the sequences that switch modes on at the start and
+off at the exit, and gives the verdicts:
+
+| Row | What the kit checks |
+| --- | ------------------- |
+| P-01 | `?2004h` at the start, `?2004l` at the exit. |
+| P-02 (a) | Every private mode switched on is switched off at the exit (not (b) and (c)). |
+| P-03 | The kitty flags are asked for at the start and given back at the exit. |
+| P-04 | `?9001h` at the start, `?9001l` at the exit. |
+| P-05 | `ESC _ far2l1 ESC \` at the start and `far2l0` at the exit; with `--far2l` the kit answers with `ESC _ far2lok BEL` before the answer to the DSR and sends the keys as `f2l` events. The events themselves are not checked. |
+| P-06 | With `--silent-ext` the kit acknowledges `far2l1` and answers nothing else; the manager must quit within 5 seconds of `F10`. |
+
+**`far2lcompat host [--term-key ctrl+o] -- <manager> [args]`** checks the
+terminal that the manager offers to its programs. The kit types probe scripts
+into the command line of the manager, so that they run in its built-in
+terminal, presses keys and pastes as a terminal does (kitty and win32 key
+sequences, `CSI 200 ~` pastes), and compares what the program in the terminal
+received with the text in section 6. `--term-key` names the key that shows the
+built-in terminal for a manager that does not show it by itself while a command
+runs (f4 does). The rows: T-01 (the three status reports), T-02 (bracketed
+paste on and off, with `CR` between lines), T-03 (the kitty flag query and a
+`Ctrl+Shift+A`), T-04 (win32-input-mode keys), T-05 (a) (`far2lok` before the
+answer to a DSR), T-07 (the modes of a command that has ended are gone) and
+T-10 (no answer to `OSC 52 ; c ; ?`). Not yet covered by the kit: T-05 (b) to
+(e), T-06, T-08, T-09, and the DECRQM answers of T-04.
+
+Both commands print `fail` for a row when an answer is missing or differs. The
+kit does not replace the manual procedures of this document: a `pass` row is
+the recorded result of the check for the environment the kit ran in (E2, a
+terminal that answers like the kit) and the others stay with the reporter.
 
 ## 11. Implementations to compare with
 
@@ -429,6 +463,15 @@ this document are the reference.
 | kitty, Ghostty, Alacritty, WezTerm, Windows Terminal | — | kitty keyboard protocol or win32-input-mode, OSC 52 | Hosts for E2 and E3 ([far2l help][hlp-terminals]). |
 
 ## 12. Changes
+
+* 0.4 (23 October 2026), after the self-check kit
+  ([unxed/f4#2115](https://github.com/unxed/f4/issues/2115)):
+  * section 10 describes the kit (`record` and `host`);
+  * T-02, T-03, T-04, T-07: the checks run with `stty raw -echo`, because the
+    default mode of the terminal driver turns a pasted `CR` into `LF` and holds
+    the input until a line is complete, so the expected text of T-02
+    (`^[[200~x^My^[[201~`) could not be seen with it. The requirement is the
+    same; the level does not change.
 
 * 0.3 (22 October 2026), after the audits of f4 and unxed/dn up to section 7
   ([unxed/f4#2115](https://github.com/unxed/f4/issues/2115)):
