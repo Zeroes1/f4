@@ -40,12 +40,6 @@ func ParseChannelArg(arg string, configured int) (channel int, explicit bool, er
 // Everything goes to stdout, because vtui.SetupStderrLog has already sent
 // stderr to the log file where the user would never see it.
 func RunCLI(channelArg string, cfg Settings, b Build, save func(Settings)) int {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer stop()
-	return runCLI(ctx, channelArg, cfg, b, save)
-}
-
-func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, save func(Settings)) int {
 	channel, explicit, err := ParseChannelArg(channelArg, cfg.Channel)
 	if err != nil {
 		fmt.Printf("f4: %v\n", err)
@@ -61,9 +55,15 @@ func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, sa
 		save(cfg)
 	}
 
+	// Ctrl+C stops the check and the download, which have changed nothing yet.
+	// Once caught it stays caught through the install below: killed halfway
+	// through unpacking, f4 would be left half replaced, with nobody to put
+	// the backup back.
+	interrupted, stop := interruptContext()
+	defer stop()
 	// A nightly archive takes minutes over a slow link, so this timeout is far
 	// wider than the ten seconds an API query gets.
-	ctx, cancel := context.WithTimeout(parent, 30*time.Minute)
+	ctx, cancel := context.WithTimeout(interrupted, 30*time.Minute)
 	defer cancel()
 
 	fmt.Printf("Checking the %s channel...\n", ChannelName(channel))
@@ -71,6 +71,9 @@ func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, sa
 	checkCfg.SwitchedChannel = switched
 	cand, err := Check(ctx, checkCfg, b)
 	if err != nil {
+		if interrupted.Err() != nil {
+			return cancelled()
+		}
 		fmt.Printf("f4: update check failed: %v\n", err)
 		return 1
 	}
@@ -104,6 +107,9 @@ func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, sa
 		fmt.Println()
 	}
 	if err != nil {
+		if interrupted.Err() != nil {
+			return cancelled()
+		}
 		fmt.Printf("f4: download failed: %v\n", err)
 		return 1
 	}
@@ -129,6 +135,24 @@ func runCLI(parent context.Context, channelArg string, cfg Settings, b Build, sa
 
 	fmt.Printf("Installed %s. Restart f4 to use it.\n", cand.DisplayVersion)
 	return 0
+}
+
+// interruptContext is canceled by Ctrl+C, and on Windows by Ctrl+Break, which
+// Go reports as the same os.Interrupt. A variable so that a test can
+// interrupt RunCLI without signalling the whole test binary.
+var interruptContext = func() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt)
+}
+
+// exitInterrupted is what a shell reports for a command stopped by Ctrl+C,
+// 128 + SIGINT, so a script tells a cancelled update from a failed one.
+const exitInterrupted = 130
+
+// cancelled reports an update stopped by Ctrl+C before anything was
+// installed, returning the exit code.
+func cancelled() int {
+	fmt.Println("f4: update cancelled, nothing was installed.")
+	return exitInterrupted
 }
 
 // rollBack puts the previous build back after a failed update and reports
