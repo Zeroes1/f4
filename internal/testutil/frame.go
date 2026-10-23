@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"bytes"
+	"reflect"
 	"runtime/pprof"
 	"strings"
 	"testing"
@@ -143,11 +144,28 @@ func DrainPendingTasks() {
 // would never come back round: every test that ended its session used to wait
 // out the deadline below.
 func DrainUITasks() {
+	takeUITasks(true)
+}
+
+// DiscardUITasks is DrainUITasks throwing the queued UI work away instead of
+// running it. DrainPendingTasks stops the first time TaskChan has nothing to
+// hand over, which is not when the queue is empty: TaskChan is unbuffered,
+// and the pump behind it may not have offered its next task yet -- at
+// GOMAXPROCS 1 it often has not.
+func DiscardUITasks() {
+	takeUITasks(false)
+}
+
+func takeUITasks(run bool) {
 	if vtui.FrameManager.IsShutdown() {
 		return
 	}
 	done := make(chan struct{})
-	vtui.FrameManager.PostTask(func() { close(done) })
+	marker := func() { close(done) }
+	// Discarding still has to run the marker, and a func has no identity to
+	// compare but its code: every task this literal makes is such a marker.
+	markerCode := reflect.ValueOf(marker).Pointer()
+	vtui.FrameManager.PostTask(marker)
 	deadline := time.After(30 * time.Second)
 	// A shutdown from another goroutine leaves TaskChan nil, and a receive
 	// from nil never returns; the tick is what notices.
@@ -158,7 +176,9 @@ func DrainUITasks() {
 		case <-done:
 			return
 		case task := <-vtui.FrameManager.TaskChan:
-			task()
+			if run || reflect.ValueOf(task).Pointer() == markerCode {
+				task()
+			}
 			if vtui.FrameManager.IsShutdown() {
 				return
 			}

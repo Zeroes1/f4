@@ -97,11 +97,28 @@ func SwapFrameManager(t *testing.T) func() {
 // exercise the frame without a real child process. The panels read the working
 // directory through a plain OSVFS, because tests create real files under
 // t.TempDir().
+//
+// When the test ends, the directory reads it started are joined and the UI
+// work it left queued is thrown away. Left queued, that work ran in whichever
+// test pumped the queue next: Show's auto-refresh check in
+// TestPanelsFrame_SudoOnlyFolderSyncIsSentOnce queued a reload, the next test
+// ran it with its own folder history installed, the reload put the sudo
+// test's folder at the top of that history, and
+// TestActionFoldersHistoryInsertPersistsLock's Insert locked that row. The
+// work is thrown away rather than run because the test is over by then: a
+// reload run at that point that fails goes on to the parent folder and puts
+// an error dialog over the next test. The reads are joined because they read
+// globals the test's own cleanups put back, the sudo client for one, and
+// those were registered before this one, so they run after it.
 func SetupMockPanelsFrame(t *testing.T) *panel.PanelsFrame {
 	t.Helper()
 	if vtui.FrameManager.TaskChan == nil {
 		vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
 	}
+	t.Cleanup(func() {
+		WaitForDirectoryLoads(t)
+		testutil.DiscardUITasks()
+	})
 	pf := &panel.PanelsFrame{ActiveIdx: 1, ShowPanels: true, ShowKeyBar: true, ShowLeftPanel: true, ShowRightPanel: true}
 	pf.Pty = &MockPty{}
 	pf.TermView = terminal.NewTerminalView(80, 24)
