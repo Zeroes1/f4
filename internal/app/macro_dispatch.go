@@ -137,11 +137,27 @@ func macroCommandLineOwnsDeletion(area string, e *vtinput.InputEvent) bool {
 	return pf != nil && pf.CommandLineOwnsDeletion(e)
 }
 
+// macroPasting is true between the marks of a bracketed paste.
+var macroPasting bool
+
 func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	if e.Type == vtinput.MouseEventType {
 		return macroMouseWheel(m, e)
 	}
+	if e.Type == vtinput.PasteEventType {
+		macroPasting = e.PasteStart
+		return false
+	}
 	if e.Type != vtinput.KeyEventType {
+		return false
+	}
+
+	// The keys of a paste are text: no key remap, no macro and no command
+	// palette chord applies to them (a macro on the letter "a" must not run
+	// for every "a" of a pasted text), and looking them up for each of a
+	// million keys took a third of the time of a paste of 1 MiB into the
+	// editor (unxed/f4#2194). A recording still sees them.
+	if macroPasting && !m.Recording && !m.Assigning {
 		return false
 	}
 

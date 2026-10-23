@@ -1292,3 +1292,28 @@ func macroAssign(f *macro.MacroAssignFrame, e *vtinput.InputEvent) bool {
 	f.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_RETURN})
 	return handled
 }
+
+// The keys of a paste are text: a macro on a plain letter must not run for the
+// letters of a pasted text, and the lookup is not made for each of them
+// (unxed/f4#2194).
+func TestMacroFilterIgnoresTheKeysOfAPaste(t *testing.T) {
+	mgr := macro.NewMacroManager("unused.ini")
+	key := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F2}
+	keyStr := keymap.EventToFarString(key)
+	seq := []*vtinput.InputEvent{{Type: vtinput.KeyEventType, KeyDown: true, Char: 'x', VirtualKeyCode: vtinput.VK_X}}
+	mgr.Macros["Common"] = map[string][]*vtinput.InputEvent{keyStr: seq}
+	mgr.Macros[macroCurrentArea()] = map[string][]*vtinput.InputEvent{keyStr: seq}
+	t.Cleanup(func() { macroPasting = false })
+
+	if !macroFilter(mgr, key) {
+		t.Fatal("the macro does not run for a key outside a paste")
+	}
+	macroFilter(mgr, &vtinput.InputEvent{Type: vtinput.PasteEventType, PasteStart: true})
+	if macroFilter(mgr, key) {
+		t.Error("the macro ran for a key of a paste")
+	}
+	macroFilter(mgr, &vtinput.InputEvent{Type: vtinput.PasteEventType, PasteStart: false})
+	if !macroFilter(mgr, key) {
+		t.Error("the macro does not run after the paste ended")
+	}
+}
