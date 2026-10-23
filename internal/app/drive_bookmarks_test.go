@@ -4,6 +4,7 @@ import (
 	"github.com/unxed/f4/internal/panel"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestKeyRouterOpensADriveLinkBeforeMacrosAndCommands(t *testing.T) {
 
 // The key router's part of what a link's key would be taken from: macro
 // recording cannot give Ctrl+. up, the palette's own Ctrl+Alt+P can be taken,
-// and a macro is named unless the link leaves it the left Ctrl.
+// and a macro is named, on the right Ctrl too: it plays on either Ctrl.
 func TestDriveLinkRouterKeyOwners(t *testing.T) {
 	previousHotkeys := keymap.GlobalHotkeysMgr
 	hm := &keymap.HotkeyManager{
@@ -108,8 +109,8 @@ func TestDriveLinkRouterKeyOwners(t *testing.T) {
 	if len(owners) != 1 || owners[0].Fixed || owners[0].Release != nil {
 		t.Errorf("owners of Ctrl+Alt+; = %+v, want the Common macro, kept", owners)
 	}
-	if owners := driveLinkRouterKeyOwners(manager, "RCtrlAltVK_BA"); len(owners) != 0 {
-		t.Errorf("an RCtrl link takes the macro's key: %+v", owners)
+	if owners := driveLinkRouterKeyOwners(manager, "RCtrlAltVK_BA"); len(owners) != 1 || owners[0].Fixed {
+		t.Errorf("owners of Right Ctrl+Alt+; = %+v, want the macro, which plays on either Ctrl", owners)
 	}
 	if owners := driveLinkRouterKeyOwners(manager, "CtrlAltE"); len(owners) != 0 {
 		t.Errorf("an Editor macro is named for the panels: %+v", owners)
@@ -128,6 +129,48 @@ func TestDriveLinkRouterKeyOwners(t *testing.T) {
 	}
 	if owners := driveLinkRouterKeyOwners(manager, commandPaletteLegacyKey); len(owners) != 0 {
 		t.Errorf("Ctrl+Alt+P still has owners after it was taken: %+v", owners)
+	}
+}
+
+// f4#2171, the keys the user found offered as free: with the real action
+// registry the link dialog names what Ctrl+N, Ctrl+Alt+N, Right Ctrl+Tab and
+// F3 do in the panels. A key the framework keeps for the terminal is a plain
+// key of the panels; one that works in some state says which.
+func TestDriveLinkKeyOwnersKnowEveryKeyOfThePanels(t *testing.T) {
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previousHotkeys })
+	previousExtra := panel.DriveLinkExtraKeyOwners
+	panel.DriveLinkExtraKeyOwners = func(key string) []panel.DriveLinkKeyOwner {
+		return driveLinkRouterKeyOwners(&macro.MacroManager{}, key)
+	}
+	t.Cleanup(func() { panel.DriveLinkExtraKeyOwners = previousExtra })
+	names := func(key string) []string {
+		var out []string
+		for _, owner := range panel.DriveLinkGlobalKeyOwners(key) {
+			out = append(out, owner.Name)
+		}
+		return out
+	}
+	for key, want := range map[string]string{
+		"CtrlN":    `built-in key of "New workspace"`,
+		"CtrlAltN": `built-in key of "New workspace"`,
+		"RCtrlTab": `built-in key of "Next workspace"`,
+		"F3":       `built-in key of "Quick view: open in viewer" when QuickViewFocused`,
+	} {
+		if got := names(key); !slices.Contains(got, want) {
+			t.Errorf("owners of %s = %q, want %q among them", key, got, want)
+		}
+	}
+	if got := strings.Join(names("F3"), "\n"); !strings.Contains(got, `command "View"`) {
+		t.Errorf("owners of F3 = %q, want the View command among them", got)
+	}
+	fixed := false
+	for _, owner := range panel.DriveLinkGlobalKeyOwners("CtrlVK_BE") {
+		fixed = fixed || owner.Fixed
+	}
+	if !fixed {
+		t.Error("Ctrl+., which starts a recording before the links are asked, is offered to a link")
 	}
 }
 

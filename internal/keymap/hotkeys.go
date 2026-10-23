@@ -319,6 +319,14 @@ func MenuShortcutsForAction(area, actionName string) string {
 	return strings.Join(MergeShortcuts(groups...), ", ")
 }
 
+// NativeConditionTrue reports whether the condition of a native key holds in
+// area now. The framework's conditions name the terminal and hold in every
+// other area, so a key they guard is a plain key of the panels (a drive-menu
+// link's global hot key asks, f4#2171).
+func NativeConditionTrue(area, condition string) bool {
+	return nativeShortcutConditionTrue(area, condition)
+}
+
 func nativeShortcutConditionTrue(area, condition string) bool {
 	condition = strings.TrimSpace(condition)
 	if condition == "" {

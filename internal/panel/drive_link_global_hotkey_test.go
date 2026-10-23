@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/internal/testutil"
 	"github.com/unxed/f4/internal/theme"
 	"github.com/unxed/f4/vfs"
@@ -300,8 +302,9 @@ func ownerNames(owners []DriveLinkKeyOwner) []string {
 
 // f4#2171: the link dialog names what a key would be taken from. A command
 // loses the key in Shell only; a Ctrl link takes the RCtrl spelling of a
-// command too, an RCtrl link leaves the Ctrl one alone; the numbered bookmarks
-// cannot give their keys up.
+// command too; an RCtrl link takes the right Ctrl from a Ctrl command, which
+// answers either Ctrl and keeps the left one (nothing to release); the
+// numbered bookmarks cannot give their keys up.
 func TestDriveLinkKeyOwners(t *testing.T) {
 	hm := useHotkeys(t, map[string]map[string]string{
 		"Shell":  {"F5": "Test.Copy", "RCtrlAltK": "Test.RightK", "CtrlAltN": "None"},
@@ -324,7 +327,7 @@ func TestDriveLinkKeyOwners(t *testing.T) {
 	}{
 		{"F5", []string{`command "Test.Copy"`}, false},
 		{"CtrlAltT", []string{`command "Test.Everywhere"`}, false},
-		{"RCtrlAltT", nil, false},
+		{"RCtrlAltT", []string{`command "Test.Everywhere"`}, false},
 		{"CtrlAltK", []string{`command "Test.RightK"`}, false},
 		{"CtrlAltN", nil, false},
 		{"CtrlAltD", []string{`link "Docs"`}, false},
@@ -344,6 +347,10 @@ func TestDriveLinkKeyOwners(t *testing.T) {
 		if len(owners) > 0 && owners[0].Fixed != tc.fixed {
 			t.Errorf("owner of %s fixed = %v, want %v", tc.key, owners[0].Fixed, tc.fixed)
 		}
+	}
+
+	if owners := driveLinkKeyOwners("RCtrlAltT", nil); len(owners) != 1 || owners[0].Release != nil {
+		t.Errorf("an RCtrl link would release the Ctrl command's key: %+v", owners)
 	}
 
 	// Taking F5 unbinds it in Shell, where the links are asked, and writes
@@ -379,6 +386,99 @@ func TestDriveLinkKeyOwners(t *testing.T) {
 	}
 	if got := hm.Bindings["Shell"]["CtrlAltT"]; got != "None" {
 		t.Errorf("Shell CtrlAltT = %q, want None", got)
+	}
+}
+
+// The built-in keys -- what the panels and vtui do with a key themselves, as
+// the action registry declares them -- are owners too. Without them the link
+// dialog offered Ctrl+N and RCtrl+Tab as free, and the link quietly took
+// them from the new workspace and the workspace switch. A key that works only
+// in some state says so.
+func TestDriveLinkKeyOwnersNameTheBuiltinKeys(t *testing.T) {
+	useHotkeys(t, map[string]map[string]string{})
+	t.Cleanup(action.Snapshot())
+	for _, a := range []action.Action{
+		{Name: "Test.Fork", Area: "Common", Label: "Fork", NativeKeys: []string{"CtrlN"}, NativeKeyAliases: []string{"CtrlAltN"}},
+		{Name: "Test.Cycle", Area: "Common", Label: "Cycle", NativeKeys: []string{"CtrlTab"}},
+		{Name: "Test.Peek", Area: "Shell", Label: "Peek", NativeKeys: []string{"F3:QuickViewFocused"}},
+		{Name: "Test.Shared", Area: "Terminal", DefaultAreas: []string{"Shell"}, Label: "Shared", NativeKeys: []string{"CtrlAltS"}},
+		{Name: "Test.EditorOnly", Area: "Editor", Label: "Editor only", NativeKeys: []string{"CtrlAltE"}},
+	} {
+		action.RegisterAction(a)
+	}
+	for _, tc := range []struct {
+		key   string
+		names []string
+	}{
+		{"CtrlN", []string{`built-in key of "Fork"`}},
+		{"CtrlAltN", []string{`built-in key of "Fork"`}},
+		{"RCtrlTab", []string{`built-in key of "Cycle"`}},
+		{"CtrlTab", []string{`built-in key of "Cycle"`}},
+		{"F3", []string{`built-in key of "Peek" when QuickViewFocused`}},
+		{"CtrlAltS", []string{`built-in key of "Shared"`}},
+		{"CtrlAltE", nil},
+		{"CtrlAltX", nil},
+	} {
+		owners := driveLinkKeyOwners(tc.key, nil)
+		if got := ownerNames(owners); strings.Join(got, "|") != strings.Join(tc.names, "|") {
+			t.Errorf("owners of %s = %q, want %q", tc.key, got, tc.names)
+		}
+		for _, owner := range owners {
+			if owner.Fixed || owner.Release != nil {
+				t.Errorf("%s: a built-in key is fixed or released: %+v", tc.key, owner)
+			}
+		}
+	}
+}
+
+// A plugin's global hot key runs after the links were asked, so a link takes
+// it; it is named by the plugin command that declares the same key. A default
+// the user switched off in the plugin menu does not count.
+func TestDriveLinkKeyOwnersNamePluginKeys(t *testing.T) {
+	useHotkeys(t, map[string]map[string]string{})
+	t.Cleanup(plughost.SnapshotPluginRegistries())
+	registration, err := plughost.RegisterPluginCommand(vfs.PluginCommand{
+		ID: "test.drive-link.archive", Location: vfs.PluginCommandPanel,
+		Label: "Add to archive", Shortcut: "Shift+F1", Run: func(vfs.App) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(registration.Unregister)
+	plughost.RegisterGlobalHotkey(vtinput.VK_F1, vtinput.ShiftPressed, func(vfs.App) {})
+	plughost.RegisterGlobalHotkey(vtinput.VK_F2, vtinput.ShiftPressed, func(vfs.App) {})
+
+	if got := ownerNames(driveLinkKeyOwners("ShiftF1", nil)); strings.Join(got, "|") != `command "Add to archive"` {
+		t.Errorf("owners of Shift+F1 = %q", got)
+	}
+	if got := ownerNames(driveLinkKeyOwners("ShiftF2", nil)); strings.Join(got, "|") != "a plugin's hot key" {
+		t.Errorf("owners of Shift+F2 = %q", got)
+	}
+	old := config.App.PluginDefaultHotkeysOff
+	t.Cleanup(func() { config.App.PluginDefaultHotkeysOff = old })
+	config.App.PluginDefaultHotkeysOff = "ShiftF1"
+	if got := ownerNames(driveLinkKeyOwners("ShiftF1", nil)); len(got) != 0 {
+		t.Errorf("a switched-off plugin key still owns Shift+F1: %q", got)
+	}
+}
+
+// keymap.ini turns a key into another before the key router asks the links,
+// so a link on it could never be opened: the key is refused.
+func TestDriveLinkKeyOwnersNameARemap(t *testing.T) {
+	useHotkeys(t, map[string]map[string]string{})
+	path := filepath.Join(t.TempDir(), "keymap.ini")
+	if err := os.WriteFile(path, []byte("[Shell]\nCtrlAltY=CtrlAltU\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := keymap.GlobalKeyRemap
+	t.Cleanup(func() { keymap.GlobalKeyRemap = old })
+	keymap.GlobalKeyRemap = keymap.NewKeyRemap(path)
+	owners := driveLinkKeyOwners("CtrlAltY", nil)
+	if len(owners) == 0 || !owners[0].Fixed || owners[0].Name != "keymap.ini, which turns the key into Ctrl+Alt+U" {
+		t.Errorf("owners of a remapped key = %+v", owners)
+	}
+	if owners := driveLinkKeyOwners("CtrlAltU", nil); len(owners) != 0 {
+		t.Errorf("the target of a remap has owners: %q", ownerNames(owners))
 	}
 }
 

@@ -460,9 +460,15 @@ func driveLinkRouterKeyOwners(m *macro.MacroManager, key string) []panel.DriveLi
 			},
 		})
 	}
-	// A macro's key has no right Ctrl of its own: an RCtrl link leaves the
-	// macro the left Ctrl, as it leaves a Ctrl command.
-	if !strings.HasPrefix(key, "RCtrl") && m.PlaysOn("Shell", key) {
+	// A macro plays on either Ctrl: its key is kept in Far's spelling, which
+	// has no right Ctrl (keymap.EventToFarString). The links are asked before
+	// the macros, so an RCtrl link takes the right Ctrl from a macro on Ctrl;
+	// the macro keeps the left one.
+	macroKey := key
+	if strings.HasPrefix(key, "RCtrl") {
+		macroKey = "Ctrl" + key[len("RCtrl"):]
+	}
+	if m.PlaysOn("Shell", macroKey) {
 		owners = append(owners, panel.DriveLinkKeyOwner{Name: i18n.Msg("DriveLink.OwnerMacro")})
 	}
 	return owners

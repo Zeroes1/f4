@@ -25,11 +25,12 @@ When the key already does something in the panels, the dialog lists what and off
 
 * a command bound to the key in `Shell` or `Common` gets `None` in `Shell` in `hotkeys.ini`, so a `Common` binding keeps working in the editor and the viewer;
 * another link with the key loses its global hot key;
-* a macro on the key, quick search (Alt with a letter) and switching workspaces (Alt with a digit) keep their keys, but in the panels the link comes first.
+* a macro on the key, quick search (Alt with a letter) and switching workspaces (Alt with a digit) keep their keys, but in the panels the link comes first;
+* so do the built-in keys, the ones the panels and vtui handle themselves (the rows marked `•` in the Hotkey Configurator: `Ctrl+N`, `Ctrl+Tab`, the keys of the focused quick view), and the plugins' own hot keys. A built-in key that works only in some state says which (`when QuickViewFocused`).
 
-Some keys are refused outright, because they are handled before the links are asked: the numbered bookmark keys (`RCtrl` or `Ctrl+Alt` with a digit or `` ` ``, and the same with Shift) and macro recording (`Ctrl+.`). A key the link already has is checked again on Save, since a command may have been bound to it in the meantime.
+Some keys are refused outright, because they are handled before the links are asked: the numbered bookmark keys (`RCtrl` or `Ctrl+Alt` with a digit or `` ` ``, and the same with Shift), macro recording (`Ctrl+.`), and a key that `keymap.ini` or f4's Mac layout turns into another before the key router sees it. A key the link already has is checked again on Save, since a command may have been bound to it in the meantime.
 
-In the panels the key router asks the links after the command palette, macro recording and the bookmark keys, and before macros, plugin keys and the hotkey table. A link written with `Ctrl` answers either Ctrl key. One written with `RCtrl` answers the right Ctrl only and leaves the left Ctrl to whatever has it. With the panels hidden, the key goes to the terminal. Keys that the panels handle without a configurable command are not listed as conflicts, and the link wins over them.
+In the panels the key router asks the links after the command palette, macro recording and the bookmark keys, and before macros, plugin keys, the hotkey table and the panels' own keys. A link written with `Ctrl` answers either Ctrl key. One written with `RCtrl` answers the right Ctrl only; it takes the right Ctrl from a command, a macro or a built-in key on plain `Ctrl`, which answer either Ctrl, and leaves them the left one. With the panels hidden, the key goes to the terminal.
 
 Before f4#2171 the dialog had a "Quick call with RCtrl/Ctrl+Alt" check box. A link saved with it (`QuickCall=true`) and a Latin letter as its hot key now loads with that letter on RCtrl as its global hot key. The next save writes `GlobalHotkey=` and drops `QuickCall`. The `Ctrl+Alt` variant is not carried over; set it again in the dialog if needed.
 

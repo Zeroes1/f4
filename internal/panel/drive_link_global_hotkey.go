@@ -11,6 +11,7 @@ import (
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -188,8 +189,9 @@ var DriveLinkExtraKeyOwners func(key string) []DriveLinkKeyOwner
 
 // driveLinkKeyOwners lists what the key would be taken from if a link got it
 // as its global hot key: the reserved keys first, then the other links, the
-// commands of the panels, the panels' own keys and the application's part.
-// others are the links besides the one being edited.
+// commands of the panels, the built-in keys, the plugins' keys, the panels'
+// own keys and the application's part. others are the links besides the one
+// being edited.
 func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -197,6 +199,12 @@ func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner 
 	}
 	var owners []DriveLinkKeyOwner
 	hm := keymap.GlobalHotkeysMgr
+
+	// keymap.ini, then f4's Mac layout, turn the key into another before the
+	// key router asks the links, so a link would never see it.
+	if to, msg := driveLinkRemap(key); to != "" {
+		owners = append(owners, DriveLinkKeyOwner{Name: fmt.Sprintf(i18n.Msg(msg), keymap.FormatKeyForUI(to)), Fixed: true})
+	}
 
 	// The numbered folder bookmarks answer before the links do, unless the
 	// user bound the key to a command (ConfigurableHotkeyOwnsPanelBookmark).
@@ -214,7 +222,7 @@ func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner 
 	}
 
 	// A Ctrl link catches the right Ctrl as well, so a command bound to the
-	// RCtrl spelling loses it too. An RCtrl link leaves the left Ctrl alone.
+	// RCtrl spelling loses it too.
 	spellings := []string{key}
 	if p := splitDriveLinkHotkey(key); p.ctrl {
 		spellings = append(spellings, "R"+key)
@@ -234,6 +242,18 @@ func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner 
 			})
 		}
 	}
+	// An RCtrl link takes the right Ctrl from a command bound to plain Ctrl,
+	// which answers either Ctrl (keymap.ConfiguredHotkeyAction). The command
+	// keeps the left Ctrl, and in the panels the link simply comes first, so
+	// there is nothing to release.
+	if p := splitDriveLinkHotkey(key); p.rctrl && driveLinkCommandOn(hm, key) == "" {
+		if name := driveLinkCommandOn(hm, driveLinkPlainCtrl(key)); name != "" {
+			owners = append(owners, DriveLinkKeyOwner{Name: fmt.Sprintf(i18n.Msg("DriveLink.OwnerCommand"), name)})
+		}
+	}
+
+	owners = append(owners, driveLinkBuiltinOwners(key)...)
+	owners = append(owners, driveLinkPluginKeyOwners(key)...)
 
 	if p := splitDriveLinkHotkey(key); p.alt && !p.ctrl && !p.rctrl {
 		if !p.shift && len(p.base) == 1 && p.base[0] >= '1' && p.base[0] <= '9' &&
@@ -257,6 +277,155 @@ func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner 
 // to take a key, refuses a new one that has any.
 func DriveLinkGlobalKeyOwners(key string) []DriveLinkKeyOwner {
 	return driveLinkKeyOwners(key, nil)
+}
+
+// driveLinkPlainCtrl is the Ctrl spelling of an RCtrl key.
+func driveLinkPlainCtrl(key string) string {
+	return "Ctrl" + key[len("RCtrl"):]
+}
+
+// driveLinkCanonicalKey is key as keymap.EventToHotkeyString spells it, lower
+// case, so the spellings of the action table and of a pressed key compare.
+func driveLinkCanonicalKey(key string) string {
+	key = strings.TrimSpace(key)
+	if e := keymap.ParseFarKey(key); e != nil && e.VirtualKeyCode != 0 {
+		if spelled := keymap.EventToHotkeyString(e); spelled != "" {
+			key = spelled
+		}
+	}
+	return strings.ToLower(key)
+}
+
+// driveLinkKeySpellings are the spellings a link on key answers: a Ctrl link
+// the right Ctrl as well; an RCtrl link takes the right Ctrl from whatever
+// answers either Ctrl, so the Ctrl spelling counts as well.
+func driveLinkKeySpellings(key string) map[string]bool {
+	spellings := map[string]bool{driveLinkCanonicalKey(key): true}
+	switch p := splitDriveLinkHotkey(key); {
+	case p.ctrl:
+		spellings[driveLinkCanonicalKey("R"+key)] = true
+	case p.rctrl:
+		spellings[driveLinkCanonicalKey(driveLinkPlainCtrl(key))] = true
+	}
+	return spellings
+}
+
+// driveLinkRemap is what the key router turns key into before it asks the
+// links, and the message naming what does it: the user's keymap.ini, then
+// f4's Mac layout. It is "" when the key reaches the links as it is. It only
+// asks: the live rewrites (ApplyKeyRemap, ApplyMacKeys) also redraw the key
+// bar's modifiers.
+func driveLinkRemap(key string) (string, string) {
+	parsed := keymap.ParseFarKey(key)
+	if parsed == nil || parsed.VirtualKeyCode == 0 {
+		return "", ""
+	}
+	source := keymap.EventToHotkeyString(parsed)
+	if to := keymap.GlobalKeyRemap.Resolve("Shell", source); to != "" && !strings.EqualFold(to, source) {
+		return to, "DriveLink.OwnerRemap"
+	}
+	if to := keymap.MacKeyTarget("Shell", source); to != "" && !strings.EqualFold(to, source) {
+		return to, "DriveLink.OwnerMacKeys"
+	}
+	return "", ""
+}
+
+// driveLinkBuiltinOwners lists the built-in keys on key: what the panels and
+// vtui do with it themselves, as the action registry declares it (NativeKeys
+// and NativeKeyAliases of the actions of the panels). The key router asks the
+// links before any of them, so the link takes the key from them in the panels.
+// A key whose condition does not hold in the panels now works only in some
+// state (the focused quick view), and its owner names it. The folder bookmarks
+// and vtui's Alt with a digit are named on their own above.
+func driveLinkBuiltinOwners(key string) []DriveLinkKeyOwner {
+	spellings := driveLinkKeySpellings(key)
+	var owners []DriveLinkKeyOwner
+	seen := make(map[string]bool)
+	for _, act := range action.AllSorted() {
+		if !driveLinkActionInPanels(act) {
+			continue
+		}
+		natives := append(append([]string(nil), act.NativeKeys...), act.NativeKeyAliases...)
+		for _, spec := range natives {
+			native, condition, _ := strings.Cut(spec, ":")
+			condition = strings.TrimSpace(condition)
+			if !spellings[driveLinkCanonicalKey(native)] || strings.EqualFold(condition, "WorkspaceAltNumbers") {
+				continue
+			}
+			if e := keymap.ParseFarKey(native); e != nil && keymap.IsPanelBookmarkHotkey(e) {
+				continue
+			}
+			label := action.PlainLabel(act.DisplayLabel())
+			name := fmt.Sprintf(i18n.Msg("DriveLink.OwnerBuiltin"), label)
+			if condition != "" && !keymap.NativeConditionTrue("Shell", condition) {
+				name = fmt.Sprintf(i18n.Msg("DriveLink.OwnerBuiltinWhen"), label, condition)
+			}
+			if !seen[name] {
+				seen[name] = true
+				owners = append(owners, DriveLinkKeyOwner{Name: name})
+			}
+		}
+	}
+	return owners
+}
+
+// driveLinkActionInPanels reports whether the action's keys work in the panels,
+// where the links are asked: its area is Shell or Common, or it lists Shell.
+func driveLinkActionInPanels(act action.Action) bool {
+	if strings.EqualFold(act.Area, "Shell") || strings.EqualFold(act.Area, "Common") {
+		return true
+	}
+	for _, area := range act.DefaultAreas {
+		if strings.EqualFold(area, "Shell") {
+			return true
+		}
+	}
+	return false
+}
+
+// driveLinkPluginKeyOwners lists the plugins' global hot keys on key
+// (plughost.GlobalHotkeys), which PanelsFrame.InterceptPluginKey runs after
+// the links were asked. Each is named by the plugin command that declares the
+// same key, when there is one. A default the user switched off does not count.
+func driveLinkPluginKeyOwners(key string) []DriveLinkKeyOwner {
+	e := keymap.ParseFarKey(key)
+	if e == nil || e.VirtualKeyCode == 0 {
+		return nil
+	}
+	const ctrlMask = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed
+	const altMask = vtinput.LeftAltPressed | vtinput.RightAltPressed
+	var owners []DriveLinkKeyOwner
+	for _, hk := range plughost.GlobalHotkeysSnapshot() {
+		if hk.VK != e.VirtualKeyCode ||
+			(hk.Mods&ctrlMask != 0) != (e.ControlKeyState&ctrlMask != 0) ||
+			(hk.Mods&altMask != 0) != (e.ControlKeyState&altMask != 0) ||
+			(hk.Mods&vtinput.ShiftPressed != 0) != (e.ControlKeyState&vtinput.ShiftPressed != 0) {
+			continue
+		}
+		spelled := keymap.EventToHotkeyString(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: hk.VK, ControlKeyState: hk.Mods})
+		if PluginDefaultKeyOff(spelled) {
+			continue
+		}
+		name := i18n.Msg("DriveLink.OwnerPluginKey")
+		if label := pluginCommandLabelForShortcut(spelled); label != "" {
+			name = fmt.Sprintf(i18n.Msg("DriveLink.OwnerCommand"), label)
+		}
+		owners = append(owners, DriveLinkKeyOwner{Name: name})
+	}
+	return owners
+}
+
+// pluginCommandLabelForShortcut is the label of the plugin command that
+// declares key as its shortcut, or "".
+func pluginCommandLabelForShortcut(key string) string {
+	want := driveLinkCanonicalKey(key)
+	for _, id := range plughost.PluginCommandIDs() {
+		command, ok := plughost.PluginCommandByID(id)
+		if ok && command.Shortcut != "" && driveLinkCanonicalKey(declaredHotkeyString(command.Shortcut)) == want {
+			return action.PlainLabel(plughost.PluginCommandDisplayLabel(command))
+		}
+	}
+	return ""
 }
 
 // driveLinkTypesCharacter reports whether base, the key without its

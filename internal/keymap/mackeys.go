@@ -124,6 +124,18 @@ func macKeyTarget(area, source string) string {
 	return macCommandRules[source]
 }
 
+// MacKeyTarget is the key the Mac layout turns key, in the spelling of
+// EventToHotkeyString, into in area, or "" when it leaves the key alone or is
+// off. Unlike ApplyMacKeys it changes nothing, so a dialog can ask what a key
+// will become before anyone presses it (a drive-menu link's global hot key,
+// f4#2171).
+func MacKeyTarget(area, key string) string {
+	if !MacKeysEnabled() {
+		return ""
+	}
+	return macKeyTarget(area, key)
+}
+
 // ApplyMacKeys rewrites a live keystroke into the Far chord that means the
 // same thing, and reports whether it did.
 //
