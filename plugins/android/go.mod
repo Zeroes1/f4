@@ -9,7 +9,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/unxed/f4 v0.0.0
 	github.com/unxed/vtinput v0.1.12
-	github.com/unxed/vtui v0.1.421 // indirect
+	github.com/unxed/vtui v0.1.422 // indirect
 )
 
 require (
