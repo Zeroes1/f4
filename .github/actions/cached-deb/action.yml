@@ -74,20 +74,23 @@ runs:
         }
 
         if [ -z "$deb" ] || { [ "$REFRESH" = "true" ] && [ "$EXACT" != "true" ]; }; then
-          # What the workflow did before this action, plus keeping the file.
           rm -rf "$DEB_DIR"
           mkdir -p "$DEB_DIR"
           apt_get 60 update -qq
-          (cd "$DEB_DIR" && apt_get 120 download -qq "$PACKAGE")
+          (cd "$DEB_DIR" && apt_get 120 download -q "$PACKAGE")
           deb=$(find "$DEB_DIR" -maxdepth 1 -name '*.deb' -print -quit)
-          apt_get 120 install -y -q "$deb"
           echo "downloaded=true" >> "$GITHUB_OUTPUT"
-        elif ! sudo dpkg -i "$deb" </dev/null; then
-          # A newer image may lack a dependency the cached .deb needs; dpkg
-          # then leaves it unconfigured. apt finishes the job the slow way,
-          # as the workflow always did: -f repairs what dpkg left, and the
-          # install by name covers a .deb dpkg could not unpack at all.
-          echo "::warning::dpkg could not install the cached $(basename "$deb"); completing with apt-get"
+        fi
+
+        # dpkg, whether the file came from the cache or was just downloaded:
+        # `apt-get install ./file.deb` fetched the same version from the
+        # mirror all over again, so a slow mirror cost a downloaded .deb twice.
+        if ! sudo dpkg -i "$deb" </dev/null; then
+          # A newer image may lack a dependency the .deb needs; dpkg then
+          # leaves it unconfigured. apt finishes the job the slow way, as the
+          # workflow always did: -f repairs what dpkg left, and the install by
+          # name covers a .deb dpkg could not unpack at all.
+          echo "::warning::dpkg could not install $(basename "$deb"); completing with apt-get"
           apt_get 60 update -qq
           apt_get 120 install -y -q -f
           apt_get 120 install -y -q "$PACKAGE"
