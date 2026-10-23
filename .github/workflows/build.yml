@@ -87,6 +87,26 @@ jobs:
         echo "event=$EVENT_NAME head_ref=$HEAD_REF run_full=$run_full" >&2
         echo "run-full=$run_full" >> "$GITHUB_OUTPUT"
 
+  # The jobs that take longest -- test, race, race-windows, wine, vet and
+  # build-batch -- need only should-run-full; the shorter ones -- build,
+  # build-lite, the plugins, termux, win7, reactos, quality and lint -- need
+  # this job as well. It does nothing; it only puts them in the queue a few
+  # seconds later. A run has more jobs than the 20 runners, GitHub has no job
+  # priorities, and among jobs queued at the same moment it hands out runners
+  # in no useful order: in one run the two Windows test cells, the longest
+  # of a pull request, waited three and six minutes for a runner while lint,
+  # lite and plugin jobs ran, and the run ended on one of them. Queued first,
+  # the long jobs get the runners first and the short ones fill the gaps;
+  # longest first is what keeps a saturated pool near its floor.
+  long-jobs-first:
+    name: Let the long jobs start first
+    needs: [should-run-full]
+    if: needs.should-run-full.outputs.run-full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Nothing to do
+      run: 'true'
+
   # The build matrix is deliberately inline data. Pull requests build all
   # six cells because those are the artifacts anyone actually downloads
   # from a PR: the six desktop OS/architecture pairs.
@@ -97,7 +117,7 @@ jobs:
   # runs on glibc and musl alike -- see the Build binaries step below.
   build:
     name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -688,7 +708,7 @@ jobs:
   # cmd/f4/lite_deps_test.go checks all of this from `go list -deps`.
   build-lite:
     name: Build lite (${{ matrix.name }})
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: github.event_name != 'pull_request' && needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -890,7 +910,7 @@ jobs:
   # take about three minutes, well inside the run's critical path.
   build-cloudfox-plugin:
     name: Build cloudfox-plugin
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1019,7 +1039,7 @@ jobs:
   # build-cloudfox-plugin.
   build-android-plugin:
     name: Build android-plugin
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1143,7 +1163,7 @@ jobs:
   # build-cloudfox-plugin.
   build-ios-plugin:
     name: Build ios-plugin
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1247,7 +1267,7 @@ jobs:
   # added as another cell on request.
   build-termux:
     name: Build (termux/${{ matrix.goarch }})
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -1403,7 +1423,7 @@ jobs:
   # ошибку "method already declared", поэтому он удалён.
   build-win7:
     name: Build (windows7/amd64)
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1526,7 +1546,7 @@ jobs:
   # README links f4-legacy-windows-386.zip as the ReactOS download.
   build-reactos:
     name: Build (legacy windows/386)
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1782,7 +1802,7 @@ jobs:
   # cost nothing here, so vet-and-scanners and the lint shards run side by side.
   quality:
     name: Quality
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     env:
@@ -1859,7 +1879,7 @@ jobs:
 
   lint:
     name: Lint (${{ matrix.shard }})
-    needs: [should-run-full]
+    needs: [should-run-full, long-jobs-first]
     if: needs.should-run-full.outputs.run-full == 'true'
     runs-on: ubuntu-latest
     strategy:
