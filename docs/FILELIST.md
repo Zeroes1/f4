@@ -3246,7 +3246,8 @@ Every file tracked in the repository. Regenerate with
     │   ├── cicheck
     │   │   ├── action_test.go
     │   │   ├── cache_test.go
-    │   │   └── doc.go
+    │   │   ├── doc.go
+    │   │   └── prverified_test.go
     │   ├── conpty_probe_child.py
     │   ├── conpty_probe.py
     │   ├── conptyreconcile

@@ -65,6 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run-full: ${{ steps.decide.outputs.run-full }}
+      pr-verified: ${{ steps.verified.outputs.pr-verified }}
     steps:
     - name: Decide whether to run the full matrix
       id: decide
@@ -86,6 +87,73 @@ jobs:
 
         echo "event=$EVENT_NAME head_ref=$HEAD_REF run_full=$run_full" >&2
         echo "run-full=$run_full" >> "$GITHUB_OUTPUT"
+
+    # A push to main whose tree a pull request run has already passed need
+    # not test it again. A train lands by fast-forward, and a pull request
+    # merged while main stood still makes the very merge commit its run
+    # tested: the files are the same, so the results would be. Equality of
+    # trees is the whole test -- if main moved on in between, the merge has
+    # another tree and nothing is skipped. record-tested-tree leaves the tree
+    # of every pull request run behind as an artifact named after it; this
+    # step looks for one whose run, of this workflow, finished with success.
+    # Anything else -- no such artifact, a run still going or failed, an API
+    # error -- leaves pr-verified false and the push runs everything. What a
+    # verified push skips is what the pull request run covered in full: see
+    # the test, race-windows and wine jobs.
+    - name: Look for a pull request run that passed this tree
+      id: verified
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        TREE: ${{ github.event.head_commit.tree_id }}
+      run: |
+        set -euo pipefail
+        verified=false
+        if [ -n "$TREE" ]; then
+          runs=$(gh api "repos/$REPO/actions/artifacts?name=tested-tree-$TREE&per_page=100" \
+            --jq '.artifacts[] | select(.expired | not) | .workflow_run.id' || true)
+          for id in $runs; do
+            url=$(gh api "repos/$REPO/actions/runs/$id" \
+              --jq 'select(.event == "pull_request" and .status == "completed" and .conclusion == "success" and .path == ".github/workflows/build.yml") | .html_url' || true)
+            if [ -n "$url" ]; then
+              verified=true
+              echo "::notice::tree $TREE passed the pull request run $url; tests that run covered in full are skipped"
+              break
+            fi
+          done
+        fi
+        if [ "$verified" != true ]; then
+          echo "no pull request run passed tree ${TREE:-(unknown)}; everything runs"
+        fi
+        echo "pr-verified=$verified" >> "$GITHUB_OUTPUT"
+
+  # The other half of the check above: a pull request run leaves the tree it
+  # tests -- that of its merge commit -- as the name of an artifact. A job of
+  # its own, beside the matrix rather than in front of it.
+  record-tested-tree:
+    name: Record the tested tree
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Find the tree of the merge commit
+      id: tree
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+        tree=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.tree.sha)
+        echo "tree=$tree" >> "$GITHUB_OUTPUT"
+        echo "$tree" > tested-tree.txt
+
+    - name: Upload it
+      uses: actions/upload-artifact@v7
+      with:
+        name: tested-tree-${{ steps.tree.outputs.tree }}
+        path: tested-tree.txt
+        retention-days: 14
 
   # The jobs that take longest -- test, race, race-windows, wine, vet and
   # build-batch -- need only should-run-full; the shorter ones -- build,
@@ -2033,7 +2101,13 @@ jobs:
       # the isolated TestAllDialogs_LayoutValidation pass a second time.
       # The first regex also covers an exact "Test" name; the negated class
       # puts every other non-standard Test* suffix in the second shard.
-      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64","cover":"linux"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-D","run":"^Test([A-D]|$)","cover":"macos"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-D]","cover":"macos"},{"os":"windows-latest","target":"windows/amd64","shard":"A-D","run":"^Test([A-D]|$)","cover":"windows"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-D]","cover":"windows"}]}') || fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64","cover":"linux"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-D","run":"^Test([A-D]|$)","cover":"macos"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-D]","cover":"macos"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-latest","target":"windows/amd64","shard":"A-D","run":"^Test([A-D]|$)","cover":"windows"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-D]","cover":"windows"},{"os":"windows-11-arm","target":"windows/arm64"}]}') }}
+      # A push whose tree a pull request run already passed (pr-verified,
+      # see should-run-full) runs only the cells that run did not cover in
+      # full: linux/arm64, which tests just the affected packages on a pull
+      # request, and darwin/amd64 and windows/arm64, which a pull request
+      # does not run at all. The other five ran ./... on that very tree --
+      # coverage forces it -- so their results would be the same.
+      matrix: ${{ github.event_name == 'pull_request' && fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64","cover":"linux"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-D","run":"^Test([A-D]|$)","cover":"macos"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-D]","cover":"macos"},{"os":"windows-latest","target":"windows/amd64","shard":"A-D","run":"^Test([A-D]|$)","cover":"windows"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-D]","cover":"windows"}]}') || needs.should-run-full.outputs.pr-verified == 'true' && fromJSON('{"include":[{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-11-arm","target":"windows/arm64"}]}') || fromJSON('{"include":[{"os":"ubuntu-latest","target":"linux/amd64","cover":"linux"},{"os":"ubuntu-24.04-arm","target":"linux/arm64"},{"os":"macos-latest","target":"darwin/arm64","shard":"A-D","run":"^Test([A-D]|$)","cover":"macos"},{"os":"macos-latest","target":"darwin/arm64","shard":"rest","run":"^Test[^A-D]","cover":"macos"},{"os":"macos-15-intel","target":"darwin/amd64"},{"os":"windows-latest","target":"windows/amd64","shard":"A-D","run":"^Test([A-D]|$)","cover":"windows"},{"os":"windows-latest","target":"windows/amd64","shard":"rest","run":"^Test[^A-D]","cover":"windows"},{"os":"windows-11-arm","target":"windows/arm64"}]}') }}
     env:
       CGO_ENABLED: 0
       TEST_SHUFFLE: ${{ inputs.shuffle || 'on' }}
@@ -2459,7 +2533,9 @@ jobs:
   race-windows:
     name: Race (windows/amd64)
     needs: [should-run-full]
-    if: needs.should-run-full.outputs.run-full == 'true'
+    # Its package list is fixed, so a pull request run tests exactly what a
+    # push would: a push of a tree that run passed skips it (pr-verified).
+    if: needs.should-run-full.outputs.run-full == 'true' && needs.should-run-full.outputs.pr-verified != 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -2767,7 +2843,9 @@ jobs:
   wine:
     name: End-to-end under Wine (linux/amd64 host)
     needs: [should-run-full]
-    if: needs.should-run-full.outputs.run-full == 'true'
+    # The same on a pull request as on a push, so a push of a tree a pull
+    # request run passed skips it (pr-verified, see should-run-full).
+    if: needs.should-run-full.outputs.run-full == 'true' && needs.should-run-full.outputs.pr-verified != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -3130,7 +3208,11 @@ jobs:
     # Narrowing build-batch's condition would make release on a tag skipped, not failed.
     needs: [build, build-batch, build-lite, build-win7, build-reactos, build-termux, build-cloudfox-plugin, build-android-plugin, build-ios-plugin, test, race, race-windows]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # A job whose need was skipped is skipped itself unless its condition
+    # says otherwise, and a push of a tree a pull request run passed skips
+    # race-windows (pr-verified). So this asks only that nothing it needs
+    # failed or was cancelled.
+    if: ${{ !cancelled() && !failure() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     permissions:
       contents: write
     steps:
