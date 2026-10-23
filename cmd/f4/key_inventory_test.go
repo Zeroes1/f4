@@ -100,11 +100,6 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 		rationale: "routes keys past the hotkey table to the frame while the quick search, an alternative panel or the command line " +
 			"owns them; what the keys do is audited where they are handled",
 	},
-	"panel.(*QuickViewPanel).OwnsKey": {
-		areas:     []string{"Shell"},
-		chords:    []string{"F3", "F4", "F7", "F8"},
-		rationale: "the focused quick view takes its F-keys ahead of the file commands bound to them (QuickView.*)",
-	},
 	"panel.(*PlayerPanel).OwnsKey": {
 		areas:     []string{"Shell"},
 		chords:    []string{"Enter", "Del", "CtrlUp", "CtrlDown", "CtrlLeft", "CtrlRight", "CtrlHome"},
@@ -112,7 +107,7 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 	},
 	"app.(*AIChatPanel).OwnsKey": {
 		areas:     []string{"Shell"},
-		chords:    []string{"RCtrlC", "CtrlZ", "F3"},
+		chords:    []string{"RCtrlC", "CtrlZ"},
 		nav:       []string{"BACK", "DELETE", "RETURN"},
 		rationale: "the focused AI chat takes its keys ahead of the hotkey table; Backspace, Delete and Enter edit and send its input line",
 	},
@@ -188,8 +183,9 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 		rationale: "the player's playlist (Panel.Player.*)",
 	},
 	"panel.isFilePanelOnlyKey": {
-		nav:       []string{"DELETE", "F3", "F4", "F5", "F6", "F7", "F8", "INSERT"},
-		rationale: "the file keys the focused player swallows so they do not act on the file panel behind it",
+		nav: []string{"DELETE", "F3", "F4", "F5", "F6", "F7", "F8", "INSERT"},
+		rationale: "the file keys no focused alternative panel without a file list (info, quick view, player, AI chat) lets " +
+			"reach the file panel hidden behind it",
 	},
 	"panel.(*PluginPanelInstance).ProcessKey": {
 		areas:     []string{"Shell"},

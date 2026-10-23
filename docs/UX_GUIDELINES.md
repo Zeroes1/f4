@@ -86,9 +86,13 @@ own (a drive-menu link's global hot key, f4#2171) know the key is taken.
 * The action's handler does what the key does. For a key of the panels it
   presses the key (`PanelsFrame.PressNativeKey`): the key is the definition
   of the action.
-* A focused alternative panel (quick view, player, AI chat) names the keys it
-  takes ahead of the hotkey table with `OwnsKey`; `PanelsFrame.VetoActionKey`
-  asks it.
+* A focused alternative panel (player, AI chat) names the keys it takes ahead
+  of the hotkey table with `OwnsKey`; `PanelsFrame.VetoActionKey` asks it.
+* A focused alternative panel with no file under a cursor (info, quick view,
+  player, AI chat) never lets a file key (F3 to F8, Ins, Del, with Shift too)
+  reach the file panel hidden behind it, neither through the hotkey table nor
+  through the frame's own chain. The folder tree and panel plugins are lists
+  of their own and keep those keys (`altPanelListsFiles`).
 
 `cmd/f4/key_inventory_test.go` enforces this. It takes an AST inventory of the
 keys every production function compares a key event against (a

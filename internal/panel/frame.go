@@ -3004,14 +3004,19 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 		// normal PanelsFrame.ProcessKey path. A focused alt panel gets its
 		// own keys first: F2 toggles wrap in quick view and must not fire
 		// Panel.UserMenu, and every panel names the rest of its keys
-		// (altPanelKeyOwner). Without that the quick view's F8 deleted the
-		// file behind it, and the player's Ctrl+Up moved the split.
+		// (altPanelKeyOwner). Without that the player's Ctrl+Up moved the
+		// split. A panel with no file under a cursor keeps the file keys too:
+		// F5, F6 and F8 in the quick view or the info panel copied, moved and
+		// deleted a file of the panel hidden behind it.
 		if pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
 			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() {
 				if e.VirtualKeyCode == vtinput.VK_F2 {
 					return true
 				}
 				if owner, ok := a.(altPanelKeyOwner); ok && owner.OwnsKey(e) {
+					return true
+				}
+				if !altPanelListsFiles(a) && plainFileKey(e) {
 					return true
 				}
 			}
@@ -3171,9 +3176,15 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// Ctrl+Q quick-view, later Ctrl+T tree), let it consume its own
 	// navigation keys first — plain arrows, PgUp/Dn, Home/End, F2
 	// wrap-toggle. Anything the alt doesn't recognise falls through
-	// to the normal chain, so Ctrl+L / Ctrl+Q / Tab still work.
+	// to the normal chain, so Ctrl+L / Ctrl+Q / Tab still work -- except a
+	// file key of a panel with no file under a cursor, which the chain would
+	// apply to the file panel hidden behind it (altPanelListsFiles).
 	if pf.ShowPanels && pf.AltPanels[pf.ActiveIdx] != nil && pf.AltPanels[pf.ActiveIdx].IsFocused() {
-		if pf.AltPanels[pf.ActiveIdx].ProcessKey(e) {
+		alt := pf.AltPanels[pf.ActiveIdx]
+		if alt.ProcessKey(e) {
+			return true
+		}
+		if e.KeyDown && !altPanelListsFiles(alt) && plainFileKey(e) {
 			return true
 		}
 	}

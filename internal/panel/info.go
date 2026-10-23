@@ -42,6 +42,35 @@ type altPanelKeyOwner interface {
 	OwnsKey(e *vtinput.InputEvent) bool
 }
 
+// altPanelListsFiles reports whether the alternative panel is a list of its
+// own that the file keys act on: the folder tree deletes the folder under its
+// cursor on F8, and a panel plugin takes its keys before the hotkey table.
+// Info, the quick view, the player and the AI chat have no file under a
+// cursor, so a file key bound to a command would act on the file panel hidden
+// behind them (PanelsFrame.VetoActionKey).
+func altPanelListsFiles(a AltPanel) bool {
+	kind := a.Kind()
+	return kind == "tree" || strings.HasPrefix(kind, "plugin:")
+}
+
+// isFilePanelOnlyKey lists the keys that only make sense with a file under
+// the cursor: view, edit, copy, move, make a folder, delete, select.
+func isFilePanelOnlyKey(vk uint16) bool {
+	switch vk {
+	case vtinput.VK_F3, vtinput.VK_F4, vtinput.VK_F5, vtinput.VK_F6,
+		vtinput.VK_F7, vtinput.VK_F8, vtinput.VK_INSERT, vtinput.VK_DELETE:
+		return true
+	}
+	return false
+}
+
+// plainFileKey is a file key with neither Ctrl nor Alt held; with Shift it is
+// still a file operation (Shift+F5 copies in place, Shift+Del wipes).
+func plainFileKey(e *vtinput.InputEvent) bool {
+	const ctrlAlt = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed
+	return e.ControlKeyState&ctrlAlt == 0 && isFilePanelOnlyKey(e.VirtualKeyCode)
+}
+
 // InfoPanel is far2l's Ctrl+L information panel. It shows the
 // active file panel's location and system context — computer/user,
 // current directory, disk space, memory and (when enabled) CPU/GPU.

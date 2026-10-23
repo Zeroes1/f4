@@ -186,20 +186,6 @@ func (q *QuickViewPanel) SetFocus(f bool) {
 }
 func (q *QuickViewPanel) IsFocused() bool { return q.Focused }
 
-// OwnsKey: while the quick view has the focus its F3, F4, F7 and F8 are its
-// own (QuickView.*), not the file commands bound to them, which would act on
-// the file panel behind it (altPanelKeyOwner).
-func (q *QuickViewPanel) OwnsKey(e *vtinput.InputEvent) bool {
-	if e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed|vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0 {
-		return false
-	}
-	switch e.VirtualKeyCode {
-	case vtinput.VK_F3, vtinput.VK_F4, vtinput.VK_F7, vtinput.VK_F8:
-		return true
-	}
-	return false
-}
-
 // ProcessKey handles cursor, marking, copy and wrap-toggle keys while
 // focused. The arrows move a line cursor the view follows; Shift+arrows and
 // Ins mark lines the way the info panel marks rows, and C copies them. Any

@@ -44,8 +44,9 @@ func livePanels(t *testing.T) (*PanelsFrame, *FileSystemPanel) {
 // The hotkey table took keys of the focused alternative panels first: the
 // quick view's F3/F4/F7/F8 ran File.View, File.Edit, File.MakeDir and
 // File.Delete on the file panel behind it -- F8 deleted a file the user could
-// not see -- and the player's Ctrl+arrows (docs/PLAYER.md) moved the split
-// between the panels. The panels now veto them for the focused panel.
+// not see -- F5 and F6 there and in the info panel copied and moved it, and the
+// player's Ctrl+arrows (docs/PLAYER.md) moved the split between the panels.
+// The panels now veto them for the focused panel.
 func TestFocusedAltPanelsKeepTheirKeys(t *testing.T) {
 	pf, fsp := livePanels(t)
 	key := func(vk uint16, mods vtinput.ControlKeyState) *vtinput.InputEvent {
@@ -57,30 +58,49 @@ func TestFocusedAltPanelsKeepTheirKeys(t *testing.T) {
 		t.Fatal("the file panel vetoes the hotkey table without an alternative panel")
 	}
 
-	quick := NewQuickViewPanel(fsp)
-	pf.AltPanels[pf.ActiveIdx] = quick
-	quick.SetFocus(true)
-	for _, vk := range []uint16{vtinput.VK_F2, vtinput.VK_F3, vtinput.VK_F4, vtinput.VK_F7, vtinput.VK_F8} {
-		if !pf.VetoActionKey(key(vk, 0)) {
-			t.Errorf("the focused quick view gives %s to the hotkey table", vtinput.VKString(vk))
+	shift := vtinput.ControlKeyState(vtinput.ShiftPressed)
+	fileKeys := []*vtinput.InputEvent{
+		key(vtinput.VK_F3, 0), key(vtinput.VK_F4, 0), key(vtinput.VK_F5, 0), key(vtinput.VK_F6, 0),
+		key(vtinput.VK_F7, 0), key(vtinput.VK_F8, 0), key(vtinput.VK_DELETE, 0),
+		key(vtinput.VK_F5, shift), key(vtinput.VK_F8, shift), key(vtinput.VK_DELETE, shift),
+	}
+
+	// The quick view and the info panel have no file under a cursor: every
+	// file key stays away from the file panel hidden behind them.
+	for _, alt := range []AltPanel{NewQuickViewPanel(fsp), NewInfoPanel(fsp)} {
+		pf.AltPanels[pf.ActiveIdx] = alt
+		alt.SetFocus(true)
+		for _, e := range append([]*vtinput.InputEvent{key(vtinput.VK_F2, 0)}, fileKeys...) {
+			if !pf.VetoActionKey(e) {
+				t.Errorf("the focused %s gives %s (mods %#x) to the hotkey table", alt.Kind(), vtinput.VKString(e.VirtualKeyCode), e.ControlKeyState)
+			}
+		}
+		if pf.VetoActionKey(key(vtinput.VK_F3, ctrl)) || pf.VetoActionKey(key(vtinput.VK_F5, vtinput.LeftAltPressed)) {
+			t.Errorf("the focused %s takes Ctrl+F3 or Alt+F5, which are not file keys", alt.Kind())
+		}
+		alt.SetFocus(false)
+		if pf.VetoActionKey(key(vtinput.VK_F8, 0)) {
+			t.Errorf("an unfocused %s takes F8", alt.Kind())
 		}
 	}
-	if pf.VetoActionKey(key(vtinput.VK_F3, ctrl)) {
-		t.Error("the focused quick view takes Ctrl+F3, which it does not handle")
-	}
-	quick.SetFocus(false)
-	if pf.VetoActionKey(key(vtinput.VK_F3, 0)) {
-		t.Error("an unfocused quick view takes F3")
+
+	// The folder tree is a list of its own: F8 deletes the folder under its
+	// cursor, so the file keys still reach the commands.
+	tree := NewTreePanel(fsp)
+	pf.AltPanels[pf.ActiveIdx] = tree
+	tree.SetFocus(true)
+	if pf.VetoActionKey(key(vtinput.VK_F8, 0)) || pf.VetoActionKey(key(vtinput.VK_F5, 0)) {
+		t.Error("the focused tree keeps F8 or F5 from the hotkey table")
 	}
 
 	player := NewPlayerPanel(fsp)
 	pf.AltPanels[pf.ActiveIdx] = player
 	player.SetFocus(true)
-	for _, e := range []*vtinput.InputEvent{
+	for _, e := range append([]*vtinput.InputEvent{
 		key(vtinput.VK_UP, ctrl), key(vtinput.VK_DOWN, ctrl), key(vtinput.VK_LEFT, ctrl), key(vtinput.VK_RIGHT, ctrl), key(vtinput.VK_HOME, ctrl),
-		key(vtinput.VK_F7, 0), key(vtinput.VK_DELETE, 0), key(vtinput.VK_RETURN, 0),
+		key(vtinput.VK_RETURN, 0),
 		{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'Z', Char: 'z'},
-	} {
+	}, fileKeys...) {
 		if !pf.VetoActionKey(e) {
 			t.Errorf("the focused player gives %s (mods %#x) to the hotkey table", vtinput.VKString(e.VirtualKeyCode), e.ControlKeyState)
 		}
