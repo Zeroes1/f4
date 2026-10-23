@@ -2143,6 +2143,7 @@ Every file tracked in the repository. Regenerate with
     │   │   ├── libc_default_test.go
     │   │   ├── libc_musl.go
     │   │   ├── libc_musl_test.go
+    │   │   ├── nightly_notes_test.go
     │   │   ├── release_audit.go
     │   │   ├── release_audit_test.go
     │   │   ├── release_os_default.go

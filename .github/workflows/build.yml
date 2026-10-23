@@ -3230,10 +3230,19 @@ jobs:
         # directories and fails the otherwise successful main CI run. The
         # GitHub CLI uploads the same files sequentially, which is reliable
         # for the nightly's ~30 architecture assets.
+        #
+        # "Built on" is the commit's time, not this job's: every installed
+        # updater reads it with a regex anchored on the date and compares it
+        # with the vcs.time of the binary that runs (internal/update), so both
+        # must be the same clock. What follows the date is for people: the
+        # page shows the release's own time in the reader's zone ("an hour
+        # ago"), and next to it an unlabelled commit time read as a stale
+        # build date. TestNightlyNotesParse ties this line to the parser.
+        PUBLISHED=$(date -u +'%Y-%m-%d %H:%M')
         gh release create nightly dist/* \
           --repo "$GITHUB_REPOSITORY" \
           --title "Continuous Build (Nightly)" \
-          --notes "Automated pre-release build of the latest main branch. Commit: $SHORT_SHA. Built on: $BUILD_TIME" \
+          --notes "Automated pre-release build of the latest main branch. Commit: $SHORT_SHA. Built on: $BUILD_TIME UTC, the time of that commit. Published: $PUBLISHED UTC." \
           --prerelease
 
     # The check before publishing replays installed builds over the names
