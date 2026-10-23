@@ -315,6 +315,13 @@ func (d *commandPaletteDialog) ResizeConsole(screenWidth, screenHeight int) {
 	d.refreshDescription()
 }
 
+// setQuery puts text into the query line, with the cursor after it and
+// nothing selected, so typing goes on from it, and filters the list by it.
+func (d *commandPaletteDialog) setQuery(text string) {
+	d.query.SetText(text)
+	d.refilter(text)
+}
+
 func (d *commandPaletteDialog) refilter(query string) {
 	if d == nil || d.table == nil {
 		return

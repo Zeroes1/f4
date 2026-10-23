@@ -29,20 +29,73 @@ type hotkeyRow struct {
 	Desc      string
 }
 
+// hotkeyBuiltinMark marks, in the configurator's first, one-cell column, a
+// built-in key: one a frame handles itself (an action's NativeKeys or
+// NativeKeyAliases). It is listed so the table holds every key f4 reacts to,
+// and it cannot be reassigned.
+const hotkeyBuiltinMark = "•"
+
+// hotkeyShowBuiltin says whether the configurator lists the built-in keys.
+// The checkbox under its table turns them off for the rest of the session.
+var hotkeyShowBuiltin = true
+
+// builtIn reports whether the row is a built-in key; every other row is
+// editable, a binding or the empty row that offers one.
+func (r hotkeyRow) builtIn() bool { return !r.Editable }
+
+// The columns of the hotkey table, in order (hotkeyColumnTitles).
+const (
+	hotkeyColMark = iota
+	hotkeyColCommand
+	hotkeyColKey
+	hotkeyColArea
+	hotkeyColWhen
+	hotkeyColDescription
+)
+
 func (r hotkeyRow) GetCellText(col int) string {
 	switch col {
-	case 0:
+	case hotkeyColMark:
+		if r.builtIn() {
+			return hotkeyBuiltinMark
+		}
+		return ""
+	case hotkeyColCommand:
 		return r.Label
-	case 1:
+	case hotkeyColKey:
 		return r.Key
-	case 2:
+	case hotkeyColArea:
 		return r.Area
-	case 3:
+	case hotkeyColWhen:
 		return r.Condition
-	case 4:
+	case hotkeyColDescription:
 		return r.Desc
 	}
 	return ""
+}
+
+// visibleHotkeyRows drops the built-in keys while they are turned off.
+func visibleHotkeyRows(rows []hotkeyRow) []hotkeyRow {
+	if hotkeyShowBuiltin {
+		return rows
+	}
+	kept := make([]hotkeyRow, 0, len(rows))
+	for _, row := range rows {
+		if !row.builtIn() {
+			kept = append(kept, row)
+		}
+	}
+	return kept
+}
+
+// newHotkeyBuiltinCheckbox is the switch for the built-in keys, labelled
+// with their mark.
+func newHotkeyBuiltinCheckbox() *vtui.Checkbox {
+	cb := vtui.NewCheckbox(0, 0, fmt.Sprintf(i18n.Msg("Hotkeys.ShowBuiltin"), hotkeyBuiltinMark), false)
+	if hotkeyShowBuiltin {
+		cb.State = 1
+	}
+	return cb
 }
 
 func (r hotkeyRow) GetCellAttr(col int, def uint64) uint64 {
@@ -102,9 +155,9 @@ func fitHotkeyColumnWidths(widths []int, budget int) []int {
 }
 
 // hotkeyColumnTitles names the hotkey table's columns in the order
-// hotkeyTableColumns lays them out; the last one, Description, is the only
-// elastic one.
-var hotkeyColumnTitles = []string{"Command", "Key", "Area", "When", "Description"}
+// hotkeyTableColumns lays them out: the built-in mark, one cell wide, first;
+// the last one, Description, is the only elastic one.
+var hotkeyColumnTitles = []string{hotkeyBuiltinMark, "Command", "Key", "Area", "When", "Description"}
 
 // hotkeyColumnFloors are the readable minimum widths fitHotkeyColumns settles
 // the four balanced columns at once there is not enough room for everything
@@ -132,11 +185,12 @@ const (
 // shortened, so those two give way first, in two rounds, each down to a floor;
 // only if that is not enough does everything shrink evenly (#1239).
 func fitHotkeyColumns(widths []int, budget int) []int {
+	// The built-in mark is one cell and never gives way.
 	const (
-		command = 0
-		key     = 1
-		area    = 2
-		when    = 3
+		command = hotkeyColCommand
+		key     = hotkeyColKey
+		area    = hotkeyColArea
+		when    = hotkeyColWhen
 	)
 	for _, step := range []struct{ col, floor int }{{when, 8}, {command, 16}, {when, hotkeyWhenFloor}, {command, hotkeyCommandFloor}, {area, hotkeyAreaFloor}, {key, hotkeyKeyFloor}} {
 		if step.col >= len(widths) {
@@ -197,13 +251,13 @@ func hotkeyTableColumns(rows []hotkeyRow, dialogWidth int) []vtui.TableColumn {
 }
 
 // HotkeyTableMinDialogWidth is the narrowest dialogWidth (hotkeyTableColumns's
-// own units) that keeps every fixed column at its readable minimum -- Command,
-// Key, Area and When at their floors above, Description at its header --
-// rather than shrinking one of them further. It is derived from those same
-// constants, not measured, so it tracks them if they ever change (#1239
-// follow-up).
+// own units) that keeps every fixed column at its readable minimum -- the
+// built-in mark whole, Command, Key, Area and When at their floors above,
+// Description at its header -- rather than shrinking one of them further. It
+// is derived from those same constants, not measured, so it tracks them if
+// they ever change (#1239 follow-up).
 func HotkeyTableMinDialogWidth() int {
-	floorSum := hotkeyCommandFloor + hotkeyKeyFloor + hotkeyAreaFloor + hotkeyWhenFloor
+	floorSum := vtui.StringWidth(hotkeyBuiltinMark) + hotkeyCommandFloor + hotkeyKeyFloor + hotkeyAreaFloor + hotkeyWhenFloor
 	separators := len(hotkeyColumnTitles) - 1
 	for dialogWidth := floorSum + separators + hotkeyTablePadding + hotkeyDescriptionMinWidth(); ; dialogWidth++ {
 		fixedBudget := dialogWidth - hotkeyTablePadding - separators - hotkeyDescriptionWidth(dialogWidth)
@@ -377,14 +431,17 @@ func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
 	// native row stays alongside the editable one.
 	for _, act := range actions {
 		seenNative := make(map[string]bool)
-		for _, spec := range act.NativeKeys {
+		// The aliases are listed too: the configurator shows every key f4
+		// reacts to, the ones menus leave out included.
+		natives := append(append([]string(nil), act.NativeKeys...), act.NativeKeyAliases...)
+		for _, spec := range natives {
 			key, cond, _ := strings.Cut(spec, ":")
 			key = strings.TrimSpace(key)
 			displayKey := keymap.FormatKeyForUI(key)
 			if key == "" || seenNative[displayKey] {
 				continue
 			}
-			if draft.GetAction(act.Area, key) != "" {
+			if !act.NativeKeysFirst && draft.GetAction(act.Area, key) != "" {
 				continue
 			}
 			seenNative[displayKey] = true
@@ -487,13 +544,26 @@ func actionHotkeyConfig(pf *panel.PanelsFrame) {
 	draft := original.CloneForEdit()
 
 	dlg, table := vtui.NewTableDialog(w, h, i18n.Msg("Hotkeys.Title"), []vtui.TableColumn{
+		{Title: hotkeyBuiltinMark, Width: 1},
 		{Title: i18n.Msg("Hotkeys.ColCommand"), Width: 23},
 		{Title: i18n.Msg("Hotkeys.ColKey"), Width: 14},
 		{Title: i18n.Msg("Hotkeys.ColArea"), Width: 10},
 		{Title: i18n.Msg("Hotkeys.ColWhen"), Width: 17},
 		{Title: i18n.Msg("Hotkeys.ColDescription"), Width: 0},
 	}, btnAssign, btnUnbind, btnSave, btnCancel)
-	refresh := configureHotkeyEditor(dlg, table, btnAssign, btnUnbind, draft, nil, w)
+	// The switch for the built-in keys takes the blank row between the table
+	// and the buttons, and follows the bottom edge on resize. AddItem would
+	// pin the window's minimum size at its position (vtui.NewTableWithButtons),
+	// so the minimum the table dialog chose is put back.
+	builtin := newHotkeyBuiltinCheckbox()
+	tx1, _, _, ty2 := table.GetPosition()
+	cbx1, _, cbx2, _ := builtin.GetPosition()
+	builtin.SetPosition(tx1, ty2+1, tx1+cbx2-cbx1, ty2+1)
+	builtin.SetGrowMode(vtui.GrowLoY | vtui.GrowHiY)
+	minW, minH := dlg.MinW, dlg.MinH
+	dlg.AddItem(builtin)
+	dlg.MinW, dlg.MinH = max(minW, cbx2-cbx1+5), minH
+	refresh := configureHotkeyEditor(dlg, table, btnAssign, btnUnbind, builtin, draft, nil, w)
 
 	btnSave.OnClick = func() {
 		original.ReplaceBindingsFrom(draft)
@@ -596,7 +666,7 @@ func showAreaSelectDialog(hm *keymap.HotkeyManager, actionName, defaultArea, def
 }
 
 // configureHotkeyEditor is shared by the legacy dialog and its embedded Settings tab.
-func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUnbind *vtui.Button, draft *keymap.HotkeyManager, onChange func(*keymap.HotkeyManager), w int) func() {
+func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUnbind *vtui.Button, builtin *vtui.Checkbox, draft *keymap.HotkeyManager, onChange func(*keymap.HotkeyManager), w int) func() {
 	theme.UseTableColors(table)
 	table.ShowScrollBar = true
 	table.Sortable = true // click a column header to sort, again to reverse
@@ -608,7 +678,9 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 
 	refresh := func() {
 		rows = nil
-		hkRows = buildHotkeyRows(draft)
+		// hkRows holds exactly the rows the table shows: selectedHotkeyRow
+		// maps a table position back into it.
+		hkRows = visibleHotkeyRows(buildHotkeyRows(draft))
 
 		for _, r := range hkRows {
 			rows = append(rows, r)
@@ -660,6 +732,13 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 		}
 	}
 
+	if builtin != nil {
+		builtin.OnChange = func(state int) {
+			hotkeyShowBuiltin = state == 1
+			refresh()
+		}
+	}
+
 	return refresh
 }
 
@@ -668,6 +747,10 @@ type hotkeyPage struct {
 	owner          *vtui.Window
 	table          *vtui.Table
 	assign, unbind *vtui.Button
+	builtin        *vtui.Checkbox
+	// builtinWidth is the checkbox's own width, kept apart from its position,
+	// which a narrow page cuts.
+	builtinWidth int
 }
 
 // hotkeyDetailsText is one row of the list in full. The table cuts every cell
@@ -687,6 +770,9 @@ func hotkeyDetailsText(row hotkeyRow) string {
 	}
 	if row.Desc != "" {
 		lines = append(lines, "", row.Desc)
+	}
+	if row.builtIn() && row.Key != "" {
+		lines = append(lines, "", hotkeyBuiltinMark+" "+i18n.Msg("Hotkeys.BuiltinNote"))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -745,6 +831,9 @@ func (p *hotkeyPage) SetPosition(x1, y1, x2, y2 int) {
 	p.Group.SetPosition(x1, y1, x2, y2)
 	p.table.SetPosition(x1, y1, x2, y2-2)
 	p.table.Columns = hotkeyTableColumns(p.rows(), x2-x1+1+hotkeyDialogWidthOffset)
+	// The switch for the built-in keys sits right under the table, as in the
+	// Hotkey Configurator dialog.
+	p.builtin.SetPosition(x1, y2-1, min(x2, x1+p.builtinWidth-1), y2-1)
 	x := x1
 	for _, button := range []*vtui.Button{p.assign, p.unbind} {
 		width := vtui.StringWidth(button.GetCaption()) + 4
@@ -770,14 +859,21 @@ func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyM
 	p.assign.SetId("hotkey-assign")
 	p.unbind = vtui.NewButton(0, 0, i18n.Msg("Hotkeys.BtnUnbind"))
 	p.unbind.SetId("hotkey-unbind")
+	p.builtin = newHotkeyBuiltinCheckbox()
+	p.builtin.SetId("hotkey-builtin")
+	cbx1, _, cbx2, _ := p.builtin.GetPosition()
+	p.builtinWidth = cbx2 - cbx1 + 1
+	// Tab follows the page top to bottom: the table, the switch under it,
+	// the buttons.
 	p.AddItem(p.table)
+	p.AddItem(p.builtin)
 	p.AddItem(p.assign)
 	p.AddItem(p.unbind)
 	if keymap.GlobalHotkeysMgr == nil {
 		p.SetDisabled(true)
 		return p
 	}
-	refresh := configureHotkeyEditor(owner, p.table, p.assign, p.unbind, keymap.GlobalHotkeysMgr.CloneForEdit(), onChange, 44)
+	refresh := configureHotkeyEditor(owner, p.table, p.assign, p.unbind, p.builtin, keymap.GlobalHotkeysMgr.CloneForEdit(), onChange, 44)
 	refresh()
 	p.SetFocusedItem(p.table)
 	return p

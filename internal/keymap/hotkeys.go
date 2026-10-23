@@ -233,13 +233,18 @@ func formatKeyTokenForUI(key string) string {
 	return key
 }
 
-// FormatKeyForUI converts a raw key string (like CtrlShiftF5) into a pretty UI string (Ctrl+Shift+F5).
+// FormatKeyForUI converts a raw key string (like CtrlShiftF5) into a pretty UI
+// string (Ctrl+Shift+F5). The Right Ctrl spelling of EventToHotkeyString
+// (RCtrl3, a numbered bookmark key) reads RCtrl+3.
 func FormatKeyForUI(key string) string {
 	if key == "" {
 		return ""
 	}
 	var parts []string
-	if strings.HasPrefix(key, "Ctrl") {
+	if strings.HasPrefix(key, "RCtrl") && len(key) > len("RCtrl") {
+		parts = append(parts, "RCtrl")
+		key = key[len("RCtrl"):]
+	} else if strings.HasPrefix(key, "Ctrl") {
 		parts = append(parts, "Ctrl")
 		key = key[4:]
 	}
@@ -278,7 +283,9 @@ func NativeShortcutsForAction(area string, action action.Action) []string {
 		if NativeShortcutOwnedByCurrentContext(action.Name, key) {
 			continue
 		}
-		if GlobalHotkeysMgr != nil {
+		// A key the frame takes before the hotkey table is not replaced by
+		// a binding on it (action.Action.NativeKeysFirst).
+		if GlobalHotkeysMgr != nil && !action.NativeKeysFirst {
 			bound := GlobalHotkeysMgr.GetAction(area, key)
 			if bound != "" && !strings.EqualFold(bound, action.Name) {
 				continue

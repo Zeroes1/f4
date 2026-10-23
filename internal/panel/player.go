@@ -585,13 +585,24 @@ func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	return handled
 }
 
-// isFilePanelOnlyKey lists the plain keys that only make sense with a
-// file under the cursor, so the player refuses to pass them on.
-func isFilePanelOnlyKey(vk uint16) bool {
-	switch vk {
-	case vtinput.VK_F3, vtinput.VK_F4, vtinput.VK_F5, vtinput.VK_F6,
-		vtinput.VK_F7, vtinput.VK_F8, vtinput.VK_INSERT, vtinput.VK_DELETE:
+// OwnsKey: while the player has the focus it keeps (altPanelKeyOwner) the
+// characters -- WinAmp's Z X C V B, + and - for the volume -- which must not
+// go to the command line, Enter and Del, and Ctrl with the arrows and Home,
+// which move playlist items (docs/PLAYER.md) instead of the split between the
+// panels. The file keys no focused alternative panel lets through
+// (altPanelListsFiles, #380, #902).
+func (pp *PlayerPanel) OwnsKey(e *vtinput.InputEvent) bool {
+	if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
 		return true
+	}
+	ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
+	alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
+	shift := e.ControlKeyState&vtinput.ShiftPressed != 0
+	if ctrl && !alt && !shift {
+		switch e.VirtualKeyCode {
+		case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_HOME:
+			return true
+		}
 	}
 	return false
 }

@@ -3,9 +3,11 @@ package app
 import (
 	"github.com/unxed/f4/internal/settings"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/dialog"
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 
 	"github.com/unxed/f4/internal/testutil"
@@ -38,20 +40,29 @@ func TestHotkeyRow(t *testing.T) {
 		Desc:      "Description",
 	}
 
-	if row.GetCellText(0) != "Test Label" {
+	if row.GetCellText(hotkeyColCommand) != "Test Label" {
 		t.Errorf("Expected Test Label")
 	}
-	if row.GetCellText(1) != "F12" {
+	if row.GetCellText(hotkeyColKey) != "F12" {
 		t.Errorf("Expected F12")
 	}
-	if row.GetCellText(2) != "Common" {
+	if row.GetCellText(hotkeyColArea) != "Common" {
 		t.Errorf("Expected Common")
 	}
-	if row.GetCellText(3) != "EmptyCommandLine" {
+	if row.GetCellText(hotkeyColWhen) != "EmptyCommandLine" {
 		t.Errorf("Expected EmptyCommandLine")
 	}
-	if row.GetCellText(4) != "Description" {
+	if row.GetCellText(hotkeyColDescription) != "Description" {
 		t.Errorf("Expected Description")
+	}
+	// A read-only row is a built-in key and carries the mark; an editable
+	// one does not.
+	if row.GetCellText(hotkeyColMark) != hotkeyBuiltinMark {
+		t.Errorf("a built-in row is not marked")
+	}
+	row.Editable = true
+	if row.GetCellText(hotkeyColMark) != "" {
+		t.Errorf("an editable row is marked as built-in")
 	}
 }
 
@@ -132,7 +143,7 @@ func TestHotkeyTableColumnsFitContentWhenSpaceAllows(t *testing.T) {
 		Desc:      "A long localized description that remains in the flexible column",
 	}}
 	columns := hotkeyTableColumns(rows, 160)
-	for col := 0; col < 4; col++ {
+	for col := hotkeyColMark; col < hotkeyColDescription; col++ {
 		if got, want := columns[col].Width, vtui.StringWidth(rows[0].GetCellText(col)); got < want {
 			t.Errorf("column %d width = %d, want at least %d", col, got, want)
 		}
@@ -145,10 +156,10 @@ func TestSelectedHotkeyRowUsesDisplayedTablePosition(t *testing.T) {
 		{Label: "Alpha action"},
 		{Label: "Middle action"},
 	}
-	table := vtui.NewTable(0, 0, 80, 10, []vtui.TableColumn{{Title: "Command", Width: 40}})
+	table := vtui.NewTable(0, 0, 80, 10, []vtui.TableColumn{{Title: hotkeyBuiltinMark, Width: 1}, {Title: "Command", Width: 40}})
 	table.Sortable = true
 	table.SetRows([]vtui.TableRow{rows[0], rows[1], rows[2]})
-	table.SetSort(0, true)
+	table.SetSort(hotkeyColCommand, true)
 
 	row, ok := selectedHotkeyRow(table, rows)
 	if !ok || row.Label != "Alpha action" {
@@ -170,10 +181,10 @@ func TestSelectedHotkeyRowAtUsesActionPosition(t *testing.T) {
 		{Label: "Alpha action"},
 		{Label: "Middle action"},
 	}
-	table := vtui.NewTable(0, 0, 80, 10, []vtui.TableColumn{{Title: "Command", Width: 40}})
+	table := vtui.NewTable(0, 0, 80, 10, []vtui.TableColumn{{Title: hotkeyBuiltinMark, Width: 1}, {Title: "Command", Width: 40}})
 	table.Sortable = true
 	table.SetRows([]vtui.TableRow{rows[0], rows[1], rows[2]})
-	table.SetSort(0, true)
+	table.SetSort(hotkeyColCommand, true)
 
 	// Simulate Enter dispatching an explicit display position while the
 	// table's current selection contains a different value.
@@ -385,6 +396,14 @@ func TestNativeOnlyActionsStayAssignable(t *testing.T) {
 		{"Workspace.Previous", "Ctrl+Shift+Tab"},
 		{"Workspace.List", "F12"},
 	} {
+		// The keys vtui also takes with more modifiers held are read-only
+		// rows of their own (action.Action.NativeKeyAliases).
+		act, _ := GetAction(tc.action)
+		aliases := map[string]bool{}
+		for _, alias := range act.NativeKeyAliases {
+			key, _, _ := strings.Cut(alias, ":")
+			aliases[keymap.FormatKeyForUI(key)] = true
+		}
 		var native, assignable int
 		for _, row := range rows {
 			if row.Action != tc.action {
@@ -395,6 +414,7 @@ func TestNativeOnlyActionsStayAssignable(t *testing.T) {
 				native++
 			case row.Key == "" && row.Editable:
 				assignable++
+			case aliases[row.Key] && !row.Editable:
 			default:
 				t.Errorf("%s: unexpected row %+v", tc.action, row)
 			}
@@ -475,7 +495,7 @@ func TestSettingsEmbeddedHotkeyConfiguratorDraft(t *testing.T) {
 	if page == nil {
 		t.Fatal("missing embedded hotkey configurator")
 	}
-	if !page.table.Sortable || !page.table.QuickSearch || len(page.table.Columns) != 5 {
+	if !page.table.Sortable || !page.table.QuickSearch || len(page.table.Columns) != len(hotkeyColumnTitles) {
 		t.Fatal("legacy table features missing")
 	}
 	for i, row := range page.table.Rows {
@@ -612,8 +632,131 @@ func TestSettingsHotkeyFirstRowUp(t *testing.T) {
 	}
 	page.table.SetSelectPos(page.table.ItemCount - 1)
 	center.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_DOWN})
-	if page.GetFocusedItem() != page.assign {
-		t.Fatal("Down at last row did not reach Assign")
+	// The switch for the built-in keys is the control right under the table.
+	if page.GetFocusedItem() != page.builtin {
+		t.Fatal("Down at last row did not reach the control under the table")
 	}
 	center.Show(scr)
+}
+
+// countBuiltinRows counts the rows of a hotkey table that are built-in keys.
+func countBuiltinRows(table *vtui.Table) int {
+	n := 0
+	for _, row := range table.Rows {
+		if r, ok := row.(hotkeyRow); ok && r.builtIn() {
+			n++
+		}
+	}
+	return n
+}
+
+// pressSpaceOn toggles a checkbox the way the keyboard does.
+func pressSpaceOn(t *testing.T, cb *vtui.Checkbox) {
+	t.Helper()
+	if !cb.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_SPACE, Char: ' '}) {
+		t.Fatal("the checkbox did not take Space")
+	}
+}
+
+// The built-in keys -- the ones a frame handles itself -- carry a mark of
+// their own besides the dim colour, and a checkbox under the table hides them
+// and shows them again. The user could not tell them from the rest.
+func TestHotkeyConfiguratorMarksAndHidesBuiltinKeys(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	t.Cleanup(func() { hotkeyShowBuiltin = true })
+	t.Cleanup(testutil.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(160, 40)
+	vtui.FrameManager.Init(screen)
+	actionHotkeyConfig(nil)
+	dlg, ok := vtui.FrameManager.GetTopFrame().(*vtui.Window)
+	if !ok {
+		t.Fatalf("top frame = %T, want hotkey dialog", vtui.FrameManager.GetTopFrame())
+	}
+	defer dlg.Close()
+
+	var table *vtui.Table
+	var builtin *vtui.Checkbox
+	for _, child := range dlg.GetChildren() {
+		switch c := child.(type) {
+		case *vtui.Table:
+			table = c
+		case *vtui.Checkbox:
+			builtin = c
+		}
+	}
+	if table == nil || builtin == nil {
+		t.Fatalf("hotkey dialog: table %v, built-in switch %v", table != nil, builtin != nil)
+	}
+	if table.Columns[hotkeyColMark].Title != hotkeyBuiltinMark || table.Columns[hotkeyColMark].Width != 1 {
+		t.Errorf("the mark column is %+v, want one cell titled %q", table.Columns[hotkeyColMark], hotkeyBuiltinMark)
+	}
+	if !strings.Contains(builtin.GetText(), hotkeyBuiltinMark) || builtin.State != 1 {
+		t.Errorf("the switch reads %q, state %d; want it on, naming the mark", builtin.GetText(), builtin.State)
+	}
+	_, _, _, tableBottom := table.GetPosition()
+	if _, y, _, _ := builtin.GetPosition(); y != tableBottom+1 {
+		t.Errorf("the switch is on row %d, want %d, right under the table", y, tableBottom+1)
+	}
+	if countBuiltinRows(table) == 0 {
+		t.Fatal("no built-in keys are listed")
+	}
+
+	pressSpaceOn(t, builtin)
+	if countBuiltinRows(table) != 0 || hotkeyShowBuiltin {
+		t.Fatalf("%d built-in keys are still listed after the switch was turned off", countBuiltinRows(table))
+	}
+	if len(table.Rows) == 0 {
+		t.Fatal("turning the built-in keys off emptied the list")
+	}
+	pressSpaceOn(t, builtin)
+	if countBuiltinRows(table) == 0 {
+		t.Fatal("the built-in keys did not come back")
+	}
+}
+
+// The Settings tab has the same switch, and it filters the rows the table
+// shows, so a row picked by position is still the row on screen.
+func TestSettingsHotkeyPageHidesBuiltinKeys(t *testing.T) {
+	previous := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous })
+	t.Cleanup(func() { hotkeyShowBuiltin = true })
+	t.Cleanup(testutil.SwapFrameManager(t))
+	t.Cleanup(settings.WaitSchemeRefreshes)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(140, 35)
+	vtui.FrameManager.Init(scr)
+	settings.OpenAt("hotkeys", "", "", false)
+	center := vtui.FrameManager.GetTopFrame().(*settings.Center)
+	defer center.Close()
+	page := findEmbeddedHotkeys(t, center)
+	if page == nil {
+		t.Fatal("missing embedded hotkey configurator")
+	}
+	if countBuiltinRows(page.table) == 0 {
+		t.Fatal("no built-in keys are listed")
+	}
+	pressSpaceOn(t, page.builtin)
+	if countBuiltinRows(page.table) != 0 {
+		t.Fatal("built-in keys are still listed after the switch was turned off")
+	}
+	page.table.SetSelectPos(0)
+	if row, ok := selectedHotkeyRow(page.table, page.rows()); !ok || !row.Editable {
+		t.Errorf("the first row picked with the built-in keys off is %+v", row)
+	}
+}
+
+// F3 on a built-in key says what it is.
+func TestHotkeyDetailsExplainABuiltinKey(t *testing.T) {
+	builtin := hotkeyDetailsText(hotkeyRow{Label: "Open", Key: "Enter", Area: "Shell"})
+	if !strings.Contains(builtin, i18n.Msg("Hotkeys.BuiltinNote")) {
+		t.Errorf("the details of a built-in key do not explain it:\n%s", builtin)
+	}
+	bound := hotkeyDetailsText(hotkeyRow{Label: "Copy", Key: "F5", Area: "Shell", Editable: true})
+	if strings.Contains(bound, i18n.Msg("Hotkeys.BuiltinNote")) {
+		t.Errorf("the details of a binding call it built-in:\n%s", bound)
+	}
 }

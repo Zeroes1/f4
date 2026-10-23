@@ -150,13 +150,83 @@ var hotkeyConditions = map[string]func() bool{
 	// Tabs into it (#1804). It reads the frame's focus state rather than
 	// the panel's own flag, which only the next redraw brings up to date.
 	"altpanelfocused": func() bool {
-		pf := FindPanelsFrameAnyScreen()
-		if pf == nil || !pf.ShowPanels || pf.CommandLineFocused || pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+		kind := focusedAltPanelKind()
+		return kind == "info" || kind == "quick_view"
+	},
+
+	// The conditions below say when a key the panels handle themselves does
+	// what its NativeKeys entry promises (the key inventory,
+	// cmd/f4/key_inventory_test.go). They are not offered in the Hotkey
+	// Configurator's condition list; they qualify the read-only rows of those
+	// keys and gate their actions.
+
+	// quickviewfocused, playerfocused and aichatfocused narrow
+	// altpanelfocused to one kind of panel.
+	"quickviewfocused": func() bool { return focusedAltPanelKind() == "quick_view" },
+	"playerfocused":    func() bool { return focusedAltPanelKind() == "player" },
+	"aichatfocused":    func() bool { return focusedAltPanelKind() == "ai_chat" },
+	// fastfind: the quick search of the active panel is open; autofilter: it
+	// is open as the filter.
+	"fastfind": func() bool {
+		fsp := activeFilePanelShown()
+		return fsp != nil && fsp.FastFindMode
+	},
+	"autofilter": func() bool {
+		fsp := activeFilePanelShown()
+		return fsp != nil && fsp.FastFindMode && fsp.autoFilterMode
+	},
+	// temppanel: the active panel is a temporary panel.
+	"temppanel": func() bool {
+		fsp := activeFilePanelShown()
+		if fsp == nil {
 			return false
 		}
-		a := pf.AltPanels[pf.ActiveIdx]
-		return a != nil && (a.Kind() == "info" || a.Kind() == "quick_view")
+		_, ok := fsp.Vfs.(*TempPanelVFS)
+		return ok
 	},
+	// pluginpanel: a panel plugin holds the active side.
+	"pluginpanel": func() bool {
+		pf := FindPanelsFrameAnyScreen()
+		return pf != nil && pf.ShowPanels && pf.focusedPluginPanel() != nil
+	},
+	// aipanel: the active panel shows the AI file system.
+	"aipanel": func() bool {
+		fsp := activeFilePanelShown()
+		return fsp != nil && IsAIPanel(fsp)
+	},
+	// remotecommand: the active panel is a remote one whose command Ctrl+C
+	// interrupts.
+	"remotecommand": func() bool {
+		pf := FindPanelsFrameAnyScreen()
+		return pf != nil && pf.CurrentRemotePTYInterruptTarget() != nil
+	},
+	// workspacealtnumbers: Alt and a digit switch workspaces.
+	"workspacealtnumbers": func() bool {
+		return vtui.FrameManager != nil && vtui.FrameManager.WorkspaceAltNumberSwitch
+	},
+}
+
+// focusedAltPanelKind is the kind of the alternative panel that holds the
+// focus on the active side, or "" when the keys go to the file panel or the
+// command line.
+func focusedAltPanelKind() string {
+	pf := FindPanelsFrameAnyScreen()
+	if pf == nil || !pf.ShowPanels || pf.CommandLineFocused || pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+		return ""
+	}
+	if a := pf.AltPanels[pf.ActiveIdx]; a != nil {
+		return a.Kind()
+	}
+	return ""
+}
+
+// activeFilePanelShown is the active file panel while the panels are shown.
+func activeFilePanelShown() *FileSystemPanel {
+	pf := FindPanelsFrameAnyScreen()
+	if pf == nil || !pf.ShowPanels {
+		return nil
+	}
+	return pf.GetActivePanel()
 }
 
 // nativeShortcutOwnedByCurrentContext filters framework fallbacks that never

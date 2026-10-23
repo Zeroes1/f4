@@ -3001,35 +3001,22 @@ func (pf *PanelsFrame) VetoActionKey(e *vtinput.InputEvent) bool {
 	}
 	if fsp == nil || !fsp.FastFindMode {
 		// The global hotkey dispatcher runs after this veto but before the
-		// normal PanelsFrame.ProcessKey path. Keep file-panel-only keys with
-		// a focused player, otherwise F3/F4/F5/F8 can act on the stale file
-		// cursor underneath the player (#380, #902).
-		ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
-		alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
-		if !ctrl && !alt && isFilePanelOnlyKey(e.VirtualKeyCode) &&
-			pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "player" {
-				return true
-			}
-		}
-		// A focused alt panel gets its own keys first: e.g. F2 toggles
-		// wrap in quick view and must not fire Panel.UserMenu.
-		if e.VirtualKeyCode == vtinput.VK_F2 && pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() {
-				return true
-			}
-		}
+		// normal PanelsFrame.ProcessKey path. A focused alt panel gets its
+		// own keys first: F2 toggles wrap in quick view and must not fire
+		// Panel.UserMenu, and every panel names the rest of its keys
+		// (altPanelKeyOwner). Without that the player's Ctrl+Up moved the
+		// split. A panel with no file under a cursor keeps the file keys too:
+		// F5, F6 and F8 in the quick view or the info panel copied, moved and
+		// deleted a file of the panel hidden behind it.
 		if pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "ai_chat" {
-				if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_BACK || e.VirtualKeyCode == vtinput.VK_DELETE {
+			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() {
+				if e.VirtualKeyCode == vtinput.VK_F2 {
 					return true
 				}
-			}
-			// The player takes WinAmp's letter keys (Z X C V B) and +/-
-			// for volume, so plain characters must not go to the
-			// command line while it has the cursor.
-			if a := pf.AltPanels[pf.ActiveIdx]; a != nil && a.IsFocused() && a.Kind() == "player" {
-				if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
+				if owner, ok := a.(altPanelKeyOwner); ok && owner.OwnsKey(e) {
+					return true
+				}
+				if !altPanelListsFiles(a) && plainFileKey(e) {
 					return true
 				}
 			}
@@ -3189,9 +3176,15 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	// Ctrl+Q quick-view, later Ctrl+T tree), let it consume its own
 	// navigation keys first — plain arrows, PgUp/Dn, Home/End, F2
 	// wrap-toggle. Anything the alt doesn't recognise falls through
-	// to the normal chain, so Ctrl+L / Ctrl+Q / Tab still work.
+	// to the normal chain, so Ctrl+L / Ctrl+Q / Tab still work -- except a
+	// file key of a panel with no file under a cursor, which the chain would
+	// apply to the file panel hidden behind it (altPanelListsFiles).
 	if pf.ShowPanels && pf.AltPanels[pf.ActiveIdx] != nil && pf.AltPanels[pf.ActiveIdx].IsFocused() {
-		if pf.AltPanels[pf.ActiveIdx].ProcessKey(e) {
+		alt := pf.AltPanels[pf.ActiveIdx]
+		if alt.ProcessKey(e) {
+			return true
+		}
+		if e.KeyDown && !altPanelListsFiles(alt) && plainFileKey(e) {
 			return true
 		}
 	}
@@ -3376,36 +3369,16 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 
 		if e.VirtualKeyCode >= vtinput.VK_0 && e.VirtualKeyCode <= vtinput.VK_9 && (isBookmarkGoto || isBookmarkSave) {
 			slot := int(e.VirtualKeyCode - vtinput.VK_0)
-			File := BookmarksFilePath()
-			// Always read fresh: another f4 or far2l instance may have
-			// rewritten the file since we last looked at it.
-			set, err := LoadBookmarks(File)
-			if err != nil {
-				vtui.DebugLog("BOOKMARKS: load %q failed: %v", File, err)
-				return true
-			}
 			if isBookmarkSave {
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					set[slot] = pf.BookmarkForPanel(fsp)
-					if err := SaveBookmarks(File, set); err != nil {
-						vtui.DebugLog("BOOKMARKS: save %q failed: %v", File, err)
-					}
-				}
-			} else if !set[slot].IsEmpty() {
-				// An unset slot is a silent no-op, as in far2l.
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					pf.NavigateToBookmark(fsp, set[slot])
-				}
+				pf.SaveBookmarkSlot(slot)
+			} else {
+				pf.GoToBookmarkSlot(slot)
 			}
 			return true
 		}
 
 		if e.VirtualKeyCode == vtinput.VK_OEM_3 && isBookmarkGoto {
-			if home, _ := hostmode.UserHomeDir(); home != "" {
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					pf.NavigateToPath(fsp, home)
-				}
-			}
+			pf.GoToHomeFolder()
 			return true
 		}
 

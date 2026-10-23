@@ -190,6 +190,33 @@ func (cp *AIChatPanel) navigateToTarget(target string) {
 	}
 }
 
+// OwnsKey says which keys the focused chat takes ahead of the hotkey table
+// (panel.PanelsFrame.VetoActionKey): what is typed into its input line --
+// characters, Enter, Backspace, Delete -- and its own keys: Right Ctrl+C and
+// Ctrl+Z, which would otherwise copy files or undo something else. F3, which
+// reviews a patch on the patch bar, is a file key, and no focused alternative
+// panel lets those through (panel's altPanelListsFiles).
+func (cp *AIChatPanel) OwnsKey(e *vtinput.InputEvent) bool {
+	switch e.VirtualKeyCode {
+	case vtinput.VK_RETURN, vtinput.VK_BACK, vtinput.VK_DELETE:
+		return true
+	}
+	if e.Char != 0 {
+		return true
+	}
+	alt := (e.ControlKeyState & (vtinput.LeftAltPressed | vtinput.RightAltPressed)) != 0
+	shift := (e.ControlKeyState & vtinput.ShiftPressed) != 0
+	rctrl := (e.ControlKeyState & vtinput.RightCtrlPressed) != 0
+	ctrl := (e.ControlKeyState & (vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed)) != 0
+	switch {
+	case e.VirtualKeyCode == vtinput.VK_C && rctrl && !alt && !shift:
+		return true
+	case e.VirtualKeyCode == vtinput.VK_Z && ctrl && !alt && !shift:
+		return true
+	}
+	return false
+}
+
 // ProcessKey adds the AI-specific hotkeys (copy last response, apply patch,
 // undo the last applied patch)
 // on top of vtui.ChatWindow's generic scrolling/link/input handling.
