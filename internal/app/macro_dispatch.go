@@ -169,6 +169,21 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// Ctrl+N remains Ctrl+N when the Russian layout produces Ctrl+т.
 	keymap.NormalizeLayoutShortcut(e)
 
+	// A field that captures a key -- the global hot key of a drive-menu link
+	// (f4#2171) -- gets every key before anything here acts on it: Ctrl+.
+	// would start a macro recording, Ctrl+Shift+P open the palette, a macro
+	// or a hotkey run, and vtui would switch workspaces on Alt and a digit
+	// after this filter. The frame it sits in gets the key, so the keys the
+	// field leaves alone (Tab, Enter, Esc) still move the focus or close it.
+	// The key is the one pressed, before keymap.ini: the link dialog says when
+	// keymap.ini would turn it into another.
+	if vtui.FrameManager != nil {
+		if top := vtui.FrameManager.GetTopFrame(); top != nil && keymap.FocusCapturesKeys(top) {
+			top.ProcessKey(e)
+			return true
+		}
+	}
+
 	// The user's key remap (keymap.ini) substitutes the key before anything
 	// else sees the event, so macros, plugin interception, configurable
 	// hotkeys and the frames themselves all agree on which key was pressed.

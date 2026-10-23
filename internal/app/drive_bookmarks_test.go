@@ -174,6 +174,67 @@ func TestDriveLinkKeyOwnersKnowEveryKeyOfThePanels(t *testing.T) {
 	}
 }
 
+// f4#2171: the global hot key field gets every key before the key router acts
+// on it, so the keys the router or vtui would take first can be chosen too.
+// The keys the field leaves alone still move the focus of its dialog.
+func TestKeyRouterHandsEveryKeyToACapturingField(t *testing.T) {
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(80, 25)
+	vtui.FrameManager.Init(screen)
+	previousMacro := macro.MacroMgr
+	manager := macro.NewMacroManager("")
+	macro.MacroMgr = manager
+	t.Cleanup(func() { macro.MacroMgr = previousMacro })
+
+	dlg := vtui.NewCenteredDialog(40, 8, "Link")
+	field := panel.NewGlobalHotkeyEdit("", 20)
+	var got []string
+	field.OnKey = func(key string) { got = append(got, key) }
+	other := vtui.NewButton(0, 0, "Ok")
+	field.SetPosition(dlg.X1+2, dlg.Y1+2, dlg.X1+21, dlg.Y1+2)
+	other.SetPosition(dlg.X1+2, dlg.Y1+4, dlg.X1+7, dlg.Y1+4)
+	dlg.AddItem(field)
+	dlg.AddItem(other)
+	dlg.SetFocusedItem(field)
+	vtui.FrameManager.Push(dlg)
+
+	key := func(vk uint16, mods vtinput.ControlKeyState) *vtinput.InputEvent {
+		return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, ControlKeyState: mods}
+	}
+	for _, e := range []*vtinput.InputEvent{
+		key(vtinput.VK_OEM_PERIOD, vtinput.LeftCtrlPressed),
+		key('P', vtinput.LeftCtrlPressed|vtinput.ShiftPressed),
+		key('1', vtinput.LeftAltPressed),
+		key(vtinput.VK_TAB, vtinput.RightCtrlPressed),
+	} {
+		if !macroFilter(manager, e) {
+			t.Errorf("the router let %s go past the capturing field", keymap.EventToHotkeyString(e))
+		}
+	}
+	if want := []string{"CtrlVK_BE", "CtrlShiftP", "Alt1", "RCtrlTab"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("the field got %q, want %q", got, want)
+	}
+	if manager.Recording {
+		t.Error("Ctrl+. in the field started a macro recording")
+	}
+	if top := vtui.FrameManager.GetTopFrame(); top != dlg {
+		t.Errorf("a key in the field opened %T", top)
+	}
+
+	// Tab is the dialog's: it moves the focus off the field, and then the
+	// router acts on keys as it always does.
+	macroFilter(manager, key(vtinput.VK_TAB, 0))
+	if dlg.GetFocusedItem() != other {
+		t.Fatal("Tab did not move the focus off the field")
+	}
+	macroFilter(manager, key(vtinput.VK_OEM_PERIOD, vtinput.LeftCtrlPressed))
+	if !manager.Recording {
+		t.Error("with the focus off the field Ctrl+. did not start a recording")
+	}
+	manager.Recording = false
+}
+
 func TestDriveBookmarksRoundTripHasNoTenItemLimit(t *testing.T) {
 	bookmarks := make([]panel.DriveBookmark, 12)
 	for i := range bookmarks {

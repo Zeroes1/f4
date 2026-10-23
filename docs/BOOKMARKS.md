@@ -19,7 +19,7 @@ The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a
 
 A link has two keys, both set in its dialog (`Ins` or `F4` in the drive menu). The **hot key** is one character that picks the link while the menu is open. The **global hot key** is any key with Ctrl or Alt, or a function key, that opens the link in the active panel without the menu. The two are independent: `Alt+F1`, then `D` can go to Downloads while `Ctrl+Alt+D` goes there at once. There is no separate table of link keys: the global hot key is stored with the link, as `GlobalHotkey=` in `drive-bookmarks.ini`, in the spelling of the hotkey table (`CtrlAltD`, `RCtrlY`, `CtrlShiftF11`). The drive menu shows it at the right edge of the link's row.
 
-The global hot key field takes the key pressed in it; nothing is typed there. `Del` or `Backspace` clears it, and `Tab`, `Enter` and `Esc` work as in any other field. A key without Ctrl or Alt that is not a function key is refused, because the panels and the command line need it.
+The global hot key field takes the key pressed in it; nothing is typed there. It gets the key before anything else does, so a key the key router or vtui would act on first (`Ctrl+Shift+P`, a macro's key, `Alt` with a digit, `Ctrl+.`) can be pressed there too, and the dialog then says what the key does. `Del` or `Backspace` clears it, and `Tab`, `Enter` and `Esc` work as in any other field. A key without Ctrl or Alt that is not a function key is refused, because the panels and the command line need it.
 
 When the key already does something in the panels, the dialog lists what and offers **Take** or **Choose another**. Take frees the key on Save, never before:
 

@@ -33,6 +33,12 @@ func NewGlobalHotkeyEdit(key string, width int) *GlobalHotkeyEdit {
 	return e
 }
 
+// CapturesKeys asks the application's key router to hand the focused field
+// every key before it acts on any (keymap.KeyCapturer): Ctrl+., Ctrl+Shift+P,
+// a macro's key or Alt with a digit may be the hot key the user wants, and the
+// router would otherwise take it first.
+func (e *GlobalHotkeyEdit) CapturesKeys() bool { return true }
+
 // Key is the hot key the field holds, in the spelling it was given in.
 func (e *GlobalHotkeyEdit) Key() string { return e.key }
 
