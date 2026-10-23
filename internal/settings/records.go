@@ -245,25 +245,25 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 		return panel.SavePluginMenuHidden(names)
 	}})
 	linkPath := panel.DriveBookmarksFilePath()
-	links := recordCollection("drive-links", "drives", "Drive links", "Named links shown in the drive chooser.", "link.Name", []f4settings.Field{recordField("link.Name", "Link name", "Display name in the drive chooser.", f4settings.String), recordField("link.Path", "Link path", "Directory or provider path opened by the link.", f4settings.Path), recordField("link.Hotkey", "Shortcut", "Far-style shortcut spelling, such as Q or CtrlF5. Capture fills it in from a key press.", f4settings.Chord)})
+	links := recordCollection("drive-links", "drives", "Drive links", "Named links shown in the drive chooser.", "link.Name", []f4settings.Field{
+		recordField("link.Name", "Link name", "Display name in the drive chooser.", f4settings.String),
+		recordField("link.Path", "Link path", "Directory or provider path opened by the link.", f4settings.Path),
+		recordField("link.Hotkey", "Shortcut", "Far-style shortcut spelling, such as Q or CtrlF5. Capture fills it in from a key press.", f4settings.Chord),
+		recordField("link.GlobalHotkey", "Global hot key", "Opens the link from the panels without the drive menu: a key with Ctrl or Alt, or a function key, such as Ctrl+Alt+T.", f4settings.Chord),
+	})
 	p.stores = append(p.stores, settingsRecordStore{collection: links, path: linkPath, validate: func(rows []f4settings.Record) error {
-		for _, r := range rows {
-			if err := settingsValidateShortcut(r.Values["link.Hotkey"]); err != nil {
-				return err
-			}
-		}
-		return nil
+		return settingsValidateDriveLinks(linkPath, rows)
 	}, load: func() ([]f4settings.Record, error) {
 		items, err := panel.LoadDriveBookmarks(linkPath)
 		var rows []f4settings.Record
 		for i, item := range items {
-			rows = append(rows, f4settings.Record{ID: fmt.Sprintf("drive-link:%d", i), Values: map[string]string{"link.Name": item.Name, "link.Path": item.Path, "link.Hotkey": item.Hotkey}})
+			rows = append(rows, f4settings.Record{ID: fmt.Sprintf("drive-link:%d", i), Values: map[string]string{"link.Name": item.Name, "link.Path": item.Path, "link.Hotkey": item.Hotkey, "link.GlobalHotkey": item.GlobalHotkey}})
 		}
 		return rows, err
 	}, save: func(rows []f4settings.Record) error {
 		var items []panel.DriveBookmark
 		for _, r := range rows {
-			items = append(items, panel.DriveBookmark{Name: r.Values["link.Name"], Path: r.Values["link.Path"], Hotkey: r.Values["link.Hotkey"]})
+			items = append(items, panel.DriveBookmark{Name: r.Values["link.Name"], Path: r.Values["link.Path"], Hotkey: r.Values["link.Hotkey"], GlobalHotkey: r.Values["link.GlobalHotkey"]})
 		}
 		return panel.SaveDriveBookmarks(linkPath, items)
 	}})
@@ -284,6 +284,56 @@ func settingsValidateShortcut(value string) error {
 	event := keymap.ParseFarKey(value)
 	if event == nil || !strings.EqualFold(keymap.EventToHotkeyString(event), value) {
 		return settingsError("%s is not a key: use a single key such as Q, or a chord such as CtrlF5", value)
+	}
+	return nil
+}
+
+// settingsValidateDriveLinks checks the links before Apply writes them. A
+// global hot key (f4#2171) must be one a link can have and no two links may
+// share it. A key that is new to the file must also be free: this window cannot
+// ask whether to take it from a command, as the link dialog of the drive menu
+// does, so it sends the user there instead. A key the file already has is not
+// asked about again.
+func settingsValidateDriveLinks(linkPath string, rows []f4settings.Record) error {
+	saved := map[string]bool{}
+	if current, err := panel.LoadDriveBookmarks(linkPath); err == nil {
+		for _, link := range current {
+			if key := strings.TrimSpace(link.GlobalHotkey); key != "" {
+				saved[strings.ToLower(key)] = true
+			}
+		}
+	}
+	holders := map[string]string{}
+	for _, r := range rows {
+		if err := settingsValidateShortcut(r.Values["link.Hotkey"]); err != nil {
+			return err
+		}
+		key := strings.TrimSpace(r.Values["link.GlobalHotkey"])
+		if key == "" {
+			continue
+		}
+		if err := settingsValidateShortcut(key); err != nil {
+			return err
+		}
+		shown := keymap.FormatKeyForUI(key)
+		if !panel.DriveLinkGlobalKeyAllowed(key) {
+			return settingsError("%s cannot be a global hot key: it needs Ctrl or Alt, or a function key", shown)
+		}
+		name := strings.TrimSpace(r.Values["link.Name"])
+		if other, taken := holders[strings.ToLower(key)]; taken {
+			return settingsError("%s is the global hot key of both %q and %q", shown, other, name)
+		}
+		holders[strings.ToLower(key)] = name
+		if saved[strings.ToLower(key)] {
+			continue
+		}
+		var names []string
+		for _, owner := range panel.DriveLinkGlobalKeyOwners(key) {
+			names = append(names, owner.Name)
+		}
+		if len(names) > 0 {
+			return settingsError("%s is already used by %s: give it to the link with Ins or F4 in the drive menu, which can take it, or choose another key", shown, strings.Join(names, ", "))
+		}
 	}
 	return nil
 }

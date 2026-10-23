@@ -20,6 +20,31 @@ func macroTestEvents() []*vtinput.InputEvent {
 	return []*vtinput.InputEvent{{Type: vtinput.KeyEventType, KeyDown: true, Char: 'a'}}
 }
 
+// f4#2171: PlaysOn answers for the area and for Common, and compares keys in
+// the hotkey table's spelling, so Far's "CtrlAlt;" is the key CtrlAltVK_BA.
+func TestPlaysOnFindsTheMacroOfAKey(t *testing.T) {
+	mgr := &MacroManager{Macros: map[string]map[string][]*vtinput.InputEvent{
+		"Shell":  {"CtrlAltT": macroTestEvents()},
+		"Common": {"CtrlAlt;": macroTestEvents()},
+		"Editor": {"CtrlAltE": macroTestEvents()},
+	}}
+	for key, want := range map[string]bool{
+		"CtrlAltT":     true,
+		"CtrlAltVK_BA": true,
+		"CtrlAltE":     false,
+		"CtrlAltQ":     false,
+		"":             false,
+	} {
+		if got := mgr.PlaysOn("Shell", key); got != want {
+			t.Errorf("PlaysOn(Shell, %q) = %v, want %v", key, got, want)
+		}
+	}
+	var none *MacroManager
+	if none.PlaysOn("Shell", "CtrlAltT") {
+		t.Error("a missing macro manager plays on a key")
+	}
+}
+
 // f4#1870 (DkmS1953): the list of free keys leaves out what a macro or a
 // command already uses, in the area and in Common, which reaches every area.
 func TestFreeKeysLeaveOutKeysInUse(t *testing.T) {

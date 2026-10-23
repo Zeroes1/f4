@@ -67,7 +67,8 @@ func driveMenuNameWithoutMarker(name string) string {
 const driveMenuBoxChrome = 4
 
 // driveMenuBoxWidth is the width of the drive menu box: the widest row of the
-// Drive, Tools and Links sections plus driveMenuBoxChrome. The rows in skip
+// Drive, Tools and Links sections, with the key a row shows at its right edge,
+// plus driveMenuBoxChrome. The rows in skip
 // (the bookmarks) do not count: their paths are cut to the box afterwards. A
 // section rule or a caption (the title, the key hint at the bottom) is never
 // cut, so the box is at least as wide as each of them needs.
@@ -90,10 +91,20 @@ func driveMenuBoxWidth(items []vtui.MenuItem, skip map[int]int, captions ...stri
 			need(vtui.StringWidth(clean) + 6) // the rule draws its caption with a blank on each side
 			continue
 		}
+		if it.Shortcut != "" {
+			// A link's global hot key at the right edge, two blanks after
+			// the name (f4#2171).
+			need(vtui.StringWidth(clean) + driveMenuShortcutGap + vtui.StringWidth(it.Shortcut) + driveMenuBoxChrome)
+			continue
+		}
 		need(vtui.StringWidth(clean) + driveMenuBoxChrome)
 	}
 	return w
 }
+
+// driveMenuShortcutGap is the room between a row's text and the key shown at
+// its right edge.
+const driveMenuShortcutGap = 2
 
 // driveMenuBookmarkText is the row of the folder bookmark in slot: its hotkey
 // digit and the path, cut on the left to width columns.

@@ -694,6 +694,84 @@ func TestDriveLinksPageHotKeyField(t *testing.T) {
 	}
 }
 
+// f4#2171: the Links page takes a link's global hot key in a field the key is
+// pressed in, on the line of its label, with no Capture button; Apply writes
+// it to the links file.
+func TestDriveLinksPageGlobalHotkeyField(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := panel.DriveBookmarksFilePath()
+	before, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr != nil {
+			_ = os.Remove(path)
+		} else {
+			_ = os.WriteFile(path, before, 0o600) // #nosec G703 -- the test's own profile file, put back.
+		}
+	})
+	if err := panel.SaveDriveBookmarks(path, []panel.DriveBookmark{{Name: "Home", Path: "/home", Hotkey: "H"}}); err != nil {
+		t.Fatal(err)
+	}
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 99, 30)
+	c.selectCategory(driveLinksPage)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 31)
+	c.Show(scr)
+
+	var field *panel.GlobalHotkeyEdit
+	var row *settingsRow
+	for _, r := range c.page.rows {
+		if e, ok := r.control.(*panel.GlobalHotkeyEdit); ok && r.field.ID == "link.GlobalHotkey" {
+			field, row = e, r
+		}
+	}
+	if field == nil {
+		t.Fatal("no global hot key field for the link")
+	}
+	label := row.field.Label.Resolve("English", func(string) string { return "" })
+	if label != "Global hot key:" {
+		t.Errorf("label = %q, want Global hot key:", label)
+	}
+	if want := c.page.X1 + 2 + vtui.StringWidth(label) + 1; field.X1 != want {
+		t.Errorf("field starts at column %d, want %d, one blank after its label", field.X1, want)
+	}
+	if field.Y1 != c.page.Y1+row.y-c.page.scroll {
+		t.Errorf("field on line %d, want the line of its label", field.Y1)
+	}
+	field.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F12,
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed | vtinput.ShiftPressed})
+	if got := field.GetText(); got != "Ctrl+Alt+Shift+F12" {
+		t.Errorf("field shows %q, want Ctrl+Alt+Shift+F12", got)
+	}
+
+	c.commit(false)
+	deadline := time.After(10 * time.Second)
+	for c.running != nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(5 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("Apply did not finish; status is %q", c.status)
+		}
+	}
+	links, err := panel.LoadDriveBookmarks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || links[0].GlobalHotkey != "CtrlAltShiftF12" {
+		t.Errorf("links after Apply = %+v, want Home with the global hot key CtrlAltShiftF12; status %q", links, c.status)
+	}
+}
+
 // f4#1148 (mitek1977-coder, 15.10 list, point 2): the Bookmarks page of the
 // F9 window has "Show Bookmarks" over the list of the folder bookmark slots,
 // one blank line between them, and the box clears the drive menu's option;

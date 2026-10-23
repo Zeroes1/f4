@@ -2,14 +2,134 @@ package app
 
 import (
 	"github.com/unxed/f4/internal/panel"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/macro"
+	"github.com/unxed/f4/internal/paneltest"
 	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
+
+// f4#2171: in the panels a link's global hot key opens the link before the
+// macros and the hotkey table get the key; a key no link has goes on to them.
+func TestKeyRouterOpensADriveLinkBeforeMacrosAndCommands(t *testing.T) {
+	preserveActionRegistry(t)
+	t.Cleanup(paneltest.SwapFrameManager(t))
+	screen := vtui.NewSilentScreenBuf()
+	screen.AllocBuf(80, 25)
+	vtui.FrameManager.Init(screen)
+
+	cfg := t.TempDir()
+	oldUserConfigDir := config.UserConfigDir
+	config.UserConfigDir = func() (string, error) { return cfg, nil }
+	t.Cleanup(func() { config.UserConfigDir = oldUserConfigDir })
+	if err := os.MkdirAll(filepath.Join(cfg, "f4", "settings"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := panel.SaveDriveBookmarks(panel.DriveBookmarksFilePath(), []panel.DriveBookmark{{Name: "Logs", Path: target, GlobalHotkey: "CtrlAltT"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	pf := paneltest.SetupMockPanelsFrame(t)
+	pf.ResizeConsole(80, 25)
+	defer pf.Close()
+	vtui.FrameManager.Push(pf)
+
+	ran := map[string]int{}
+	for _, name := range []string{"Test.LinkKey", "Test.OtherKey"} {
+		name := name
+		action.RegisterAction(action.Action{Name: name, Area: "Shell", Handler: func() bool { ran[name]++; return true }})
+	}
+	shell := map[string]string{"CtrlAltT": "Test.LinkKey", "CtrlAltQ": "Test.OtherKey"}
+	previousHotkeys, previousMacro := keymap.GlobalHotkeysMgr, macro.MacroMgr
+	keymap.GlobalHotkeysMgr = &keymap.HotkeyManager{
+		Defaults: map[string]map[string]string{"Shell": shell},
+		Bindings: map[string]map[string]string{"Shell": shell},
+	}
+	manager := &macro.MacroManager{Macros: map[string]map[string][]*vtinput.InputEvent{
+		"Shell": {"CtrlAltT": {{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F1}}},
+	}}
+	macro.MacroMgr = manager
+	t.Cleanup(func() {
+		keymap.GlobalHotkeysMgr = previousHotkeys
+		macro.MacroMgr = previousMacro
+	})
+
+	ctrlAlt := vtinput.LeftCtrlPressed | vtinput.LeftAltPressed
+	if !macroFilter(manager, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'T', ControlKeyState: ctrlAlt}) {
+		t.Fatal("Ctrl+Alt+T was not taken")
+	}
+	if ran["Test.LinkKey"] != 0 {
+		t.Error("the command bound to the link's key ran")
+	}
+	fsp := pf.GetActivePanel()
+	paneltest.WaitForLoad(t, fsp)
+	if got := fsp.Vfs.GetPath(); got != target {
+		t.Errorf("the active panel is in %q, want the link's %q", got, target)
+	}
+
+	if !macroFilter(manager, &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'Q', ControlKeyState: ctrlAlt}) || ran["Test.OtherKey"] != 1 {
+		t.Errorf("Ctrl+Alt+Q, which no link has, ran its command %d times, want 1", ran["Test.OtherKey"])
+	}
+}
+
+// The key router's part of what a link's key would be taken from: macro
+// recording cannot give Ctrl+. up, the palette's own Ctrl+Alt+P can be taken,
+// and a macro is named unless the link leaves it the left Ctrl.
+func TestDriveLinkRouterKeyOwners(t *testing.T) {
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	hm := &keymap.HotkeyManager{
+		Defaults: map[string]map[string]string{},
+		Bindings: map[string]map[string]string{},
+		IniPath:  filepath.Join(t.TempDir(), "hotkeys.ini"),
+	}
+	keymap.GlobalHotkeysMgr = hm
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previousHotkeys })
+	manager := &macro.MacroManager{Macros: map[string]map[string][]*vtinput.InputEvent{
+		"Common": {"CtrlAlt;": {{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F1}}},
+		"Editor": {"CtrlAltE": {{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F1}}},
+	}}
+
+	owners := driveLinkRouterKeyOwners(manager, "CtrlVK_BE")
+	if len(owners) != 1 || !owners[0].Fixed {
+		t.Errorf("owners of Ctrl+. = %+v, want macro recording, fixed", owners)
+	}
+	owners = driveLinkRouterKeyOwners(manager, "CtrlAltVK_BA")
+	if len(owners) != 1 || owners[0].Fixed || owners[0].Release != nil {
+		t.Errorf("owners of Ctrl+Alt+; = %+v, want the Common macro, kept", owners)
+	}
+	if owners := driveLinkRouterKeyOwners(manager, "RCtrlAltVK_BA"); len(owners) != 0 {
+		t.Errorf("an RCtrl link takes the macro's key: %+v", owners)
+	}
+	if owners := driveLinkRouterKeyOwners(manager, "CtrlAltE"); len(owners) != 0 {
+		t.Errorf("an Editor macro is named for the panels: %+v", owners)
+	}
+
+	owners = driveLinkRouterKeyOwners(manager, commandPaletteLegacyKey)
+	if len(owners) != 1 || owners[0].Release == nil {
+		t.Fatalf("owners of Ctrl+Alt+P = %+v, want the palette, releasable", owners)
+	}
+	if err := owners[0].Release(); err != nil {
+		t.Fatal(err)
+	}
+	event := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'P', ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed}
+	if commandPaletteLegacyShortcut("Shell", event) {
+		t.Error("Ctrl+Alt+P still opens the palette in the panels after a link took it")
+	}
+	if owners := driveLinkRouterKeyOwners(manager, commandPaletteLegacyKey); len(owners) != 0 {
+		t.Errorf("Ctrl+Alt+P still has owners after it was taken: %+v", owners)
+	}
+}
 
 func TestDriveBookmarksRoundTripHasNoTenItemLimit(t *testing.T) {
 	bookmarks := make([]panel.DriveBookmark, 12)

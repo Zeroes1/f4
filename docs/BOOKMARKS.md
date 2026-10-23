@@ -14,3 +14,23 @@ Each row shows the slot digit and the path, and `[ID]` after it for a plugin boo
 ## Drive-menu links
 
 The named links of the drive menu (Alt+F1/Alt+F2; `drive-bookmarks.ini`) store a path only, in the same form as above, so a link made on a Docker, Kubernetes or MongoDB panel, or on a NetFox connection (`net://<name>/<folder>`, offered as the path of a new link made with `Ins` while the panel is on the server, or with the cursor on the connection in the manager), brings that panel back. In the drive menu, Ctrl+Up and Ctrl+Down move the link under the cursor one place up or down, and the order is saved to the file. The same keys move a tool row (a plugin such as AI, Android or Network) among the tool rows; that order is kept one name per line in `settings/drive-tools-order.txt` of the profile, and applies while the "sort plugins by hotkey" option is off.
+
+### Global hot key (f4#2171)
+
+A link has two keys, both set in its dialog (`Ins` or `F4` in the drive menu). The **hot key** is one character that picks the link while the menu is open. The **global hot key** is any key with Ctrl or Alt, or a function key, that opens the link in the active panel without the menu. The two are independent: `Alt+F1`, then `D` can go to Downloads while `Ctrl+Alt+D` goes there at once. There is no separate table of link keys: the global hot key is stored with the link, as `GlobalHotkey=` in `drive-bookmarks.ini`, in the spelling of the hotkey table (`CtrlAltD`, `RCtrlY`, `CtrlShiftF11`). The drive menu shows it at the right edge of the link's row.
+
+The global hot key field takes the key pressed in it; nothing is typed there. `Del` or `Backspace` clears it, and `Tab`, `Enter` and `Esc` work as in any other field. A key without Ctrl or Alt that is not a function key is refused, because the panels and the command line need it.
+
+When the key already does something in the panels, the dialog lists what and offers **Take** or **Choose another**. Take frees the key on Save, never before:
+
+* a command bound to the key in `Shell` or `Common` gets `None` in `Shell` in `hotkeys.ini`, so a `Common` binding keeps working in the editor and the viewer;
+* another link with the key loses its global hot key;
+* a macro on the key, quick search (Alt with a letter) and switching workspaces (Alt with a digit) keep their keys, but in the panels the link comes first.
+
+Some keys are refused outright, because they are handled before the links are asked: the numbered bookmark keys (`RCtrl` or `Ctrl+Alt` with a digit or `` ` ``, and the same with Shift) and macro recording (`Ctrl+.`). A key the link already has is checked again on Save, since a command may have been bound to it in the meantime.
+
+In the panels the key router asks the links after the command palette, macro recording and the bookmark keys, and before macros, plugin keys and the hotkey table. A link written with `Ctrl` answers either Ctrl key. One written with `RCtrl` answers the right Ctrl only and leaves the left Ctrl to whatever has it. With the panels hidden, the key goes to the terminal. Keys that the panels handle without a configurable command are not listed as conflicts, and the link wins over them.
+
+Before f4#2171 the dialog had a "Quick call with RCtrl/Ctrl+Alt" check box. A link saved with it (`QuickCall=true`) and a Latin letter as its hot key now loads with that letter on RCtrl as its global hot key. The next save writes `GlobalHotkey=` and drops `QuickCall`. The `Ctrl+Alt` variant is not carried over; set it again in the dialog if needed.
+
+The main Settings window edits the global hot key as a chord field with Capture, and the Links page of the drive menu's F9 window as a field the key is pressed in. Neither can ask whether to take a key, so Apply refuses a global hot key that is new to the file and that something else already has, and points to the link dialog instead. A key the file already gives the link is not asked about again.
