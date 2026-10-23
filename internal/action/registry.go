@@ -37,6 +37,12 @@ type Action struct {
 	// EventFilter would run the action before the focused frame gets its normal
 	// chance to consume the key (notably terminal Ctrl+W and Ctrl+N).
 	NativeKeys []string
+	// NativeKeyAliases are more frame-owned keys that do the same as
+	// NativeKeys because the frame does not look at every modifier: vtui
+	// forks a workspace on N with Ctrl held whatever else is. The Hotkey
+	// Configurator lists them, so every key f4 reacts to has a row there,
+	// but menus and the command palette advertise NativeKeys only.
+	NativeKeyAliases []string
 	// DefaultAreas lists extra areas (besides Area) that get the default
 	// bindings too (e.g. Panel.Toggle works in both Shell and Terminal).
 	DefaultAreas []string

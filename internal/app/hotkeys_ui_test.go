@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/unxed/f4/internal/settings"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/unxed/f4/internal/dialog"
@@ -385,6 +386,14 @@ func TestNativeOnlyActionsStayAssignable(t *testing.T) {
 		{"Workspace.Previous", "Ctrl+Shift+Tab"},
 		{"Workspace.List", "F12"},
 	} {
+		// The keys vtui also takes with more modifiers held are read-only
+		// rows of their own (action.Action.NativeKeyAliases).
+		act, _ := GetAction(tc.action)
+		aliases := map[string]bool{}
+		for _, alias := range act.NativeKeyAliases {
+			key, _, _ := strings.Cut(alias, ":")
+			aliases[keymap.FormatKeyForUI(key)] = true
+		}
 		var native, assignable int
 		for _, row := range rows {
 			if row.Action != tc.action {
@@ -395,6 +404,7 @@ func TestNativeOnlyActionsStayAssignable(t *testing.T) {
 				native++
 			case row.Key == "" && row.Editable:
 				assignable++
+			case aliases[row.Key] && !row.Editable:
 			default:
 				t.Errorf("%s: unexpected row %+v", tc.action, row)
 			}

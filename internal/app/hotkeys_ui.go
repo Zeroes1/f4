@@ -377,7 +377,10 @@ func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
 	// native row stays alongside the editable one.
 	for _, act := range actions {
 		seenNative := make(map[string]bool)
-		for _, spec := range act.NativeKeys {
+		// The aliases are listed too: the configurator shows every key f4
+		// reacts to, the ones menus leave out included.
+		natives := append(append([]string(nil), act.NativeKeys...), act.NativeKeyAliases...)
+		for _, spec := range natives {
 			key, cond, _ := strings.Cut(spec, ":")
 			key = strings.TrimSpace(key)
 			displayKey := keymap.FormatKeyForUI(key)
