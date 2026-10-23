@@ -442,10 +442,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # 7 cells, pushes/tags only; capped so this job doesn't claim every
-      # runner the free-tier pool has (see the concurrency comment above
-      # the jobs) -- this is the matrix a tag release competes against.
-      max-parallel: 3
+      # 7 cells, pushes/tags only. Not capped any more, for the reason given
+      # at the test job: three at a time ran them in three waves, and the
+      # last batch decided when a push run's Nightly could start.
       # The noffi rows are the extra architectures Go can cross-compile
       # Linux for; vtui's graphical/FFI backends are unavailable there,
       # so they use its ANSI-only noffi configuration.
@@ -1987,10 +1986,17 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      # Up to 9 cells on pushes/tags (6 on pull requests); capped so this
-      # job doesn't claim every runner the free-tier pool has (see the
-      # concurrency comment above the jobs).
-      max-parallel: 4
+      # Up to 9 cells on pushes/tags (6 on pull requests), not capped.
+      # #1537 capped this, race and build-batch at about half their size when
+      # the bot opened four to eight pull requests at once and a tag build
+      # starved behind their matrices. The bot now lands work in trains and
+      # keeps to one full run at a time (LUNOBOT.md), while the caps sat on
+      # the critical path of every run: on pull requests the Windows cells,
+      # the longest there, started three to five minutes late behind the
+      # cap, and on pushes darwin/amd64, the longest of all, five minutes
+      # late. The plugin builds, one job per plugin instead of four, give
+      # back more runners than these cells now take at once. build and vet
+      # stay capped: their cells finish well inside the critical path.
       # One hosted runner per native os/arch cell, except that the slow
       # darwin/arm64 and windows/amd64 cells split their tests by name.
       # Pull requests skip the second-arch twin of the two
@@ -2318,9 +2324,10 @@ jobs:
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      # 4 shards, every run; capped so this job doesn't claim every runner
-      # the free-tier pool has (see the concurrency comment above the jobs).
-      max-parallel: 3
+      # 4 shards, every run, not capped, for the reason given at the test
+      # job: the heaviest shard is a pull request's critical path, and in a
+      # measured run, with three of four shards allowed, it waited two
+      # minutes for a runner.
       matrix:
         # Four numbered shards, filled by measured weight rather than by name.
         # The heaviest package lands alone in one of them and that is the floor:
