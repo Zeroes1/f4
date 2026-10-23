@@ -2469,6 +2469,8 @@ Hotkeys.AssignCurrent=Текущая: %s
 Hotkeys.AssignNone=(нет)
 Hotkeys.AssignPrompt=Нажмите желаемое сочетание клавиш...
 Hotkeys.AssignCancel=Нажмите Esc для отмены
+Hotkeys.ShowBuiltin=&Встроенные клавиши (%s)
+Hotkeys.BuiltinNote=Встроенная клавиша: её обрабатывает само окно. Переназначить её нельзя, но команде можно дать свою клавишу.
 
 CommandPalette.Title= Палитра команд
 CommandPalette.QueryPrompt=>

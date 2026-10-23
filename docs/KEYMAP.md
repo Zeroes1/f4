@@ -227,10 +227,13 @@ than through `hotkeys.ini`: Enter and Tab in the panels, the command line's
 `Ctrl+Alt` with a digit, the keys of the focused quick view and of the player,
 the quick search's `Ctrl+Enter`, the drive menu's `Ins`, `F4` and `Del`,
 vtui's `Ctrl+Tab`, `Ctrl+N` and `Alt+1`..`Alt+9`. The Hotkey Configurator lists
-each of them as a read-only row, with the state it works in under *When*, so
-it shows every key f4 reacts to. The command behind such a row can still be
-given a key of its own with *Assign*, and it runs from the command palette and
-from macros like any other.
+each of them as a built-in row: dimmed, marked `•` in the narrow first column,
+with the state it works in under *When*, so it shows every key f4 reacts to.
+In the Hotkeys tab of the settings, `F3` on such a row says it is built in. The
+*Built-in keys (•)* checkbox under the table hides them and shows them again;
+to find one, type its name into the table (`ctrl y`, `rctrl3`, `enter`). The
+command behind such a row can still be given a key of its own with *Assign*,
+and it runs from the command palette and from macros like any other.
 
 vtui does not look at every modifier: it opens a workspace on N with Ctrl
 held whatever else is held, so `Ctrl+Alt+N` does it too. Those variants have

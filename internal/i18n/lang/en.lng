@@ -2469,6 +2469,8 @@ Hotkeys.AssignCurrent=Current: %s
 Hotkeys.AssignNone=(none)
 Hotkeys.AssignPrompt=Press the desired key combination...
 Hotkeys.AssignCancel=Press Esc to cancel
+Hotkeys.ShowBuiltin=&Built-in keys (%s)
+Hotkeys.BuiltinNote=Built-in key: the window handles it itself. It cannot be reassigned, but the command can be given a key of its own.
 
 CommandPalette.Title= Command Palette
 CommandPalette.QueryPrompt=>
