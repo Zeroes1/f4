@@ -73,6 +73,25 @@ Knowingly left behind (each needs one reinstall by hand):
   regular windows/amd64 build does, so no name can give them their own
   archive.
 
+## Is there anything to install
+
+The running binary is asked first (`Check`). On the nightly channel it
+compares its own commit and that commit's time, which `f4 -v` prints, with
+the `Commit:` and `Built on:` the nightly's notes give (`nightlyNeedsUpdate`):
+the same commit is up to date, an older one is offered the nightly, a newer
+one is not sent back. On stable a release build compares its tag, and a
+development build its commit time with the release's publication time.
+
+`[Update] LastVersion` in settings.ini is the asset time (nightly) or tag
+(stable) that the updater stored after its own last install. It decides only
+when the binary cannot answer: a release build on the nightly channel, a
+build without VCS data, nightly notes without the commit. It knows nothing of
+an f4 unpacked by hand, which `f4 --update` used to download again (#2172).
+
+`f4 --update` stops on Ctrl+C (Ctrl+Break on Windows) while it checks or
+downloads, with nothing changed. From the backup of the running binary on,
+it lets the install finish: stopped halfway, f4 would be left half replaced.
+
 ## Safeguards
 
 Before publishing, the nightly and release jobs run
