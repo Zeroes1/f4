@@ -137,17 +137,35 @@ func DrainPendingTasks() {
 }
 
 // DrainUITasks runs queued UI work until a task posted now comes back round,
-// which is when everything posted before it has run.
+// which is when everything posted before it has run -- or until the frame
+// manager shuts down. With no UI loop running, Shutdown stops the task pump
+// and drops whatever was still queued, the task posted here included, so it
+// would never come back round: every test that ended its session used to wait
+// out the deadline below.
 func DrainUITasks() {
+	if vtui.FrameManager.IsShutdown() {
+		return
+	}
 	done := make(chan struct{})
 	vtui.FrameManager.PostTask(func() { close(done) })
 	deadline := time.After(30 * time.Second)
+	// A shutdown from another goroutine leaves TaskChan nil, and a receive
+	// from nil never returns; the tick is what notices.
+	tick := time.NewTicker(10 * time.Millisecond)
+	defer tick.Stop()
 	for {
 		select {
 		case <-done:
 			return
 		case task := <-vtui.FrameManager.TaskChan:
 			task()
+			if vtui.FrameManager.IsShutdown() {
+				return
+			}
+		case <-tick.C:
+			if vtui.FrameManager.IsShutdown() {
+				return
+			}
 		case <-deadline:
 			return
 		}

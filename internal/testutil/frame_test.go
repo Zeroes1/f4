@@ -80,6 +80,29 @@ func TestFrameManagerShutdownStopsTaskPumpAndUnblocksPostTask(t *testing.T) {
 	}
 }
 
+// A test that ends its session drains the UI tasks afterwards, and with no UI
+// loop running, ending the session stops the task pump and drops whatever was
+// queued -- the drain's own marker task included. DrainUITasks then waited out
+// its 30-second deadline: two tests in internal/app did, twice more each
+// under the race shard's -cpu 1,4, two minutes on a pull request's critical
+// path.
+func TestDrainUITasksReturnsOnceTheManagerShutsDown(t *testing.T) {
+	t.Cleanup(SwapFrameManager(t))
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	vtui.FrameManager.PostTask(vtui.FrameManager.Shutdown)
+
+	drained := make(chan struct{})
+	go func() {
+		DrainUITasks()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(5 * time.Second):
+		t.Fatal("DrainUITasks went on waiting after the frame manager shut down")
+	}
+}
+
 // Main's leak check used to judge the task pumps from one profile taken right
 // after Shutdown, and failed a -race run over a pump whose deferred
 // WaitGroup.Done had already let Shutdown return but which was still inside
