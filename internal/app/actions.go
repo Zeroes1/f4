@@ -2409,7 +2409,7 @@ func actionCalcDirSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, idx in
 	var targetPath = fsp.Vfs.Join(basePath, name)
 	actionRunSizeScan(pf, fsp,
 		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
-			return vfs.CalculateStats(ctx, fsp.Vfs, targetPath, []string{""}, cb)
+			return vfs.CalculateStatsWithOptions(ctx, fsp.Vfs, targetPath, []string{""}, vfs.ScanOptions{FollowSymlinkDirs: false}, cb)
 		},
 		func(totalStats vfs.OpStats) {
 			entry.Size = totalStats.FilesSize(config.App.DirSizeCountsFolders)
@@ -2458,7 +2458,7 @@ func actionCalcDirSizes(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel, entri
 		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
 			var total vfs.OpStats
 			for i, entry := range entries {
-				stats, err := vfs.CalculateStats(ctx, fsp.Vfs, fsp.Vfs.Join(basePath, entry.Name), []string{""}, cb)
+				stats, err := vfs.CalculateStatsWithOptions(ctx, fsp.Vfs, fsp.Vfs.Join(basePath, entry.Name), []string{""}, vfs.ScanOptions{FollowSymlinkDirs: false}, cb)
 				if err != nil {
 					return total, err
 				}
@@ -2519,7 +2519,7 @@ func actionCalcPanelSize(pf *panel.PanelsFrame, fsp *panel.FileSystemPanel) {
 	}
 	actionRunSizeScan(pf, fsp,
 		func(ctx context.Context, cb vfs.ScanCallback) (vfs.OpStats, error) {
-			return vfs.CalculateStats(ctx, fsp.Vfs, basePath, names, cb)
+			return vfs.CalculateStatsWithOptions(ctx, fsp.Vfs, basePath, names, vfs.ScanOptions{FollowSymlinkDirs: false}, cb)
 		},
 		func(totalStats vfs.OpStats) {
 			if fsp.Vfs.GetPath() != basePath {
