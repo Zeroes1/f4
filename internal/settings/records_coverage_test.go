@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/plughost"
 	"github.com/unxed/f4/internal/sysinfo"
@@ -165,6 +166,65 @@ func TestSettingsCoreRecordProviderDriveLinksValidateAndRoundTrip(t *testing.T) 
 	row := loaded[0]
 	if row.Values["link.Name"] != "Home" || row.Values["link.Path"] != "/home/user" || row.Values["link.Hotkey"] != "Q" {
 		t.Fatalf("drive link round trip mismatch: %#v", row.Values)
+	}
+}
+
+// f4#2171: the global hot key of a link goes through Apply and back. A key a
+// link cannot have, one two links share, and a new one a command has are
+// refused, since this window cannot ask whether to take it; a key the file
+// already gives the link is not asked about again.
+func TestSettingsDriveLinksGlobalHotkey(t *testing.T) {
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = &keymap.HotkeyManager{
+		Defaults: map[string]map[string]string{},
+		Bindings: map[string]map[string]string{"Shell": {"F5": "Test.Copy"}},
+	}
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previousHotkeys })
+	p := newCoreRecordSettingsProvider()
+	store := settingsRecordStoreByID(t, p, "drive-links")
+	t.Cleanup(func() { _ = os.Remove(store.path) })
+	_ = os.Remove(store.path)
+
+	link := func(name, key string) f4settings.Record {
+		return f4settings.Record{ID: "drive-link:" + name, Values: map[string]string{"link.Name": name, "link.Path": "/" + name, "link.Hotkey": "", "link.GlobalHotkey": key}}
+	}
+	for _, tc := range []struct {
+		rows []f4settings.Record
+		want string
+	}{
+		{[]f4settings.Record{link("Logs", "T")}, "needs Ctrl or Alt"},
+		{[]f4settings.Record{link("Logs", "CtrlAltT"), link("Docs", "CtrlAltT")}, "both"},
+		{[]f4settings.Record{link("Logs", "F5")}, `already used by command "Test.Copy"`},
+		{[]f4settings.Record{link("Logs", "Ctrl+Alt+T")}, "is not a key"},
+	} {
+		err := store.validate(tc.rows)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("validate(%v) = %v, want an error saying %q", tc.rows[0].Values["link.GlobalHotkey"], err, tc.want)
+		}
+	}
+
+	rows := []f4settings.Record{link("Logs", "CtrlAltT"), link("Docs", "")}
+	if err := store.validate(rows); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.save(rows); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded) != 2 || loaded[0].Values["link.GlobalHotkey"] != "CtrlAltT" || loaded[1].Values["link.GlobalHotkey"] != "" {
+		t.Fatalf("global hot keys after a round trip: %+v", loaded)
+	}
+
+	// The link dialog gave F5 to a link, taking it from the command; a later
+	// Apply here keeps it without asking.
+	if err := panel.SaveDriveBookmarks(store.path, []panel.DriveBookmark{{Name: "Logs", Path: "/Logs", GlobalHotkey: "F5"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.validate([]f4settings.Record{link("Logs", "F5")}); err != nil {
+		t.Errorf("a key the file already has was refused: %v", err)
 	}
 }
 

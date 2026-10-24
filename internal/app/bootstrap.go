@@ -1231,6 +1231,9 @@ func setupUI(firstRunStyle func() (string, bool)) {
 	panel.CurrentArea = macroCurrentArea
 	panel.MacroHotkey = func(e *vtinput.InputEvent) bool { return macroLookupHotkey(macro.MacroMgr, e) }
 	panel.KeyFilter = func(e *vtinput.InputEvent) bool { return macroFilter(macro.MacroMgr, e) }
+	panel.DriveLinkExtraKeyOwners = func(key string) []panel.DriveLinkKeyOwner {
+		return driveLinkRouterKeyOwners(macro.MacroMgr, key)
+	}
 	panel.AISetViewMode = aiSetViewMode
 	vtinput.Logger = vtui.DebugLog // Pipe vtinput logs to vtui's debug logger
 	vtui.GlobalClipboardAccessManager = terminal.NewF4ClipboardAuth()

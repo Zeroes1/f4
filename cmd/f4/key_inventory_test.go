@@ -182,6 +182,23 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 		nav:       []string{"DOWN", "END", "HOME", "NEXT", "PRIOR", "UP"},
 		rationale: "the player's playlist (Panel.Player.*)",
 	},
+	// f4#2171, the global hot key of a drive-menu link.
+	"panel.(*GlobalHotkeyEdit).ProcessKey": {
+		nav: []string{"BACK", "CAPITAL", "CONTROL", "DELETE", "DOWN", "END", "ESCAPE", "HOME", "INSERT", "LCONTROL", "LEFT",
+			"LMENU", "LSHIFT", "LWIN", "MENU", "NEXT", "NUMLOCK", "PRIOR", "RCONTROL", "RETURN", "RIGHT", "RMENU", "RSHIFT",
+			"RWIN", "SCROLL", "SHIFT", "TAB", "UP"},
+		rationale: "the field captures whatever key is pressed as a link's global hot key; it leaves Tab, Enter, Esc and the plain " +
+			"vertical keys to the dialog, swallows the plain horizontal ones and Ins, clears on Del and Backspace, and skips lone modifiers",
+	},
+	"panel.(*GlobalHotkeyEdit).Show": {
+		infrastructure: true, rationale: "a synthetic Home keeps the start of the shown key in view",
+	},
+	"panel.driveLinkBookmarkKeyName": {
+		infrastructure: true, rationale: "names the folder bookmark key a link's global hot key would take",
+	},
+	"app.driveLinkRouterKeyOwners": {
+		infrastructure: true, rationale: "names Ctrl+. (Macro.Record), which the key router handles before a link's global hot key",
+	},
 	"panel.isFilePanelOnlyKey": {
 		nav: []string{"DELETE", "F3", "F4", "F5", "F6", "F7", "F8", "INSERT"},
 		rationale: "the file keys no focused alternative panel without a file list (info, quick view, player, AI chat) lets " +

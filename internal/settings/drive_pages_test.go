@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/f4/internal/sysinfo"
@@ -691,6 +692,158 @@ func TestDriveLinksPageHotKeyField(t *testing.T) {
 	}
 	if len(links) != 1 || !strings.EqualFold(links[0].Hotkey, "Q") {
 		t.Errorf("links after Apply = %+v, want Home with hot key Q", links)
+	}
+}
+
+// f4#2171: the Links page takes a link's global hot key in a field the key is
+// pressed in, on the line of its label, with no Capture button; Apply writes
+// it to the links file.
+func TestDriveLinksPageGlobalHotkeyField(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	path := panel.DriveBookmarksFilePath()
+	before, readErr := os.ReadFile(path)
+	t.Cleanup(func() {
+		if readErr != nil {
+			_ = os.Remove(path)
+		} else {
+			_ = os.WriteFile(path, before, 0o600) // #nosec G703 -- the test's own profile file, put back.
+		}
+	})
+	if err := panel.SaveDriveBookmarks(path, []panel.DriveBookmark{{Name: "Home", Path: "/home", Hotkey: "H"}}); err != nil {
+		t.Fatal(err)
+	}
+	vtui.FrameManager.Init(vtui.NewSilentScreenBuf())
+	if !OpenCategoryOnly("drives") {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 99, 30)
+	c.selectCategory(driveLinksPage)
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(100, 31)
+	c.Show(scr)
+
+	var field *panel.GlobalHotkeyEdit
+	var row *settingsRow
+	for _, r := range c.page.rows {
+		if e, ok := r.control.(*panel.GlobalHotkeyEdit); ok && r.field.ID == "link.GlobalHotkey" {
+			field, row = e, r
+		}
+	}
+	if field == nil {
+		t.Fatal("no global hot key field for the link")
+	}
+	label := row.field.Label.Resolve("English", func(string) string { return "" })
+	if label != "Global hot key:" {
+		t.Errorf("label = %q, want Global hot key:", label)
+	}
+	if want := c.page.X1 + 2 + vtui.StringWidth(label) + 1; field.X1 != want {
+		t.Errorf("field starts at column %d, want %d, one blank after its label", field.X1, want)
+	}
+	if field.Y1 != c.page.Y1+row.y-c.page.scroll {
+		t.Errorf("field on line %d, want the line of its label", field.Y1)
+	}
+	field.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_F12,
+		ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed | vtinput.ShiftPressed})
+	if got := field.GetText(); got != "Ctrl+Alt+Shift+F12" {
+		t.Errorf("field shows %q, want Ctrl+Alt+Shift+F12", got)
+	}
+
+	c.commit(false)
+	deadline := time.After(10 * time.Second)
+	for c.running != nil {
+		select {
+		case task := <-vtui.FrameManager.TaskChan:
+			task()
+		case <-time.After(5 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("Apply did not finish; status is %q", c.status)
+		}
+	}
+	links, err := panel.LoadDriveBookmarks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || links[0].GlobalHotkey != "CtrlAltShiftF12" {
+		t.Errorf("links after Apply = %+v, want Home with the global hot key CtrlAltShiftF12; status %q", links, c.status)
+	}
+}
+
+// f4#2171: in the main Settings window a link's global hot key was a text
+// field with Capture. Ctrl+N typed into it opened a workspace, and Capture
+// took Ctrl+N without a word; only Apply said the key was taken. Now it is the
+// field the key is pressed in, as on the drive menu's Links page: the key
+// router hands it every key, a taken key is refused the moment it is pressed,
+// a free one goes in, and the key the link has already is not asked about.
+func TestSettingsDriveLinkGlobalHotkeyRefusesATakenKeyAtOnce(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	// The window lists the Colorer schemes in the background, writing into
+	// HOME; that must be over before the test's HOME is removed.
+	t.Cleanup(WaitSchemeRefreshes)
+	t.Cleanup(action.Snapshot())
+	action.RegisterAction(action.Action{Name: "Test.Fork", Area: "Common", Label: "Fork", NativeKeys: []string{"CtrlN"}})
+	previousHotkeys := keymap.GlobalHotkeysMgr
+	keymap.GlobalHotkeysMgr = &keymap.HotkeyManager{Defaults: map[string]map[string]string{}, Bindings: map[string]map[string]string{}}
+	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previousHotkeys })
+	path := panel.DriveBookmarksFilePath()
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if err := panel.SaveDriveBookmarks(path, []panel.DriveBookmark{{Name: "Logs", Path: "/logs", GlobalHotkey: "CtrlAltY"}}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(testutil.SwapFrameManager(t))
+	scr := vtui.NewSilentScreenBuf()
+	scr.AllocBuf(120, 40)
+	vtui.FrameManager.Init(scr)
+	if !OpenAt("drives", "drive-links", "", false) {
+		t.Fatal("the window did not open")
+	}
+	c, ok := vtui.FrameManager.GetTopFrame().(*settingsCenter)
+	if !ok {
+		t.Fatalf("top frame is %T", vtui.FrameManager.GetTopFrame())
+	}
+	defer vtui.FrameManager.Pop()
+	c.SetPosition(0, 0, 119, 39)
+	c.Show(scr)
+
+	var field *panel.GlobalHotkeyEdit
+	for _, r := range c.page.rows {
+		if e, ok := r.control.(*panel.GlobalHotkeyEdit); ok && r.field.ID == "link.GlobalHotkey" {
+			field = e
+		}
+	}
+	if field == nil {
+		t.Fatal("the link's global hot key is not the field a key is pressed in")
+	}
+	c.SetFocusedItem(c.page)
+	c.page.SetFocusedItem(field)
+	if !keymap.FocusCapturesKeys(c) {
+		t.Error("the key router would not hand the focused field its keys")
+	}
+
+	key := func(vk uint16, mods vtinput.ControlKeyState) *vtinput.InputEvent {
+		return &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vk, ControlKeyState: mods}
+	}
+	ctrlAlt := vtinput.ControlKeyState(vtinput.LeftCtrlPressed | vtinput.LeftAltPressed)
+	field.ProcessKey(key('N', vtinput.LeftCtrlPressed))
+	if top := vtui.FrameManager.GetTopFrame(); top == c {
+		t.Error("Ctrl+N, the built-in key of Fork, was not refused")
+	} else {
+		vtui.FrameManager.Pop()
+	}
+	if got := field.GetText(); got != "Ctrl+Alt+Y" {
+		t.Errorf("after a refused key the field shows %q, want the link's Ctrl+Alt+Y", got)
+	}
+	field.ProcessKey(key('U', ctrlAlt))
+	if top := vtui.FrameManager.GetTopFrame(); top != c || field.GetText() != "Ctrl+Alt+U" {
+		t.Errorf("a free key: top %T, field %q", top, field.GetText())
+	}
+	field.ProcessKey(key('Y', ctrlAlt))
+	if top := vtui.FrameManager.GetTopFrame(); top != c || field.GetText() != "Ctrl+Alt+Y" {
+		t.Errorf("the link's own key: top %T, field %q", top, field.GetText())
 	}
 }
 

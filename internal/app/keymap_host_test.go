@@ -129,8 +129,10 @@ func TestFormatKeyForUI(t *testing.T) {
 		{"CtrlVK_DB", "Ctrl+["},
 		{"VK_C0", "`"},
 		// The Right Ctrl spelling of EventToHotkeyString reads as the other
-		// modifiers do (the numbered bookmark keys, the key inventory).
+		// modifiers do (the numbered bookmark keys, the key inventory, a
+		// link's global hot key, f4#2171).
 		{"RCtrl3", "RCtrl+3"},
+		{"RCtrlY", "RCtrl+Y"},
 		{"RCtrlAltShiftF11", "RCtrl+Alt+Shift+F11"},
 		{"RCtrl", "RCtrl"},
 		{"", ""},

@@ -122,18 +122,28 @@ func splitDriveChooser(sessions []*settingsSession) {
 // driveLinkPageFields are the link fields as the Links page edits them: the
 // hot key in a one-character field after "Hot key:", as in the link dialog of
 // the drive menu, instead of a chord field with Capture (mitek1977-coder,
-// f4#1148). The main Settings window keeps the chord field.
+// f4#1148), and the global hot key in a field that takes the key pressed in it,
+// as that dialog's does (f4#2171). The main Settings window keeps the chord
+// fields.
 func driveLinkPageFields(fields []f4settings.Field) []f4settings.Field {
 	out := append([]f4settings.Field(nil), fields...)
 	for i := range out {
-		if out[i].ID == "link.Hotkey" {
+		switch out[i].ID {
+		case "link.Hotkey":
 			out[i].Label = f4settings.Text{Key: "DriveLink.Hotkey", English: "Hot key:"}
 			out[i].Description = f4settings.Text{Key: "SettingsCenter.DriveLinks.Hotkey", English: "The link's hot key in the drive menu: a letter or a digit; empty for none."}
 			out[i].InputWidth = 1
+		case "link.GlobalHotkey":
+			out[i].Label = f4settings.Text{Key: "DriveLink.GlobalHotkey", English: "Global hot key:"}
+			out[i].InputWidth = driveLinkGlobalHotkeyWidth
 		}
 	}
 	return out
 }
+
+// driveLinkGlobalHotkeyWidth is the width of the global hot key field of the
+// Links page: Ctrl+Alt+Shift+F11 fits.
+const driveLinkGlobalHotkeyWidth = 18
 
 // driveBookmarksGroup is the box of the Bookmarks page: the list's own group,
 // so that "Show Bookmarks" stands in it above the list.

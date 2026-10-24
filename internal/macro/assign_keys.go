@@ -72,6 +72,44 @@ func (m *MacroManager) FreeKeys(area string, hm *keymap.HotkeyManager) []string 
 	return free
 }
 
+// PlaysOn reports whether a macro plays on key in area: one recorded there or
+// in Common, or a Lua macro. key is in the spelling of
+// keymap.EventToHotkeyString. A recorded macro's key is compared in that
+// spelling too, so Far's "Ctrl;" and the hotkey table's "CtrlVK_BA" are one
+// key. The drive-menu link dialog asks it before a link takes a key
+// (f4#2171).
+func (m *MacroManager) PlaysOn(area, key string) bool {
+	key = strings.TrimSpace(key)
+	if m == nil || key == "" {
+		return false
+	}
+	want := hotkeySpelling(key)
+	areas := []string{area}
+	if !strings.EqualFold(area, "Common") {
+		areas = append(areas, "Common")
+	}
+	for _, a := range areas {
+		for recorded := range m.Macros[a] {
+			if strings.EqualFold(hotkeySpelling(recorded), want) {
+				return true
+			}
+		}
+	}
+	if m.Lua != nil {
+		// A Lua macro names its key as Far does: "CtrlAltT", "Ctrl.".
+		for _, far := range []string{keymap.EventToFarString(keymap.ParseFarKey(key)), strings.ReplaceAll(keymap.FormatKeyForUI(key), "+", "")} {
+			if m.Lua.Find(area, far) != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hotkeySpelling(key string) string {
+	return keymap.EventToHotkeyString(keymap.ParseFarKey(key))
+}
+
 func isWorkspaceShortcut(key string) bool {
 	return len(key) == len("Alt0") && strings.HasPrefix(key, "Alt") && key[len("Alt")] >= '1' && key[len("Alt")] <= '9'
 }

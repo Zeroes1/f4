@@ -65,7 +65,7 @@ var commandPaletteAuditClasses = map[string]bool{
 // one package to another; it never removes one. A smaller number here means an
 // audit entry was dropped together with its subject, which the set comparison
 // below cannot see because both sides shrink at once.
-const commandPaletteF4Surfaces = 73
+const commandPaletteF4Surfaces = 74
 
 // commandPaletteTargetPackage named the package each audited cmd/f4 file would
 // end up in once the split reached it, so an audit key survived the move that
@@ -157,6 +157,9 @@ var commandPaletteProcessKeyAudit = map[string]commandPaletteSurfaceAudit{
 	},
 	"panel.(*pluginHotkeyEdit).ProcessKey": {
 		class: paletteAuditModalLocal, rationale: "the one-character field of the plugin hotkey dialog takes a letter, a digit or Delete locally and is not a global command surface",
+	},
+	"panel.(*GlobalHotkeyEdit).ProcessKey": {
+		class: paletteAuditModalLocal, rationale: "the global hot key field of a drive-menu link captures the key pressed in it locally (f4#2171) and is not a global command surface",
 	},
 	"media.(*ImageView).ProcessKey": {
 		class: paletteAuditFrameProvider, rationale: "image-viewer commands are supplied by commandPaletteImageEntries",
