@@ -849,7 +849,7 @@ func TestHotkeyConfiguratorUnbindsAPluginsDeclaredKey(t *testing.T) {
 		t.Fatalf("Shift+F1 before Unbind ran the command %d times, want 1", *runs)
 	}
 
-	dlg, row, unbind, cancel := openHotkeyConfiguratorOn(t, pf, actionName)
+	dlg, row, unbind, _ := openHotkeyConfiguratorOn(t, pf, actionName)
 	if row.Key != "Shift+F1" || row.Declared != "ShiftF1" || row.when() != "" {
 		t.Fatalf("declared row = key %q, declared %q, when %q; want Shift+F1 in every panel", row.Key, row.Declared, row.when())
 	}
@@ -864,7 +864,7 @@ func TestHotkeyConfiguratorUnbindsAPluginsDeclaredKey(t *testing.T) {
 	}
 	dlg.Close()
 	vtui.FrameManager.PopFramesAbove(pf)
-	_, row, _, cancel = openHotkeyConfiguratorOn(t, pf, actionName)
+	_, row, _, cancel := openHotkeyConfiguratorOn(t, pf, actionName)
 	if row.Key != "" || row.Declared != "" {
 		t.Fatalf("after Unbind the row shows key %q, declared %q; want none", row.Key, row.Declared)
 	}
