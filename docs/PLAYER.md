@@ -108,7 +108,7 @@ hop between the controls and the playlist. Instead the panel is one column:
 | playlist         | Shift+Up/Down  | reorder among siblings                |
 | playlist         | Shift+Right    | move into the nearest folder above    |
 | playlist         | Shift+Left     | move out of the folder, right after it |
-| playlist         | Del            | remove (stops playback if it was the current track) |
+| playlist         | Del / F8       | remove (stops playback if it was the current track) |
 | playlist         | F7             | new folder after the cursor           |
 | control row      | F7             | new folder at the end of the playlist |
 | anywhere         | Z X C V B      | prev / play / pause / stop / next (WinAmp) |
@@ -118,7 +118,15 @@ hop between the controls and the playlist. Instead the panel is one column:
 | anywhere         | M              | mute, and back (YouTube)              |
 | anywhere         | 0 … 9          | jump to that tenth of the track (YouTube) |
 | anywhere         | + / −          | volume                                |
+| anywhere         | H              | show the keys on the player, or hide them |
 | file panel       | Ctrl+Alt+Left/Right | seek 5 s without leaving the file panel |
+
+The keys are hidden by default, so the player is not a page of letters: its
+bottom border says "H: keys", and H puts the letters on the buttons and as
+many of the other keys as fit into the border, the way B flips the units of
+the info panel (`PlayerKeyHints`, remembered in settings.ini). The key bar
+over a focused player names F7 (folder) and F8 (remove) and leaves the file
+keys, which do nothing there, blank.
 
 Ctrl with the arrows still moves playlist items too, where it reaches f4:
 macOS keeps Ctrl+Up/Down/Left/Right for Mission Control and the switching
@@ -151,8 +159,6 @@ engine stops.
 
 Known and deliberate; each is small:
 
-- **No KeyBar labels** for the player (F7 = new folder, Del, F5 in the other
-  panel). `GetKeyLabels` has the quick-view precedent.
 - **Not in the command palette / panel menu list** yet
   (`command_palette_panels.go` switch on panel type).
 - **No mouse**: buttons and playlist rows should be clickable, the volume

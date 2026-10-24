@@ -108,9 +108,9 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 	},
 	"panel.playerKeyCommand": {
 		areas: []string{"Shell"},
-		chords: []string{"Z", "X", "C", "V", "B", "K", "J", "L", "M", "ShiftP", "ShiftN",
+		chords: []string{"H", "Z", "X", "C", "V", "B", "K", "J", "L", "M", "ShiftP", "ShiftN",
 			"VK_BB", "VK_BD", "Add", "Subtract"},
-		rationale: "the player's WinAmp and YouTube letter keys and its volume, wherever its cursor is (Panel.Player.*)",
+		rationale: "the player's WinAmp and YouTube letter keys, its volume and H, which shows its keys, wherever its cursor is (Panel.Player.*)",
 	},
 	"panel.playerDigit": {
 		areas:     []string{"Shell"},
@@ -193,7 +193,7 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 	"panel.(*PlayerPanel).playlistKey": {
 		areas: []string{"Shell"},
 		chords: []string{"Left", "Right", "ShiftUp", "ShiftDown", "ShiftLeft", "ShiftRight",
-			"CtrlUp", "CtrlDown", "CtrlHome", "CtrlLeft", "CtrlRight", "Enter", "Space", "Del", "F7"},
+			"CtrlUp", "CtrlDown", "CtrlHome", "CtrlLeft", "CtrlRight", "Enter", "Space", "Del", "F7", "F8"},
 		nav:       []string{"DOWN", "END", "HOME", "NEXT", "PRIOR", "UP"},
 		rationale: "the player's playlist (Panel.Player.*)",
 	},

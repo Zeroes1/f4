@@ -617,6 +617,7 @@ const (
 	PlayerMute
 	PlayerSeekBack10
 	PlayerSeekForward10
+	PlayerToggleKeyHints
 )
 
 // Do does cmd and reports whether it was one the player knows.
@@ -648,6 +649,9 @@ func (pp *PlayerPanel) Do(cmd PlayerCommand) bool {
 		pp.SeekBy(-10 * time.Second)
 	case PlayerSeekForward10:
 		pp.SeekBy(10 * time.Second)
+	case PlayerToggleKeyHints:
+		config.App.PlayerKeyHints = !config.App.PlayerKeyHints
+		config.RequestSaveConfig()
 	default:
 		return false
 	}
@@ -733,12 +737,15 @@ func (pp *PlayerPanel) globalKey(e *vtinput.InputEvent) bool {
 // playerKeyCommand is the command of a key in the focused player with the
 // letter scheme scheme. WinAmp: Z X C V B. YouTube: K play or pause, J and L
 // ten seconds back and forward, M mute, Shift+P and Shift+N the previous and
-// the next track. The two share no key, so both can be on.
+// the next track. The two share no key, so both can be on. H, with either,
+// shows the keys on the player and hides them again.
 func playerKeyCommand(e *vtinput.InputEvent, scheme string) (PlayerCommand, bool) {
 	winamp := scheme != config.PlayerKeysYouTube
 	youtube := scheme != config.PlayerKeysWinAmp
 	shift := e.ControlKeyState&vtinput.ShiftPressed != 0
 	switch letter := playerLetterKey(e); {
+	case letter == vtinput.VK_H:
+		return PlayerToggleKeyHints, true
 	case winamp && letter == vtinput.VK_Z:
 		return PlayerPrevious, true
 	case winamp && letter == vtinput.VK_X:
@@ -927,7 +934,9 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		} else if !it.Folder {
 			pp.playItem(it)
 		}
-	case vtinput.VK_DELETE:
+	case vtinput.VK_DELETE, vtinput.VK_F8:
+		// F8 too, which deletes in the file panels: the key bar says Remove
+		// over it while the player has the focus.
 		if it == pp.current || (it.Folder && pp.currentInside(it)) {
 			pp.Engine.Stop()
 			pp.current = nil
@@ -1102,9 +1111,17 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		put(y+3, row.String(), text)
 	}
 
-	// The last row: buttons and volume.
+	// The last row: buttons and volume. While the keys are shown (H) each
+	// button carries the letter that presses it.
 	by := y + pp.controlRows() - 1
 	labels := []string{"|<", " > ", "||", " # ", ">|"}
+	if config.App.PlayerKeyHints {
+		for i, key := range playerButtonKeys(config.App.PlayerKeys) {
+			if key != "" {
+				labels[i] = key + " " + strings.TrimSpace(labels[i])
+			}
+		}
+	}
 	bx := x
 	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
 	for i, l := range labels {
@@ -1131,6 +1148,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	// Separator on the frame's own lines.
 	sep := "├" + strings.Repeat("─", w) + "┤"
 	scr.Write(pp.X1, by+1, vtui.StringToCharInfo(sep, box))
+	pp.showKeyHints(scr, box)
 
 	// Playlist.
 	pp.rebuildRows()
@@ -1177,6 +1195,56 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		}
 		put(py+i, s, attr)
 	}
+}
+
+// showKeyHints writes on the bottom border how to see the player's keys, or,
+// while they are shown, the keys the buttons do not carry: as many as the
+// border has room for, and always the one that hides them again. The full
+// list is too long for a panel, and a player that showed it all the time
+// would be a page of keys with a player in it (#2185).
+func (pp *PlayerPanel) showKeyHints(scr *vtui.ScreenBuf, attr uint64) {
+	room := pp.X2 - pp.X1 - 3
+	line := i18n.Msg("Player.KeysHint")
+	if config.App.PlayerKeyHints {
+		key := "Player.KeysLine.Both"
+		switch config.App.PlayerKeys {
+		case config.PlayerKeysWinAmp:
+			key = "Player.KeysLine.WinAmp"
+		case config.PlayerKeysYouTube:
+			key = "Player.KeysLine.YouTube"
+		}
+		line = fitHints(strings.Split(i18n.Msg(key), "|"), room-2)
+	}
+	if line = " " + line + " "; runewidth.StringWidth(line) <= room {
+		scr.Write(pp.X1+2, pp.Y2, vtui.StringToCharInfo(line, attr))
+	}
+}
+
+// fitHints joins as many of hints as fit in room, in their order, and the
+// last of them whatever room is left.
+func fitHints(hints []string, room int) string {
+	const gap = "  "
+	last := hints[len(hints)-1]
+	width := runewidth.StringWidth(last)
+	var shown []string
+	for _, h := range hints[:len(hints)-1] {
+		w := runewidth.StringWidth(h) + len(gap)
+		if width+w > room {
+			break
+		}
+		shown = append(shown, h)
+		width += w
+	}
+	return strings.Join(append(shown, last), gap)
+}
+
+// playerButtonKeys are the letters the buttons carry while the keys are
+// shown: WinAmp's when they are on, else YouTube's, which has no stop.
+func playerButtonKeys(scheme string) [5]string {
+	if scheme == config.PlayerKeysYouTube {
+		return [5]string{"⇧P", "K", "K", "", "⇧N"}
+	}
+	return [5]string{"Z", "X", "C", "V", "B"}
 }
 
 // playbackBar is the row with the clocks at its two ends and a bar between

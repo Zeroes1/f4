@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/unxed/f4/internal/config"
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/vtinput"
 )
 
@@ -68,5 +69,70 @@ func TestPlayerDrawsThePlaybackBar(t *testing.T) {
 	config.App.PlayerSpectrum = true
 	if with := separator(f.screenRows()); with != without+1 {
 		t.Errorf("with the spectrum on the playlist starts at row %d, want %d: a row under the bar", with, without+1)
+	}
+}
+
+// The letters of the player were nowhere to be seen (#2185). They stay out of
+// the way until H shows them: the bottom border says so, H puts the letters
+// on the buttons and the other keys in the border, H again takes them off.
+func TestPlayerShowsItsKeysOnH(t *testing.T) {
+	oldHints, oldKeys := config.App.PlayerKeyHints, config.App.PlayerKeys
+	t.Cleanup(func() { config.App.PlayerKeyHints, config.App.PlayerKeys = oldHints, oldKeys })
+	config.App.PlayerKeyHints, config.App.PlayerKeys = false, config.PlayerKeysBoth
+
+	f := newPlayerFixture(t)
+	f.press(playerKey(vtinput.VK_TAB, 0))
+	shows := func(text string) bool { return strings.Contains(strings.Join(f.screenRows(), "\n"), text) }
+	if !shows(i18n.Msg("Player.KeysHint")) || !shows("[|<]") || shows("[Z |<]") {
+		t.Fatalf("with the keys hidden the player shows:\n%s", strings.Join(f.screenRows(), "\n"))
+	}
+
+	f.press(playerChar(0, 'р')) // H with the Russian layout on
+	if !config.App.PlayerKeyHints {
+		t.Fatal("р (H) did not show the keys")
+	}
+	for _, want := range []string{"[Z |<]", "[X >]", "[C ||]", "[V #]", "[B >|]", "K play", "H hide"} {
+		if !shows(want) {
+			t.Errorf("with the keys shown the player has no %q:\n%s", want, strings.Join(f.screenRows(), "\n"))
+		}
+	}
+
+	f.press(playerChar(vtinput.VK_H, 'h'))
+	if config.App.PlayerKeyHints || shows("[Z |<]") {
+		t.Errorf("H again did not hide the keys:\n%s", strings.Join(f.screenRows(), "\n"))
+	}
+	if !f.pf.CmdLine.IsEmpty() {
+		t.Errorf("H went to the command line too: %q", f.pf.CmdLine.Edit.GetText())
+	}
+}
+
+// The key bar over a focused player named the file panel's keys, which do
+// nothing there. It names F7 and F8, which make a playlist folder and remove
+// an item, and leaves F3 to F6 blank.
+func TestPlayerKeyBar(t *testing.T) {
+	f := newPlayerFixture(t, "a.mp3", "b.mp3")
+	f.press(playerKey(vtinput.VK_INSERT, 0))
+	f.press(playerKey(vtinput.VK_INSERT, 0))
+	f.press(playerKey(vtinput.VK_F5, 0))
+	f.press(playerKey(vtinput.VK_TAB, 0))
+
+	labels := f.pf.GetKeyLabels().Normal
+	if labels[6] != i18n.Msg("KeyBar.Player.F7") || labels[7] != i18n.Msg("KeyBar.Player.F8") {
+		t.Errorf("F7 and F8 over the player read %q and %q", labels[6], labels[7])
+	}
+	for i := 2; i <= 5; i++ {
+		if labels[i] != "" {
+			t.Errorf("F%d over the player reads %q, a key that does nothing there", i+1, labels[i])
+		}
+	}
+
+	f.press(playerKey(vtinput.VK_F8, 0))
+	if got := f.player.GetSelectedName(); got != "b" {
+		t.Errorf("after F8 on a the cursor is on %q, want b, the one left", got)
+	}
+
+	f.press(playerKey(vtinput.VK_TAB, 0))
+	if got := f.pf.GetKeyLabels().Normal[4]; got == "" {
+		t.Error("back in the file panel F5 has no caption")
 	}
 }
