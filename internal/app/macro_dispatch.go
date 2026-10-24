@@ -1,9 +1,12 @@
 package app
 
 import (
+	"fmt"
 	"github.com/unxed/f4/internal/panel"
 	"strings"
 
+	"github.com/unxed/f4/internal/action"
+	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/macro"
 	"github.com/unxed/vtinput"
@@ -166,6 +169,21 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// Ctrl+N remains Ctrl+N when the Russian layout produces Ctrl+т.
 	keymap.NormalizeLayoutShortcut(e)
 
+	// A field that captures a key -- the global hot key of a drive-menu link
+	// (f4#2171) -- gets every key before anything here acts on it: Ctrl+.
+	// would start a macro recording, Ctrl+Shift+P open the palette, a macro
+	// or a hotkey run, and vtui would switch workspaces on Alt and a digit
+	// after this filter. The frame it sits in gets the key, so the keys the
+	// field leaves alone (Tab, Enter, Esc) still move the focus or close it.
+	// The key is the one pressed, before keymap.ini: the link dialog says when
+	// keymap.ini would turn it into another.
+	if vtui.FrameManager != nil {
+		if top := vtui.FrameManager.GetTopFrame(); top != nil && keymap.FocusCapturesKeys(top) {
+			top.ProcessKey(e)
+			return true
+		}
+	}
+
 	// The user's key remap (keymap.ini) substitutes the key before anything
 	// else sees the event, so macros, plugin interception, configurable
 	// hotkeys and the frames themselves all agree on which key was pressed.
@@ -245,6 +263,16 @@ func macroFilter(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 		((keymap.IsPanelBookmarkHotkey(e) && !keymap.ConfigurableHotkeyOwnsPanelBookmark(keymap.GlobalHotkeysMgr, currentArea, e)) ||
 			isPanelFastFindToggleKey(e)) {
 		return false
+	}
+
+	// A drive-menu link's global hot key (f4#2171) opens the link ahead of
+	// the macros, the plugin keys and the hotkey table: the link dialog asked
+	// whether to take the key from them when the key was given to the link
+	// (driveLinkRouterKeyOwners names what comes before this point).
+	if currentArea == "Shell" {
+		if pf, ok := vtui.FrameManager.GetTopFrame().(*panel.PanelsFrame); ok && pf.OpenDriveLinkForKey(e) {
+			return true
+		}
 	}
 
 	// Check if this key triggers a macro
@@ -417,6 +445,48 @@ func macroLookupHotkey(m *macro.MacroManager, e *vtinput.InputEvent) bool {
 	// frame below it.
 	RunAction(actionName)
 	return true
+}
+
+// driveLinkRouterKeyOwners is the application's part of what a drive-menu
+// link's global hot key would take its key from (panel.DriveLinkExtraKeyOwners,
+// f4#2171): what macroFilter does with a key before it asks the links, and the
+// macros it would no longer play in the panels.
+func driveLinkRouterKeyOwners(m *macro.MacroManager, key string) []panel.DriveLinkKeyOwner {
+	var owners []panel.DriveLinkKeyOwner
+	const ctrl = vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed
+	// Ctrl+. starts and stops a macro recording before anything else.
+	if e := keymap.ParseFarKey(key); e != nil && e.ControlKeyState&ctrl != 0 &&
+		(e.VirtualKeyCode == vtinput.VK_OEM_PERIOD || e.Char == '.') {
+		owners = append(owners, panel.DriveLinkKeyOwner{Name: i18n.Msg("DriveLink.OwnerMacroRecording"), Fixed: true})
+	}
+	// The command palette's own Ctrl+Alt+P, while no command has the key.
+	// "None" in Shell is a binding, so the fallback stands down there.
+	if hm := keymap.GlobalHotkeysMgr; hm != nil && key == commandPaletteLegacyKey &&
+		keymap.ConfiguredHotkeyAction(hm, "Shell", key) == "" {
+		name := commandPaletteActionName
+		if a, ok := keymap.LookupAction(name); ok {
+			name = action.PlainLabel(a.DisplayLabel())
+		}
+		owners = append(owners, panel.DriveLinkKeyOwner{
+			Name: fmt.Sprintf(i18n.Msg("DriveLink.OwnerCommand"), name),
+			Release: func() error {
+				hm.Bind("Shell", key, "None")
+				return hm.SaveError()
+			},
+		})
+	}
+	// A macro plays on either Ctrl: its key is kept in Far's spelling, which
+	// has no right Ctrl (keymap.EventToFarString). The links are asked before
+	// the macros, so an RCtrl link takes the right Ctrl from a macro on Ctrl;
+	// the macro keeps the left one.
+	macroKey := key
+	if strings.HasPrefix(key, "RCtrl") {
+		macroKey = "Ctrl" + key[len("RCtrl"):]
+	}
+	if m.PlaysOn("Shell", macroKey) {
+		owners = append(owners, panel.DriveLinkKeyOwner{Name: i18n.Msg("DriveLink.OwnerMacro")})
+	}
+	return owners
 }
 
 func isMenuAcceleratorAction(actionName, key string) bool {

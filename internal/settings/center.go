@@ -233,6 +233,16 @@ func (v *settingsViewport) SetPosition(x1, y1, x2, y2 int) {
 			r.controlX = vtui.StringWidth(label) + 1
 			r.controlWidth = 1
 			r.gap = 0
+		case *panel.GlobalHotkeyEdit:
+			// The label and the field on one line, as the hot key above
+			// them (f4#2171).
+			available := max(3, x2-x1-5)
+			label := r.field.Label.Resolve(config.App.Language, i18n.Msg)
+			labelWidth := min(vtui.StringWidth(label), max(1, available/2))
+			r.label = settingsWrap(label, labelWidth)
+			r.controlX = labelWidth + 1
+			r.controlWidth = max(1, min(r.field.InputWidth, available-r.controlX))
+			r.gap = 0
 		case *settingsEdit:
 			width := r.field.InputWidth
 			if width == 0 && r.field.Kind == f4settings.Integer {
@@ -1608,6 +1618,28 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 			// Delete clears it (the Links page, f4#1148).
 			e := panel.NewHotkeyEdit(value)
 			e.OnChange = change
+			control = e
+			break
+		}
+		if f.InputWidth > 1 {
+			// No Capture either: the key pressed in the field is the
+			// value, Delete clears it (a link's global hot key, f4#2171).
+			// The key is checked as it is pressed, as the link dialog
+			// does; this window cannot take a key from what has it, so a
+			// taken one is refused here rather than at Apply. The key the
+			// link has already is not asked about again.
+			e := panel.NewGlobalHotkeyEdit(value, f.InputWidth)
+			initial := strings.TrimSpace(value)
+			e.OnKey = func(key string) {
+				if f.ID == "link.GlobalHotkey" && key != "" && !strings.EqualFold(key, initial) {
+					if err := settingsDriveLinkKeyRefusal(key); err != nil {
+						vtui.ShowMessageOnEx(c.Window, settingsText("Title", "Settings"), settingsErrorText(err), []string{i18n.Msg("vtui.Ok")}, vtui.MessageWarn)
+						return
+					}
+				}
+				e.SetKey(key)
+				change(key)
+			}
 			control = e
 			break
 		}

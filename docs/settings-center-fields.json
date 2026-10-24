@@ -1590,6 +1590,16 @@
     "unavailable": ""
   },
   {
+    "category": "drives",
+    "description": "Opens the link from the panels without the drive menu: a key with Ctrl or Alt, or a function key, such as Ctrl+Alt+T.",
+    "group": "Drive links",
+    "id": "link.GlobalHotkey",
+    "kind": "chord",
+    "label": "Global hot key",
+    "timing": "Apply",
+    "unavailable": ""
+  },
+  {
     "category": "menus",
     "description": "Visible command or submenu name.",
     "group": "Global user menu",

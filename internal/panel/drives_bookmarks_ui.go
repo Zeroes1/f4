@@ -53,9 +53,29 @@ type driveBookmarkEditDialog struct {
 	nameEdit   *vtui.Edit
 	pathEdit   *vtui.Edit
 	HotkeyEdit *driveLinkHotkeyEdit
-	quickCall  *vtui.Checkbox
-	finished   bool
-	onFinish   func(bool, DriveBookmark)
+	globalEdit *GlobalHotkeyEdit
+	// others are the links besides the one edited: a global hot key is
+	// checked against theirs.
+	others []DriveBookmark
+	// takenKey is the global hot key the user agreed to take from what had
+	// it, or that nothing had.
+	takenKey string
+	finished bool
+	onFinish func(bool, DriveBookmark)
+}
+
+// driveLinkGlobalFieldWidth is the least width of the global hot key field:
+// Ctrl+Alt+Shift+F11 fits.
+const driveLinkGlobalFieldWidth = 18
+
+// driveLinkColumnGap is the least room between the menu hot key, with its
+// hint, and the global hot key, with its own.
+const driveLinkColumnGap = 3
+
+// elementWidth is how many columns el takes.
+func elementWidth(el vtui.UIElement) int {
+	x1, _, x2, _ := el.GetPosition()
+	return x2 - x1 + 1
 }
 
 // driveBookmarkDialogMinWidth is the floor for the dialog's computed width:
@@ -92,7 +112,26 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	if vtui.FrameManager != nil {
 		screenW = vtui.FrameManager.GetScreenSize()
 	}
-	width := driveBookmarkDialogWidth(screenW)
+	// The hot key row holds two columns (f4#2171): the menu letter with its
+	// hint on the left, the global hot key with its own on the right. The
+	// dialog grows to fit both.
+	// The hint of the menu hot key is shorter than the plugin menu's, which
+	// shares DriveLink.HotkeyHint: it sits beside the field, next to the hint
+	// of the global hot key.
+	hotkeyText, hintText := i18n.Msg("DriveLink.Hotkey"), i18n.Msg("DriveLink.HotkeyHintShort")
+	globalText, globalHintText := i18n.Msg("DriveLink.GlobalHotkey"), i18n.Msg("DriveLink.GlobalHotkeyHint")
+	leftWidth := max(vtui.StringWidth(hotkeyText)+2, vtui.StringWidth(hintText))
+	rightWidth := max(vtui.StringWidth(globalText)+1+driveLinkGlobalFieldWidth, vtui.StringWidth(globalHintText))
+	width := max(driveBookmarkDialogWidth(screenW), leftWidth+driveLinkColumnGap+rightWidth+4)
+	if screenW > 0 && width > screenW {
+		width = screenW
+	}
+	inner := width - 4
+	// The right column starts half way, or further left when it would not
+	// fit there, and never over the left one.
+	rightX := max(leftWidth+driveLinkColumnGap, min(inner/2, inner-rightWidth))
+	globalWidth := max(1, inner-rightX-vtui.StringWidth(globalText)-1)
+
 	titleKey := "DriveLink.CreateTitle"
 	if initial.Name != "" || initial.Path != "" {
 		titleKey = "DriveLink.EditTitle"
@@ -102,20 +141,20 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 		nameEdit:   vtui.NewEdit(0, 0, width-6, initial.Name),
 		pathEdit:   vtui.NewEdit(0, 0, width-6, initial.Path),
 		HotkeyEdit: &driveLinkHotkeyEdit{vtui.NewEdit(0, 0, max(1, vtui.StringWidth(initial.Hotkey)), initial.Hotkey)},
-		quickCall:  vtui.NewCheckbox(0, 0, i18n.Msg("DriveLink.QuickCall"), false),
+		globalEdit: NewGlobalHotkeyEdit(initial.GlobalHotkey, globalWidth),
 		onFinish:   onFinish,
 	}
-	if initial.QuickCall {
-		dialog.quickCall.State = 1
-	}
+	dialog.globalEdit.OnKey = dialog.offerGlobalKey
 	if dialog.pathEdit.GetText() == "" {
 		dialog.pathEdit.SetText(defaultPath)
 	}
 
 	nameLabel := vtui.NewLabel(0, 0, i18n.Msg("DriveLink.Name"), dialog.nameEdit)
 	pathLabel := vtui.NewLabel(0, 0, i18n.Msg("DriveLink.Path"), dialog.pathEdit)
-	hotkeyLabel := vtui.NewLabel(0, 0, i18n.Msg("DriveLink.Hotkey"), dialog.HotkeyEdit)
-	hotkeyHint := vtui.NewText(0, 0, i18n.Msg("DriveLink.HotkeyHint"), vtui.Palette[vtui.ColDialogText])
+	hotkeyLabel := vtui.NewLabel(0, 0, hotkeyText, dialog.HotkeyEdit)
+	hotkeyHint := vtui.NewText(0, 0, hintText, vtui.Palette[vtui.ColDialogText])
+	globalLabel := vtui.NewLabel(0, 0, globalText, dialog.globalEdit)
+	globalHint := vtui.NewText(0, 0, globalHintText, vtui.Palette[vtui.ColDialogText])
 	createText := i18n.Msg("DriveLink.Create")
 	if initial.Name != "" || initial.Path != "" {
 		createText = i18n.Msg("DriveLink.Save")
@@ -133,8 +172,10 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	dialog.AddItem(dialog.pathEdit)
 	dialog.AddItem(hotkeyLabel)
 	dialog.AddItem(dialog.HotkeyEdit)
-	dialog.AddItem(dialog.quickCall)
+	dialog.AddItem(globalLabel)
+	dialog.AddItem(dialog.globalEdit)
 	dialog.AddItem(hotkeyHint)
+	dialog.AddItem(globalHint)
 	dialog.AddItem(separator)
 	dialog.AddItem(createButton)
 	dialog.AddItem(cancelButton)
@@ -144,13 +185,19 @@ func NewDriveBookmarkEditDialog(initial DriveBookmark, defaultPath string, onFin
 	vbox.Add(dialog.nameEdit, vtui.Margins{}, vtui.AlignFill)
 	vbox.Add(pathLabel, vtui.Margins{}, vtui.AlignLeft)
 	vbox.Add(dialog.pathEdit, vtui.Margins{}, vtui.AlignFill)
-	hotkeyRow := vtui.NewHBoxLayout(0, 0, width-4, 1)
+	hotkeyRow := vtui.NewHBoxLayout(0, 0, inner, 1)
 	hotkeyRow.Spacing = 0
 	hotkeyRow.Add(hotkeyLabel, vtui.Margins{}, vtui.AlignLeft)
-	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Left: 1, Right: 1}, vtui.AlignLeft)
-	hotkeyRow.Add(dialog.quickCall, vtui.Margins{}, vtui.AlignLeft)
+	hotkeyRow.Add(dialog.HotkeyEdit, vtui.Margins{Left: 1}, vtui.AlignLeft)
+	hotkeyRow.Add(globalLabel, vtui.Margins{Left: max(1, rightX-elementWidth(hotkeyLabel)-1-elementWidth(dialog.HotkeyEdit))}, vtui.AlignLeft)
+	hotkeyRow.Add(dialog.globalEdit, vtui.Margins{Left: 1}, vtui.AlignLeft)
 	vbox.Add(hotkeyRow, vtui.Margins{Top: 1}, vtui.AlignFill)
-	vbox.Add(hotkeyHint, vtui.Margins{}, vtui.AlignLeft)
+	// The hint of the global hot key ends under the end of its field.
+	hintRow := vtui.NewHBoxLayout(0, 0, inner, 1)
+	hintRow.Spacing = 0
+	hintRow.Add(hotkeyHint, vtui.Margins{}, vtui.AlignLeft)
+	hintRow.Add(globalHint, vtui.Margins{Left: max(1, inner-elementWidth(hotkeyHint)-elementWidth(globalHint))}, vtui.AlignLeft)
+	vbox.Add(hintRow, vtui.Margins{}, vtui.AlignFill)
 	buttons := vtui.NewHBoxLayout(0, 0, width-4, 1)
 	buttons.HorizontalAlign = vtui.AlignCenter
 	buttons.Spacing = 2
@@ -185,10 +232,10 @@ func (d *driveBookmarkEditDialog) finish(saved bool, bookmark DriveBookmark) {
 
 func (d *driveBookmarkEditDialog) submit() {
 	bookmark := DriveBookmark{
-		Name:      strings.TrimSpace(d.nameEdit.GetText()),
-		Path:      strings.TrimSpace(d.pathEdit.GetText()),
-		Hotkey:    strings.TrimSpace(d.HotkeyEdit.GetText()),
-		QuickCall: d.quickCall.State == 1,
+		Name:         strings.TrimSpace(d.nameEdit.GetText()),
+		Path:         strings.TrimSpace(d.pathEdit.GetText()),
+		Hotkey:       strings.TrimSpace(d.HotkeyEdit.GetText()),
+		GlobalHotkey: d.globalEdit.Key(),
 	}
 	if bookmark.Name == "" {
 		vtui.ShowMessageOn(d, i18n.Msg("DriveLink.ErrorTitle"), i18n.Msg("DriveLink.NameRequired"), []string{"&Ok"})
@@ -200,7 +247,82 @@ func (d *driveBookmarkEditDialog) submit() {
 		d.SetFocusedItem(d.pathEdit)
 		return
 	}
+	if key := bookmark.GlobalHotkey; key != "" {
+		if !DriveLinkGlobalKeyAllowed(key) {
+			d.refuseGlobalKey(fmt.Sprintf(i18n.Msg("DriveLink.GlobalHotkeyNeedsModifier"), keymap.FormatKeyForUI(key)))
+			return
+		}
+		// A key the link already had, or one read from the file, was never
+		// checked in this dialog: something may have been bound to it since.
+		if !strings.EqualFold(key, d.takenKey) {
+			d.checkGlobalKey(key, d.submit)
+			return
+		}
+		for _, owner := range driveLinkKeyOwners(key, d.others) {
+			if owner.Release == nil {
+				continue
+			}
+			if err := owner.Release(); err != nil {
+				vtui.ShowMessageOn(d, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{"&Ok"})
+				return
+			}
+		}
+	}
 	d.finish(true, bookmark)
+}
+
+// offerGlobalKey is what a key pressed in the global hot key field does
+// (f4#2171): Delete clears the field; a key that may be a global hot key and
+// that nothing else has, or that the user agrees to take, goes into it.
+func (d *driveBookmarkEditDialog) offerGlobalKey(key string) {
+	if key == "" {
+		d.globalEdit.SetKey("")
+		return
+	}
+	if !DriveLinkGlobalKeyAllowed(key) {
+		d.refuseGlobalKey(fmt.Sprintf(i18n.Msg("DriveLink.GlobalHotkeyNeedsModifier"), keymap.FormatKeyForUI(key)))
+		return
+	}
+	d.checkGlobalKey(key, func() { d.globalEdit.SetKey(key) })
+}
+
+// checkGlobalKey lists what key would be taken from and runs take once the
+// user agrees, at once when nothing has the key. A key the link could never
+// take is refused; "Choose another" leaves the field as it was.
+func (d *driveBookmarkEditDialog) checkGlobalKey(key string, take func()) {
+	owners := driveLinkKeyOwners(key, d.others)
+	var fixed, all []string
+	for _, owner := range owners {
+		if owner.Fixed {
+			fixed = append(fixed, "  "+owner.Name)
+		}
+		all = append(all, "  "+owner.Name)
+	}
+	shown := keymap.FormatKeyForUI(key)
+	if len(fixed) > 0 {
+		d.refuseGlobalKey(fmt.Sprintf(i18n.Msg("DriveLink.GlobalHotkeyFixed"), shown, strings.Join(fixed, "\n")))
+		return
+	}
+	if len(owners) == 0 {
+		d.takenKey = key
+		take()
+		return
+	}
+	question := fmt.Sprintf(i18n.Msg("DriveLink.GlobalHotkeyBusy"), shown, strings.Join(all, "\n"))
+	buttons := []string{i18n.Msg("DriveLink.Take"), i18n.Msg("DriveLink.ChooseAnother")}
+	vtui.ShowMessageOn(d, i18n.Msg("DriveLink.GlobalHotkeyTitle"), question, buttons).OnResult = func(choice int) {
+		if choice != 0 {
+			d.SetFocusedItem(d.globalEdit)
+			return
+		}
+		d.takenKey = key
+		take()
+	}
+}
+
+func (d *driveBookmarkEditDialog) refuseGlobalKey(message string) {
+	vtui.ShowMessageOn(d, i18n.Msg("DriveLink.GlobalHotkeyTitle"), message, []string{"&Ok"})
+	d.SetFocusedItem(d.globalEdit)
 }
 
 // ProcessMouse blocks the corner-drag resize gesture vtui.Window otherwise
@@ -217,6 +339,13 @@ func (d *driveBookmarkEditDialog) ProcessMouse(e *vtinput.InputEvent) bool {
 }
 
 func (d *driveBookmarkEditDialog) ProcessKey(e *vtinput.InputEvent) bool {
+	// The global hot key field sees its keys before the dialog: Alt+N there
+	// is a hot key, not the jump to Name. What it leaves (Tab, Enter, Esc)
+	// the dialog does as usual.
+	if e != nil && (e.Type == vtinput.KeyEventType || e.Type == vtinput.PasteEventType) &&
+		d.GetFocusedItem() == d.globalEdit && d.globalEdit.ProcessKey(e) {
+		return true
+	}
 	if e != nil && e.KeyDown && d.GetFocusedItem() == d.HotkeyEdit {
 		if e.VirtualKeyCode == vtinput.VK_TAB || e.VirtualKeyCode == vtinput.VK_ESCAPE || e.VirtualKeyCode == vtinput.VK_RETURN {
 			return d.Window.ProcessKey(e)
@@ -255,6 +384,12 @@ func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, b
 	if menu != nil {
 		menu.Close()
 	}
+	var others []DriveBookmark
+	for i, bookmark := range bookmarks {
+		if i != index {
+			others = append(others, bookmark)
+		}
+	}
 	vtui.FrameManager.PostTask(func() {
 		dialog := NewDriveBookmarkEditDialog(initial, pf.driveBookmarkDefaultPath(panelIdx), func(saved bool, bookmark DriveBookmark) {
 			if !saved {
@@ -263,11 +398,14 @@ func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, b
 			}
 			current, err := LoadDriveBookmarks(DriveBookmarksFilePath())
 			if err == nil {
-				if index >= 0 && index < len(current) {
-					current[index] = bookmark
+				at := index
+				if at >= 0 && at < len(current) {
+					current[at] = bookmark
 				} else {
+					at = len(current)
 					current = append(current, bookmark)
 				}
+				current = takeDriveLinkGlobalKey(current, at)
 				err = SaveDriveBookmarks(DriveBookmarksFilePath(), current)
 			}
 			if err != nil {
@@ -277,8 +415,28 @@ func (pf *PanelsFrame) openDriveBookmarkEditor(panelIdx int, menu *vtui.VMenu, b
 			}
 			vtui.FrameManager.PostTask(reopen)
 		})
+		dialog.others = others
 		vtui.FrameManager.Push(dialog)
 	})
+}
+
+// takeDriveLinkGlobalKey clears the global hot key of every link that shares
+// it with the link at index, which the user has just agreed to give it to
+// (f4#2171). The list is changed in place and returned.
+func takeDriveLinkGlobalKey(links []DriveBookmark, index int) []DriveBookmark {
+	if index < 0 || index >= len(links) {
+		return links
+	}
+	key := strings.TrimSpace(links[index].GlobalHotkey)
+	if key == "" {
+		return links
+	}
+	for i := range links {
+		if i != index && strings.EqualFold(strings.TrimSpace(links[i].GlobalHotkey), key) {
+			links[i].GlobalHotkey = ""
+		}
+	}
+	return links
 }
 
 func (pf *PanelsFrame) deleteDriveBookmark(menu *vtui.VMenu, bookmarks []DriveBookmark, index int, reopen func()) {

@@ -5,7 +5,6 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/dialog"
 	"github.com/unxed/f4/internal/keymap"
-	"github.com/unxed/vtinput"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,12 +15,34 @@ import (
 // DriveBookmark is a named link shown in the Alt+F1/Alt+F2 drive menu.
 // Unlike folder bookmarks, drive-menu links are not limited to ten numbered
 // slots. Hotkey contains the Far-style raw spelling (for example "Q" or
-// "CtrlF5").
+// "CtrlF5") of the key that picks the link in the open menu.
 type DriveBookmark struct {
-	Name      string
-	Path      string
-	Hotkey    string
-	QuickCall bool
+	Name   string
+	Path   string
+	Hotkey string
+	// GlobalHotkey opens the link from the panels without the menu
+	// (f4#2171), in the spelling of keymap.EventToHotkeyString: "CtrlAltT",
+	// "RCtrlY", "CtrlShiftF11". Empty when the link has none.
+	GlobalHotkey string
+}
+
+// driveBookmarkQuickCallKey is the global hot key a link of the "quick call"
+// days (f4#1148) gets on load: that check box made RCtrl and the menu letter
+// open the link. Only a Latin letter ever worked that way; a digit was always
+// the numbered bookmark's, so nothing is carried over for anything else.
+func driveBookmarkQuickCallKey(hotkey string) string {
+	hotkey = strings.TrimSpace(hotkey)
+	if len(hotkey) != 1 {
+		return ""
+	}
+	c := hotkey[0]
+	if c >= 'a' && c <= 'z' {
+		c -= 'a' - 'A'
+	}
+	if c < 'A' || c > 'Z' {
+		return ""
+	}
+	return "RCtrl" + string(c)
 }
 
 // DriveBookmarksFilePath returns the user-config location of the named drive
@@ -49,6 +70,7 @@ func LoadDriveBookmarks(path string) ([]DriveBookmark, error) {
 	defer f.Close()
 
 	byIndex := make(map[int]DriveBookmark)
+	quickCall := make(map[int]bool)
 	var current int
 	validSection := false
 	scanner := bufio.NewScanner(f)
@@ -86,13 +108,24 @@ func LoadDriveBookmarks(path string) ([]DriveBookmark, error) {
 			bookmark.Path = value
 		case "Hotkey":
 			bookmark.Hotkey = value
+		case "GlobalHotkey":
+			bookmark.GlobalHotkey = value
 		case "QuickCall":
-			bookmark.QuickCall = strings.EqualFold(value, "true") || value == "1"
+			quickCall[current] = strings.EqualFold(value, "true") || value == "1"
 		}
 		byIndex[current] = bookmark
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
+	}
+	// A file written before the global hot key (f4#2171) says QuickCall=true
+	// instead: the link answered RCtrl and its letter. The next save writes
+	// the key out and drops the flag.
+	for index, on := range quickCall {
+		if bookmark := byIndex[index]; on && strings.TrimSpace(bookmark.GlobalHotkey) == "" {
+			bookmark.GlobalHotkey = driveBookmarkQuickCallKey(bookmark.Hotkey)
+			byIndex[index] = bookmark
+		}
 	}
 
 	indices := make([]int, 0, len(byIndex))
@@ -141,11 +174,13 @@ func SaveDriveBookmarks(path string, bookmarks []DriveBookmark) error {
 		buf.WriteString(pathValue)
 		buf.WriteString("\nHotkey=")
 		buf.WriteString(strings.TrimSpace(bookmark.Hotkey))
-		buf.WriteString("\nQuickCall=")
-		buf.WriteString(strconv.FormatBool(bookmark.QuickCall))
+		buf.WriteString("\nGlobalHotkey=")
+		buf.WriteString(strings.TrimSpace(bookmark.GlobalHotkey))
 		buf.WriteByte('\n')
 	}
-	return config.WriteUserFileAtomically(path, []byte(buf.String()), 0o600)
+	err := config.WriteUserFileAtomically(path, []byte(buf.String()), 0o600)
+	forgetDriveLinksCache()
+	return err
 }
 
 func driveBookmarkIsValid(bookmark DriveBookmark) bool {
@@ -155,25 +190,6 @@ func driveBookmarkIsValid(bookmark DriveBookmark) bool {
 func DriveBookmarkKeyMatches(bookmark DriveBookmark, eKey string) bool {
 	return driveBookmarkIsValid(bookmark) && strings.TrimSpace(bookmark.Hotkey) != "" &&
 		strings.EqualFold(strings.TrimSpace(bookmark.Hotkey), strings.TrimSpace(eKey))
-}
-
-// DriveBookmarkQuickCall finds the link that RCtrl or Ctrl+Alt plus its
-// hotkey opens from the panels, as with the numbered folder bookmarks
-// (mitek1977-coder, f4#1148): a link with QuickCall on whose hotkey is the key
-// of e without Ctrl and Alt. The first such link in the list wins.
-func DriveBookmarkQuickCall(bookmarks []DriveBookmark, e *vtinput.InputEvent) (DriveBookmark, bool) {
-	bare := *e
-	bare.ControlKeyState &^= vtinput.LeftCtrlPressed | vtinput.RightCtrlPressed | vtinput.LeftAltPressed | vtinput.RightAltPressed
-	key := keymap.EventToHotkeyString(&bare)
-	if key == "" {
-		return DriveBookmark{}, false
-	}
-	for _, bookmark := range bookmarks {
-		if bookmark.QuickCall && DriveBookmarkKeyMatches(bookmark, key) {
-			return bookmark, true
-		}
-	}
-	return DriveBookmark{}, false
 }
 
 func DriveBookmarkMenuText(bookmark DriveBookmark) string {

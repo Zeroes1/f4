@@ -175,7 +175,7 @@ Every listed field is independently described in its provider catalog. Ordered s
 |---|---|---|---|
 | `associations`: mask, description; Enter/AltEnter/F3/AltF3/F4/AltF4 commands and enable flags | Files → File associations → Edit association | associations | `settings/associations.ini`; `file_associations.go`, `file_associations_ui.go`. The AltExec slot runs on Ctrl+PgDn over a file (f4#1741; a file without a matching AltExec association keeps entering the archive or opening the plugin view). The AltView slot runs on Alt+F3 over a file (f4#1741; a file without a matching AltView association opens in the hex viewer). The AltEdit slot runs on Alt+F4 over a file (f4#1741; a file without a matching AltEdit association opens in the editor that F4 does not use: the external one, or the built-in one when UseExternalEditor is on). |
 | `bookmarks`: ten paths; retained plugin/file/data metadata | Drive chooser → bookmarks; numbered folder shortcuts | drives | Existing bookmark file; `bookmarks.go`. Reordering changes digit slots. |
-| `drive-links`: name, path, hotkey | Drive chooser → named links → edit | drives | Existing links file; `drive_bookmarks.go`. |
+| `drive-links`: name, path, hotkey, global hotkey | Drive chooser → named links → edit | drives | Existing links file; `drive_bookmarks.go`. The global hot key (f4#2171) is a press-to-capture field (a `Chord` field with `InputWidth` over 1) in the main window and on the Links page. A key that a command, a macro, a built-in key or a plugin already uses is refused as it is pressed and again on Apply, unless the file already gives it to the link; the link dialog of the drive menu can take such a key ([BOOKMARKS.md](BOOKMARKS.md#global-hot-key-f42171)). |
 | `usermenu.*`: label, activation key, submenu flag, parent, multiline commands | User menu → F4 / Insert → item/submenu editor | menus | Global INI, executable-scoped and ancestor-local FarMenu files remain separate sources and separate drafts; `user_menu_ui.go`. |
 | `bindings`: action, chord, area, condition | Options → Hotkey configurator → assign → area/condition → chord | hotkeys | `hotkeys.ini`; `hotkeys.go`. Native frame-owned chords are not editable bindings. |
 | `envman.profiles`: kind, name, enabled, ordered variable lines | Environment Manager → profile editor | terminal | Environment Manager JSON; `plugins/envman`. Apply reconciles the environment only after a successful save. Separators are preserved. |
@@ -449,7 +449,7 @@ workflows; those redirects are removed:
 
 | Context | Local interaction | Shared Settings storage/logic |
 | --- | --- | --- |
-| Drive chooser Insert / edit link | Name, path and shortcut dialog; returns to drive chooser | `panel.DriveBookmark`, `LoadDriveBookmarks`, `SaveDriveBookmarks`; Drive chooser drive links |
+| Drive chooser Insert / edit link | Name, path, menu hot key and global hot key dialog; asks before taking a global hot key from a command, macro or another link; returns to drive chooser | `panel.DriveBookmark`, `LoadDriveBookmarks`, `SaveDriveBookmarks`; Drive chooser drive links |
 | Numbered bookmarks edit | Path input for the selected slot | `panel.BookmarkSet`, `SaveBookmarks`; Drive chooser bookmark slots |
 | User menu create/edit item or submenu | Original entry editor with source/scope retained | User-menu tree and source-specific writers; User menus |
 | NetFox add/edit connection | Original connection dialog | NetFox configuration store; Network connections |

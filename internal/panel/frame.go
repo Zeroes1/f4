@@ -3381,21 +3381,9 @@ func (pf *PanelsFrame) ProcessKey(e *vtinput.InputEvent) bool {
 			pf.GoToHomeFolder()
 			return true
 		}
-
-		// The links of the drive menu marked "Use for quick call" answer to
-		// the same [RightCtrl | Ctrl+Alt] with their own hotkey (f4#1148).
-		// The digits above stay the numbered bookmarks'.
-		if isBookmarkGoto {
-			links, err := LoadDriveBookmarks(DriveBookmarksFilePath())
-			if err != nil {
-				vtui.DebugLog("DRIVE BOOKMARKS: load %q failed: %v", DriveBookmarksFilePath(), err)
-			} else if link, ok := DriveBookmarkQuickCall(links, e); ok {
-				if fsp := pf.GetActivePanel(); fsp != nil {
-					pf.NavigateToBookmark(fsp, Bookmark{Path: link.Path})
-				}
-				return true
-			}
-		}
+		// The global hot keys of the drive-menu links are asked by the
+		// application's key router, ahead of the macros and the hotkey table
+		// (OpenDriveLinkForKey, f4#2171).
 	}
 
 	if !e.KeyDown {
@@ -6891,6 +6879,9 @@ func (pf *PanelsFrame) showDriveMenuAt(panelIdx, selectPos int) {
 		driveBookmarkRows[menu.GetItemCount()] = index
 		menu.AddItem(vtui.MenuItem{
 			Text: DriveBookmarkMenuText(bookmark),
+			// The global hot key stands at the right edge, as a menu shows
+			// the key of a command (f4#2171).
+			Shortcut: keymap.FormatKeyForUI(strings.TrimSpace(bookmark.GlobalHotkey)),
 			UserData: func(fsp *FileSystemPanel) {
 				pf.NavigateToBookmark(fsp, Bookmark{Path: bookmark.Path})
 			},
