@@ -27,6 +27,13 @@ type hotkeyRow struct {
 	Editable  bool
 	Condition string
 	Desc      string
+	// Declared is the hotkey a plugin declares for its command, in the
+	// hotkey manager's spelling, while nothing is configured for the command
+	// and the user has not removed it. It is not in hotkeys.ini: Unbind
+	// switches it off the way Del in the plugin menu does.
+	Declared string
+	// PanelOnly marks a declared key the plugin handles in its own panel only.
+	PanelOnly bool
 }
 
 // hotkeyBuiltinMark marks, in the configurator's first, one-cell column, a
@@ -67,7 +74,7 @@ func (r hotkeyRow) GetCellText(col int) string {
 	case hotkeyColArea:
 		return r.Area
 	case hotkeyColWhen:
-		return r.Condition
+		return r.when()
 	case hotkeyColDescription:
 		return r.Desc
 	}
@@ -96,6 +103,15 @@ func newHotkeyBuiltinCheckbox() *vtui.Checkbox {
 		cb.State = 1
 	}
 	return cb
+}
+
+// when is what the When column shows: the binding's condition, or where a
+// declared plugin key works when that is only the plugin's own panel.
+func (r hotkeyRow) when() string {
+	if r.PanelOnly {
+		return i18n.Msg("Hotkeys.WhenPluginPanel")
+	}
+	return r.Condition
 }
 
 func (r hotkeyRow) GetCellAttr(col int, def uint64) uint64 {
@@ -479,22 +495,25 @@ func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
 		if assignedActions[strings.ToLower(act.Name)] {
 			continue
 		}
+		rawKey := panel.PluginActionConfiguredKey(act.Name)
 		key := panel.PluginActionShortcut(act.Name)
-		if key == "" {
-			key = panel.PluginActionDefaultShortcut(act.Name)
-		}
-		rawKey := ""
-		if configured := panel.PluginActionConfiguredKey(act.Name); configured != "" {
-			rawKey = configured
+		declared := ""
+		if key == "" && rawKey == "" {
+			// The plugin's own key, unless the user removed it (Unbind here,
+			// Del in the plugin menu).
+			declared = panel.PluginActionDeclaredKey(act.Name)
+			key = keymap.FormatKeyForUI(declared)
 		}
 		hkRows = append(hkRows, hotkeyRow{
-			Action:   act.Name,
-			Label:    action.PlainLabel(act.DisplayLabel()),
-			Area:     act.Area,
-			Key:      key,
-			RawKey:   rawKey,
-			Editable: true,
-			Desc:     act.DisplayDescription(),
+			Action:    act.Name,
+			Label:     action.PlainLabel(act.DisplayLabel()),
+			Area:      act.Area,
+			Key:       key,
+			RawKey:    rawKey,
+			Editable:  true,
+			Desc:      act.DisplayDescription(),
+			Declared:  declared,
+			PanelOnly: declared != "" && !panel.PluginGlobalHotkey(declared),
 		})
 	}
 
@@ -710,6 +729,10 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 
 	btnUnbind.OnClick = func() {
 		if row, ok := selectedHotkeyRow(table, hkRows); ok && row.Editable {
+			if row.RawKey == "" && row.Declared != "" {
+				unbindDeclaredPluginKey(dlg, row, refresh)
+				return
+			}
 			if row.RawKey != "" && row.Area != "" {
 				question := fmt.Sprintf("%s %s?", action.PlainLabel(i18n.Msg("Hotkeys.BtnUnbind")), row.Key)
 				vtui.ShowMessageOn(dlg, i18n.Msg("Hotkeys.Title"), question, []string{i18n.Msg("vtui.Ok"), i18n.Msg("vtui.Cancel")}).OnResult = func(choice int) {
@@ -742,6 +765,28 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 	return refresh
 }
 
+// unbindDeclaredPluginKey removes the key a plugin declares for its command,
+// as Del in the plugin menu does: it is switched off in
+// PluginDefaultHotkeysOff, which is saved at once, like the plugin menu's
+// change, rather than with the draft. Assign gives the command a key again. A
+// key the plugin handles in its own panel cannot be switched off that way, and
+// the user is told so instead.
+func unbindDeclaredPluginKey(dlg *vtui.Window, row hotkeyRow, refresh func()) {
+	title, ok, cancel := i18n.Msg("Hotkeys.Title"), i18n.Msg("vtui.Ok"), i18n.Msg("vtui.Cancel")
+	if row.PanelOnly {
+		vtui.ShowMessageOnEx(dlg, title, fmt.Sprintf(i18n.Msg("Hotkeys.PluginPanelKeyNote"), row.Key), []string{ok}, vtui.MessageInfo)
+		return
+	}
+	question := fmt.Sprintf("%s %s?", action.PlainLabel(i18n.Msg("Hotkeys.BtnUnbind")), row.Key)
+	vtui.ShowMessageOn(dlg, title, question, []string{ok, cancel}).OnResult = func(choice int) {
+		if choice != 0 {
+			return
+		}
+		panel.SetPluginDefaultKeyOff(row.Declared, true)
+		refresh()
+	}
+}
+
 type hotkeyPage struct {
 	*vtui.Group
 	owner          *vtui.Window
@@ -762,7 +807,7 @@ func hotkeyDetailsText(row hotkeyRow) string {
 		{i18n.Msg("Hotkeys.ColCommand"), row.Label},
 		{i18n.Msg("Hotkeys.ColKey"), row.Key},
 		{i18n.Msg("Hotkeys.ColArea"), row.Area},
-		{i18n.Msg("Hotkeys.ColWhen"), row.Condition},
+		{i18n.Msg("Hotkeys.ColWhen"), row.when()},
 	} {
 		if field.value != "" {
 			lines = append(lines, field.title+": "+field.value)
