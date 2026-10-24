@@ -256,10 +256,7 @@ func (a *AudioEngine) Seek(delta time.Duration) bool {
 		return false
 	}
 
-	bytes := int64(float64(target) / float64(time.Second) * float64(a.ctxRate*AudioBytesPerFrame))
-	if bytes > 0 {
-		_, _ = io.CopyN(io.Discard, a.tap, bytes)
-	}
+	_, _ = skipPCM(a.tap, target, a.ctxRate)
 	if wasPlaying {
 		a.player.Play()
 	}

@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/unxed/vtui"
 )
@@ -146,6 +147,21 @@ func (t *pcmTap) Spectrum(bands int) []float64 {
 		out[b] = math.Max(0, math.Min(1, v))
 	}
 	return out
+}
+
+// skipPCM reads and drops the PCM of the first d of r, a stream of
+// AudioBytesPerFrame-byte frames at rate, and says how many bytes it dropped.
+// It drops whole frames only. Dropping part of one shifts every sample after it
+// by a byte or two, which the speakers play as white noise: the first seek of
+// a track was noise and the next one, by luck back on a frame, played (#2185).
+// And the resampler hands out whole frames only, so the last few bytes of a
+// partial frame never came and the copy waited for them forever.
+func skipPCM(r io.Reader, d time.Duration, rate int) (int64, error) {
+	frames := int64(d.Seconds() * float64(rate))
+	if frames <= 0 {
+		return 0, nil
+	}
+	return io.CopyN(io.Discard, r, frames*AudioBytesPerFrame)
 }
 
 // linearResampler converts 16-bit stereo LE PCM from srcRate to dstRate.
