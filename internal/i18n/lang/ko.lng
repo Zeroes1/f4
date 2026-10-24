@@ -1141,6 +1141,8 @@ SettingsCenter.PathHintSource.Description=액티브 패널, 파시티브 패널,
 SettingsCenter.PathHintSource.Label=제안원
 SettingsCenter.PathHintTimeout.Description=파일 시스템 디렉토리를 제안 뒤에 읽을 수 있는 최대 시간 이것은 제안이 나오기 전에 지연이 아닙니다. 최소 1초
 SettingsCenter.PathHintTimeout.Label=디렉토리 읽기 타임아웃 (초)
+SettingsCenter.PlayerKeys.Description=포커스가 있을 때 오디오 플레이어(Ctrl+Shift+M)를 조작하는 문자 키입니다. WinAmp: Z 이전, X 재생, C 일시 정지, V 정지, B 다음. YouTube: K 재생 또는 일시 정지, J와 L 10초 뒤로와 앞으로, Shift+P와 Shift+N 이전과 다음, M 음소거, 0~9 트랙의 10분의 1 지점. 화살표, Space, Enter, +와 -는 어느 쪽에서나 작동합니다.
+SettingsCenter.PlayerKeys.Label=플레이어 키
 SettingsCenter.PlayerSpectrum.Description=오디오 플레이어(Ctrl+Shift+M)의 재생 막대 아래에 재생 중인 소리의 스펙트럼을 그립니다. 기본값은 꺼짐: 스펙트럼이 재생 목록의 한 줄을 차지합니다.
 SettingsCenter.PlayerSpectrum.Label=스펙트럼 표시
 SettingsCenter.Previous=이전 일치 항목
@@ -1856,6 +1858,7 @@ SettingsCenter.Text.c137a4c1666040cb945562c37118dc086f90fd6914e4e7205295dce3773f
 SettingsCenter.Text.c142e51a34e9502a395f6cef79b47b040e51560d67cfc5324c3ad47f6bafb3cd=아래로 내려가는 바퀴 틈당 패널 라인 수 0은 시스템 설정을 따르고 있습니다.
 SettingsCenter.Text.c16f23d8b96077744b496c4ae002499a5249c25c3fc40ca1805a1080e071d69a=활성화 키
 SettingsCenter.Text.c177d34aee8dd57c821aaff1ecf1e3cf5a5ff4d958ccbe55ad4bc595b8fc5e6a=기존 공급자가 허용하는 경우에 명시적으로 안전하지 않은 S3 운송을 허용한다.
+SettingsCenter.Text.c23d1c0798d0c8a5d65f2c77d879ccc0a19a15636de72a712b921cf8c9533e0f=WinAmp + YouTube
 SettingsCenter.Text.c2b770405a9eacd95277c9ca1c76b9a73633273e3cb3c1196b16102bc173133a=열린 파일 옆의 .editorconfig에서 일치하는 indent_style, indent_size 및 tab_width를 적용합니다. 상위 디렉터리 검색 및 전체 표준은 구현되지 않습니다.
 SettingsCenter.Text.c2b8faa8509efd079624a328bbcb8b991a7989892884d957136807a16fa55a86=최신 업데이트 확인 시도의 시간표 빈도는 응용 프로그램을 시작 시 평가되며, 지속적으로 실행되는 타이머가 아닙니다.
 SettingsCenter.Text.c374f0d3c97489c08d3408d949e2079b813a139e064e49f8bb20367f381f6cec=루트 프리픽스
@@ -1995,6 +1998,7 @@ SettingsCenter.Text.eb244aa9dcbdee656caa6bfc66265a3a3569a4a1b4fa9f142d614768bc64
 SettingsCenter.Text.eb5c78870f14154c6b7e3ba78a80108687808b9a40e2d0d657c0e96c4c156b8f=세션 파일
 SettingsCenter.Text.eb6fdf60f2260ba0004c44f9678559a3f03f100496f9b4aebb91671061fd382b=vtvibe.ini (보장된 키가 있는 경우)
 SettingsCenter.Text.ec36557e53d70c9ca1a9f067691d213f21eafb927494df7462c15a6bd9c96ad8=플러그인 경로
+SettingsCenter.Text.ec47df9a9ac313041b5239ba2c6928fbb9b3603555f243014e60e5c4c8c69353=WinAmp
 SettingsCenter.Text.ecd8dcc802dfaa68fa60e164a40c6f130d4ecc6ecdd89ceec2a3f7b517cc07ed=새로운 편집자; 라이브 시청자
 SettingsCenter.Text.ecde5f9b1e18a2997240bc845d6f745334c6296c809889fdf95a19c530677b0c=패널 보기 모드, 정렬, 가시성, 활성 작업 공간 및 작업 공간 레이아웃을 기억하세요.
 SettingsCenter.Text.ecfb5e81fd5071ecfc76f66758fb039940c863e327f9f88c79d2a1d01f275558=편집자 및 대화 필드에서 Mac 스타일의 편집 추호를 사용하십시오. MacOS에서 자동으로 설정합니다. 패널은 멀리 탐색을 유지합니다. 명령어 번역은 백엔드 지원이 필요합니다.
@@ -2030,6 +2034,7 @@ SettingsCenter.Text.fa15dd8ac6d7cd9f9fbec89f40f6c3d344604f17e48bdeed0aaf17c41e0a
 SettingsCenter.Text.fa57243dc0dd127dc5c1b251753f2ba32ac8356524907b9fc6c000d7b440d6ac=삭제 확인
 SettingsCenter.Text.fae75018276afa77650f87c60ff30ecb76c766f218d462de11a9af41215322e6=갱신 카탈로그
 SettingsCenter.Text.faed00681d7621f8b3a2e59fd57e2ec1b07fc22dd0304d5d7fc93612295980ec=플러그인 카탈로그
+SettingsCenter.Text.fb7accfff8c6f8ea9b03c91ee5576d0d08080e9ba35918d801aaeb6020dbc88c=YouTube
 SettingsCenter.Text.fb9f1efaf349e3b7ca3bfd8200bd1c7c5cd30912598fe62fd7c9247efa739e4f=파일 이름 코드페이지 FTP 그리고 SFTP. FISH 이 분야를 소비하지 않습니다.
 SettingsCenter.Text.fbde1a184072da9fc1d71141ea713c352ea0b6762274a33ef84b2c07cfe42bca=2초에 연결 시간 종료, 기본값은 15입니다.
 SettingsCenter.Text.fbf20f266f03020948d32206936c49894da3fb353241d003e4d23c4a25cd51d7=작업 공간 및 저장

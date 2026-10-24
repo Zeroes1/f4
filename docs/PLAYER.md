@@ -112,12 +112,23 @@ hop between the controls and the playlist. Instead the panel is one column:
 | playlist         | F7             | new folder after the cursor           |
 | control row      | F7             | new folder at the end of the playlist |
 | anywhere         | Z X C V B      | prev / play / pause / stop / next (WinAmp) |
+| anywhere         | K              | play or pause (YouTube)               |
+| anywhere         | J / L          | 10 s back / forward (YouTube)         |
+| anywhere         | Shift+P / Shift+N | previous / next track (YouTube)    |
+| anywhere         | M              | mute, and back (YouTube)              |
+| anywhere         | 0 … 9          | jump to that tenth of the track (YouTube) |
 | anywhere         | + / −          | volume                                |
 | file panel       | Ctrl+Alt+Left/Right | seek 5 s without leaving the file panel |
 
 Ctrl with the arrows still moves playlist items too, where it reaches f4:
 macOS keeps Ctrl+Up/Down/Left/Right for Mission Control and the switching
 of Spaces, which is why Shift is the key that is documented (#2185).
+Which letters are on is a setting (Settings, Panels, Audio player,
+`PlayerKeys`): WinAmp's, YouTube's, or both, the default, since the two
+share no key. The command palette and macros run the player's commands
+(`PlayerPanel.Do`), not their keys, so Player: Stop works whatever the
+scheme.
+
 Z X C V B are matched by the key, not by the character it types, so they
 work with the Russian layout on: the virtual key when the terminal reports
 one, else the character put back on its Latin key

@@ -56,6 +56,7 @@ type PlayerPanel struct {
 
 	current *playlistItem // the track loaded in the engine, if any
 	marquee int
+	unmuted float64 // the volume M brings back
 
 	// queue is the file panel's audio files when the current track came
 	// from Enter in the panel rather than the playlist; queuePos is the
@@ -131,6 +132,18 @@ func (pp *PlayerPanel) SetPosition(x1, y1, x2, y2 int) {
 	if pp.frame != nil {
 		pp.frame.SetPosition(x1, y1, x2, y2)
 	}
+}
+
+// FocusedPlayer is the player when it has the focus in the panels, or nil.
+// The Panel.Player.* actions act on it.
+func (pf *PanelsFrame) FocusedPlayer() *PlayerPanel {
+	if pf == nil || !pf.ShowPanels || pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
+		return nil
+	}
+	if pp, ok := pf.AltPanels[pf.ActiveIdx].(*PlayerPanel); ok && pp.IsFocused() {
+		return pp
+	}
+	return nil
 }
 
 func (pp *PlayerPanel) Source() *FileSystemPanel { return pp.src }
@@ -563,6 +576,84 @@ func (pp *PlayerPanel) SeekBy(delta time.Duration) bool {
 	return true
 }
 
+// JumpToTenth moves the current track to tenth tenths of its length, as the
+// digits do on YouTube: 0 to the start, 5 to the middle.
+func (pp *PlayerPanel) JumpToTenth(tenth int) bool {
+	if pp.Engine == nil || !pp.Engine.IsLoaded() || pp.Engine.Duration() <= 0 || tenth < 0 || tenth > 9 {
+		return false
+	}
+	target := pp.Engine.Duration() * time.Duration(tenth) / 10
+	return pp.SeekBy(target - pp.Engine.Position())
+}
+
+// toggleMute turns the sound off, or back on to the volume it had.
+func (pp *PlayerPanel) toggleMute() {
+	if v := pp.Engine.Volume(); v > 0 {
+		pp.unmuted = v
+		pp.Engine.SetVolume(0)
+		return
+	}
+	v := pp.unmuted
+	if v <= 0 {
+		v = 0.8
+	}
+	pp.Engine.SetVolume(v)
+}
+
+// PlayerCommand is something the player does on a key and from the command
+// palette (Panel.Player.*). The palette asks for the command, not for its key:
+// which keys work depends on config.App.PlayerKeys.
+type PlayerCommand int
+
+const (
+	PlayerPrevious PlayerCommand = iota
+	PlayerPlay
+	PlayerPause
+	PlayerStop
+	PlayerNext
+	PlayerPlayPause
+	PlayerVolumeUp
+	PlayerVolumeDown
+	PlayerMute
+	PlayerSeekBack10
+	PlayerSeekForward10
+)
+
+// Do does cmd and reports whether it was one the player knows.
+func (pp *PlayerPanel) Do(cmd PlayerCommand) bool {
+	switch cmd {
+	case PlayerPrevious:
+		pp.pressButton(playerBtnPrev)
+	case PlayerPlay:
+		pp.pressButton(playerBtnPlay)
+	case PlayerPause:
+		pp.pressButton(playerBtnPause)
+	case PlayerStop:
+		pp.pressButton(playerBtnStop)
+	case PlayerNext:
+		pp.pressButton(playerBtnNext)
+	case PlayerPlayPause:
+		if pp.Engine.IsLoaded() {
+			pp.Engine.TogglePause()
+		} else {
+			pp.pressButton(playerBtnPlay)
+		}
+	case PlayerVolumeUp:
+		pp.adjustVolume(+0.05)
+	case PlayerVolumeDown:
+		pp.adjustVolume(-0.05)
+	case PlayerMute:
+		pp.toggleMute()
+	case PlayerSeekBack10:
+		pp.SeekBy(-10 * time.Second)
+	case PlayerSeekForward10:
+		pp.SeekBy(10 * time.Second)
+	default:
+		return false
+	}
+	return true
+}
+
 // ---- keys ------------------------------------------------------------
 
 func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
@@ -622,37 +713,75 @@ func (pp *PlayerPanel) OwnsKey(e *vtinput.InputEvent) bool {
 	return false
 }
 
-// globalKey handles the WinAmp letter keys and the volume keys, which work
-// wherever the cursor is. The letters are told by the key they are on, not
-// by what it types: with the Russian layout on, Z types я, and the player
-// still has to go back a track (#2185).
+// globalKey handles the letter keys of the scheme config.App.PlayerKeys
+// names, the digits of YouTube's, and the volume keys, which work wherever
+// the cursor is. The letters are told by the key they are on, not by what it
+// types: with the Russian layout on, Z types я, and the player still has to
+// go back a track (#2185).
 func (pp *PlayerPanel) globalKey(e *vtinput.InputEvent) bool {
-	switch playerLetterKey(e) {
-	case vtinput.VK_Z:
-		pp.pressButton(playerBtnPrev)
+	if tenth, ok := playerDigit(e); ok && config.App.PlayerKeys != config.PlayerKeysWinAmp {
+		pp.JumpToTenth(tenth)
 		return true
-	case vtinput.VK_X:
-		pp.pressButton(playerBtnPlay)
-		return true
-	case vtinput.VK_C:
-		pp.pressButton(playerBtnPause)
-		return true
-	case vtinput.VK_V:
-		pp.pressButton(playerBtnStop)
-		return true
-	case vtinput.VK_B:
-		pp.pressButton(playerBtnNext)
-		return true
+	}
+	cmd, ok := playerKeyCommand(e, config.App.PlayerKeys)
+	if ok {
+		pp.Do(cmd)
+	}
+	return ok
+}
+
+// playerKeyCommand is the command of a key in the focused player with the
+// letter scheme scheme. WinAmp: Z X C V B. YouTube: K play or pause, J and L
+// ten seconds back and forward, M mute, Shift+P and Shift+N the previous and
+// the next track. The two share no key, so both can be on.
+func playerKeyCommand(e *vtinput.InputEvent, scheme string) (PlayerCommand, bool) {
+	winamp := scheme != config.PlayerKeysYouTube
+	youtube := scheme != config.PlayerKeysWinAmp
+	shift := e.ControlKeyState&vtinput.ShiftPressed != 0
+	switch letter := playerLetterKey(e); {
+	case winamp && letter == vtinput.VK_Z:
+		return PlayerPrevious, true
+	case winamp && letter == vtinput.VK_X:
+		return PlayerPlay, true
+	case winamp && letter == vtinput.VK_C:
+		return PlayerPause, true
+	case winamp && letter == vtinput.VK_V:
+		return PlayerStop, true
+	case winamp && letter == vtinput.VK_B:
+		return PlayerNext, true
+	case youtube && letter == vtinput.VK_K:
+		return PlayerPlayPause, true
+	case youtube && letter == vtinput.VK_J:
+		return PlayerSeekBack10, true
+	case youtube && letter == vtinput.VK_L:
+		return PlayerSeekForward10, true
+	case youtube && letter == vtinput.VK_M:
+		return PlayerMute, true
+	case youtube && shift && letter == vtinput.VK_P:
+		return PlayerPrevious, true
+	case youtube && shift && letter == vtinput.VK_N:
+		return PlayerNext, true
+	case e.Char == '+' || e.Char == '=' || e.VirtualKeyCode == vtinput.VK_OEM_PLUS || e.VirtualKeyCode == vtinput.VK_ADD:
+		return PlayerVolumeUp, true
+	case e.Char == '-' || e.Char == '_' || e.VirtualKeyCode == vtinput.VK_OEM_MINUS || e.VirtualKeyCode == vtinput.VK_SUBTRACT:
+		return PlayerVolumeDown, true
+	}
+	return 0, false
+}
+
+// playerDigit is the digit of a digit key pressed without Shift, which types
+// the same digit in every layout.
+func playerDigit(e *vtinput.InputEvent) (int, bool) {
+	if e.ControlKeyState&vtinput.ShiftPressed != 0 {
+		return 0, false
 	}
 	switch {
-	case e.Char == '+' || e.Char == '=' || e.VirtualKeyCode == vtinput.VK_OEM_PLUS || e.VirtualKeyCode == vtinput.VK_ADD:
-		pp.adjustVolume(+0.05)
-	case e.Char == '-' || e.Char == '_' || e.VirtualKeyCode == vtinput.VK_OEM_MINUS || e.VirtualKeyCode == vtinput.VK_SUBTRACT:
-		pp.adjustVolume(-0.05)
-	default:
-		return false
+	case e.Char >= '0' && e.Char <= '9':
+		return int(e.Char - '0'), true
+	case e.Char == 0 && e.VirtualKeyCode >= vtinput.VK_0 && e.VirtualKeyCode <= vtinput.VK_9:
+		return int(e.VirtualKeyCode - vtinput.VK_0), true
 	}
-	return true
+	return 0, false
 }
 
 // playerLetterKey is the Latin letter key e was typed on, or 0. That is the

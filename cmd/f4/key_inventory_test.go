@@ -106,10 +106,16 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 			"CtrlUp", "CtrlDown", "CtrlLeft", "CtrlRight", "CtrlHome"},
 		rationale: "the focused player takes its keys ahead of the hotkey table (Panel.Player.*)",
 	},
-	"panel.(*PlayerPanel).globalKey": {
+	"panel.playerKeyCommand": {
+		areas: []string{"Shell"},
+		chords: []string{"Z", "X", "C", "V", "B", "K", "J", "L", "M", "ShiftP", "ShiftN",
+			"VK_BB", "VK_BD", "Add", "Subtract"},
+		rationale: "the player's WinAmp and YouTube letter keys and its volume, wherever its cursor is (Panel.Player.*)",
+	},
+	"panel.playerDigit": {
 		areas:     []string{"Shell"},
-		chords:    []string{"Z", "X", "C", "V", "B", "VK_BB", "VK_BD", "Add", "Subtract"},
-		rationale: "the player's WinAmp keys and its volume, wherever its cursor is (Panel.Player.*)",
+		chords:    []string{"0", "9"},
+		rationale: "the player's digits, 0 to 9, jump to that tenth of the track (Panel.Player.JumpToStart, Panel.Player.JumpToTenth); the source compares the two ends of the range",
 	},
 	"panel.playerLetterKey": {
 		infrastructure: true, rationale: "tells the letter key of a keystroke whatever the layout, for the player's WinAmp keys",

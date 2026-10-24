@@ -259,6 +259,113 @@ func TestPlayerShiftArrowsMovePlaylistItems(t *testing.T) {
 	}
 }
 
+// YouTube's keys next to WinAmp's (#2185): K plays and pauses, J and L move
+// ten seconds, the digits jump to a tenth of the track, M mutes, Shift+N and
+// Shift+P change the track. The letters by their key, so the Russian layout's
+// л о д ь work as K J L M.
+func TestPlayerYouTubeKeys(t *testing.T) {
+	old := config.App.PlayerKeys
+	t.Cleanup(func() { config.App.PlayerKeys = old })
+	config.App.PlayerKeys = config.PlayerKeysBoth
+
+	f := newPlayerFixture(t, "a.mp3", "b.mp3")
+	f.press(playerKey(vtinput.VK_INSERT, 0))
+	f.press(playerKey(vtinput.VK_INSERT, 0))
+	f.press(playerKey(vtinput.VK_F5, 0)) // a and b into the playlist
+	f.press(playerKey(vtinput.VK_TAB, 0))
+
+	f.press(playerChar(vtinput.VK_K, 'k'))
+	if f.audio.Path() != f.path("a.mp3") || !f.audio.IsPlaying() {
+		t.Fatalf("K with nothing playing: engine has %q, playing=%v; want a.mp3 playing", f.audio.Path(), f.audio.IsPlaying())
+	}
+	f.press(playerChar(0, 'л'))
+	if f.audio.IsPlaying() {
+		t.Error("л (K) did not pause")
+	}
+	f.press(playerChar(0, 'л'))
+	if !f.audio.IsPlaying() {
+		t.Error("л (K) again did not go on playing")
+	}
+
+	for _, step := range []struct {
+		key  *vtinput.InputEvent
+		name string
+		want time.Duration
+	}{
+		{playerChar(vtinput.VK_L, 'l'), "L", 10 * time.Second},
+		{playerChar(0, 'д'), "д (L)", 20 * time.Second},
+		{playerChar(vtinput.VK_J, 'j'), "J", 10 * time.Second},
+		{playerChar(0, '5'), "5", 90 * time.Second}, // half of the fake's three minutes
+		{playerChar(0, '0'), "0", 0},
+		{playerChar(0, 'о'), "о (J) at the start", 0},
+	} {
+		f.press(step.key)
+		if got := f.audio.Position(); got != step.want {
+			t.Errorf("%s left the track at %s, want %s", step.name, got, step.want)
+		}
+	}
+
+	volume := f.audio.Volume()
+	f.press(playerChar(0, 'ь'))
+	if f.audio.Volume() != 0 {
+		t.Errorf("ь (M) left the volume at %v, want it muted", f.audio.Volume())
+	}
+	f.press(playerChar(vtinput.VK_M, 'm'))
+	if f.audio.Volume() != volume {
+		t.Errorf("M again set the volume to %v, want %v back", f.audio.Volume(), volume)
+	}
+
+	shift := vtinput.ControlKeyState(vtinput.ShiftPressed)
+	f.press(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: vtinput.VK_N, Char: 'N', ControlKeyState: shift})
+	if got := f.audio.Path(); got != f.path("b.mp3") {
+		t.Errorf("Shift+N played %q, want b.mp3", got)
+	}
+	f.press(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, Char: 'З', ControlKeyState: shift})
+	if got := f.audio.Path(); got != f.path("a.mp3") {
+		t.Errorf("Shift+З (Shift+P) played %q, want a.mp3", got)
+	}
+	if !f.pf.CmdLine.IsEmpty() {
+		t.Errorf("the keys went to the command line too: %q", f.pf.CmdLine.Edit.GetText())
+	}
+}
+
+// The scheme is a setting: with WinAmp's alone K is no key of the player,
+// with YouTube's alone X is not. The command palette runs the command, not
+// its key, so Player: Stop stops whatever the scheme.
+func TestPlayerKeySchemeSetting(t *testing.T) {
+	old := config.App.PlayerKeys
+	t.Cleanup(func() { config.App.PlayerKeys = old })
+
+	for _, c := range []struct {
+		scheme    string
+		plays, no *vtinput.InputEvent
+		name      string
+	}{
+		{config.PlayerKeysWinAmp, playerChar(vtinput.VK_X, 'x'), playerChar(vtinput.VK_K, 'k'), "WinAmp: X plays, K does not"},
+		{config.PlayerKeysYouTube, playerChar(vtinput.VK_K, 'k'), playerChar(vtinput.VK_X, 'x'), "YouTube: K plays, X does not"},
+	} {
+		t.Run(c.scheme, func(t *testing.T) {
+			config.App.PlayerKeys = c.scheme
+			f := newPlayerFixture(t, "a.mp3")
+			f.press(playerKey(vtinput.VK_F5, 0))
+			f.press(playerKey(vtinput.VK_TAB, 0))
+
+			f.press(c.no)
+			if f.audio.Path() != "" {
+				t.Errorf("%s: the key of the other scheme loaded %q", c.name, f.audio.Path())
+			}
+			f.pf.CmdLine.Clear() // where the other scheme's letter went
+			f.press(c.plays)
+			if f.audio.Path() != f.path("a.mp3") {
+				t.Errorf("%s: the key of the scheme loaded %q", c.name, f.audio.Path())
+			}
+			if !RunAction("Panel.Player.Stop") || f.audio.Path() != "" {
+				t.Errorf("%s: Player: Stop from the palette left %q loaded", c.name, f.audio.Path())
+			}
+		})
+	}
+}
+
 // Ctrl+Alt+Left and Right seek from the file panel, without going to the
 // player -- but the action looked for the player in the slot that has the
 // focus, which is the file panel's, and never found it.
