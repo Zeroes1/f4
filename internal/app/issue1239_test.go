@@ -148,7 +148,7 @@ func TestIssue1239F3ShowsTheWholeRow(t *testing.T) {
 
 	owner := vtui.NewCenteredDialog(100, 25, "Settings")
 	vtui.FrameManager.Push(owner)
-	page := (settingsHost{}).HotkeyPage(owner, nil).(*hotkeyPage)
+	page := (settingsHost{}).HotkeyPage(owner, nil, nil).(*hotkeyPage)
 	page.SetPosition(owner.X1+1, owner.Y1+1, owner.X1+60, owner.Y1+20)
 	rows := []hotkeyRow{
 		{Label: "Alpha", Key: "F8", Area: "Shell"},
@@ -193,7 +193,7 @@ func TestIssue1239ListKeysActOnTheSelectedRow(t *testing.T) {
 
 	owner := vtui.NewCenteredDialog(100, 25, "Settings")
 	vtui.FrameManager.Push(owner)
-	page := (settingsHost{}).HotkeyPage(owner, nil).(*hotkeyPage)
+	page := (settingsHost{}).HotkeyPage(owner, nil, nil).(*hotkeyPage)
 	page.SetPosition(owner.X1+1, owner.Y1+1, owner.X1+60, owner.Y1+20)
 	page.SetFocusedItem(page.table)
 

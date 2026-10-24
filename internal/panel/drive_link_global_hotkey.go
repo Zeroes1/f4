@@ -191,14 +191,33 @@ var DriveLinkExtraKeyOwners func(key string) []DriveLinkKeyOwner
 // as its global hot key: the reserved keys first, then the other links, the
 // commands of the panels, the built-in keys, the plugins' keys, the panels'
 // own keys and the application's part. others are the links besides the one
-// being edited.
+// being edited. The commands are those of the live hotkey table, and one the
+// key is taken from writes the table down at once.
 func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner {
+	hm := keymap.GlobalHotkeysMgr
+	owners := driveLinkKeyOwnersIn(hm, key, others)
+	for i := range owners {
+		if release := owners[i].Release; release != nil {
+			owners[i].Release = func() error {
+				if err := release(); err != nil {
+					return err
+				}
+				return hm.SaveError()
+			}
+		}
+	}
+	return owners
+}
+
+// driveLinkKeyOwnersIn is driveLinkKeyOwners with the commands of hm, which
+// may be a draft the Hotkey Configurator edits: a command the key is taken
+// from gives it up in hm, and whoever edits hm writes it down.
+func driveLinkKeyOwnersIn(hm *keymap.HotkeyManager, key string, others []DriveBookmark) []DriveLinkKeyOwner {
 	key = strings.TrimSpace(key)
 	if key == "" {
 		return nil
 	}
 	var owners []DriveLinkKeyOwner
-	hm := keymap.GlobalHotkeysMgr
 
 	// keymap.ini, then f4's Mac layout, turn the key into another before the
 	// key router asks the links, so a link would never see it.
@@ -237,7 +256,7 @@ func driveLinkKeyOwners(key string, others []DriveBookmark) []DriveLinkKeyOwner 
 					// links are never asked, as a Common binding does in
 					// the editor.
 					hm.Bind("Shell", spelling, "None")
-					return hm.SaveError()
+					return nil
 				},
 			})
 		}

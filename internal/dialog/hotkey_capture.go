@@ -17,6 +17,11 @@ type HotkeyAssignFrame struct {
 	area       string
 	onComplete func()
 	shiftHeld  bool
+	// Confirm, when set, gets the key pressed once the frame has closed,
+	// instead of the key being bound at once: it may ask the user first and
+	// calls bind to bind the key and run onComplete. The Hotkey Configurator
+	// asks this way about a key a drive-menu link has (f4#2171).
+	Confirm func(key string, bind func())
 }
 
 func NewHotkeyAssignFrame(hm *keymap.HotkeyManager, actionName, area string, onComplete func()) *HotkeyAssignFrame {
@@ -97,13 +102,19 @@ func (f *HotkeyAssignFrame) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	keyStr := keymap.EventToHotkeyString(&keyEvent)
 
-	if f.hm != nil {
-		f.hm.Bind(f.area, keyStr, f.actionName)
+	bind := func() {
+		if f.hm != nil {
+			f.hm.Bind(f.area, keyStr, f.actionName)
+		}
+		if f.onComplete != nil {
+			f.onComplete()
+		}
 	}
-
 	f.Close()
-	if f.onComplete != nil {
-		f.onComplete()
+	if f.Confirm != nil {
+		f.Confirm(keyStr, bind)
+	} else {
+		bind()
 	}
 	vtui.FrameManager.Redraw()
 	return true

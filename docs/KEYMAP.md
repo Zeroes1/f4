@@ -235,6 +235,12 @@ to find one, type its name into the table (`ctrl y`, `rctrl3`, `enter`). The
 command behind such a row can still be given a key of its own with *Assign*,
 and it runs from the command palette and from macros like any other.
 
+The global hot key of a drive-menu link is a row too, `Link "Downloads"` in
+`Shell`, editable through the link dialog rather than the area and key windows
+(`BOOKMARKS.md`, "In the Hotkey Configurator"). A command given a link's key in
+`Shell` or `Common` asks first whether to take the key from the link: in the
+panels the link would get it before any command.
+
 The commands of the focused quick view and of the focused player are offered
 by the command palette only while they have the focus. Opened then, the palette
 starts with *Quick view:* or *Player:* typed in, so the list opens on them;

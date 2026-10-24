@@ -439,7 +439,7 @@ func TestBuildHotkeyRowsIncludesUnassignedPluginCommand(t *testing.T) {
 	}
 	t.Cleanup(registration.Unregister)
 
-	for _, row := range buildHotkeyRows(keymap.GlobalHotkeysMgr) {
+	for _, row := range buildHotkeyRows(keymap.GlobalHotkeysMgr, nil) {
 		if row.Action == "Plugin.Command.test.hotkey-row" {
 			if row.Label != "Plugin row command" || row.Key != "Shift+F6" || !row.Editable {
 				t.Fatalf("plugin hotkey row = %#v", row)

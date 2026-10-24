@@ -276,6 +276,56 @@ func newCoreRecordSettingsProvider() coreRecordSettingsProvider {
 	return p
 }
 
+// settingsDriveLinkCheckedField holds, in a Drive links record, the global hot
+// key the Hotkey Configurator page put there (settingsDriveLinkKeys). That
+// page opens the link dialog, which checks the key against this window's
+// draft of the hotkey table and may take it from a command there, so Apply
+// does not refuse the key for a command it still finds in the live table.
+// It is not a field: the links file never gets it.
+const settingsDriveLinkCheckedField = "link.GlobalHotkeyChecked"
+
+// settingsDriveLinkKeys is the Hotkey Configurator page's store of the
+// drive-menu links (f4#2171): the Drive links of this window's draft, so the
+// two pages show the same links and Apply writes them with the hotkey table.
+type settingsDriveLinkKeys struct{ c *settingsCenter }
+
+func (s settingsDriveLinkKeys) records() []f4settings.Record {
+	for _, session := range s.c.sessions {
+		if rows, ok := session.draft.Records["drive-links"]; ok {
+			return rows
+		}
+	}
+	return nil
+}
+
+func (s settingsDriveLinkKeys) DriveLinks() []panel.DriveBookmark {
+	var links []panel.DriveBookmark
+	for _, r := range s.records() {
+		links = append(links, panel.DriveBookmark{Name: r.Values["link.Name"], Path: r.Values["link.Path"], Hotkey: r.Values["link.Hotkey"], GlobalHotkey: r.Values["link.GlobalHotkey"]})
+	}
+	return links
+}
+
+func (s settingsDriveLinkKeys) SetDriveLink(index int, link panel.DriveBookmark) error {
+	rows := s.records()
+	if index < 0 || index >= len(rows) {
+		return nil
+	}
+	values := rows[index].Values
+	if values == nil {
+		values = map[string]string{}
+		rows[index].Values = values
+	}
+	values["link.Name"], values["link.Path"], values["link.Hotkey"] = link.Name, link.Path, link.Hotkey
+	if values["link.GlobalHotkey"] != link.GlobalHotkey {
+		values["link.GlobalHotkey"] = link.GlobalHotkey
+		values[settingsDriveLinkCheckedField] = link.GlobalHotkey
+	}
+	s.c.status = ""
+	s.c.updateMatches()
+	return nil
+}
+
 // settingsValidateShortcut rejects a drive-link shortcut the drive menu
 // could never match. The menu compares the stored spelling against
 // keymap.EventToHotkeyString of the key that was pressed, so a spelling is
@@ -298,7 +348,8 @@ func settingsValidateShortcut(value string) error {
 // share it. A key that is new to the file must also be free: this window cannot
 // ask whether to take it from a command, as the link dialog of the drive menu
 // does, so it sends the user there instead. A key the file already has is not
-// asked about again.
+// asked about again, nor one the link dialog of the Hotkey Configurator page
+// checked (settingsDriveLinkCheckedField).
 func settingsValidateDriveLinks(linkPath string, rows []f4settings.Record) error {
 	saved := map[string]bool{}
 	if current, err := panel.LoadDriveBookmarks(linkPath); err == nil {
@@ -328,7 +379,7 @@ func settingsValidateDriveLinks(linkPath string, rows []f4settings.Record) error
 			return settingsError("%s is the global hot key of both %q and %q", keymap.FormatKeyForUI(key), other, name)
 		}
 		holders[strings.ToLower(key)] = name
-		if saved[strings.ToLower(key)] {
+		if saved[strings.ToLower(key)] || strings.EqualFold(strings.TrimSpace(r.Values[settingsDriveLinkCheckedField]), key) {
 			continue
 		}
 		if err := settingsDriveLinkKeyRefusal(key); err != nil {
