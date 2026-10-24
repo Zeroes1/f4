@@ -1623,10 +1623,20 @@ func (c *settingsCenter) makeControl(r *settingsRow) vtui.UIElement {
 		}
 		if f.InputWidth > 1 {
 			// No Capture either: the key pressed in the field is the
-			// value, Delete clears it (a link's global hot key on the
-			// Links page, f4#2171).
+			// value, Delete clears it (a link's global hot key, f4#2171).
+			// The key is checked as it is pressed, as the link dialog
+			// does; this window cannot take a key from what has it, so a
+			// taken one is refused here rather than at Apply. The key the
+			// link has already is not asked about again.
 			e := panel.NewGlobalHotkeyEdit(value, f.InputWidth)
+			initial := strings.TrimSpace(value)
 			e.OnKey = func(key string) {
+				if f.ID == "link.GlobalHotkey" && key != "" && !strings.EqualFold(key, initial) {
+					if err := settingsDriveLinkKeyRefusal(key); err != nil {
+						vtui.ShowMessageOnEx(c.Window, settingsText("Title", "Settings"), settingsErrorText(err), []string{i18n.Msg("vtui.Ok")}, vtui.MessageWarn)
+						return
+					}
+				}
 				e.SetKey(key)
 				change(key)
 			}
