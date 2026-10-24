@@ -57,6 +57,11 @@ type driveBookmarkEditDialog struct {
 	// others are the links besides the one edited: a global hot key is
 	// checked against theirs.
 	others []DriveBookmark
+	// hotkeys is the Hotkey Configurator's draft of the hotkey table when
+	// the configurator opened the dialog (EditDriveLinkIn): the key is
+	// checked against its commands, and one the key is taken from gives it
+	// up there. Nil is the live table, which is written down at once.
+	hotkeys *keymap.HotkeyManager
 	// takenKey is the global hot key the user agreed to take from what had
 	// it, or that nothing had.
 	takenKey string
@@ -258,7 +263,7 @@ func (d *driveBookmarkEditDialog) submit() {
 			d.checkGlobalKey(key, d.submit)
 			return
 		}
-		for _, owner := range driveLinkKeyOwners(key, d.others) {
+		for _, owner := range d.keyOwners(key) {
 			if owner.Release == nil {
 				continue
 			}
@@ -290,7 +295,7 @@ func (d *driveBookmarkEditDialog) offerGlobalKey(key string) {
 // user agrees, at once when nothing has the key. A key the link could never
 // take is refused; "Choose another" leaves the field as it was.
 func (d *driveBookmarkEditDialog) checkGlobalKey(key string, take func()) {
-	owners := driveLinkKeyOwners(key, d.others)
+	owners := d.keyOwners(key)
 	var fixed, all []string
 	for _, owner := range owners {
 		if owner.Fixed {
@@ -318,6 +323,15 @@ func (d *driveBookmarkEditDialog) checkGlobalKey(key string, take func()) {
 		d.takenKey = key
 		take()
 	}
+}
+
+// keyOwners lists what key would be taken from, in the hotkey table the
+// dialog edits (hotkeys).
+func (d *driveBookmarkEditDialog) keyOwners(key string) []DriveLinkKeyOwner {
+	if d.hotkeys != nil {
+		return driveLinkKeyOwnersIn(d.hotkeys, key, d.others)
+	}
+	return driveLinkKeyOwners(key, d.others)
 }
 
 func (d *driveBookmarkEditDialog) refuseGlobalKey(message string) {
