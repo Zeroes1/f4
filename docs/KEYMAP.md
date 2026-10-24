@@ -235,13 +235,6 @@ to find one, type its name into the table (`ctrl y`, `rctrl3`, `enter`). The
 command behind such a row can still be given a key of its own with *Assign*,
 and it runs from the command palette and from macros like any other.
 
-A plugin command's row shows the key the plugin declares for it (`Shift+F1`
-for *Add to archive*) until one is assigned. *Unbind* on such a row removes it
-as `Del` in the plugin menu (F11) does, through `PluginDefaultHotkeysOff`, at
-once rather than with *Save*; *Assign* gives the command a key again. A key the
-plugin handles in its own panel only (`Shift+F4` for NetFox's *Add connection*)
-says *In the plugin's panel* under *When* and cannot be removed this way.
-
 The commands of the focused quick view and of the focused player are offered
 by the command palette only while they have the focus. Opened then, the palette
 starts with *Quick view:* or *Player:* typed in, so the list opens on them;

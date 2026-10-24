@@ -2471,8 +2471,6 @@ Hotkeys.AssignPrompt=Press the desired key combination...
 Hotkeys.AssignCancel=Press Esc to cancel
 Hotkeys.ShowBuiltin=&Built-in keys (%s)
 Hotkeys.BuiltinNote=Built-in key: the window handles it itself. It cannot be reassigned, but the command can be given a key of its own.
-Hotkeys.WhenPluginPanel=In the plugin's panel
-Hotkeys.PluginPanelKeyNote=%s is handled by the plugin's own panel, and only there. It cannot be removed here, but the command can be given a key of its own.
 
 CommandPalette.Title= Command Palette
 CommandPalette.QueryPrompt=>

@@ -358,34 +358,6 @@ func PluginActionDefaultShortcut(name string) string {
 	return ""
 }
 
-// PluginActionDeclaredKey is the hotkey the plugin declares for the command
-// named name, in the hotkey manager's spelling, or "" when it declares none or
-// the user removed it (PluginDefaultHotkeysOff).
-func PluginActionDeclaredKey(name string) string {
-	key := declaredHotkeyString(PluginActionDefaultShortcut(name))
-	if PluginDefaultKeyOff(key) {
-		return ""
-	}
-	return key
-}
-
-// PluginGlobalHotkey reports whether a plugin registered key (in the hotkey
-// manager's spelling) as a global hotkey, one the panels run wherever they
-// are. A key a plugin declares without registering it is handled by the
-// plugin's own panel, and PluginDefaultHotkeysOff does not reach it there.
-func PluginGlobalHotkey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for _, hk := range plughost.GlobalHotkeysSnapshot() {
-		e := &vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: hk.VK, ControlKeyState: hk.Mods}
-		if strings.EqualFold(keymap.EventToHotkeyString(e), key) {
-			return true
-		}
-	}
-	return false
-}
-
 func assignPluginHotkey(actionName, label string, onComplete func()) {
 	hm := keymap.GlobalHotkeysMgr
 	if hm == nil || vtui.FrameManager == nil || !isMenuHotkeyActionName(actionName) {
