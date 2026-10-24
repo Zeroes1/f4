@@ -72,6 +72,13 @@ action that does the same thing. That is what lets the user see every key,
 even one no binding can move, and what lets a feature that picks a key of its
 own (a drive-menu link's global hot key, f4#2171) know the key is taken.
 
+A key the user gives to something other than a command is a row as well: the
+global hot key of a drive-menu link is listed as `Link "<name>"`, and Assign
+there opens the editor that owns it (the link dialog) instead of the area and
+key windows. A feature that adds keys of its own adds its rows to the
+configurator (`buildHotkeyRows`), and the configurator asks before a command
+takes such a key, if the feature would win it.
+
 * **`NativeKeys`** are the keys menus, the KeyBar and the command palette
   advertise. A condition after a colon says when the key works
   (`F3:QuickViewFocused`); the conditions live in

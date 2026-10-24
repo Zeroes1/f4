@@ -440,6 +440,16 @@ provider checks concurrent changes and saves before replacing runtime bindings.
 SearchExactOnHit is available under Keyboard & shortcuts and takes effect when
 the configurator is next opened; it never changes sidebar search behavior.
 
+The table also lists the global hot key of every drive-menu link (f4#2171, see
+`BOOKMARKS.md`). The tab reads and changes them in the window's own draft of the
+Drive links collection, so the Drive links page and the tab show the same keys,
+the tab lists its rows again when it comes back into view, and one Apply writes
+both. Assign on a link row opens the link dialog, which checks the key against
+the tab's draft of the hotkey table and may take it from a command there. The
+record then carries `link.GlobalHotkeyChecked`, not a field and never written
+to the links file, so Apply does not refuse that key for a command only the
+live table still has.
+
 
 ## Contextual editor restoration
 

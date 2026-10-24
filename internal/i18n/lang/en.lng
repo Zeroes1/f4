@@ -2471,6 +2471,9 @@ Hotkeys.AssignPrompt=Press the desired key combination...
 Hotkeys.AssignCancel=Press Esc to cancel
 Hotkeys.ShowBuiltin=&Built-in keys (%s)
 Hotkeys.BuiltinNote=Built-in key: the window handles it itself. It cannot be reassigned, but the command can be given a key of its own.
+Hotkeys.LinkRow=Link "%s"
+Hotkeys.LinkDesc=Opens %s in the active panel
+Hotkeys.LinkKeyBusy=In the panels %s opens link "%s",\nwhich gets the key before any command.\nTake it from the link?
 
 CommandPalette.Title= Command Palette
 CommandPalette.QueryPrompt=>

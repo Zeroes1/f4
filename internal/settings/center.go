@@ -1513,6 +1513,11 @@ func (c *settingsCenter) selectCategory(id string) {
 	c.page.fullPage = nil
 	if id == "hotkeys" {
 		if h, ok := host.(HotkeyPageHost); ok {
+			if refresher, ok := c.hotkeyPage.(interface{ Refresh() }); ok {
+				// The Drive links page may have changed a link's global
+				// hot key since the page was last shown.
+				refresher.Refresh()
+			}
 			if c.hotkeyPage == nil {
 				c.hotkeyPage = h.HotkeyPage(c.Window, func(hm *keymap.HotkeyManager) {
 					for _, session := range c.sessions {
@@ -1527,7 +1532,7 @@ func (c *settingsCenter) selectCategory(id string) {
 					}
 					c.status = ""
 					c.updateMatches()
-				})
+				}, settingsDriveLinkKeys{c})
 			}
 			c.page.fullPage = c.hotkeyPage
 			c.page.AddItem(c.hotkeyPage)

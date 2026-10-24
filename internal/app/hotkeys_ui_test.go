@@ -386,7 +386,7 @@ func TestNativeOnlyActionsStayAssignable(t *testing.T) {
 
 	hm := keymap.NewHotkeyManager("")
 	keymap.GlobalHotkeysMgr = hm
-	rows := buildHotkeyRows(hm)
+	rows := buildHotkeyRows(hm, nil)
 
 	for _, tc := range []struct {
 		action    string
@@ -440,7 +440,7 @@ func TestConfiguredBindingReplacesTheAssignableRow(t *testing.T) {
 	hm.Bind("Common", "CtrlShiftT", "Workspace.Next")
 
 	var empty, bound int
-	for _, row := range buildHotkeyRows(hm) {
+	for _, row := range buildHotkeyRows(hm, nil) {
 		if row.Action != "Workspace.Next" {
 			continue
 		}
@@ -557,7 +557,7 @@ func TestEmbeddedHotkeyPageUsesLiveDialogPalette(t *testing.T) {
 	t.Cleanup(func() { keymap.GlobalHotkeysMgr = previous; vtui.Palette = saved })
 	keymap.GlobalHotkeysMgr = keymap.NewHotkeyManager("")
 	owner := vtui.NewCenteredDialog(80, 25, "Settings")
-	page := (settingsHost{}).HotkeyPage(owner, nil).(*hotkeyPage)
+	page := (settingsHost{}).HotkeyPage(owner, nil, nil).(*hotkeyPage)
 	var rows []vtui.TableRow
 	for i := 0; i < 40; i++ {
 		rows = append(rows, hotkeyRow{Label: "Command", Key: "F8", Editable: true})

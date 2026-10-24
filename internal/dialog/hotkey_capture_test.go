@@ -59,6 +59,33 @@ func TestHotkeyAssignFrame_EscapeClosesWithoutBinding(t *testing.T) {
 	}
 }
 
+// With Confirm set, the key pressed is handed to it once the frame has
+// closed, and nothing is bound until Confirm calls bind: the Hotkey
+// Configurator asks first about a key a drive-menu link has (f4#2171).
+func TestHotkeyAssignFrame_ConfirmBindsOnlyWhenAsked(t *testing.T) {
+	hm := keymap.NewHotkeyManager("")
+	completed := 0
+	f := newTestHotkeyAssignFrame(hm, func() { completed++ })
+	var gotKey string
+	var bind func()
+	f.Confirm = func(key string, b func()) { gotKey, bind = key, b }
+
+	f.ProcessKey(&vtinput.InputEvent{Type: vtinput.KeyEventType, KeyDown: true, VirtualKeyCode: 'P', ControlKeyState: vtinput.LeftCtrlPressed | vtinput.LeftAltPressed})
+	if !f.IsDone() {
+		t.Fatal("the frame stayed open")
+	}
+	if gotKey != "CtrlAltP" || bind == nil {
+		t.Fatalf("Confirm got %q", gotKey)
+	}
+	if got := hm.Bindings["Shell"]["CtrlAltP"]; got != "" || completed != 0 {
+		t.Fatalf("bound %q, completed %d before Confirm agreed", got, completed)
+	}
+	bind()
+	if got := hm.Bindings["Shell"]["CtrlAltP"]; got != "Test.Action" || completed != 1 {
+		t.Fatalf("after bind Shell CtrlAltP = %q, completed %d", got, completed)
+	}
+}
+
 func TestHotkeyAssignFrame_ModifierOnlyKeysAreIgnored(t *testing.T) {
 	codes := []struct {
 		name string
