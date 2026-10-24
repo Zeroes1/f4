@@ -27,6 +27,10 @@ type hotkeyRow struct {
 	Editable  bool
 	Condition string
 	Desc      string
+	// IsLink: the row is the global hot key of the drive-menu link at
+	// LinkIndex in the configurator's links (f4#2171).
+	IsLink    bool
+	LinkIndex int
 }
 
 // hotkeyBuiltinMark marks, in the configurator's first, one-cell column, a
@@ -372,9 +376,10 @@ func selectedHotkeyRow(table *vtui.Table, rows []hotkeyRow) (hotkeyRow, bool) {
 
 // buildHotkeyRows assembles the shortcut inventory the hotkey settings dialog
 // shows: one editable row per configurable binding, one read-only row per
-// framework-owned native chord, and one editable row for every action that has
-// no configurable binding yet.
-func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
+// framework-owned native chord, one editable row for every action that has
+// no configurable binding yet, and one editable row for every drive-menu link
+// in links, with its global hot key or without one.
+func buildHotkeyRows(draft *keymap.HotkeyManager, links []panel.DriveBookmark) []hotkeyRow {
 	if draft == nil {
 		return nil
 	}
@@ -498,6 +503,26 @@ func buildHotkeyRows(draft *keymap.HotkeyManager) []hotkeyRow {
 		})
 	}
 
+	// A link's global hot key opens it from the panels (f4#2171): a key f4
+	// reacts to, so it is a row as well. The link keeps it in the links
+	// file, not in the hotkey table, and the link dialog changes it.
+	for i, link := range links {
+		if strings.TrimSpace(link.Name) == "" || strings.TrimSpace(link.Path) == "" {
+			continue
+		}
+		key := strings.TrimSpace(link.GlobalHotkey)
+		hkRows = append(hkRows, hotkeyRow{
+			Label:     fmt.Sprintf(i18n.Msg("Hotkeys.LinkRow"), strings.TrimSpace(link.Name)),
+			Area:      "Shell",
+			Key:       keymap.FormatKeyForUI(key),
+			RawKey:    key,
+			Editable:  true,
+			Desc:      fmt.Sprintf(i18n.Msg("Hotkeys.LinkDesc"), strings.TrimSpace(link.Path)),
+			IsLink:    true,
+			LinkIndex: i,
+		})
+	}
+
 	sort.Slice(hkRows, func(i, j int) bool {
 		if hkRows[i].Area != hkRows[j].Area {
 			// Rows without an area (shouldn't happen) go last
@@ -542,6 +567,13 @@ func actionHotkeyConfig(pf *panel.PanelsFrame) {
 	}
 	original := keymap.GlobalHotkeysMgr
 	draft := original.CloneForEdit()
+	// The links' global hot keys are edited in a draft of the links file,
+	// which Save writes with the hotkey table. A file that cannot be read
+	// shows no links and is not written.
+	links, err := panel.LoadDriveLinksDraft()
+	if err != nil {
+		vtui.DebugLog("HOTKEYS: drive links: %v", err)
+	}
 
 	dlg, table := vtui.NewTableDialog(w, h, i18n.Msg("Hotkeys.Title"), []vtui.TableColumn{
 		{Title: hotkeyBuiltinMark, Width: 1},
@@ -563,12 +595,15 @@ func actionHotkeyConfig(pf *panel.PanelsFrame) {
 	minW, minH := dlg.MinW, dlg.MinH
 	dlg.AddItem(builtin)
 	dlg.MinW, dlg.MinH = max(minW, cbx2-cbx1+5), minH
-	refresh := configureHotkeyEditor(dlg, table, btnAssign, btnUnbind, builtin, draft, nil, w)
+	refresh := configureHotkeyEditor(dlg, table, btnAssign, btnUnbind, builtin, draft, links, nil, w)
 
 	btnSave.OnClick = func() {
 		original.ReplaceBindingsFrom(draft)
 		original.Save()
 		dlg.Close()
+		if err := links.Save(); err != nil {
+			vtui.ShowMessage(i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{i18n.Msg("vtui.Ok")})
+		}
 	}
 
 	btnCancel.OnClick = func() { dlg.Close() }
@@ -577,7 +612,11 @@ func actionHotkeyConfig(pf *panel.PanelsFrame) {
 	refresh()
 }
 
-func showAreaSelectDialog(hm *keymap.HotkeyManager, actionName, defaultArea, defaultCond string, onComplete func()) {
+// showAreaSelectDialog asks for the area and the condition of a key for
+// actionName, then for the key itself (pushHotkeyAssign). links are the
+// drive-menu links whose global hot keys the key is checked against; nil
+// checks none.
+func showAreaSelectDialog(hm *keymap.HotkeyManager, links panel.DriveLinkStore, actionName, defaultArea, defaultCond string, onComplete func()) {
 	dlg := vtui.NewCenteredDialog(40, 11, i18n.Msg("Hotkeys.SelectTitle"))
 	dlg.ShowClose = true
 
@@ -659,14 +698,56 @@ func showAreaSelectDialog(hm *keymap.HotkeyManager, actionName, defaultArea, def
 
 		dlg.Close()
 		vtui.FrameManager.PostTask(func() {
-			vtui.FrameManager.Push(dialog.NewHotkeyAssignFrame(hm, fullName, area, onComplete))
+			pushHotkeyAssign(hm, links, fullName, area, onComplete)
 		})
 	}
 	vtui.FrameManager.Push(dlg)
 }
 
+// pushHotkeyAssign opens the window a key for actionName in area is pressed
+// in. In the panels the key router asks the drive-menu links before the
+// hotkey table (f4#2171), so a key one of links has as its global hot key is
+// not bound in Shell or Common at once: the user is asked whether to take it
+// from the link or to choose another.
+func pushHotkeyAssign(hm *keymap.HotkeyManager, links panel.DriveLinkStore, actionName, area string, onComplete func()) {
+	frame := dialog.NewHotkeyAssignFrame(hm, actionName, area, onComplete)
+	if links != nil {
+		frame.Confirm = func(key string, bind func()) {
+			current := links.DriveLinks()
+			index, ok := panel.DriveLinkBeforeCommand(current, area, key)
+			if !ok {
+				bind()
+				return
+			}
+			link := current[index]
+			question := fmt.Sprintf(i18n.Msg("Hotkeys.LinkKeyBusy"), keymap.FormatKeyForUI(strings.TrimSpace(link.GlobalHotkey)), strings.TrimSpace(link.Name))
+			buttons := []string{i18n.Msg("DriveLink.Take"), i18n.Msg("DriveLink.ChooseAnother")}
+			vtui.ShowMessage(i18n.Msg("Hotkeys.AssignTitle"), question, buttons).OnResult = func(choice int) {
+				switch choice {
+				case 0:
+				case 1:
+					vtui.FrameManager.PostTask(func() { pushHotkeyAssign(hm, links, actionName, area, onComplete) })
+					return
+				default:
+					// Esc gives the key up, as Esc in the key window does.
+					return
+				}
+				link.GlobalHotkey = ""
+				if err := links.SetDriveLink(index, link); err != nil {
+					vtui.ShowMessage(i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{i18n.Msg("vtui.Ok")})
+					return
+				}
+				bind()
+			}
+		}
+	}
+	vtui.FrameManager.Push(frame)
+}
+
 // configureHotkeyEditor is shared by the legacy dialog and its embedded Settings tab.
-func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUnbind *vtui.Button, builtin *vtui.Checkbox, draft *keymap.HotkeyManager, onChange func(*keymap.HotkeyManager), w int) func() {
+// links are the drive-menu links whose global hot keys the editor lists and
+// changes (f4#2171); nil lists none.
+func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUnbind *vtui.Button, builtin *vtui.Checkbox, draft *keymap.HotkeyManager, links panel.DriveLinkStore, onChange func(*keymap.HotkeyManager), w int) func() {
 	theme.UseTableColors(table)
 	table.ShowScrollBar = true
 	table.Sortable = true // click a column header to sort, again to reverse
@@ -680,7 +761,11 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 		rows = nil
 		// hkRows holds exactly the rows the table shows: selectedHotkeyRow
 		// maps a table position back into it.
-		hkRows = visibleHotkeyRows(buildHotkeyRows(draft))
+		var linkList []panel.DriveBookmark
+		if links != nil {
+			linkList = links.DriveLinks()
+		}
+		hkRows = visibleHotkeyRows(buildHotkeyRows(draft, linkList))
 
 		for _, r := range hkRows {
 			rows = append(rows, r)
@@ -702,9 +787,34 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 		}
 		refresh()
 	}
+	reportLinkError := func(err error) {
+		if err != nil {
+			vtui.ShowMessageOn(dlg, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{i18n.Msg("vtui.Ok")})
+		}
+	}
+	// assign gives the row a key: a command through the area and the key
+	// windows, a link through the link dialog, which checks the key against
+	// the draft (f4#2171). A command the link takes the key from gives it up
+	// in the draft, so the change is reported for both.
+	assign := func(row hotkeyRow) {
+		if !row.Editable {
+			return
+		}
+		if row.IsLink {
+			if links == nil {
+				return
+			}
+			panel.EditDriveLinkIn(draft, links.DriveLinks(), row.LinkIndex, func(link panel.DriveBookmark) {
+				reportLinkError(panel.PutDriveLink(links, row.LinkIndex, link))
+				changed()
+			})
+			return
+		}
+		showAreaSelectDialog(draft, links, row.Action, row.Area, row.Condition, changed)
+	}
 	btnAssign.OnClick = func() {
-		if row, ok := selectedHotkeyRow(table, hkRows); ok && row.Editable {
-			showAreaSelectDialog(draft, row.Action, row.Area, row.Condition, changed)
+		if row, ok := selectedHotkeyRow(table, hkRows); ok {
+			assign(row)
 		}
 	}
 
@@ -714,6 +824,20 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 				question := fmt.Sprintf("%s %s?", action.PlainLabel(i18n.Msg("Hotkeys.BtnUnbind")), row.Key)
 				vtui.ShowMessageOn(dlg, i18n.Msg("Hotkeys.Title"), question, []string{i18n.Msg("vtui.Ok"), i18n.Msg("vtui.Cancel")}).OnResult = func(choice int) {
 					if choice != 0 {
+						return
+					}
+					if row.IsLink {
+						if links == nil {
+							return
+						}
+						current := links.DriveLinks()
+						if row.LinkIndex >= len(current) {
+							return
+						}
+						link := current[row.LinkIndex]
+						link.GlobalHotkey = ""
+						reportLinkError(links.SetDriveLink(row.LinkIndex, link))
+						changed()
 						return
 					}
 					draft.Bind(row.Area, row.RawKey, "None")
@@ -727,8 +851,8 @@ func configureHotkeyEditor(dlg *vtui.Window, table *vtui.Table, btnAssign, btnUn
 		// idx is the table's display position. Use it directly: the table may
 		// be sorted or QuickSearch-filtered, and SelectPos can be observed
 		// after the dispatcher's state has moved on.
-		if row, ok := selectedHotkeyRowAt(table, hkRows, idx); ok && row.Editable {
-			showAreaSelectDialog(draft, row.Action, row.Area, row.Condition, changed)
+		if row, ok := selectedHotkeyRowAt(table, hkRows, idx); ok {
+			assign(row)
 		}
 	}
 
@@ -751,6 +875,16 @@ type hotkeyPage struct {
 	// builtinWidth is the checkbox's own width, kept apart from its position,
 	// which a narrow page cuts.
 	builtinWidth int
+	refresh      func()
+}
+
+// Refresh lists the rows again. The Settings window calls it when the page
+// comes back into view: the Drive links page of the same window may have
+// changed a link's global hot key meanwhile.
+func (p *hotkeyPage) Refresh() {
+	if p.refresh != nil {
+		p.refresh()
+	}
 }
 
 // hotkeyDetailsText is one row of the list in full. The table cuts every cell
@@ -850,7 +984,7 @@ func (settingsHost) HotkeyTableMinPageWidth() int {
 	return HotkeyTableMinPageWidth()
 }
 
-func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyManager)) vtui.UIElement {
+func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyManager), links panel.DriveLinkStore) vtui.UIElement {
 	p := &hotkeyPage{Group: vtui.NewGroup(0, 0, 40, 10), owner: owner}
 	p.SetId("hotkey-configurator")
 	p.table = vtui.NewTable(0, 0, 40, 7, hotkeyTableColumns(nil, 44))
@@ -873,8 +1007,8 @@ func (settingsHost) HotkeyPage(owner *vtui.Window, onChange func(*keymap.HotkeyM
 		p.SetDisabled(true)
 		return p
 	}
-	refresh := configureHotkeyEditor(owner, p.table, p.assign, p.unbind, p.builtin, keymap.GlobalHotkeysMgr.CloneForEdit(), onChange, 44)
-	refresh()
+	p.refresh = configureHotkeyEditor(owner, p.table, p.assign, p.unbind, p.builtin, keymap.GlobalHotkeysMgr.CloneForEdit(), links, onChange, 44)
+	p.refresh()
 	p.SetFocusedItem(p.table)
 	return p
 }

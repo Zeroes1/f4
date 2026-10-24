@@ -2471,6 +2471,9 @@ Hotkeys.AssignPrompt=Нажмите желаемое сочетание клав
 Hotkeys.AssignCancel=Нажмите Esc для отмены
 Hotkeys.ShowBuiltin=&Встроенные клавиши (%s)
 Hotkeys.BuiltinNote=Встроенная клавиша: её обрабатывает само окно. Переназначить её нельзя, но команде можно дать свою клавишу.
+Hotkeys.LinkRow=Ссылка "%s"
+Hotkeys.LinkDesc=Открывает %s в активной панели
+Hotkeys.LinkKeyBusy=В панелях %s открывает ссылку "%s",\nи ссылка получает клавишу раньше любой команды.\nЗабрать её у ссылки?
 
 CommandPalette.Title= Палитра команд
 CommandPalette.QueryPrompt=>

@@ -8,6 +8,7 @@ import (
 	"github.com/unxed/f4/internal/action"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/f4/internal/keymap"
+	"github.com/unxed/f4/internal/panel"
 	"github.com/unxed/vtinput"
 	"github.com/unxed/vtui"
 )
@@ -138,8 +139,17 @@ func (d *commandPaletteDialog) assignKeyToSelected() {
 			i18n.Msg("CommandPalette.AssignUnavailable"), []string{i18n.Msg("vtui.Ok")})
 		return
 	}
-	showAreaSelectDialog(hm, act.Name, act.Area, "", func() {
+	// A key a drive-menu link has is taken from the link only when the user
+	// agrees (pushHotkeyAssign), and written down with the key.
+	links, err := panel.LoadDriveLinksDraft()
+	if err != nil {
+		vtui.DebugLog("PALETTE: drive links: %v", err)
+	}
+	showAreaSelectDialog(hm, links, act.Name, act.Area, "", func() {
 		hm.Save()
+		if err := links.Save(); err != nil {
+			vtui.ShowMessageOn(d.Window, i18n.Msg("DriveLink.ErrorTitle"), fmt.Sprintf(i18n.Msg("DriveLink.SaveError"), err), []string{i18n.Msg("vtui.Ok")})
+		}
 		d.reloadAfterAssign(entry.Key)
 	})
 }

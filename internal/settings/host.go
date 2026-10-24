@@ -27,8 +27,11 @@ var host Host
 func Configure(h Host) { host = h }
 
 // HotkeyPageHost embeds the application's existing shortcut configurator.
+// The page lists and changes the global hot keys of the drive-menu links
+// too (f4#2171), in the store it is given: the window's draft of its Drive
+// links.
 type HotkeyPageHost interface {
-	HotkeyPage(*vtui.Window, func(*keymap.HotkeyManager)) vtui.UIElement
+	HotkeyPage(*vtui.Window, func(*keymap.HotkeyManager), panel.DriveLinkStore) vtui.UIElement
 }
 
 // HotkeyTableSizeHost reports how wide the embedded hotkey table's own page

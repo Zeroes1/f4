@@ -42,7 +42,7 @@ func TestNativeKeysAreRowsOfTheHotkeyConfigurator(t *testing.T) {
 		}
 		return false
 	}
-	rows := buildHotkeyRows(hm)
+	rows := buildHotkeyRows(hm, nil)
 	for _, want := range []struct{ action, key string }{
 		{"Panel.Bookmark.Go3", "RCtrl+3"},
 		{"Panel.Bookmark.Go3", "Ctrl+Alt+3"},
@@ -70,7 +70,7 @@ func TestNativeKeysAreRowsOfTheHotkeyConfigurator(t *testing.T) {
 	// A binding the user puts on a bookmark key replaces it
 	// (ConfigurableHotkeyOwnsPanelBookmark), so its row goes.
 	hm.Bind("Shell", "RCtrl3", "File.Copy")
-	if has(buildHotkeyRows(hm), "Panel.Bookmark.Go3", "RCtrl+3") {
+	if has(buildHotkeyRows(hm, nil), "Panel.Bookmark.Go3", "RCtrl+3") {
 		t.Error("RCtrl+3 is still shown as the bookmark's after it was bound to a command")
 	}
 }
