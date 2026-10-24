@@ -214,10 +214,19 @@ func TestIssue1239ListKeysActOnTheSelectedRow(t *testing.T) {
 		t.Fatalf("Del: Unbind ran %d times, want 1", unbound)
 	}
 
-	// With a search typed, Del edits the search and leaves the binding alone.
+	// With a search typed, Del deletes the character right of the search
+	// cursor and leaves the binding alone.
 	page.table.SetSearchText("ab")
+	press(vtinput.VK_LEFT)
 	press(vtinput.VK_DELETE)
-	if unbound != 1 {
-		t.Fatalf("Del with a search typed unbound a row (%d)", unbound)
+	if unbound != 1 || page.table.SearchText() != "a" {
+		t.Fatalf("Del inside the search: unbound %d, search %q; want 1 and %q", unbound, page.table.SearchText(), "a")
+	}
+	// At the end of the search Del has nothing to delete there, so it
+	// unbinds the selected row, as with no search: a search left typed made
+	// Del on a row do nothing.
+	press(vtinput.VK_DELETE)
+	if unbound != 2 || page.table.SearchText() != "a" {
+		t.Fatalf("Del at the end of the search: unbound %d, search %q; want 2 and %q", unbound, page.table.SearchText(), "a")
 	}
 }
