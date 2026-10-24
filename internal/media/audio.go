@@ -10,11 +10,11 @@ import (
 	"github.com/unxed/vtui"
 )
 
-// audioTrackInfo is what the panel prints in the "128kbps 44kHz stereo"
+// AudioTrackInfo is what the panel prints in the "128kbps 44kHz stereo"
 // slot. Bitrate is the average over the file (size / duration), which is
 // what most players show for VBR anyway; for MP3 the channel mode comes from
 // the first frame header because go-mp3 always emits stereo PCM.
-type audioTrackInfo struct {
+type AudioTrackInfo struct {
 	BitrateKbps int
 	SampleRate  int
 	Mono        bool

@@ -41,7 +41,7 @@ type AudioEngine struct {
 	Path   string
 
 	duration time.Duration
-	info     audioTrackInfo
+	info     AudioTrackInfo
 	volume   float64
 	loaded   bool
 
@@ -209,7 +209,7 @@ func (a *AudioEngine) loadLocked(Path string) error {
 		src = NewLinearResampler(source, srcRate, a.ctxRate)
 	}
 	a.duration = source.Duration
-	a.info = audioTrackInfo{SampleRate: srcRate, Mono: source.Mono, Codec: source.Codec}
+	a.info = AudioTrackInfo{SampleRate: srcRate, Mono: source.Mono, Codec: source.Codec}
 	if st, err := os.Stat(Path); err == nil && a.duration > 0 {
 		a.info.BitrateKbps = int(math.Round(float64(st.Size()) * 8 / a.duration.Seconds() / 1000))
 	} else if err != nil {
@@ -417,7 +417,7 @@ func (a *AudioEngine) Duration() time.Duration {
 	return a.duration
 }
 
-func (a *AudioEngine) Info() audioTrackInfo {
+func (a *AudioEngine) Info() AudioTrackInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.info

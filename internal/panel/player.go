@@ -45,7 +45,7 @@ type PlayerPanel struct {
 	frame   *vtui.BorderedFrame
 	focused bool
 
-	Engine *media.AudioEngine
+	Engine PlayerEngine
 	root   *playlistItem // invisible root; children are the top level
 	rows   []playlistRow // flattened view, rebuilt on every Show
 	cursor int           // index into rows; -1 = control row has the cursor
@@ -100,7 +100,7 @@ func NewPlayerPanel(src *FileSystemPanel) *PlayerPanel {
 	x1, y1, x2, y2 := src.GetPosition()
 	pp := &PlayerPanel{
 		src:    src,
-		Engine: media.NewAudioEngine(),
+		Engine: NewPlayerEngine(),
 		root:   &playlistItem{Folder: true, Expanded: true},
 		cursor: -1,
 		button: playerBtnPlay,
