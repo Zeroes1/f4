@@ -65,10 +65,10 @@ the mixer.
 ```
 ┌ Player ──────────────────────────────────┐
 │ ♪ Artist - Title            (marquee)     │  row 0
-│ 02:15 / 04:31       128kbps 44kHz stereo  │  row 1
-│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  row 2 ┐ spectrum
-│ █████████████▇▆▅▄ ...                     │  row 3 ┘ (16 levels)
-│ [|<] [ > ] [||] [ # ] [>|] ████████░░ 80% │  row 4
+│ 02:15 ━━━━━━━━━━━━●──────────────── 04:31 │  row 1: playback bar
+│ MP3 128kbps 44kHz stereo                  │  row 2
+│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  (spectrum, a setting)
+│ [|<] [ > ] [||] [ # ] [>|] ████████░░ 80% │  buttons
 ├───────────────────────────────────────────┤
 │ ▾ Album                                   │
 │   ♪ 01 - First track                      │  ♪ = loaded now
@@ -77,6 +77,11 @@ the mixer.
 │   loose.mp3                               │
 └───────────────────────────────────────────┘
 ```
+
+The playback bar fills between the two clocks as the track plays; a track
+whose length is not known leaves it empty. The spectrum row is off by
+default (Settings, Panels, Audio player, `PlayerSpectrum`): it said little
+and took a row from the playlist (#2185).
 
 The spectrum is a Goertzel evaluation at 16–24 log-spaced frequencies over
 the tap's ring buffer, drawn with eighth-block characters. It costs a few

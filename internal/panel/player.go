@@ -94,7 +94,14 @@ const (
 	playerBtnCount
 )
 
-const playerControlRows = 5 // title, time/info, spectrum×2, buttons
+// controlRows is the height of the block above the playlist: the title, the
+// playback bar, the stream facts, the spectrum when it is on, the buttons.
+func (pp *PlayerPanel) controlRows() int {
+	if config.App.PlayerSpectrum {
+		return 5
+	}
+	return 4
+}
 
 const playerSeekStep = 5 * time.Second
 
@@ -889,7 +896,7 @@ func (pp *PlayerPanel) newFolder(after *playlistItem) {
 // ---- drawing ---------------------------------------------------------
 
 func (pp *PlayerPanel) playlistHeight() int {
-	return pp.Y2 - pp.Y1 - 2 - playerControlRows - 1
+	return pp.Y2 - pp.Y1 - 2 - pp.controlRows() - 1
 }
 
 func fmtClock(d time.Duration) string {
@@ -933,11 +940,13 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	}
 	put(y, title, text)
 
-	// Row 1: clock and stream facts.
-	clock := "--:-- / --:--"
+	// Row 1: where the track is, on a bar between the two clocks.
+	loaded := pp.Engine.IsLoaded()
+	put(y+1, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), text)
+
+	// Row 2: stream facts.
 	facts := ""
-	if pp.Engine.IsLoaded() {
-		clock = fmtClock(pp.Engine.Position()) + " / " + fmtClock(pp.Engine.Duration())
+	if loaded {
 		info := pp.Engine.Info()
 		mode := i18n.Msg("Player.Stereo")
 		if info.Mono {
@@ -948,40 +957,34 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 			facts = info.Codec + " " + facts
 		}
 	}
-	line := clock
-	if gap := w - runewidth.StringWidth(clock) - runewidth.StringWidth(facts); gap > 1 {
-		line += strings.Repeat(" ", gap) + facts
-	}
-	put(y+1, line, text)
+	put(y+2, facts, text)
 
-	// Rows 2-3: spectrum, two rows of eighth blocks = 16 levels per band.
-	bands := min(24, max(4, (w-2)/2))
-	spec := pp.Engine.Spectrum(bands)
-	if !pp.Engine.IsPlaying() {
-		for i := range spec {
-			spec[i] = 0
+	// Row 3, when it is on: the spectrum, one row of eighth blocks.
+	if config.App.PlayerSpectrum {
+		bands := min(24, max(4, (w-2)/2))
+		spec := pp.Engine.Spectrum(bands)
+		var row strings.Builder
+		for _, v := range spec {
+			if !pp.Engine.IsPlaying() {
+				v = 0
+			}
+			row.WriteString(eighthBlock(int(v*8+0.5)) + " ")
 		}
+		put(y+3, row.String(), text)
 	}
-	var hiRow, loRow strings.Builder
-	for _, v := range spec {
-		lvl := int(v*16 + 0.5)
-		hiRow.WriteString(eighthBlock(lvl-8) + " ")
-		loRow.WriteString(eighthBlock(lvl) + " ")
-	}
-	put(y+2, hiRow.String(), text)
-	put(y+3, loRow.String(), text)
 
-	// Row 4: buttons and volume.
+	// The last row: buttons and volume.
+	by := y + pp.controlRows() - 1
 	labels := []string{"|<", " > ", "||", " # ", ">|"}
 	bx := x
-	scr.FillRect(x, y+4, pp.X2-1, y+4, ' ', text)
+	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
 	for i, l := range labels {
 		attr := text
 		if pp.focused && pp.cursor < 0 && pp.button == i {
 			attr = hi
 		}
 		cells := vtui.StringToCharInfo("["+l+"]", attr)
-		scr.Write(bx, y+4, cells)
+		scr.Write(bx, by, cells)
 		bx += len(cells) + 1
 	}
 	volW := w - (bx - x) - 5
@@ -992,18 +995,18 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		if pp.focused && pp.cursor < 0 && pp.button == playerBtnVolume {
 			attr = hi
 		}
-		scr.Write(bx, y+4, vtui.StringToCharInfo(bar, attr))
-		scr.Write(bx+volW, y+4, vtui.StringToCharInfo(fmt.Sprintf("%3d%%", int(pp.Engine.Volume()*100+0.5)), text))
+		scr.Write(bx, by, vtui.StringToCharInfo(bar, attr))
+		scr.Write(bx+volW, by, vtui.StringToCharInfo(fmt.Sprintf("%3d%%", int(pp.Engine.Volume()*100+0.5)), text))
 	}
 
 	// Separator on the frame's own lines.
 	sep := "├" + strings.Repeat("─", w) + "┤"
-	scr.Write(pp.X1, y+playerControlRows, vtui.StringToCharInfo(sep, box))
+	scr.Write(pp.X1, by+1, vtui.StringToCharInfo(sep, box))
 
 	// Playlist.
 	pp.rebuildRows()
 	ph := pp.playlistHeight()
-	py := y + playerControlRows + 1
+	py := by + 2
 	if ph <= 0 {
 		return
 	}
@@ -1045,6 +1048,28 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		}
 		put(py+i, s, attr)
 	}
+}
+
+// playbackBar is the row with the clocks at its two ends and a bar between
+// them that fills as the track plays: "02:15 ━━━━━━●────── 04:31". A track
+// whose length is not known leaves the bar empty.
+func playbackBar(pos, dur time.Duration, loaded bool, w int) string {
+	left, right := "--:--", "--:--"
+	if loaded {
+		left = fmtClock(pos)
+		if dur > 0 {
+			right = fmtClock(dur)
+		}
+	}
+	barW := w - runewidth.StringWidth(left) - runewidth.StringWidth(right) - 2
+	if barW < 3 {
+		return left + " / " + right
+	}
+	if !loaded || dur <= 0 {
+		return left + " " + strings.Repeat("─", barW) + " " + right
+	}
+	knob := int(float64(barW-1)*min(1, max(0, float64(pos)/float64(dur))) + 0.5)
+	return left + " " + strings.Repeat("━", knob) + "●" + strings.Repeat("─", barW-knob-1) + " " + right
 }
 
 func eighthBlock(level int) string {
