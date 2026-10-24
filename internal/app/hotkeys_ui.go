@@ -940,7 +940,9 @@ func (p *hotkeyPage) ProcessKey(e *vtinput.InputEvent) bool {
 	// F4 changes the selected entry, Ins adds to it, Del removes. The buttons
 	// stay, but reaching them takes the focus off the list, and it is then not
 	// clear which row they act on (#1239). While a search text is being typed
-	// Del belongs to the search.
+	// Del deletes the character right of its cursor, as in an input line. With
+	// none there it would do nothing, so it unbinds the selected row instead:
+	// a search left typed made Del on a row look broken.
 	if e.KeyDown && e.ControlKeyState&modifiers == 0 {
 		switch e.VirtualKeyCode {
 		case vtinput.VK_F4, vtinput.VK_INSERT:
@@ -949,10 +951,16 @@ func (p *hotkeyPage) ProcessKey(e *vtinput.InputEvent) bool {
 				return true
 			}
 		case vtinput.VK_DELETE:
-			if p.table.SearchText() == "" && p.unbind.OnClick != nil {
-				p.unbind.OnClick()
-				return true
+			if search := p.table.SearchText(); search != "" {
+				p.table.ProcessKey(e)
+				if p.table.SearchText() != search {
+					return true
+				}
 			}
+			if p.unbind.OnClick != nil {
+				p.unbind.OnClick()
+			}
+			return true
 		}
 	}
 	previous := p.WrapFocus
