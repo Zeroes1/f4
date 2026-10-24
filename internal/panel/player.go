@@ -8,10 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
+	"github.com/unxed/f4/internal/keymap"
 	"github.com/unxed/f4/internal/media"
 	"github.com/unxed/f4/internal/theme"
 	id3 "github.com/unxed/id3-go"
@@ -419,12 +421,15 @@ func (pp *PlayerPanel) PlayFile(files []string, pos int) bool {
 }
 
 // AutoPlayFile follows the file-panel cursor without restarting a track when
-// an arrow key merely hits the edge of the list.
+// an arrow key merely hits the edge of the list. It follows the cursor only
+// while the player plays the panel's files, or nothing: a track of the
+// playlist stays, or Tab to the player and back and the next arrow in the
+// file panel swapped it for the file under the cursor (#2185).
 func (pp *PlayerPanel) AutoPlayFile(files []string, pos int) bool {
 	if pp.Engine == nil || pos < 0 || pos >= len(files) {
 		return false
 	}
-	if pp.current != nil && pp.current.Path == files[pos] && pp.Engine.IsLoaded() {
+	if pp.Engine.IsLoaded() && (pp.queue == nil || pp.current != nil && pp.current.Path == files[pos]) {
 		return false
 	}
 	return pp.PlayFile(files, pos)
@@ -565,11 +570,11 @@ func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	}
 	handled := true
 	switch {
-	case !ctrl && !shift && e.Char != 0 && pp.globalChar(e.Char):
+	case !ctrl && pp.globalKey(e):
 	case pp.cursor < 0:
 		handled = pp.controlKey(e, ctrl)
 	default:
-		handled = pp.playlistKey(e, ctrl)
+		handled = pp.playlistKey(e, ctrl, shift)
 	}
 	if !handled && !ctrl && isFilePanelOnlyKey(e.VirtualKeyCode) {
 		// F3/F4/F5/F8 and their Shift variants, Ins, Del: with the player
@@ -587,10 +592,10 @@ func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
 
 // OwnsKey: while the player has the focus it keeps (altPanelKeyOwner) the
 // characters -- WinAmp's Z X C V B, + and - for the volume -- which must not
-// go to the command line, Enter and Del, and Ctrl with the arrows and Home,
-// which move playlist items (docs/PLAYER.md) instead of the split between the
-// panels. The file keys no focused alternative panel lets through
-// (altPanelListsFiles, #380, #902).
+// go to the command line, Enter and Del, and Shift or Ctrl with the arrows,
+// which move playlist items (docs/PLAYER.md) instead of marking files or the
+// split between the panels, and Ctrl+Home. The file keys no focused
+// alternative panel lets through (altPanelListsFiles, #380, #902).
 func (pp *PlayerPanel) OwnsKey(e *vtinput.InputEvent) bool {
 	if e.Char != 0 || e.VirtualKeyCode == vtinput.VK_RETURN || e.VirtualKeyCode == vtinput.VK_DELETE {
 		return true
@@ -598,37 +603,66 @@ func (pp *PlayerPanel) OwnsKey(e *vtinput.InputEvent) bool {
 	ctrl := e.ControlKeyState&(vtinput.LeftCtrlPressed|vtinput.RightCtrlPressed) != 0
 	alt := e.ControlKeyState&(vtinput.LeftAltPressed|vtinput.RightAltPressed) != 0
 	shift := e.ControlKeyState&vtinput.ShiftPressed != 0
-	if ctrl && !alt && !shift {
-		switch e.VirtualKeyCode {
-		case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_HOME:
-			return true
-		}
+	if alt || ctrl == shift {
+		return false
+	}
+	switch e.VirtualKeyCode {
+	case vtinput.VK_UP, vtinput.VK_DOWN, vtinput.VK_LEFT, vtinput.VK_RIGHT:
+		return true
+	case vtinput.VK_HOME:
+		return ctrl
 	}
 	return false
 }
 
-// globalChar handles the WinAmp letter keys and volume characters that
-// work wherever the cursor is.
-func (pp *PlayerPanel) globalChar(ch rune) bool {
-	switch ch {
-	case 'z', 'Z':
+// globalKey handles the WinAmp letter keys and the volume keys, which work
+// wherever the cursor is. The letters are told by the key they are on, not
+// by what it types: with the Russian layout on, Z types я, and the player
+// still has to go back a track (#2185).
+func (pp *PlayerPanel) globalKey(e *vtinput.InputEvent) bool {
+	switch playerLetterKey(e) {
+	case vtinput.VK_Z:
 		pp.pressButton(playerBtnPrev)
-	case 'x', 'X':
+		return true
+	case vtinput.VK_X:
 		pp.pressButton(playerBtnPlay)
-	case 'c', 'C':
+		return true
+	case vtinput.VK_C:
 		pp.pressButton(playerBtnPause)
-	case 'v', 'V':
+		return true
+	case vtinput.VK_V:
 		pp.pressButton(playerBtnStop)
-	case 'b', 'B':
+		return true
+	case vtinput.VK_B:
 		pp.pressButton(playerBtnNext)
-	case '+', '=':
+		return true
+	}
+	switch {
+	case e.Char == '+' || e.Char == '=' || e.VirtualKeyCode == vtinput.VK_OEM_PLUS || e.VirtualKeyCode == vtinput.VK_ADD:
 		pp.adjustVolume(+0.05)
-	case '-', '_':
+	case e.Char == '-' || e.Char == '_' || e.VirtualKeyCode == vtinput.VK_OEM_MINUS || e.VirtualKeyCode == vtinput.VK_SUBTRACT:
 		pp.adjustVolume(-0.05)
 	default:
 		return false
 	}
 	return true
+}
+
+// playerLetterKey is the Latin letter key e was typed on, or 0. That is the
+// virtual key when the terminal or the window reported one; a terminal that
+// sends only the character gives a letter of the layout that is on, and a
+// Russian one is put back on its key.
+func playerLetterKey(e *vtinput.InputEvent) uint16 {
+	if vk := e.VirtualKeyCode; vk >= vtinput.VK_A && vk <= vtinput.VK_Z {
+		return vk
+	}
+	if e.VirtualKeyCode != 0 || e.Char == 0 {
+		return 0
+	}
+	if r := unicode.ToUpper(e.Char); r >= 'A' && r <= 'Z' {
+		return uint16(r)
+	}
+	return keymap.LayoutLetterVK(e.Char)
 }
 
 func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent, ctrl bool) bool {
@@ -662,13 +696,21 @@ func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent, ctrl bool) bool {
 	case vtinput.VK_UP:
 		// Top of the column: nothing above, but swallow so the file
 		// panel below the alt does not react.
+	case vtinput.VK_F7:
+		// On the buttons too, and with the playlist still empty, where the
+		// cursor never leaves them: the folder goes to the end (#2185).
+		pp.newFolder(nil)
 	default:
 		return false
 	}
 	return true
 }
 
-func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
+// playlistKey: Shift with an arrow moves the item under the cursor, and so
+// does Ctrl, which is what the player had first. Shift is the one that works
+// everywhere: macOS keeps Ctrl with the arrows for Mission Control and the
+// switching of Spaces and never lets them reach the terminal (#2185).
+func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool {
 	pp.rebuildRows()
 	if pp.cursor >= len(pp.rows) {
 		pp.cursor = len(pp.rows) - 1
@@ -676,7 +718,8 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
 	if pp.cursor < 0 {
 		return pp.controlKey(e, ctrl)
 	}
-	if !ctrl && pp.Engine.IsLoaded() {
+	move := ctrl || shift
+	if !move && pp.Engine.IsLoaded() {
 		switch e.VirtualKeyCode {
 		case vtinput.VK_LEFT:
 			pp.Engine.Seek(-playerSeekStep)
@@ -694,7 +737,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
 	}
 	switch e.VirtualKeyCode {
 	case vtinput.VK_UP:
-		if ctrl {
+		if move {
 			pp.moveItem(it, -1)
 		} else if pp.cursor == 0 {
 			pp.cursor = -1
@@ -702,7 +745,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
 			pp.cursor--
 		}
 	case vtinput.VK_DOWN:
-		if ctrl {
+		if move {
 			pp.moveItem(it, +1)
 		} else if pp.cursor < len(pp.rows)-1 {
 			pp.cursor++
@@ -720,7 +763,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
 	case vtinput.VK_END:
 		pp.cursor = len(pp.rows) - 1
 	case vtinput.VK_LEFT:
-		if ctrl {
+		if move {
 			pp.moveOut(it)
 		} else if it.Folder && it.Expanded {
 			it.Expanded = false
@@ -729,7 +772,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl bool) bool {
 			pp.cursorTo(it.parent)
 		}
 	case vtinput.VK_RIGHT:
-		if ctrl {
+		if move {
 			pp.moveInto(it)
 		} else if it.Folder && !it.Expanded {
 			it.Expanded = true

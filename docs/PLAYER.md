@@ -100,13 +100,28 @@ hop between the controls and the playlist. Instead the panel is one column:
 | playlist         | Enter          | play track / toggle folder            |
 | playlist         | Space          | pause/resume what is playing, or play the track if nothing is |
 | playlist         | Left / Right   | collapse / expand; Left on a track goes to its folder |
-| playlist         | Ctrl+Up/Down   | reorder among siblings                |
-| playlist         | Ctrl+Right     | move into the nearest folder above    |
-| playlist         | Ctrl+Left      | move out of the folder, right after it |
+| playlist         | Shift+Up/Down  | reorder among siblings                |
+| playlist         | Shift+Right    | move into the nearest folder above    |
+| playlist         | Shift+Left     | move out of the folder, right after it |
 | playlist         | Del            | remove (stops playback if it was the current track) |
 | playlist         | F7             | new folder after the cursor           |
+| control row      | F7             | new folder at the end of the playlist |
 | anywhere         | Z X C V B      | prev / play / pause / stop / next (WinAmp) |
 | anywhere         | + / −          | volume                                |
+| file panel       | Ctrl+Alt+Left/Right | seek 5 s without leaving the file panel |
+
+Ctrl with the arrows still moves playlist items too, where it reaches f4:
+macOS keeps Ctrl+Up/Down/Left/Right for Mission Control and the switching
+of Spaces, which is why Shift is the key that is documented (#2185).
+Z X C V B are matched by the key, not by the character it types, so they
+work with the Russian layout on: the virtual key when the terminal reports
+one, else the character put back on its Latin key
+(`keymap.LayoutLetterVK`).
+
+With the player open, the cursor of the file panel it was opened from is
+followed: moving onto a recording plays it. That happens only while the
+player plays the panel's files or nothing at all; a track started from the
+playlist is never swapped for the file under the cursor (#2185).
 
 `F5` in the other panel adds the selection: directories are walked
 recursively and become folders (nested ones too), non-MP3 files are

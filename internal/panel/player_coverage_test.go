@@ -35,12 +35,12 @@ func TestPlayerShowRendersPlaylistStates(t *testing.T) {
 func TestPlayerGlobalAndControlKeys(t *testing.T) {
 	pp := newTestPlayerPanel()
 	t.Cleanup(pp.Close)
-	for _, ch := range []rune{'z', 'x', 'c', 'v', 'b', '+', '=', '-', '_'} {
-		if !pp.globalChar(ch) {
-			t.Errorf("globalChar(%q) was not handled", ch)
+	for _, ch := range []rune{'z', 'x', 'c', 'v', 'b', '+', '=', '-', '_', 'я', 'Ч', 'с', 'м', 'и'} {
+		if !pp.globalKey(&vtinput.InputEvent{KeyDown: true, Char: ch}) {
+			t.Errorf("globalKey(%q) was not handled", ch)
 		}
 	}
-	if pp.globalChar('?') {
+	if pp.globalKey(&vtinput.InputEvent{KeyDown: true, Char: '?'}) {
 		t.Error("unknown global character was handled")
 	}
 	for _, vk := range []uint16{vtinput.VK_LEFT, vtinput.VK_RIGHT, vtinput.VK_HOME, vtinput.VK_END, vtinput.VK_DOWN, vtinput.VK_NEXT, vtinput.VK_RETURN, vtinput.VK_SPACE, vtinput.VK_UP} {

@@ -101,9 +101,18 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 			"owns them; what the keys do is audited where they are handled",
 	},
 	"panel.(*PlayerPanel).OwnsKey": {
-		areas:     []string{"Shell"},
-		chords:    []string{"Enter", "Del", "CtrlUp", "CtrlDown", "CtrlLeft", "CtrlRight", "CtrlHome"},
+		areas: []string{"Shell"},
+		chords: []string{"Enter", "Del", "ShiftUp", "ShiftDown", "ShiftLeft", "ShiftRight",
+			"CtrlUp", "CtrlDown", "CtrlLeft", "CtrlRight", "CtrlHome"},
 		rationale: "the focused player takes its keys ahead of the hotkey table (Panel.Player.*)",
+	},
+	"panel.(*PlayerPanel).globalKey": {
+		areas:     []string{"Shell"},
+		chords:    []string{"Z", "X", "C", "V", "B", "VK_BB", "VK_BD", "Add", "Subtract"},
+		rationale: "the player's WinAmp keys and its volume, wherever its cursor is (Panel.Player.*)",
+	},
+	"panel.playerLetterKey": {
+		infrastructure: true, rationale: "tells the letter key of a keystroke whatever the layout, for the player's WinAmp keys",
 	},
 	"app.(*AIChatPanel).OwnsKey": {
 		areas:     []string{"Shell"},
@@ -171,14 +180,14 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 	},
 	"panel.(*PlayerPanel).controlKey": {
 		areas:     []string{"Shell"},
-		chords:    []string{"Left", "Right", "Enter", "Space"},
+		chords:    []string{"Left", "Right", "Enter", "Space", "F7"},
 		nav:       []string{"DOWN", "END", "HOME", "NEXT", "UP"},
-		rationale: "the player's button row: the arrows seek or move between buttons, Enter and Space press one",
+		rationale: "the player's button row: the arrows seek or move between buttons, Enter and Space press one, F7 makes a playlist folder",
 	},
 	"panel.(*PlayerPanel).playlistKey": {
 		areas: []string{"Shell"},
-		chords: []string{"Left", "Right", "CtrlUp", "CtrlDown", "CtrlHome", "CtrlLeft", "CtrlRight",
-			"Enter", "Space", "Del", "F7"},
+		chords: []string{"Left", "Right", "ShiftUp", "ShiftDown", "ShiftLeft", "ShiftRight",
+			"CtrlUp", "CtrlDown", "CtrlHome", "CtrlLeft", "CtrlRight", "Enter", "Space", "Del", "F7"},
 		nav:       []string{"DOWN", "END", "HOME", "NEXT", "PRIOR", "UP"},
 		rationale: "the player's playlist (Panel.Player.*)",
 	},
@@ -309,7 +318,7 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 	"keymap.TranslateKeyToKitty":       {infrastructure: true, rationale: "encodes a keystroke in the kitty keyboard protocol"},
 	"keymap.TranslateLegacySpecialKey": {infrastructure: true, rationale: "encodes a keystroke for a legacy terminal"},
 	"keymap.ctrlCharFromVK":            {infrastructure: true, rationale: "the control character of a Ctrl key"},
-	"keymap.layoutShortcutVK":          {infrastructure: true, rationale: "maps a non-Latin layout back to the Latin key"},
+	"keymap.LayoutLetterVK":            {infrastructure: true, rationale: "maps a non-Latin layout back to the Latin key"},
 	"keymap.var farKeyNames":           {infrastructure: true, rationale: "the table of key names"},
 	"keymap.var vkSpelledHotkeys":      {infrastructure: true, rationale: "the keys named after their virtual key"},
 	"keymap.win32UnicodeChar":          {infrastructure: true, rationale: "the character of a win32-input-mode keystroke"},
