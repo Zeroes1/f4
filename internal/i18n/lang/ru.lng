@@ -2471,6 +2471,8 @@ Hotkeys.AssignPrompt=Нажмите желаемое сочетание клав
 Hotkeys.AssignCancel=Нажмите Esc для отмены
 Hotkeys.ShowBuiltin=&Встроенные клавиши (%s)
 Hotkeys.BuiltinNote=Встроенная клавиша: её обрабатывает само окно. Переназначить её нельзя, но команде можно дать свою клавишу.
+Hotkeys.WhenPluginPanel=В панели плагина
+Hotkeys.PluginPanelKeyNote=%s обрабатывает сама панель плагина, и только в ней. Снять эту клавишу здесь нельзя, но команде можно дать свою клавишу.
 
 CommandPalette.Title= Палитра команд
 CommandPalette.QueryPrompt=>
