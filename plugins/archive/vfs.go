@@ -90,6 +90,11 @@ type ArchiveVFS struct {
 	fsys   archive.FileSystem
 	closer io.Closer
 
+	// sevenzipReader provides random access for 7z solid archives
+	sevenzipReader *sevenzip.Reader
+	// sevenzipFile is the underlying file handle for the sevenzip reader
+	sevenzipFile *os.File
+
 	activeCount  int
 	isClosed     bool
 	cleanupTimer *time.Timer
@@ -133,7 +138,45 @@ func (v *ArchiveVFS) ensureFSLocked() error {
 		return err
 	}
 	v.fsys = reopened
+
+	// Create sevenzip.Reader for 7z archives to enable random access
+	if v.sevenzipReader == nil && isSevenZipFormat(v.format) {
+		v.createSevenZipReader()
+	}
 	return nil
+}
+
+func (v *ArchiveVFS) createSevenZipReader() {
+	path := v.activePath()
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return
+	}
+
+	// Check if password is needed
+	var r *sevenzip.Reader
+	if v.password != "" {
+		r, err = sevenzip.NewReaderWithPassword(file, info.Size(), v.password)
+	} else {
+		r, err = sevenzip.NewReader(file, info.Size())
+	}
+	if err != nil {
+		_ = file.Close()
+		return
+	}
+	v.sevenzipReader = r
+	v.sevenzipFile = file
+}
+
+func isSevenZipFormat(format string) bool {
+	lower := strings.ToLower(format)
+	return lower == "7z" || lower == "fallback" || strings.HasSuffix(lower, ".7z")
 }
 
 func (v *ArchiveVFS) bindStreamContext(ctx context.Context) {
@@ -783,6 +826,124 @@ func archiveFileCRC(info fs.FileInfo) (uint32, bool) {
 	return 0, false
 }
 
+// sevenzipReadWrapper provides random access to 7z archive members
+// using the sevenzip.Reader pool for solid archive support.
+type sevenzipReadWrapper struct {
+	v           *ArchiveVFS
+	once        sync.Once
+	mu          sync.Mutex
+	reader      io.ReadCloser
+	fsPath      string
+	size        int64
+	crc32       uint32
+	hasCRC32    bool
+	readPos     int64
+	closed      bool
+}
+
+func (w *sevenzipReadWrapper) Read(ctx context.Context, p []byte) (int, error) {
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return 0, errors.New("reader closed")
+	}
+	reader := w.reader
+	w.mu.Unlock()
+
+	if reader == nil {
+		return 0, errors.New("sevenzip reader not initialized")
+	}
+
+	n, err := reader.Read(p)
+	if n > 0 {
+		w.mu.Lock()
+		w.readPos += int64(n)
+		w.mu.Unlock()
+	}
+	if err == io.EOF {
+		w.mu.Lock()
+		shortRead := w.hasCRC32 && w.size >= 0 && w.readPos < w.size
+		w.mu.Unlock()
+		if shortRead {
+			err = newArchivePasswordValidationError("extracted %d bytes, want %d", w.readPos, w.size)
+		}
+	}
+	return n, err
+}
+
+func (w *sevenzipReadWrapper) ReadAt(ctx context.Context, p []byte, off int64) (int, error) {
+	if ctx.Err() != nil {
+		return 0, ctx.Err()
+	}
+	if off < 0 {
+		return 0, fmt.Errorf("negative member read offset %d", off)
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+	w.mu.Lock()
+	if w.closed {
+		w.mu.Unlock()
+		return 0, errors.New("reader closed")
+	}
+	reader := w.reader
+	w.mu.Unlock()
+
+	if reader == nil {
+		return 0, errors.New("sevenzip reader not initialized")
+	}
+
+	// Check if reader supports ReadAt
+	if readerAt, ok := reader.(io.ReaderAt); ok {
+		if w.size >= 0 && off >= w.size {
+			return 0, io.EOF
+		}
+		return readerAt.ReadAt(p, off)
+	}
+
+	// Fallback: seek and read
+	if seeker, ok := reader.(io.Seeker); ok {
+		if _, err := seeker.Seek(off, io.SeekStart); err != nil {
+			return 0, err
+		}
+		if w.size >= 0 && off >= w.size {
+			return 0, io.EOF
+		}
+		return reader.Read(p)
+	}
+
+	return 0, errors.New("sevenzip reader does not support random access")
+}
+
+func (w *sevenzipReadWrapper) Close() error {
+	w.once.Do(func() {
+		w.mu.Lock()
+		if w.reader != nil {
+			_ = w.reader.Close()
+			w.reader = nil
+		}
+		w.closed = true
+		w.mu.Unlock()
+		w.v.decrementActive()
+	})
+	return nil
+}
+
+func (w *sevenzipReadWrapper) Size() int64 {
+	return w.size
+}
+
+func (w *sevenzipReadWrapper) TempPath() string {
+	return ""
+}
+
+func (w *sevenzipReadWrapper) LocalPath() (string, bool) {
+	return "", false
+}
+
 // reopenAfterPassword replaces the member handle after the archive backend
 // reports an encrypted payload while reading it. Some formats validate the
 // password lazily, so Open may succeed and the first Read may be the point at
@@ -1382,13 +1543,10 @@ func (w *archiveReadWrapper) Read(ctx context.Context, p []byte) (int, error) {
 		v.bindStreamContext(ctx)
 	}
 
-	// 7z may return a full-sized, garbage payload with EOF for a wrong
-	// password when its headers remain visible, and a ZipCrypto member whose
-	// wrong password slipped past the one-byte check yields garbage until the
-	// CRC is compared at EOF. Materialize such members before exposing bytes
-	// so the size/CRC checks can retry without leaking data to the caller.
-	// Unencrypted TAR/ZIP keep their lazy and random-access paths unchanged.
-	if v != nil && (strings.EqualFold(filepath.Ext(v.displayName), ".7z") || v.passwordInstalled()) {
+	// Password-protected archives may return garbage for wrong passwords;
+	// materialize such members so size/CRC checks can retry without leaking data.
+	// Unencrypted TAR/ZIP/7z keep their lazy and random-access paths unchanged.
+	if v != nil && v.passwordInstalled() {
 		if err := w.materialize(ctx, false); err != nil {
 			return 0, err
 		}
@@ -1737,6 +1895,47 @@ func (v *ArchiveVFS) Open(ctx context.Context, path string) (vfs.ReadAtCloser, e
 	if err == nil && info != nil {
 		size = info.Size()
 		expectedCRC, hasExpectedCRC = archiveFileCRC(info)
+	}
+
+	// For 7z archives, use sevenzip.Reader for random access if available
+	v.mu.Lock()
+	sevenzipReader := v.sevenzipReader
+	is7z := sevenzipReader != nil && (strings.EqualFold(filepath.Ext(v.displayName), ".7z") || strings.HasSuffix(strings.ToLower(v.format), ".7z"))
+	v.mu.Unlock()
+
+	if is7z {
+		// Use sevenzip.Reader for random access
+		fileName := fsPath
+		if idx := strings.LastIndex(fileName, "/"); idx >= 0 {
+			fileName = fileName[idx+1:]
+		}
+		
+		sevenzipFile := sevenzipReader.File
+		var targetFile *sevenzip.File
+		for _, f := range sevenzipFile {
+			if f.Name == fileName || f.Name == fsPath {
+				targetFile = f
+				break
+			}
+		}
+		
+		if targetFile != nil {
+			// Open the file using sevenzip random access
+			rc, err := targetFile.Open()
+			if err == nil {
+				_ = srcFile.Close() // Close the original file handle
+				close(openDone)
+				return &sevenzipReadWrapper{
+					v:        v,
+					reader:   rc,
+					fsPath:   fsPath,
+					size:     int64(targetFile.UncompressedSize),
+					crc32:    targetFile.CRC32,
+					hasCRC32: targetFile.CRC32 != 0,
+				}, nil
+			}
+			_ = rc.Close()
+		}
 	}
 
 	if update != nil || reporter != nil {
@@ -2246,6 +2445,11 @@ func (v *ArchiveVFS) performCleanup() error {
 	if v.fsys != nil {
 		_ = v.fsys.Close() // The archive index is read-only and no longer needed.
 		v.fsys = nil
+	}
+	if v.sevenzipFile != nil {
+		_ = v.sevenzipFile.Close()
+		v.sevenzipFile = nil
+		v.sevenzipReader = nil
 	}
 	if v.closer != nil {
 		err := v.closer.Close()
