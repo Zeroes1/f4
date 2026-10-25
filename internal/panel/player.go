@@ -106,6 +106,12 @@ func (pp *PlayerPanel) controlRows() int {
 
 const playerSeekStep = 5 * time.Second
 
+// playerHideSymbol is on the button that sends the player to the background,
+// drawn as a title button: [-], or with rounded glyphs in a window, " - ". A
+// minus, as on the minimize button of a window; ASCII, which every font has,
+// and in the middle of the cell, where the line of the border is.
+const playerHideSymbol = "-"
+
 // The rows above the playlist the cursor stops on: the buttons, and above
 // them the playback bar, where the arrows seek.
 const (
@@ -199,6 +205,20 @@ func (pp *PlayerPanel) AskClose(proceed func()) {
 			proceed()
 		}
 	}
+}
+
+// closePlayer closes pp without the question AskClose asks: what it plays
+// goes on in the background, as after In background there, and with nothing
+// loaded the player just closes (#2185). I in the player, the button in its
+// top right corner and Panel.Player.ToBackground do it.
+func (pf *PanelsFrame) closePlayer(pp *PlayerPanel) bool {
+	for slot, a := range pf.AltPanels {
+		if p, ok := a.(*PlayerPanel); ok && p == pp {
+			pf.closeAltPanel(slot, nil)
+			return true
+		}
+	}
+	return false
 }
 
 // ---- playlist model ---------------------------------------------------
@@ -424,6 +444,7 @@ const (
 	PlayerSeekBack10
 	PlayerSeekForward10
 	PlayerToggleKeyHints
+	PlayerToBackground
 )
 
 // Do does cmd and reports whether it was one the player knows.
@@ -458,6 +479,10 @@ func (pp *PlayerPanel) Do(cmd PlayerCommand) bool {
 	case PlayerToggleKeyHints:
 		config.App.PlayerKeyHints = !config.App.PlayerKeyHints
 		config.RequestSaveConfig()
+	case PlayerToBackground:
+		if pf := FindPanelsFrameAnyScreen(); pf != nil {
+			pf.closePlayer(pp)
+		}
 	default:
 		return false
 	}
@@ -546,7 +571,8 @@ func (pp *PlayerPanel) globalKey(e *vtinput.InputEvent) bool {
 // letter scheme scheme. WinAmp: Z X C V B. YouTube: K play or pause, J and L
 // ten seconds back and forward, M mute, Shift+P and Shift+N the previous and
 // the next track. The two share no key, so both can be on. H, with either,
-// shows the keys on the player and hides them again.
+// shows the keys on the player and hides them again, and I, YouTube's key of
+// its miniplayer, closes the player and leaves the music playing.
 func playerKeyCommand(e *vtinput.InputEvent, scheme string) (PlayerCommand, bool) {
 	winamp := scheme != config.PlayerKeysYouTube
 	youtube := scheme != config.PlayerKeysWinAmp
@@ -554,6 +580,8 @@ func playerKeyCommand(e *vtinput.InputEvent, scheme string) (PlayerCommand, bool
 	switch letter := playerLetterKey(e); {
 	case letter == vtinput.VK_H:
 		return PlayerToggleKeyHints, true
+	case letter == vtinput.VK_I:
+		return PlayerToBackground, true
 	case winamp && letter == vtinput.VK_Z:
 		return PlayerPrevious, true
 	case winamp && letter == vtinput.VK_X:
@@ -931,6 +959,14 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	}
 	row := y + 1
 	pp.layout = playerLayout{barY: row}
+	// The button in the top right corner that closes the player and leaves
+	// the music playing, while there is music to leave. It is right by the
+	// corner, as the ♪ that marks the music then is (DrawPlayerIndicator):
+	// with the player on the right the two take the same cells.
+	if loaded && w >= 16 {
+		pp.layout.hideX = pp.X2 - 3
+		vtui.NewPainter(scr).DrawTitleButton(pp.layout.hideX, pp.Y1, playerHideSymbol, box)
+	}
 	if config.App.PlayerBar {
 		// Where the track is, on a bar between the two clocks, and the
 		// stream facts under it. While the bar is dragged its knob is where

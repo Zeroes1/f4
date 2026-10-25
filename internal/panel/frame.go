@@ -4368,7 +4368,7 @@ func (pf *PanelsFrame) ProcessMouse(e *vtinput.InputEvent) bool {
 		}
 	}
 
-	if pf.openMenuBarFromClick(e, my) {
+	if pf.playerHideClick(e, mx, my) || pf.openMenuBarFromClick(e, my) {
 		return true
 	}
 
@@ -5524,24 +5524,29 @@ type altPanelCloseAsker interface {
 func (pf *PanelsFrame) closeAltPanelAsking(slot int, then func()) {
 	a := pf.AltPanels[slot]
 	proceed := func() {
-		if pf.AltPanels[slot] != a {
-			return // closed or replaced while the question was open
+		if pf.AltPanels[slot] == a { // not closed or replaced while the question was open
+			pf.closeAltPanel(slot, then)
 		}
-		if c, ok := a.(interface{ Close() }); ok {
-			c.Close()
-		}
-		pf.AltPanels[slot] = nil
-		if then != nil {
-			then()
-		}
-		pf.ResizeConsole(pf.LastW, pf.LastH)
-		vtui.FrameManager.HardRefresh()
 	}
 	if asker, ok := a.(altPanelCloseAsker); ok {
 		asker.AskClose(proceed)
 		return
 	}
 	proceed()
+}
+
+// closeAltPanel closes the alternative panel in slot without asking, and does
+// then after it.
+func (pf *PanelsFrame) closeAltPanel(slot int, then func()) {
+	if c, ok := pf.AltPanels[slot].(interface{ Close() }); ok {
+		c.Close()
+	}
+	pf.AltPanels[slot] = nil
+	if then != nil {
+		then()
+	}
+	pf.ResizeConsole(pf.LastW, pf.LastH)
+	vtui.FrameManager.HardRefresh()
 }
 
 func (pf *PanelsFrame) RefreshAll() {
