@@ -108,6 +108,13 @@ the playlist. Each row keeps its arrows whatever plays: they used to seek on
 the buttons and in the playlist while a track was loaded, so the cursor could
 not get from Play to Stop then, nor fold a folder (#2185).
 
+The volume slider is the last stop of the control row, past Next, and Left
+and Right turn the volume there; Up and Down lead off it as off a button.
+The row is entered from the bar or the playlist on the button it was left
+on, and on Next when it was left on the slider (`toButtons`): it remembered
+the slider, so coming back put the cursor where no arrow could reach a
+button again (#2185).
+
 | Cursor on        | Key            | Action                                |
 |------------------|----------------|---------------------------------------|
 | playback bar     | Left / Right   | seek 5 s back / forward               |

@@ -280,7 +280,9 @@ func (pp *PlayerPanel) rebuildRows() {
 	}
 	walk(pp.root, 0)
 	if pp.cursor >= len(pp.rows) {
-		pp.cursor = len(pp.rows) - 1
+		if pp.cursor = len(pp.rows) - 1; pp.cursor < 0 {
+			pp.toButtons() // the playlist is empty now
+		}
 	}
 }
 
@@ -615,9 +617,11 @@ func playerLetterKey(e *vtinput.InputEvent) uint16 {
 }
 
 // controlKey: on the buttons Left and Right go from one to the next, and on
-// the volume slider make it louder or quieter, whether a track is loaded or
-// not. They used to seek while one was, so nobody could get from Play to
-// Stop with the arrows while it played (#2185); seeking is on the bar above.
+// the volume slider, the last stop of the row, make it louder or quieter,
+// whether a track is loaded or not. They used to seek while one was, so
+// nobody could get from Play to Stop with the arrows while it played (#2185);
+// seeking is on the bar above. Up and Down leave the slider as they leave a
+// button, and come back to a button (toButtons).
 func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent) bool {
 	switch e.VirtualKeyCode {
 	case vtinput.VK_LEFT:
@@ -654,6 +658,18 @@ func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent) bool {
 	return true
 }
 
+// toButtons puts the cursor on the row of the buttons from the row above or
+// below. The row keeps the button it was on, but not the volume slider at its
+// end: Left and Right turn the volume there, so a row entered on the slider
+// let no arrow get to a button again (#2185). The cursor is then on Next, the
+// button beside the slider.
+func (pp *PlayerPanel) toButtons() {
+	pp.cursor = playerCursorButtons
+	if pp.button == playerBtnVolume {
+		pp.button = playerBtnNext
+	}
+}
+
 // barKey: the playback bar, or the clock with the bar off, is a row of the
 // cursor's own above the buttons, and Left and Right there move the track
 // five seconds. Up is the top of the column: nothing above, but the key is
@@ -665,7 +681,7 @@ func (pp *PlayerPanel) barKey(e *vtinput.InputEvent) bool {
 	case vtinput.VK_RIGHT:
 		pp.SeekBy(playerSeekStep)
 	case vtinput.VK_DOWN, vtinput.VK_NEXT:
-		pp.cursor = playerCursorButtons
+		pp.toButtons()
 	case vtinput.VK_UP, vtinput.VK_PRIOR:
 	case vtinput.VK_RETURN, vtinput.VK_SPACE:
 		pp.Do(PlayerPlayPause)
@@ -683,11 +699,7 @@ func (pp *PlayerPanel) barKey(e *vtinput.InputEvent) bool {
 // switching of Spaces and never lets them reach the terminal (#2185).
 func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool {
 	pp.rebuildRows()
-	if pp.cursor >= len(pp.rows) {
-		pp.cursor = len(pp.rows) - 1
-	}
-	if pp.cursor < 0 {
-		pp.cursor = playerCursorButtons
+	if pp.cursor < 0 { // the playlist is empty, and the cursor on the buttons
 		return pp.controlKey(e)
 	}
 	// Left and Right fold and unfold a folder, and Left takes a track to
@@ -704,7 +716,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		if move {
 			pp.moveItem(it, -1)
 		} else if pp.cursor == 0 {
-			pp.cursor = playerCursorButtons
+			pp.toButtons()
 		} else {
 			pp.cursor--
 		}
@@ -720,7 +732,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		pp.cursor = min(len(pp.rows)-1, pp.cursor+page)
 	case vtinput.VK_HOME:
 		if ctrl {
-			pp.cursor = playerCursorButtons
+			pp.toButtons()
 		} else {
 			pp.cursor = 0
 		}

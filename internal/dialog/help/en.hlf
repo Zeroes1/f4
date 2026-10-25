@@ -1051,9 +1051,10 @@ and the other formats need ffmpeg.
   #Up, Down#                Move the cursor; Ctrl+Home goes to the buttons.
 
   #Left, Right#             On the bar: seek 5 seconds. On the buttons: the
-                          next button, or the volume on its slider. In the
-                          playlist: fold or unfold a folder; Left on a track
-                          goes to its folder.
+                          next button; past the last one is the volume
+                          slider, where they turn the volume, and Up or
+                          Down lead off it. In the playlist: fold or unfold
+                          a folder; Left on a track goes to its folder.
 
   #Enter, Space#            Press the button, play the track, fold or unfold
                           the folder; on the bar, play or pause.
