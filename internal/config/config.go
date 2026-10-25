@@ -485,7 +485,6 @@ type F4Config struct {
 	DirSizeCountsFolders     bool   // folder size (F3, quick view) also counts the size file systems give the folders themselves, as far2l does (f4#2005)
 	PlayerBar                bool   // the audio player (Ctrl+Shift+M) draws a playback bar between its clocks (f4#2185)
 	PlayerSpectrum           bool   // the audio player draws the spectrum of what plays, on by default as it always was (f4#2185)
-	PlayerUnicodeButtons     bool   // the player's buttons are the Unicode media symbols, not ASCII; off by default, as not every font has them (f4#2185)
 	PlayerKeys               string // the player's letter keys: PlayerKeysBoth, PlayerKeysWinAmp or PlayerKeysYouTube (f4#2185)
 	PlayerKeyHints           bool   // the player shows its keys on its buttons and in its border; H flips it (f4#2185)
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
@@ -773,7 +772,6 @@ var App = F4Config{
 	DirSizeCountsFolders:     false,
 	PlayerBar:                true,
 	PlayerSpectrum:           true,
-	PlayerUnicodeButtons:     false,
 	PlayerKeys:               PlayerKeysBoth,
 	PlayerKeyHints:           false,
 	EscTogglePanels:          true,
@@ -1068,7 +1066,6 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.DirSizeCountsFolders = merged.GetString("Panel", "DirSizeCountsFolders", "0") == "1"
 	cfg.PlayerBar = merged.GetString("Panel", "PlayerBar", "1") != "0"
 	cfg.PlayerSpectrum = merged.GetString("Panel", "PlayerSpectrum", "1") != "0"
-	cfg.PlayerUnicodeButtons = merged.GetString("Panel", "PlayerUnicodeButtons", "0") == "1"
 	cfg.PlayerKeys = ParsePlayerKeys(merged.GetString("Panel", "PlayerKeys", PlayerKeysBoth))
 	cfg.PlayerKeyHints = merged.GetString("Panel", "PlayerKeyHints", "0") == "1"
 	cfg.EscTogglePanels = merged.GetString("Panel", "EscTogglePanels", "1") == "1"
@@ -1446,7 +1443,6 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "DirSizeCountsFolders = %d\n", map[bool]int{true: 1, false: 0}[cfg.DirSizeCountsFolders])
 	fmt.Fprintf(&sb, "PlayerBar = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerBar])
 	fmt.Fprintf(&sb, "PlayerSpectrum = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerSpectrum])
-	fmt.Fprintf(&sb, "PlayerUnicodeButtons = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerUnicodeButtons])
 	fmt.Fprintf(&sb, "PlayerKeys = %s\n", ParsePlayerKeys(cfg.PlayerKeys))
 	fmt.Fprintf(&sb, "PlayerKeyHints = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerKeyHints])
 	fmt.Fprintf(&sb, "EscTogglePanels = %d\n", map[bool]int{true: 1, false: 0}[cfg.EscTogglePanels])

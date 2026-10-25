@@ -86,23 +86,6 @@ are settings, both on by default (Settings, Panels, Audio player,
 facts share row 1, "02:15 / 04:31   MP3 128kbps...", which with the spectrum
 on is the layout the player had before the bar.
 
-The buttons are ASCII in brackets, `[|<] [ > ] [||] [ # ] [>|]`, unless
-`PlayerUnicodeButtons` (same group, off by default) draws them with symbols,
-` |◄   ►   ▌▌   ■   ►| `, a space at each side and no brackets (#2185).
-`playerButtonLabels` builds both, with the letters of the keys while they
-are shown.
-
-The symbols are those of code page 437, not the media symbols ⏮ ⏸ ⏹ ⏭.
-Those came with Unicode 6 and 7 as emoji, and classic monospace fonts never
-got them: on macOS only Apple Color Emoji (192 MB) and STIX Two Math carry
-them, on Linux not DejaVu, and vtui's GUI loads a fallback font whole, held
-twice by gg, about 366 MiB for the emoji font. ◄ ► ▌ ■ are in the fonts of
-a Windows console (Consolas, Lucida Console and Courier New declare code
-page 437), which never falls back to another font, and in Menlo and DejaVu
-Sans Mono. Monaco, the macOS system monospace font the GUI takes by default,
-has none of them; there they come from a fallback font like the ♪ of the
-title does.
-
 The spectrum is a Goertzel evaluation at 16–24 log-spaced frequencies over
 the tap's ring buffer, drawn with eighth-block characters. It costs a few
 thousand multiply-adds per repaint at ~7 Hz and needs no FFT package; the

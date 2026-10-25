@@ -1024,8 +1024,7 @@ between the player and the file panel.
   From the top the player shows what plays, the playback bar between two
 clocks, the facts about the stream, the spectrum, the buttons with the
 volume slider, and the playlist. The bar and the spectrum can be turned off
-in ~Settings~SettingsCenter@ (Panels, Audio player), and the buttons drawn
-with Unicode symbols instead of ASCII.
+in ~Settings~SettingsCenter@ (Panels, Audio player).
 
   MP3, WAV, FLAC and Ogg Vorbis play by themselves; AAC, M4A, Opus, WMA, AMR
 and the other formats need ffmpeg.

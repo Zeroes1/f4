@@ -1015,9 +1015,17 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		row += 2
 	}
 
-	// The last row: buttons and volume.
+	// The last row: buttons and volume. While the keys are shown (H) each
+	// button carries the letter that presses it.
 	by := row
-	labels := playerButtonLabels(config.App.PlayerUnicodeButtons, config.App.PlayerKeyHints, config.App.PlayerKeys)
+	labels := []string{"|<", " > ", "||", " # ", ">|"}
+	if config.App.PlayerKeyHints {
+		for i, key := range playerButtonKeys(config.App.PlayerKeys) {
+			if key != "" {
+				labels[i] = key + " " + strings.TrimSpace(labels[i])
+			}
+		}
+	}
 	bx := x
 	pp.layout.buttonsY = by
 	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
@@ -1026,7 +1034,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		if pp.focused && pp.cursor == playerCursorButtons && pp.button == i {
 			attr = hi
 		}
-		cells := vtui.StringToCharInfo(l, attr)
+		cells := vtui.StringToCharInfo("["+l+"]", attr)
 		scr.Write(bx, by, cells)
 		pp.layout.buttons[i] = [2]int{bx, bx + len(cells) - 1}
 		bx += len(cells) + 1
@@ -1165,36 +1173,6 @@ func playerButtonKeys(scheme string) [5]string {
 		return [5]string{"⇧P", "K", "K", "", "⇧N"}
 	}
 	return [5]string{"Z", "X", "C", "V", "B"}
-}
-
-// playerButtonLabels are the buttons as Show draws them: ASCII in brackets,
-// as they always were, or with symbols in symbols of code page 437, a space at
-// each side and no brackets (PlayerUnicodeButtons, #2185). While the keys are
-// shown (hints) each button carries the letter that presses it.
-//
-// Not ⏮ ⏸ ⏹ ⏭: they are emoji of Unicode 6 and 7, which classic monospace
-// fonts do not have. On macOS only Apple Color Emoji and STIX Two Math carry
-// them, and vtui's GUI loads the whole 192 MB of the emoji font, twice, for
-// them. ◄ ► ▌ ■ are in code page 437, which the fonts of a Windows console
-// declare (Consolas, Lucida Console, Courier New), so a console that never
-// falls back to another font draws them too; Menlo and DejaVu Sans Mono have
-// them as well.
-func playerButtonLabels(symbols, hints bool, scheme string) [5]string {
-	faces := [5]string{"|<", " > ", "||", " # ", ">|"}
-	left, right := "[", "]"
-	if symbols {
-		faces = [5]string{"|◄", "►", "▌▌", "■", "►|"}
-		left, right = " ", " "
-	}
-	keys := playerButtonKeys(scheme)
-	var labels [5]string
-	for i, face := range faces {
-		if hints && keys[i] != "" {
-			face = keys[i] + " " + strings.TrimSpace(face)
-		}
-		labels[i] = left + face + right
-	}
-	return labels
 }
 
 // playbackBar is the row with the clocks at its two ends and a bar between
