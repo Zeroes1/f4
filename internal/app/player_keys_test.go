@@ -77,7 +77,25 @@ func newPlayerFixture(t *testing.T, files ...string) *playerFixture {
 func (f *playerFixture) press(e *vtinput.InputEvent) {
 	f.t.Helper()
 	pressKey(f.pf, e)
+	f.settle()
 	f.pf.Show(f.scr)
+}
+
+// pressIn is a key pressed in a dialog over the panels, which the frame
+// manager drops from the screen once the key closed it.
+func (f *playerFixture) pressIn(dlg vtui.Frame, e *vtinput.InputEvent) {
+	f.t.Helper()
+	pressKey(dlg, e)
+	f.settle()
+	f.pf.Show(f.scr)
+}
+
+// settle drops the frames a key closed, as the frame manager's loop does
+// after each event; a test has no loop.
+func (f *playerFixture) settle() {
+	for top := vtui.FrameManager.GetTopFrame(); top != nil && top != f.pf && top.IsDone(); top = vtui.FrameManager.GetTopFrame() {
+		vtui.FrameManager.Pop()
+	}
 }
 
 // newFolder is F7 in the player and name typed into the dialog it opens.
@@ -91,8 +109,7 @@ func (f *playerFixture) newFolder(name string) {
 	for _, ch := range name {
 		pressKey(dlg, playerChar(0, ch))
 	}
-	pressKey(dlg, playerKey(vtinput.VK_RETURN, 0))
-	f.pf.Show(f.scr)
+	f.pressIn(dlg, playerKey(vtinput.VK_RETURN, 0))
 }
 
 func (f *playerFixture) path(name string) string { return filepath.Join(f.dir, name) }

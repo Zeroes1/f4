@@ -2,7 +2,6 @@ package panel
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,32 +42,17 @@ import (
 // (WinAmp's or YouTube's) and +/- for volume work anywhere in the panel.
 type PlayerPanel struct {
 	vtui.ScreenObject
+	// The session is what plays (player_session.go); the panel shows it
+	// and has the cursor.
+	*playerSession
 	src     *FileSystemPanel
 	frame   *vtui.BorderedFrame
 	focused bool
 
-	Engine PlayerEngine
-	root   *playlistItem // invisible root; children are the top level
 	rows   []playlistRow // flattened view, rebuilt on every Show
 	cursor int           // index into rows, or playerCursorButtons / playerCursorBar
 	button int           // focused control when cursor == playerCursorButtons
 	top    int           // first visible playlist row
-
-	current *playlistItem // the track loaded in the engine, if any
-	marquee int
-	unmuted float64 // the volume M brings back
-
-	// queue is the file panel's audio files when the current track came
-	// from Enter in the panel rather than the playlist; queuePos is the
-	// current one. Nil while the playlist drives playback.
-	queue    []string
-	queuePos int
-
-	ffmpegWarned bool // the install message is shown once per panel
-	//lastTick time.Time // fix linter error
-	status string // one-line error/notice shown instead of the title
-
-	stop chan struct{}
 }
 
 type playlistItem struct {
@@ -122,12 +106,10 @@ const (
 func NewPlayerPanel(src *FileSystemPanel) *PlayerPanel {
 	x1, y1, x2, y2 := src.GetPosition()
 	pp := &PlayerPanel{
-		src:    src,
-		Engine: NewPlayerEngine(),
-		root:   &playlistItem{Folder: true, Expanded: true},
-		cursor: -1,
-		button: playerBtnPlay,
-		stop:   make(chan struct{}),
+		playerSession: openPlayerSession(),
+		src:           src,
+		cursor:        playerCursorButtons,
+		button:        playerBtnPlay,
 	}
 	pp.SetVisible(true)
 	pp.frame = vtui.NewBorderedFrame(x1, y1, x2, y2, vtui.SingleBox, i18n.Msg("Player.Title"))
@@ -135,8 +117,11 @@ func NewPlayerPanel(src *FileSystemPanel) *PlayerPanel {
 	pp.frame.ColorTitleIdx = theme.ColPanelTitle
 	pp.frame.ColorBackgroundIdx = theme.ColPanelText
 	pp.SetPosition(x1, y1, x2, y2)
-	pp.loadPlaylist()
-	go pp.tick()
+	// A player opened over music playing in the background shows it as it
+	// is, with the cursor on the track that plays.
+	if pp.current != nil {
+		pp.cursorTo(pp.current)
+	}
 	return pp
 }
 
@@ -177,66 +162,38 @@ func (pp *PlayerPanel) GetSelectedName() string {
 	return ""
 }
 
-// Close stops playback and the repaint ticker. Playback is tied to the
-// panel on purpose: with no panel there is nothing to control it from.
+// Close is the panel going away. The music it played goes on in the
+// background (playerSession); the question whether it should comes before
+// the close (AskClose).
 func (pp *PlayerPanel) Close() {
-	select {
-	case <-pp.stop:
-	default:
-		close(pp.stop)
+	if pp.playerSession != nil {
+		pp.leave()
 	}
-	pp.Engine.Close()
 }
 
-// tick repaints while something is playing so the clock, the marquee and
-// the spectrum move, and advances to the next track when one ends. It
-// never touches UI state itself; everything happens inside PostTask.
-func (pp *PlayerPanel) tick() {
-	t := time.NewTicker(150 * time.Millisecond)
-	defer t.Stop()
-	for {
-		select {
-		case <-pp.stop:
-			return
-		case <-t.C:
-			if !pp.Engine.IsLoaded() {
-				continue
-			}
-			vtui.FrameManager.PostTask(func() {
-				if pp.Engine.Finished() {
-					if !pp.playRelative(+1) {
-						pp.Engine.Stop()
-						pp.current = nil
-					}
-				}
-				pp.marquee++
-				vtui.FrameManager.Redraw()
-			})
+// AskClose: closing the player while music plays asks whether to go on
+// playing it in the background or to stop it; Cancel and Esc keep the player
+// open. With nothing loaded, or another player still showing it, the player
+// just closes.
+func (pp *PlayerPanel) AskClose(proceed func()) {
+	if pp.playerSession == nil || pp.views > 1 || !pp.Engine.IsLoaded() {
+		proceed()
+		return
+	}
+	dlg := vtui.ShowMessage(i18n.Msg("Player.Title"), i18n.Msg("Player.CloseWhilePlaying"),
+		[]string{i18n.Msg("Player.PlayInBackground"), i18n.Msg("Player.StopPlaying"), i18n.Msg("vtui.Cancel")})
+	dlg.OnResult = func(code int) {
+		switch code {
+		case 0:
+			proceed()
+		case 1:
+			pp.stopPlaying()
+			proceed()
 		}
 	}
 }
 
 // ---- playlist model ---------------------------------------------------
-
-func playlistFile() string {
-	return filepath.Join(config.GetF4ConfigDir(), "playlist.json")
-}
-
-func (pp *PlayerPanel) loadPlaylist() {
-	data, err := os.ReadFile(playlistFile())
-	if err != nil {
-		return
-	}
-	_ = unmarshalPlaylist(data, pp.root)
-}
-
-func (pp *PlayerPanel) savePlaylist() {
-	data, err := marshalPlaylist(pp.root)
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(playlistFile(), data, 0o600)
-}
 
 func marshalPlaylist(root *playlistItem) ([]byte, error) {
 	return json.MarshalIndent(root.Children, "", " ")
@@ -410,144 +367,7 @@ func trackDisplayName(path string) string {
 	return base
 }
 
-// ---- playback ---------------------------------------------------------
-
-func (pp *PlayerPanel) playItem(it *playlistItem) bool {
-	if it == nil || it.Folder {
-		return false
-	}
-	// A playlist track takes over from the file panel queue.
-	if it.parent != nil {
-		pp.queue = nil
-	}
-	pp.status = ""
-	if err := pp.Engine.Load(it.Path); err != nil {
-		pp.status = err.Error()
-		pp.current = nil
-		if errors.Is(err, media.ErrNeedFFmpeg) {
-			pp.status = fmt.Sprintf(i18n.Msg("Player.NeedFFmpeg"), filepath.Ext(it.Path))
-			if !pp.ffmpegWarned {
-				pp.ffmpegWarned = true
-				vtui.ShowMessage(i18n.Msg("Player.Title"), media.ToolFFmpeg.MissingMessage(), []string{i18n.Msg("vtui.Ok")})
-			}
-		}
-		return false
-	}
-	pp.current = it
-	pp.marquee = 0
-	pp.Engine.Play()
-	return true
-}
-
-// PlayFile plays one file that is not in the playlist — the one under the
-// cursor of the file panel — and remembers its neighbours so that playback
-// can go on to the next recording, and |< >| move within the folder. The
-// list is the panel's audio files in panel order; pos is the one to play.
-func (pp *PlayerPanel) PlayFile(files []string, pos int) bool {
-	if pos < 0 || pos >= len(files) {
-		return false
-	}
-	it := &playlistItem{Name: trackDisplayName(files[pos]), Path: files[pos]}
-	if !pp.playItem(it) {
-		return false
-	}
-	pp.queue = append([]string(nil), files...)
-	pp.queuePos = pos
-	return true
-}
-
-// AutoPlayFile follows the file-panel cursor without restarting a track when
-// an arrow key merely hits the edge of the list. It follows the cursor only
-// while the player plays the panel's files, or nothing: a track of the
-// playlist stays, or Tab to the player and back and the next arrow in the
-// file panel swapped it for the file under the cursor (#2185).
-func (pp *PlayerPanel) AutoPlayFile(files []string, pos int) bool {
-	if pp.Engine == nil || pos < 0 || pos >= len(files) {
-		return false
-	}
-	if pp.Engine.IsLoaded() && (pp.queue == nil || pp.current != nil && pp.current.Path == files[pos]) {
-		return false
-	}
-	return pp.PlayFile(files, pos)
-}
-
-// StopIfPlaying stops playback when the current track is one of paths.
-// The delete action calls it before removing files: an open file cannot be
-// deleted on Windows, and a player that carries on reading a file that is
-// gone is not what anybody expects on the others. The queue forgets the
-// files too so the player does not step onto them later.
-func (pp *PlayerPanel) StopIfPlaying(paths []string) {
-	set := make(map[string]bool, len(paths))
-	for _, p := range paths {
-		set[filepath.Clean(p)] = true
-	}
-	if pp.current != nil && set[filepath.Clean(pp.current.Path)] {
-		pp.Engine.Stop()
-		pp.current = nil
-	}
-	if pp.queue == nil {
-		return
-	}
-	kept := pp.queue[:0]
-	pos := pp.queuePos
-	for i, p := range pp.queue {
-		if set[filepath.Clean(p)] {
-			if i < pp.queuePos {
-				pos--
-			}
-			continue
-		}
-		kept = append(kept, p)
-	}
-	pp.queue = kept
-	pp.queuePos = max(-1, min(pos, len(kept)-1))
-}
-
-// playQueueRelative steps through the file panel's files. Files that have
-// gone since the list was taken (deleted from the panel meanwhile) are
-// skipped.
-func (pp *PlayerPanel) playQueueRelative(delta int) bool {
-	for i := pp.queuePos + delta; i >= 0 && i < len(pp.queue); i += delta {
-		if _, err := os.Stat(pp.queue[i]); err != nil {
-			continue
-		}
-		if pp.PlayFile(pp.queue, i) {
-			return true
-		}
-	}
-	return false
-}
-
-// playRelative plays the track delta positions away from the current one
-// in play order. With nothing current it starts from the ends.
-func (pp *PlayerPanel) playRelative(delta int) bool {
-	if pp.queue != nil {
-		return pp.playQueueRelative(delta)
-	}
-	list := pp.root.tracks(nil)
-	if len(list) == 0 {
-		return false
-	}
-	idx := -1
-	for i, t := range list {
-		if t == pp.current {
-			idx = i
-			break
-		}
-	}
-	if idx < 0 {
-		if delta > 0 {
-			idx = -1
-		} else {
-			idx = len(list)
-		}
-	}
-	idx += delta
-	if idx < 0 || idx >= len(list) {
-		return false
-	}
-	return pp.playItem(list[idx])
-}
+// ---- buttons ----------------------------------------------------------
 
 func (pp *PlayerPanel) pressButton(b int) {
 	switch b {
@@ -568,52 +388,12 @@ func (pp *PlayerPanel) pressButton(b int) {
 	case playerBtnPause:
 		pp.Engine.TogglePause()
 	case playerBtnStop:
-		pp.Engine.Stop()
-		pp.current = nil
-		pp.queue = nil
+		pp.stopPlaying()
 	case playerBtnNext:
 		pp.playRelative(+1)
 	case playerBtnVolume:
 		// Enter on the volume slider does nothing; +/- and Left/Right adjust it.
 	}
-}
-
-func (pp *PlayerPanel) adjustVolume(delta float64) {
-	pp.Engine.SetVolume(pp.Engine.Volume() + delta)
-}
-
-// SeekBy moves the current track by delta. It is also used by the file-panel
-// shortcuts, where the player is open but does not have keyboard focus.
-func (pp *PlayerPanel) SeekBy(delta time.Duration) bool {
-	if pp.Engine == nil || !pp.Engine.IsLoaded() {
-		return false
-	}
-	pp.Engine.Seek(delta)
-	return true
-}
-
-// JumpToTenth moves the current track to tenth tenths of its length, as the
-// digits do on YouTube: 0 to the start, 5 to the middle.
-func (pp *PlayerPanel) JumpToTenth(tenth int) bool {
-	if pp.Engine == nil || !pp.Engine.IsLoaded() || pp.Engine.Duration() <= 0 || tenth < 0 || tenth > 9 {
-		return false
-	}
-	target := pp.Engine.Duration() * time.Duration(tenth) / 10
-	return pp.SeekBy(target - pp.Engine.Position())
-}
-
-// toggleMute turns the sound off, or back on to the volume it had.
-func (pp *PlayerPanel) toggleMute() {
-	if v := pp.Engine.Volume(); v > 0 {
-		pp.unmuted = v
-		pp.Engine.SetVolume(0)
-		return
-	}
-	v := pp.unmuted
-	if v <= 0 {
-		v = 0.8
-	}
-	pp.Engine.SetVolume(v)
 }
 
 // PlayerCommand is something the player does on a key and from the command

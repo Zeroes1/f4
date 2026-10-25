@@ -1093,3 +1093,16 @@ WinAmp's, YouTube's or both, the default. They work in any keyboard layout.
 
   The command palette (Ctrl+Shift+P) lists the player's commands, as
 "Player: ...", while the player has the focus.
+
+ #Playing in the background#
+
+  Closing the player while music plays, with Ctrl+Shift+M or by opening
+another panel in its place, asks whether to go on playing in the
+background or to stop; Esc keeps the player open. In the background a ♪ in
+the top right corner of the screen says that music plays, ‖ that it is
+paused. A click on it, or Ctrl+Shift+M, opens the player again on what
+plays.
+
+  Without the player the command palette has "Music: play or pause",
+"Music: next track", "Music: previous track" and "Music: stop". They have
+no keys of their own; the Hotkey Configurator gives them some.

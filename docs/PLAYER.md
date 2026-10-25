@@ -171,6 +171,29 @@ Play order is depth-first over the whole tree regardless of what is
 expanded; when a track ends the next one starts, and after the last one the
 engine stops.
 
+### 1.4 Playing in the background
+
+What plays is a `playerSession` (`internal/panel/player_session.go`), one
+for the process: the engine, the playlist, the track loaded, the file
+panel's recordings when they are what plays, and the ticker that goes on to
+the next track. A `PlayerPanel` shows the session and keeps only the cursor
+and the buttons; a second player, in another workspace, shows the same one.
+The session ends when no player shows it and nothing is loaded.
+
+Closing the player while something plays (`ToggleAltPanel`: Ctrl+Shift+M,
+or another alternative panel opened in its slot) asks first
+(`altPanelCloseAsker`): In the background, Stop, or Cancel and Esc, which
+keep it open. A player closed otherwise, with its workspace say, leaves the
+music playing without a question.
+
+In the background `DrawPlayerIndicator`, which the application calls after
+each frame next to the macro recording mark, puts ♪ (‖ when paused) in the
+top right corner of the screen, unless a player is on the screen; a click
+on it (`PlayerIndicatorClick`, from the key router) opens the player, whose
+cursor starts on the track that plays. The `Music.*` actions (play or
+pause, next, previous, stop; area Common, no default keys) work while a
+track is loaded and no player has the focus (condition `MusicPlaying`).
+
 ## 2. Loose ends in the first patch
 
 Known and deliberate; each is small:

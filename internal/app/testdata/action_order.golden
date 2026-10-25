@@ -150,6 +150,10 @@ Panel.AutoFilter
 Panel.Player
 Panel.Player.SeekBack
 Panel.Player.SeekForward
+Music.PlayPause
+Music.Next
+Music.Previous
+Music.Stop
 Panel.Tree
 Panel.SplitLeft
 Panel.SplitRight
