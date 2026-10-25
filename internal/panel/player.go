@@ -95,13 +95,19 @@ const (
 	playerBtnCount
 )
 
-// controlRows is the height of the block above the playlist: the title, the
-// playback bar, the stream facts, the spectrum when it is on, the buttons.
+// controlRows is the height of the block above the playlist: the title; the
+// playback bar and the stream facts under it, or with the bar off the clock
+// and the facts on one row; the two rows of the spectrum when it is on; the
+// buttons.
 func (pp *PlayerPanel) controlRows() int {
-	if config.App.PlayerSpectrum {
-		return 5
+	rows := 3
+	if config.App.PlayerBar {
+		rows++
 	}
-	return 4
+	if config.App.PlayerSpectrum {
+		rows += 2
+	}
+	return rows
 }
 
 const playerSeekStep = 5 * time.Second
@@ -1078,11 +1084,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	}
 	put(y, title, text)
 
-	// Row 1: where the track is, on a bar between the two clocks.
 	loaded := pp.Engine.IsLoaded()
-	put(y+1, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), text)
-
-	// Row 2: stream facts.
 	facts := ""
 	if loaded {
 		info := pp.Engine.Info()
@@ -1095,25 +1097,48 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 			facts = info.Codec + " " + facts
 		}
 	}
-	put(y+2, facts, text)
+	row := y + 1
+	if config.App.PlayerBar {
+		// Where the track is, on a bar between the two clocks, and the
+		// stream facts under it.
+		put(row, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), text)
+		put(row+1, facts, text)
+		row += 2
+	} else {
+		// The clock and the stream facts on one row.
+		clock := "--:-- / --:--"
+		if loaded {
+			clock = fmtClock(pp.Engine.Position()) + " / " + fmtClock(pp.Engine.Duration())
+		}
+		line := clock
+		if gap := w - runewidth.StringWidth(clock) - runewidth.StringWidth(facts); gap > 1 {
+			line += strings.Repeat(" ", gap) + facts
+		}
+		put(row, line, text)
+		row++
+	}
 
-	// Row 3, when it is on: the spectrum, one row of eighth blocks.
+	// The spectrum, when it is on: two rows of eighth blocks, 16 levels a band.
 	if config.App.PlayerSpectrum {
 		bands := min(24, max(4, (w-2)/2))
 		spec := pp.Engine.Spectrum(bands)
-		var row strings.Builder
+		var hiRow, loRow strings.Builder
 		for _, v := range spec {
 			if !pp.Engine.IsPlaying() {
 				v = 0
 			}
-			row.WriteString(eighthBlock(int(v*8+0.5)) + " ")
+			lvl := int(v*16 + 0.5)
+			hiRow.WriteString(eighthBlock(lvl-8) + " ")
+			loRow.WriteString(eighthBlock(lvl) + " ")
 		}
-		put(y+3, row.String(), text)
+		put(row, hiRow.String(), text)
+		put(row+1, loRow.String(), text)
+		row += 2
 	}
 
 	// The last row: buttons and volume. While the keys are shown (H) each
 	// button carries the letter that presses it.
-	by := y + pp.controlRows() - 1
+	by := row
 	labels := []string{"|<", " > ", "||", " # ", ">|"}
 	if config.App.PlayerKeyHints {
 		for i, key := range playerButtonKeys(config.App.PlayerKeys) {

@@ -29,13 +29,14 @@ func (f *playerFixture) screenRows() []string {
 	return rows
 }
 
-// The player drew a spectrum, which says little, and nothing that showed how
-// far the track had got (#2185). The bar between the two clocks does, and
-// the spectrum is a setting, off by default, a row under the bar.
+// The player drew a spectrum and nothing that showed how far the track had
+// got (#2185). The bar between the two clocks does. Both are settings, on by
+// default: with the bar off the clock shares a row with the facts about the
+// track, as it did, and the spectrum takes two rows, as it did.
 func TestPlayerDrawsThePlaybackBar(t *testing.T) {
-	old := config.App.PlayerSpectrum
-	t.Cleanup(func() { config.App.PlayerSpectrum = old })
-	config.App.PlayerSpectrum = false
+	oldBar, oldSpectrum := config.App.PlayerBar, config.App.PlayerSpectrum
+	t.Cleanup(func() { config.App.PlayerBar, config.App.PlayerSpectrum = oldBar, oldSpectrum })
+	config.App.PlayerBar, config.App.PlayerSpectrum = true, false
 
 	f := newPlayerFixture(t, "a.mp3")
 	f.press(playerKey(vtinput.VK_RETURN, 0))
@@ -65,10 +66,19 @@ func TestPlayerDrawsThePlaybackBar(t *testing.T) {
 		t.Fatalf("no separator above the playlist:\n%s", strings.Join(rows, "\n"))
 		return -1
 	}
-	without := separator(rows)
+	withBar := separator(rows)
 	config.App.PlayerSpectrum = true
-	if with := separator(f.screenRows()); with != without+1 {
-		t.Errorf("with the spectrum on the playlist starts at row %d, want %d: a row under the bar", with, without+1)
+	if got := separator(f.screenRows()); got != withBar+2 {
+		t.Errorf("with the spectrum on the playlist starts at row %d, want %d: two rows of spectrum", got, withBar+2)
+	}
+
+	config.App.PlayerBar = false
+	rows = f.screenRows()
+	if got := separator(rows); got != withBar+1 {
+		t.Errorf("with the bar off and the spectrum on the playlist starts at row %d, want %d", got, withBar+1)
+	}
+	if strings.Contains(strings.Join(rows, "\n"), "●") || !strings.Contains(strings.Join(rows, "\n"), "01:30 / 03:00") {
+		t.Errorf("with the bar off the player shows no clock alone:\n%s", strings.Join(rows, "\n"))
 	}
 }
 

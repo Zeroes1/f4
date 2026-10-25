@@ -67,7 +67,8 @@ the mixer.
 │ ♪ Artist - Title            (marquee)     │  row 0
 │ 02:15 ━━━━━━━━━━━━●──────────────── 04:31 │  row 1: playback bar
 │ MP3 128kbps 44kHz stereo                  │  row 2
-│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  (spectrum, a setting)
+│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  ┐ spectrum
+│ █████████████▇▆▅▄ ...                     │  ┘ (16 levels)
 │ [|<] [ > ] [||] [ # ] [>|] ████████░░ 80% │  buttons
 ├───────────────────────────────────────────┤
 │ ▾ Album                                   │
@@ -79,9 +80,11 @@ the mixer.
 ```
 
 The playback bar fills between the two clocks as the track plays; a track
-whose length is not known leaves it empty. The spectrum row is off by
-default (Settings, Panels, Audio player, `PlayerSpectrum`): it said little
-and took a row from the playlist (#2185).
+whose length is not known leaves it empty (#2185). The bar and the spectrum
+are settings, both on by default (Settings, Panels, Audio player,
+`PlayerBar`, `PlayerSpectrum`). With the bar off the clock and the stream
+facts share row 1, "02:15 / 04:31   MP3 128kbps...", which with the spectrum
+on is the layout the player had before the bar.
 
 The spectrum is a Goertzel evaluation at 16–24 log-spaced frequencies over
 the tap's ring buffer, drawn with eighth-block characters. It costs a few

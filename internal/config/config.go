@@ -483,7 +483,8 @@ type F4Config struct {
 	TreeRootWholeVolume      bool   // Ctrl+T tree panel root: true = whole current volume (far2l), false = source panel's current directory
 	TreeExplorerMode         bool   // Ctrl+T tree like Explorer's: the panel that opened it follows the tree's cursor (f4#1602)
 	DirSizeCountsFolders     bool   // folder size (F3, quick view) also counts the size file systems give the folders themselves, as far2l does (f4#2005)
-	PlayerSpectrum           bool   // the audio player (Ctrl+Shift+M) draws a spectrum under its playback bar (f4#2185)
+	PlayerBar                bool   // the audio player (Ctrl+Shift+M) draws a playback bar between its clocks (f4#2185)
+	PlayerSpectrum           bool   // the audio player draws the spectrum of what plays, on by default as it always was (f4#2185)
 	PlayerKeys               string // the player's letter keys: PlayerKeysBoth, PlayerKeysWinAmp or PlayerKeysYouTube (f4#2185)
 	PlayerKeyHints           bool   // the player shows its keys on its buttons and in its border; H flips it (f4#2185)
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
@@ -769,7 +770,8 @@ var App = F4Config{
 	TreeRootWholeVolume:      true,
 	TreeExplorerMode:         false,
 	DirSizeCountsFolders:     false,
-	PlayerSpectrum:           false,
+	PlayerBar:                true,
+	PlayerSpectrum:           true,
 	PlayerKeys:               PlayerKeysBoth,
 	PlayerKeyHints:           false,
 	EscTogglePanels:          true,
@@ -1062,7 +1064,8 @@ func parseConfigInto(cfg *F4Config, merged *ini.File) {
 	cfg.TreeRootWholeVolume = merged.GetString("Panel", "TreeRootWholeVolume", "1") == "1"
 	cfg.TreeExplorerMode = merged.GetString("Panel", "TreeExplorerMode", "0") == "1"
 	cfg.DirSizeCountsFolders = merged.GetString("Panel", "DirSizeCountsFolders", "0") == "1"
-	cfg.PlayerSpectrum = merged.GetString("Panel", "PlayerSpectrum", "0") == "1"
+	cfg.PlayerBar = merged.GetString("Panel", "PlayerBar", "1") != "0"
+	cfg.PlayerSpectrum = merged.GetString("Panel", "PlayerSpectrum", "1") != "0"
 	cfg.PlayerKeys = ParsePlayerKeys(merged.GetString("Panel", "PlayerKeys", PlayerKeysBoth))
 	cfg.PlayerKeyHints = merged.GetString("Panel", "PlayerKeyHints", "0") == "1"
 	cfg.EscTogglePanels = merged.GetString("Panel", "EscTogglePanels", "1") == "1"
@@ -1438,6 +1441,7 @@ func SerializeSettingsConfig(cfg F4Config) []byte {
 	fmt.Fprintf(&sb, "TreeRootWholeVolume = %d\n", map[bool]int{true: 1, false: 0}[cfg.TreeRootWholeVolume])
 	fmt.Fprintf(&sb, "TreeExplorerMode = %d\n", map[bool]int{true: 1, false: 0}[cfg.TreeExplorerMode])
 	fmt.Fprintf(&sb, "DirSizeCountsFolders = %d\n", map[bool]int{true: 1, false: 0}[cfg.DirSizeCountsFolders])
+	fmt.Fprintf(&sb, "PlayerBar = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerBar])
 	fmt.Fprintf(&sb, "PlayerSpectrum = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerSpectrum])
 	fmt.Fprintf(&sb, "PlayerKeys = %s\n", ParsePlayerKeys(cfg.PlayerKeys))
 	fmt.Fprintf(&sb, "PlayerKeyHints = %d\n", map[bool]int{true: 1, false: 0}[cfg.PlayerKeyHints])
