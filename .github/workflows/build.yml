@@ -269,6 +269,19 @@ jobs:
           cmd/f4-gui-launcher/rsrc_windows_amd64.syso \
           cmd/f4-gui-launcher/rsrc_windows_arm64.syso
 
+    - name: Generate platform icon resources
+      # Windows and macOS cells need the .syso/.icns files generated locally
+      # because each matrix cell runs on a separate runner. The linux/amd64
+      # cell already ran this in "Verify generated application icons".
+      if: steps.affected.outputs.build == 'yes' && (matrix.goos == 'windows' || matrix.goos == 'darwin')
+      run: |
+        go generate ./cmd/f4
+        test -s cmd/f4-gui-launcher/rsrc_windows_amd64.syso
+        test -s cmd/f4-gui-launcher/rsrc_windows_arm64.syso
+        if [ "$GOOS" = "darwin" ]; then
+          test -s internal/gui/assets/icon/generated/f4.icns
+        fi
+
     - name: Build binaries
       if: steps.affected.outputs.build == 'yes'
       env:
