@@ -5056,6 +5056,14 @@ func (pf *PanelsFrame) GetKeyLabels() *vtui.KeySet {
 			}
 		}
 	}
+	if pf.FocusedPlayer() != nil {
+		// The file keys do nothing in the player; F7 and F8 make and remove
+		// playlist folders and items (#2185).
+		return &vtui.KeySet{Normal: vtui.KeyBarLabels{
+			i18n.Msg("KeyBar.F1"), "", "", "", "", "", i18n.Msg("KeyBar.Player.F7"), i18n.Msg("KeyBar.Player.F8"),
+			i18n.Msg("KeyBar.F9"), i18n.Msg("KeyBar.F10"), i18n.Msg("KeyBar.F11"), i18n.Msg("KeyBar.F12"),
+		}}
+	}
 	if pf.ShowPanels && pf.ActiveIdx >= 0 && pf.ActiveIdx < len(pf.AltPanels) {
 		if fsp := pf.GetActivePanel(); fsp != nil {
 			if _, ok := fsp.Vfs.(*TempPanelVFS); ok {

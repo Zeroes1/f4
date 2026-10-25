@@ -65,10 +65,11 @@ the mixer.
 ```
 ┌ Player ──────────────────────────────────┐
 │ ♪ Artist - Title            (marquee)     │  row 0
-│ 02:15 / 04:31       128kbps 44kHz stereo  │  row 1
-│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  row 2 ┐ spectrum
-│ █████████████▇▆▅▄ ...                     │  row 3 ┘ (16 levels)
-│ [|<] [ > ] [||] [ # ] [>|] ████████░░ 80% │  row 4
+│ 02:15 ━━━━━━━━━━━━●──────────────── 04:31 │  row 1: playback bar
+│ MP3 128kbps 44kHz stereo                  │  row 2
+│ ▂▃▅▇▆▄▂▁▂▃▅▆▇█▆▄ ...                       │  ┐ spectrum
+│ █████████████▇▆▅▄ ...                     │  ┘ (16 levels)
+│ [|<] [ > ] [||] [ # ] [>|] ████████░░ 80% │  buttons
 ├───────────────────────────────────────────┤
 │ ▾ Album                                   │
 │   ♪ 01 - First track                      │  ♪ = loaded now
@@ -77,6 +78,13 @@ the mixer.
 │   loose.mp3                               │
 └───────────────────────────────────────────┘
 ```
+
+The playback bar fills between the two clocks as the track plays; a track
+whose length is not known leaves it empty (#2185). The bar and the spectrum
+are settings, both on by default (Settings, Panels, Audio player,
+`PlayerBar`, `PlayerSpectrum`). With the bar off the clock and the stream
+facts share row 1, "02:15 / 04:31   MP3 128kbps...", which with the spectrum
+on is the layout the player had before the bar.
 
 The spectrum is a Goertzel evaluation at 16–24 log-spaced frequencies over
 the tap's ring buffer, drawn with eighth-block characters. It costs a few
@@ -89,24 +97,66 @@ always emits stereo PCM.
 ### 1.3 Keyboard
 
 `Tab` keeps its f4 meaning (switch panels), which rules out using it to
-hop between the controls and the playlist. Instead the panel is one column:
+hop between the controls and the playlist. Instead the panel is one column,
+from the playback bar (the clock row with the bar off) over the buttons into
+the playlist. Each row keeps its arrows whatever plays: they used to seek on
+the buttons and in the playlist while a track was loaded, so the cursor could
+not get from Play to Stop then, nor fold a folder (#2185).
 
 | Cursor on        | Key            | Action                                |
 |------------------|----------------|---------------------------------------|
+| playback bar     | Left / Right   | seek 5 s back / forward               |
+| playback bar     | Enter / Space  | play or pause                         |
+| playback bar     | Down / PgDn    | to the control row                    |
 | control row      | Left / Right   | previous / next button; on the volume slider: −5 % / +5 % |
 | control row      | Enter / Space  | press the button                      |
+| control row      | Up             | onto the playback bar                 |
 | control row      | Down / PgDn    | into the playlist                     |
 | playlist         | Up (top row)   | back to the control row               |
 | playlist         | Enter          | play track / toggle folder            |
 | playlist         | Space          | pause/resume what is playing, or play the track if nothing is |
 | playlist         | Left / Right   | collapse / expand; Left on a track goes to its folder |
-| playlist         | Ctrl+Up/Down   | reorder among siblings                |
-| playlist         | Ctrl+Right     | move into the nearest folder above    |
-| playlist         | Ctrl+Left      | move out of the folder, right after it |
-| playlist         | Del            | remove (stops playback if it was the current track) |
+| playlist         | Shift+Up/Down  | reorder among siblings                |
+| playlist         | Shift+Right    | move into the nearest folder above    |
+| playlist         | Shift+Left     | move out of the folder, right after it |
+| playlist         | Del / F8       | remove (stops playback if it was the current track) |
 | playlist         | F7             | new folder after the cursor           |
+| control row      | F7             | new folder at the end of the playlist |
 | anywhere         | Z X C V B      | prev / play / pause / stop / next (WinAmp) |
+| anywhere         | K              | play or pause (YouTube)               |
+| anywhere         | J / L          | 10 s back / forward (YouTube)         |
+| anywhere         | Shift+P / Shift+N | previous / next track (YouTube)    |
+| anywhere         | M              | mute, and back (YouTube)              |
+| anywhere         | 0 … 9          | jump to that tenth of the track (YouTube) |
 | anywhere         | + / −          | volume                                |
+| anywhere         | H              | show the keys on the player, or hide them |
+| file panel       | Ctrl+Alt+Left/Right | seek 5 s without leaving the file panel |
+
+The keys are hidden by default, so the player is not a page of letters: its
+bottom border says "H: keys", and H puts the letters on the buttons and as
+many of the other keys as fit into the border, the way B flips the units of
+the info panel (`PlayerKeyHints`, remembered in settings.ini). The key bar
+over a focused player names F7 (folder) and F8 (remove) and leaves the file
+keys, which do nothing there, blank.
+
+Ctrl with the arrows still moves playlist items too, where it reaches f4:
+macOS keeps Ctrl+Up/Down/Left/Right for Mission Control and the switching
+of Spaces, which is why Shift is the key that is documented (#2185).
+Which letters are on is a setting (Settings, Panels, Audio player,
+`PlayerKeys`): WinAmp's, YouTube's, or both, the default, since the two
+share no key. The command palette and macros run the player's commands
+(`PlayerPanel.Do`), not their keys, so Player: Stop works whatever the
+scheme.
+
+Z X C V B are matched by the key, not by the character it types, so they
+work with the Russian layout on: the virtual key when the terminal reports
+one, else the character put back on its Latin key
+(`keymap.LayoutLetterVK`).
+
+With the player open, the cursor of the file panel it was opened from is
+followed: moving onto a recording plays it. That happens only while the
+player plays the panel's files or nothing at all; a track started from the
+playlist is never swapped for the file under the cursor (#2185).
 
 `F5` in the other panel adds the selection: directories are walked
 recursively and become folders (nested ones too), non-MP3 files are
@@ -120,8 +170,6 @@ engine stops.
 
 Known and deliberate; each is small:
 
-- **No KeyBar labels** for the player (F7 = new folder, Del, F5 in the other
-  panel). `GetKeyLabels` has the quick-view precedent.
 - **Not in the command palette / panel menu list** yet
   (`command_palette_panels.go` switch on panel type).
 - **No mouse**: buttons and playlist rows should be clickable, the volume

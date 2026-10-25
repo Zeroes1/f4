@@ -2472,15 +2472,15 @@ func init() {
 		Description: "Seek backward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekBack.Desc",
 		DefaultKeys: []string{"CtrlAltLeft"},
-		// The focused player seeks on the plain arrows (PlayerPanel.controlKey).
+		// The focused player seeks on the plain arrows on its playback bar
+		// (PlayerPanel.barKey).
 		NativeKeys:  []string{"Left:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
+		// The player is on either side: in the other slot while the file
+		// panel has the focus, which is what these keys are for (#2185).
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			if pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
-				return
-			}
-			if player, ok := pf.AltPanels[pf.ActiveIdx].(*panel.PlayerPanel); ok {
+			if player := openPlayerPanel(pf); player != nil {
 				player.SeekBy(-5 * time.Second)
 			}
 		}),
@@ -2498,10 +2498,7 @@ func init() {
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",
 		Handler: withPF(func(pf *panel.PanelsFrame) {
-			if pf.ActiveIdx < 0 || pf.ActiveIdx >= len(pf.AltPanels) {
-				return
-			}
-			if player, ok := pf.AltPanels[pf.ActiveIdx].(*panel.PlayerPanel); ok {
+			if player := openPlayerPanel(pf); player != nil {
 				player.SeekBy(5 * time.Second)
 			}
 		}),
