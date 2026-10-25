@@ -8,6 +8,7 @@ import (
 	"github.com/unxed/f4/internal/config"
 	"github.com/unxed/f4/internal/i18n"
 	"github.com/unxed/vtinput"
+	"github.com/unxed/vtui"
 )
 
 // screenRows is what the player shows, row by row, on the fixture's screen.
@@ -113,6 +114,39 @@ func TestPlayerShowsItsKeysOnH(t *testing.T) {
 	}
 	if !f.pf.CmdLine.IsEmpty() {
 		t.Errorf("H went to the command line too: %q", f.pf.CmdLine.Edit.GetText())
+	}
+}
+
+// The player had no help of its own: F1 in it opened the panels' (#2185).
+// It opens the player's topic now, and F1 in the file panel still the
+// panels'. F1 is the frame manager's own key, which a test cannot press;
+// App.Help asks the frame for its topic the same way.
+func TestPlayerF1OpensItsHelp(t *testing.T) {
+	previous := vtui.GlobalHelpEngine
+	t.Cleanup(func() { vtui.GlobalHelpEngine = previous })
+	f := newPlayerFixture(t)
+	f.pf.SetHelp("Panels") // as NewPanelsFrame does; the mock frame is built without it
+	InitHelpSystem()
+
+	topic := func() string {
+		t.Helper()
+		help, ok := vtui.FrameManager.GetTopFrame().(*vtui.HelpView)
+		if !ok {
+			t.Fatalf("F1 opened %T, want the help", vtui.FrameManager.GetTopFrame())
+		}
+		name := help.CurrentTopic().Name
+		vtui.FrameManager.Pop()
+		f.pf.Show(f.scr)
+		return name
+	}
+	RunAction("App.Help")
+	if got := topic(); got != "Panels" {
+		t.Errorf("F1 in the file panel opened %q, want the panels' help", got)
+	}
+	f.press(playerKey(vtinput.VK_TAB, 0))
+	RunAction("App.Help")
+	if got := topic(); got != "Player" {
+		t.Errorf("F1 in the player opened %q, want Player", got)
 	}
 }
 

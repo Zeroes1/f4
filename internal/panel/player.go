@@ -167,6 +167,9 @@ func (pp *PlayerPanel) ProcessMouse(*vtinput.InputEvent) bool {
 	return false
 }
 
+// HelpTopic is the topic F1 opens while the player has the focus.
+func (pp *PlayerPanel) HelpTopic() string { return "Player" }
+
 func (pp *PlayerPanel) GetSelectedName() string {
 	if pp.cursor >= 0 && pp.cursor < len(pp.rows) {
 		return pp.rows[pp.cursor].item.Name

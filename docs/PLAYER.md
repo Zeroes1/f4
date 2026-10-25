@@ -96,6 +96,11 @@ always emits stereo PCM.
 
 ### 1.3 Keyboard
 
+F1 with the focus in the player opens its own help topic, `@Player` in
+`internal/dialog/help/en.hlf` and `ru.hlf` (an alternative panel names its
+topic with `HelpTopic`, which `PanelsFrame.GetHelp` asks); keep it in step
+with the table below.
+
 `Tab` keeps its f4 meaning (switch panels), which rules out using it to
 hop between the controls and the playlist. Instead the panel is one column,
 from the playback bar (the clock row with the bar off) over the buttons into
