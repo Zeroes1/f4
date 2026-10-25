@@ -100,6 +100,14 @@ func (t *pcmTap) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// startAt makes the tap count from n bytes, for a track a seek started in
+// its middle, so that the clock says where it is.
+func (t *pcmTap) startAt(n int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.n = n
+}
+
 func (t *pcmTap) BytesRead() int64 {
 	t.mu.Lock()
 	defer t.mu.Unlock()
