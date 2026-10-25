@@ -36,11 +36,11 @@ import (
 // through the panel's files instead of the playlist (see PlayFile).
 //
 // Keyboard model, chosen so that Tab keeps its f4 meaning (switch panels):
-// Up/Down walk one column that starts at the control row and continues into
-// the playlist; Left/Right pick a button while the control row has the
-// cursor, and collapse/expand a folder while the playlist has it. Enter and
-// Space act on whatever has the cursor. WinAmp's Z X C V B keys and +/- for
-// volume work anywhere in the panel.
+// Up/Down walk one column that starts at the playback bar, goes on to the
+// control row and continues into the playlist; Left/Right seek on the bar,
+// pick a button on the control row, and collapse/expand a folder in the
+// playlist. Enter and Space act on whatever has the cursor. The letter keys
+// (WinAmp's or YouTube's) and +/- for volume work anywhere in the panel.
 type PlayerPanel struct {
 	vtui.ScreenObject
 	src     *FileSystemPanel
@@ -50,8 +50,8 @@ type PlayerPanel struct {
 	Engine PlayerEngine
 	root   *playlistItem // invisible root; children are the top level
 	rows   []playlistRow // flattened view, rebuilt on every Show
-	cursor int           // index into rows; -1 = control row has the cursor
-	button int           // focused control when cursor == -1
+	cursor int           // index into rows, or playerCursorButtons / playerCursorBar
+	button int           // focused control when cursor == playerCursorButtons
 	top    int           // first visible playlist row
 
 	current *playlistItem // the track loaded in the engine, if any
@@ -111,6 +111,13 @@ func (pp *PlayerPanel) controlRows() int {
 }
 
 const playerSeekStep = 5 * time.Second
+
+// The rows above the playlist the cursor stops on: the buttons, and above
+// them the playback bar, where the arrows seek.
+const (
+	playerCursorButtons = -1
+	playerCursorBar     = -2
+)
 
 func NewPlayerPanel(src *FileSystemPanel) *PlayerPanel {
 	x1, y1, x2, y2 := src.GetPosition()
@@ -679,8 +686,10 @@ func (pp *PlayerPanel) ProcessKey(e *vtinput.InputEvent) bool {
 	handled := true
 	switch {
 	case !ctrl && pp.globalKey(e):
+	case pp.cursor == playerCursorBar:
+		handled = pp.barKey(e)
 	case pp.cursor < 0:
-		handled = pp.controlKey(e, ctrl)
+		handled = pp.controlKey(e)
 	default:
 		handled = pp.playlistKey(e, ctrl, shift)
 	}
@@ -814,20 +823,20 @@ func playerLetterKey(e *vtinput.InputEvent) uint16 {
 	return keymap.LayoutLetterVK(e.Char)
 }
 
-func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent, ctrl bool) bool {
+// controlKey: on the buttons Left and Right go from one to the next, and on
+// the volume slider make it louder or quieter, whether a track is loaded or
+// not. They used to seek while one was, so nobody could get from Play to
+// Stop with the arrows while it played (#2185); seeking is on the bar above.
+func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent) bool {
 	switch e.VirtualKeyCode {
 	case vtinput.VK_LEFT:
-		if !ctrl && pp.Engine.IsLoaded() {
-			pp.Engine.Seek(-playerSeekStep)
-		} else if pp.button == playerBtnVolume {
+		if pp.button == playerBtnVolume {
 			pp.adjustVolume(-0.05)
 		} else if pp.button > 0 {
 			pp.button--
 		}
 	case vtinput.VK_RIGHT:
-		if !ctrl && pp.Engine.IsLoaded() {
-			pp.Engine.Seek(playerSeekStep)
-		} else if pp.button == playerBtnVolume {
+		if pp.button == playerBtnVolume {
 			pp.adjustVolume(+0.05)
 		} else {
 			pp.button++
@@ -843,11 +852,33 @@ func (pp *PlayerPanel) controlKey(e *vtinput.InputEvent, ctrl bool) bool {
 	case vtinput.VK_RETURN, vtinput.VK_SPACE:
 		pp.pressButton(pp.button)
 	case vtinput.VK_UP:
-		// Top of the column: nothing above, but swallow so the file
-		// panel below the alt does not react.
+		pp.cursor = playerCursorBar
 	case vtinput.VK_F7:
 		// On the buttons too, and with the playlist still empty, where the
 		// cursor never leaves them: the folder goes to the end (#2185).
+		pp.newFolder(nil)
+	default:
+		return false
+	}
+	return true
+}
+
+// barKey: the playback bar, or the clock with the bar off, is a row of the
+// cursor's own above the buttons, and Left and Right there move the track
+// five seconds. Up is the top of the column: nothing above, but the key is
+// swallowed so the file panel behind the player does not take it.
+func (pp *PlayerPanel) barKey(e *vtinput.InputEvent) bool {
+	switch e.VirtualKeyCode {
+	case vtinput.VK_LEFT:
+		pp.SeekBy(-playerSeekStep)
+	case vtinput.VK_RIGHT:
+		pp.SeekBy(playerSeekStep)
+	case vtinput.VK_DOWN, vtinput.VK_NEXT:
+		pp.cursor = playerCursorButtons
+	case vtinput.VK_UP, vtinput.VK_PRIOR:
+	case vtinput.VK_RETURN, vtinput.VK_SPACE:
+		pp.Do(PlayerPlayPause)
+	case vtinput.VK_F7:
 		pp.newFolder(nil)
 	default:
 		return false
@@ -865,19 +896,12 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		pp.cursor = len(pp.rows) - 1
 	}
 	if pp.cursor < 0 {
-		return pp.controlKey(e, ctrl)
+		pp.cursor = playerCursorButtons
+		return pp.controlKey(e)
 	}
+	// Left and Right fold and unfold a folder, and Left takes a track to
+	// its folder, also while something plays: they seeked then (#2185).
 	move := ctrl || shift
-	if !move && pp.Engine.IsLoaded() {
-		switch e.VirtualKeyCode {
-		case vtinput.VK_LEFT:
-			pp.Engine.Seek(-playerSeekStep)
-			return true
-		case vtinput.VK_RIGHT:
-			pp.Engine.Seek(playerSeekStep)
-			return true
-		}
-	}
 	row := pp.rows[pp.cursor]
 	it := row.item
 	page := pp.playlistHeight()
@@ -889,7 +913,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		if move {
 			pp.moveItem(it, -1)
 		} else if pp.cursor == 0 {
-			pp.cursor = -1
+			pp.cursor = playerCursorButtons
 		} else {
 			pp.cursor--
 		}
@@ -905,7 +929,7 @@ func (pp *PlayerPanel) playlistKey(e *vtinput.InputEvent, ctrl, shift bool) bool
 		pp.cursor = min(len(pp.rows)-1, pp.cursor+page)
 	case vtinput.VK_HOME:
 		if ctrl {
-			pp.cursor = -1
+			pp.cursor = playerCursorButtons
 		} else {
 			pp.cursor = 0
 		}
@@ -1097,11 +1121,16 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 			facts = info.Codec + " " + facts
 		}
 	}
+	// The bar, or the clock, is where the cursor stops to seek.
+	barAttr := text
+	if pp.focused && pp.cursor == playerCursorBar {
+		barAttr = hi
+	}
 	row := y + 1
 	if config.App.PlayerBar {
 		// Where the track is, on a bar between the two clocks, and the
 		// stream facts under it.
-		put(row, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), text)
+		put(row, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), barAttr)
 		put(row+1, facts, text)
 		row += 2
 	} else {
@@ -1114,7 +1143,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		if gap := w - runewidth.StringWidth(clock) - runewidth.StringWidth(facts); gap > 1 {
 			line += strings.Repeat(" ", gap) + facts
 		}
-		put(row, line, text)
+		put(row, line, barAttr)
 		row++
 	}
 
@@ -1151,7 +1180,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
 	for i, l := range labels {
 		attr := text
-		if pp.focused && pp.cursor < 0 && pp.button == i {
+		if pp.focused && pp.cursor == playerCursorButtons && pp.button == i {
 			attr = hi
 		}
 		cells := vtui.StringToCharInfo("["+l+"]", attr)
@@ -1163,7 +1192,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		filled := int(pp.Engine.Volume()*float64(volW) + 0.5)
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", volW-filled)
 		attr := text
-		if pp.focused && pp.cursor < 0 && pp.button == playerBtnVolume {
+		if pp.focused && pp.cursor == playerCursorButtons && pp.button == playerBtnVolume {
 			attr = hi
 		}
 		scr.Write(bx, by, vtui.StringToCharInfo(bar, attr))

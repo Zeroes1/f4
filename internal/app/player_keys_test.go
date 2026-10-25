@@ -366,6 +366,82 @@ func TestPlayerKeySchemeSetting(t *testing.T) {
 	}
 }
 
+// Left and Right on the buttons seeked while a track was loaded, so with
+// something playing the cursor could not get from Play to Stop (#2185).
+// They go from button to button whatever plays.
+func TestPlayerArrowsGoBetweenButtonsWhileATrackPlays(t *testing.T) {
+	f := newPlayerFixture(t, "a.mp3")
+	f.press(playerKey(vtinput.VK_F5, 0))
+	f.press(playerKey(vtinput.VK_TAB, 0))
+	f.press(playerKey(vtinput.VK_RETURN, 0)) // a.mp3 plays
+	f.press(playerKey(vtinput.VK_HOME, vtinput.LeftCtrlPressed))
+
+	f.press(playerKey(vtinput.VK_RIGHT, 0)) // Play to Pause
+	f.press(playerKey(vtinput.VK_RIGHT, 0)) // Pause to Stop
+	if got := f.audio.Position(); got != 0 {
+		t.Errorf("Right on the buttons moved the track to %s", got)
+	}
+	f.press(playerKey(vtinput.VK_RETURN, 0))
+	if got := f.audio.Path(); got != "" {
+		t.Errorf("two Right from Play and Enter did not press Stop: %q still loaded", got)
+	}
+}
+
+// The arrows seek on the playback bar, a row of its own above the buttons
+// (Up from them), or on the clock with the bar off.
+func TestPlayerSeeksOnThePlaybackBar(t *testing.T) {
+	old := config.App.PlayerBar
+	t.Cleanup(func() { config.App.PlayerBar = old })
+	for _, bar := range []bool{true, false} {
+		config.App.PlayerBar = bar
+		f := newPlayerFixture(t, "a.mp3")
+		f.press(playerKey(vtinput.VK_F5, 0))
+		f.press(playerKey(vtinput.VK_TAB, 0))
+		f.press(playerKey(vtinput.VK_RETURN, 0))
+		f.press(playerKey(vtinput.VK_HOME, vtinput.LeftCtrlPressed))
+
+		f.press(playerKey(vtinput.VK_UP, 0)) // onto the bar
+		f.press(playerKey(vtinput.VK_RIGHT, 0))
+		f.press(playerKey(vtinput.VK_RIGHT, 0))
+		f.press(playerKey(vtinput.VK_LEFT, 0))
+		if got := f.audio.Position(); got != 5*time.Second {
+			t.Errorf("bar=%v: Right, Right, Left on the bar left the track at %s, want 5s", bar, got)
+		}
+		f.press(playerKey(vtinput.VK_DOWN, 0)) // back to the buttons
+		f.press(playerKey(vtinput.VK_RIGHT, 0))
+		if got := f.audio.Position(); got != 5*time.Second {
+			t.Errorf("bar=%v: Right on the buttons after the bar moved the track to %s", bar, got)
+		}
+	}
+}
+
+// In the playlist Left and Right seeked too while something played, and a
+// folder could not be folded then. They fold and unfold it whatever plays.
+func TestPlayerArrowsFoldAFolderWhileATrackPlays(t *testing.T) {
+	f := newPlayerFixture(t, "a.mp3")
+	f.press(playerKey(vtinput.VK_F5, 0))
+	f.press(playerKey(vtinput.VK_TAB, 0))
+	f.press(playerKey(vtinput.VK_RETURN, 0)) // a.mp3 plays
+	f.press(playerKey(vtinput.VK_HOME, vtinput.LeftCtrlPressed))
+	f.newFolder("F") // a, F
+	f.press(playerKey(vtinput.VK_UP, vtinput.ShiftPressed))
+	f.press(playerKey(vtinput.VK_DOWN, 0))
+	f.press(playerKey(vtinput.VK_RIGHT, vtinput.ShiftPressed)) // F with a in it
+	f.press(playerKey(vtinput.VK_UP, 0))
+	if got := f.player.GetSelectedName(); got != "F" {
+		t.Fatalf("the cursor is on %q, want the folder F", got)
+	}
+
+	f.press(playerKey(vtinput.VK_LEFT, 0)) // fold F
+	f.press(playerKey(vtinput.VK_DOWN, 0))
+	if got := f.player.GetSelectedName(); got != "F" {
+		t.Errorf("Left did not fold F while a.mp3 played: Down went to %q", got)
+	}
+	if got := f.audio.Position(); got != 0 {
+		t.Errorf("Left in the playlist moved the track to %s", got)
+	}
+}
+
 // Ctrl+Alt+Left and Right seek from the file panel, without going to the
 // player -- but the action looked for the player in the slot that has the
 // focus, which is the file panel's, and never found it.

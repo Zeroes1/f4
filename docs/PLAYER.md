@@ -97,12 +97,20 @@ always emits stereo PCM.
 ### 1.3 Keyboard
 
 `Tab` keeps its f4 meaning (switch panels), which rules out using it to
-hop between the controls and the playlist. Instead the panel is one column:
+hop between the controls and the playlist. Instead the panel is one column,
+from the playback bar (the clock row with the bar off) over the buttons into
+the playlist. Each row keeps its arrows whatever plays: they used to seek on
+the buttons and in the playlist while a track was loaded, so the cursor could
+not get from Play to Stop then, nor fold a folder (#2185).
 
 | Cursor on        | Key            | Action                                |
 |------------------|----------------|---------------------------------------|
+| playback bar     | Left / Right   | seek 5 s back / forward               |
+| playback bar     | Enter / Space  | play or pause                         |
+| playback bar     | Down / PgDn    | to the control row                    |
 | control row      | Left / Right   | previous / next button; on the volume slider: −5 % / +5 % |
 | control row      | Enter / Space  | press the button                      |
+| control row      | Up             | onto the playback bar                 |
 | control row      | Down / PgDn    | into the playlist                     |
 | playlist         | Up (top row)   | back to the control row               |
 | playlist         | Enter          | play track / toggle folder            |

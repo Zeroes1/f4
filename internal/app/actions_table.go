@@ -2472,7 +2472,8 @@ func init() {
 		Description: "Seek backward while the file panel has focus",
 		DescKey:     "Action.Panel.Player.SeekBack.Desc",
 		DefaultKeys: []string{"CtrlAltLeft"},
-		// The focused player seeks on the plain arrows (PlayerPanel.controlKey).
+		// The focused player seeks on the plain arrows on its playback bar
+		// (PlayerPanel.barKey).
 		NativeKeys:  []string{"Left:PlayerFocused"},
 		MenuPath:    "Commands",
 		MenuSubPath: "Player",

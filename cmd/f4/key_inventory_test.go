@@ -188,7 +188,13 @@ var keyInventoryAudit = map[string]keyInventoryEntry{
 		areas:     []string{"Shell"},
 		chords:    []string{"Left", "Right", "Enter", "Space", "F7"},
 		nav:       []string{"DOWN", "END", "HOME", "NEXT", "UP"},
-		rationale: "the player's button row: the arrows seek or move between buttons, Enter and Space press one, F7 makes a playlist folder",
+		rationale: "the player's button row: the arrows move between buttons, Enter and Space press one, F7 makes a playlist folder",
+	},
+	"panel.(*PlayerPanel).barKey": {
+		areas:     []string{"Shell"},
+		chords:    []string{"Left", "Right", "Enter", "Space", "F7"},
+		nav:       []string{"DOWN", "NEXT", "PRIOR", "UP"},
+		rationale: "the player's playback bar: the arrows seek, Enter and Space play or pause, F7 makes a playlist folder",
 	},
 	"panel.(*PlayerPanel).playlistKey": {
 		areas: []string{"Shell"},
