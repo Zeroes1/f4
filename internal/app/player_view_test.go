@@ -117,6 +117,44 @@ func TestPlayerShowsItsKeysOnH(t *testing.T) {
 	}
 }
 
+// The buttons were ASCII only, |< > || # >| (#2185). A setting draws them with
+// the symbols of code page 437, which every console font has, and no brackets;
+// it is off, and the buttons stay as they were. The mouse finds the buttons
+// wherever they are drawn.
+func TestPlayerDrawsUnicodeButtons(t *testing.T) {
+	oldSymbols, oldHints, oldKeys := config.App.PlayerUnicodeButtons, config.App.PlayerKeyHints, config.App.PlayerKeys
+	t.Cleanup(func() {
+		config.App.PlayerUnicodeButtons, config.App.PlayerKeyHints, config.App.PlayerKeys = oldSymbols, oldHints, oldKeys
+	})
+	config.App.PlayerKeyHints, config.App.PlayerKeys = false, config.PlayerKeysBoth
+
+	config.App.PlayerUnicodeButtons = false
+	f := playingFixture(t)
+	shows := func(text string) bool { return strings.Contains(strings.Join(f.screenRows(), "\n"), text) }
+	if !shows("[|<] [ > ] [||] [ # ] [>|]") || shows("►") {
+		t.Errorf("with the setting off the buttons are not the ASCII ones:\n%s", strings.Join(f.screenRows(), "\n"))
+	}
+
+	config.App.PlayerUnicodeButtons = true
+	if !shows(" |◄   ►   ▌▌   ■   ►| ") || shows("[|<]") {
+		t.Errorf("with the setting on the buttons are not the Unicode ones:\n%s", strings.Join(f.screenRows(), "\n"))
+	}
+	config.App.PlayerKeyHints = true
+	if !shows(" Z |◄   X ►   C ▌▌   V ■   B ►| ") {
+		t.Errorf("with the keys shown the Unicode buttons carry no letters:\n%s", strings.Join(f.screenRows(), "\n"))
+	}
+	config.App.PlayerKeyHints = false
+
+	f.click(f.find("►|"))
+	if got := f.audio.Path(); got != f.path("b.mp3") {
+		t.Errorf("a click on ►| played %q, want b.mp3", got)
+	}
+	f.click(f.find("■"))
+	if got := f.audio.Path(); got != "" {
+		t.Errorf("a click on ■ left %q loaded", got)
+	}
+}
+
 // The player had no help of its own: F1 in it opened the panels' (#2185).
 // It opens the player's topic now, and F1 in the file panel still the
 // panels'. F1 is the frame manager's own key, which a test cannot press;

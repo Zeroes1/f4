@@ -1114,3 +1114,20 @@ func TestEditorMemoryMapIsOnByDefault(t *testing.T) {
 		t.Fatal("Editor.MemoryMap defaults to off")
 	}
 }
+
+// The player's buttons stay ASCII unless the user asks for the Unicode media
+// symbols, which not every font has (f4#2185); the choice survives a save.
+func TestPlayerUnicodeButtonsAreOffByDefault(t *testing.T) {
+	var cfg F4Config
+	parseConfigInto(&cfg, ini.New())
+	if cfg.PlayerUnicodeButtons || DefaultConfig().PlayerUnicodeButtons {
+		t.Fatal("Panel.PlayerUnicodeButtons defaults to on")
+	}
+	cfg = DefaultConfig()
+	cfg.PlayerUnicodeButtons = true
+	back := DefaultConfig()
+	parseConfigInto(&back, ini.Parse(strings.NewReader(string(SerializeSettingsConfig(cfg)))))
+	if !back.PlayerUnicodeButtons {
+		t.Fatal("Panel.PlayerUnicodeButtons on did not survive a save and a load")
+	}
+}
