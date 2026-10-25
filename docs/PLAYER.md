@@ -146,9 +146,12 @@ button again (#2185).
 | file panel       | Ctrl+Alt+Left/Right | seek 5 s without leaving the file panel |
 
 The keys are hidden by default, so the player is not a page of letters: its
-bottom border says "H: keys", and H puts the letters on the buttons and as
-many of the other keys as fit into the border, the way B flips the units of
-the info panel (`PlayerKeyHints`, remembered in settings.ini). The key bar
+bottom border says "H: keys", and H puts the key of each button on the line
+under it (`showButtonKeys`) and as many of the other keys as fit into the
+border, the way B flips the units of the info panel (`PlayerKeyHints`,
+remembered in settings.ini). The buttons themselves never change: the keys
+were inside them first, `[⇧P |<] [K >]`, and the row was a jumble that
+changed its width with the scheme (#2185). The key bar
 over a focused player names F7 (folder) and F8 (remove) and leaves the file
 keys, which do nothing there, blank.
 

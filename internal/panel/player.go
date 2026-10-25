@@ -1015,17 +1015,9 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		row += 2
 	}
 
-	// The last row: buttons and volume. While the keys are shown (H) each
-	// button carries the letter that presses it.
+	// The last row: buttons and volume.
 	by := row
 	labels := []string{"|<", " > ", "||", " # ", ">|"}
-	if config.App.PlayerKeyHints {
-		for i, key := range playerButtonKeys(config.App.PlayerKeys) {
-			if key != "" {
-				labels[i] = key + " " + strings.TrimSpace(labels[i])
-			}
-		}
-	}
 	bx := x
 	pp.layout.buttonsY = by
 	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
@@ -1055,6 +1047,9 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	// Separator on the frame's own lines.
 	sep := "├" + strings.Repeat("─", w) + "┤"
 	scr.Write(pp.X1, by+1, vtui.StringToCharInfo(sep, box))
+	if config.App.PlayerKeyHints {
+		pp.showButtonKeys(scr, by+1, box)
+	}
 	pp.showKeyHints(scr, box)
 
 	// Playlist.
@@ -1126,7 +1121,7 @@ func playbackBarSpan(left, right string, w int) (start, width int) {
 }
 
 // showKeyHints writes on the bottom border how to see the player's keys, or,
-// while they are shown, the keys the buttons do not carry: as many as the
+// while they are shown, the keys that are not under the buttons: as many as the
 // border has room for, and always the one that hides them again. The full
 // list is too long for a panel, and a player that showed it all the time
 // would be a page of keys with a player in it (#2185).
@@ -1166,8 +1161,29 @@ func fitHints(hints []string, room int) string {
 	return strings.Join(append(shown, last), gap)
 }
 
-// playerButtonKeys are the letters the buttons carry while the keys are
-// shown: WinAmp's when they are on, else YouTube's, which has no stop.
+// showButtonKeys writes the key of each button on the line y under the
+// buttons, in the middle of the button, while the keys are shown (H). They
+// were inside the buttons, [⇧P |<] [K >], which turned the row into a jumble
+// of letters and arrows and changed its width (#2185). A key that does not
+// fit under its button, in a player too narrow for the row, is left out.
+func (pp *PlayerPanel) showButtonKeys(scr *vtui.ScreenBuf, y int, attr uint64) {
+	for i, key := range playerButtonKeys(config.App.PlayerKeys) {
+		b := pp.layout.buttons[i]
+		if key == "" || b[1] >= pp.X2 {
+			continue
+		}
+		width := b[1] - b[0] + 1
+		if key = " " + key + " "; runewidth.StringWidth(key) > width {
+			key = strings.TrimSpace(key)
+		}
+		if kw := runewidth.StringWidth(key); kw <= width {
+			scr.Write(b[0]+(width-kw)/2, y, vtui.StringToCharInfo(key, attr))
+		}
+	}
+}
+
+// playerButtonKeys are the keys under the buttons while the keys are shown:
+// WinAmp's when they are on, else YouTube's, which has no stop.
 func playerButtonKeys(scheme string) [5]string {
 	if scheme == config.PlayerKeysYouTube {
 		return [5]string{"⇧P", "K", "K", "", "⇧N"}

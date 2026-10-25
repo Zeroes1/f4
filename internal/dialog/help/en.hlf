@@ -1069,7 +1069,7 @@ and the other formats need ffmpeg.
 
   #Del, F8#                 Remove from the playlist; the file stays on disk.
 
-  #H#                       Show the keys on the buttons and in the bottom
+  #H#                       Show the keys under the buttons and in the bottom
                           border, or hide them.
 
   #I#                       Close the player without asking and leave the

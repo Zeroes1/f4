@@ -486,7 +486,7 @@ type F4Config struct {
 	PlayerBar                bool   // the audio player (Ctrl+Shift+M) draws a playback bar between its clocks (f4#2185)
 	PlayerSpectrum           bool   // the audio player draws the spectrum of what plays, on by default as it always was (f4#2185)
 	PlayerKeys               string // the player's letter keys: PlayerKeysBoth, PlayerKeysWinAmp or PlayerKeysYouTube (f4#2185)
-	PlayerKeyHints           bool   // the player shows its keys on its buttons and in its border; H flips it (f4#2185)
+	PlayerKeyHints           bool   // the player shows its keys under its buttons and in its border; H flips it (f4#2185)
 	EscTogglePanels          bool   // ESC toggles panels visibility (Far ships this as a macro; on by default)
 	TerminalCtrlNWorkspace   bool   // reserve Ctrl+N in terminal views for cloning panels to a workspace
 	KeepTerminalCursor       bool

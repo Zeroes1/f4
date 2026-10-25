@@ -327,7 +327,7 @@ func nativeKeyActions() []nativeKeyAction {
 			desc: "Remove the item under the cursor from the playlist",
 			keys: []string{"Del:PlayerFocused", "F8:PlayerFocused"}, condition: "PlayerFocused"},
 		{name: "Panel.Player.ToggleKeyHints", area: "Shell", label: "Player: Show Keys",
-			desc: "Show the keys of the player on its buttons and in its bottom border, or hide them",
+			desc: "Show the keys of the player under its buttons and in its bottom border, or hide them",
 			keys: []string{"H:PlayerFocused"}, condition: "PlayerFocused", handler: playerCommand(panel.PlayerToggleKeyHints)},
 		{name: "Panel.Player.ToBackground", area: "Shell", label: "Player: Close, Keep Playing",
 			desc: "Close the player without asking and leave what it plays playing in the background",
