@@ -24,10 +24,12 @@ type FakeAudio struct {
 	Loads []string
 }
 
-// UseFakeAudio makes every player opened until the test ends play into a
-// FakeAudio, and returns the engines in the order the players were opened.
+// UseFakeAudio makes every player session started until the test ends play
+// into a FakeAudio, and returns the engines in the order they were made. The
+// test ends with whatever still plays in the background stopped.
 func UseFakeAudio(t *testing.T) func() []*FakeAudio {
 	t.Helper()
+	panel.EndPlayerSession()
 	var mu sync.Mutex
 	var made []*FakeAudio
 	old := panel.NewPlayerEngine
@@ -38,7 +40,10 @@ func UseFakeAudio(t *testing.T) func() []*FakeAudio {
 		mu.Unlock()
 		return a
 	}
-	t.Cleanup(func() { panel.NewPlayerEngine = old })
+	t.Cleanup(func() {
+		panel.EndPlayerSession()
+		panel.NewPlayerEngine = old
+	})
 	return func() []*FakeAudio {
 		mu.Lock()
 		defer mu.Unlock()

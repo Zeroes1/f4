@@ -5479,24 +5479,18 @@ func (pf *PanelsFrame) ToggleAltPanel(kind string, factory func(src *FileSystemP
 	if !pf.ShowPanels {
 		return
 	}
-	TryClose := func(a AltPanel) {
-		if c, ok := a.(interface{ Close() }); ok {
-			c.Close()
-		}
-	}
 	opp := 1 - pf.ActiveIdx
 	switch {
 	case pf.AltPanels[pf.ActiveIdx] != nil && pf.AltPanels[pf.ActiveIdx].Kind() == kind:
-		TryClose(pf.AltPanels[pf.ActiveIdx])
-		pf.AltPanels[pf.ActiveIdx] = nil
+		pf.closeAltPanelAsking(pf.ActiveIdx, nil)
 	case pf.AltPanels[opp] != nil && pf.AltPanels[opp].Kind() == kind:
-		TryClose(pf.AltPanels[opp])
-		pf.AltPanels[opp] = nil
+		pf.closeAltPanelAsking(opp, nil)
 	default:
-		if fsp, ok := pf.Panels[pf.ActiveIdx].(*FileSystemPanel); ok {
-			if pf.AltPanels[opp] != nil {
-				TryClose(pf.AltPanels[opp])
-			}
+		fsp, ok := pf.Panels[pf.ActiveIdx].(*FileSystemPanel)
+		if !ok {
+			break
+		}
+		open := func() {
 			pf.AltPanels[opp] = factory(fsp)
 			// If the opposite side is currently hidden (Ctrl+F1/F2), un-hide
 			// it — otherwise the alt panel installs into an invisible slot
@@ -5507,9 +5501,47 @@ func (pf *PanelsFrame) ToggleAltPanel(kind string, factory func(src *FileSystemP
 				pf.ShowRightPanel = true
 			}
 		}
+		if pf.AltPanels[opp] != nil {
+			pf.closeAltPanelAsking(opp, open)
+			return
+		}
+		open()
 	}
 	pf.ResizeConsole(pf.LastW, pf.LastH)
 	vtui.FrameManager.HardRefresh()
+}
+
+// altPanelCloseAsker is an alternative panel that may ask before the user
+// closes it: the player while music plays, whether to go on playing it in
+// the background (#2185). AskClose calls proceed once the panel may close,
+// and never when the user thinks better of it.
+type altPanelCloseAsker interface {
+	AskClose(proceed func())
+}
+
+// closeAltPanelAsking closes the alternative panel in slot, once it has asked
+// if it asks, and does then after it.
+func (pf *PanelsFrame) closeAltPanelAsking(slot int, then func()) {
+	a := pf.AltPanels[slot]
+	proceed := func() {
+		if pf.AltPanels[slot] != a {
+			return // closed or replaced while the question was open
+		}
+		if c, ok := a.(interface{ Close() }); ok {
+			c.Close()
+		}
+		pf.AltPanels[slot] = nil
+		if then != nil {
+			then()
+		}
+		pf.ResizeConsole(pf.LastW, pf.LastH)
+		vtui.FrameManager.HardRefresh()
+	}
+	if asker, ok := a.(altPanelCloseAsker); ok {
+		asker.AskClose(proceed)
+		return
+	}
+	proceed()
 }
 
 func (pf *PanelsFrame) RefreshAll() {
