@@ -2033,8 +2033,8 @@ Player.KeysHint=H: клавиши
 Player.CloseWhilePlaying=Играет музыка. Продолжить играть её в фоне?
 Player.PlayInBackground=В &фоне
 Player.StopPlaying=&Стоп
-Player.KeysLine.Both=K пуск|J L ±10с|0-9 переход|M без звука|⇧P ⇧N трек|+/- громкость|I в фон|H скрыть
-Player.KeysLine.WinAmp=+/- громкость|←→ ±5с|⇧↑↓ сдвиг|F7 папка|I в фон|H скрыть
+Player.KeysLine.Both=K пуск|J L ±10с|0-9 переход|M без звука|⇧ P ⇧ N трек|+/- громкость|I в фон|H скрыть
+Player.KeysLine.WinAmp=+/- громкость|←→ ±5с|⇧ ↑↓ сдвиг|F7 папка|I в фон|H скрыть
 Player.KeysLine.YouTube=J L ±10с|0-9 переход|M без звука|+/- громкость|I в фон|H скрыть
 
 TreePanel.Title= Дерево

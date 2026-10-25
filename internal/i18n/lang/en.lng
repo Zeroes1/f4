@@ -2033,8 +2033,8 @@ Player.KeysHint=H: keys
 Player.CloseWhilePlaying=Music is playing. Go on playing it in the background?
 Player.PlayInBackground=In the &background
 Player.StopPlaying=&Stop
-Player.KeysLine.Both=K play|J L ±10s|0-9 jump|M mute|⇧P ⇧N track|+/- volume|I background|H hide
-Player.KeysLine.WinAmp=+/- volume|←→ ±5s|⇧↑↓ move|F7 folder|I background|H hide
+Player.KeysLine.Both=K play|J L ±10s|0-9 jump|M mute|⇧ P ⇧ N track|+/- volume|I background|H hide
+Player.KeysLine.WinAmp=+/- volume|←→ ±5s|⇧ ↑↓ move|F7 folder|I background|H hide
 Player.KeysLine.YouTube=J L ±10s|0-9 jump|M mute|+/- volume|I background|H hide
 
 TreePanel.Title= Tree

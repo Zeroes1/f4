@@ -1183,10 +1183,12 @@ func (pp *PlayerPanel) showButtonKeys(scr *vtui.ScreenBuf, y int, attr uint64) {
 }
 
 // playerButtonKeys are the keys under the buttons while the keys are shown:
-// WinAmp's when they are on, else YouTube's, which has no stop.
+// WinAmp's when they are on, else YouTube's, which has no stop. The ⇧ stands
+// a cell apart from its letter: the fonts that have it draw it wider than a
+// cell, over the letter (Monaco, the GUI's font on macOS, has none, #2185).
 func playerButtonKeys(scheme string) [5]string {
 	if scheme == config.PlayerKeysYouTube {
-		return [5]string{"⇧P", "K", "K", "", "⇧N"}
+		return [5]string{"⇧ P", "K", "K", "", "⇧ N"}
 	}
 	return [5]string{"Z", "X", "C", "V", "B"}
 }
