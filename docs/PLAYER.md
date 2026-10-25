@@ -171,6 +171,18 @@ Play order is depth-first over the whole tree regardless of what is
 expanded; when a track ends the next one starts, and after the last one the
 engine stops.
 
+The mouse (`player_mouse.go`, #2185): a click presses a button, sets the
+volume where it lands on the slider and moves the track where it lands on
+the playback bar. The slider and the bar follow a drag; the bar only moves
+its knob while dragged and seeks when the button is let go, as a seek loads
+the track again. In the playlist a click puts the cursor on the row, a
+click on ▸/▾ folds the folder, and a double click plays the track or folds
+the folder. The wheel scrolls the playlist (`followed`: the view follows the
+cursor only when the cursor moves) and turns the volume over the slider;
+the player takes every wheel event, which the panels would otherwise turn
+into Up and Down for the file panel behind it. `Show` records where it drew
+what a click can hit (`playerLayout`).
+
 ### 1.4 Playing in the background
 
 What plays is a `playerSession` (`internal/panel/player_session.go`), one
@@ -200,8 +212,6 @@ Known and deliberate; each is small:
 
 - **Not in the command palette / panel menu list** yet
   (`command_palette_panels.go` switch on panel type).
-- **No mouse**: buttons and playlist rows should be clickable, the volume
-  bar draggable. `ProcessMouse` returns false.
 - **English only**; `Player.*` keys exist only in `en.lng`.
 - **Position clock** subtracts `BufferedSize()` from bytes read, which is
   the right idea but untested against real hardware latency.

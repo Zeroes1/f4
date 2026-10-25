@@ -1071,6 +1071,15 @@ and the other formats need ffmpeg.
   #H#                       Show the keys on the buttons and in the bottom
                           border, or hide them.
 
+ #Mouse#
+
+  A click presses a button, sets the volume where it lands on the slider
+and moves the track where it lands on the playback bar; the slider and the
+bar can be dragged, and the track goes where the bar is let go. In the
+playlist a click puts the cursor on a row, a click on ▸ or ▾ folds or
+unfolds a folder, and a double click plays a track or folds a folder. The
+wheel scrolls the playlist, and over the slider turns the volume.
+
  #Letter keys#
 
   Which of them work is set in Settings, Panels, Audio player, Player keys:

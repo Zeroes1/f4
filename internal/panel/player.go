@@ -53,6 +53,16 @@ type PlayerPanel struct {
 	cursor int           // index into rows, or playerCursorButtons / playerCursorBar
 	button int           // focused control when cursor == playerCursorButtons
 	top    int           // first visible playlist row
+	// followed is the cursor the view last scrolled to; the view follows
+	// the cursor when it moves, and the wheel scrolls away from it.
+	followed int
+
+	// The mouse (player_mouse.go): where Show put what a click can hit,
+	// what the button held since it went down drags, and where the knob of
+	// the playback bar is while it is dragged, 0 to 1.
+	layout   playerLayout
+	drag     playerDrag
+	dragSeek float64
 }
 
 type playlistItem struct {
@@ -110,6 +120,7 @@ func NewPlayerPanel(src *FileSystemPanel) *PlayerPanel {
 		src:           src,
 		cursor:        playerCursorButtons,
 		button:        playerBtnPlay,
+		followed:      playerCursorButtons,
 	}
 	pp.SetVisible(true)
 	pp.frame = vtui.NewBorderedFrame(x1, y1, x2, y2, vtui.SingleBox, i18n.Msg("Player.Title"))
@@ -148,9 +159,6 @@ func (pp *PlayerPanel) Source() *FileSystemPanel { return pp.src }
 func (pp *PlayerPanel) Kind() string             { return "player" }
 func (pp *PlayerPanel) SetFocus(f bool)          { pp.focused = f }
 func (pp *PlayerPanel) IsFocused() bool          { return pp.focused }
-func (pp *PlayerPanel) ProcessMouse(*vtinput.InputEvent) bool {
-	return false
-}
 
 // HelpTopic is the topic F1 opens while the player has the focus.
 func (pp *PlayerPanel) HelpTopic() string { return "Player" }
@@ -910,10 +918,21 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		barAttr = hi
 	}
 	row := y + 1
+	pp.layout = playerLayout{barY: row}
 	if config.App.PlayerBar {
 		// Where the track is, on a bar between the two clocks, and the
-		// stream facts under it.
-		put(row, playbackBar(pp.Engine.Position(), pp.Engine.Duration(), loaded, w), barAttr)
+		// stream facts under it. While the bar is dragged its knob is where
+		// the mouse is; the track goes there when the button is let go.
+		pos, dur := pp.Engine.Position(), pp.Engine.Duration()
+		if pp.drag == playerDragBar && dur > 0 {
+			pos = time.Duration(pp.dragSeek * float64(dur))
+		}
+		put(row, playbackBar(pos, dur, loaded, w), barAttr)
+		if left, right := playbackClocks(pos, dur, loaded); loaded && dur > 0 {
+			if start, width := playbackBarSpan(left, right, w); width >= 3 {
+				pp.layout.barX, pp.layout.barW = x+start, width
+			}
+		}
 		put(row+1, facts, text)
 		row += 2
 	} else {
@@ -960,6 +979,7 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		}
 	}
 	bx := x
+	pp.layout.buttonsY = by
 	scr.FillRect(x, by, pp.X2-1, by, ' ', text)
 	for i, l := range labels {
 		attr := text
@@ -968,10 +988,12 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		}
 		cells := vtui.StringToCharInfo("["+l+"]", attr)
 		scr.Write(bx, by, cells)
+		pp.layout.buttons[i] = [2]int{bx, bx + len(cells) - 1}
 		bx += len(cells) + 1
 	}
 	volW := w - (bx - x) - 5
 	if volW >= 4 {
+		pp.layout.volX, pp.layout.volW = bx, volW
 		filled := int(pp.Engine.Volume()*float64(volW) + 0.5)
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", volW-filled)
 		attr := text
@@ -994,7 +1016,10 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 	if ph <= 0 {
 		return
 	}
-	if pp.cursor >= 0 {
+	pp.layout.listY, pp.layout.listRows = py, ph
+	// The view follows the cursor when it has moved; the wheel scrolls the
+	// view away from a cursor that stays.
+	if pp.cursor >= 0 && pp.cursor != pp.followed {
 		if pp.cursor < pp.top {
 			pp.top = pp.cursor
 		}
@@ -1002,9 +1027,8 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 			pp.top = pp.cursor - ph + 1
 		}
 	}
-	if pp.top > max(0, len(pp.rows)-ph) {
-		pp.top = max(0, len(pp.rows)-ph)
-	}
+	pp.followed = pp.cursor
+	pp.top = max(0, min(pp.top, len(pp.rows)-ph))
 	if len(pp.rows) == 0 {
 		put(py, i18n.Msg("Player.EmptyPlaylist"), text)
 		return
@@ -1032,6 +1056,25 @@ func (pp *PlayerPanel) Show(scr *vtui.ScreenBuf) {
 		}
 		put(py+i, s, attr)
 	}
+}
+
+// playbackClocks are the clocks at the two ends of the playback bar.
+func playbackClocks(pos, dur time.Duration, loaded bool) (left, right string) {
+	left, right = "--:--", "--:--"
+	if loaded {
+		left = fmtClock(pos)
+		if dur > 0 {
+			right = fmtClock(dur)
+		}
+	}
+	return left, right
+}
+
+// playbackBarSpan is where the bar starts in its row, w cells wide, between
+// the clocks left and right, and how wide it is; under 3 cells there is none.
+func playbackBarSpan(left, right string, w int) (start, width int) {
+	lw := runewidth.StringWidth(left)
+	return lw + 1, w - lw - runewidth.StringWidth(right) - 2
 }
 
 // showKeyHints writes on the bottom border how to see the player's keys, or,
@@ -1088,14 +1131,8 @@ func playerButtonKeys(scheme string) [5]string {
 // them that fills as the track plays: "02:15 ━━━━━━●────── 04:31". A track
 // whose length is not known leaves the bar empty.
 func playbackBar(pos, dur time.Duration, loaded bool, w int) string {
-	left, right := "--:--", "--:--"
-	if loaded {
-		left = fmtClock(pos)
-		if dur > 0 {
-			right = fmtClock(dur)
-		}
-	}
-	barW := w - runewidth.StringWidth(left) - runewidth.StringWidth(right) - 2
+	left, right := playbackClocks(pos, dur, loaded)
+	_, barW := playbackBarSpan(left, right, w)
 	if barW < 3 {
 		return left + " / " + right
 	}
